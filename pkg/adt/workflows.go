@@ -1011,7 +1011,7 @@ type SaveToFileResult struct {
 // Workflow: GetSource → WriteFile
 //
 // The file extension is automatically determined based on object type.
-func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, objectName, outputPath string) (*SaveToFileResult, error) {
+func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, objectName, parentName, outputPath string) (*SaveToFileResult, error) {
 	result := &SaveToFileResult{
 		ObjectName: objectName,
 		ObjectType: string(objType),
@@ -1028,6 +1028,8 @@ func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, ob
 		ext = ".intf.abap"
 	case ObjectTypeFunctionGroup:
 		ext = ".fugr.abap"
+	case ObjectTypeFunctionMod:
+		ext = ".func.abap"
 	case ObjectTypeInclude:
 		ext = ".abap"
 	// RAP object types (using ABAPGit-compatible extensions)
@@ -1056,7 +1058,7 @@ func (c *Client) SaveToFile(ctx context.Context, objType CreatableObjectType, ob
 	}
 
 	// 3. Get object source
-	objectURL, err := c.buildObjectURL(objType, objectName)
+	objectURL, err := c.buildObjectURLWithParent(objType, objectName, parentName)
 	if err != nil {
 		return nil, err
 	}

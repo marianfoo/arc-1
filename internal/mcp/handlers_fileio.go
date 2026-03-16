@@ -72,6 +72,16 @@ func (s *Server) handleSaveToFile(ctx context.Context, request mcp.CallToolReque
 		includeStr = strings.ToLower(inc)
 	}
 
+	// Check for parent/function_group parameter (required for FUNC type)
+	parentName := ""
+	if p, ok := request.Params.Arguments["parent"].(string); ok {
+		parentName = p
+	} else if p, ok := request.Params.Arguments["function_group"].(string); ok {
+		parentName = p
+	} else if p, ok := request.Params.Arguments["parentName"].(string); ok {
+		parentName = p
+	}
+
 	// Parse object type - support both short (PROG) and full (PROG/P) format
 	var objType adt.CreatableObjectType
 	switch strings.ToUpper(objTypeStr) {
@@ -122,7 +132,7 @@ func (s *Server) handleSaveToFile(ctx context.Context, request mcp.CallToolReque
 		return mcp.NewToolResultText(string(output)), nil
 	}
 
-	result, err := s.adtClient.SaveToFile(ctx, objType, objectName, outputPath)
+	result, err := s.adtClient.SaveToFile(ctx, objType, objectName, parentName, outputPath)
 	if err != nil {
 		return newToolResultError(fmt.Sprintf("SaveToFile failed: %v", err)), nil
 	}

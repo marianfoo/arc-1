@@ -499,7 +499,7 @@ func (b *ExportBuilder) exportObject(ctx context.Context, obj ExportObject) Expo
 	if obj.Type == adt.ObjectTypeClass && obj.IncludeType != "" && obj.IncludeType != adt.ClassIncludeMain {
 		saveResult, err = b.client.SaveClassIncludeToFile(ctx, obj.Name, obj.IncludeType, b.outputDir)
 	} else {
-		saveResult, err = b.client.SaveToFile(ctx, obj.Type, obj.Name, b.outputDir)
+		saveResult, err = b.client.SaveToFile(ctx, obj.Type, obj.Name, "", b.outputDir)
 	}
 
 	if err != nil {
