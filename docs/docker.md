@@ -1,8 +1,12 @@
 # Docker Guide for vsp
 
-vsp ships as a single static-ish binary that speaks MCP over **stdio**. Docker is
-useful when you want a reproducible, credential-isolated runtime without installing
-Go locally, or when you want to lock a specific version for a team.
+vsp ships as a single static-ish binary that speaks MCP over **HTTP streamable**
+(the default transport in the Docker image). This makes it easy to run as a
+long-lived, port-accessible container that multiple MCP clients can connect to
+without spawning a new process per session.
+
+> **stdio mode is still supported.** Pass `-e SAP_TRANSPORT=stdio` and use
+> `docker run -i` to revert to the classic pipe-based transport.
 
 ---
 
@@ -43,25 +47,38 @@ Go locally, or when you want to lock a specific version for a team.
 > [GitHub Container Registry (GHCR)](https://ghcr.io/oisee/vsp) on every
 > release. Pull them with `docker pull ghcr.io/oisee/vsp:latest`.
 
+### HTTP streamable (default — recommended)
+
+The Docker image defaults to `SAP_TRANSPORT=http-streamable` listening on
+`0.0.0.0:8080`. Start the container, map the port, and connect any MCP client
+to `http://localhost:8080/mcp`.
+
 ```bash
-# Minimal run (basic auth)
-docker run -i --rm \
+# Start vsp as a persistent HTTP MCP server
+docker run -d --rm \
+  -p 8080:8080 \
   -e SAP_URL=https://host:44300 \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
   ghcr.io/oisee/vsp:latest
 
-# Read-only mode — safe for production systems
+# Verify it is up
+curl -s http://localhost:8080/mcp   # should return an MCP protocol response
+```
+
+### stdio mode (classic, pipe-based)
+
+```bash
 docker run -i --rm \
-  -e SAP_URL=https://prod:44300 \
-  -e SAP_USER=viewer \
+  -e SAP_URL=https://host:44300 \
+  -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
-  -e SAP_READ_ONLY=true \
+  -e SAP_TRANSPORT=stdio \
   ghcr.io/oisee/vsp:latest
 ```
 
-> **`-i` is required.** MCP communicates over stdin/stdout. Without `-i` the
-> container exits immediately because stdin is closed.
+> **`-i` is required for stdio mode.** MCP communicates over stdin/stdout.
+> Without `-i` the container exits immediately because stdin is closed.
 
 ---
 
@@ -191,26 +208,50 @@ docker buildx build \
 
 ## How vsp Runs in Docker
 
-vsp is an **MCP stdio server** — it reads JSON-RPC from stdin and writes to
-stdout. There are no exposed ports, no HTTP endpoints, no daemons.
+### HTTP streamable (default)
 
-An MCP client (Claude Desktop, Gemini CLI, etc.) launches `docker run -i` as a
-subprocess and communicates through pipes. The container lifecycle is:
+The Docker image defaults to the **MCP streamable HTTP transport**, listening on
+`0.0.0.0:8080`. This is the recommended mode for containerised deployments:
+
+```
+MCP Client (Claude Desktop, Cursor, etc.)
+  │
+  │  HTTP POST http://localhost:8080/mcp
+  │
+  ├─► docker container (long-lived, -d)
+  │         │
+  │    JSON-RPC over HTTP (streaming)
+  │         │
+  └─────────┴─► container keeps running; multiple clients can connect
+```
+
+Key differences from stdio mode:
+- **Port 8080 is exposed** — map it with `-p 8080:8080`.
+- **`-d` (detached) mode works** — the container stays alive between sessions.
+- **No `-i` flag needed** — stdin is not used.
+- **Multiple clients** can connect to the same container simultaneously.
+
+### stdio mode (classic)
+
+Set `SAP_TRANSPORT=stdio` to revert to the pipe-based model where an MCP client
+spawns the container as a subprocess:
 
 ```
 MCP Client
   │
-  ├─► docker run -i --rm -e SAP_URL=... vsp   ← spawns container
+  ├─► docker run -i --rm -e SAP_TRANSPORT=stdio -e SAP_URL=... vsp
   │         │
-  │    JSON-RPC over stdio
+  │    JSON-RPC over stdin/stdout
   │         │
   └─────────┴─► container exits when client disconnects
 ```
 
-Because of this model:
-- **No `EXPOSE` directive is needed.**
-- **No `-d` (detached) mode.** The container must be in the foreground.
-- **`--rm` is recommended** to avoid stale containers accumulating.
+### Transport / address options
+
+| Env variable | CLI flag | Default in image | Description |
+|---|---|---|---|
+| `SAP_TRANSPORT` | `--transport` | `http-streamable` | `stdio` or `http-streamable` |
+| `SAP_HTTP_ADDR` | `--http-addr` | `0.0.0.0:8080` | Listen address for http-streamable |
 
 ---
 
@@ -244,6 +285,8 @@ prefix. CLI flags map 1:1 to env vars:
 | `--feature-ui5` | `SAP_FEATURE_UI5` | `auto` |
 | `--feature-transport` | `SAP_FEATURE_TRANSPORT` | `auto` |
 | `--feature-hana` | `SAP_FEATURE_HANA` | `auto` |
+| `--transport` | `SAP_TRANSPORT` | `http-streamable` *(image default)* |
+| `--http-addr` | `SAP_HTTP_ADDR` | `0.0.0.0:8080` *(image default)* |
 | `--terminal-id` | `SAP_TERMINAL_ID` | |
 | `--verbose` | `SAP_VERBOSE` | `false` |
 
@@ -583,10 +626,38 @@ docker run -i --rm \
 
 ## MCP Client Integration
 
-### Claude Desktop
+### HTTP streamable (recommended)
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
-or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Start the container once and point any MCP client at `http://localhost:8080/mcp`:
+
+```bash
+docker run -d --name vsp \
+  -p 8080:8080 \
+  -e SAP_URL=https://my-sap-system:44300 \
+  -e SAP_USER=developer \
+  -e SAP_PASSWORD=secret \
+  ghcr.io/oisee/vsp:latest
+```
+
+Then configure your MCP client to use the HTTP URL:
+
+```json
+{
+  "mcpServers": {
+    "vsp": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+> MCP clients that support the streamable HTTP transport (Claude Desktop ≥ 0.9,
+> Cursor, etc.) can connect directly by URL — no `docker run` subprocess needed.
+
+### Claude Desktop (stdio fallback)
+
+If your Claude Desktop version does not yet support HTTP MCP endpoints, use the
+stdio mode by overriding the transport:
 
 ```json
 {
@@ -598,6 +669,7 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
         "-e", "SAP_URL=https://my-sap-system:44300",
         "-e", "SAP_USER=developer",
         "-e", "SAP_PASSWORD=secret",
+        "-e", "SAP_TRANSPORT=stdio",
         "ghcr.io/oisee/vsp:latest"
       ]
     }
@@ -617,6 +689,7 @@ For a production system where you want read-only access:
         "-e", "SAP_URL=https://prod-sap:44300",
         "-e", "SAP_USER=readonly_user",
         "-e", "SAP_PASSWORD=secret",
+        "-e", "SAP_TRANSPORT=stdio",
         "-e", "SAP_READ_ONLY=true",
         "-e", "SAP_MODE=focused",
         "ghcr.io/oisee/vsp:latest"
@@ -630,14 +703,15 @@ For a production system where you want read-only access:
 > out of the config file. Reference the absolute path to the env file:
 >
 > ```json
-> "args": ["run", "-i", "--rm", "--env-file", "/Users/me/.vsp-prod.env", "ghcr.io/oisee/vsp:latest"]
+> "args": ["run", "-i", "--rm", "-e", "SAP_TRANSPORT=stdio", "--env-file", "/Users/me/.vsp-prod.env", "ghcr.io/oisee/vsp:latest"]
 > ```
 
 ### Gemini CLI / Other Agents
 
-Most MCP clients follow the same stdio pattern. Use the same `docker run -i`
-command. See `docs/cli-agents/README.md` for agent-specific configuration
-examples.
+Clients that support HTTP MCP can connect to `http://localhost:8080/mcp` directly
+once the container is running. For stdio-only clients use `docker run -i` with
+`-e SAP_TRANSPORT=stdio`. See `docs/cli-agents/README.md` for agent-specific
+configuration examples.
 
 ---
 
@@ -648,7 +722,8 @@ examples.
 Safe for handing to an AI agent with access to a production system:
 
 ```bash
-docker run -i --rm \
+docker run -d --rm \
+  -p 8080:8080 \
   -e SAP_URL=https://prod:44300 \
   -e SAP_USER=s_ai_viewer \
   -e SAP_PASSWORD=secret \

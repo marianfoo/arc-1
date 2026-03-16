@@ -79,6 +79,14 @@ ENV SAP_ALLOWED_PACKAGES=""
 # Allow editing objects that need a transport request
 ENV SAP_ALLOW_TRANSPORTABLE_EDITS="false"
 
+# ─── MCP Transport ───────────────────────────────────────────────────────────
+# stdio  = default, for local MCP client spawning docker run -i
+# http-streamable = recommended for containerised / remote deployments
+ENV SAP_TRANSPORT="http-streamable"
+# Listen on all interfaces so the container port is reachable from the host.
+# Override with SAP_HTTP_ADDR=127.0.0.1:8080 to restrict to localhost.
+ENV SAP_HTTP_ADDR="0.0.0.0:8080"
+
 # ─── Transport Management ────────────────────────────────────────────────────
 # Enable CTS transport tools (disabled by default)
 ENV SAP_ENABLE_TRANSPORTS="false"
@@ -103,7 +111,8 @@ ENV SAP_TERMINAL_ID=""
 # ─── Output ──────────────────────────────────────────────────────────────────
 ENV SAP_VERBOSE="false"
 
-# vsp speaks MCP over stdio — no network ports to expose.
-# Run with:  docker run -i --rm -e SAP_URL=... -e SAP_USER=... ghcr.io/oisee/vsp
+# Expose the MCP streamable HTTP port (default transport in this image).
+# Map to any host port: docker run -p 8080:8080 ...
+EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/vsp"]
