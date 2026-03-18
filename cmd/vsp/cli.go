@@ -276,19 +276,30 @@ func runSearch(cmd *cobra.Command, args []string) error {
 // --- source command ---
 
 var sourceCmd = &cobra.Command{
-	Use:   "source <type> <name>",
+	Use:   "source [type] [name]",
 	Short: "Get ABAP source code",
 	Long: `Retrieve source code for an ABAP object.
+
+Subcommands:
+  read     Read source code (same as 'vsp source <type> <name>')
+  write    Write source code from stdin
+  edit     Surgical string replacement
+  context  Source with compressed dependency contracts
 
 Examples:
   vsp -s a4h source CLAS ZCL_MY_CLASS
   vsp source PROG ZTEST_PROGRAM
-  vsp source INTF ZIF_MY_INTERFACE
-  vsp source FUNC MY_FUNCTION_MODULE --parent MY_FUNCTION_GROUP
-  vsp source CLAS ZCL_MY_CLASS --include testclasses
-  vsp source CLAS ZCL_MY_CLASS --method MY_METHOD`,
-	Args: cobra.ExactArgs(2),
-	RunE: runSource,
+  vsp source read CLAS ZCL_MY_CLASS
+  vsp source write CLAS ZCL_FOO < file.abap
+  vsp source edit CLAS ZCL_FOO --old "old" --new "new"
+  vsp source context CLAS ZCL_FOO`,
+	Args: cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 2 {
+			return runSource(cmd, args)
+		}
+		return cmd.Help()
+	},
 }
 
 func init() {

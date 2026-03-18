@@ -107,6 +107,7 @@ func init() {
 	// Mode options
 	rootCmd.Flags().StringVar(&cfg.Mode, "mode", "focused", "Tool mode: focused (81 essential tools) or expert (all 122 tools)")
 	rootCmd.Flags().StringVar(&cfg.DisabledGroups, "disabled-groups", "", "Disable tool groups: 5/U=UI5, T=Tests, H=HANA, D=Debug (e.g., \"TH\" disables Tests and HANA)")
+	rootCmd.Flags().StringVar(&cfg.ToolMode, "tool-mode", "granular", "Tool mode: granular (122 individual tools) or universal (single SAP tool)")
 
 	// Feature configuration (safety network)
 	// Values: "auto" (default), "on", "off"
@@ -143,6 +144,7 @@ func init() {
 	viper.BindPFlag("allow-transportable-edits", rootCmd.Flags().Lookup("allow-transportable-edits"))
 	viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
 	viper.BindPFlag("disabled-groups", rootCmd.Flags().Lookup("disabled-groups"))
+	viper.BindPFlag("tool-mode", rootCmd.Flags().Lookup("tool-mode"))
 	viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
 
 	// Feature configuration
@@ -184,6 +186,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if cfg.Verbose {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] Starting vsp server\n")
 		fmt.Fprintf(os.Stderr, "[VERBOSE] Mode: %s\n", cfg.Mode)
+		fmt.Fprintf(os.Stderr, "[VERBOSE] Tool mode: %s\n", cfg.ToolMode)
 		if cfg.DisabledGroups != "" {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Disabled groups: %s (5/U=UI5, T=Tests, H=HANA, D=Debug)\n", cfg.DisabledGroups)
 		}
@@ -312,6 +315,13 @@ func resolveConfig(cmd *cobra.Command) {
 		}
 	}
 
+	// ToolMode: flag > SAP_TOOL_MODE env > default (granular)
+	if !cmd.Flags().Changed("tool-mode") {
+		if envToolMode := viper.GetString("TOOL_MODE"); envToolMode != "" {
+			cfg.ToolMode = envToolMode
+		}
+	}
+
 	// Verbose: flag > SAP_VERBOSE env
 	if !cmd.Flags().Changed("verbose") {
 		cfg.Verbose = viper.GetBool("VERBOSE")
@@ -400,6 +410,11 @@ func validateConfig() error {
 	// Validate mode
 	if cfg.Mode != "focused" && cfg.Mode != "expert" {
 		return fmt.Errorf("invalid mode: %s (must be 'focused' or 'expert')", cfg.Mode)
+	}
+
+	// Validate tool mode
+	if cfg.ToolMode != "granular" && cfg.ToolMode != "universal" {
+		return fmt.Errorf("invalid tool-mode: %s (must be 'granular' or 'universal')", cfg.ToolMode)
 	}
 
 	// Check if we have either basic auth or cookies will be processed

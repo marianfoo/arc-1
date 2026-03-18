@@ -12,6 +12,22 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
+// routeFileIOAction routes file I/O operations.
+func (s *Server) routeFileIOAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
+	if action == "system" || action == "edit" {
+		fileType := getStringParam(params, "type")
+		switch fileType {
+		case "deploy_from_file":
+			return s.callHandler(ctx, s.handleDeployFromFile, params)
+		case "save_to_file":
+			return s.callHandler(ctx, s.handleSaveToFile, params)
+		case "rename":
+			return s.callHandler(ctx, s.handleRenameObject, params)
+		}
+	}
+	return nil, false, nil
+}
+
 // --- File-Based Deployment Handlers ---
 
 // Note: CreateFromFile and UpdateFromFile handlers removed - use DeployFromFile instead

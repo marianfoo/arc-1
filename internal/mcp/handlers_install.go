@@ -13,6 +13,27 @@ import (
 	"github.com/oisee/vibing-steampunk/pkg/adt"
 )
 
+// routeInstallAction routes "system" with install-related types.
+func (s *Server) routeInstallAction(ctx context.Context, action, objectType, objectName string, params map[string]any) (*mcp.CallToolResult, bool, error) {
+	if action != "system" {
+		return nil, false, nil
+	}
+	installType := getStringParam(params, "type")
+	switch installType {
+	case "install_zadt_vsp":
+		return s.callHandler(ctx, s.handleInstallZADTVSP, params)
+	case "install_abapgit":
+		return s.callHandler(ctx, s.handleInstallAbapGit, params)
+	case "install_dummy_test":
+		return s.callHandler(ctx, s.handleInstallDummyTest, params)
+	case "list_dependencies":
+		return s.callHandler(ctx, s.handleListDependencies, params)
+	case "deploy_zip":
+		return s.callHandler(ctx, s.handleDeployZip, params)
+	}
+	return nil, false, nil
+}
+
 // --- Install Handlers ---
 
 func (s *Server) handleInstallDummyTest(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
