@@ -167,12 +167,22 @@ func isHandled(op byte) bool {
 		OpI64TruncF64S, OpI64TruncF32S,
 		OpF64ConvertI32S, OpF64ConvertI64S, OpF64ConvertI32U,
 		OpF64PromoteF32, OpF32DemoteF64,
-		OpF32ConvertI32S, OpF32ConvertI64S,
+		OpF32ConvertI32S, OpF32ConvertI64S, OpF32ConvertI32U, OpF32ConvertI64U,
 		OpI32ReinterpretF32, OpF32ReinterpretI32,
 		OpI64ReinterpretF64, OpF64ReinterpretI64,
 		OpI32Extend8S, OpI32Extend16S,
 		OpI64Extend8S, OpI64Extend16S, OpI64Extend32S,
-		OpMiscPrefix:
+		OpI64TruncF64U, OpI64TruncF32U,
+		OpF64ConvertI64U,
+		OpF32Eq, OpF32Ne, OpF32Lt, OpF32Gt, OpF32Le, OpF32Ge,
+		OpF32Add, OpF32Sub, OpF32Mul, OpF32Div,
+		OpF32Abs, OpF32Neg, OpF32Sqrt, OpF32Min, OpF32Max,
+		OpF32Ceil, OpF32Floor, OpF32Trunc, OpF32Nearest, OpF32Copysign,
+		OpF64Copysign, OpF64Nearest,
+		OpSelectT,
+		OpTry, OpCatch, OpCatchAll, OpThrow, OpRethrow, OpDelegate,
+		OpReturnCall, OpReturnCallIndirect,
+		OpMiscPrefix, OpSIMDPrefix:
 		return true
 	default:
 		return false

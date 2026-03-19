@@ -18,8 +18,9 @@ func Compile(mod *Module, className string) string {
 type blockKind int
 
 const (
-	blockDO blockKind = iota // block/loop → DO ... ENDDO
-	blockIF                  // if → IF ... ENDIF
+	blockDO  blockKind = iota // block/loop → DO ... ENDDO
+	blockIF                   // if → IF ... ENDIF
+	blockTRY                  // try → TRY ... ENDTRY
 )
 
 type compiler struct {
@@ -540,6 +541,8 @@ func (c *compiler) emitInstructions(f *Function, code []Instruction, stack *virt
 					c.line("ENDIF.")
 				case blockDO:
 					c.line("ENDDO.")
+				case blockTRY:
+					c.line("ENDTRY.")
 				}
 			}
 		case OpBr:
@@ -566,10 +569,47 @@ func (c *compiler) emitInstructions(f *Function, code []Instruction, stack *virt
 		// Stack
 		case OpDrop:
 			stack.pop()
-		case OpSelect:
+		case OpSelect, OpSelectT:
 			cond, b, a := stack.pop(), stack.pop(), stack.pop()
 			r := stack.push()
 			c.line("IF %s <> 0. %s = %s. ELSE. %s = %s. ENDIF.", cond, r, a, r, b)
+
+		// Tail calls — treat as regular call + return
+		case OpReturnCall:
+			c.emitCall(f, inst.FuncIndex, stack)
+			if len(f.Type.Results) > 0 {
+				c.line("rv = %s. RETURN.", stack.peek())
+			} else {
+				c.line("RETURN.")
+			}
+		case OpReturnCallIndirect:
+			c.emitCallIndirect(f, inst.TypeIndex, inst.TableIndex, stack)
+			if len(f.Type.Results) > 0 {
+				c.line("rv = %s. RETURN.", stack.peek())
+			} else {
+				c.line("RETURN.")
+			}
+
+		// Try/catch — map to TRY/CATCH in ABAP
+		case OpTry:
+			c.line("TRY. \" wasm try")
+			c.indent++
+			c.blockStack = append(c.blockStack, blockTRY)
+		case OpCatch, OpCatchAll:
+			c.indent--
+			c.line("CATCH cx_root. \" wasm catch")
+			c.indent++
+		case OpThrow:
+			c.line("RAISE EXCEPTION TYPE cx_sy_program_error. \" wasm throw")
+		case OpRethrow:
+			c.line("RAISE EXCEPTION TYPE cx_sy_program_error. \" wasm rethrow")
+		case OpDelegate:
+			c.indent--
+			c.line("ENDTRY. \" delegate")
+
+		// SIMD — stub as trap (QuickJS shouldn't hit these in normal execution)
+		case OpSIMDPrefix:
+			c.line("RAISE EXCEPTION TYPE cx_sy_program_error. \" SIMD not supported")
 
 		// i64 arithmetic (same patterns as i32 — ABAP INT8 handles it)
 		case OpI64Add:
@@ -755,6 +795,118 @@ func (c *compiler) emitInstructions(f *Function, code []Instruction, stack *virt
 			b, a := stack.pop(), stack.pop()
 			r := stack.push()
 			c.line("IF %s >= %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+
+		// f32 comparisons
+		case OpF32Eq:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s = %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+		case OpF32Ne:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s <> %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+		case OpF32Lt:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s < %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+		case OpF32Gt:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s > %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+		case OpF32Le:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s <= %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+		case OpF32Ge:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s >= %s. %s = 1. ELSE. %s = 0. ENDIF.", a, b, r, r)
+
+		// f32 arithmetic
+		case OpF32Add:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("%s = %s + %s.", r, a, b)
+		case OpF32Sub:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("%s = %s - %s.", r, a, b)
+		case OpF32Mul:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("%s = %s * %s.", r, a, b)
+		case OpF32Div:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("%s = %s / %s.", r, a, b)
+		case OpF32Abs:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = abs( %s ).", r, a)
+		case OpF32Neg:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = - %s.", r, a)
+		case OpF32Sqrt:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = sqrt( %s ).", r, a)
+		case OpF32Min:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s < %s. %s = %s. ELSE. %s = %s. ENDIF.", a, b, r, a, r, b)
+		case OpF32Max:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("IF %s > %s. %s = %s. ELSE. %s = %s. ENDIF.", a, b, r, a, r, b)
+		case OpF32Ceil:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = ceil( %s ).", r, a)
+		case OpF32Floor:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = floor( %s ).", r, a)
+		case OpF32Trunc:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = trunc( %s ).", r, a)
+		case OpF32Nearest:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = round( val = %s dec = 0 ).", r, a)
+		case OpF32Copysign:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("%s = zcl_wasm_rt=>copysign( iv_mag = %s iv_sign = %s ).", r, a, b)
+
+		// f64.copysign, f64.nearest
+		case OpF64Copysign:
+			b, a := stack.pop(), stack.pop()
+			r := stack.push()
+			c.line("%s = zcl_wasm_rt=>copysign( iv_mag = %s iv_sign = %s ).", r, a, b)
+		case OpF64Nearest:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = round( val = %s dec = 0 ).", r, a)
+
+		// Additional conversions
+		case OpF64ConvertI64U:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = zcl_wasm_rt=>extend_u64_f( %s ).", r, a)
+		case OpF32ConvertI32U:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = zcl_wasm_rt=>extend_u32( %s ). \" f32.convert_i32_u", r, a)
+		case OpF32ConvertI64U:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = zcl_wasm_rt=>extend_u64_f( %s ).", r, a)
+		case OpI64TruncF64U, OpI64TruncF32U:
+			a := stack.pop()
+			r := stack.push()
+			c.line("%s = zcl_wasm_rt=>trunc_f_u64( %s ).", r, a)
 
 		// i64 memory
 		case OpI64Load:

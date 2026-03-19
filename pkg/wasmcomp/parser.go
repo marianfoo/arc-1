@@ -350,6 +350,34 @@ func parseInstructions(r *reader, end int) []Instruction {
 			bits := r.readU64Fixed()
 			inst.F64Value = math.Float64frombits(bits)
 
+		// Typed select
+		case OpSelectT:
+			count := r.readU32() // number of types (always 1)
+			for j := 0; j < int(count); j++ {
+				_ = r.readByte() // valtype
+			}
+
+		// Try/catch (exception handling proposal)
+		case OpTry:
+			inst.BlockType = int(r.readI32())
+		case OpCatch:
+			inst.LabelIndex = int(r.readU32()) // tag index
+		case OpThrow:
+			inst.LabelIndex = int(r.readU32()) // tag index
+		case OpRethrow:
+			inst.LabelIndex = int(r.readU32()) // depth
+		case OpDelegate:
+			inst.LabelIndex = int(r.readU32()) // depth
+		case OpCatchAll:
+			// no immediates
+
+		// Tail calls
+		case OpReturnCall:
+			inst.FuncIndex = int(r.readU32())
+		case OpReturnCallIndirect:
+			inst.TypeIndex = int(r.readU32())
+			inst.TableIndex = int(r.readU32())
+
 		// Multi-byte opcodes
 		case OpMiscPrefix:
 			miscOp := r.readU32()
@@ -360,6 +388,42 @@ func parseInstructions(r *reader, end int) []Instruction {
 				_ = r.readByte() // dst memory
 			case MiscMemoryFill:
 				_ = r.readByte() // memory index
+			default:
+				// trunc_sat opcodes (0x00-0x07) have no additional immediates
+				// memory.init (0x08), data.drop (0x09), table.* (0x0C-0x11) have immediates
+				if inst.MiscOp == 0x08 { // memory.init
+					_ = r.readU32() // data index
+					_ = r.readByte() // memory index
+				} else if inst.MiscOp == 0x09 { // data.drop
+					_ = r.readU32() // data index
+				} else if inst.MiscOp >= 0x0C && inst.MiscOp <= 0x11 { // table ops
+					_ = r.readU32() // table/elem index
+					if inst.MiscOp == 0x0E { // table.copy
+						_ = r.readU32() // second table index
+					}
+				}
+			}
+
+		// SIMD prefix (0xFD) — skip the opcode + any immediates
+		case OpSIMDPrefix:
+			simdOp := r.readU32()
+			inst.MiscOp = byte(simdOp)
+			// SIMD loads/stores (opcodes 0-11) have memarg (align + offset)
+			if simdOp <= 11 || (simdOp >= 84 && simdOp <= 91) || (simdOp >= 92 && simdOp <= 95) {
+				_ = r.readU32() // align
+				_ = r.readU32() // offset
+			}
+			// v128.const (opcode 12) has 16 bytes immediate
+			if simdOp == 12 {
+				_ = r.readBytes(16)
+			}
+			// i8x16.shuffle (opcode 13) has 16 byte lane indices
+			if simdOp == 13 {
+				_ = r.readBytes(16)
+			}
+			// extract_lane / replace_lane have 1 byte lane index
+			if (simdOp >= 21 && simdOp <= 34) {
+				_ = r.readByte()
 			}
 
 		// Everything else: no immediates

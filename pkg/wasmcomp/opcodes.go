@@ -209,8 +209,30 @@ const (
 	OpI64Extend16S byte = 0xC3
 	OpI64Extend32S byte = 0xC4
 
+	// Typed select (post-MVP)
+	OpSelectT byte = 0x1C
+
+	// Reference types
+	OpRefNull   byte = 0xD0
+	OpRefIsNull byte = 0xD1
+	OpRefFunc   byte = 0xD2
+
+	// Try/catch (exception handling - stub as nop/trap)
+	OpTry       byte = 0x06
+	OpCatch     byte = 0x07
+	OpThrow     byte = 0x08
+	OpRethrow   byte = 0x09
+	OpDelegate  byte = 0x18
+	OpCatchAll  byte = 0x19
+
+	// Tail calls
+	OpReturnCall         byte = 0x12
+	OpReturnCallIndirect byte = 0x13
+
 	// Multi-byte prefix
 	OpMiscPrefix byte = 0xFC
+	OpSIMDPrefix byte = 0xFD
+	OpAtomicPrefix byte = 0xFE
 )
 
 // Misc opcodes (after 0xFC prefix)
