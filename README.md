@@ -119,6 +119,28 @@ The AI only sends/receives the method block (~30 lines). vsp fetches the full cl
 
 See [LSP setup](#abap-lsp-for-claude-code) for configuration.
 
+### WASM-to-ABAP Compiler — Run Any Language on SAP
+
+Compile WebAssembly binaries to native ABAP. Three paths, one goal:
+
+```
+.wasm binary → pkg/wasmcomp (Go)  → ABAP source files     ← AOT compiler
+.ts source   → pkg/ts2abap (Go)   → clean OO ABAP classes  ← direct transpiler
+.wasm binary → zcl_wasm_compiler  → ABAP (on SAP itself!)  ← self-hosting, 785 lines
+```
+
+**Proven on SAP A4H:** QuickJS (1,410 functions) compiled to 101K lines ABAP. abaplint parser (26.5MB) compiled to 396K lines. Self-hosting compiler parses WASM, generates ABAP, and executes via `GENERATE SUBROUTINE POOL` — all within SAP.
+
+| What | Size | Status |
+|------|:----:|:------:|
+| QuickJS → ABAP | 101K lines | Compiled |
+| abaplint → ABAP | 396K lines | Compiled |
+| abaplint lexer (TS→ABAP) | 495 lines | Running on SAP |
+| Self-hosting compiler | 785 lines | Running on SAP |
+| Batch deploy | `vsp deploy *.clas.abap` | 40 classes, 0 failures |
+
+> *Branch: `feat/wasm-abap`. See [reports/2026-03-20-001](reports/2026-03-20-001-wasm-abap-achievement.md) for full details.*
+
 ### Other Highlights
 - **CLI DevOps Surface**: Full ABAP DevOps from the terminal — `vsp source read/write/edit/context`, `vsp test`, `vsp atc`, `vsp deploy`, `vsp transport list/get`, `vsp install zadt-vsp/abapgit`. Pipe source code, script CI/CD pipelines, bootstrap SAP systems without MCP.
 - **Bootstrap from CLI**: `vsp install abapgit` + `vsp install zadt-vsp` — deploy dependencies to SAP systems directly from the command line. No SAP GUI needed.

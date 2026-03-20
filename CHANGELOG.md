@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.30.0] - 2026-03-20
+### Features
+
+- **WASM-to-ABAP AOT Compiler** (`pkg/wasmcomp`): Compiles WebAssembly binaries to native ABAP source code. Parses .wasm binaries, converts stack machine to SSA form, emits ABAP classes or function groups. 100% opcode coverage for QuickJS (453K instructions). Three backends: FUGR, Class, Hybrid.
+- **Self-Hosting WASM Compiler on SAP** (`embedded/abap/wasm_compiler`): 785 lines of ABAP that parse any .wasm binary and compile it to executable ABAP — entirely within SAP. Uses `GENERATE SUBROUTINE POOL` for runtime compilation. Verified: `add(2,3)=5`, `factorial(10)=3,628,800` on SAP A4H.
+- **TypeScript-to-ABAP Transpiler** (`pkg/ts2abap`): Direct TS→ABAP transpilation without WASM intermediate. Produces clean OO ABAP with proper class definitions, method signatures, and ABAP naming conventions. 800x smaller output than the WASM path.
+- **abaplint Lexer on SAP**: Lars Hvam's abaplint ABAP lexer transpiled from TypeScript to native ABAP (51 classes, 495 lines). Deployed to SAP A4H, tokenizes ABAP source code at native speed.
+- **QuickJS compiled to ABAP**: Full QuickJS JavaScript engine (1,410 WASM functions) compiled to 101K lines of ABAP. 5.5x line compression via aggressive statement packing.
+- **abaplint parser compiled to ABAP**: Full @abaplint/core (26.5MB WASM) compiled to 396K lines of ABAP via the WASM compiler.
+- **Line Packing**: Pack multiple ABAP statements per line (up to 240 chars). Control flow, DATA declarations, assignments all pack together. 557K→101K lines (5.5x reduction).
+- **Function Deduplication**: SHA256 hash of function type+locals+bytecode identifies identical functions. Duplicates redirect to canonical implementation.
+- **WASI Shim**: All 9 QuickJS WASI imports implemented (fd_write with iov parsing, clock_time_get, environ stubs).
+- **Batch Deploy via CLI**: `vsp deploy *.clas.abap '$PKG'` — deploy multiple ABAP files in a shell loop. 40 token classes deployed with zero failures.
+
+## [2.29.0] - 2026-03-19
+### Features
+
+- **Hyperfocused Mode** (`--mode hyperfocused`): Single `SAP(action, target, params)` tool replaces 122 individual tools. Reduces MCP schema overhead from ~40K to ~200 tokens (99.5% reduction). All safety controls work identically.
+- **Method-Level Surgery**: Read/write individual class methods without pulling entire class source. 95% token reduction. Context compression scopes to the method's own dependencies.
+- **Unified SAP_MODE**: Merged `SAP_TOOL_MODE` into `SAP_MODE` with three values: focused (81 tools), expert (122 tools), hyperfocused (1 tool). Removed `--tool-mode` flag.
+
 ## [2.28.0] - 2026-03-18
 ### Features
 
