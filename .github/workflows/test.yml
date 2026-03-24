@@ -17,10 +17,11 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-go@v5.3.0
         with:
           go-version: '1.23'
+          cache: false
       - name: Run unit tests
         run: go test ./... -count=1 -race
       - name: Verify build
@@ -36,12 +37,13 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
     environment: sap-trial
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-go@v5.3.0
         with:
           go-version: '1.23'
+          cache: false
       - name: Run integration tests
-        run: go test -tags=integration -v -count=1 ./pkg/adt/
+        run: go test -tags=integration -v -count=1 -timeout 10m ./pkg/adt/
         env:
           SAP_URL: ${{ secrets.SAP_URL }}
           SAP_USER: ${{ secrets.SAP_USER }}
