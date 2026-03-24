@@ -97,6 +97,12 @@ type Config struct {
 	FeatureUI5       string // UI5/Fiori BSP management
 	FeatureTransport string // CTS transport management (distinct from EnableTransports safety)
 
+	// OAuth2/XSUAA authentication (for BTP/Cloud systems)
+	ServiceKeyFile    string // Path to service key JSON file
+	OAuthURL          string // OAuth2 token endpoint URL
+	OAuthClientID     string // OAuth2 client ID
+	OAuthClientSecret string // OAuth2 client secret
+
 	// Debugger configuration
 	TerminalID string // SAP GUI terminal ID for cross-tool breakpoint sharing
 
@@ -154,6 +160,17 @@ func NewServer(cfg *Config) *Server {
 		safety.AllowTransportableEdits = true
 	}
 	opts = append(opts, adt.WithSafety(safety))
+
+	// Configure OAuth/XSUAA authentication
+	if cfg.ServiceKeyFile != "" {
+		opts = append(opts, adt.WithServiceKey(cfg.ServiceKeyFile))
+	} else if cfg.OAuthURL != "" && cfg.OAuthClientID != "" {
+		opts = append(opts, adt.WithOAuth(adt.OAuthConfig{
+			TokenURL:     cfg.OAuthURL,
+			ClientID:     cfg.OAuthClientID,
+			ClientSecret: cfg.OAuthClientSecret,
+		}))
+	}
 
 	adtClient := adt.NewClient(cfg.BaseURL, cfg.Username, cfg.Password, opts...)
 

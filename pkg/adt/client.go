@@ -18,8 +18,16 @@ type Client struct {
 // NewClient creates a new ADT client with the given configuration.
 func NewClient(baseURL, username, password string, opts ...Option) *Client {
 	cfg := NewConfig(baseURL, username, password, opts...)
+	transport := NewTransport(cfg)
+
+	// If OAuth is configured, wrap the HTTP client with OAuth token injection
+	if cfg.OAuthConfig != nil {
+		tokenProvider := NewOAuthTokenProvider(*cfg.OAuthConfig)
+		transport.httpClient = NewOAuthHTTPDoer(transport.httpClient, tokenProvider)
+	}
+
 	return &Client{
-		transport: NewTransport(cfg),
+		transport: transport,
 		config:    cfg,
 	}
 }

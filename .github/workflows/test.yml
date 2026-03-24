@@ -31,7 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit
     if: >
-      github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true'
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
     environment: sap-trial
     steps:
       - uses: actions/checkout@v4

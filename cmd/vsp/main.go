@@ -93,6 +93,12 @@ func init() {
 	rootCmd.Flags().String("cookie-file", "", "Path to cookie file in Netscape format")
 	rootCmd.Flags().String("cookie-string", "", "Cookie string (key1=val1; key2=val2)")
 
+	// OAuth2/XSUAA authentication (for BTP/Cloud systems)
+	rootCmd.Flags().String("service-key", "", "Path to SAP service key JSON file (BTP/XSUAA authentication)")
+	rootCmd.Flags().String("oauth-url", "", "OAuth2/XSUAA token endpoint URL")
+	rootCmd.Flags().String("oauth-client-id", "", "OAuth2 client ID")
+	rootCmd.Flags().String("oauth-client-secret", "", "OAuth2 client secret")
+
 	// Safety options
 	rootCmd.Flags().BoolVar(&cfg.ReadOnly, "read-only", false, "Block all write operations (create, update, delete, activate)")
 	rootCmd.Flags().BoolVar(&cfg.BlockFreeSQL, "block-free-sql", false, "Block execution of arbitrary SQL queries via RunQuery")
@@ -134,6 +140,10 @@ func init() {
 	viper.BindPFlag("insecure", rootCmd.Flags().Lookup("insecure"))
 	viper.BindPFlag("cookie-file", rootCmd.Flags().Lookup("cookie-file"))
 	viper.BindPFlag("cookie-string", rootCmd.Flags().Lookup("cookie-string"))
+	viper.BindPFlag("service-key", rootCmd.Flags().Lookup("service-key"))
+	viper.BindPFlag("oauth-url", rootCmd.Flags().Lookup("oauth-url"))
+	viper.BindPFlag("oauth-client-id", rootCmd.Flags().Lookup("oauth-client-id"))
+	viper.BindPFlag("oauth-client-secret", rootCmd.Flags().Lookup("oauth-client-secret"))
 	viper.BindPFlag("read-only", rootCmd.Flags().Lookup("read-only"))
 	viper.BindPFlag("block-free-sql", rootCmd.Flags().Lookup("block-free-sql"))
 	viper.BindPFlag("allowed-ops", rootCmd.Flags().Lookup("allowed-ops"))
@@ -454,6 +464,37 @@ func processCookieAuth(cmd *cobra.Command) error {
 		cookieString = viper.GetString("COOKIE_STRING")
 	}
 
+	// Process OAuth/service key
+	serviceKeyFile := viper.GetString("SERVICE_KEY")
+	if sk, _ := cmd.Flags().GetString("service-key"); sk != "" {
+		serviceKeyFile = sk
+	}
+	oauthURL := viper.GetString("OAUTH_URL")
+	if ou, _ := cmd.Flags().GetString("oauth-url"); ou != "" {
+		oauthURL = ou
+	}
+	oauthClientID := viper.GetString("OAUTH_CLIENT_ID")
+	if oci, _ := cmd.Flags().GetString("oauth-client-id"); oci != "" {
+		oauthClientID = oci
+	}
+	oauthClientSecret := viper.GetString("OAUTH_CLIENT_SECRET")
+	if ocs, _ := cmd.Flags().GetString("oauth-client-secret"); ocs != "" {
+		oauthClientSecret = ocs
+	}
+
+	if serviceKeyFile != "" {
+		cfg.ServiceKeyFile = serviceKeyFile
+	}
+	if oauthURL != "" {
+		cfg.OAuthURL = oauthURL
+	}
+	if oauthClientID != "" {
+		cfg.OAuthClientID = oauthClientID
+	}
+	if oauthClientSecret != "" {
+		cfg.OAuthClientSecret = oauthClientSecret
+	}
+
 	// Count authentication methods
 	authMethods := 0
 	if cfg.Username != "" && cfg.Password != "" {
@@ -465,13 +506,19 @@ func processCookieAuth(cmd *cobra.Command) error {
 	if cookieString != "" {
 		authMethods++
 	}
+	if serviceKeyFile != "" {
+		authMethods++
+	}
+	if oauthURL != "" && oauthClientID != "" {
+		authMethods++
+	}
 
 	if authMethods > 1 {
-		return fmt.Errorf("only one authentication method can be used at a time (basic auth, cookie-file, or cookie-string)")
+		return fmt.Errorf("only one authentication method can be used at a time (basic auth, cookie-file, cookie-string, service-key, or oauth)")
 	}
 
 	if authMethods == 0 {
-		return fmt.Errorf("authentication required. Use --user/--password, --cookie-file, or --cookie-string")
+		return fmt.Errorf("authentication required. Use --user/--password, --cookie-file, --cookie-string, --service-key, or --oauth-url/--oauth-client-id/--oauth-client-secret")
 	}
 
 	// Process cookie file

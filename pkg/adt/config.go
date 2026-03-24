@@ -42,6 +42,10 @@ type Config struct {
 	Cookies map[string]string
 	// Verbose enables verbose logging
 	Verbose bool
+	// OAuth2/XSUAA authentication (alternative to basic auth, for BTP systems)
+	OAuthConfig *OAuthConfig
+	// OAuthError stores any error from service key parsing
+	OAuthError error
 	// Safety defines protection parameters to prevent unintended modifications
 	Safety SafetyConfig
 	// Features controls optional feature detection and enablement
