@@ -25,10 +25,14 @@ and connect the integration test suite and GitHub Actions CI to it.
 5. [HTTPS / Reverse Proxy Setup](#https--reverse-proxy-setup)
 6. [Integration Tests](#integration-tests)
    - [Running Locally](#running-locally)
+   - [Test Categories](#test-categories)
+   - [Skipped Tests](#skipped-tests)
    - [Known Test Failures](#known-test-failures)
+   - [Running a Specific Test](#running-a-specific-test)
 7. [GitHub Actions CI](#github-actions-ci)
    - [Workflow Overview](#workflow-overview)
    - [GitHub Secrets Setup](#github-secrets-setup)
+   - [CI-Specific Considerations](#ci-specific-considerations)
 8. [Troubleshooting](#troubleshooting)
 
 ---
@@ -360,26 +364,65 @@ export SAP_USER=DEVELOPER
 export SAP_PASSWORD='ABAPtr2023#00'
 export SAP_CLIENT=001
 
-go test -tags=integration -v -count=1 ./pkg/adt/
+go test -tags=integration -v -count=1 -timeout 10m ./pkg/adt/
 ```
 
 The tests:
 - Create temporary ABAP objects in the `$TMP` package
 - Exercise the full ADT API surface (read, write, activate, unit tests, etc.)
-- Clean up all created objects after the test run
+- Clean up all created objects after each test via deferred cleanup functions
+- Use the `DEVELOPER` user (not `DDIC` — see [User Access](#user-access))
+
+### Test Categories
+
+The integration test suite covers these areas:
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| **Read operations** | SearchObject, GetProgram, GetClass, GetTable, GetTableContents, RunQuery, GetPackage | Basic ADT read APIs |
+| **CDS / RAP** | GetCDSDependencies, GetDDLS, GetBDEF, GetSRVB, GetSource_RAP | CDS views, behavior definitions, service bindings |
+| **CRUD** | CRUD_FullWorkflow, LockUnlock, WriteProgram, WriteClass, CreateAndActivateProgram, CreateClassWithTests, EditSource, CreatePackage | Create, lock, modify, activate, delete ABAP objects |
+| **Dev tools** | SyntaxCheck, SyntaxCheckWithErrors, RunUnitTests, PrettyPrint, GetPrettyPrinterSettings | Syntax checker, unit test runner, pretty printer |
+| **Code intelligence** | CodeCompletion, FindReferences, FindDefinition, GetTypeHierarchy | Code completion, where-used, navigation |
+| **RAP E2E** | RAP_E2E_OData | End-to-end: DDLS → SRVD → SRVB → publish |
+| **Debugger** | ExternalBreakpoints, DebuggerListener, DebugSessionAPIs | External breakpoints and debug sessions *(skipped in CI)* |
+| **Namespaces** | Namespace_GetSource_Class, _Interface, _Program, _Function, _DDLS, _BDEF | Namespaced objects (`/DMO/`, `/UI5/`, `/AIF/`) |
+
+### Skipped Tests
+
+The following tests are automatically skipped in CI and must be run manually:
+
+| Test | Reason | Manual Run Command |
+|------|--------|--------------------|
+| `TestIntegration_ExternalBreakpoints` | Requires interactive debug session; breakpoint API needs specific user authorization | `go test -tags=integration -v -run TestIntegration_ExternalBreakpoints ./pkg/adt/` |
+| `TestIntegration_DebuggerListener` | Requires a debuggee (running ABAP program hitting a breakpoint) to catch | `go test -tags=integration -v -run TestIntegration_DebuggerListener ./pkg/adt/` |
+| `TestIntegration_DebugSessionAPIs` | Tests debug attach/step/stack APIs that need an active debug session | `go test -tags=integration -v -run TestIntegration_DebugSessionAPIs ./pkg/adt/` |
+
+These tests are skipped with `t.Skip()` because debugger operations require
+interactive sessions that cannot be reliably automated. They still exist in the
+test file and can be run manually for local development.
 
 ### Known Test Failures
 
 | Test | Status | Reason |
 |------|--------|--------|
-| `TestIntegration_RAP_E2E_OData` | Expected FAIL | Requires a pre-existing RAP service binding (`ZTEST_MCP_SB_FLIGHT`) that is not created on a fresh trial system. The test exercises the end-to-end OData pipeline; skip it unless you have the RAP infrastructure set up. |
+| `TestIntegration_RAP_E2E_OData` | May FAIL on fresh systems | The test creates a DDLS, SRVD, and SRVB (`ZTEST_MCP_SB_FLIGHT`), then publishes the service binding. The `GetSRVB` verification step may return HTTP 500 immediately after publish due to SAP internal timing. The test retries once after a 3-second delay, but this may still fail on slow systems. On subsequent runs the SRVB already exists, so the test handles the "already exists" error gracefully. |
 
-All other 33 tests should pass on a correctly configured trial system.
+All other tests should pass on a correctly configured trial system with the
+work process and session timeout tuning described above.
 
 ### Running a Specific Test
 
 ```bash
 go test -tags=integration -v -run TestIntegration_CRUD_FullWorkflow ./pkg/adt/
+```
+
+### Running Tests Without Debugger Tests
+
+To explicitly exclude debugger tests (they are already skipped, but for clarity):
+
+```bash
+go test -tags=integration -v -run "TestIntegration_[^D]|TestIntegration_D[^e]" ./pkg/adt/
 ```
 
 ---
@@ -400,7 +443,7 @@ push / pull_request / workflow_dispatch
       └── integration (ubuntu-latest) [needs: unit]
             ├── condition: PR, push to main, or manual dispatch
             ├── environment: sap-trial          ← uses GitHub environment secrets
-            └── go test -tags=integration -v ./pkg/adt/
+            └── go test -tags=integration -v -timeout 10m ./pkg/adt/
 ```
 
 The integration job only runs when:
@@ -440,6 +483,33 @@ gh secret list --env sap-trial --repo <owner>/<repo>
 gh workflow run test.yml --repo <owner>/<repo> --field run_integration=true
 ```
 
+### CI-Specific Considerations
+
+**Node.js 24 opt-in:** The workflow sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`
+at the top level to silence GitHub Actions deprecation warnings about Node.js 20.
+The `actions/checkout@v4` and `actions/setup-go@v5` actions run on Node.js 20 by
+default; this env var forces Node.js 24 ahead of GitHub's mandatory cutover.
+
+**Go module cache disabled:** The workflow uses `cache: false` for
+`actions/setup-go` because the Go toolchain download can cause tar extraction
+warnings (`/usr/bin/tar: ... Cannot open: File exists`) when the cache is
+restored. These warnings are harmless but noisy.
+
+**Test timeout:** Integration tests use `-timeout 10m` to account for network
+latency between GitHub Actions runners and the SAP system. Individual ADT calls
+from a remote CI runner take longer than from a local machine.
+
+**Debugger tests auto-skip:** The 3 debugger tests (`ExternalBreakpoints`,
+`DebuggerListener`, `DebugSessionAPIs`) call `t.Skip()` unconditionally in CI.
+They require interactive debug sessions that cannot be automated.
+
+**Session exhaustion prevention:** The SAP system must have the session timeout
+tuning from [Session Timeout Tuning](#session-timeout-tuning) applied. Without
+it, the 30+ sequential integration tests accumulate stale PRIV sessions on the
+SAP server, eventually exhausting all dialog work processes and causing 503
+errors for the remaining tests. This is especially pronounced in CI where
+network latency is higher and HTTP connections take longer to complete.
+
 ---
 
 ## Troubleshooting
@@ -452,10 +522,24 @@ succeeded but no authorisation) for the same locked user.
 
 Fix: [Unlock the DEVELOPER user via HANA SQL](#unlocking-the-developer-user).
 
-### Integration tests fail with 503 during parallel execution
+### Integration tests fail with 503 mid-run
 
-Too few dialog work processes. [Increase `rdisp/wp_no_dia`](#work-process-tuning)
-to at least 15 and restart ABAP.
+This is caused by dialog work process exhaustion. Two things must be configured:
+
+1. **Enough work processes:** Set `rdisp/wp_no_dia = 25` (see
+   [Work Process Tuning](#work-process-tuning)).
+2. **Session timeouts:** Add the session cleanup parameters (see
+   [Session Timeout Tuning](#session-timeout-tuning)). Without them, stale
+   PRIV sessions from CRUD tests hold work processes for up to 10 minutes.
+
+To diagnose, check the work process table:
+
+```bash
+docker exec a4h /usr/sap/hostctrl/exe/sapcontrol -nr 00 -function ABAPGetWPTable
+```
+
+Look for DIA work processes in `Stop, PRIV` status — these are held by stale
+sessions. If most DIA WPs are PRIV, that explains the 503 errors.
 
 ### `saplikey: profile not found`
 
@@ -487,6 +571,38 @@ pkg/adt/integration_test.go:1642:28: client.GetExternalBreakpoints undefined
 The `pkg/adt/debugger.go` file is missing from your working tree. Ensure it is
 committed and present — it defines the external breakpoint API
 (`GetExternalBreakpoints`, `SetExternalBreakpoint`, `BreakpointRequest`, etc.).
+
+### DDIC user returns 403 on CRUD operations
+
+```
+ExceptionResourceNoAuthorization: DDIC is currently editing ZMCP_XXXXX
+```
+
+The `DDIC` user does not have the `S_DEVELOP` authorization object. Use the
+`DEVELOPER` user for all ADT and integration test operations. See
+[User Access](#user-access).
+
+### RAP E2E test fails with "does already exist"
+
+```
+Resource Service Binding ZTEST_MCP_SB_FLIGHT does already exist
+```
+
+The SRVB was created by a previous test run and not cleaned up. The test now
+handles this gracefully by catching the "already exists" error and continuing.
+If it still fails, manually delete the object via ADT or SAP GUI (transaction
+`SE80`).
+
+### RAP E2E test fails with 500 on GetSRVB after publish
+
+```
+status 500 at /sap/bc/adt/businessservices/bindings/ZTEST_MCP_SB_FLIGHT
+```
+
+SAP may return HTTP 500 immediately after publishing a service binding. The test
+includes a retry with a 3-second delay, but this can still fail on slow systems.
+This is a known SAP timing issue and does not indicate a real problem — the SRVB
+was created and published successfully.
 
 ### Container starts but SAP is not ready after 10 minutes
 
