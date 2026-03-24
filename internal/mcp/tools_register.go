@@ -81,6 +81,9 @@ func (s *Server) registerTools(mode string, disabledGroups string, toolsConfig m
 	s.registerCodeIntelTools(shouldRegister)
 	s.registerUI5Tools(shouldRegister)
 	s.registerTransportTools(shouldRegister)
+	s.registerWhereUsedTools(shouldRegister)
+	s.registerEnhancementTools(shouldRegister)
+	s.registerDDICTools(shouldRegister)
 }
 
 // registerUnifiedTools registers the unified GetSource/WriteSource tools.
@@ -1430,5 +1433,166 @@ func (s *Server) registerTransportTools(shouldRegister func(string) bool) {
 	}
 }
 
+// registerWhereUsedTools registers the where-used analysis tool.
+func (s *Server) registerWhereUsedTools(shouldRegister func(string) bool) {
+	if shouldRegister("GetWhereUsed") {
+		s.mcpServer.AddTool(mcp.NewTool("GetWhereUsed",
+			mcp.WithDescription("Find all references/usages of an ABAP object across the system (where-used analysis). "+
+				"Uses Eclipse ADT compatible 2-step scope-based API for comprehensive results. "+
+				"Supports: classes, interfaces, programs, tables, domains, data elements, CDS views, structures, packages, function groups."),
+			mcp.WithString("object_url",
+				mcp.Description("ADT URL of the object (e.g., '/sap/bc/adt/oo/classes/ZCL_TEST'). Alternative to object_type + object_name."),
+			),
+			mcp.WithString("object_type",
+				mcp.Description("Object type: CLAS, INTF, PROG, TABL, DOMA, DTEL, DDLS, STRU, DEVC, FUGR. Use with object_name."),
+			),
+			mcp.WithString("object_name",
+				mcp.Description("Object name (e.g., 'ZCL_TEST'). Use with object_type."),
+			),
+			mcp.WithBoolean("enable_all_types",
+				mcp.Description("Search across ALL object types (default: false, uses SAP-selected types)"),
+			),
+		), s.handleGetWhereUsed)
+	}
+}
 
+// registerEnhancementTools registers enhancement framework tools.
+func (s *Server) registerEnhancementTools(shouldRegister func(string) bool) {
+	if shouldRegister("GetEnhancementSpot") {
+		s.mcpServer.AddTool(mcp.NewTool("GetEnhancementSpot",
+			mcp.WithDescription("Get enhancement spot metadata including BAdI definitions, interfaces, and package info. "+
+				"Enhancement spots are containers for BAdIs (Business Add-Ins) that allow extending SAP standard functionality."),
+			mcp.WithString("spot_name",
+				mcp.Required(),
+				mcp.Description("Name of the enhancement spot (e.g., 'BADI_MATERIAL_CHECK')"),
+			),
+		), s.handleGetEnhancementSpot)
+	}
 
+	if shouldRegister("GetEnhancements") {
+		s.mcpServer.AddTool(mcp.NewTool("GetEnhancements",
+			mcp.WithDescription("Get enhancement elements (user exits, BAdI implementations) applied to an ABAP object's source code. "+
+				"Shows what enhancements are active on a program, class, or include."),
+			mcp.WithString("object_url",
+				mcp.Required(),
+				mcp.Description("ADT URL of the object (e.g., '/sap/bc/adt/programs/programs/ZTEST', '/sap/bc/adt/oo/classes/ZCL_TEST')"),
+			),
+		), s.handleGetEnhancements)
+	}
+
+	if shouldRegister("GetEnhancementImpl") {
+		s.mcpServer.AddTool(mcp.NewTool("GetEnhancementImpl",
+			mcp.WithDescription("Get the source code of a specific enhancement implementation."),
+			mcp.WithString("spot_name",
+				mcp.Required(),
+				mcp.Description("Enhancement spot name"),
+			),
+			mcp.WithString("impl_name",
+				mcp.Required(),
+				mcp.Description("Enhancement implementation name"),
+			),
+		), s.handleGetEnhancementImpl)
+	}
+}
+
+// registerDDICTools registers DDIC tools (Domain, DataElement, Structure, DDLX).
+func (s *Server) registerDDICTools(shouldRegister func(string) bool) {
+	// Domain tools
+	if shouldRegister("GetDomain") {
+		s.mcpServer.AddTool(mcp.NewTool("GetDomain",
+			mcp.WithDescription("Get ABAP domain definition including data type, length, fixed values, and value table."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Domain name (e.g., 'MATNR', 'BUKRS')"),
+			),
+		), s.handleGetDomain)
+	}
+
+	if shouldRegister("CreateDomain") {
+		s.mcpServer.AddTool(mcp.NewTool("CreateDomain",
+			mcp.WithDescription("Create a new ABAP domain in the Data Dictionary."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Domain name")),
+			mcp.WithString("description", mcp.Description("Domain description")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Package name")),
+			mcp.WithString("data_type", mcp.Required(), mcp.Description("ABAP data type: CHAR, NUMC, DEC, INT4, STRING, etc.")),
+			mcp.WithNumber("length", mcp.Description("Field length")),
+			mcp.WithNumber("decimals", mcp.Description("Decimal places (for DEC type)")),
+			mcp.WithString("transport", mcp.Description("Transport request number")),
+		), s.handleCreateDomain)
+	}
+
+	if shouldRegister("ValidateDomain") {
+		s.mcpServer.AddTool(mcp.NewTool("ValidateDomain",
+			mcp.WithDescription("Validate a domain name and package before creation."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Domain name")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Package name")),
+			mcp.WithString("description", mcp.Description("Domain description")),
+		), s.handleValidateDomain)
+	}
+
+	// DataElement tools
+	if shouldRegister("GetDataElement") {
+		s.mcpServer.AddTool(mcp.NewTool("GetDataElement",
+			mcp.WithDescription("Get ABAP data element definition including domain reference, field labels, and type information."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Data element name (e.g., 'MATNR', 'BUKRS')"),
+			),
+		), s.handleGetDataElement)
+	}
+
+	if shouldRegister("CreateDataElement") {
+		s.mcpServer.AddTool(mcp.NewTool("CreateDataElement",
+			mcp.WithDescription("Create a new ABAP data element in the Data Dictionary."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Data element name")),
+			mcp.WithString("description", mcp.Description("Data element description")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Package name")),
+			mcp.WithString("domain_name", mcp.Required(), mcp.Description("Domain name to reference")),
+			mcp.WithString("transport", mcp.Description("Transport request number")),
+		), s.handleCreateDataElement)
+	}
+
+	if shouldRegister("ValidateDataElement") {
+		s.mcpServer.AddTool(mcp.NewTool("ValidateDataElement",
+			mcp.WithDescription("Validate a data element name and package before creation."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Data element name")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Package name")),
+			mcp.WithString("description", mcp.Description("Data element description")),
+		), s.handleValidateDataElement)
+	}
+
+	// Note: GetStructure already registered in registerReadTools
+
+	// DDLX / Metadata Extension tools
+	if shouldRegister("GetMetadataExtension") {
+		s.mcpServer.AddTool(mcp.NewTool("GetMetadataExtension",
+			mcp.WithDescription("Get CDS metadata extension (DDLX) definition and source. "+
+				"Metadata extensions add UI annotations to CDS views for Fiori Elements apps."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Metadata extension name"),
+			),
+		), s.handleGetMetadataExtension)
+	}
+
+	if shouldRegister("GetMetadataExtensionSource") {
+		s.mcpServer.AddTool(mcp.NewTool("GetMetadataExtensionSource",
+			mcp.WithDescription("Get the source code of a CDS metadata extension (DDLX)."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Metadata extension name"),
+			),
+		), s.handleGetMetadataExtensionSource)
+	}
+
+	if shouldRegister("CreateMetadataExtension") {
+		s.mcpServer.AddTool(mcp.NewTool("CreateMetadataExtension",
+			mcp.WithDescription("Create a new CDS metadata extension (DDLX) for adding UI annotations to CDS views."),
+			mcp.WithString("name", mcp.Required(), mcp.Description("Metadata extension name")),
+			mcp.WithString("description", mcp.Description("Description")),
+			mcp.WithString("package", mcp.Required(), mcp.Description("Package name")),
+			mcp.WithString("source", mcp.Required(), mcp.Description("DDLX source code")),
+			mcp.WithString("transport", mcp.Description("Transport request number")),
+		), s.handleCreateMetadataExtension)
+	}
+}

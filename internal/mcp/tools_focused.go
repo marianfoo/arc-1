@@ -87,5 +87,20 @@ func focusedToolSet() map[string]bool {
 		"ListTransports": true,
 		"GetTransport":   true,
 
+		// Where-Used Analysis (1)
+		"GetWhereUsed": true,
+
+		// Enhancement Framework (3 read-only)
+		"GetEnhancementSpot": true,
+		"GetEnhancements":    true,
+		"GetEnhancementImpl": true,
+
+		// DDIC Read (4 read-only)
+		"GetDomain":                  true,
+		"GetDataElement":             true,
+		"GetStructure":               true,
+		"GetMetadataExtension":       true,
+		"GetMetadataExtensionSource": true,
+
 	}
 }
