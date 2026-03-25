@@ -26,6 +26,12 @@ func NewClient(baseURL, username, password string, opts ...Option) *Client {
 		transport.httpClient = NewOAuthHTTPDoer(transport.httpClient, tokenProvider)
 	}
 
+	// If principal propagation is configured, set it on the transport.
+	// When active, requests with OIDC username in context will use ephemeral certs.
+	if cfg.PPDoer != nil {
+		transport.SetPrincipalPropagation(cfg.PPDoer)
+	}
+
 	return &Client{
 		transport: transport,
 		config:    cfg,

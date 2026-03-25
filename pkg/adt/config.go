@@ -55,6 +55,9 @@ type Config struct {
 	ClientCertFile string // Path to PEM-encoded client certificate
 	ClientKeyFile  string // Path to PEM-encoded client private key
 	CACertFile     string // Path to PEM-encoded CA certificate (for custom/internal CAs)
+	// Principal propagation doer for per-user ephemeral X.509 auth.
+	// When set, requests with OIDC username in context use ephemeral certs.
+	PPDoer *PrincipalPropagationDoer
 	// Safety defines protection parameters to prevent unintended modifications
 	Safety SafetyConfig
 	// Features controls optional feature detection and enablement
@@ -247,6 +250,15 @@ func WithFeatures(features FeatureConfig) Option {
 func WithTerminalID(terminalID string) Option {
 	return func(c *Config) {
 		c.TerminalID = terminalID
+	}
+}
+
+// WithPrincipalPropagation configures per-user ephemeral X.509 cert auth.
+// When set, requests with an OIDC username in context generate ephemeral certs
+// instead of using basic auth. Requires OIDC middleware to set the username.
+func WithPrincipalPropagation(ppDoer *PrincipalPropagationDoer) Option {
+	return func(c *Config) {
+		c.PPDoer = ppDoer
 	}
 }
 

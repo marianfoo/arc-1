@@ -31,6 +31,10 @@ type Transport struct {
 	// Session management
 	sessionID string
 	sessionMu sync.RWMutex
+
+	// Principal propagation: when set, per-request ephemeral certs override basic auth.
+	// The doer generates an X.509 cert with CN=username for each SAP request.
+	ppDoer *PrincipalPropagationDoer
 }
 
 // NewTransport creates a new Transport with the given configuration.
@@ -48,6 +52,13 @@ func NewTransportWithClient(cfg *Config, client HTTPDoer) *Transport {
 		config:     cfg,
 		httpClient: client,
 	}
+}
+
+// SetPrincipalPropagation configures the transport for per-user ephemeral X.509 auth.
+// When set, requests with an OIDC username in context will use ephemeral certificates
+// instead of basic auth. The username is extracted by OIDCMiddleware upstream.
+func (t *Transport) SetPrincipalPropagation(ppDoer *PrincipalPropagationDoer) {
+	t.ppDoer = ppDoer
 }
 
 // RequestOptions contains options for an HTTP request.
@@ -93,8 +104,18 @@ func (t *Transport) Request(ctx context.Context, path string, opts *RequestOptio
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	// Set authentication - either basic auth or cookies
-	if t.config.HasBasicAuth() {
+	// Set authentication.
+	// Priority: principal propagation > basic auth > cookies
+	// When PP is active and a username is in context, the httpClient is overridden
+	// per-request below (after headers are set).
+	usePP := false
+	if t.ppDoer != nil {
+		if _, ok := OIDCUsernameFromContext(ctx); ok {
+			usePP = true
+			// Don't set basic auth — ephemeral cert handles authentication
+		}
+	}
+	if !usePP && t.config.HasBasicAuth() {
 		req.SetBasicAuth(t.config.Username, t.config.Password)
 	}
 
@@ -119,8 +140,13 @@ func (t *Transport) Request(ctx context.Context, path string, opts *RequestOptio
 		req.Header.Set("X-CSRF-Token", token)
 	}
 
-	// Execute request
-	resp, err := t.httpClient.Do(req)
+	// Execute request — use PP doer for per-user ephemeral cert if active
+	var resp *http.Response
+	if usePP {
+		resp, err = t.ppDoer.Do(req)
+	} else {
+		resp, err = t.httpClient.Do(req)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
@@ -215,8 +241,14 @@ func (t *Transport) retryRequest(ctx context.Context, path string, opts *Request
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	// Set authentication
-	if t.config.HasBasicAuth() {
+	// Set authentication — check for PP context first
+	usePP := false
+	if t.ppDoer != nil {
+		if _, ok := OIDCUsernameFromContext(ctx); ok {
+			usePP = true
+		}
+	}
+	if !usePP && t.config.HasBasicAuth() {
 		req.SetBasicAuth(t.config.Username, t.config.Password)
 	}
 	for name, value := range t.config.Cookies {
@@ -230,7 +262,12 @@ func (t *Transport) retryRequest(ctx context.Context, path string, opts *Request
 		req.Header.Set("X-sap-adt-sessiontype", "stateful")
 	}
 
-	resp, err := t.httpClient.Do(req)
+	var resp *http.Response
+	if usePP {
+		resp, err = t.ppDoer.Do(req)
+	} else {
+		resp, err = t.httpClient.Do(req)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("executing retry request: %w", err)
 	}
