@@ -60,7 +60,7 @@ SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER BY cnt DESC
 
 ```mermaid
 flowchart TD
-    subgraph Focused["Focused Mode (Default) - 19 Tools"]
+    subgraph Focused["Focused Mode (Default) - 81 Tools"]
         U[Unified Tools]
         U --> GS[GetSource]
         U --> WS[WriteSource]
@@ -87,7 +87,7 @@ flowchart TD
         T --> UT[RunUnitTests]
     end
 
-    subgraph Expert["Expert Mode - 45 Tools"]
+    subgraph Expert["Expert Mode - 122 Tools"]
         direction TB
         F[All Focused Tools]
         A[+ Atomic Operations]
@@ -481,6 +481,4 @@ flowchart TD
 
 ---
 
-**Last Updated:** 2025-12-04
-**MCP Server Version:** v2.2.0+
 **Maintained by:** vibing-steampunk project

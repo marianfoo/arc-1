@@ -1,10 +1,10 @@
-# AGENTS.md - AI Assistant Guidelines
+# Developer & AI Assistant Guide
 
-This file provides context for AI assistants (Codex, etc.) working on this project.
+This file provides context for developers and AI assistants (Claude, etc.) working on this project.
 
 ## Project Overview
 
-**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 54 essential tools (focused mode, default) or 99 complete tools (expert mode) for use with Codex and other MCP-compatible LLMs.
+**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 81 essential tools (focused mode, default) or 122 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
 
 ## Quick Reference
 
@@ -46,7 +46,7 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_COOKIE_FILE` / `--cookie-file` | Path to Netscape-format cookie file |
 | `SAP_COOKIE_STRING` / `--cookie-string` | Cookie string (key1=val1; key2=val2) |
-| `SAP_MODE` / `--mode` | Tool mode: `focused` (20 tools, default) or `expert` (47 tools) |
+| `SAP_MODE` / `--mode` | Tool mode: `focused` (81 tools, default), `expert` (122 tools), or `hyperfocused` (1 tool) |
 | `SAP_DISABLED_GROUPS` / `--disabled-groups` | Disable tool groups: `5`/`U`=UI5, `T`=Tests, `H`=HANA, `D`=Debug |
 | `SAP_VERBOSE` / `--verbose` | Enable verbose logging to stderr |
 | **Safety Configuration** | |
@@ -67,7 +67,7 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 
 ```
 cmd/vsp/main.go       # Entry point
-internal/mcp/server.go       # MCP server (45 tool handlers, mode-aware)
+internal/mcp/server.go       # MCP server (122 tool handlers, mode-aware)
 pkg/
 ├── adt/
 │   ├── client.go             # ADT client + read operations
@@ -199,14 +199,14 @@ See `embedded/abap/zcl_vsp_amdp_service.clas.abap` for ABAP service implementati
 
 ## Testing
 
-### Unit Tests (244 tests)
+### Unit Tests (270+ tests)
 - Mock HTTP client (see `client_test.go`, `http_test.go`, `workflows_test.go`)
 - Cookie parsing tests (`cookies_test.go`)
 - Unified tools tests (GetSource, WriteSource, GrepObjects, GrepPackages)
 - Safety checks (`safety_test.go`)
 - Run: `go test ./...`
 
-### Integration Tests (21+ tests)
+### Integration Tests (34+ tests)
 - Build tag: `integration`
 - Create objects in `$TMP` package, clean up after
 - Run: `go test -tags=integration -v ./pkg/adt/`
@@ -356,131 +356,18 @@ When creating a new report:
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 99 (54 focused, 99 expert) |
-| **Unit Tests** | 244 |
-| **Integration Tests** | 34 |
-| **Platforms** | 9 |
-| **Phase** | 5 (TAS-Style Debugging) - Complete |
-| **Reports** | 29 numbered + 6 reference docs |
-| **Lua Scripting** | ✅ Complete (v2.14 - REPL, 40+ bindings, example scripts) |
-| **Cache Package** | ✅ Complete (in-memory + SQLite) |
-| **Safety System** | ✅ Complete (operation filtering, package restrictions) |
-| **Feature Detection** | ✅ Complete (GetFeatures tool, auto/on/off for abapGit, RAP, AMDP, UI5, Transport) |
-| **DSL Package** | ✅ Complete (fluent API, YAML workflows, test orchestration, batch import/export) |
-| **Batch Import/Export** | ✅ Complete (v2.12 - abapGit-compatible format, priority ordering) |
-| **Pipeline Builder** | ✅ Complete (v2.12 - DeployPipeline, RAPPipeline, ExportPipeline) |
-| **ExecuteABAP** | ✅ Complete (code execution via Unit Test wrapper) |
-| **System Info** | ✅ Complete (GetSystemInfo, GetInstalledComponents) |
-| **Code Analysis** | ✅ Complete (GetCallGraph, GetObjectStructure) |
-| **Runtime Errors** | ✅ Complete (GetDumps, GetDump - RABAX) |
-| **ABAP Profiler** | ✅ Complete (ListTraces, GetTrace - ATRA) |
-| **SQL Trace** | ✅ Complete (GetSQLTraceState, ListSQLTraces - ST05) |
-| **RAP OData E2E** | ✅ Complete (DDLS, SRVD, SRVB create + publish) |
-| **External Debugger** | ⚠️ HTTP unreliable → Use WebSocket ZADT_VSP (stateful APC) |
-| **AMDP Debugger** | ⚠️ Experimental (Session works, breakpoints need investigation - expert mode only) |
-| **Transport Mgmt** | ✅ Complete (5 tools with safety controls - v2.11.0) |
-| **UI5/BSP Mgmt** | ✅ Partial (Read ops work; Create needs alternate API) |
-| **Tool Groups** | ✅ Complete (--disabled-groups: 5/U, T, H, D, C) |
-| **Class Includes** | ✅ Complete (v2.12 - testclasses, locals_def, locals_imp, macros) |
-| **abapGit Integration** | ✅ Complete (v2.16.0 - WebSocket, GitTypes, GitExport - 158 object types) |
-| **Install Tools** | ✅ Complete (v2.17.0 - InstallZADTVSP, InstallAbapGit, ListDependencies) |
+| **Tools** | 122 (81 focused, 122 expert) |
+| **Unit Tests** | 270+ |
+| **Integration Tests** | 34+ |
+| **Platforms** | 9 (Linux/macOS/Windows × amd64/arm64/386) |
+| **Safety System** | ✅ Complete (read-only, package/op filtering, transport controls) |
+| **DSL Package** | ✅ Complete (fluent API, YAML workflows, batch import/export) |
+| **abapGit Integration** | ✅ Complete (GitTypes, GitExport — 158 object types) |
+| **Install Tools** | ✅ Complete (InstallZADTVSP, InstallAbapGit) |
+| **External Debugger** | ⚠️ Use WebSocket ZADT_VSP (stateful APC) |
+| **AMDP Debugger** | ⚠️ Experimental (expert mode only) |
 
-### DSL & Workflow Usage
-
-```bash
-# Run unit tests for a package
-vsp workflow test "$TMP"
-vsp workflow test "$ZRAY*" --parallel 4 --json
-
-# Run YAML workflow
-vsp workflow run examples/workflows/ci-pipeline.yaml --var PACKAGE=\$TMP
-```
-
-```go
-// Go fluent API - Search & Test
-objects, _ := dsl.Search(client).
-    Query("ZCL_*").
-    Classes().
-    InPackage("$TMP").
-    Execute(ctx)
-
-summary, _ := dsl.Test(client).
-    Objects(objects...).
-    IncludeDangerous().
-    Parallel(4).
-    Run(ctx)
-
-// Batch Import (abapGit-compatible)
-result, _ := dsl.Import(client).
-    FromDirectory("./src/").
-    ToPackage("$ZRAY").
-    RAPOrder().  // DDLS → BDEF → Classes → SRVD
-    Execute(ctx)
-
-// Batch Export (with all class includes)
-result, _ := dsl.Export(client).
-    Classes("ZCL_TRAVEL").
-    ToDirectory("./backup/").
-    Execute(ctx)
-
-// RAP Deployment Pipeline
-pipeline := dsl.RAPPipeline(client, "./src/", "$ZRAY", "ZTRAVEL_SB")
-```
-
-### Roadmap
-- **Phase 5:** Graph Traversal & Analysis (Design: Reports 005-007)
-- **Phase 6:** Standard API Surface Scraper (Design: Report 006)
-- **Phase 7:** Test Intelligence (Design: Report 008)
-- Transport Management
-- ATC Integration
-- CDS View Support
-- RAP/BDEF Support
-
----
-
-## Last Session Reference (2026-01-07)
-
-### Objective: SAP GUI Terminal ID Integration - COMPLETED ✅
-
-Added `SAP_TERMINAL_ID` config to enable cross-tool breakpoint sharing with SAP GUI.
-
-### What Was Done
-
-1. ✅ **Merged Community PRs** (#4, #6 from vitalratel)
-   - MoveObject tool, WebSocket refactoring, ZCL_VSP_UTILS
-
-2. ✅ **Terminal ID Feature** - SAP GUI breakpoint compatibility
-   - Added `--terminal-id` CLI flag
-   - Added `SAP_TERMINAL_ID` env variable support
-   - Updated `pkg/adt/config.go` - `TerminalID` field + `WithTerminalID()` option
-   - Updated `pkg/adt/debugger.go` - `SetTerminalID()` function, priority: custom > user-based > default
-   - Updated `internal/mcp/server.go` - Config field + initialization
-   - Updated `cmd/vsp/main.go` - flag + viper binding
-
-### How It Works
-
-SAP GUI stores terminal ID in:
-- **Windows**: Registry `HKCU\Software\SAP\ABAP Debugging\TerminalID`
-- **Linux/Mac**: File `~/.SAP/ABAPDebugging/terminalId`
-
-By configuring vsp to use the same terminal ID, breakpoints set by vsp can be hit by SAP GUI sessions!
-
-### Configuration
-
-```bash
-# .env file
-SAP_TERMINAL_ID=D0C586D015974B75BFB2A306A4A13AEA
-
-# Or CLI
-vsp --terminal-id D0C586D015974B75BFB2A306A4A13AEA
-```
-
-### TODO
-
-- [ ] **Re-add ALV capture for RunReport**
-- [ ] **Test SAP GUI breakpoint sharing** - Set breakpoint via vsp, trigger in SAP GUI
-
-### Previous Session: Method-Level Source Operations (2026-01-06)
+See [docs/roadmap.md](roadmap.md) for planned features.
 
 - Added `method` parameter to GetSource, EditSource, WriteSource
 - 95% token reduction for method-level work

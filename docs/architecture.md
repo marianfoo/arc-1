@@ -21,8 +21,8 @@ flowchart TB
 
         subgraph Core["internal/mcp/server.go"]
             direction LR
-            Focused[Focused Mode<br/>54 Tools]
-            Expert[Expert Mode<br/>99 Tools]
+            Focused[Focused Mode<br/>81 Tools]
+            Expert[Expert Mode<br/>122 Tools]
         end
 
         subgraph Safety["Safety Layer"]
@@ -278,7 +278,7 @@ vibing-steampunk/
 │   └── main.go                 #   Flags, env vars, auth, server startup
 │
 ├── internal/mcp/               # MCP protocol layer
-│   └── server.go               #   99 tool handlers, mode-aware registration
+│   └── server.go               #   122 tool handlers, mode-aware registration
 │
 ├── pkg/adt/                    # ADT client library (core)
 │   ├── client.go               #   Read operations + search

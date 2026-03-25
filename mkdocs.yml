@@ -1,0 +1,74 @@
+site_name: vsp — SAP ADT MCP Server
+site_description: Enterprise-ready MCP proxy for SAP ABAP Development Tools. Single binary, admin safety controls, works with Claude, Copilot, and all MCP clients.
+site_url: https://oisee.github.io/vibing-steampunk/
+repo_url: https://github.com/oisee/vibing-steampunk
+repo_name: oisee/vibing-steampunk
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Tools Reference: tools.md
+  - MCP Usage Guide: mcp-usage.md
+  - CLI Guide: cli-guide.md
+  - Client Setup:
+      - Overview: cli-agents/README.md
+  - SAP Trial Setup: sap-trial-setup.md
+  - Docker: docker.md
+  - DSL & Workflows: DSL.md
+  - Developer Guide: agents.md
+  - Changelog: changelog.md
+  - Roadmap: roadmap.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/oisee/vibing-steampunk
