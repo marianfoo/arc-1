@@ -114,11 +114,13 @@ Choose how many tools to expose based on your model and use case:
 
 | Mode | Tools | Schema tokens | Best for |
 |------|------:|:-------------:|----------|
+| `arc1` | 11 intent-based | ~5K | Enterprise connectors (Copilot Studio), mid-tier LLMs |
 | `hyperfocused` | 1 universal `SAP()` | ~200 | Local/small models, automation, minimal context |
 | `focused` (default) | 81 | ~14K | Standard AI-assisted development |
 | `expert` | 122 | ~40K | Power users, edge cases, full ADT access |
 
 ```bash
+vsp --mode arc1          # 11 tools for enterprise AI connectors
 vsp --mode focused       # default
 vsp --mode expert
 vsp --mode hyperfocused  # SAP(action, target, params)
@@ -278,8 +280,8 @@ See **[docs/cli-guide.md](docs/cli-guide.md)** for the full command reference.
 make build                                     # current platform
 make build-all                                 # all 9 platforms (Linux/macOS/Windows × amd64/arm64/386)
 
-go test ./...                                  # unit tests (270+)
-go test -tags=integration -v ./pkg/adt/        # integration tests (requires SAP)
+go test ./...                                  # unit tests — no SAP required
+go test -tags=integration -v ./pkg/adt/        # integration tests — skipped if no SAP vars set
 ```
 
 See [CLAUDE.md](CLAUDE.md) for codebase structure and contribution guidelines.

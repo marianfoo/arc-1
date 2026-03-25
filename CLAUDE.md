@@ -17,9 +17,12 @@ go build -o vsp ./cmd/vsp
 # Run unit tests
 go test ./...
 
-# Run integration tests (requires SAP system)
-SAP_URL=http://host:port SAP_USER=user SAP_PASSWORD=pass SAP_CLIENT=001 \
-  go test -tags=integration -v ./pkg/adt/
+# Run integration tests (SAP system optional — tests are skipped if not configured)
+# Option A: dedicated test credentials in .env (recommended)
+#   TEST_SAP_URL=http://host:50000 TEST_SAP_USER=user TEST_SAP_PASSWORD=pass
+# Option B: shared credentials (inline or via SAP_* in .env)
+#   SAP_URL=http://host:port SAP_USER=user SAP_PASSWORD=pass SAP_CLIENT=001
+go test -tags=integration -v ./pkg/adt/
 ```
 
 ### Configuration (Priority: CLI > Env > .env > Defaults)
@@ -49,7 +52,7 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_COOKIE_FILE` / `--cookie-file` | Path to Netscape-format cookie file |
 | `SAP_COOKIE_STRING` / `--cookie-string` | Cookie string (key1=val1; key2=val2) |
-| `SAP_MODE` / `--mode` | Tool mode: `focused` (81 tools, default) or `expert` (122 tools) |
+| `SAP_MODE` / `--mode` | Tool mode: `arc1` (11 intent-based tools for Copilot Studio), `focused` (81 tools, default) or `expert` (122 tools) |
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
 | `SAP_DISABLED_GROUPS` / `--disabled-groups` | Disable tool groups: `5`/`U`=UI5, `T`=Tests, `H`=HANA, `D`=Debug |
 | `SAP_VERBOSE` / `--verbose` | Enable verbose logging to stderr |
@@ -211,18 +214,32 @@ See `embedded/abap/zcl_vsp_amdp_service.clas.abap` for ABAP service implementati
 
 ## Testing
 
-### Unit Tests (244 tests)
+### Unit Tests (250+ tests)
+- No SAP system required — always run with `go test ./...`
 - Mock HTTP client (see `client_test.go`, `http_test.go`, `workflows_test.go`)
 - Cookie parsing tests (`cookies_test.go`)
 - Unified tools tests (GetSource, WriteSource, GrepObjects, GrepPackages)
-- Safety checks (`safety_test.go`)
-- Run: `go test ./...`
+- Safety checks (`safety_test.go`) — includes read-only mode, operation filtering, package restrictions
+- Server mode tests (`server_mode_test.go`) — verifies safety flags are wired correctly
 
 ### Integration Tests (21+ tests)
-- Build tag: `integration`
+- Build tag: `integration` — skipped automatically when no SAP credentials are configured
 - Create objects in `$TMP` package, clean up after
-- Run: `go test -tags=integration -v ./pkg/adt/`
 - Test program for manual testing: `ZTEST_MCP_CRUD` in `$TMP`
+- Run: `go test -tags=integration -v ./pkg/adt/`
+
+**Credentials** (resolved in priority order):
+
+| Variable | Description |
+|----------|-------------|
+| `TEST_SAP_URL` | Dedicated test system URL (takes priority over `SAP_URL`) |
+| `TEST_SAP_USER` | Test user (takes priority over `SAP_USER`) |
+| `TEST_SAP_PASSWORD` | Test password (takes priority over `SAP_PASSWORD`) |
+| `TEST_SAP_CLIENT` | SAP client (default: `001`) |
+| `TEST_SAP_LANGUAGE` | Language (default: `EN`) |
+| `TEST_SAP_INSECURE` | Skip TLS (`true`/`false`) |
+
+Set these in `.env` (see `.env.example`). Using `TEST_SAP_*` lets a running MCP server and integration tests point at different users/systems simultaneously.
 
 ## ADT API Reference
 
