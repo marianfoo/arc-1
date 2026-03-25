@@ -1,6 +1,6 @@
 # Phase 4: BTP Cloud Foundry Deployment
 
-Deploy vsp on SAP BTP Cloud Foundry with XSUAA authentication and Destination Service for SAP connectivity.
+Deploy arc1 on SAP BTP Cloud Foundry with XSUAA authentication and Destination Service for SAP connectivity.
 
 ## When to Use
 
@@ -13,7 +13,7 @@ Deploy vsp on SAP BTP Cloud Foundry with XSUAA authentication and Destination Se
 
 ```
 ┌──────────────────┐     XSUAA OAuth      ┌──────────────────┐     Destination Svc    ┌────────────┐
-│  MCP Client      │ ──────────────────► │  vsp on BTP CF   │ ────────────────────► │  SAP ABAP  │
+│  MCP Client      │ ──────────────────► │  arc1 on BTP CF   │ ────────────────────► │  SAP ABAP  │
 │  (IDE / Copilot) │   JWT Bearer        │  (MTA deploy)    │   via Cloud Connector │  (on-prem) │
 └──────────────────┘                     └──────────────────┘                       └────────────┘
 ```
@@ -34,13 +34,13 @@ Deploy vsp on SAP BTP Cloud Foundry with XSUAA authentication and Destination Se
 cf login -a https://api.cf.<landscape>.hana.ondemand.com
 
 # Create XSUAA service (with xs-security.json)
-cf create-service xsuaa application vsp-xsuaa -c xs-security.json
+cf create-service xsuaa application arc1-xsuaa -c xs-security.json
 
 # Create Destination service
-cf create-service destination lite vsp-destination
+cf create-service destination lite arc1-destination
 
 # Create Connectivity service
-cf create-service connectivity lite vsp-connectivity
+cf create-service connectivity lite arc1-connectivity
 ```
 
 ### 2. Configure SAP Destination
@@ -58,11 +58,11 @@ In BTP Cockpit → Connectivity → Destinations:
 | Password | `ServicePassword123` |
 | sap-client | `001` |
 
-### 3. Deploy vsp
+### 3. Deploy arc1
 
 ```bash
 # Build for Linux
-GOOS=linux GOARCH=amd64 go build -o vsp ./cmd/vsp
+GOOS=linux GOARCH=amd64 go build -o arc1 ./cmd/vsp
 
 # Deploy
 cf push
@@ -70,7 +70,7 @@ cf push
 
 ### 4. Configure MCP Clients
 
-The vsp URL will be: `https://vsp-mcp-server.cfapps.<landscape>.hana.ondemand.com/mcp`
+The arc1 URL will be: `https://arc1-mcp-server.cfapps.<landscape>.hana.ondemand.com/mcp`
 
 ## Status
 

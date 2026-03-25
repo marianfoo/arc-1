@@ -1,7 +1,7 @@
 site_name: vsp — SAP ADT MCP Server
 site_description: Enterprise-ready MCP proxy for SAP ABAP Development Tools. Single binary, admin safety controls, works with Claude, Copilot, and all MCP clients.
 site_url: https://marianfoo.github.io/vibing-steampunk/
-repo_url: https://github.com/marianfoo/vibing-steampunk
+repo_url: https://github.com/marianfoo/arc-1
 repo_name: marianfoo/vibing-steampunk
 edit_uri: edit/main/docs/
 
@@ -48,7 +48,13 @@ nav:
   - SAP Trial Setup: sap-trial-setup.md
   - Docker: docker.md
   - DSL & Workflows: DSL.md
-  - Enterprise Auth: enterprise-auth.md
+  - Authentication:
+      - Enterprise Auth: enterprise-auth.md
+      - Phase 1 – API Key: phase1-api-key-setup.md
+      - Phase 2 – OAuth / JWT: phase2-oauth-setup.md
+      - Phase 3 – Principal Propagation: phase3-principal-propagation-setup.md
+      - Phase 4 – BTP Deployment: phase4-btp-deployment.md
+      - Auth Test Process: auth-test-process.md
   - Vision: vision.md
   - Developer Guide: agents.md
   - Reviewer Guide: reviewer-guide.md
@@ -83,4 +89,4 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/marianfoo/vibing-steampunk
+      link: https://github.com/marianfoo/arc-1

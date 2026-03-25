@@ -1,12 +1,12 @@
 # Authentication Test Process
 
-Step-by-step verification for each authentication phase. Run these tests after deploying vsp to confirm each phase works as intended.
+Step-by-step verification for each authentication phase. Run these tests after deploying arc1 to confirm each phase works as intended.
 
 ## Prerequisites
 
 ```bash
 # Build vsp
-go build -o vsp ./cmd/vsp
+go build -o arc1 ./cmd/vsp
 
 # Run unit tests first (all 250+ must pass)
 go test ./...
@@ -27,10 +27,10 @@ Expected: All 12 tests pass (valid key, invalid key, missing header, case-insens
 
 ### Manual Integration Test
 
-**1. Start vsp with API key:**
+**1. Start arc1 with API key:**
 
 ```bash
-./vsp --url http://your-sap:8000 \
+./arc1 --url http://your-sap:8000 \
   --user DEVELOPER --password secret --client 001 \
   --transport http-streamable --http-addr 127.0.0.1:8080 \
   --api-key 'test-key-12345' --verbose
@@ -106,10 +106,10 @@ go test ./internal/mcp/ -run "TestProtectedResourceMetadataHandler" -v
 
 **Prerequisites:** You need an OIDC Identity Provider (EntraID, Keycloak, Cognito).
 
-**1. Start vsp with OIDC:**
+**1. Start arc1 with OIDC:**
 
 ```bash
-./vsp --url http://your-sap:8000 \
+./arc1 --url http://your-sap:8000 \
   --user DEVELOPER --password secret --client 001 \
   --transport http-streamable --http-addr 127.0.0.1:8080 \
   --oidc-issuer 'https://your-idp.example.com' \
@@ -164,7 +164,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 **7. Check verbose logs for username extraction:**
 
 ```
-# In vsp stderr output, look for:
+# In arc1 stderr output, look for:
 # [OIDC] Authenticated user: <username>
 ```
 
@@ -202,17 +202,17 @@ go test ./pkg/adt/ -run "TestWithClientCert|TestWithCACert" -v
 ```bash
 openssl genrsa -out /tmp/test-ca.key 2048
 openssl req -new -x509 -key /tmp/test-ca.key -out /tmp/test-ca.crt -days 365 \
-  -subj "/CN=vsp-test-ca/O=Test/C=DE"
+  -subj "/CN=arc1-test-ca/O=Test/C=DE"
 ```
 
 **2. Import CA cert into SAP STRUST** (see Phase 3 docs)
 
 **3. Configure CERTRULE** to map `CN=<username>` → SAP user
 
-**4. Start vsp with PP:**
+**4. Start arc1 with PP:**
 
 ```bash
-./vsp --url https://your-sap:44300 \
+./arc1 --url https://your-sap:44300 \
   --transport http-streamable --http-addr 127.0.0.1:8080 \
   --oidc-issuer 'https://your-idp.example.com' \
   --oidc-audience 'your-audience' \
@@ -251,7 +251,7 @@ If you also provide `--user` and `--password`, requests WITHOUT an OIDC token in
 - [ ] CA cert imported into SAP STRUST
 - [ ] CERTRULE mapping configured (CN → SAP User)
 - [ ] ICM parameter `icm/HTTPS/verify_client = 1` set
-- [ ] vsp starts without errors with `--pp-ca-key` and `--pp-ca-cert`
+- [ ] arc1 starts without errors with `--pp-ca-key` and `--pp-ca-cert`
 - [ ] Request with OIDC token uses ephemeral cert (check verbose logs)
 - [ ] SAP logs show per-user identity (not service account)
 - [ ] Fallback to basic auth works when no OIDC context
@@ -276,21 +276,21 @@ Phase 4 is currently deferred. The core BTP building blocks (VCAP_SERVICES parsi
 **1. Deploy to CF:**
 
 ```bash
-GOOS=linux GOARCH=amd64 go build -o vsp ./cmd/vsp
+GOOS=linux GOARCH=amd64 go build -o arc1 ./cmd/vsp
 cf push
 ```
 
 **2. Verify VCAP_SERVICES parsing** (check app logs):
 
 ```bash
-cf logs vsp --recent | grep "BTP"
+cf logs arc1 --recent | grep "BTP"
 # Expected: Log messages showing parsed XSUAA and Destination bindings
 ```
 
 **3. Verify Destination Service lookup:**
 
 ```bash
-cf ssh vsp -c "curl -s http://localhost:8080/health"
+cf ssh arc1 -c "curl -s http://localhost:8080/health"
 # Expected: {"status":"ok"}
 ```
 

@@ -1,8 +1,16 @@
 # Enterprise Authentication Guide
 
-This document describes the authentication methods available in vsp for connecting
+This document describes the authentication methods available in arc1 for connecting
 to SAP ABAP systems. It covers setup, configuration, and SAP-side requirements
 for each method.
+
+For centralized deployments (arc1 as a shared server), also see the phased setup guides:
+
+- [Phase 1: API Key Authentication](phase1-api-key-setup.md) — Shared token, simplest setup
+- [Phase 2: OAuth / JWT Authentication](phase2-oauth-setup.md) — OIDC identity with auto-discovery
+- [Phase 3: Principal Propagation](phase3-principal-propagation-setup.md) — Per-user SAP auth via ephemeral certs
+- [Phase 4: BTP Cloud Foundry Deployment](phase4-btp-deployment.md) — XSUAA + Destination Service
+- [Auth Test Process](auth-test-process.md) — Step-by-step verification for each phase
 
 ---
 
@@ -10,13 +18,15 @@ for each method.
 
 | Method | Use Case | Security Level | SAP-Side Setup |
 |--------|----------|---------------|----------------|
+| **API Key** | Shared server, POC | Low (shared token) | None |
 | **Basic auth** | Local dev, POC | Low (password in config) | None |
 | **Cookie auth** | Reuse browser session | Low (manual, expires) | None |
 | **OAuth2/XSUAA** | BTP/Cloud systems | Medium (service-to-service) | Service key in BTP cockpit |
 | **X.509 mTLS** | Enterprise, cert-based SSO | High (no password) | STRUST + CERTRULE |
 | **OIDC + Principal Propagation** | Multi-user enterprise | Highest (zero stored credentials) | STRUST + CERTRULE + EntraID |
 
-**Rule: only one method at a time.** vsp validates this at startup.
+**Rule: only one SAP auth method at a time.** ARC-1 validates this at startup.
+MCP client auth (API Key or OIDC) is independent and can be combined with any SAP auth method.
 
 ---
 
@@ -26,13 +36,13 @@ The simplest method. Username and password are sent with every HTTP request.
 
 ```bash
 # CLI flags
-vsp --url https://sap-host:443 --user DEVELOPER --password 'ABAPtr2023#00'
+arc1 --url https://sap-host:443 --user DEVELOPER --password 'ABAPtr2023#00'
 
 # Environment variables
 export SAP_URL=https://sap-host:443
 export SAP_USER=DEVELOPER
 export SAP_PASSWORD='ABAPtr2023#00'
-vsp
+arc1
 
 # .env file (auto-loaded)
 SAP_URL=https://sap-host:443
@@ -52,10 +62,10 @@ Reuse session cookies from a browser session (MYSAPSSO2, SAP_SESSIONID).
 
 ```bash
 # From a cookie file (Netscape format or key=value)
-vsp --url https://sap-host:443 --cookie-file cookies.txt
+arc1 --url https://sap-host:443 --cookie-file cookies.txt
 
 # From a cookie string
-vsp --url https://sap-host:443 --cookie-string "MYSAPSSO2=abc123; SAP_SESSIONID_A4H_001=xyz"
+arc1 --url https://sap-host:443 --cookie-string "MYSAPSSO2=abc123; SAP_SESSIONID_A4H_001=xyz"
 ```
 
 **When to use:** One-off sessions where you have browser cookies.
@@ -71,7 +81,7 @@ flow to obtain a Bearer token.
 ### From a Service Key File
 
 ```bash
-vsp --service-key /path/to/servicekey.json
+arc1 --service-key /path/to/servicekey.json
 ```
 
 The service key JSON is downloaded from SAP BTP Cockpit and looks like:
@@ -91,13 +101,13 @@ The service key JSON is downloaded from SAP BTP Cockpit and looks like:
 ### With Explicit OAuth Parameters
 
 ```bash
-vsp --url https://sap-host:443 \
+arc1 --url https://sap-host:443 \
     --oauth-url https://tenant.authentication.eu10.hana.ondemand.com/oauth/token \
     --oauth-client-id sb-clone-abc123 \
     --oauth-client-secret secret-value
 ```
 
-**Token lifecycle:** vsp caches the OAuth token and refreshes it automatically
+**Token lifecycle:** ARC-1 caches the OAuth token and refreshes it automatically
 60 seconds before expiry. Thread-safe for concurrent requests.
 
 **References:**
@@ -108,19 +118,19 @@ vsp --url https://sap-host:443 \
 
 ## 4. X.509 Client Certificate Authentication (mTLS)
 
-vsp authenticates to SAP using a TLS client certificate. SAP maps the certificate's
+ARC-1 authenticates to SAP using a TLS client certificate. SAP maps the certificate's
 Subject CN (Common Name) to a SAP user via CERTRULE. No username or password is needed.
 
 ### Configuration
 
 ```bash
 # CLI flags
-vsp --url https://sap-host:443 \
+arc1 --url https://sap-host:443 \
     --client-cert /path/to/client.crt \
     --client-key /path/to/client.key
 
 # With custom CA (when SAP uses an internal CA)
-vsp --url https://sap-host:443 \
+arc1 --url https://sap-host:443 \
     --client-cert /path/to/client.crt \
     --client-key /path/to/client.key \
     --ca-cert /path/to/ca.crt
@@ -135,7 +145,7 @@ export SAP_CA_CERT=/path/to/ca.crt  # optional
 ### How It Works
 
 ```
-vsp ─── TLS handshake with client certificate ───► SAP ICM
+arc1 ─── TLS handshake with client certificate ───► SAP ICM
                                                     │
                                                     ▼
                                               CERTRULE engine
@@ -147,8 +157,8 @@ vsp ─── TLS handshake with client certificate ───► SAP ICM
                                               SAP user = CN
 ```
 
-1. vsp loads the client certificate and private key from PEM files
-2. During TLS handshake, vsp presents the client certificate to SAP ICM
+1. ARC-1 loads the client certificate and private key from PEM files
+2. During TLS handshake, arc1 presents the client certificate to SAP ICM
 3. SAP ICM verifies the certificate against trusted CAs in STRUST
 4. SAP's CERTRULE engine maps the certificate's Subject CN to a SAP user
 5. All subsequent requests run as that SAP user
@@ -161,7 +171,7 @@ vsp ─── TLS handshake with client certificate ───► SAP ICM
 # Generate CA (self-signed, for testing)
 openssl genrsa -out ca.key 4096
 openssl req -new -x509 -key ca.key -out ca.crt -days 365 \
-  -subj "/CN=vsp-enterprise-ca/O=My Company"
+  -subj "/CN=arc1-enterprise-ca/O=My Company"
 
 # Generate client certificate for a specific SAP user
 openssl genrsa -out developer.key 2048
@@ -232,8 +242,8 @@ After all configuration changes, restart SAP ICM:
 curl --cert developer.crt --key developer.key \
   https://sap-host:443/sap/bc/adt/core/discovery?sap-client=001
 
-# Test with vsp
-vsp --url https://sap-host:443 --client-cert developer.crt --client-key developer.key
+# Test with arc1
+arc1 --url https://sap-host:443 --client-cert developer.crt --client-key developer.key
 ```
 
 ---
@@ -253,7 +263,7 @@ Copilot Studio / IDE  ──── authenticates via EntraID ───► EntraI
   │                                                         │
   │  OIDC Bearer token                                      │
   ▼                                                         │
-vsp HTTP endpoint  ◄─── validates token via JWKS ───────────┘
+arc1 HTTP endpoint  ◄─── validates token via JWKS ───────────┘
   │
   │  1. Extract username from JWT claim
   │  2. Map: alice@company.com → ALICE (SAP username)
@@ -281,9 +291,9 @@ Response to user
 
 ```bash
 # OIDC validation (validates incoming Bearer tokens)
-vsp --url https://sap-host:443 \
+arc1 --url https://sap-host:443 \
     --oidc-issuer https://login.microsoftonline.com/{tenant-id}/v2.0 \
-    --oidc-audience api://vsp-sap-connector \
+    --oidc-audience api://arc1-sap-connector \
     --oidc-username-claim preferred_username \
     --pp-ca-key /path/to/ca.key \
     --pp-ca-cert /path/to/ca.crt \
@@ -293,7 +303,7 @@ vsp --url https://sap-host:443 \
 # Environment variables
 export SAP_URL=https://sap-host:443
 export SAP_OIDC_ISSUER=https://login.microsoftonline.com/{tenant-id}/v2.0
-export SAP_OIDC_AUDIENCE=api://vsp-sap-connector
+export SAP_OIDC_AUDIENCE=api://arc1-sap-connector
 export SAP_OIDC_USERNAME_CLAIM=preferred_username
 export SAP_PP_CA_KEY=/path/to/ca.key
 export SAP_PP_CA_CERT=/path/to/ca.crt
@@ -307,12 +317,12 @@ export SAP_TRANSPORT=http-streamable
 
 1. Go to [Azure Portal](https://portal.azure.com/) → **Azure Active Directory** → **App registrations**
 2. Click **New registration**
-   - Name: `vsp SAP Connector`
+   - Name: `ARC-1 SAP Connector`
    - Supported account types: `Accounts in this organizational directory only`
    - Redirect URI: not needed (server-to-server)
 3. Note the **Application (client) ID** and **Directory (tenant) ID**
 4. Go to **Expose an API**
-   - Set **Application ID URI** (e.g., `api://vsp-sap-connector`)
+   - Set **Application ID URI** (e.g., `api://arc1-sap-connector`)
    - Add a scope: `SAP.Access`
 5. Go to **Certificates & secrets** (if clients need client credentials, otherwise skip)
 
@@ -328,7 +338,7 @@ export SAP_TRANSPORT=http-streamable
 # The CA certificate must be imported into SAP STRUST.
 openssl genrsa -out pp-ca.key 4096
 openssl req -new -x509 -key pp-ca.key -out pp-ca.crt -days 3650 \
-  -subj "/CN=vsp-principal-propagation-ca/O=My Company"
+  -subj "/CN=arc1-principal-propagation-ca/O=My Company"
 ```
 
 Keep `pp-ca.key` secure — it is the root of trust. In production, store it in
@@ -355,10 +365,10 @@ admin@company.com: SAP_ADMIN
 ```
 
 ```bash
-vsp --oidc-user-mapping oidc-user-mapping.yaml ...
+arc1 --oidc-user-mapping oidc-user-mapping.yaml ...
 ```
 
-Without a mapping file, vsp extracts the username part before `@` and uppercases it:
+Without a mapping file, ARC-1 extracts the username part before `@` and uppercases it:
 `alice@company.com` → `ALICE`.
 
 #### Step 5: Username Claim Selection
@@ -373,10 +383,10 @@ The JWT claim used to extract the SAP username. Common values:
 | `sub` | Subject identifier (opaque ID) | `aAbBcC123...` |
 | `unique_name` | Legacy Azure AD claim | `alice@company.com` |
 
-**Priority chain:** vsp tries the configured claim first, then falls back through
+**Priority chain:** ARC-1 tries the configured claim first, then falls back through
 `preferred_username` → `upn` → `unique_name` → `email` → `sub`.
 
-For email-like claims (`email`, `upn`, `preferred_username`), vsp automatically
+For email-like claims (`email`, `upn`, `preferred_username`), arc1 automatically
 extracts the part before `@` as the username.
 
 ---
@@ -384,12 +394,12 @@ extracts the part before `@` as the username.
 ## Custom CA Certificate
 
 When the SAP system uses a TLS server certificate signed by an internal CA
-(not a public CA like Let's Encrypt), vsp needs the CA certificate to verify
+(not a public CA like Let's Encrypt), arc1 needs the CA certificate to verify
 the connection.
 
 ```bash
 # With any auth method
-vsp --url https://sap-host:443 --user DEV --password pass \
+arc1 --url https://sap-host:443 --user DEV --password pass \
     --ca-cert /path/to/internal-ca.crt
 
 # Environment variable

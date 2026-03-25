@@ -1,6 +1,6 @@
-# Docker Guide for vsp
+# Docker Guide for arc1
 
-vsp ships as a single static-ish binary that speaks MCP over **HTTP streamable**
+arc1 ships as a single static-ish binary that speaks MCP over **HTTP streamable**
 (the default transport in the Docker image). This makes it easy to run as a
 long-lived, port-accessible container that multiple MCP clients can connect to
 without spawning a new process per session.
@@ -15,12 +15,10 @@ without spawning a new process per session.
 1. [Quick Start](#quick-start)
 2. [Pre-Built Images (GHCR)](#pre-built-images-ghcr)
 3. [Building the Image](#building-the-image)
-4. [How vsp Runs in Docker](#how-vsp-runs-in-docker)
+4. [How arc1 Runs in Docker](#how-arc1-runs-in-docker)
 5. [Configuration Reference](#configuration-reference)
    - [Connection](#connection)
    - [Authentication](#authentication)
-   - [Tool Mode](#tool-mode)
-   - [Disabling Tool Groups](#disabling-tool-groups)
    - [Safety / Read-Only](#safety--read-only)
    - [Transport Management](#transport-management)
    - [Feature Flags](#feature-flags)
@@ -32,7 +30,6 @@ without spawning a new process per session.
 7. [Common Configurations](#common-configurations)
    - [Read-Only for Production Review](#read-only-for-production-review)
    - [Sandboxed AI (Z* packages only)](#sandboxed-ai-z-packages-only)
-   - [Expert Mode with All Tools](#expert-mode-with-all-tools)
    - [Cookie Authentication](#cookie-authentication)
    - [Corporate Proxy](#corporate-proxy)
 7. [Updating the Image](#updating-the-image)
@@ -44,8 +41,8 @@ without spawning a new process per session.
 ## Quick Start
 
 > **No Docker Hub needed.** Pre-built images are published automatically to
-> [GitHub Container Registry (GHCR)](https://ghcr.io/oisee/vsp) on every
-> release. Pull them with `docker pull ghcr.io/oisee/vsp:latest`.
+> [GitHub Container Registry (GHCR)](https://ghcr.io/marianfoo/arc1) on every
+> release. Pull them with `docker pull ghcr.io/marianfoo/arc1:latest`.
 
 ### HTTP streamable (default — recommended)
 
@@ -54,13 +51,13 @@ The Docker image defaults to `SAP_TRANSPORT=http-streamable` listening on
 to `http://localhost:8080/mcp`.
 
 ```bash
-# Start vsp as a persistent HTTP MCP server
+# Start arc1 as a persistent HTTP MCP server
 docker run -d --rm \
   -p 8080:8080 \
   -e SAP_URL=https://host:44300 \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 
 # Verify it is up
 curl -s http://localhost:8080/mcp   # should return an MCP protocol response
@@ -74,7 +71,7 @@ docker run -i --rm \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
   -e SAP_TRANSPORT=stdio \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 ```
 
 > **`-i` is required for stdio mode.** MCP communicates over stdin/stdout.
@@ -91,7 +88,7 @@ pulling or publishing.
 ### Image location
 
 ```
-ghcr.io/oisee/vsp
+ghcr.io/marianfoo/arc1
 ```
 
 ### Available tags
@@ -110,10 +107,10 @@ Pre-release tags (e.g. `v2.22.0-rc1`) are published but do **not** move the
 
 ```bash
 # Latest stable
-docker pull ghcr.io/oisee/vsp:latest
+docker pull ghcr.io/marianfoo/arc1:latest
 
 # Pinned version (recommended for production/team use)
-docker pull ghcr.io/oisee/vsp:2.22.0
+docker pull ghcr.io/marianfoo/arc1:2.22.0
 ```
 
 ### Supported platforms
@@ -179,14 +176,14 @@ authentication is required (`docker login ghcr.io`).
 
 ```bash
 # Simple build (version = dev)
-docker build -t vsp .
+docker build -t arc1 .
 
 # With version metadata (recommended for releases)
 docker build \
   --build-arg VERSION=2.22.0 \
   --build-arg COMMIT=$(git rev-parse --short HEAD) \
   --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  -t vsp:2.22.0 .
+  -t arc1:2.22.0 .
 ```
 
 ### Multi-platform build (for sharing)
@@ -195,7 +192,7 @@ docker build \
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --build-arg VERSION=2.22.0 \
-  -t ghcr.io/yourorg/vsp:2.22.0 \
+  -t ghcr.io/yourorg/arc1:2.22.0 \
   --push .
 ```
 
@@ -206,7 +203,7 @@ docker buildx build \
 
 ---
 
-## How vsp Runs in Docker
+## How arc1 Runs in Docker
 
 ### HTTP streamable (default)
 
@@ -239,7 +236,7 @@ spawns the container as a subprocess:
 ```
 MCP Client
   │
-  ├─► docker run -i --rm -e SAP_TRANSPORT=stdio -e SAP_URL=... vsp
+  ├─► docker run -i --rm -e SAP_TRANSPORT=stdio -e SAP_URL=... arc1
   │         │
   │    JSON-RPC over stdin/stdout
   │         │
@@ -268,8 +265,6 @@ prefix. CLI flags map 1:1 to env vars:
 | `--client` | `SAP_CLIENT` | `001` |
 | `--language` | `SAP_LANGUAGE` | `EN` |
 | `--insecure` | `SAP_INSECURE` | `false` |
-| `--mode` | `SAP_MODE` | `focused` |
-| `--disabled-groups` | `SAP_DISABLED_GROUPS` | |
 | `--read-only` | `SAP_READ_ONLY` | `false` |
 | `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `false` |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | |
@@ -289,6 +284,15 @@ prefix. CLI flags map 1:1 to env vars:
 | `--http-addr` | `SAP_HTTP_ADDR` | `0.0.0.0:8080` *(image default)* |
 | `--terminal-id` | `SAP_TERMINAL_ID` | |
 | `--verbose` | `SAP_VERBOSE` | `false` |
+| **MCP Client Auth** | | |
+| `--api-key` | `ARC1_API_KEY` | |
+| `--oidc-issuer` | `SAP_OIDC_ISSUER` | |
+| `--oidc-audience` | `SAP_OIDC_AUDIENCE` | |
+| `--oidc-username-claim` | `SAP_OIDC_USERNAME_CLAIM` | `preferred_username` |
+| `--oidc-user-mapping` | `SAP_OIDC_USER_MAPPING` | |
+| `--pp-ca-key` | `SAP_PP_CA_KEY` | |
+| `--pp-ca-cert` | `SAP_PP_CA_CERT` | |
+| `--pp-cert-ttl` | `SAP_PP_CERT_TTL` | `5m` |
 
 ---
 
@@ -304,7 +308,31 @@ SAP_LANGUAGE=EN               # ABAP session language (2-char ISO)
 
 ### Authentication
 
-vsp supports three mutually exclusive auth methods. Use exactly one.
+arc1 supports multiple auth methods for connecting to SAP, plus optional MCP client authentication.
+
+#### MCP Client Authentication (Hop 1: Client → arc1)
+
+When running arc1 as a shared server, protect it with API key or OAuth:
+
+```bash
+# API Key (simplest)
+-e ARC1_API_KEY='your-secret-key'
+
+# OAuth/OIDC JWT validation (enterprise)
+-e SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant}/v2.0' \
+-e SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
+
+# Principal Propagation (per-user SAP auth, requires OIDC)
+-e SAP_PP_CA_KEY=/secrets/ca.key \
+-e SAP_PP_CA_CERT=/secrets/ca.crt \
+-v /path/to/secrets:/secrets:ro
+```
+
+See the [Authentication guides](enterprise-auth.md) for detailed setup.
+
+#### SAP Authentication (Hop 2: arc1 → SAP)
+
+arc1 supports these mutually exclusive SAP auth methods. Use exactly one.
 
 #### Basic auth (username + password)
 
@@ -321,7 +349,7 @@ docker run -i --rm \
   -e SAP_URL=https://host:44300 \
   -e SAP_COOKIE_FILE=/cookies/cookies.txt \
   -v /path/to/local/cookies.txt:/cookies/cookies.txt:ro \
-  vsp
+  arc1
 ```
 
 The cookie file must use the Netscape format exported by browser extensions like
@@ -348,48 +376,7 @@ SAP_PASSWORD=s3cr3t
 ```
 
 ```bash
-docker run -i --rm --env-file .env vsp
-```
-
----
-
-### Tool Mode
-
-vsp has two modes that control which tools are registered with the MCP client:
-
-| Mode | Tools | Use case |
-|---|---|---|
-| `focused` (default) | 81 tools | Daily development — essential tools only, cleaner context |
-| `expert` | 122 tools | Full access including AMDP debugger, experimental tools |
-
-```bash
--e SAP_MODE=expert
-```
-
----
-
-### Disabling Tool Groups
-
-Within a mode you can further reduce noise by disabling entire groups:
-
-| Code | Group | Tools disabled |
-|---|---|---|
-| `5` or `U` | UI5/Fiori BSP | All BSP/UI5 management tools |
-| `T` | Tests | Unit test runner tools |
-| `H` | HANA/AMDP | HANA SQL, AMDP debugger |
-| `D` | Debugger | External ABAP debugger |
-| `C` | Code Intelligence | Find references, code completion |
-
-The value is a string of codes. For example, to disable Tests and HANA:
-
-```bash
--e SAP_DISABLED_GROUPS=TH
-```
-
-To disable everything except core read/search/edit:
-
-```bash
--e SAP_DISABLED_GROUPS=THDUC
+docker run -i --rm --env-file .env arc1
 ```
 
 ---
@@ -476,7 +463,7 @@ allowlist.
 
 #### Transportable edits
 
-By default, vsp only allows editing objects in local (non-transportable) packages
+By default, arc1 only allows editing objects in local (non-transportable) packages
 like `$TMP`. To allow edits to objects that require a transport request:
 
 ```bash
@@ -573,22 +560,22 @@ docker run -i --rm \
   -e SAP_URL=https://internal-sap:44300 \
   -e SAP_USER=user -e SAP_PASSWORD=pass \
   -v /etc/ssl/certs/company-ca.crt:/usr/local/share/ca-certificates/company-ca.crt:ro \
-  vsp
+  arc1
 ```
 
 For a permanent fix, extend the image:
 
 ```dockerfile
-FROM ghcr.io/oisee/vsp:latest
+FROM ghcr.io/marianfoo/arc1:latest
 USER root
 COPY company-ca.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
-USER vsp
+USER arc1
 ```
 
 #### HTTP/HTTPS proxy
 
-vsp respects standard Go proxy environment variables. Pass them via `-e`:
+arc1 respects standard Go proxy environment variables. Pass them via `-e`:
 
 ```bash
 -e HTTPS_PROXY=http://proxy.corp.example:3128
@@ -604,7 +591,7 @@ Use the host network or `host.docker.internal` (Docker Desktop):
 docker run -i --rm --network host \
   -e SAP_URL=http://localhost:50000 \
   -e SAP_USER=user -e SAP_PASSWORD=pass \
-  vsp
+  arc1
 
 # Docker Desktop (Mac/Windows)
 -e SAP_URL=http://host.docker.internal:50000
@@ -619,7 +606,7 @@ docker run -i --rm \
   --network sap-net \
   -e SAP_URL=http://sap-container:50000 \
   -e SAP_USER=user -e SAP_PASSWORD=pass \
-  vsp
+  arc1
 ```
 
 ---
@@ -631,12 +618,12 @@ docker run -i --rm \
 Start the container once and point any MCP client at `http://localhost:8080/mcp`:
 
 ```bash
-docker run -d --name vsp \
+docker run -d --name arc1 \
   -p 8080:8080 \
   -e SAP_URL=https://my-sap-system:44300 \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 ```
 
 Then configure your MCP client to use the HTTP URL:
@@ -644,7 +631,7 @@ Then configure your MCP client to use the HTTP URL:
 ```json
 {
   "mcpServers": {
-    "vsp": {
+    "arc1": {
       "url": "http://localhost:8080/mcp"
     }
   }
@@ -662,7 +649,7 @@ stdio mode by overriding the transport:
 ```json
 {
   "mcpServers": {
-    "vsp": {
+    "arc1": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
@@ -670,7 +657,7 @@ stdio mode by overriding the transport:
         "-e", "SAP_USER=developer",
         "-e", "SAP_PASSWORD=secret",
         "-e", "SAP_TRANSPORT=stdio",
-        "ghcr.io/oisee/vsp:latest"
+        "ghcr.io/marianfoo/arc1:latest"
       ]
     }
   }
@@ -682,7 +669,7 @@ For a production system where you want read-only access:
 ```json
 {
   "mcpServers": {
-    "vsp-prod": {
+    "arc1-prod": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
@@ -691,8 +678,7 @@ For a production system where you want read-only access:
         "-e", "SAP_PASSWORD=secret",
         "-e", "SAP_TRANSPORT=stdio",
         "-e", "SAP_READ_ONLY=true",
-        "-e", "SAP_MODE=focused",
-        "ghcr.io/oisee/vsp:latest"
+        "ghcr.io/marianfoo/arc1:latest"
       ]
     }
   }
@@ -703,7 +689,7 @@ For a production system where you want read-only access:
 > out of the config file. Reference the absolute path to the env file:
 >
 > ```json
-> "args": ["run", "-i", "--rm", "-e", "SAP_TRANSPORT=stdio", "--env-file", "/Users/me/.vsp-prod.env", "ghcr.io/oisee/vsp:latest"]
+> "args": ["run", "-i", "--rm", "-e", "SAP_TRANSPORT=stdio", "--env-file", "/Users/me/.arc1-prod.env", "ghcr.io/marianfoo/arc1:latest"]
 > ```
 
 ### Gemini CLI / Other Agents
@@ -729,10 +715,9 @@ docker run -d --rm \
   -e SAP_PASSWORD=secret \
   -e SAP_READ_ONLY=true \
   -e SAP_BLOCK_FREE_SQL=true \
-  -e SAP_MODE=focused \
   -e SAP_FEATURE_TRANSPORT=off \
   -e SAP_VERBOSE=true \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 ```
 
 ### Sandboxed AI (Z* packages only)
@@ -747,29 +732,11 @@ docker run -i --rm \
   -e SAP_ALLOWED_PACKAGES="Z*,\$TMP" \
   -e SAP_BLOCK_FREE_SQL=true \
   -e SAP_DISALLOWED_OPS=D \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 ```
 
 This setup lets the AI read system objects, write only to custom packages, and
 prevents deletions and arbitrary SQL.
-
-### Expert Mode with All Tools
-
-For advanced debugging and full feature access:
-
-```bash
-docker run -i --rm \
-  -e SAP_URL=https://dev:44300 \
-  -e SAP_USER=developer \
-  -e SAP_PASSWORD=secret \
-  -e SAP_MODE=expert \
-  -e SAP_ENABLE_TRANSPORTS=true \
-  -e SAP_ALLOW_TRANSPORTABLE_EDITS=true \
-  -e SAP_FEATURE_ABAPGIT=on \
-  -e SAP_FEATURE_RAP=on \
-  -e SAP_FEATURE_AMDP=on \
-  ghcr.io/oisee/vsp:latest
-```
 
 ### Cookie Authentication
 
@@ -778,7 +745,7 @@ docker run -i --rm \
   -e SAP_URL=https://host:44300 \
   -e SAP_COOKIE_FILE=/cookies/cookies.txt \
   -v "${HOME}/.sap-cookies/my-system.txt:/cookies/cookies.txt:ro" \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 ```
 
 ### Corporate Proxy
@@ -788,7 +755,7 @@ docker run -i --rm \
   --env-file .env \
   -e HTTPS_PROXY=http://proxy.corp.example:3128 \
   -e NO_PROXY=localhost,127.0.0.1 \
-  ghcr.io/oisee/vsp:latest
+  ghcr.io/marianfoo/arc1:latest
 ```
 
 ---
@@ -799,10 +766,10 @@ docker run -i --rm \
 
 ```bash
 # Pull latest
-docker pull ghcr.io/oisee/vsp:latest
+docker pull ghcr.io/marianfoo/arc1:latest
 
 # Pull a specific version (recommended)
-docker pull ghcr.io/oisee/vsp:2.22.0
+docker pull ghcr.io/marianfoo/arc1:2.22.0
 ```
 
 ### Rebuilding from source
@@ -813,7 +780,7 @@ docker build \
   --build-arg VERSION=$(git describe --tags --abbrev=0) \
   --build-arg COMMIT=$(git rev-parse --short HEAD) \
   --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  -t vsp:latest .
+  -t arc1:latest .
 ```
 
 ### Pinning a version (recommended)
@@ -822,18 +789,18 @@ For production or shared team environments, always pin to a specific version
 tag rather than `latest`:
 
 ```json
-"ghcr.io/oisee/vsp:2.22.0"
+"ghcr.io/marianfoo/arc1:2.22.0"
 ```
 
 This ensures every team member and every CI run uses the same binary regardless
 of when the image was pulled. Check the
-[GitHub releases page](https://github.com/oisee/vibing-steampunk/releases)
+[GitHub releases page](https://github.com/marianfoo/arc-1/releases)
 for the latest version.
 
 ### Verifying the version
 
 ```bash
-docker run --rm ghcr.io/oisee/vsp:latest --version
+docker run --rm ghcr.io/marianfoo/arc1:latest --version
 ```
 
 ### Updating after a Dockerfile fix (no Go change)
@@ -847,7 +814,7 @@ desired tag. No new Go release is needed.
 Teams that want automatic image updates can use tools like
 [Renovate](https://docs.renovatebot.com/) or
 [Dependabot](https://docs.github.com/en/code-security/dependabot) to open PRs
-when a new `ghcr.io/oisee/vsp` image tag is published.
+when a new `ghcr.io/marianfoo/arc1` image tag is published.
 
 ---
 
@@ -862,7 +829,7 @@ when a new `ghcr.io/oisee/vsp` image tag is published.
 3. **Use `SAP_READ_ONLY=true` for production.** Only enable write access on
    development systems.
 
-4. **The container runs as a non-root user** (`vsp:vsp`) inside Alpine. There
+4. **The container runs as a non-root user** (`arc1:arc1`) inside Alpine. There
    are no open ports — the attack surface is minimal.
 
 5. **Cookie files contain session tokens.** Mount them read-only (`:ro`) and
@@ -877,7 +844,7 @@ when a new `ghcr.io/oisee/vsp` image tag is published.
 
 ### Container exits immediately
 
-vsp exits if stdin is closed. Make sure you are using `-i`:
+arc1 exits if stdin is closed. Make sure you are using `-i`:
 
 ```bash
 docker run -i --rm ...   # correct
@@ -890,7 +857,7 @@ docker run -d --rm ...   # wrong — detached mode breaks stdio
 The `SAP_URL` environment variable is mandatory. Verify it is being passed:
 
 ```bash
-docker run -i --rm -e SAP_URL=https://host:44300 ... vsp
+docker run -i --rm -e SAP_URL=https://host:44300 ... arc1
 ```
 
 ### TLS certificate errors
@@ -918,15 +885,13 @@ docker run -i --rm \
   -e SAP_URL=https://host:44300 \
   -e SAP_USER=user -e SAP_PASSWORD=pass \
   -e SAP_VERBOSE=true \
-  vsp 2>vsp-debug.log
+  arc1 2>arc1-debug.log
 ```
 
 ### Tool not appearing in the AI client
 
-1. Check `SAP_MODE` — some tools are only in `expert` mode.
-2. Check `SAP_DISABLED_GROUPS` — the tool's group may be disabled.
-3. Check feature flags — features in `auto` mode may have been turned off because
+1. Check feature flags — features in `auto` mode may have been turned off because
    the SAP component was not detected. Force them on with e.g.
    `SAP_FEATURE_RAP=on`.
-4. Check `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` — operation filters can block
+2. Check `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` — operation filters can block
    tools at the handler level even if they are registered.
