@@ -3,16 +3,16 @@
 # Docs: https://goreleaser.com
 version: 2
 
-project_name: vsp
+project_name: arc1
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: vsp
-    main: ./cmd/vsp
-    binary: vsp
+  - id: arc1
+    main: ./cmd/arc1
+    binary: arc1
     env:
       - CGO_ENABLED=0
     ldflags:
@@ -59,11 +59,11 @@ changelog:
 
 release:
   github:
-    owner: oisee
-    name: vibing-steampunk
+    owner: marianfoo
+    name: arc-1
   draft: false
   # Automatically mark as pre-release if version contains -rc, -beta, -alpha
   prerelease: auto
   name_template: "v{{ .Version }}"
   footer: |
-    **Full Changelog**: https://github.com/oisee/vibing-steampunk/blob/main/CHANGELOG.md
+    **Full Changelog**: https://github.com/marianfoo/arc-1/blob/main/CHANGELOG.md

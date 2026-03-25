@@ -1,21 +1,19 @@
-# vsp Tool Reference
+# ARC-1 Tool Reference
 
-Complete documentation for all 122 MCP tools available in vsp.
+Complete documentation for all MCP tools available in ARC-1.
 
-**Mode Legend:**
-- **Focused** - Available in focused mode (81 tools, default)
-- **Expert** - Only available in expert mode (122 tools total)
+ARC-1 exposes 11 intent-based tools designed for AI agents.
 
 ---
 
-## Unified Tools (2 tools) - Focused Mode
+## Unified Tools (2 tools)
 
 These tools replace 11 granular read/write operations with intelligent parameter-based routing:
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetSource` | Unified read for any ABAP source. Parameters: `type` (PROG/CLAS/INTF/FUNC/FUGR/INCL/DDLS/VIEW/BDEF/SRVD/SRVB/MSAG), `name`, optional `parent` (for FUNC), optional `include` (for CLAS). | Focused |
-| `WriteSource` | Unified write with auto-upsert. Parameters: `type` (PROG/CLAS/INTF/DDLS/BDEF/SRVD), `name`, `source`, `mode`, `options`. Supports create and update for classic ABAP and RAP types. | Focused |
+| `GetSource` | Unified read for any ABAP source. Parameters: `type` (PROG/CLAS/INTF/FUNC/FUGR/INCL/DDLS/VIEW/BDEF/SRVD/SRVB/MSAG), `name`, optional `parent` (for FUNC), optional `include` (for CLAS). |
+| `WriteSource` | Unified write with auto-upsert. Parameters: `type` (PROG/CLAS/INTF/DDLS/BDEF/SRVD), `name`, `source`, `mode`, `options`. Supports create and update for classic ABAP and RAP types. |
 
 **Benefits:** 70% token reduction, simplified tool selection, extensible for new types.
 
@@ -25,13 +23,13 @@ These tools replace 11 granular read/write operations with intelligent parameter
 
 ## Search & Grep Tools (4 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `SearchObject` | Quick search for ABAP objects by name pattern | Focused |
-| `GrepObjects` | Regex search across multiple objects (array of URLs) | Focused |
-| `GrepPackages` | Regex search across packages with recursive subpackage support | Focused |
-| `GrepObject` | Regex search in single object | Expert |
-| `GrepPackage` | Regex search in single package | Expert |
+| `SearchObject` | Quick search for ABAP objects by name pattern |
+| `GrepObjects` | Regex search across multiple objects (array of URLs) |
+| `GrepPackages` | Regex search across packages with recursive subpackage support |
+| `GrepObject` | Regex search in single object |
+| `GrepPackage` | Regex search in single package |
 
 **Grep Features:**
 - Full regex support (Go regexp syntax)
@@ -44,71 +42,71 @@ These tools replace 11 granular read/write operations with intelligent parameter
 
 ## Read Operations (15 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetProgram` | Get ABAP program source | Expert |
-| `GetClass` | Get ABAP class source | Expert |
-| `GetInterface` | Get ABAP interface source | Expert |
-| `GetFunction` | Get function module source | Expert |
-| `GetFunctionGroup` | Get function group structure | Focused |
-| `GetInclude` | Get ABAP include source | Expert |
-| `GetTable` | Get table structure definition | Focused |
-| `GetTableContents` | Get table data (supports SQL filtering) | Focused |
-| `GetStructure` | Get structure definition | Expert |
-| `GetPackage` | Get package contents | Focused |
-| `GetTransaction` | Get transaction details | Expert |
-| `GetTypeInfo` | Get data type information | Expert |
-| `GetCDSDependencies` | Get CDS view dependency tree | Focused |
-| `RunQuery` | Execute freestyle SQL query | Focused |
+| `GetProgram` | Get ABAP program source |
+| `GetClass` | Get ABAP class source |
+| `GetInterface` | Get ABAP interface source |
+| `GetFunction` | Get function module source |
+| `GetFunctionGroup` | Get function group structure |
+| `GetInclude` | Get ABAP include source |
+| `GetTable` | Get table structure definition |
+| `GetTableContents` | Get table data (supports SQL filtering) |
+| `GetStructure` | Get structure definition |
+| `GetPackage` | Get package contents |
+| `GetTransaction` | Get transaction details |
+| `GetTypeInfo` | Get data type information |
+| `GetCDSDependencies` | Get CDS view dependency tree |
+| `RunQuery` | Execute freestyle SQL query |
 
 ---
 
 ## System Information (2 tools) - NEW
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetSystemInfo` | Get SAP system information (SID, release, kernel, database) | Focused |
-| `GetInstalledComponents` | List installed software components with versions | Focused |
+| `GetSystemInfo` | Get SAP system information (SID, release, kernel, database) |
+| `GetInstalledComponents` | List installed software components with versions |
 
 ---
 
 ## Code Analysis (7 tools) - NEW
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetCallGraph` | Get call hierarchy (callers/callees) for methods/functions | Focused |
-| `GetObjectStructure` | Get object explorer tree structure | Focused |
-| `GetCallersOf` | Get who calls this object (static call graph - up traversal) | Expert |
-| `GetCalleesOf` | Get what this object calls (static call graph - down traversal) | Expert |
-| `AnalyzeCallGraph` | Get statistics about call graph (nodes, edges, depth, types) | Expert |
-| `CompareCallGraphs` | Compare static vs actual execution for test coverage analysis | Expert |
-| `TraceExecution` | **COMPOSITE RCA TOOL**: Static graph + trace + comparison for root cause analysis | Expert |
+| `GetCallGraph` | Get call hierarchy (callers/callees) for methods/functions |
+| `GetObjectStructure` | Get object explorer tree structure |
+| `GetCallersOf` | Get who calls this object (static call graph - up traversal) |
+| `GetCalleesOf` | Get what this object calls (static call graph - down traversal) |
+| `AnalyzeCallGraph` | Get statistics about call graph (nodes, edges, depth, types) |
+| `CompareCallGraphs` | Compare static vs actual execution for test coverage analysis |
+| `TraceExecution` | **COMPOSITE RCA TOOL**: Static graph + trace + comparison for root cause analysis |
 
 ---
 
 ## Development Tools (10 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `SyntaxCheck` | Check source code for syntax errors | Focused |
-| `Activate` | Activate an ABAP object | Expert |
-| `ActivatePackage` | Batch activate all inactive objects in package | Focused |
-| `RunUnitTests` | Execute ABAP Unit tests | Focused |
-| `RunATCCheck` | Run ATC code quality checks | Focused |
-| `CompareSource` | Unified diff between any two ABAP objects | Focused |
-| `CloneObject` | Copy PROG/CLAS/INTF to new name | Focused |
-| `GetClassInfo` | Quick class metadata (methods, attrs, interfaces) | Focused |
-| `CreateTable` | Create DDIC table from JSON definition | Focused |
-| `CreatePackage` | Create local package ($...) | Focused |
+| `SyntaxCheck` | Check source code for syntax errors |
+| `Activate` | Activate an ABAP object |
+| `ActivatePackage` | Batch activate all inactive objects in package |
+| `RunUnitTests` | Execute ABAP Unit tests |
+| `RunATCCheck` | Run ATC code quality checks |
+| `CompareSource` | Unified diff between any two ABAP objects |
+| `CloneObject` | Copy PROG/CLAS/INTF to new name |
+| `GetClassInfo` | Quick class metadata (methods, attrs, interfaces) |
+| `CreateTable` | Create DDIC table from JSON definition |
+| `CreatePackage` | Create local package ($...) |
 
 ---
 
 ## ATC (Code Quality) Tools (2 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `RunATCCheck` | Run ATC check, returns findings with priority (1=Error, 2=Warning, 3=Info) | Focused |
-| `GetATCCustomizing` | Get ATC system configuration | Expert |
+| `RunATCCheck` | Run ATC check, returns findings with priority (1=Error, 2=Warning, 3=Info) |
+| `GetATCCustomizing` | Get ATC system configuration |
 
 **Example ATC Output:**
 ```json
@@ -127,13 +125,13 @@ These tools replace 11 granular read/write operations with intelligent parameter
 
 ## CRUD Operations (5 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `LockObject` | Acquire edit lock | Focused |
-| `UnlockObject` | Release edit lock | Focused |
-| `CreateObject` | Create new object (program, class, interface, include, function group, function module, package, **DDLS, BDEF, SRVD, SRVB**) | Expert |
-| `UpdateSource` | Write source code | Expert |
-| `DeleteObject` | Delete an object | Expert |
+| `LockObject` | Acquire edit lock |
+| `UnlockObject` | Release edit lock |
+| `CreateObject` | Create new object (program, class, interface, include, function group, function module, package, **DDLS, BDEF, SRVD, SRVB**) |
+| `UpdateSource` | Write source code |
+| `DeleteObject` | Delete an object |
 
 **RAP Object Creation (NEW):** CreateObject now supports:
 - `DDLS/DF` - CDS DDL Source (view definitions)
@@ -145,10 +143,10 @@ These tools replace 11 granular read/write operations with intelligent parameter
 
 ## Service Binding Operations (2 tools) - NEW
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `PublishServiceBinding` | Publish a service binding to make it available as OData service | Expert |
-| `UnpublishServiceBinding` | Unpublish a service binding | Expert |
+| `PublishServiceBinding` | Publish a service binding to make it available as OData service |
+| `UnpublishServiceBinding` | Unpublish a service binding |
 
 **Parameters:**
 - `service_name` (required) - Service binding name
@@ -158,11 +156,11 @@ These tools replace 11 granular read/write operations with intelligent parameter
 
 ## Class Include Operations (3 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetClassInclude` | Get class include (definitions, implementations, macros, testclasses) | Expert |
-| `CreateTestInclude` | Create test classes include | Expert |
-| `UpdateClassInclude` | Update class include source | Expert |
+| `GetClassInclude` | Get class include (definitions, implementations, macros, testclasses) |
+| `CreateTestInclude` | Create test classes include |
+| `UpdateClassInclude` | Update class include source |
 
 ---
 
@@ -170,13 +168,13 @@ These tools replace 11 granular read/write operations with intelligent parameter
 
 Composite operations that combine multiple ADT API calls:
 
-| Tool | Description | Steps | Mode |
+| Tool | Description | Steps |
 |------|-------------|-------|------|
-| `EditSource` | **Surgical string replacement** (matches Edit tool pattern) | GetSource → FindReplace → SyntaxCheck → Lock → Update → Unlock → Activate | Focused |
-| `WriteProgram` | Update program with activation | Lock → SyntaxCheck → Update → Unlock → Activate | Expert |
-| `WriteClass` | Update class with activation | Lock → SyntaxCheck → Update → Unlock → Activate | Expert |
-| `CreateAndActivateProgram` | Create new program | Create → UpdateSource → Activate | Expert |
-| `CreateClassWithTests` | Create class with unit tests | Create → Lock → Update → CreateTestInclude → WriteTests → Unlock → Activate → RunUnitTests | Expert |
+| `EditSource` | **Surgical string replacement** (matches Edit tool pattern) | GetSource → FindReplace → SyntaxCheck → Lock → Update → Unlock → Activate |
+| `WriteProgram` | Update program with activation | Lock → SyntaxCheck → Update → Unlock → Activate |
+| `WriteClass` | Update class with activation | Lock → SyntaxCheck → Update → Unlock → Activate |
+| `CreateAndActivateProgram` | Create new program | Create → UpdateSource → Activate |
+| `CreateClassWithTests` | Create class with unit tests | Create → Lock → Update → CreateTestInclude → WriteTests → Unlock → Activate → RunUnitTests |
 
 ---
 
@@ -184,13 +182,13 @@ Composite operations that combine multiple ADT API calls:
 
 Solves token limit problem for large files:
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `ImportFromFile` | **File → SAP** - Smart deploy with auto create/update detection | Focused |
-| `ExportToFile` | **SAP → File** - Save object source to local file | Focused |
-| `DeployFromFile` | Legacy name for ImportFromFile | Expert |
-| `SaveToFile` | Legacy name for ExportToFile | Expert |
-| `RenameObject` | Rename object by creating copy | Expert |
+| `ImportFromFile` | **File → SAP** - Smart deploy with auto create/update detection |
+| `ExportToFile` | **SAP → File** - Save object source to local file |
+| `DeployFromFile` | Legacy name for ImportFromFile |
+| `SaveToFile` | Legacy name for ExportToFile |
+| `RenameObject` | Rename object by creating copy |
 
 **Supported Extensions:**
 - `.clas.abap` - Classes
@@ -206,53 +204,53 @@ Solves token limit problem for large files:
 
 ## Code Intelligence Tools (7 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `FindDefinition` | Navigate to symbol definition | Focused |
-| `FindReferences` | Find all references to symbol | Focused |
-| `CodeCompletion` | Get code completion suggestions | Expert |
-| `PrettyPrint` | Format ABAP source code | Expert |
-| `GetPrettyPrinterSettings` | Get formatter settings | Expert |
-| `SetPrettyPrinterSettings` | Update formatter settings | Expert |
-| `GetTypeHierarchy` | Get type hierarchy (supertypes/subtypes) | Expert |
+| `FindDefinition` | Navigate to symbol definition |
+| `FindReferences` | Find all references to symbol |
+| `CodeCompletion` | Get code completion suggestions |
+| `PrettyPrint` | Format ABAP source code |
+| `GetPrettyPrinterSettings` | Get formatter settings |
+| `SetPrettyPrinterSettings` | Update formatter settings |
+| `GetTypeHierarchy` | Get type hierarchy (supertypes/subtypes) |
 
 ---
 
 ## Transport Tools (3 tools)
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `CreateTransport` | Create transport request | Expert |
-| `GetTransportInfo` | Get transport details | Expert |
-| `ReleaseTransport` | Release transport | Expert |
-| `GetUserTransports` | List user's transports | Expert |
-| `GetInactiveObjects` | List inactive objects | Expert |
+| `CreateTransport` | Create transport request |
+| `GetTransportInfo` | Get transport details |
+| `ReleaseTransport` | Release transport |
+| `GetUserTransports` | List user's transports |
+| `GetInactiveObjects` | List inactive objects |
 
 ---
 
-## ExecuteABAP (Expert Mode)
+## ExecuteABAP
 
 Execute arbitrary ABAP code via unit test wrapper:
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `ExecuteABAP` | Run ABAP code and capture output | Expert |
+| `ExecuteABAP` | Run ABAP code and capture output |
 
 **Risk Levels:**
 - `harmless` - Read-only, no external calls
 - `dangerous` - Can write to DB, call external
 - `critical` - Full system access
 
-See the [repository source](https://github.com/marianfoo/vibing-steampunk) for implementation details.
+See the [repository source](https://github.com/marianfoo/arc-1) for implementation details.
 
 ---
 
 ## Runtime Errors / Short Dumps (2 tools) - RABAX
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetDumps` | List runtime errors with filters (user, exception type, program, date range) | Focused |
-| `GetDump` | Get full details of a specific dump including stack trace | Focused |
+| `GetDumps` | List runtime errors with filters (user, exception type, program, date range) |
+| `GetDump` | Get full details of a specific dump including stack trace |
 
 **Use Cases:**
 - Monitor system health by checking recent dumps
@@ -263,10 +261,10 @@ See the [repository source](https://github.com/marianfoo/vibing-steampunk) for i
 
 ## ABAP Profiler / Traces (2 tools) - ATRA
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `ListTraces` | List ABAP runtime traces (profiler results) | Focused |
-| `GetTrace` | Get trace analysis (hitlist, statements, dbAccesses) | Focused |
+| `ListTraces` | List ABAP runtime traces (profiler results) |
+| `GetTrace` | Get trace analysis (hitlist, statements, dbAccesses) |
 
 **Analysis Types:**
 - `hitlist` - Hot spots by execution time
@@ -277,10 +275,10 @@ See the [repository source](https://github.com/marianfoo/vibing-steampunk) for i
 
 ## SQL Trace (2 tools) - ST05
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GetSQLTraceState` | Check if SQL trace is currently active | Focused |
-| `ListSQLTraces` | List SQL trace files | Focused |
+| `GetSQLTraceState` | Check if SQL trace is currently active |
+| `ListSQLTraces` | List SQL trace files |
 
 ---
 
@@ -288,10 +286,10 @@ See the [repository source](https://github.com/marianfoo/vibing-steampunk) for i
 
 Exports ABAP objects using abapGit's native serialization. **Requires abapGit installed on SAP system.**
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `GitTypes` | Get list of 158 supported abapGit object types | Focused |
-| `GitExport` | Export packages/objects as abapGit-compatible ZIP (base64) | Focused |
+| `GitTypes` | Get list of 158 supported abapGit object types |
+| `GitExport` | Export packages/objects as abapGit-compatible ZIP (base64) |
 
 **GitExport Parameters:**
 - `packages` - Comma-separated package names (e.g., "$ZRAY,$TMP")
@@ -307,8 +305,6 @@ src/
 └── ...
 ```
 
-**Tool Group:** Git tools can be disabled with `--disabled-groups G`
-
 **SAP Requirements:**
 - `ZCL_ABAPGIT_OBJECTS` - Core serialization class
 - `ZCL_ABAPGIT_FACTORY` - TADIR access factory
@@ -318,13 +314,13 @@ src/
 
 ## Install/Setup Tools (3 tools) - NEW v2.17.0
 
-Deploy VSP components and dependencies to SAP systems via ADT.
+Deploy ARC-1 components and dependencies to SAP systems via ADT.
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `InstallZADTVSP` | Deploy ZADT_VSP WebSocket handler (6 ABAP objects) | Focused |
-| `InstallAbapGit` | Deploy abapGit from embedded ZIP (standalone or dev edition) | Focused |
-| `ListDependencies` | List available dependencies for installation | Focused |
+| `InstallZADTVSP` | Deploy ZADT_VSP WebSocket handler (6 ABAP objects) |
+| `InstallAbapGit` | Deploy abapGit from embedded ZIP (standalone or dev edition) |
+| `ListDependencies` | List available dependencies for installation |
 
 **InstallZADTVSP Parameters:**
 - `package` - Target package name (default: `$ZADT_VSP`)
@@ -350,22 +346,20 @@ embedded/
     └── embed.go                # Unzip + deploy logic
 ```
 
-**Tool Group:** Install tools can be disabled with `--disabled-groups I`
-
 ---
 
 ## Report Execution Tools (6 tools) - NEW v2.19.0
 
 Execute ABAP reports with parameters and capture ALV output. Includes async pattern for long-running reports.
 
-| Tool | Description | Mode |
+| Tool | Description |
 |------|-------------|------|
-| `RunReport` | Execute report with params/variant, capture ALV output | Focused |
-| `RunReportAsync` | Start report in background, returns task_id | Focused |
-| `GetAsyncResult` | Poll or wait for async task completion | Focused |
-| `GetVariants` | List available variants for a report | Focused |
-| `GetTextElements` | Get selection texts and text symbols | Focused |
-| `SetTextElements` | Update selection texts and text symbols | Focused |
+| `RunReport` | Execute report with params/variant, capture ALV output |
+| `RunReportAsync` | Start report in background, returns task_id |
+| `GetAsyncResult` | Poll or wait for async task completion |
+| `GetVariants` | List available variants for a report |
+| `GetTextElements` | Get selection texts and text symbols |
+| `SetTextElements` | Update selection texts and text symbols |
 
 **Async Pattern:**
 ```
@@ -378,13 +372,11 @@ Execute ABAP reports with parameters and capture ALV output. Includes async patt
 
 **Requires:** ZADT_VSP WebSocket handler deployed to SAP system.
 
-**Tool Group:** Report tools can be disabled with `--disabled-groups R`
-
 ---
 
 ## Tool Count Summary
 
-| Mode | Tools | Description |
+| Tools | Description |
 |------|-------|-------------|
 | **Hyperfocused** | 1 | Single universal `SAP()` tool, minimal context |
 | **Focused** | 81 | Essential tools for AI-assisted development (default) |

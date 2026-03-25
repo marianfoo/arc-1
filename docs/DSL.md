@@ -1,4 +1,4 @@
-# vsp DSL & Workflow Guide
+# ARC-1 DSL & Workflow Guide
 
 This guide covers two ways to automate SAP ADT operations:
 
@@ -26,22 +26,22 @@ This guide covers two ways to automate SAP ADT operations:
 
 ## YAML Workflows
 
-vsp can execute automation workflows defined in YAML files. This is ideal for CI/CD pipelines, batch operations, and repeatable tasks.
+ARC-1 can execute automation workflows defined in YAML files. This is ideal for CI/CD pipelines, batch operations, and repeatable tasks.
 
 ### Quick Start
 
 ```bash
 # Run unit tests for all classes in $TMP
-vsp workflow test '$TMP'
+arc1 workflow test '$TMP'
 
 # Run a YAML workflow file
-vsp workflow run my-workflow.yaml
+arc1 workflow run my-workflow.yaml
 
 # Dry run (preview without executing)
-vsp workflow run my-workflow.yaml --dry-run
+arc1 workflow run my-workflow.yaml --dry-run
 
 # Pass variables
-vsp workflow run my-workflow.yaml --var PACKAGE='$ZRAY*' --var TRANSPORT=DEVK900123
+arc1 workflow run my-workflow.yaml --var PACKAGE='$ZRAY*' --var TRANSPORT=DEVK900123
 ```
 
 ### Workflow Structure
@@ -283,8 +283,8 @@ The `pkg/dsl` package provides a fluent API for programmatic ADT automation.
 
 ```go
 import (
-    "github.com/oisee/vibing-steampunk/pkg/adt"
-    "github.com/oisee/vibing-steampunk/pkg/dsl"
+    "github.com/marianfoo/arc-1/pkg/adt"
+    "github.com/marianfoo/arc-1/pkg/dsl"
 )
 ```
 
@@ -563,8 +563,8 @@ import (
     "log"
     "time"
 
-    "github.com/oisee/vibing-steampunk/pkg/adt"
-    "github.com/oisee/vibing-steampunk/pkg/dsl"
+    "github.com/marianfoo/arc-1/pkg/adt"
+    "github.com/marianfoo/arc-1/pkg/dsl"
 )
 
 func main() {
@@ -634,12 +634,12 @@ func main() {
 
 ## CLI Reference
 
-### `vsp workflow run`
+### `arc1 workflow run`
 
 Execute a YAML workflow file.
 
 ```bash
-vsp workflow run <workflow.yaml> [flags]
+arc1 workflow run <workflow.yaml> [flags]
 ```
 
 **Flags:**
@@ -651,17 +651,17 @@ vsp workflow run <workflow.yaml> [flags]
 
 **Examples:**
 ```bash
-vsp workflow run ci.yaml
-vsp workflow run ci.yaml --dry-run
-vsp workflow run ci.yaml --var PACKAGE='$TMP' --var TRANSPORT=DEVK900123
+arc1 workflow run ci.yaml
+arc1 workflow run ci.yaml --dry-run
+arc1 workflow run ci.yaml --var PACKAGE='$TMP' --var TRANSPORT=DEVK900123
 ```
 
-### `vsp workflow test`
+### `arc1 workflow test`
 
 Run unit tests for a package pattern.
 
 ```bash
-vsp workflow test <package-pattern> [flags]
+arc1 workflow test <package-pattern> [flags]
 ```
 
 **Flags:**
@@ -675,10 +675,10 @@ vsp workflow test <package-pattern> [flags]
 
 **Examples:**
 ```bash
-vsp workflow test '$TMP'
-vsp workflow test 'ZCL_*' --parallel 4
-vsp workflow test '$ZRAY*' --dangerous --long
-vsp workflow test '$TMP' --json > results.json
+arc1 workflow test '$TMP'
+arc1 workflow test 'ZCL_*' --parallel 4
+arc1 workflow test '$ZRAY*' --dangerous --long
+arc1 workflow test '$TMP' --json > results.json
 ```
 
 ---
@@ -695,7 +695,7 @@ variables:
 ### 2. Dry Run First
 
 ```bash
-vsp workflow run my-workflow.yaml --dry-run
+arc1 workflow run my-workflow.yaml --dry-run
 ```
 
 ### 3. Handle Failures Gracefully
@@ -712,18 +712,18 @@ vsp workflow run my-workflow.yaml --dry-run
 ### 4. Use Parallel Testing
 
 ```bash
-vsp workflow test '$TMP' --parallel 4
+arc1 workflow test '$TMP' --parallel 4
 ```
 
 ### 5. JSON Output for CI/CD
 
 ```bash
-vsp workflow test '$TMP' --json | jq '.failedTests'
+arc1 workflow test '$TMP' --json | jq '.failedTests'
 ```
 
 ---
 
 ## See Also
 
-- [Example Workflows](https://github.com/marianfoo/vibing-steampunk/tree/main/examples/workflows) — sample YAML workflow files
+- [Example Workflows](https://github.com/marianfoo/arc-1/tree/main/examples/workflows) — sample YAML workflow files
 - [Developer Guide](agents.md) — project overview and codebase structure

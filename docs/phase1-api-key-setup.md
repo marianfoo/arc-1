@@ -1,6 +1,6 @@
 # Phase 1: API Key Authentication Setup
 
-Protect your centralized vsp MCP server with a shared API key. This is the simplest way to secure a remote vsp instance.
+Protect your centralized arc1 MCP server with a shared API key. This is the simplest way to secure a remote arc1 instance.
 
 ## When to Use
 
@@ -13,7 +13,7 @@ Protect your centralized vsp MCP server with a shared API key. This is the simpl
 
 ```
 ┌──────────────────┐     Bearer API Key      ┌──────────────────┐     Basic Auth      ┌────────────┐
-│  MCP Client      │ ──────────────────────► │  vsp Server      │ ──────────────────► │  SAP ABAP  │
+│  MCP Client      │ ──────────────────────► │  arc1 Server      │ ──────────────────► │  SAP ABAP  │
 │  (IDE / Copilot) │   Authorization header  │  (centralized)   │   SAP_USER/PASS    │  System    │
 └──────────────────┘                         └──────────────────┘                     └────────────┘
 ```
@@ -28,11 +28,11 @@ openssl rand -base64 32
 # Example output: K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA=
 ```
 
-### 2. Start vsp with API Key
+### 2. Start arc1 with API Key
 
 ```bash
 # Using CLI flags
-vsp --url https://sap.example.com:44300 \
+arc1 --url https://sap.example.com:44300 \
     --user SAP_SERVICE_USER \
     --password 'ServicePassword123' \
     --transport http-streamable \
@@ -45,8 +45,8 @@ export SAP_USER=SAP_SERVICE_USER
 export SAP_PASSWORD=ServicePassword123
 export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
-export VSP_API_KEY='K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA='
-vsp
+export ARC1_API_KEY='K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA='
+arc1
 ```
 
 ### 3. Test the Connection
@@ -73,9 +73,9 @@ In `.vscode/mcp.json` or Cursor MCP settings:
 ```json
 {
   "servers": {
-    "vsp": {
+    "arc1": {
       "type": "http",
-      "url": "https://vsp.company.com/mcp",
+      "url": "https://arc1.company.com/mcp",
       "headers": {
         "Authorization": "Bearer K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA="
       }
@@ -88,7 +88,7 @@ In `.vscode/mcp.json` or Cursor MCP settings:
 
 1. Go to **Settings** → **Connectors** → **MCP Servers**
 2. Click **Add MCP Server**
-3. URL: `https://vsp.company.com/mcp`
+3. URL: `https://arc1.company.com/mcp`
 4. Authentication: **API Key**
 5. Header name: `Authorization`
 6. Header value: `Bearer K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA=`
@@ -100,11 +100,11 @@ In `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "vsp": {
+    "arc1": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://vsp.company.com/mcp",
+        "https://arc1.company.com/mcp",
         "--header",
         "Authorization: Bearer K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA="
       ]
@@ -121,12 +121,12 @@ In `claude_desktop_config.json`:
 FROM golang:1.23-alpine AS builder
 WORKDIR /app
 COPY . .
-RUN go build -o vsp ./cmd/vsp
+RUN go build -o arc1 ./cmd/arc1
 
 FROM alpine:3.19
-COPY --from=builder /app/vsp /usr/local/bin/vsp
+COPY --from=builder /app/arc1 /usr/local/bin/arc1
 EXPOSE 8080
-CMD ["vsp", "--transport", "http-streamable", "--http-addr", "0.0.0.0:8080"]
+CMD ["arc1", "--transport", "http-streamable", "--http-addr", "0.0.0.0:8080"]
 ```
 
 ```bash
@@ -136,9 +136,9 @@ docker run -d \
   -e SAP_PASSWORD=secret \
   -e SAP_TRANSPORT=http-streamable \
   -e SAP_HTTP_ADDR=0.0.0.0:8080 \
-  -e VSP_API_KEY='your-api-key-here' \
+  -e ARC1_API_KEY='your-api-key-here' \
   -p 8080:8080 \
-  vsp
+  arc1
 ```
 
 ### Behind a Reverse Proxy (nginx)
@@ -146,10 +146,10 @@ docker run -d \
 ```nginx
 server {
     listen 443 ssl;
-    server_name vsp.company.com;
+    server_name arc1.company.com;
 
-    ssl_certificate /etc/ssl/certs/vsp.crt;
-    ssl_certificate_key /etc/ssl/private/vsp.key;
+    ssl_certificate /etc/ssl/certs/arc1.crt;
+    ssl_certificate_key /etc/ssl/private/arc1.key;
 
     location /mcp {
         proxy_pass http://localhost:8080;

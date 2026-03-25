@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/oisee/vibing-steampunk/pkg/config"
+	"github.com/marianfoo/arc-1/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -15,8 +15,8 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(configInitCmd)
 	configCmd.AddCommand(configShowCmd)
-	configCmd.AddCommand(mcpToVspCmd)
-	configCmd.AddCommand(vspToMcpCmd)
+	configCmd.AddCommand(mcpToArc1Cmd)
+	configCmd.AddCommand(arc1ToMcpCmd)
 	configCmd.AddCommand(configToolsCmd)
 	configToolsCmd.AddCommand(configToolsInitCmd)
 	configToolsCmd.AddCommand(configToolsListCmd)
@@ -26,20 +26,20 @@ func init() {
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage vsp configuration files",
-	Long: `Manage vsp configuration files for different usage modes.
+	Short: "Manage arc1 configuration files",
+	Long: `Manage arc1 configuration files for different usage modes.
 
-vsp supports three configuration methods:
+arc1 supports three configuration methods:
 
 1. .env file (or SAP_* env vars) - Default system for MCP server mode
-2. .vsp.json - Multiple systems for CLI mode (vsp -s <system>)
+2. .arc1.json - Multiple systems for CLI mode (arc1 -s <system>)
 3. .mcp.json - Claude Desktop MCP server configuration
 
 Priority (highest to lowest):
   CLI flags > Environment variables > .env file > Defaults
 
-Use 'vsp config init' to create example configuration files.
-Use 'vsp config show' to display effective configuration.`,
+Use 'arc1 config init' to create example configuration files.
+Use 'arc1 config show' to display effective configuration.`,
 }
 
 var configInitCmd = &cobra.Command{
@@ -49,7 +49,7 @@ var configInitCmd = &cobra.Command{
 
 Files created:
   .env.example           - Environment variables for default system
-  .vsp.json.example      - Multiple systems for CLI mode
+  .arc1.json.example     - Multiple systems for CLI mode
   .mcp.json.example      - Claude Desktop configuration
 
 These are created as .example files to avoid overwriting existing configs.
@@ -60,7 +60,7 @@ Copy and edit them to create your actual configuration.`,
 func runConfigInit(cmd *cobra.Command, args []string) error {
 	files := map[string]string{
 		".env.example":          envExample,
-		".vsp.json.example":     vspSystemsExample,
+		".arc1.json.example":    arc1SystemsExample,
 		".mcp.json.example":     mcpJsonExample,
 	}
 
@@ -81,7 +81,7 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nCreated %d example files.\n", created)
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Copy .env.example to .env and fill in your SAP credentials")
-	fmt.Println("  2. Copy .vsp.json.example to .vsp.json for CLI mode")
+	fmt.Println("  2. Copy .arc1.json.example to .arc1.json for CLI mode")
 	fmt.Println("  3. Copy .mcp.json.example to .mcp.json for Claude Desktop")
 	fmt.Println("\nSee each file for detailed documentation.")
 
@@ -95,7 +95,7 @@ var configShowCmd = &cobra.Command{
 
 Shows:
   - Environment variables (SAP_*)
-  - Systems from .vsp-systems.json
+  - Systems from .arc1-systems.json
   - .mcp.json if present`,
 	RunE: runConfigShow,
 }
@@ -134,7 +134,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	}
 
 	// Systems config
-	fmt.Println("\nSystems Config (.vsp.json):")
+	fmt.Println("\nSystems Config (.arc1.json):")
 	cfg, path, err := config.LoadSystems()
 	if err != nil {
 		fmt.Printf("  Error: %v\n", err)
@@ -146,7 +146,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Systems:")
 		for name, sys := range cfg.Systems {
 			pwdStatus := "env"
-			envKey := fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))
+			envKey := fmt.Sprintf("ARC1_%s_PASSWORD", strings.ToUpper(name))
 			if sys.Password != "" {
 				pwdStatus = "inline"
 			} else if os.Getenv(envKey) != "" {
@@ -166,7 +166,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	fmt.Println("\nMCP Config (.mcp.json):")
 	if mcpCfg, err := loadMCPConfig(); err == nil {
 		fmt.Printf("  Found: .mcp.json\n")
-		if vsp, ok := mcpCfg["mcpServers"].(map[string]interface{})["vsp"]; ok {
+		if vsp, ok := mcpCfg["mcpServers"].(map[string]interface{})["arc1"]; ok {
 			if vspMap, ok := vsp.(map[string]interface{}); ok {
 				if cmd, ok := vspMap["command"].(string); ok {
 					fmt.Printf("  Command: %s\n", cmd)
@@ -188,7 +188,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 				}
 			}
 		} else {
-			fmt.Println("  No 'vsp' server configured")
+			fmt.Println("  No 'arc1' server configured")
 		}
 	} else if os.IsNotExist(err) {
 		fmt.Println("  Not found")
@@ -211,12 +211,12 @@ func loadMCPConfig() (map[string]interface{}, error) {
 	return cfg, nil
 }
 
-// --- mcp-to-vsp command ---
+// --- mcp-to-arc1 command ---
 
-var mcpToVspCmd = &cobra.Command{
-	Use:   "mcp-to-vsp",
-	Short: "Import systems from .mcp.json to .vsp.json",
-	Long: `Parse .mcp.json and create/update .vsp.json with system entries.
+var mcpToArc1Cmd = &cobra.Command{
+	Use:   "mcp-to-arc1",
+	Short: "Import systems from .mcp.json to .arc1.json",
+	Long: `Parse .mcp.json and create/update .arc1.json with system entries.
 
 For each vsp-* server in .mcp.json, extracts:
   - URL from --url arg or env.SAP_URL
@@ -225,10 +225,10 @@ For each vsp-* server in .mcp.json, extracts:
   - Client from --client arg
   - Cookie auth from --cookie-file or --cookie-string
   - Other settings (insecure, read-only, etc.)`,
-	RunE: runMcpToVsp,
+	RunE: runMcpToArc1,
 }
 
-func runMcpToVsp(cmd *cobra.Command, args []string) error {
+func runMcpToArc1(cmd *cobra.Command, args []string) error {
 	mcpCfg, err := loadMCPConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -242,10 +242,10 @@ func runMcpToVsp(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no mcpServers found in .mcp.json")
 	}
 
-	// Load existing .vsp.json or create new
-	vspCfg, _, _ := config.LoadSystems()
-	if vspCfg == nil {
-		vspCfg = &config.SystemsConfig{
+	// Load existing .arc1.json or create new
+	arc1Cfg, _, _ := config.LoadSystems()
+	if arc1Cfg == nil {
+		arc1Cfg = &config.SystemsConfig{
 			Systems: make(map[string]config.SystemConfig),
 		}
 	}
@@ -264,21 +264,21 @@ func runMcpToVsp(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		// Determine system name (strip 'vsp-' prefix if present)
+		// Determine system name (strip 'arc1-' prefix if present)
 		sysName := name
-		if strings.HasPrefix(name, "vsp-") {
-			sysName = strings.TrimPrefix(name, "vsp-")
-		} else if name == "vsp" {
+		if strings.HasPrefix(name, "arc1-") {
+			sysName = strings.TrimPrefix(name, "arc1-")
+		} else if name == "arc1" {
 			sysName = "default"
 		}
 
 		// Check if exists
 		action := "ADD"
-		if _, exists := vspCfg.Systems[sysName]; exists {
+		if _, exists := arc1Cfg.Systems[sysName]; exists {
 			action = "UPDATE"
 		}
 
-		vspCfg.Systems[sysName] = sys
+		arc1Cfg.Systems[sysName] = sys
 		pwdInfo := ""
 		if sys.Password != "" {
 			pwdInfo = " (pwd:imported)"
@@ -287,8 +287,8 @@ func runMcpToVsp(cmd *cobra.Command, args []string) error {
 		imported++
 
 		// Set first system as default if none set
-		if vspCfg.Default == "" {
-			vspCfg.Default = sysName
+		if arc1Cfg.Default == "" {
+			arc1Cfg.Default = sysName
 		}
 	}
 
@@ -297,18 +297,18 @@ func runMcpToVsp(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Write .vsp.json
-	data, err := json.MarshalIndent(vspCfg, "", "  ")
+	// Write .arc1.json
+	data, err := json.MarshalIndent(arc1Cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(".vsp.json", data, 0600); err != nil {
-		return fmt.Errorf("failed to write .vsp.json: %w", err)
+	if err := os.WriteFile(".arc1.json", data, 0600); err != nil {
+		return fmt.Errorf("failed to write .arc1.json: %w", err)
 	}
 
-	fmt.Printf("\nImported %d systems to .vsp.json\n", imported)
-	fmt.Println("Set passwords via: VSP_<SYSTEM>_PASSWORD environment variables")
+	fmt.Printf("\nImported %d systems to .arc1.json\n", imported)
+	fmt.Println("Set passwords via: ARC1_<SYSTEM>_PASSWORD environment variables")
 	return nil
 }
 
@@ -399,25 +399,25 @@ func parseServerArgs(serverMap map[string]interface{}) config.SystemConfig {
 	return sys
 }
 
-// --- vsp-to-mcp command ---
+// --- arc1-to-mcp command ---
 
-var vspToMcpCmd = &cobra.Command{
-	Use:   "vsp-to-mcp",
-	Short: "Export systems from .vsp.json to .mcp.json",
-	Long: `Generate .mcp.json entries from .vsp.json systems.
+var arc1ToMcpCmd = &cobra.Command{
+	Use:   "arc1-to-mcp",
+	Short: "Export systems from .arc1.json to .mcp.json",
+	Long: `Generate .mcp.json entries from .arc1.json systems.
 
-Creates mcpServers entries for each system in .vsp.json.
+Creates mcpServers entries for each system in .arc1.json.
 Passwords are placed in the 'env' block (you need to fill them in).`,
-	RunE: runVspToMcp,
+	RunE: runArc1ToMcp,
 }
 
-func runVspToMcp(cmd *cobra.Command, args []string) error {
-	vspCfg, path, err := config.LoadSystems()
+func runArc1ToMcp(cmd *cobra.Command, args []string) error {
+	arc1Cfg, path, err := config.LoadSystems()
 	if err != nil {
-		return fmt.Errorf("failed to load .vsp.json: %w", err)
+		return fmt.Errorf("failed to load .arc1.json: %w", err)
 	}
-	if vspCfg == nil {
-		return fmt.Errorf(".vsp.json not found. Run 'vsp config init' first")
+	if arc1Cfg == nil {
+		return fmt.Errorf(".arc1.json not found. Run 'arc1 config init' first")
 	}
 
 	fmt.Printf("Reading from: %s\n\n", path)
@@ -437,15 +437,15 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 	// Get executable path
 	execPath, _ := os.Executable()
 	if execPath == "" {
-		execPath = "vsp"
+		execPath = "arc1"
 	}
 
 	exported := 0
-	for name, sys := range vspCfg.Systems {
+	for name, sys := range arc1Cfg.Systems {
 		// Build server entry
-		serverName := "vsp"
-		if name != "default" && name != vspCfg.Default {
-			serverName = "vsp-" + name
+		serverName := "arc1"
+		if name != "default" && name != arc1Cfg.Default {
+			serverName = "arc1-" + name
 		}
 
 		serverArgs := []string{
@@ -517,19 +517,19 @@ func runVspToMcp(cmd *cobra.Command, args []string) error {
 var configToolsCmd = &cobra.Command{
 	Use:   "tools",
 	Short: "Manage tool visibility settings",
-	Long: `Manage granular tool visibility in .vsp.json.
+	Long: `Manage granular tool visibility in .arc1.json.
 
 Tools can be enabled/disabled individually to control what the LLM sees.
 This allows hiding experimental or non-working tools.
 
-Use 'vsp config tools init' to create a complete tools configuration.
-Use 'vsp config tools list' to see current visibility.`,
+Use 'arc1 config tools init' to create a complete tools configuration.
+Use 'arc1 config tools list' to see current visibility.`,
 }
 
 var configToolsInitCmd = &cobra.Command{
 	Use:   "init [--mode focused|expert|hyperfocused]",
 	Short: "Initialize tools configuration with defaults",
-	Long: `Create or update the "tools" section in .vsp.json.
+	Long: `Create or update the "tools" section in .arc1.json.
 
 Lists ALL available tools with their visibility status based on:
 - Current mode (focused/expert/hyperfocused)
@@ -567,7 +567,7 @@ func init() {
 func runConfigToolsInit(cmd *cobra.Command, args []string) error {
 	mode, _ := cmd.Flags().GetString("mode")
 
-	// Load or create .vsp.json
+	// Load or create .arc1.json
 	cfg, path, err := config.LoadSystems()
 	if err != nil {
 		return err
@@ -576,7 +576,7 @@ func runConfigToolsInit(cmd *cobra.Command, args []string) error {
 		cfg = &config.SystemsConfig{
 			Systems: make(map[string]config.SystemConfig),
 		}
-		path = ".vsp.json"
+		path = ".arc1.json"
 	}
 
 	// Get all tools and their visibility
@@ -632,7 +632,7 @@ func runConfigToolsInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Mode: %s\n", mode)
 	fmt.Printf("  Enabled: %d tools\n", enabledCount)
 	fmt.Printf("  Disabled: %d tools\n", disabledCount)
-	fmt.Println("\nEdit .vsp.json to customize tool visibility.")
+	fmt.Println("\nEdit .arc1.json to customize tool visibility.")
 
 	return nil
 }
@@ -688,7 +688,7 @@ func runConfigToolsEnable(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if cfg == nil {
-		return fmt.Errorf(".vsp.json not found. Run 'vsp config tools init' first")
+		return fmt.Errorf(".arc1.json not found. Run 'arc1 config tools init' first")
 	}
 
 	// Verify tool exists
@@ -722,7 +722,7 @@ func runConfigToolsDisable(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if cfg == nil {
-		return fmt.Errorf(".vsp.json not found. Run 'vsp config tools init' first")
+		return fmt.Errorf(".arc1.json not found. Run 'arc1 config tools init' first")
 	}
 
 	// Verify tool exists
@@ -848,7 +848,7 @@ const envExample = `# vsp Environment Configuration
 # Copy this file to .env and fill in your SAP credentials.
 #
 # This is the DEFAULT system used when running vsp without --system flag.
-# For multiple systems, use .vsp-systems.json instead.
+# For multiple systems, use .arc1-systems.json instead.
 #
 # Priority: CLI flags > Environment variables > .env > Defaults
 
@@ -882,7 +882,7 @@ SAP_MODE=focused
 # SAP_FEATURE_TRANSPORT=auto
 `
 
-var vspSystemsExample = func() string {
+var arc1SystemsExample = func() string {
 	cfg := config.SystemsConfig{
 		Default: "dev",
 		Systems: map[string]config.SystemConfig{
@@ -910,19 +910,19 @@ var vspSystemsExample = func() string {
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 
 	return fmt.Sprintf(`// vsp Systems Configuration
-// Copy this file to .vsp.json and edit for your systems.
+// Copy this file to .arc1.json and edit for your systems.
 //
-// Usage: vsp -s <system> <command>
+// Usage: arc1 -s <system> <command>
 // Example: vsp -s dev search "ZCL_*"
 //
 // Passwords are loaded from environment variables:
-//   VSP_<SYSTEM>_PASSWORD (e.g., VSP_DEV_PASSWORD, VSP_A4H_PASSWORD)
+//   ARC1_<SYSTEM>_PASSWORD (e.g., ARC1_DEV_PASSWORD, ARC1_A4H_PASSWORD)
 //
 // Config file locations (searched in order):
-//   .vsp.json                (current directory, preferred)
-//   .vsp/systems.json        (current directory)
-//   ~/.vsp.json              (home directory)
-//   ~/.vsp/systems.json      (home directory)
+//   .arc1.json               (current directory, preferred)
+//   .arc1/systems.json       (current directory)
+//   ~/.arc1.json             (home directory)
+//   ~/.arc1/systems.json     (home directory)
 
 %s
 `, string(data))
@@ -937,7 +937,7 @@ var mcpJsonExample = func() string {
 	execPath = filepath.Base(execPath) // Just use the binary name
 
 	return fmt.Sprintf(`{
-  "_comment": "vsp MCP Server Configuration for Claude Desktop",
+  "_comment": "ARC-1 MCP Server Configuration for Claude Desktop",
   "_docs": [
     "Copy this file to .mcp.json in your project directory.",
     "Or add to ~/.config/claude/claude_desktop_config.json",
@@ -949,7 +949,7 @@ var mcpJsonExample = func() string {
     "Multiple systems: Create separate server entries (vsp-dev, vsp-prod, etc.)"
   ],
   "mcpServers": {
-    "vsp": {
+    "arc1": {
       "command": "%s",
       "args": [
         "--url", "http://your-sap-host:50000",
@@ -961,12 +961,12 @@ var mcpJsonExample = func() string {
         "SAP_PASSWORD": "YOUR_PASSWORD_HERE"
       }
     },
-    "vsp-dev": {
+    "arc1-dev": {
       "command": "%s",
       "args": ["--url", "http://dev:50000", "--user", "DEV_USER"],
       "env": {"SAP_PASSWORD": "dev_password"}
     },
-    "vsp-prod": {
+    "arc1-prod": {
       "command": "%s",
       "args": [
         "--url", "https://prod:44300",

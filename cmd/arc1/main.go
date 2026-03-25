@@ -1,4 +1,4 @@
-// vsp is an MCP server providing ABAP Development Tools (ADT) functionality.
+// arc1 is an MCP server providing ABAP Development Tools (ADT) functionality.
 package main
 
 import (
@@ -10,9 +10,8 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
-	"github.com/oisee/vibing-steampunk/internal/mcp"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
-	"github.com/oisee/vibing-steampunk/pkg/config"
+	"github.com/marianfoo/arc-1/internal/mcp"
+	"github.com/marianfoo/arc-1/pkg/adt"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -27,9 +26,9 @@ var (
 var cfg = &mcp.Config{}
 
 var rootCmd = &cobra.Command{
-	Use:   "vsp",
-	Short: "ABAP Development Tools for AI agents and DevOps",
-	Long: `vsp — ABAP Development Tools for AI agents and DevOps.
+	Use:   "arc1",
+	Short: "ARC-1 — ABAP Relay Connector for AI agents and DevOps",
+	Long: `arc1 — ARC-1 (ABAP Relay Connector) for AI agents and DevOps.
 
 Single binary, 9 platforms, no dependencies. Download from GitHub releases,
 point your MCP config at it, done.
@@ -38,35 +37,34 @@ Two modes of operation:
 
   MCP Server (default)  Connects Claude, Gemini CLI, Copilot, Codex, Qwen Code,
                         and other MCP-compatible agents to SAP systems.
-                        81 tools (focused), 122 (expert), ~46 (readonly), or 1 universal tool (hyperfocused).
+                        11 intent-based tools (ARC-1 architecture).
 
   CLI Mode              Direct terminal access: search, source, export, debug.
                         Multi-system profiles. Useful for scripts and pipelines.
 
 Quick start:
   # 1. MCP server (reads .env or SAP_* env vars)
-  vsp --url https://host:44300 --user dev --password secret
+  arc1 --url https://host:44300 --user dev --password secret
 
   # 2. CLI mode with saved system profile
-  vsp -s dev search "ZCL_ORDER*"
-  vsp -s dev source CLAS ZCL_ORDER_PROCESSING
-  vsp -s dev export '$ZPACKAGE' -o backup.zip
+  arc1 -s dev search "ZCL_ORDER*"
+  arc1 -s dev source CLAS ZCL_ORDER_PROCESSING
+  arc1 -s dev export '$ZPACKAGE' -o backup.zip
 
   # 3. Enterprise safety (hand to AI without fear)
-  vsp --read-only                                    # no writes at all
-  vsp --allowed-packages 'Z*,$TMP' --block-free-sql  # sandbox AI to custom code
-  vsp --disallowed-ops CDUA                           # block create/delete/update/activate
+  arc1 --read-only                                    # no writes at all
+  arc1 --allowed-packages 'Z*,$TMP' --block-free-sql  # sandbox AI to custom code
+  arc1 --disallowed-ops CDUA                           # block create/delete/update/activate
 
 Configuration files:
   .env          Default SAP connection (MCP server mode). SAP_URL, SAP_USER, etc.
-  .vsp.json     Multi-system profiles for CLI mode (vsp -s dev, vsp -s prod).
+  .arc1.json    Multi-system profiles for CLI mode (vsp -s dev, arc1 -s prod).
   .mcp.json     MCP server entries for Claude Desktop / other MCP clients.
 
-  vsp config init       Generate example files (.env.example, .vsp.json.example, .mcp.json.example)
-  vsp config show       Display effective configuration
-  vsp config mcp-to-vsp Import systems from .mcp.json into .vsp.json
-  vsp config vsp-to-mcp Export .vsp.json systems to .mcp.json format
-  vsp config tools      Manage per-tool visibility in .vsp.json
+  arc1 config init       Generate example files (.env.example, .arc1.json.example, .mcp.json.example)
+  arc1 config show       Display effective configuration
+  arc1 config mcp-to-arc1 Import systems from .mcp.json into .arc1.json
+  arc1 config arc1-to-mcp Export .arc1.json systems to .mcp.json format
 
 Configuration priority: CLI flags > env vars > .env file > defaults
 Ready-to-use configs for 8 AI agents: docs/cli-agents/`,
@@ -132,9 +130,7 @@ func init() {
 	rootCmd.Flags().StringSliceVar(&cfg.AllowedTransports, "allowed-transports", nil, "Restrict transport operations to specific transports (comma-separated, supports wildcards like A4HK*)")
 	rootCmd.Flags().BoolVar(&cfg.AllowTransportableEdits, "allow-transportable-edits", false, "Allow editing objects in transportable packages (requires transport parameter)")
 
-	// Mode options
-	rootCmd.Flags().StringVar(&cfg.Mode, "mode", "focused", "Tool mode: focused (81 tools), expert (122 tools), readonly (~46 read-only tools, implies --read-only), or hyperfocused (single universal SAP tool)")
-	rootCmd.Flags().StringVar(&cfg.DisabledGroups, "disabled-groups", "", "Disable tool groups: 5/U=UI5, T=Tests, H=HANA, D=Debug (e.g., \"TH\" disables Tests and HANA)")
+	// Transport options
 	rootCmd.Flags().StringVar(&cfg.Transport, "transport", "stdio", "MCP transport: stdio or http-streamable")
 	rootCmd.Flags().StringVar(&cfg.HTTPAddr, "http-addr", "", "Listen address for http-streamable transport (default: 127.0.0.1:8080, use 0.0.0.0:8080 for Docker/remote)")
 
@@ -186,8 +182,6 @@ func init() {
 	viper.BindPFlag("transport-read-only", rootCmd.Flags().Lookup("transport-read-only"))
 	viper.BindPFlag("allowed-transports", rootCmd.Flags().Lookup("allowed-transports"))
 	viper.BindPFlag("allow-transportable-edits", rootCmd.Flags().Lookup("allow-transportable-edits"))
-	viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
-	viper.BindPFlag("disabled-groups", rootCmd.Flags().Lookup("disabled-groups"))
 	viper.BindPFlag("transport", rootCmd.Flags().Lookup("transport"))
 	viper.BindPFlag("http-addr", rootCmd.Flags().Lookup("http-addr"))
 	viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
@@ -239,10 +233,6 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if cfg.Verbose {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] Starting vsp server\n")
 		fmt.Fprintf(os.Stderr, "[VERBOSE] Transport: %s\n", cfg.Transport)
-		fmt.Fprintf(os.Stderr, "[VERBOSE] Mode: %s\n", cfg.Mode)
-		if cfg.DisabledGroups != "" {
-			fmt.Fprintf(os.Stderr, "[VERBOSE] Disabled groups: %s (5/U=UI5, T=Tests, H=HANA, D=Debug)\n", cfg.DisabledGroups)
-		}
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", cfg.BaseURL)
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Client: %s\n", cfg.Client)
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Language: %s\n", cfg.Language)
@@ -270,7 +260,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 
 		// Safety status
-		if cfg.ReadOnly || cfg.Mode == "readonly" {
+		if cfg.ReadOnly {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: READ-ONLY mode enabled\n")
 		}
 		if cfg.BlockFreeSQL {
@@ -293,25 +283,6 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 		if !cfg.ReadOnly && !cfg.BlockFreeSQL && cfg.AllowedOps == "" && cfg.DisallowedOps == "" && len(cfg.AllowedPackages) == 0 {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Safety: UNRESTRICTED (no safety checks active)\n")
-		}
-	}
-
-	// Load granular tool visibility from .vsp.json if present
-	if systemsCfg, configPath, err := config.LoadSystems(); err == nil && systemsCfg != nil {
-		if systemsCfg.Tools != nil {
-			cfg.ToolsConfig = systemsCfg.Tools
-			if cfg.Verbose {
-				enabled := 0
-				disabled := 0
-				for _, v := range systemsCfg.Tools {
-					if v {
-						enabled++
-					} else {
-						disabled++
-					}
-				}
-				fmt.Fprintf(os.Stderr, "[VERBOSE] Tool config loaded from %s: %d enabled, %d disabled\n", configPath, enabled, disabled)
-			}
 		}
 	}
 
@@ -376,20 +347,6 @@ func resolveConfig(cmd *cobra.Command) {
 	// Insecure: flag > SAP_INSECURE env
 	if !cmd.Flags().Changed("insecure") {
 		cfg.InsecureSkipVerify = viper.GetBool("INSECURE")
-	}
-
-	// Mode: flag > SAP_MODE env > default (focused)
-	if !cmd.Flags().Changed("mode") {
-		if envMode := viper.GetString("MODE"); envMode != "" {
-			cfg.Mode = envMode
-		}
-	}
-
-	// DisabledGroups: flag > SAP_DISABLED_GROUPS env
-	if !cmd.Flags().Changed("disabled-groups") {
-		if envGroups := viper.GetString("DISABLED_GROUPS"); envGroups != "" {
-			cfg.DisabledGroups = envGroups
-		}
 	}
 
 	// Transport: flag > SAP_TRANSPORT env > default (stdio)
@@ -557,11 +514,6 @@ func validateConfig() error {
 		return fmt.Errorf("SAP URL is required. Use --url flag or SAP_URL environment variable")
 	}
 
-	// Validate mode
-	if cfg.Mode != "focused" && cfg.Mode != "expert" && cfg.Mode != "hyperfocused" && cfg.Mode != "readonly" {
-		return fmt.Errorf("invalid mode: %s (must be 'focused', 'expert', 'readonly', or 'hyperfocused')", cfg.Mode)
-	}
-
 	// Validate transport
 	cfg.Transport = strings.ToLower(strings.TrimSpace(cfg.Transport))
 	if cfg.Transport == "" {
@@ -653,8 +605,8 @@ func processCookieAuth(cmd *cobra.Command) error {
 	cfg.PPCACertFile = ppCACert
 	cfg.PPCertTTL = ppCertTTL
 
-	// Process API key (uses VSP_ prefix, not SAP_, since it authenticates MCP clients to vsp)
-	apiKey := os.Getenv("VSP_API_KEY")
+	// Process API key (uses ARC1_ prefix, not SAP_, since it authenticates MCP clients to vsp)
+	apiKey := os.Getenv("ARC1_API_KEY")
 	if ak, _ := cmd.Flags().GetString("api-key"); ak != "" {
 		apiKey = ak
 	}

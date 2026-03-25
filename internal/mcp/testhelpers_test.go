@@ -103,8 +103,5 @@ func newServerWithConfig(cfg *Config) *Server {
 	if cfg.Language == "" {
 		cfg.Language = "EN"
 	}
-	if cfg.Mode == "" {
-		cfg.Mode = "focused"
-	}
 	return NewServer(cfg)
 }

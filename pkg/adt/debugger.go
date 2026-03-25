@@ -83,10 +83,10 @@ func getTerminalID() string {
 		for i, c := range terminalIDUser {
 			h[i%8] ^= byte(c)
 		}
-		return "vsp-" + hex.EncodeToString(h)
+		return "arc1-" + hex.EncodeToString(h)
 	}
 	// 3. Fixed default - better than random for MCP scenarios
-	return "vsp-mcp-default"
+	return "arc1-mcp-default"
 }
 
 // Breakpoint represents an ABAP debugger breakpoint.
@@ -128,7 +128,7 @@ type BreakpointRequest struct {
 	DebuggingMode   DebuggingMode   `json:"debuggingMode"`
 	TerminalID      string          `json:"terminalId,omitempty"`
 	User            string          `json:"user,omitempty"`
-	IdeID           string          `json:"ideId,omitempty"`           // IDE identifier (default: "vsp")
+	IdeID           string          `json:"ideId,omitempty"`           // IDE identifier (default: "arc1")
 	ClientID        string          `json:"clientId,omitempty"`        // Client ID for breakpoints
 	SystemDebugging bool            `json:"systemDebugging,omitempty"` // Enable system debugging
 	Deactivated     bool            `json:"deactivated,omitempty"`     // Create breakpoints in deactivated state
@@ -195,7 +195,7 @@ func (c *Client) GetExternalBreakpoints(ctx context.Context, user string) (*Brea
 	// All four parameters required - terminalId identifies this vsp session
 	query.Set("requestUser", user)
 	query.Set("terminalId", getTerminalID())
-	query.Set("ideId", "vsp")
+	query.Set("ideId", "arc1")
 
 	resp, err := c.transport.Request(ctx, "/sap/bc/adt/debugger/breakpoints", &RequestOptions{
 		Method: http.MethodGet,
@@ -224,7 +224,7 @@ func (c *Client) DeleteExternalBreakpoint(ctx context.Context, breakpointID stri
 	// All parameters required - terminalId identifies this vsp session
 	query.Set("requestUser", user)
 	query.Set("terminalId", getTerminalID())
-	query.Set("ideId", "vsp")
+	query.Set("ideId", "arc1")
 
 	endpoint := fmt.Sprintf("/sap/bc/adt/debugger/breakpoints/%s", url.PathEscape(breakpointID))
 	_, err := c.transport.Request(ctx, endpoint, &RequestOptions{
@@ -296,7 +296,7 @@ func buildBreakpointRequestXML(req *BreakpointRequest) (string, error) {
 	// Set defaults
 	ideID := req.IdeID
 	if ideID == "" {
-		ideID = "vsp"
+		ideID = "arc1"
 	}
 	// Use provided terminalId or generate session-unique one
 	termID := req.TerminalID
@@ -548,7 +548,7 @@ type ListenOptions struct {
 	DebuggingMode         DebuggingMode `json:"debuggingMode"`
 	User                  string        `json:"user,omitempty"`        // Required for user mode
 	TerminalID            string        `json:"terminalId,omitempty"`  // Auto-generated if empty
-	IdeID                 string        `json:"ideId,omitempty"`       // Default: "vsp"
+	IdeID                 string        `json:"ideId,omitempty"`       // Default: "arc1"
 	TimeoutSeconds        int           `json:"timeout,omitempty"`     // Default: 240
 	CheckConflict         bool          `json:"checkConflict"`
 	NotifyOnConflict      bool          `json:"notifyOnConflict"`
@@ -572,7 +572,7 @@ func (c *Client) DebuggerListen(ctx context.Context, opts *ListenOptions) (*List
 		opts.DebuggingMode = DebuggingModeUser
 	}
 	if opts.IdeID == "" {
-		opts.IdeID = "vsp"
+		opts.IdeID = "arc1"
 	}
 	if opts.TerminalID == "" {
 		opts.TerminalID = getTerminalID()
@@ -643,7 +643,7 @@ func (c *Client) DebuggerCheckListener(ctx context.Context, opts *ListenOptions)
 		opts.DebuggingMode = DebuggingModeUser
 	}
 	if opts.IdeID == "" {
-		opts.IdeID = "vsp"
+		opts.IdeID = "arc1"
 	}
 	if opts.TerminalID == "" {
 		opts.TerminalID = getTerminalID()
@@ -688,7 +688,7 @@ func (c *Client) DebuggerStopListener(ctx context.Context, opts *ListenOptions) 
 		opts.DebuggingMode = DebuggingModeUser
 	}
 	if opts.IdeID == "" {
-		opts.IdeID = "vsp"
+		opts.IdeID = "arc1"
 	}
 	if opts.TerminalID == "" {
 		opts.TerminalID = getTerminalID()
@@ -1690,7 +1690,7 @@ func (c *Client) DebuggerBatchRequest(ctx context.Context, operations []DebugBat
 		Accept:      "multipart/mixed",
 		Body:        []byte(body.String()),
 		Headers: map[string]string{
-			"User-Agent":          "vsp/1.0 (compatible; Eclipse ADT)",
+			"User-Agent":          "arc1/1.0 (compatible; Eclipse ADT)",
 			"X-sap-adt-profiling": "server-time",
 		},
 	})

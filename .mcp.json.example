@@ -1,5 +1,5 @@
 {
-  "_comment": "vsp MCP Server Configuration for Claude Desktop",
+  "_comment": "ARC-1 MCP Server Configuration for Claude Desktop",
   "_docs": [
     "Copy this file to .mcp.json in your project directory.",
     "Or add to ~/.config/claude/claude_desktop_config.json",
@@ -8,28 +8,27 @@
     "  1. Use 'env' block (recommended): SAP_PASSWORD loaded from environment",
     "  2. Use --password in args (not recommended): visible in config",
     "",
-    "Multiple systems: Create separate server entries (vsp-dev, vsp-prod, etc.)"
+    "Multiple systems: Create separate server entries (arc1-dev, arc1-prod, etc.)"
   ],
   "mcpServers": {
-    "vsp": {
-      "command": "vsp",
+    "arc1": {
+      "command": "arc1",
       "args": [
         "--url", "http://your-sap-host:50000",
         "--user", "YOUR_USERNAME",
-        "--client", "001",
-        "--mode", "focused"
+        "--client", "001"
       ],
       "env": {
         "SAP_PASSWORD": "YOUR_PASSWORD_HERE"
       }
     },
-    "vsp-dev": {
-      "command": "vsp",
+    "arc1-dev": {
+      "command": "arc1",
       "args": ["--url", "http://dev:50000", "--user", "DEV_USER"],
       "env": {"SAP_PASSWORD": "dev_password"}
     },
-    "vsp-prod": {
-      "command": "vsp",
+    "arc1-prod": {
+      "command": "arc1",
       "args": [
         "--url", "https://prod:44300",
         "--user", "PROD_USER",

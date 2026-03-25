@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/oisee/vibing-steampunk/pkg/ctxcomp"
+	"github.com/marianfoo/arc-1/pkg/ctxcomp"
 )
 
 // routeContextAction routes "analyze" with type=context, parse_abap, analyze_deps.

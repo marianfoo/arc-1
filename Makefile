@@ -1,7 +1,7 @@
-# vsp Makefile
+# ARC-1 Makefile
 
 # Binary name
-BINARY_NAME=vsp
+BINARY_NAME=arc1
 
 # Go parameters
 GOCMD=go
@@ -15,7 +15,7 @@ GOLINT=golangci-lint
 
 # Build directories
 BUILD_DIR=build
-CMD_DIR=./cmd/vsp
+CMD_DIR=./cmd/arc1
 
 # Version info
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -51,7 +51,7 @@ build: ## Build the binary for current platform
 	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
 	@echo "Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
-build-all: ## Build for common platforms (linux-amd64, darwin-arm64, windows-amd64) + local ./build/vsp
+build-all: ## Build for common platforms (linux-amd64, darwin-arm64, windows-amd64) + local ./build/arc1
 	@mkdir -p $(BUILD_DIR)
 	@for platform in $(PLATFORMS_COMMON); do \
 		os=$${platform%/*}; \
@@ -108,7 +108,7 @@ build-windows: ## Build for Windows (amd64, arm64, 386)
 	done
 
 # WSL deployment directory
-WINDOWS_DEPLOY_DIR=/mnt/c/bin/vibing-steampunk
+WINDOWS_DEPLOY_DIR=/mnt/c/bin/arc1
 
 deploy-windows: ## Build Windows amd64 and deploy to /mnt/c/bin/vibing-steampunk/
 	@mkdir -p $(BUILD_DIR)
@@ -132,14 +132,14 @@ SAP_SYSTEM ?= a4h
 
 refresh-deps: ## Refresh embedded ZIPs from SAP (keeps old if SAP unavailable)
 	@echo "Refreshing embedded dependencies from SAP system '$(SAP_SYSTEM)'..."
-	@if ./build/vsp -s $(SAP_SYSTEM) export '$$ZGIT' -o embedded/deps/abapgit-full.zip.tmp 2>/dev/null; then \
+	@if ./build/arc1 -s $(SAP_SYSTEM) export '$$ZGIT' -o embedded/deps/abapgit-full.zip.tmp 2>/dev/null; then \
 		mv embedded/deps/abapgit-full.zip.tmp embedded/deps/abapgit-full.zip; \
 		echo "  abapgit-full.zip: updated"; \
 	else \
 		rm -f embedded/deps/abapgit-full.zip.tmp; \
 		echo "  abapgit-full.zip: kept existing (SAP export failed)"; \
 	fi
-	@if ./build/vsp -s $(SAP_SYSTEM) export 'ZABAPGIT' -o embedded/deps/abapgit-standalone.zip.tmp 2>/dev/null; then \
+	@if ./build/arc1 -s $(SAP_SYSTEM) export 'ZABAPGIT' -o embedded/deps/abapgit-standalone.zip.tmp 2>/dev/null; then \
 		mv embedded/deps/abapgit-standalone.zip.tmp embedded/deps/abapgit-standalone.zip; \
 		echo "  abapgit-standalone.zip: updated"; \
 	else \
@@ -147,7 +147,7 @@ refresh-deps: ## Refresh embedded ZIPs from SAP (keeps old if SAP unavailable)
 		echo "  abapgit-standalone.zip: kept existing (SAP export failed)"; \
 	fi
 
-release: build refresh-deps build-all ## Full release: build vsp, refresh deps from SAP, rebuild all platforms
+release: build refresh-deps build-all ## Full release: build arc1, refresh deps from SAP, rebuild all platforms
 	@echo "Release build complete."
 
 install: ## Install the binary

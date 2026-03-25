@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 // routeDevToolsAction routes "test" (unit tests), "analyze" (syntax check), "edit" (activate), and "analyze" (execute_abap).

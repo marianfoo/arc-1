@@ -4,7 +4,7 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 ## Project Overview
 
-**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 81 essential tools (focused mode, default) or 122 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
+**ARC-1** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 11 intent-based tools (SAPRead, SAPSearch, SAPWrite, SAPActivate, SAPNavigate, SAPQuery, SAPTransport, SAPContext, SAPLint, SAPDiagnose, SAPManage) for use with Claude and other MCP-compatible LLMs.
 
 ## Quick Reference
 
@@ -12,7 +12,7 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 ```bash
 # Build
-go build -o vsp ./cmd/vsp
+go build -o arc1 ./cmd/arc1
 
 # Run unit tests
 go test ./...
@@ -29,17 +29,17 @@ go test -tags=integration -v ./pkg/adt/
 
 ```bash
 # Using CLI flags
-./vsp --url http://host:50000 --user admin --password secret
+./arc1 --url http://host:50000 --user admin --password secret
 
 # Using environment variables
-SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
+SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./arc1
 
 # Using cookie authentication
-./vsp --url http://host:50000 --cookie-string "sap-usercontext=abc; SAP_SESSIONID=xyz"
-./vsp --url http://host:50000 --cookie-file cookies.txt
+./arc1 --url http://host:50000 --cookie-string "sap-usercontext=abc; SAP_SESSIONID=xyz"
+./arc1 --url http://host:50000 --cookie-file cookies.txt
 
 # Using HTTP Streamable transport (MCP endpoint at /mcp)
-./vsp --url http://host:50000 --user admin --password secret --transport http-streamable
+./arc1 --url http://host:50000 --user admin --password secret --transport http-streamable
 ```
 
 | Variable / Flag | Description |
@@ -52,9 +52,7 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_COOKIE_FILE` / `--cookie-file` | Path to Netscape-format cookie file |
 | `SAP_COOKIE_STRING` / `--cookie-string` | Cookie string (key1=val1; key2=val2) |
-| `SAP_MODE` / `--mode` | Tool mode: `arc1` (11 intent-based tools for Copilot Studio), `focused` (81 tools, default) or `expert` (122 tools) |
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
-| `SAP_DISABLED_GROUPS` / `--disabled-groups` | Disable tool groups: `5`/`U`=UI5, `T`=Tests, `H`=HANA, `D`=Debug |
 | `SAP_VERBOSE` / `--verbose` | Enable verbose logging to stderr |
 | **Safety Configuration** | |
 | `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: false) |
@@ -73,8 +71,8 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 ## Codebase Structure
 
 ```
-cmd/vsp/main.go       # Entry point
-internal/mcp/server.go       # MCP server (122 tool handlers, mode-aware)
+cmd/arc1/main.go       # Entry point
+internal/mcp/server.go       # MCP server (11 intent-based tool handlers)
 pkg/
 ├── adt/
 │   ├── client.go             # ADT client + read operations
@@ -149,7 +147,7 @@ pkg/
 3. **Add integration test** in `pkg/adt/integration_test.go`
 4. **Update documentation**:
    - `README.md` tool tables
-   - `reports/vsp-status.md`
+   - `reports/arc1-status.md`
 
 ## Code Patterns
 
@@ -284,7 +282,7 @@ This allows AI-driven debugging without manual SAP GUI interaction.
 
 ## Security Notes
 
-- Never commit `.env`, `cookies.txt`, or `.mcp.json` (all in `.gitignore`)
+- Never commit `.env`, `cookies.txt`, or `.arc1.json` (all in `.gitignore`)
 - Session summaries (`*SESSION-SUMMARY*`) are also gitignored
 - Always verify no credentials in `git log --all -p` before pushing
 
@@ -316,7 +314,7 @@ All research reports, analysis documents, and design specifications follow this 
 - **004:** Graph Architecture Improvements (vs-punk) - Alternative design approach
 - **005:** Improved Graph Architecture Design - Clean architecture redesign for ZRAY graph system
 - **006:** Standard API Surface Scraper - Tool to discover and analyze SAP standard API usage
-- **007:** Graph Traversal Implementation Plan - Step-by-step implementation for vsp
+- **007:** Graph Traversal Implementation Plan - Step-by-step implementation for ARC-1
 - **008:** Test Intelligence Plan - Smart test execution based on code changes
 - **009:** Library Architecture & Caching Strategy - Multi-layer architecture and SQLite caching
 
@@ -327,7 +325,7 @@ All research reports, analysis documents, and design specifications follow this 
 #### 2025-12-05 Reports
 - **001:** Code Injection & Bootstrap Strategies - Unit Test execution vehicle, data injection options
 - **002:** Self-Replicating Deploy Agent Design - Rejected due to STRUST/SSL certificate concerns
-- **003:** ADT-Assisted Universal Deployment - Factory Pattern strategy via vsp (ADT-native)
+- **003:** ADT-Assisted Universal Deployment - Factory Pattern strategy via ARC-1 (ADT-native)
 - **004:** ExecuteABAP Implementation - ABAP code execution via Unit Test wrapper (385 LOC, 2 tests)
 - **014:** External Debugger Scripting Vision - Watchpoints API, AI-powered debugger scripting architecture
 - **017:** AMDP Debugging & UI5/BSP Capabilities - Investigation of ADT endpoints
@@ -335,7 +333,7 @@ All research reports, analysis documents, and design specifications follow this 
 - **019:** AMDP Session Architecture & Solutions - Root cause analysis, 3 proposed solutions
 - **021:** Project Status v2.11 - Comprehensive project status with Transport Management
 - **022:** Future Vision - Strategic roadmap for AI-native ABAP development
-- **023:** VSP for ABAP Developers - Introduction article for developers and DevOps
+- **023:** ARC-1 for ABAP Developers - Introduction article for developers and DevOps
 - **024:** AMDP Goroutine+Channel Architecture - Session persistence via Go concurrency (✅ Implemented)
 
 #### 2025-12-06 Reports
@@ -348,14 +346,14 @@ All research reports, analysis documents, and design specifications follow this 
 - **003:** RAP OData Service Lessons - BDEF XML format, SRVB creation, OData V4 action URLs
 
 #### 2026-02-03 Reports
-- **001:** abapGit Dependencies & Submodules - Git submodules analysis, dependency management patterns, vsp opportunity `[ROADMAP]`
+- **001:** abapGit Dependencies & Submodules - Git submodules analysis, dependency management patterns, ARC-1 opportunity `[ROADMAP]`
 
 #### Reference Documentation (Non-numbered)
 - `abap-adt-discovery-guide.md` - ADT API discovery process
 - `adt-abap-internals-documentation.md` - Detailed ADT endpoint analysis
 - `adt-capability-matrix.md` - ADT feature comparison
 - `cookie-auth-implementation-guide.md` - Cookie authentication research
-- `vsp-status.md` - Current project status
+- `arc1-status.md` - Current project status
 
 ### Creating New Reports
 
@@ -385,7 +383,7 @@ When creating a new report:
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 122 (81 focused, 122 expert) |
+| **Tools** | 11 intent-based (SAPRead, SAPSearch, SAPWrite, SAPActivate, SAPNavigate, SAPQuery, SAPTransport, SAPContext, SAPLint, SAPDiagnose, SAPManage) |
 | **Unit Tests** | 250+ |
 | **Integration Tests** | 34 |
 | **Platforms** | 9 |
@@ -406,10 +404,9 @@ When creating a new report:
 | **SQL Trace** | ✅ Complete (GetSQLTraceState, ListSQLTraces - ST05) |
 | **RAP OData E2E** | ✅ Complete (DDLS, SRVD, SRVB create + publish) |
 | **External Debugger** | ⚠️ HTTP unreliable → Use WebSocket ZADT_VSP (stateful APC) |
-| **AMDP Debugger** | ⚠️ Experimental (Session works, breakpoints need investigation - expert mode only) |
+| **AMDP Debugger** | ⚠️ Experimental (Session works, breakpoints need investigation) |
 | **Transport Mgmt** | ✅ Complete (5 tools with safety controls - v2.11.0) |
 | **UI5/BSP Mgmt** | ✅ Partial (Read ops work; Create needs alternate API) |
-| **Tool Groups** | ✅ Complete (--disabled-groups: 5/U, T, H, D, C) |
 | **Class Includes** | ✅ Complete (v2.12 - testclasses, locals_def, locals_imp, macros) |
 | **abapGit Integration** | ✅ Complete (v2.16.0 - WebSocket, GitTypes, GitExport - 158 object types) |
 | **Install Tools** | ✅ Complete (v2.17.0 - InstallZADTVSP, InstallAbapGit, ListDependencies) |
@@ -425,11 +422,11 @@ When creating a new report:
 
 ```bash
 # Run unit tests for a package
-vsp workflow test "$TMP"
-vsp workflow test "$ZRAY*" --parallel 4 --json
+arc1 workflow test "$TMP"
+arc1 workflow test "$ZRAY*" --parallel 4 --json
 
 # Run YAML workflow
-vsp workflow run examples/workflows/ci-pipeline.yaml --var PACKAGE=\$TMP
+arc1 workflow run examples/workflows/ci-pipeline.yaml --var PACKAGE=\$TMP
 ```
 
 ```go

@@ -56,70 +56,6 @@ SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER BY cnt DESC
 
 ---
 
-## Server Modes
-
-```mermaid
-flowchart TD
-    subgraph Focused["Focused Mode (Default) - 81 Tools"]
-        U[Unified Tools]
-        U --> GS[GetSource]
-        U --> WS[WriteSource]
-
-        S[Search]
-        S --> GO[GrepObjects]
-        S --> GP[GrepPackages]
-        S --> SO[SearchObject]
-
-        E[Edit]
-        E --> ES[EditSource]
-
-        D[Data]
-        D --> GT[GetTable/Contents]
-        D --> RQ[RunQuery]
-        D --> CD[GetCDSDependencies]
-
-        N[Navigate]
-        N --> FD[FindDefinition]
-        N --> FR[FindReferences]
-
-        T[Test/Check]
-        T --> SC[SyntaxCheck]
-        T --> UT[RunUnitTests]
-    end
-
-    subgraph Expert["Expert Mode - 122 Tools"]
-        direction TB
-        F[All Focused Tools]
-        A[+ Atomic Operations]
-        A --> LO[LockObject]
-        A --> UO[UnlockObject]
-        A --> CO[CreateObject]
-        A --> US[UpdateSource]
-        A --> DO[DeleteObject]
-
-        G[+ Granular Reads]
-        G --> GP2[GetProgram]
-        G --> GC[GetClass]
-        G --> GI[GetInterface]
-
-        W[+ Legacy Workflows]
-        W --> WP[WriteProgram]
-        W --> WC[WriteClass]
-        W --> CC[CreateClassWithTests]
-    end
-
-    Focused -.->|--mode=expert| Expert
-```
-
-### Mode Selection Guide
-
-| Use Case | Mode | Reason |
-|----------|------|--------|
-| Standard development | Focused | Simpler, fewer choices |
-| Existing workflow scripts | Expert | Backward compatibility |
-| Debugging lock issues | Expert | Direct LockObject access |
-| Learning the API | Expert | See all atomic operations |
-
 ---
 
 ## Tool Selection Decision Tree
@@ -205,7 +141,7 @@ flowchart LR
 
 ---
 
-## Tool Catalog (Focused Mode)
+## Tool Catalog
 
 ### GetSource - Unified Read Tool
 
@@ -481,4 +417,4 @@ flowchart TD
 
 ---
 
-**Maintained by:** vibing-steampunk project
+**Maintained by:** ARC-1 project

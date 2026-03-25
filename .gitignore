@@ -22,6 +22,7 @@ abap-adt-api/
 *.dylib
 /mcp-abap-adt-go
 /vsp
+/arc1
 
 # Test binary
 *.test
@@ -57,7 +58,12 @@ certs/
 .env.*
 !.env.example
 
-# vsp config files (contain credentials)
+# arc1 config files (contain credentials)
+.arc1*.json
+arc1.tmp.json
+arc1*.tmp.json
+.arc1/
+# Legacy vsp config files
 .vsp*.json
 vsp.tmp.json
 vsp*.tmp.json
@@ -70,3 +76,6 @@ abap-adt-api/
 # Session logs
 sessions/
 node_modules/
+
+# Claude worktrees
+.claude/worktrees/

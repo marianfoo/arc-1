@@ -1,4 +1,4 @@
-# vsp Reviewer Guide
+# ARC-1 Reviewer Guide
 
 > A hands-on checklist for anyone who wants to kick the tires.
 > No SAP system required for most tasks — 6 of 11 tasks are fully offline.
@@ -6,10 +6,10 @@
 ## Build It (30 seconds)
 
 ```bash
-git clone https://github.com/oisee/vibing-steampunk.git
-cd vibing-steampunk
-go build -o vsp ./cmd/vsp
-./vsp --version
+git clone https://github.com/marianfoo/arc-1.git
+cd arc-1
+go build -o arc1 ./cmd/arc1
+./arc1 --version
 ```
 
 Single binary, zero dependencies beyond Go 1.23+.
@@ -19,12 +19,12 @@ Single binary, zero dependencies beyond Go 1.23+.
 ## Task 1: Read the --help
 
 ```bash
-./vsp --help
+./arc1 --help
 ```
 
 **What to spotlight:**
 - Two modes: MCP Server (AI agents) + CLI (terminal DevOps)
-- 28 CLI commands, 81–122 MCP tools
+- 28 CLI commands, 11 intent-based MCP tools
 - Enterprise safety flags (`--read-only`, `--allowed-packages`, `--disallowed-ops`)
 - Subcommands: search, source, query, grep, graph, deps, lint, compile, parse, test, atc, deploy, export, system, install...
 
@@ -78,14 +78,14 @@ echo 'REPORT ztest.
 DATA bad_name TYPE i.
 .
 COMPUTE bad_name = 42.
-IF bad_name EQ 10. WRITE bad_name. ENDIF.' | ./vsp lint --stdin
+IF bad_name EQ 10. WRITE bad_name. ENDIF.' | ./arc1 lint --stdin
 ```
 
 Expected: finds `empty_statement`, `obsolete_statement`, `preferred_compare_operator`, `max_one_statement`.
 
 **Lint a real file:**
 ```bash
-./vsp lint --file embedded/abap/zcl_vsp_utils.clas.abap
+./arc1 lint --file embedded/abap/zcl_vsp_utils.clas.abap
 ```
 
 **What to spotlight:**
@@ -110,14 +110,14 @@ CLASS zcl_demo IMPLEMENTATION.
       WRITE lv_result.
     ENDIF.
   ENDMETHOD.
-ENDCLASS.' | ./vsp parse --stdin --format summary
+ENDCLASS.' | ./arc1 parse --stdin --format summary
 ```
 
 Expected: 13 statements, types: ClassDefinition, ClassImplementation, MethodDef, etc.
 
 **JSON output for tooling:**
 ```bash
-echo "DATA lv_x TYPE i. lv_x = 42." | ./vsp parse --stdin --format json
+echo "DATA lv_x TYPE i. lv_x = 42." | ./arc1 parse --stdin --format json
 ```
 
 ---
@@ -126,7 +126,7 @@ echo "DATA lv_x TYPE i. lv_x = 42." | ./vsp parse --stdin --format json
 
 ```bash
 # Compile a WASM binary to ABAP (if you have one)
-./vsp compile wasm pkg/wasmcomp/testdata/quickjs_eval.wasm --class ZCL_QUICKJS 2>/dev/null | head -20
+./arc1 compile wasm pkg/wasmcomp/testdata/quickjs_eval.wasm --class ZCL_QUICKJS 2>/dev/null | head -20
 
 # Or build the test suite WASM and compile it
 go test -v -run TestWASMSuite_CompileGo ./pkg/wasmcomp/
@@ -144,19 +144,19 @@ cat /tmp/wasm_suite_go.abap | head -20
 
 ```bash
 # Generate example configs
-./vsp config init
+./arc1 config init
 cat .env.example
-cat .vsp.json.example
+cat .arc1.json.example
 
 # Test safety flags
-SAP_MODE=expert SAP_READ_ONLY=true ./vsp config show
-SAP_ALLOWED_PACKAGES='Z*,$TMP' ./vsp config show
+SAP_READ_ONLY=true ./arc1 config show
+SAP_ALLOWED_PACKAGES='Z*,$TMP' ./arc1 config show
 ```
 
 **Multi-system profiles:**
 ```bash
-cp .vsp.json.example .vsp.json
-./vsp systems
+cp .arc1.json.example .arc1.json
+./arc1 systems
 ```
 
 **Safety review:** Read `pkg/adt/safety.go` + `safety_test.go` (25 tests).
@@ -177,22 +177,22 @@ If you have an SAP system with ADT enabled:
 
 ```bash
 export SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret
-# Or: ./vsp -s dev ...
+# Or: ./arc1 -s dev ...
 
 # System info
-./vsp system info
+./arc1 system info
 
 # Search
-./vsp search "ZCL_*" --max 10
+./arc1 search "ZCL_*" --max 10
 
 # Query a table
-./vsp query T000 --top 3
+./arc1 query T000 --top 3
 
 # Grep source code
-./vsp grep "SELECT" --package '$TMP' --max 5
+./arc1 grep "SELECT" --package '$TMP' --max 5
 
 # Read source with dependency context
-./vsp context CLAS ZCL_SOMETHING --depth 2
+./arc1 context CLAS ZCL_SOMETHING --depth 2
 ```
 
 **What to spotlight:** Everything works with standard ADT. No ZADT_VSP needed.
@@ -203,16 +203,16 @@ export SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret
 
 ```bash
 # What does a class use?
-./vsp graph CLAS ZCL_MY_CLASS
+./arc1 graph CLAS ZCL_MY_CLASS
 
 # Who uses an interface?
-./vsp graph INTF ZIF_MY_INTERFACE --direction callers
+./arc1 graph INTF ZIF_MY_INTERFACE --direction callers
 
 # Transaction → resolve to program → graph
-./vsp graph TRAN SE80
+./arc1 graph TRAN SE80
 
 # Package transport readiness
-./vsp deps '$MY_PACKAGE' --format summary
+./arc1 deps '$MY_PACKAGE' --format summary
 ```
 
 **What to spotlight:**
@@ -224,11 +224,11 @@ export SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret
 
 ## Task 9: Lua Scripting & YAML Workflows (with SAP)
 
-vsp includes a Lua scripting engine (50+ SAP bindings) and a YAML workflow engine for automation.
+ARC-1 includes a Lua scripting engine (50+ SAP bindings) and a YAML workflow engine for automation.
 
 **Lua REPL:**
 ```bash
-./vsp -s dev lua
+./arc1 -s dev lua
 # lua> objs = searchObject("ZCL_VSP*")
 # lua> for _, o in ipairs(objs) do print(o.name) end
 # lua> rows = query("SELECT MANDT, MTEXT FROM T000")
@@ -240,25 +240,25 @@ vsp includes a Lua scripting engine (50+ SAP bindings) and a YAML workflow engin
 **Run example scripts:**
 ```bash
 # Package audit — lint + parse all classes
-./vsp -s dev lua examples/scripts/package-audit.lua
+./arc1 -s dev lua examples/scripts/package-audit.lua
 
 # Table explorer — interactive SQL queries
-./vsp -s dev lua examples/scripts/table-explorer.lua
+./arc1 -s dev lua examples/scripts/table-explorer.lua
 
 # Dependency check — transport readiness via WBCROSSGT
-./vsp -s dev lua examples/scripts/dependency-check.lua
+./arc1 -s dev lua examples/scripts/dependency-check.lua
 
 # Debug session recording
-./vsp -s dev lua examples/scripts/record-debug-session.lua
+./arc1 -s dev lua examples/scripts/record-debug-session.lua
 ```
 
 **YAML workflows:**
 ```bash
 # CI pipeline: search → syntax check → unit tests
-./vsp -s dev workflow run examples/workflows/ci-pipeline.yaml
+./arc1 -s dev workflow run examples/workflows/ci-pipeline.yaml
 
 # Pre-transport quality gate
-./vsp -s dev workflow run examples/workflows/quality-gate.yaml --var PACKAGE='$ZADT_VSP'
+./arc1 -s dev workflow run examples/workflows/quality-gate.yaml --var PACKAGE='$ZADT_VSP'
 ```
 
 **What to spotlight:**
@@ -288,14 +288,14 @@ vsp includes a Lua scripting engine (50+ SAP bindings) and a YAML workflow engin
 If you have Claude Desktop, Gemini CLI, Copilot, or any MCP client:
 
 ```bash
-./vsp config init
+./arc1 config init
 cat .mcp.json.example
 ```
 
 Ready-to-use configs for 8 AI agents in `docs/cli-agents/`.
 
 **What to spotlight:**
-- Hyperfocused mode: 1 universal `SAP()` tool, ~200 tokens schema (vs ~40K for 122 tools)
+- 11 intent-based tools, ~200 tokens schema
 - Context compression: dependencies auto-appended to GetSource
 - Method-level surgery: 95% token reduction
 
@@ -306,7 +306,7 @@ Ready-to-use configs for 8 AI agents in `docs/cli-agents/`.
 ```bash
 go vet ./...
 go test -race ./...
-ls -lh vsp                    # binary size
+ls -lh arc1                    # binary size
 go mod graph | wc -l          # dependency count
 ```
 
@@ -323,7 +323,7 @@ go mod graph | wc -l          # dependency count
 | `pkg/dsl/workflow.go` | YAML workflow engine | ~600 |
 | `pkg/wasmcomp/compile.go` | WASM→ABAP compiler | ~500 |
 | `pkg/ts2go/ts2go.go` | TypeScript→Go transpiler | ~500 |
-| `cmd/vsp/devops.go` | CLI command handlers | ~1100 |
+| `cmd/arc1/devops.go` | CLI command handlers | ~1100 |
 
 ---
 
@@ -331,26 +331,26 @@ go mod graph | wc -l          # dependency count
 
 | What | Command | SAP? |
 |------|---------|:----:|
-| Build | `go build -o vsp ./cmd/vsp` | — |
+| Build | `go build -o arc1 ./cmd/arc1` | — |
 | Unit tests | `go test ./...` | — |
-| Lint ABAP | `./vsp lint --file x.abap` | — |
-| Parse ABAP | `./vsp parse --stdin` | — |
-| Compile WASM | `./vsp compile wasm x.wasm` | — |
-| Config | `./vsp config init/show` | — |
-| System info | `./vsp system info` | ✅ |
-| Search | `./vsp search "Z*"` | ✅ |
-| Query table | `./vsp query T000 --top 5` | ✅ |
-| Grep source | `./vsp grep "pattern" --package PKG` | ✅ |
-| Call graph | `./vsp graph CLAS ZCL_X` | ✅ |
-| Package deps | `./vsp deps '$PKG' --format summary` | ✅ |
-| Read source | `./vsp source read CLAS ZCL_X` | ✅ |
-| Context | `./vsp context CLAS ZCL_X --depth 2` | ✅ |
-| Lua REPL | `./vsp lua` | ✅ |
-| Lua script | `./vsp lua script.lua` | ✅ |
-| YAML workflow | `./vsp workflow run pipeline.yaml` | ✅ |
-| Unit tests | `./vsp test CLAS ZCL_X` | ✅ |
-| Deploy | `./vsp deploy x.clas.abap '$TMP'` | ✅ |
-| Export | `./vsp export '$PKG' -o backup.zip` | ✅+ |
+| Lint ABAP | `./arc1 lint --file x.abap` | — |
+| Parse ABAP | `./arc1 parse --stdin` | — |
+| Compile WASM | `./arc1 compile wasm x.wasm` | — |
+| Config | `./arc1 config init/show` | — |
+| System info | `./arc1 system info` | ✅ |
+| Search | `./arc1 search "Z*"` | ✅ |
+| Query table | `./arc1 query T000 --top 5` | ✅ |
+| Grep source | `./arc1 grep "pattern" --package PKG` | ✅ |
+| Call graph | `./arc1 graph CLAS ZCL_X` | ✅ |
+| Package deps | `./arc1 deps '$PKG' --format summary` | ✅ |
+| Read source | `./arc1 source read CLAS ZCL_X` | ✅ |
+| Context | `./arc1 context CLAS ZCL_X --depth 2` | ✅ |
+| Lua REPL | `./arc1 lua` | ✅ |
+| Lua script | `./arc1 lua script.lua` | ✅ |
+| YAML workflow | `./arc1 workflow run pipeline.yaml` | ✅ |
+| Unit tests | `./arc1 test CLAS ZCL_X` | ✅ |
+| Deploy | `./arc1 deploy x.clas.abap '$TMP'` | ✅ |
+| Export | `./arc1 export '$PKG' -o backup.zip` | ✅+ |
 
 ✅+ = needs ZADT_VSP WebSocket
 
@@ -358,5 +358,5 @@ go mod graph | wc -l          # dependency count
 
 ## Found Something?
 
-- Open an issue: https://github.com/oisee/vibing-steampunk/issues
+- Open an issue: https://github.com/marianfoo/arc-1/issues
 - PRs welcome — especially for: test coverage, error messages, documentation, new lint rules, MCP agent configs

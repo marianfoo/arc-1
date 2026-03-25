@@ -1,4 +1,4 @@
-# vsp Architecture
+# ARC-1 Architecture
 
 ## High-Level Architecture
 
@@ -10,7 +10,7 @@ flowchart TB
         Other[Other MCP Clients]
     end
 
-    subgraph VSP["vsp - Go Binary"]
+    subgraph VSP["arc1 - Go Binary"]
         direction TB
 
         subgraph Entry["Entry Points"]
@@ -21,8 +21,7 @@ flowchart TB
 
         subgraph Core["internal/mcp/server.go"]
             direction LR
-            Focused[Focused Mode<br/>81 Tools]
-            Expert[Expert Mode<br/>122 Tools]
+            Tools[11 Intent-Based Tools]
         end
 
         subgraph Safety["Safety Layer"]
@@ -128,7 +127,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant AI as AI Assistant
-    participant VSP as vsp
+    participant VSP as arc1
     participant SAP as SAP System
 
     AI->>VSP: EditSource(url, old_string, new_string)
@@ -245,7 +244,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph VSP["vsp"]
+    subgraph VSP["ARC-1"]
         HTTP[HTTP Client<br/>pkg/adt/http.go]
         WS[WebSocket Client<br/>pkg/adt/websocket.go]
     end
@@ -273,8 +272,8 @@ flowchart LR
 ## Package Structure
 
 ```
-vibing-steampunk/
-├── cmd/vsp/                    # CLI entry point (cobra/viper)
+arc-1/
+├── cmd/arc1/                    # CLI entry point (cobra/viper)
 │   └── main.go                 #   Flags, env vars, auth, server startup
 │
 ├── internal/mcp/               # MCP protocol layer

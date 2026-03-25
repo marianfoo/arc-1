@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oisee/vibing-steampunk/pkg/cache"
+	"github.com/marianfoo/arc-1/pkg/cache"
 )
 
 func TestMemoryCache_BasicOperations(t *testing.T) {

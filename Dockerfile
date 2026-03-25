@@ -1,5 +1,5 @@
 # =============================================================================
-# vsp — ABAP Development Tools MCP Server
+# ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP systems
 # Multi-stage build: builder (CGO + gcc) → minimal Alpine runtime
 # =============================================================================
 
@@ -28,7 +28,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
       -X main.Version=${VERSION} \
       -X main.Commit=${COMMIT} \
       -X main.BuildDate=${BUILD_DATE}" \
-    -o /vsp ./cmd/vsp
+    -o /arc1 ./cmd/arc1
 
 # --- Runtime Stage -----------------------------------------------------------
 FROM alpine:3.21
@@ -38,13 +38,13 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates libgcc libstdc++
 
 # Run as non-root user
-RUN addgroup -S vsp && adduser -S vsp -G vsp
+RUN addgroup -S arc1 && adduser -S arc1 -G arc1
 
-WORKDIR /home/vsp
+WORKDIR /home/arc1
 
-COPY --from=builder /vsp /usr/local/bin/vsp
+COPY --from=builder /arc1 /usr/local/bin/arc1
 
-USER vsp
+USER arc1
 
 # ─── Connection ──────────────────────────────────────────────────────────────
 # SAP system URL (required)
@@ -57,12 +57,6 @@ ENV SAP_CLIENT="001"
 ENV SAP_LANGUAGE="EN"
 # Skip TLS verification (set to "true" for self-signed certs)
 ENV SAP_INSECURE="false"
-
-# ─── Tool Mode ───────────────────────────────────────────────────────────────
-# focused (81 tools, default) or expert (122 tools)
-ENV SAP_MODE="focused"
-# Disable tool groups: 5/U=UI5, T=Tests, H=HANA, D=Debug  (e.g. "TH")
-ENV SAP_DISABLED_GROUPS=""
 
 # ─── Safety ──────────────────────────────────────────────────────────────────
 # Block ALL write operations (read-only access to the SAP system)
@@ -115,4 +109,4 @@ ENV SAP_VERBOSE="false"
 # Map to any host port: docker run -p 8080:8080 ...
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/vsp"]
+ENTRYPOINT ["/usr/local/bin/arc1"]

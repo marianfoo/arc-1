@@ -33,7 +33,6 @@ func newTestConfig() *Config {
 		Password: "testpass",
 		Client:   "001",
 		Language: "EN",
-		Mode:     "focused",
 	}
 }
 

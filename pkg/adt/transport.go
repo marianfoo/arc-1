@@ -872,3 +872,141 @@ func (c *Client) DeleteTransport(ctx context.Context, number string) error {
 }
 
 // escapeXMLAttr is defined in ui5.go
+
+// --- Transport Quick Win Features ---
+
+// TransportReference represents which transport(s) contain a specific object.
+type TransportReference struct {
+	TransportNumber string `json:"transportNumber"`
+	TaskNumber      string `json:"taskNumber,omitempty"`
+	Owner           string `json:"owner"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+}
+
+// FindTransportForObject finds the transport request(s) that contain a specific object.
+func (c *Client) FindTransportForObject(ctx context.Context, objectType, objectName, devClass string) ([]TransportReference, error) {
+	objectName = strings.ToUpper(objectName)
+	objectType = strings.ToUpper(objectType)
+
+	// Build the object URL for the transport info request
+	objectURL := buildObjectURL(objectType, objectName)
+
+	params := map[string][]string{
+		"uri": {objectURL},
+	}
+	if devClass != "" {
+		params["devclass"] = []string{strings.ToUpper(devClass)}
+	}
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/cts/transportrequests/reference", &RequestOptions{
+		Method: http.MethodGet,
+		Query:  params,
+		Accept: acceptTransportOrganizerV1 + ", application/xml",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("finding transport for object: %w", err)
+	}
+
+	return parseTransportReferences(resp.Body)
+}
+
+func parseTransportReferences(data []byte) ([]TransportReference, error) {
+	if len(data) == 0 {
+		return []TransportReference{}, nil
+	}
+
+	// Strip namespace prefixes
+	xmlStr := string(data)
+	xmlStr = strings.ReplaceAll(xmlStr, "tm:", "")
+	xmlStr = strings.ReplaceAll(xmlStr, "atom:", "")
+
+	type transportRef struct {
+		Number      string `xml:"number,attr"`
+		Owner       string `xml:"owner,attr"`
+		Description string `xml:"description,attr"`
+		Status      string `xml:"status,attr"`
+		Tasks       []struct {
+			Number string `xml:"number,attr"`
+		} `xml:"task"`
+	}
+	type response struct {
+		Transports []transportRef `xml:"request"`
+	}
+
+	var resp response
+	if err := xml.Unmarshal([]byte(xmlStr), &resp); err != nil {
+		// Try a simpler format — may be just text
+		return []TransportReference{}, nil
+	}
+
+	refs := make([]TransportReference, 0, len(resp.Transports))
+	for _, tr := range resp.Transports {
+		ref := TransportReference{
+			TransportNumber: tr.Number,
+			Owner:           tr.Owner,
+			Description:     tr.Description,
+			Status:          tr.Status,
+		}
+		if len(tr.Tasks) > 0 {
+			ref.TaskNumber = tr.Tasks[0].Number
+		}
+		refs = append(refs, ref)
+	}
+
+	return refs, nil
+}
+
+// SetTransportOwner changes the owner of a transport request.
+func (c *Client) SetTransportOwner(ctx context.Context, transportNumber, newOwner string) error {
+	if err := c.config.Safety.CheckTransport(transportNumber, "SetTransportOwner", true); err != nil {
+		return err
+	}
+
+	transportNumber = strings.ToUpper(transportNumber)
+	newOwner = strings.ToUpper(newOwner)
+
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" tm:useraction="changeowner" tm:owner="%s"/>`,
+		escapeXMLAttr(newOwner))
+
+	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s", transportNumber)
+	_, err := c.transport.Request(ctx, path, &RequestOptions{
+		Method:      http.MethodPatch,
+		Body:        []byte(body),
+		ContentType: "application/vnd.sap.adt.transportorganizer.v1+xml",
+		Accept:      acceptTransportOrganizerV1,
+	})
+	if err != nil {
+		return fmt.Errorf("setting transport owner: %w", err)
+	}
+
+	return nil
+}
+
+// AddTransportUser adds a user to a transport request (creates a new task for them).
+func (c *Client) AddTransportUser(ctx context.Context, transportNumber, userName string) error {
+	if err := c.config.Safety.CheckTransport(transportNumber, "AddTransportUser", true); err != nil {
+		return err
+	}
+
+	transportNumber = strings.ToUpper(transportNumber)
+	userName = strings.ToUpper(userName)
+
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" tm:useraction="adduser" tm:owner="%s"/>`,
+		escapeXMLAttr(userName))
+
+	path := fmt.Sprintf("/sap/bc/adt/cts/transportrequests/%s", transportNumber)
+	_, err := c.transport.Request(ctx, path, &RequestOptions{
+		Method:      http.MethodPatch,
+		Body:        []byte(body),
+		ContentType: "application/vnd.sap.adt.transportorganizer.v1+xml",
+		Accept:      acceptTransportOrganizerV1,
+	})
+	if err != nil {
+		return fmt.Errorf("adding user to transport: %w", err)
+	}
+
+	return nil
+}

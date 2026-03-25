@@ -1,0 +1,1172 @@
+=== RUN   TestParseATCCustomizing
+--- PASS: TestParseATCCustomizing (0.00s)
+=== RUN   TestParseATCRunResult
+--- PASS: TestParseATCRunResult (0.00s)
+=== RUN   TestParseATCWorklist
+--- PASS: TestParseATCWorklist (0.00s)
+=== RUN   TestParseATCWorklistEmpty
+--- PASS: TestParseATCWorklistEmpty (0.00s)
+=== RUN   TestATCFindingPriorityMapping
+--- PASS: TestATCFindingPriorityMapping (0.00s)
+=== RUN   TestClient_SearchObject
+--- PASS: TestClient_SearchObject (0.00s)
+=== RUN   TestClient_GetProgram
+--- PASS: TestClient_GetProgram (0.00s)
+=== RUN   TestClient_GetClass
+--- PASS: TestClient_GetClass (0.00s)
+=== RUN   TestClient_NewClient
+--- PASS: TestClient_NewClient (0.00s)
+=== RUN   TestClient_NameNormalization
+--- PASS: TestClient_NameNormalization (0.00s)
+=== RUN   TestParseSRVBMetadata
+--- PASS: TestParseSRVBMetadata (0.00s)
+=== RUN   TestParseClassComponents
+--- PASS: TestParseClassComponents (0.00s)
+=== RUN   TestParseClassComponentsEmpty
+--- PASS: TestParseClassComponentsEmpty (0.00s)
+=== RUN   TestParseClassComponentsNested
+--- PASS: TestParseClassComponentsNested (0.00s)
+=== RUN   TestNewConfig
+=== RUN   TestNewConfig/default_config
+=== RUN   TestNewConfig/with_custom_client
+=== RUN   TestNewConfig/with_custom_language
+=== RUN   TestNewConfig/with_insecure_skip_verify
+=== RUN   TestNewConfig/with_stateless_session
+=== RUN   TestNewConfig/with_custom_timeout
+=== RUN   TestNewConfig/with_multiple_options
+--- PASS: TestNewConfig (0.00s)
+    --- PASS: TestNewConfig/default_config (0.00s)
+    --- PASS: TestNewConfig/with_custom_client (0.00s)
+    --- PASS: TestNewConfig/with_custom_language (0.00s)
+    --- PASS: TestNewConfig/with_insecure_skip_verify (0.00s)
+    --- PASS: TestNewConfig/with_stateless_session (0.00s)
+    --- PASS: TestNewConfig/with_custom_timeout (0.00s)
+    --- PASS: TestNewConfig/with_multiple_options (0.00s)
+=== RUN   TestNewHTTPClient
+--- PASS: TestNewHTTPClient (0.00s)
+=== RUN   TestSessionTypes
+--- PASS: TestSessionTypes (0.00s)
+=== RUN   TestParseCookieString
+=== RUN   TestParseCookieString/single_cookie
+=== RUN   TestParseCookieString/multiple_cookies
+=== RUN   TestParseCookieString/cookies_with_spaces
+=== RUN   TestParseCookieString/cookie_with_equals_in_value
+=== RUN   TestParseCookieString/empty_string
+=== RUN   TestParseCookieString/no_equals_sign
+=== RUN   TestParseCookieString/SAP_style_cookies
+--- PASS: TestParseCookieString (0.00s)
+    --- PASS: TestParseCookieString/single_cookie (0.00s)
+    --- PASS: TestParseCookieString/multiple_cookies (0.00s)
+    --- PASS: TestParseCookieString/cookies_with_spaces (0.00s)
+    --- PASS: TestParseCookieString/cookie_with_equals_in_value (0.00s)
+    --- PASS: TestParseCookieString/empty_string (0.00s)
+    --- PASS: TestParseCookieString/no_equals_sign (0.00s)
+    --- PASS: TestParseCookieString/SAP_style_cookies (0.00s)
+=== RUN   TestLoadCookiesFromFile
+=== RUN   TestLoadCookiesFromFile/netscape_format
+=== RUN   TestLoadCookiesFromFile/key-value_format
+=== RUN   TestLoadCookiesFromFile/mixed_format
+=== RUN   TestLoadCookiesFromFile/empty_file
+=== RUN   TestLoadCookiesFromFile/comments_only
+=== RUN   TestLoadCookiesFromFile/file_not_found
+--- PASS: TestLoadCookiesFromFile (0.00s)
+    --- PASS: TestLoadCookiesFromFile/netscape_format (0.00s)
+    --- PASS: TestLoadCookiesFromFile/key-value_format (0.00s)
+    --- PASS: TestLoadCookiesFromFile/mixed_format (0.00s)
+    --- PASS: TestLoadCookiesFromFile/empty_file (0.00s)
+    --- PASS: TestLoadCookiesFromFile/comments_only (0.00s)
+    --- PASS: TestLoadCookiesFromFile/file_not_found (0.00s)
+=== RUN   TestConfigCookieAuth
+=== RUN   TestConfigCookieAuth/HasBasicAuth_with_credentials
+=== RUN   TestConfigCookieAuth/HasBasicAuth_without_credentials
+=== RUN   TestConfigCookieAuth/HasBasicAuth_with_only_username
+=== RUN   TestConfigCookieAuth/HasBasicAuth_with_only_password
+=== RUN   TestConfigCookieAuth/HasCookieAuth_with_cookies
+=== RUN   TestConfigCookieAuth/HasCookieAuth_without_cookies
+=== RUN   TestConfigCookieAuth/HasCookieAuth_with_empty_cookie_map
+--- PASS: TestConfigCookieAuth (0.00s)
+    --- PASS: TestConfigCookieAuth/HasBasicAuth_with_credentials (0.00s)
+    --- PASS: TestConfigCookieAuth/HasBasicAuth_without_credentials (0.00s)
+    --- PASS: TestConfigCookieAuth/HasBasicAuth_with_only_username (0.00s)
+    --- PASS: TestConfigCookieAuth/HasBasicAuth_with_only_password (0.00s)
+    --- PASS: TestConfigCookieAuth/HasCookieAuth_with_cookies (0.00s)
+    --- PASS: TestConfigCookieAuth/HasCookieAuth_without_cookies (0.00s)
+    --- PASS: TestConfigCookieAuth/HasCookieAuth_with_empty_cookie_map (0.00s)
+=== RUN   TestWithCookies
+--- PASS: TestWithCookies (0.00s)
+=== RUN   TestWithVerbose
+--- PASS: TestWithVerbose (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_LineBreakpoint
+--- PASS: TestBuildBreakpointRequestXML_LineBreakpoint (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_ExceptionBreakpoint
+--- PASS: TestBuildBreakpointRequestXML_ExceptionBreakpoint (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_StatementBreakpoint
+--- PASS: TestBuildBreakpointRequestXML_StatementBreakpoint (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_MessageBreakpoint
+--- PASS: TestBuildBreakpointRequestXML_MessageBreakpoint (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_WithCondition
+--- PASS: TestBuildBreakpointRequestXML_WithCondition (0.00s)
+=== RUN   TestParseBreakpointResponse_LineBreakpoint
+--- PASS: TestParseBreakpointResponse_LineBreakpoint (0.00s)
+=== RUN   TestParseBreakpointResponse_ExceptionBreakpoint
+--- PASS: TestParseBreakpointResponse_ExceptionBreakpoint (0.00s)
+=== RUN   TestParseBreakpointResponse_MultipleBreakpoints
+--- PASS: TestParseBreakpointResponse_MultipleBreakpoints (0.00s)
+=== RUN   TestParseBreakpointResponse_WithErrorMessage
+--- PASS: TestParseBreakpointResponse_WithErrorMessage (0.00s)
+=== RUN   TestParseBreakpointResponse_EmptyResponse
+--- PASS: TestParseBreakpointResponse_EmptyResponse (0.00s)
+=== RUN   TestNewLineBreakpoint
+--- PASS: TestNewLineBreakpoint (0.00s)
+=== RUN   TestNewExceptionBreakpoint
+--- PASS: TestNewExceptionBreakpoint (0.00s)
+=== RUN   TestNewStatementBreakpoint
+--- PASS: TestNewStatementBreakpoint (0.00s)
+=== RUN   TestNewMessageBreakpoint
+--- PASS: TestNewMessageBreakpoint (0.00s)
+=== RUN   TestSetExternalBreakpoint_Integration
+--- PASS: TestSetExternalBreakpoint_Integration (0.00s)
+=== RUN   TestGetExternalBreakpoints_Integration
+--- PASS: TestGetExternalBreakpoints_Integration (0.00s)
+=== RUN   TestDeleteExternalBreakpoint_Integration
+--- PASS: TestDeleteExternalBreakpoint_Integration (0.00s)
+=== RUN   TestValidateBreakpointCondition
+--- PASS: TestValidateBreakpointCondition (0.00s)
+=== RUN   TestXmlEscape
+--- PASS: TestXmlEscape (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_WithOptionalAttributes
+--- PASS: TestBuildBreakpointRequestXML_WithOptionalAttributes (0.00s)
+=== RUN   TestBuildBreakpointRequestXML_OmitsEmptyOptionalAttrs
+--- PASS: TestBuildBreakpointRequestXML_OmitsEmptyOptionalAttrs (0.00s)
+=== RUN   TestParseAttachResponse
+--- PASS: TestParseAttachResponse (0.00s)
+=== RUN   TestParseStepResponse
+--- PASS: TestParseStepResponse (0.00s)
+=== RUN   TestParseStackResponse
+--- PASS: TestParseStackResponse (0.00s)
+=== RUN   TestParseVariablesResponse
+--- PASS: TestParseVariablesResponse (0.00s)
+=== RUN   TestParseChildVariablesResponse
+--- PASS: TestParseChildVariablesResponse (0.00s)
+=== RUN   TestParseDebuggeeResponse
+--- PASS: TestParseDebuggeeResponse (0.00s)
+=== RUN   TestParseDebuggeeResponse_PostMortem
+--- PASS: TestParseDebuggeeResponse_PostMortem (0.00s)
+=== RUN   TestParseDebuggeeResponse_Empty
+--- PASS: TestParseDebuggeeResponse_Empty (0.00s)
+=== RUN   TestDebuggerAttach_Mock
+--- PASS: TestDebuggerAttach_Mock (0.00s)
+=== RUN   TestDebuggerStep_Mock
+--- PASS: TestDebuggerStep_Mock (0.00s)
+=== RUN   TestDebuggerGetStack_Mock
+--- PASS: TestDebuggerGetStack_Mock (0.00s)
+=== RUN   TestDebuggerGetVariables_Mock
+--- PASS: TestDebuggerGetVariables_Mock (0.00s)
+=== RUN   TestDebuggerGetVariables_EmptyIDs
+--- PASS: TestDebuggerGetVariables_EmptyIDs (0.00s)
+=== RUN   TestDebugVariable_IsComplexType
+--- PASS: TestDebugVariable_IsComplexType (0.00s)
+=== RUN   TestDebugStepTypes
+--- PASS: TestDebugStepTypes (0.00s)
+=== RUN   TestParseInactiveObjects
+--- PASS: TestParseInactiveObjects (0.00s)
+=== RUN   TestParseInactiveObjectsEmpty
+--- PASS: TestParseInactiveObjectsEmpty (0.00s)
+=== RUN   TestParseInactiveObjectsEmptyResponse
+--- PASS: TestParseInactiveObjectsEmptyResponse (0.00s)
+=== RUN   TestParseABAPFile_Class
+--- PASS: TestParseABAPFile_Class (0.00s)
+=== RUN   TestParseABAPFile_ClassWithDescription
+--- PASS: TestParseABAPFile_ClassWithDescription (0.00s)
+=== RUN   TestParseABAPFile_Program
+--- PASS: TestParseABAPFile_Program (0.00s)
+=== RUN   TestParseABAPFile_Interface
+--- PASS: TestParseABAPFile_Interface (0.00s)
+=== RUN   TestParseABAPFile_InvalidExtension
+--- PASS: TestParseABAPFile_InvalidExtension (0.00s)
+=== RUN   TestParseABAPFile_NoObjectName
+--- PASS: TestParseABAPFile_NoObjectName (0.00s)
+=== RUN   TestParseABAPFile_ClassWithTestClasses
+--- PASS: TestParseABAPFile_ClassWithTestClasses (0.00s)
+=== RUN   TestExtractClassNameFromFilename
+=== RUN   TestExtractClassNameFromFilename/zcl_foo.clas.abap
+=== RUN   TestExtractClassNameFromFilename/zcl_foo.clas.testclasses.abap
+=== RUN   TestExtractClassNameFromFilename/zcl_foo.clas.locals_def.abap
+=== RUN   TestExtractClassNameFromFilename/zcl_foo.clas.locals_imp.abap
+=== RUN   TestExtractClassNameFromFilename/zcl_foo.clas.macros.abap
+=== RUN   TestExtractClassNameFromFilename/ZCL_ZORK_00_IO_CONSOLE.clas.testclasses.abap
+=== RUN   TestExtractClassNameFromFilename//path/to/zcl_test.clas.testclasses.abap
+=== RUN   TestExtractClassNameFromFilename/my_class.clas.abap
+=== RUN   TestExtractClassNameFromFilename/test.prog.abap
+=== RUN   TestExtractClassNameFromFilename/random.txt
+--- PASS: TestExtractClassNameFromFilename (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/zcl_foo.clas.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/zcl_foo.clas.testclasses.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/zcl_foo.clas.locals_def.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/zcl_foo.clas.locals_imp.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/zcl_foo.clas.macros.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/ZCL_ZORK_00_IO_CONSOLE.clas.testclasses.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename//path/to/zcl_test.clas.testclasses.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/my_class.clas.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/test.prog.abap (0.00s)
+    --- PASS: TestExtractClassNameFromFilename/random.txt (0.00s)
+=== RUN   TestParseABAPFile_TestClassesInclude
+--- PASS: TestParseABAPFile_TestClassesInclude (0.00s)
+=== RUN   TestParseABAPFile_LocalsDefInclude
+--- PASS: TestParseABAPFile_LocalsDefInclude (0.00s)
+=== RUN   TestParseABAPFile_LocalsImpInclude
+--- PASS: TestParseABAPFile_LocalsImpInclude (0.00s)
+=== RUN   TestParseABAPFile_MacrosInclude
+--- PASS: TestParseABAPFile_MacrosInclude (0.00s)
+=== RUN   TestGetAbapHelpURL
+=== RUN   TestGetAbapHelpURL/SELECT_keyword
+=== RUN   TestGetAbapHelpURL/LOOP_keyword
+=== RUN   TestGetAbapHelpURL/lowercase_input
+=== RUN   TestGetAbapHelpURL/mixed_case_input
+=== RUN   TestGetAbapHelpURL/with_spaces
+=== RUN   TestGetAbapHelpURL/empty_string
+=== RUN   TestGetAbapHelpURL/whitespace_only
+--- PASS: TestGetAbapHelpURL (0.00s)
+    --- PASS: TestGetAbapHelpURL/SELECT_keyword (0.00s)
+    --- PASS: TestGetAbapHelpURL/LOOP_keyword (0.00s)
+    --- PASS: TestGetAbapHelpURL/lowercase_input (0.00s)
+    --- PASS: TestGetAbapHelpURL/mixed_case_input (0.00s)
+    --- PASS: TestGetAbapHelpURL/with_spaces (0.00s)
+    --- PASS: TestGetAbapHelpURL/empty_string (0.00s)
+    --- PASS: TestGetAbapHelpURL/whitespace_only (0.00s)
+=== RUN   TestFormatAbapHelpQuery
+=== RUN   TestFormatAbapHelpQuery/SELECT_keyword
+=== RUN   TestFormatAbapHelpQuery/lowercase_input
+=== RUN   TestFormatAbapHelpQuery/with_spaces
+=== RUN   TestFormatAbapHelpQuery/empty_string
+--- PASS: TestFormatAbapHelpQuery (0.00s)
+    --- PASS: TestFormatAbapHelpQuery/SELECT_keyword (0.00s)
+    --- PASS: TestFormatAbapHelpQuery/lowercase_input (0.00s)
+    --- PASS: TestFormatAbapHelpQuery/with_spaces (0.00s)
+    --- PASS: TestFormatAbapHelpQuery/empty_string (0.00s)
+=== RUN   TestClientGetAbapHelp
+=== RUN   TestClientGetAbapHelp/valid_keyword
+=== RUN   TestClientGetAbapHelp/lowercase_becomes_uppercase
+=== RUN   TestClientGetAbapHelp/empty_keyword
+=== RUN   TestClientGetAbapHelp/whitespace_only
+--- PASS: TestClientGetAbapHelp (0.00s)
+    --- PASS: TestClientGetAbapHelp/valid_keyword (0.00s)
+    --- PASS: TestClientGetAbapHelp/lowercase_becomes_uppercase (0.00s)
+    --- PASS: TestClientGetAbapHelp/empty_keyword (0.00s)
+    --- PASS: TestClientGetAbapHelp/whitespace_only (0.00s)
+=== RUN   TestNewHistoryManager
+--- PASS: TestNewHistoryManager (0.00s)
+=== RUN   TestSaveAndLoadRecording
+--- PASS: TestSaveAndLoadRecording (0.00s)
+=== RUN   TestLoadRecordingFromCache
+--- PASS: TestLoadRecordingFromCache (0.00s)
+=== RUN   TestLoadRecordingNotFound
+--- PASS: TestLoadRecordingNotFound (0.00s)
+=== RUN   TestListRecordings
+--- PASS: TestListRecordings (0.00s)
+=== RUN   TestListRecordingsWithFilter
+--- PASS: TestListRecordingsWithFilter (0.00s)
+=== RUN   TestRecordingFilterMinSteps
+--- PASS: TestRecordingFilterMinSteps (0.00s)
+=== RUN   TestDeleteRecording
+--- PASS: TestDeleteRecording (0.00s)
+=== RUN   TestDeleteRecordingNotFound
+--- PASS: TestDeleteRecordingNotFound (0.00s)
+=== RUN   TestGetRecordingStats
+--- PASS: TestGetRecordingStats (0.00s)
+=== RUN   TestCompareRecordings
+--- PASS: TestCompareRecordings (0.00s)
+=== RUN   TestCompareRecordingsDifferentPaths
+--- PASS: TestCompareRecordingsDifferentPaths (0.00s)
+=== RUN   TestCompareRecordingsDifferentStepCount
+--- PASS: TestCompareRecordingsDifferentStepCount (0.00s)
+=== RUN   TestRecordingFilterMatches
+=== RUN   TestRecordingFilterMatches/empty_filter_matches_all
+=== RUN   TestRecordingFilterMatches/program_filter_matches
+=== RUN   TestRecordingFilterMatches/program_filter_no_match
+=== RUN   TestRecordingFilterMatches/session_ID_filter_matches
+=== RUN   TestRecordingFilterMatches/session_ID_filter_no_match
+=== RUN   TestRecordingFilterMatches/min_steps_filter_matches
+=== RUN   TestRecordingFilterMatches/min_steps_filter_no_match
+=== RUN   TestRecordingFilterMatches/start_after_filter_matches
+=== RUN   TestRecordingFilterMatches/start_after_filter_no_match
+=== RUN   TestRecordingFilterMatches/tags_filter_matches
+=== RUN   TestRecordingFilterMatches/tags_filter_no_match
+=== RUN   TestRecordingFilterMatches/multiple_filters_all_match
+=== RUN   TestRecordingFilterMatches/multiple_filters_one_fails
+--- PASS: TestRecordingFilterMatches (0.00s)
+    --- PASS: TestRecordingFilterMatches/empty_filter_matches_all (0.00s)
+    --- PASS: TestRecordingFilterMatches/program_filter_matches (0.00s)
+    --- PASS: TestRecordingFilterMatches/program_filter_no_match (0.00s)
+    --- PASS: TestRecordingFilterMatches/session_ID_filter_matches (0.00s)
+    --- PASS: TestRecordingFilterMatches/session_ID_filter_no_match (0.00s)
+    --- PASS: TestRecordingFilterMatches/min_steps_filter_matches (0.00s)
+    --- PASS: TestRecordingFilterMatches/min_steps_filter_no_match (0.00s)
+    --- PASS: TestRecordingFilterMatches/start_after_filter_matches (0.00s)
+    --- PASS: TestRecordingFilterMatches/start_after_filter_no_match (0.00s)
+    --- PASS: TestRecordingFilterMatches/tags_filter_matches (0.00s)
+    --- PASS: TestRecordingFilterMatches/tags_filter_no_match (0.00s)
+    --- PASS: TestRecordingFilterMatches/multiple_filters_all_match (0.00s)
+    --- PASS: TestRecordingFilterMatches/multiple_filters_one_fails (0.00s)
+=== RUN   TestRebuildIndex
+--- PASS: TestRebuildIndex (0.00s)
+=== RUN   TestCacheEviction
+--- PASS: TestCacheEviction (0.00s)
+=== RUN   TestSearchHistoryVariableValue
+--- PASS: TestSearchHistoryVariableValue (0.00s)
+=== RUN   TestSearchHistoryLocation
+--- PASS: TestSearchHistoryLocation (0.00s)
+=== RUN   TestSearchHistoryWithLimit
+--- PASS: TestSearchHistoryWithLimit (0.00s)
+=== RUN   TestTransport_Request_BasicAuth
+--- PASS: TestTransport_Request_BasicAuth (0.00s)
+=== RUN   TestTransport_Request_QueryParams
+--- PASS: TestTransport_Request_QueryParams (0.00s)
+=== RUN   TestTransport_Request_CSRFToken
+--- PASS: TestTransport_Request_CSRFToken (0.00s)
+=== RUN   TestTransport_Request_CSRFRefreshOn403
+--- PASS: TestTransport_Request_CSRFRefreshOn403 (0.00s)
+=== RUN   TestTransport_Request_RetryOn401
+--- PASS: TestTransport_Request_RetryOn401 (0.00s)
+=== RUN   TestTransport_Request_RetryOn401_POST
+--- PASS: TestTransport_Request_RetryOn401_POST (0.00s)
+=== RUN   TestTransport_Request_RetryOn401_ReauthFails
+--- PASS: TestTransport_Request_RetryOn401_ReauthFails (0.00s)
+=== RUN   TestTransport_Request_ErrorResponse
+--- PASS: TestTransport_Request_ErrorResponse (0.00s)
+=== RUN   TestTransport_BuildURL
+=== RUN   TestTransport_BuildURL/simple_path
+=== RUN   TestTransport_BuildURL/path_without_leading_slash
+--- PASS: TestTransport_BuildURL (0.00s)
+    --- PASS: TestTransport_BuildURL/simple_path (0.00s)
+    --- PASS: TestTransport_BuildURL/path_without_leading_slash (0.00s)
+=== RUN   TestIsModifyingMethod
+=== RUN   TestIsModifyingMethod/GET
+=== RUN   TestIsModifyingMethod/HEAD
+=== RUN   TestIsModifyingMethod/OPTIONS
+=== RUN   TestIsModifyingMethod/POST
+=== RUN   TestIsModifyingMethod/PUT
+=== RUN   TestIsModifyingMethod/DELETE
+=== RUN   TestIsModifyingMethod/PATCH
+--- PASS: TestIsModifyingMethod (0.00s)
+    --- PASS: TestIsModifyingMethod/GET (0.00s)
+    --- PASS: TestIsModifyingMethod/HEAD (0.00s)
+    --- PASS: TestIsModifyingMethod/OPTIONS (0.00s)
+    --- PASS: TestIsModifyingMethod/POST (0.00s)
+    --- PASS: TestIsModifyingMethod/PUT (0.00s)
+    --- PASS: TestIsModifyingMethod/DELETE (0.00s)
+    --- PASS: TestIsModifyingMethod/PATCH (0.00s)
+=== RUN   TestAPIError_Error
+--- PASS: TestAPIError_Error (0.00s)
+=== RUN   TestIsNotFoundError
+=== RUN   TestIsNotFoundError/nil_error
+=== RUN   TestIsNotFoundError/404_error
+=== RUN   TestIsNotFoundError/400_error
+=== RUN   TestIsNotFoundError/500_error
+=== RUN   TestIsNotFoundError/wrapped_404
+=== RUN   TestIsNotFoundError/wrapped_500
+=== RUN   TestIsNotFoundError/non-API_error
+--- PASS: TestIsNotFoundError (0.00s)
+    --- PASS: TestIsNotFoundError/nil_error (0.00s)
+    --- PASS: TestIsNotFoundError/404_error (0.00s)
+    --- PASS: TestIsNotFoundError/400_error (0.00s)
+    --- PASS: TestIsNotFoundError/500_error (0.00s)
+    --- PASS: TestIsNotFoundError/wrapped_404 (0.00s)
+    --- PASS: TestIsNotFoundError/wrapped_500 (0.00s)
+    --- PASS: TestIsNotFoundError/non-API_error (0.00s)
+=== RUN   TestIsSessionExpiredError
+=== RUN   TestIsSessionExpiredError/nil_error
+=== RUN   TestIsSessionExpiredError/404_error
+=== RUN   TestIsSessionExpiredError/400_ICMENOSESSION
+=== RUN   TestIsSessionExpiredError/400_Session_Timed_Out
+=== RUN   TestIsSessionExpiredError/400_session_no_longer_exists
+=== RUN   TestIsSessionExpiredError/400_other_error
+=== RUN   TestIsSessionExpiredError/500_session_timeout_text
+=== RUN   TestIsSessionExpiredError/wrapped_session_expired
+=== RUN   TestIsSessionExpiredError/non-API_error
+--- PASS: TestIsSessionExpiredError (0.00s)
+    --- PASS: TestIsSessionExpiredError/nil_error (0.00s)
+    --- PASS: TestIsSessionExpiredError/404_error (0.00s)
+    --- PASS: TestIsSessionExpiredError/400_ICMENOSESSION (0.00s)
+    --- PASS: TestIsSessionExpiredError/400_Session_Timed_Out (0.00s)
+    --- PASS: TestIsSessionExpiredError/400_session_no_longer_exists (0.00s)
+    --- PASS: TestIsSessionExpiredError/400_other_error (0.00s)
+    --- PASS: TestIsSessionExpiredError/500_session_timeout_text (0.00s)
+    --- PASS: TestIsSessionExpiredError/wrapped_session_expired (0.00s)
+    --- PASS: TestIsSessionExpiredError/non-API_error (0.00s)
+=== RUN   TestTransport_Request_CookieAuth
+--- PASS: TestTransport_Request_CookieAuth (0.00s)
+=== RUN   TestTransport_Request_CookieAuth_CSRF
+--- PASS: TestTransport_Request_CookieAuth_CSRF (0.00s)
+=== RUN   TestTransport_Request_BasicAuth_NotAffectedByCookies
+--- PASS: TestTransport_Request_BasicAuth_NotAffectedByCookies (0.00s)
+=== RUN   TestTransport_Request_BothAuthMethods
+--- PASS: TestTransport_Request_BothAuthMethods (0.00s)
+=== RUN   TestIntegration_SearchObject
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:218: Found 10 results
+    integration_test.go:223:   CL_3RFCJVSO7L6FFPDV619RM99U4 (CLAS/OC) - Generated Class for Simple Transformation
+    integration_test.go:223:   CL_3RFCJZ7KMYTRPQ11REB834PAK (CLAS/OC) - Generated Class for Simple Transformation
+    integration_test.go:223:   CL_3RFCK4RABYI7602PZ403CJRWS (CLAS/OC) - Generated Class for Simple Transformation
+--- PASS: TestIntegration_SearchObject (0.22s)
+=== RUN   TestIntegration_GetProgram
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:246: Retrieved 42884 characters of source code
+    integration_test.go:252: Preview:
+        
+        * -------------------------------------------------------------------
+        *                          S A P M S S Y 0
+        *                  system routines for ABAP processing
+        *
+        *                  (must...
+--- PASS: TestIntegration_GetProgram (0.13s)
+=== RUN   TestIntegration_GetClass
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:272: Retrieved 23350 characters of class source
+--- PASS: TestIntegration_GetClass (0.03s)
+=== RUN   TestIntegration_GetTableContents
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:286: Retrieved 17 columns, 2 rows
+    integration_test.go:294: First row: map[ADRNR: CCCATEGORY:S CCCOPYLOCK:X CCCORACTIV:2 CCIMAILDIS: CCNOCASCAD: CCNOCLIIND: CCORIGCONT: CCSOFTLOCK: CCTEMPLOCK: CHANGEDATE:00000000 CHANGEUSER: LOGSYS: MANDT:000 MTEXT:SAP SE MWAER:EUR ORT01:Walldorf]
+--- PASS: TestIntegration_GetTableContents (0.08s)
+=== RUN   TestIntegration_GetTableContentsWithQuery
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:308: Retrieved 17 columns, 1 rows (filtered)
+--- PASS: TestIntegration_GetTableContentsWithQuery (0.08s)
+=== RUN   TestIntegration_RunQuery
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:328: Query returned 2 columns, 2 rows
+    integration_test.go:336: First row: map[MANDT:000 MTEXT:SAP SE]
+--- PASS: TestIntegration_RunQuery (0.17s)
+=== RUN   TestIntegration_GetTable
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:352: Retrieved 1190 characters of table source
+    integration_test.go:358: Preview:
+        @EndUserText.label : 'Clients'
+        @AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+        @AbapCatalog.tableCategory : #TRANSPARENT
+        @AbapCatalog.deliveryClass : #C
+        @AbapCatalog.dataMaintenance : #ALLOWED
+        def...
+--- PASS: TestIntegration_GetTable (0.07s)
+=== RUN   TestIntegration_GetPackage
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:371: Package: BASIS
+    integration_test.go:372: Sub-packages: 1203, Objects: 15
+--- PASS: TestIntegration_GetPackage (0.29s)
+=== RUN   TestIntegration_GetCDSDependencies
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:393: CDS view: ACM_DDDDLSRC_CDSV
+    integration_test.go:394: Type: CDS_VIEW
+    integration_test.go:395: Activation state: 
+    integration_test.go:396: Children count: 1
+    integration_test.go:400: Total dependencies (flat): 2
+    integration_test.go:405:   CDS_VIEW: 1
+    integration_test.go:405:   TABLE: 1
+    integration_test.go:410: Table dependencies: 1
+    integration_test.go:412:   - DDDDLSRC
+    integration_test.go:432: Dependency depth: 2
+--- PASS: TestIntegration_GetCDSDependencies (0.12s)
+=== RUN   TestIntegration_SyntaxCheck
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:458: Syntax check returned 0 messages
+--- PASS: TestIntegration_SyntaxCheck (0.04s)
+=== RUN   TestIntegration_RunUnitTests
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:482: Unit test result: 0 test classes
+--- PASS: TestIntegration_RunUnitTests (0.30s)
+=== RUN   TestIntegration_CRUD_FullWorkflow
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:507: Test program name: ZMCP_37114
+    integration_test.go:510: Step 1: Creating program...
+    integration_test.go:523: Created program: ZMCP_37114
+    integration_test.go:548: Object URL: /sap/bc/adt/programs/programs/ZMCP_37114
+    integration_test.go:551: Step 2: Locking object...
+    integration_test.go:556: Lock acquired: 47AF7BDA486C3289E2D59EE78EE64F9AEF09AD66 (local: true)
+    integration_test.go:559: Step 3: Updating source...
+    integration_test.go:571: Source updated successfully
+    integration_test.go:574: Step 4: Unlocking object...
+    integration_test.go:579: Object unlocked successfully
+    integration_test.go:582: Step 5: Activating object...
+    integration_test.go:587: Activation result: success=true, messages=0
+    integration_test.go:590: Step 6: Verifying source...
+    integration_test.go:599: Source verified successfully
+    integration_test.go:602: CRUD workflow completed successfully!
+    integration_test.go:527: Cleanup: Deleting program...
+    integration_test.go:543: Cleanup: Program deleted successfully
+--- PASS: TestIntegration_CRUD_FullWorkflow (0.73s)
+=== RUN   TestIntegration_LockUnlock
+    integration_test.go:608: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:612: [INFO  + 410ms] Created temp program: ZTEST_LOCK_37115 (/sap/bc/adt/programs/programs/ZTEST_LOCK_37115)
+    integration_test.go:622: [INFO  + 427ms] Lock acquired: handle=A56FFF6F75C74D5B1EC42AF5E00F1850030C4586 isLocal=true
+    integration_test.go:635: [INFO  + 431ms] Unlock successful
+    integration_test.go:196: [INFO  + 523ms] Cleanup: deleted ZTEST_LOCK_37115
+--- PASS: TestIntegration_LockUnlock (0.52s)
+=== RUN   TestIntegration_ClassWithUnitTests
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:649: Test class name: ZCL_MCP_37116
+    integration_test.go:652: Step 1: Creating class...
+    integration_test.go:665: Created class: ZCL_MCP_37116
+    integration_test.go:688: Object URL: /sap/bc/adt/oo/classes/ZCL_MCP_37116
+    integration_test.go:691: Step 2: Locking class...
+    integration_test.go:696: Lock acquired: 74590EDA1693D835B061601F8DFF16050954C3B4
+    integration_test.go:699: Step 3: Updating main source...
+    integration_test.go:717: Main source updated
+    integration_test.go:720: Step 4: Creating test include...
+    integration_test.go:729: Test include created
+    integration_test.go:732: Step 5: Writing test class code...
+    integration_test.go:758: Test class code written
+    integration_test.go:761: Step 6: Unlocking class...
+    integration_test.go:766: Class unlocked
+    integration_test.go:769: Step 7: Activating class...
+    integration_test.go:774: Activation result: success=true, messages=0
+    integration_test.go:777: Step 8: Running unit tests...
+    integration_test.go:784: Unit test result: 1 test classes
+    integration_test.go:786:   Class: LTCL_TEST
+    integration_test.go:795:     [PASS] TEST_GET_VALUE (0 µs)
+    integration_test.go:804: Class with unit tests workflow completed successfully!
+    integration_test.go:669: Cleanup: Deleting class...
+    integration_test.go:683: Cleanup: Class deleted successfully
+--- PASS: TestIntegration_ClassWithUnitTests (5.33s)
+=== RUN   TestIntegration_WriteProgram
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:817: Test program name: ZMCPW_37121
+    integration_test.go:858: WriteProgram result: success=true, message=Program updated and activated successfully
+    integration_test.go:874: WriteProgram workflow completed successfully!
+--- PASS: TestIntegration_WriteProgram (0.93s)
+=== RUN   TestIntegration_WriteClass
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:885: Test class name: ZCL_MCPW_37122
+    integration_test.go:930: WriteClass result: success=true, message=Class updated and activated successfully
+    integration_test.go:941: WriteClass workflow completed successfully!
+--- PASS: TestIntegration_WriteClass (4.04s)
+=== RUN   TestIntegration_CreateAndActivateProgram
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:951: Test program name: ZMCPC_37126
+    integration_test.go:979: CreateAndActivateProgram result: success=true, message=Program created and activated successfully
+    integration_test.go:1003: CreateAndActivateProgram workflow completed successfully!
+--- PASS: TestIntegration_CreateAndActivateProgram (0.56s)
+=== RUN   TestIntegration_CreateClassWithTests
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1013: Test class name: ZCL_MCPT_37126
+    integration_test.go:1063: CreateClassWithTests result: success=true, message=Class created, activated, and unit tests executed successfully
+    integration_test.go:1079: Unit test result: 1 test classes
+    integration_test.go:1081:   Test class: LTCL_TEST
+    integration_test.go:1087:     [PASS] TEST_GET_ANSWER (0 µs)
+    integration_test.go:1095: CreateClassWithTests workflow completed successfully!
+--- PASS: TestIntegration_CreateClassWithTests (5.08s)
+=== RUN   TestIntegration_SyntaxCheckWithErrors
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1116: SyntaxCheck found 1 issues
+    integration_test.go:1118:   [E] Line 2, Col 18: The type "STRINGGG" is unknown, but there is a type with the similar name "STRING".
+    integration_test.go:1134: SyntaxCheck error detection test passed!
+--- PASS: TestIntegration_SyntaxCheckWithErrors (0.04s)
+=== RUN   TestIntegration_PrettyPrint
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1157: Original:
+        report ztest.
+        data lv_test type string.
+        lv_test = 'hello'.
+        write lv_test.
+    integration_test.go:1158: Formatted:
+        REPORT ztest.
+        DATA lv_test TYPE string.
+        lv_test = 'hello'.
+        WRITE lv_test.
+    integration_test.go:1164: PrettyPrint test passed!
+--- PASS: TestIntegration_PrettyPrint (0.03s)
+=== RUN   TestIntegration_GetPrettyPrinterSettings
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1179: Pretty printer settings: indentation=true, style=keywordUpper
+    integration_test.go:1180: GetPrettyPrinterSettings test passed!
+--- PASS: TestIntegration_GetPrettyPrinterSettings (0.02s)
+=== RUN   TestIntegration_CodeCompletion
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1228: Found 2 completion proposals
+    integration_test.go:1234:   LV_STRING (kind=1)
+    integration_test.go:1234:   LV5TESTER (kind=2)
+    integration_test.go:1237: CodeCompletion test passed!
+--- PASS: TestIntegration_CodeCompletion (0.28s)
+=== RUN   TestIntegration_FindReferences
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1256: Found 4101 references to CL_ABAP_STRUCTDESCR
+    integration_test.go:1262:   BANK_DTE_CD_REF_TO_DESCR_STRU (DTEL/DE) - 
+    integration_test.go:1262:   RSR_MOVE_TYPE (DTEL/DE) - 
+    integration_test.go:1262:   WDR_OVS_TYPE_DESCR (DTEL/DE) - 
+    integration_test.go:1262:   /BOFU/S_FDT_EXP_101_TR (TABL/DS) - 
+    integration_test.go:1262:   /MFND/CORE_OMDO_TABRUL_VAL_STR (TABL/DS) - 
+    integration_test.go:1259:   ... and 4096 more
+    integration_test.go:1265: FindReferences test passed!
+--- PASS: TestIntegration_FindReferences (2.14s)
+=== RUN   TestIntegration_FindDefinition
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1330: Definition found at: /sap/bc/adt/oo/classes/cl_abap_typedescr/source/main line 2, column 6
+    integration_test.go:1336: FindDefinition test passed!
+--- PASS: TestIntegration_FindDefinition (0.37s)
+=== RUN   TestIntegration_GetTypeHierarchy
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1397: Found 3 supertypes of CL_ABAP_CLASSDESCR
+    integration_test.go:1399:   CL_ABAP_CLASSDESCR (CLAS/OC) - Runtime Type Services
+    integration_test.go:1399:   CL_ABAP_OBJECTDESCR (CLAS/OC) - Runtime Type Services
+    integration_test.go:1399:   CL_ABAP_TYPEDESCR (CLAS/OC) - Runtime Type Services
+    integration_test.go:1402: GetTypeHierarchy test passed!
+--- PASS: TestIntegration_GetTypeHierarchy (0.42s)
+=== RUN   TestIntegration_CreatePackage
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1414: Test package name: $ZMCPP_37135
+    integration_test.go:1430: Package $ZMCPP_37135 created successfully
+    integration_test.go:1442: Package verified: $ZMCPP_37135
+    integration_test.go:1455: Warning: Failed to delete package: deleting object: ADT API error: status 400 at /sap/bc/adt/packages/$zmcpp_37135: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="ExceptionResourceDeletionFailure"/><message lang="EN">Package $ZMCPP_37135 is already locked</message><localizedMessage lang="EN">Package $ZMCPP_37135 is already locked</localizedMessage><properties><entry key="LONGTEXT"/><entry key="MSGID">PAK</entry><entry key="MSGNO">058</entry><entry key="T100KEY-ID">PAK</entry><entry key="T100KEY-NO">058</entry><entry key="T100KEY-V1">$ZMCPP_37135</entry></properties></exc:exception>
+--- PASS: TestIntegration_CreatePackage (0.08s)
+=== RUN   TestIntegration_EditSource
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1470: Test program name: ZMCPE_37135
+    integration_test.go:1526: EditSource result: success=true, message=Successfully edited and activated ZMCPE_37135, matchCount=1
+    integration_test.go:1597: Syntax error correctly detected: Line 5: Field "INVALID" is unknown.
+    integration_test.go:1628: Case-insensitive match succeeded: Successfully edited and activated ZMCPE_37135
+    integration_test.go:1641: EditSource workflow completed successfully!
+--- PASS: TestIntegration_EditSource (0.77s)
+=== RUN   TestIntegration_GetDDLS
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1660: GetDDLS returned 1365 bytes
+    integration_test.go:1667: GetDDLS successful: I_ABAPPACKAGE
+--- PASS: TestIntegration_GetDDLS (0.03s)
+=== RUN   TestIntegration_GetBDEF
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1686: GetBDEF returned 535 bytes
+    integration_test.go:1693: GetBDEF successful: /DMO/C_TRAVEL_U
+--- PASS: TestIntegration_GetBDEF (0.05s)
+=== RUN   TestIntegration_GetSRVB
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1712: GetSRVB result: name=/DMO/API_TRAVEL_U_V2, type=SRVB/SVB, version=V2
+    integration_test.go:1718: GetSRVB successful: /DMO/API_TRAVEL_U_V2
+--- PASS: TestIntegration_GetSRVB (0.04s)
+=== RUN   TestIntegration_GetSource_RAP
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestIntegration_GetSource_RAP/DDLS
+    integration_test.go:1746: GetSource returned 1365 bytes
+=== RUN   TestIntegration_GetSource_RAP/BDEF
+    integration_test.go:1746: GetSource returned 535 bytes
+--- PASS: TestIntegration_GetSource_RAP (0.06s)
+    --- PASS: TestIntegration_GetSource_RAP/DDLS (0.04s)
+    --- PASS: TestIntegration_GetSource_RAP/BDEF (0.02s)
+=== RUN   TestIntegration_RAP_E2E_OData
+    integration_test.go:1770: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1772: [INFO  +    0s] RAP E2E test — client timeout=3min (SRVB activation can take >60s)
+    integration_test.go:1797: [INFO  +    0s] Step 1: Creating CDS View (DDLS)...
+    integration_test.go:1824: [INFO  +1.636s] DDLS: success=true mode=updated msg=DDLS updated and activated successfully
+    integration_test.go:1833: [INFO  +1.637s] Step 2: Creating Service Definition (SRVD)...
+    integration_test.go:1850: [INFO  + 1.88s] SRVD: success=true mode=updated msg=SRVD updated and activated successfully
+    integration_test.go:1856: [INFO  + 1.88s] Step 3: Creating Service Binding (SRVB)...
+    integration_test.go:1874: [WARN  +1.972s] SRVB already exists — continuing
+    integration_test.go:1881: [INFO  +1.972s] Step 4: Activating Service Binding (slow — up to 3min)...
+    integration_test.go:1887: [INFO  +1.984s] Activation: success=true msgs=0
+    integration_test.go:1894: [INFO  +1.984s] Step 5: Publishing Service Binding...
+    integration_test.go:1899: [INFO  +2.318s] Published: &{Severity:OK ShortText:Local Service Endpoint of service ZTEST_MCP_SB_FLIGHT with version 0001 is activated locally LongText:}
+    integration_test.go:1903: [INFO  +2.318s] Step 6: Verifying Service Binding...
+    integration_test.go:1911: [INFO  +2.333s] SRVB verified: name=ZTEST_MCP_SB_FLIGHT type=SRVB/SVB version=V2
+    integration_test.go:1913: [INFO  +2.333s] RAP E2E OData test completed
+    integration_test.go:1787: [INFO  +2.333s] Cleanup: deleting RAP objects...
+    integration_test.go:1793: [INFO  +2.349s] Cleanup done
+--- PASS: TestIntegration_RAP_E2E_OData (2.35s)
+=== RUN   TestIntegration_ExternalBreakpoints
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:1928: Step 1: Getting existing external breakpoints...
+    integration_test.go:1933: Found 0 existing breakpoints
+    integration_test.go:1938: Step 2: Setting line breakpoint at line 7...
+    integration_test.go:1949: SetExternalBreakpoint failed (may require authorization): set external breakpoint failed: ADT API error: status 403 at /sap/bc/adt/debugger/breakpoints: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="AdiFailed"/><message lang="EN">User AVINOGRADOVA does not exist</message><localizedMessage lang="EN">User AVINOGRADOVA does not exist</localizedMessage><properties><entry key="com.sap.adt.communicationFramework.subType">notAuthorized</entry><entry key="T100KEY-ID">SY</entry><entry key="T100KEY-NO">530</entry></properties></exc:exception>
+    integration_test.go:1950: Skipping breakpoint test - breakpoint API may not be available or authorized
+--- SKIP: TestIntegration_ExternalBreakpoints (0.05s)
+=== RUN   TestIntegration_DebuggerListener
+    integration_test.go:2029: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:2036: [INFO  +    0s] Testing debug listener for user: DEVELOPER
+    integration_test.go:2042: [INFO  +    0s] Step 1: Checking for existing listeners...
+    integration_test.go:2061: [INFO  +  27ms] No existing listeners found
+    integration_test.go:2067: [INFO  +  27ms] Step 2: Starting debug listener (server timeout=5s, HTTP deadline=20s)...
+    integration_test.go:2094: [INFO  +5.058s] Listener timed out as expected (no debuggee attached)
+    integration_test.go:2105: [INFO  +5.058s] Step 3: Stopping listener...
+    integration_test.go:2114: [INFO  +5.066s] Listener stopped
+--- PASS: TestIntegration_DebuggerListener (5.07s)
+=== RUN   TestIntegration_DebugSessionAPIs
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+    integration_test.go:2139: Testing debug session APIs for user: DEVELOPER
+    integration_test.go:2143: Step 1: Testing DebuggerAttach with invalid debuggee...
+    integration_test.go:2148: DebuggerAttach correctly returned error: debugger attach failed: ADT API error: status 500 at /sap/bc/adt/debugger: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="AdiFailed"/><message lang="EN">An exception was raised</message><localizedMessage lang="EN">An exception was raised</localizedMessage><properties><entry key="previous1Text">An exception was raised</entry><entry key="previous1LongText">An exception was raised.</entry><entry key="previous1SourcePositionProgram">CL_TPDA_ADT_RES_DEBUGGER======CP</entry><entry key="previous1SourcePositionInclude">CL_TPDA_ADT_RES_DEBUGGER======CCIMP</entry><entry key="previous1SourcePositionSourceLine">4217 </entry><entry key="previous1ExceptionClassName">CX_TPDAPI_FAILURE</entry><entry key="previous2Text">An exception was raised.</entry><entry key="previous2LongText"/><entry key="previous2SourcePositionProgram">CL_ABDBG_ACT_FOR_ATTACH__USER=CP</entry><entry key="previous2SourcePositionInclude">CL_ABDBG_ACT_FOR_ATTACH__USER=CM009</entry><entry key="previous2SourcePositionSourceLine">9 </entry><entry key="previous2ExceptionClassName">CX_ABDBG_ACTEXT_CANNOT_ATTACH</entry><entry key="com.sap.adt.communicationFramework.subType">invalidDebuggee</entry><entry key="T100KEY-ID">SY</entry><entry key="T100KEY-NO">530</entry></properties></exc:exception>
+    integration_test.go:2153: Step 2: Testing DebuggerGetStack without session...
+    integration_test.go:2158: DebuggerGetStack correctly returned error: debugger get stack failed: ADT API error: status 404 at /sap/bc/adt/debugger/stack: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="AdtFailed"/><message lang="EN">An exception was raised</message><localizedMessage lang="EN">An exception was raised</localizedMessage><properties><entry key="com.sap.adt.communicationFramework.subType">noSessionAttached</entry><entry key="T100KEY-ID">SY</entry><entry key="T100KEY-NO">530</entry></properties></exc:exception>
+    integration_test.go:2162: Step 3: Testing DebuggerGetVariables without session...
+    integration_test.go:2167: DebuggerGetVariables correctly returned error: debugger get variables failed: ADT API error: status 404 at /sap/bc/adt/debugger: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="AdiFailed"/><message lang="EN">An exception was raised</message><localizedMessage lang="EN">An exception was raised</localizedMessage><properties><entry key="com.sap.adt.communicationFramework.subType">noSessionAttached</entry><entry key="T100KEY-ID">SY</entry><entry key="T100KEY-NO">530</entry></properties></exc:exception>
+    integration_test.go:2171: Step 4: Testing DebuggerGetChildVariables without session...
+    integration_test.go:2176: DebuggerGetChildVariables correctly returned error: debugger get child variables failed: ADT API error: status 404 at /sap/bc/adt/debugger: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="AdiFailed"/><message lang="EN">An exception was raised</message><localizedMessage lang="EN">An exception was raised</localizedMessage><properties><entry key="com.sap.adt.communicationFramework.subType">noSessionAttached</entry><entry key="T100KEY-ID">SY</entry><entry key="T100KEY-NO">530</entry></properties></exc:exception>
+    integration_test.go:2180: Step 5: Testing DebuggerStep without session...
+    integration_test.go:2185: DebuggerStep correctly returned error: debugger step failed: ADT API error: status 400 at /sap/bc/adt/debugger: <?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="ExceptionInvalidData"/><message lang="EN">Data is invalid and could not be converted</message><localizedMessage lang="EN">Data is invalid and could not be converted</localizedMessage><properties><entry key="com.sap.adt.communicationFramework.subType">noSessionAttached</entry><entry key="T100KEY-ID">SADT_REST</entry><entry key="T100KEY-NO">006</entry></properties></exc:exception>
+    integration_test.go:2188: Debug session API test completed!
+    integration_test.go:2189: 
+    integration_test.go:2190: === To test a full debug session manually ===
+    integration_test.go:2191: 1. Set a breakpoint: client.SetExternalBreakpoint(...)
+    integration_test.go:2192: 2. Run code that hits the breakpoint from another session
+    integration_test.go:2193: 3. Call client.DebuggerListen to catch the debuggee
+    integration_test.go:2194: 4. Attach: client.DebuggerAttach(debuggee.ID, user)
+    integration_test.go:2195: 5. Get stack: client.DebuggerGetStack(true)
+    integration_test.go:2196: 6. Get variables: client.DebuggerGetChildVariables([]string{"@ROOT"})
+    integration_test.go:2197: 7. Step: client.DebuggerStep(DebugStepOver, "")
+    integration_test.go:2198: 8. Detach: client.DebuggerDetach()
+--- PASS: TestIntegration_DebugSessionAPIs (5.86s)
+=== RUN   TestNamespace_GetSource_Class
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_GetSource_Class//DMO/CL_FLIGHT_AMDP
+    namespace_test.go:71: ✅ GetClassSource(/DMO/CL_FLIGHT_AMDP): 1548 bytes
+=== RUN   TestNamespace_GetSource_Class//UI5/CL_ABAP_MESSAGE
+    namespace_test.go:71: ✅ GetClassSource(/UI5/CL_ABAP_MESSAGE): 33301 bytes
+--- PASS: TestNamespace_GetSource_Class (0.26s)
+    --- PASS: TestNamespace_GetSource_Class//DMO/CL_FLIGHT_AMDP (0.07s)
+    --- PASS: TestNamespace_GetSource_Class//UI5/CL_ABAP_MESSAGE (0.19s)
+=== RUN   TestNamespace_GetSource_Interface
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_GetSource_Interface//UI5/IF_APPLICATION_LOG
+    namespace_test.go:99: ✅ GetInterface(/UI5/IF_APPLICATION_LOG): 1728 bytes
+--- PASS: TestNamespace_GetSource_Interface (0.11s)
+    --- PASS: TestNamespace_GetSource_Interface//UI5/IF_APPLICATION_LOG (0.11s)
+=== RUN   TestNamespace_GetSource_Program
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_GetSource_Program//UI5/APP_INDEX_CALCULATE
+    namespace_test.go:127: ✅ GetProgram(/UI5/APP_INDEX_CALCULATE): 14594 bytes
+--- PASS: TestNamespace_GetSource_Program (0.13s)
+    --- PASS: TestNamespace_GetSource_Program//UI5/APP_INDEX_CALCULATE (0.13s)
+=== RUN   TestNamespace_GetSource_Function
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_GetSource_Function//AIF/ACTIVATE_DESTI_STRUCT
+    namespace_test.go:156: ✅ GetFunction(/AIF/ACTIVATE_DESTI_STRUCT): 772 bytes
+--- PASS: TestNamespace_GetSource_Function (2.55s)
+    --- PASS: TestNamespace_GetSource_Function//AIF/ACTIVATE_DESTI_STRUCT (2.55s)
+=== RUN   TestNamespace_GetSource_DDLS
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_GetSource_DDLS//DMO/I_TRAVEL_U
+    namespace_test.go:176: GetDDLS(/DMO/I_TRAVEL_U) failed: getting DDLS source: ADT API error: status 503 at /sap/bc/adt/ddic/ddl/sources/%2FDMO%2FI_TRAVEL_U/source/main: 503 Service Not Available
+        
+        006902c0 2026-03-13 21:25:52
+--- FAIL: TestNamespace_GetSource_DDLS (0.05s)
+    --- FAIL: TestNamespace_GetSource_DDLS//DMO/I_TRAVEL_U (0.05s)
+=== RUN   TestNamespace_GetSource_BDEF
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_GetSource_BDEF//DMO/I_TRAVEL_M
+    namespace_test.go:204: GetBDEF(/DMO/I_TRAVEL_M) failed: getting BDEF source: ADT API error: status 503 at /sap/bc/adt/bo/behaviordefinitions/%2FDMO%2FI_TRAVEL_M/source/main: 503 Service Not Available
+        
+        006a02c1 2026-03-13 21:25:52
+--- FAIL: TestNamespace_GetSource_BDEF (0.05s)
+    --- FAIL: TestNamespace_GetSource_BDEF//DMO/I_TRAVEL_M (0.05s)
+=== RUN   TestNamespace_ExportToFile
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_ExportToFile//DMO/CL_FLIGHT_AMDP
+    namespace_test.go:250: SaveToFile(/DMO/CL_FLIGHT_AMDP) failed: Failed to read object: ADT API error: status 503 at /sap/bc/adt/oo/classes/%2Fdmo%2Fcl_flight_amdp/source/main: 503 Service Not Available
+        
+        006b02c2 2026-03-13 21:25:52
+=== RUN   TestNamespace_ExportToFile//UI5/IF_APPLICATION_LOG
+    namespace_test.go:250: SaveToFile(/UI5/IF_APPLICATION_LOG) failed: Failed to read object: ADT API error: status 503 at /sap/bc/adt/oo/interfaces/%2Fui5%2Fif_application_log/source/main: 503 Service Not Available
+        
+        006c02c3 2026-03-13 21:25:52
+=== RUN   TestNamespace_ExportToFile//UI5/APP_INDEX_CALCULATE
+    namespace_test.go:250: SaveToFile(/UI5/APP_INDEX_CALCULATE) failed: Failed to read object: ADT API error: status 503 at /sap/bc/adt/programs/programs/%2Fui5%2Fapp_index_calculate/source/main: 503 Service Not Available
+        
+        006e02c4 2026-03-13 21:25:52
+=== RUN   TestNamespace_ExportToFile//DMO/I_TRAVEL_U
+    namespace_test.go:250: SaveToFile(/DMO/I_TRAVEL_U) failed: Failed to read object: ADT API error: status 503 at /sap/bc/adt/ddic/ddl/sources/%2Fdmo%2Fi_travel_u/source/main: 503 Service Not Available
+        
+        006d02c5 2026-03-13 21:25:53
+=== RUN   TestNamespace_ExportToFile//DMO/I_TRAVEL_M
+    namespace_test.go:269: ✅ SaveToFile(/DMO/I_TRAVEL_M) -> #dmo#i_travel_m.bdef.asbdef (3947 bytes)
+--- FAIL: TestNamespace_ExportToFile (0.25s)
+    --- FAIL: TestNamespace_ExportToFile//DMO/CL_FLIGHT_AMDP (0.05s)
+    --- FAIL: TestNamespace_ExportToFile//UI5/IF_APPLICATION_LOG (0.05s)
+    --- FAIL: TestNamespace_ExportToFile//UI5/APP_INDEX_CALCULATE (0.05s)
+    --- FAIL: TestNamespace_ExportToFile//DMO/I_TRAVEL_U (0.05s)
+    --- PASS: TestNamespace_ExportToFile//DMO/I_TRAVEL_M (0.04s)
+=== RUN   TestNamespace_ParseFilename
+=== RUN   TestNamespace_ParseFilename/zcl_foo.clas.abap
+    namespace_test.go:352: ✅ ParseABAPFile(zcl_foo.clas.abap) -> ZCL_FOO (CLAS/OC)
+=== RUN   TestNamespace_ParseFilename/zif_bar.intf.abap
+    namespace_test.go:352: ✅ ParseABAPFile(zif_bar.intf.abap) -> ZIF_BAR (INTF/OI)
+=== RUN   TestNamespace_ParseFilename/zprog.prog.abap
+    namespace_test.go:352: ✅ ParseABAPFile(zprog.prog.abap) -> ZPROG (PROG/P)
+=== RUN   TestNamespace_ParseFilename/#dmo#cl_flight_amdp.clas.abap
+    namespace_test.go:352: ✅ ParseABAPFile(#dmo#cl_flight_amdp.clas.abap) -> /DMO/CL_FLIGHT_AMDP (CLAS/OC)
+=== RUN   TestNamespace_ParseFilename/#ui5#if_application_log.intf.abap
+    namespace_test.go:352: ✅ ParseABAPFile(#ui5#if_application_log.intf.abap) -> /UI5/IF_APPLICATION_LOG (INTF/OI)
+=== RUN   TestNamespace_ParseFilename/#ui5#app_index_calculate.prog.abap
+    namespace_test.go:352: ✅ ParseABAPFile(#ui5#app_index_calculate.prog.abap) -> /UI5/APP_INDEX_CALCULATE (PROG/P)
+=== RUN   TestNamespace_ParseFilename/#dmo#i_travel_u.ddls.asddls
+    namespace_test.go:352: ✅ ParseABAPFile(#dmo#i_travel_u.ddls.asddls) -> /DMO/I_TRAVEL_U (DDLS/DF)
+=== RUN   TestNamespace_ParseFilename/#dmo#i_travel_m.bdef.asbdef
+    namespace_test.go:352: ✅ ParseABAPFile(#dmo#i_travel_m.bdef.asbdef) -> /DMO/I_TRAVEL_M (BDEF/BDO)
+=== RUN   TestNamespace_ParseFilename/#dmo#cl_flight.clas.testclasses.abap
+    namespace_test.go:352: ✅ ParseABAPFile(#dmo#cl_flight.clas.testclasses.abap) -> /DMO/CL_FLIGHT (CLAS/OC)
+=== RUN   TestNamespace_ParseFilename/#ui5#cl_app.clas.locals_def.abap
+    namespace_test.go:352: ✅ ParseABAPFile(#ui5#cl_app.clas.locals_def.abap) -> /UI5/CL_APP (CLAS/OC)
+=== RUN   TestNamespace_ParseFilename/#ui5#cl_app.clas.locals_imp.abap
+    namespace_test.go:352: ✅ ParseABAPFile(#ui5#cl_app.clas.locals_imp.abap) -> /UI5/CL_APP (CLAS/OC)
+--- PASS: TestNamespace_ParseFilename (0.00s)
+    --- PASS: TestNamespace_ParseFilename/zcl_foo.clas.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/zif_bar.intf.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/zprog.prog.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#dmo#cl_flight_amdp.clas.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#ui5#if_application_log.intf.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#ui5#app_index_calculate.prog.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#dmo#i_travel_u.ddls.asddls (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#dmo#i_travel_m.bdef.asbdef (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#dmo#cl_flight.clas.testclasses.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#ui5#cl_app.clas.locals_def.abap (0.00s)
+    --- PASS: TestNamespace_ParseFilename/#ui5#cl_app.clas.locals_imp.abap (0.00s)
+=== RUN   TestNamespace_RoundTrip
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_RoundTrip//DMO/CL_FLIGHT_AMDP
+    namespace_test.go:383: Export failed: <nil> - Failed to read object: ADT API error: status 500 at /sap/bc/adt/oo/classes/%2Fdmo%2Fcl_flight_amdp/source/main: 500 Internal Server Error<br>
+        007002c7 2026-03-13 21:25:54
+=== RUN   TestNamespace_RoundTrip//UI5/IF_APPLICATION_LOG
+    namespace_test.go:383: Export failed: <nil> - Failed to read object: ADT API error: status 503 at /sap/bc/adt/oo/interfaces/%2Fui5%2Fif_application_log/source/main: 503 Service Not Available
+        
+        007102c8 2026-03-13 21:25:54
+--- FAIL: TestNamespace_RoundTrip (0.97s)
+    --- FAIL: TestNamespace_RoundTrip//DMO/CL_FLIGHT_AMDP (0.92s)
+    --- FAIL: TestNamespace_RoundTrip//UI5/IF_APPLICATION_LOG (0.05s)
+=== RUN   TestNamespace_URLEncoding
+=== RUN   TestNamespace_URLEncoding//DMO/CL_FLIGHT
+    namespace_test.go:430: ✅ GetObjectURL(CLAS/OC, /DMO/CL_FLIGHT) = /sap/bc/adt/oo/classes/%2FDMO%2FCL_FLIGHT
+=== RUN   TestNamespace_URLEncoding//UI5/IF_LOG
+    namespace_test.go:430: ✅ GetObjectURL(INTF/OI, /UI5/IF_LOG) = /sap/bc/adt/oo/interfaces/%2FUI5%2FIF_LOG
+=== RUN   TestNamespace_URLEncoding//UI5/PROG
+    namespace_test.go:430: ✅ GetObjectURL(PROG/P, /UI5/PROG) = /sap/bc/adt/programs/programs/%2FUI5%2FPROG
+=== RUN   TestNamespace_URLEncoding//dmo/i_travel
+    namespace_test.go:430: ✅ GetObjectURL(DDLS/DF, /dmo/i_travel) = /sap/bc/adt/ddic/ddl/sources/%2Fdmo%2Fi_travel
+--- PASS: TestNamespace_URLEncoding (0.00s)
+    --- PASS: TestNamespace_URLEncoding//DMO/CL_FLIGHT (0.00s)
+    --- PASS: TestNamespace_URLEncoding//UI5/IF_LOG (0.00s)
+    --- PASS: TestNamespace_URLEncoding//UI5/PROG (0.00s)
+    --- PASS: TestNamespace_URLEncoding//dmo/i_travel (0.00s)
+=== RUN   TestNamespace_SearchObject
+    integration_test.go:118: [INFO  +    0s] SAP connection: url=http://localhost:50000 user=DEVELOPER client=001 lang=EN
+=== RUN   TestNamespace_SearchObject//DMO/*
+    namespace_test.go:454: SearchObject(/DMO/*) failed: search request failed: ADT API error: status 503 at /sap/bc/adt/repository/informationsystem/search: 503 Service Not Available
+        
+        007702c9 2026-03-13 21:25:54
+=== RUN   TestNamespace_SearchObject//UI5/CL*
+    namespace_test.go:454: SearchObject(/UI5/CL*) failed: search request failed: ADT API error: status 503 at /sap/bc/adt/repository/informationsystem/search: 503 Service Not Available
+        
+        007902cb 2026-03-13 21:25:54
+=== RUN   TestNamespace_SearchObject/*UI5*IF*
+    namespace_test.go:454: SearchObject(*UI5*IF*) failed: search request failed: ADT API error: status 503 at /sap/bc/adt/repository/informationsystem/search: 503 Service Not Available
+        
+        007a02cc 2026-03-13 21:25:54
+--- FAIL: TestNamespace_SearchObject (0.16s)
+    --- FAIL: TestNamespace_SearchObject//DMO/* (0.05s)
+    --- FAIL: TestNamespace_SearchObject//UI5/CL* (0.05s)
+    --- FAIL: TestNamespace_SearchObject/*UI5*IF* (0.05s)
+=== RUN   TestNamespaceFilenameEscaping
+=== RUN   TestNamespaceFilenameEscaping/ZCL_FOO
+=== RUN   TestNamespaceFilenameEscaping/ZIF_BAR
+=== RUN   TestNamespaceFilenameEscaping/ZPROG
+=== RUN   TestNamespaceFilenameEscaping//DMO/CL_FLIGHT_AMDP
+=== RUN   TestNamespaceFilenameEscaping//UI5/IF_APPLICATION_LOG
+=== RUN   TestNamespaceFilenameEscaping//UI5/APP_INDEX_CALCULATE
+=== RUN   TestNamespaceFilenameEscaping//IWBEP/CL_TEST
+=== RUN   TestNamespaceFilenameEscaping//A/B
+=== RUN   TestNamespaceFilenameEscaping//NS/SUB/OBJ
+--- PASS: TestNamespaceFilenameEscaping (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping/ZCL_FOO (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping/ZIF_BAR (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping/ZPROG (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping//DMO/CL_FLIGHT_AMDP (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping//UI5/IF_APPLICATION_LOG (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping//UI5/APP_INDEX_CALCULATE (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping//IWBEP/CL_TEST (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping//A/B (0.00s)
+    --- PASS: TestNamespaceFilenameEscaping//NS/SUB/OBJ (0.00s)
+=== RUN   TestNamespaceFilenameUnescaping
+=== RUN   TestNamespaceFilenameUnescaping/zcl_foo.clas.abap
+=== RUN   TestNamespaceFilenameUnescaping/zcl_foo.clas.testclasses.abap
+=== RUN   TestNamespaceFilenameUnescaping/zcl_foo.clas.locals_def.abap
+=== RUN   TestNamespaceFilenameUnescaping/#dmo#cl_flight.clas.abap
+=== RUN   TestNamespaceFilenameUnescaping/#dmo#cl_flight.clas.testclasses.abap
+=== RUN   TestNamespaceFilenameUnescaping/#ui5#cl_app.clas.locals_def.abap
+=== RUN   TestNamespaceFilenameUnescaping/#ui5#cl_app.clas.locals_imp.abap
+=== RUN   TestNamespaceFilenameUnescaping/#ui5#cl_app.clas.macros.abap
+=== RUN   TestNamespaceFilenameUnescaping/#a#b.clas.abap
+--- PASS: TestNamespaceFilenameUnescaping (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/zcl_foo.clas.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/zcl_foo.clas.testclasses.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/zcl_foo.clas.locals_def.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/#dmo#cl_flight.clas.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/#dmo#cl_flight.clas.testclasses.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/#ui5#cl_app.clas.locals_def.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/#ui5#cl_app.clas.locals_imp.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/#ui5#cl_app.clas.macros.abap (0.00s)
+    --- PASS: TestNamespaceFilenameUnescaping/#a#b.clas.abap (0.00s)
+=== RUN   TestNamespaceFunctionGroupFilename
+=== RUN   TestNamespaceFunctionGroupFilename/zvsp_report.fugr.z_vsp_run.func.abap
+=== RUN   TestNamespaceFunctionGroupFilename/#aif#util.fugr.#aif#activate.func.abap
+=== RUN   TestNamespaceFunctionGroupFilename/#ui5#ui5_app_idx.fugr.#ui5#app_idx_recalc.func.abap
+--- PASS: TestNamespaceFunctionGroupFilename (0.00s)
+    --- PASS: TestNamespaceFunctionGroupFilename/zvsp_report.fugr.z_vsp_run.func.abap (0.00s)
+    --- PASS: TestNamespaceFunctionGroupFilename/#aif#util.fugr.#aif#activate.func.abap (0.00s)
+    --- PASS: TestNamespaceFunctionGroupFilename/#ui5#ui5_app_idx.fugr.#ui5#app_idx_recalc.func.abap (0.00s)
+=== RUN   TestNamespaceURLEncoding
+=== RUN   TestNamespaceURLEncoding//DMO/CL_FLIGHT
+=== RUN   TestNamespaceURLEncoding//UI5/CL_APP
+=== RUN   TestNamespaceURLEncoding/ZCL_NORMAL
+=== RUN   TestNamespaceURLEncoding//UI5/IF_LOG
+=== RUN   TestNamespaceURLEncoding//UI5/PROG
+=== RUN   TestNamespaceURLEncoding//AIF/FUNC
+=== RUN   TestNamespaceURLEncoding//dmo/i_travel
+--- PASS: TestNamespaceURLEncoding (0.00s)
+    --- PASS: TestNamespaceURLEncoding//DMO/CL_FLIGHT (0.00s)
+    --- PASS: TestNamespaceURLEncoding//UI5/CL_APP (0.00s)
+    --- PASS: TestNamespaceURLEncoding/ZCL_NORMAL (0.00s)
+    --- PASS: TestNamespaceURLEncoding//UI5/IF_LOG (0.00s)
+    --- PASS: TestNamespaceURLEncoding//UI5/PROG (0.00s)
+    --- PASS: TestNamespaceURLEncoding//AIF/FUNC (0.00s)
+    --- PASS: TestNamespaceURLEncoding//dmo/i_travel (0.00s)
+=== RUN   TestNamespaceRoundTrip
+=== RUN   TestNamespaceRoundTrip//DMO/CL_FLIGHT_AMDP
+    namespace_unit_test.go:192: ✅ /DMO/CL_FLIGHT_AMDP -> #dmo#cl_flight_amdp.clas.abap -> /DMO/CL_FLIGHT_AMDP
+=== RUN   TestNamespaceRoundTrip//UI5/IF_APPLICATION_LOG
+    namespace_unit_test.go:192: ✅ /UI5/IF_APPLICATION_LOG -> #ui5#if_application_log.intf.abap -> /UI5/IF_APPLICATION_LOG
+=== RUN   TestNamespaceRoundTrip//UI5/APP_INDEX_CALCULATE
+    namespace_unit_test.go:192: ✅ /UI5/APP_INDEX_CALCULATE -> #ui5#app_index_calculate.prog.abap -> /UI5/APP_INDEX_CALCULATE
+=== RUN   TestNamespaceRoundTrip//DMO/I_TRAVEL_U
+    namespace_unit_test.go:192: ✅ /DMO/I_TRAVEL_U -> #dmo#i_travel_u.ddls.asddls -> /DMO/I_TRAVEL_U
+=== RUN   TestNamespaceRoundTrip/ZCL_NORMAL
+    namespace_unit_test.go:192: ✅ ZCL_NORMAL -> zcl_normal.clas.abap -> ZCL_NORMAL
+--- PASS: TestNamespaceRoundTrip (0.00s)
+    --- PASS: TestNamespaceRoundTrip//DMO/CL_FLIGHT_AMDP (0.00s)
+    --- PASS: TestNamespaceRoundTrip//UI5/IF_APPLICATION_LOG (0.00s)
+    --- PASS: TestNamespaceRoundTrip//UI5/APP_INDEX_CALCULATE (0.00s)
+    --- PASS: TestNamespaceRoundTrip//DMO/I_TRAVEL_U (0.00s)
+    --- PASS: TestNamespaceRoundTrip/ZCL_NORMAL (0.00s)
+=== RUN   TestNamespaceExportFilePath
+=== RUN   TestNamespaceExportFilePath//DMO/CL_FLIGHT
+=== RUN   TestNamespaceExportFilePath//UI5/IF_LOG
+=== RUN   TestNamespaceExportFilePath/ZCL_NORMAL
+--- PASS: TestNamespaceExportFilePath (0.00s)
+    --- PASS: TestNamespaceExportFilePath//DMO/CL_FLIGHT (0.00s)
+    --- PASS: TestNamespaceExportFilePath//UI5/IF_LOG (0.00s)
+    --- PASS: TestNamespaceExportFilePath/ZCL_NORMAL (0.00s)
+=== RUN   TestNewExecutionRecorder
+--- PASS: TestNewExecutionRecorder (0.00s)
+=== RUN   TestRecordFrame
+--- PASS: TestRecordFrame (0.00s)
+=== RUN   TestDeltaCompression
+--- PASS: TestDeltaCompression (0.00s)
+=== RUN   TestGetVariablesAtStep
+--- PASS: TestGetVariablesAtStep (0.00s)
+=== RUN   TestFindWhenChanged
+--- PASS: TestFindWhenChanged (0.00s)
+=== RUN   TestFindChanges
+--- PASS: TestFindChanges (0.00s)
+=== RUN   TestCheckpoints
+--- PASS: TestCheckpoints (0.00s)
+=== RUN   TestRecordingComplete
+--- PASS: TestRecordingComplete (0.00s)
+=== RUN   TestToJSON
+--- PASS: TestToJSON (0.00s)
+=== RUN   TestFromJSON
+--- PASS: TestFromJSON (0.00s)
+=== RUN   TestStats
+--- PASS: TestStats (0.00s)
+=== RUN   TestVariablesEqual
+=== RUN   TestVariablesEqual/equal_strings
+=== RUN   TestVariablesEqual/different_strings
+=== RUN   TestVariablesEqual/equal_numbers
+=== RUN   TestVariablesEqual/different_numbers
+=== RUN   TestVariablesEqual/equal_bools
+=== RUN   TestVariablesEqual/different_types
+--- PASS: TestVariablesEqual (0.00s)
+    --- PASS: TestVariablesEqual/equal_strings (0.00s)
+    --- PASS: TestVariablesEqual/different_strings (0.00s)
+    --- PASS: TestVariablesEqual/equal_numbers (0.00s)
+    --- PASS: TestVariablesEqual/different_numbers (0.00s)
+    --- PASS: TestVariablesEqual/equal_bools (0.00s)
+    --- PASS: TestVariablesEqual/different_types (0.00s)
+=== RUN   TestSafetyConfig_IsOperationAllowed
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_create
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_update
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_delete
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_activate
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_workflow
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_allows_read
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_allows_search
+=== RUN   TestSafetyConfig_IsOperationAllowed/ReadOnly_allows_query
+=== RUN   TestSafetyConfig_IsOperationAllowed/BlockFreeSQL_blocks_free_SQL
+=== RUN   TestSafetyConfig_IsOperationAllowed/BlockFreeSQL_allows_read
+=== RUN   TestSafetyConfig_IsOperationAllowed/AllowedOps_whitelist_-_allowed_op
+=== RUN   TestSafetyConfig_IsOperationAllowed/AllowedOps_whitelist_-_blocked_op
+=== RUN   TestSafetyConfig_IsOperationAllowed/DisallowedOps_blacklist
+=== RUN   TestSafetyConfig_IsOperationAllowed/DisallowedOps_allows_non-blacklisted
+=== RUN   TestSafetyConfig_IsOperationAllowed/DisallowedOps_overrides_AllowedOps
+=== RUN   TestSafetyConfig_IsOperationAllowed/DryRun_allows_all
+=== RUN   TestSafetyConfig_IsOperationAllowed/Unrestricted_allows_all
+--- PASS: TestSafetyConfig_IsOperationAllowed (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_create (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_update (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_delete (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_activate (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_blocks_workflow (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_allows_read (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_allows_search (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/ReadOnly_allows_query (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/BlockFreeSQL_blocks_free_SQL (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/BlockFreeSQL_allows_read (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/AllowedOps_whitelist_-_allowed_op (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/AllowedOps_whitelist_-_blocked_op (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/DisallowedOps_blacklist (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/DisallowedOps_allows_non-blacklisted (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/DisallowedOps_overrides_AllowedOps (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/DryRun_allows_all (0.00s)
+    --- PASS: TestSafetyConfig_IsOperationAllowed/Unrestricted_allows_all (0.00s)
+=== RUN   TestSafetyConfig_CheckOperation
+--- PASS: TestSafetyConfig_CheckOperation (0.00s)
+=== RUN   TestSafetyConfig_IsPackageAllowed
+=== RUN   TestSafetyConfig_IsPackageAllowed/Empty_AllowedPackages_allows_all
+=== RUN   TestSafetyConfig_IsPackageAllowed/Exact_match
+=== RUN   TestSafetyConfig_IsPackageAllowed/Not_in_whitelist
+=== RUN   TestSafetyConfig_IsPackageAllowed/Wildcard_match_-_Z*
+=== RUN   TestSafetyConfig_IsPackageAllowed/Wildcard_match_-_$*
+=== RUN   TestSafetyConfig_IsPackageAllowed/Wildcard_no_match
+=== RUN   TestSafetyConfig_IsPackageAllowed/Case_insensitive
+--- PASS: TestSafetyConfig_IsPackageAllowed (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Empty_AllowedPackages_allows_all (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Exact_match (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Not_in_whitelist (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Wildcard_match_-_Z* (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Wildcard_match_-_$* (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Wildcard_no_match (0.00s)
+    --- PASS: TestSafetyConfig_IsPackageAllowed/Case_insensitive (0.00s)
+=== RUN   TestSafetyConfig_CheckPackage
+--- PASS: TestSafetyConfig_CheckPackage (0.00s)
+=== RUN   TestSafetyConfig_String
+=== RUN   TestSafetyConfig_String/Unrestricted
+=== RUN   TestSafetyConfig_String/ReadOnly
+=== RUN   TestSafetyConfig_String/BlockFreeSQL
+=== RUN   TestSafetyConfig_String/DryRun
+=== RUN   TestSafetyConfig_String/AllowedOps
+=== RUN   TestSafetyConfig_String/Multiple_flags
+--- PASS: TestSafetyConfig_String (0.00s)
+    --- PASS: TestSafetyConfig_String/Unrestricted (0.00s)
+    --- PASS: TestSafetyConfig_String/ReadOnly (0.00s)
+    --- PASS: TestSafetyConfig_String/BlockFreeSQL (0.00s)
+    --- PASS: TestSafetyConfig_String/DryRun (0.00s)
+    --- PASS: TestSafetyConfig_String/AllowedOps (0.00s)
+    --- PASS: TestSafetyConfig_String/Multiple_flags (0.00s)
+=== RUN   TestDefaultSafetyConfig
+--- PASS: TestDefaultSafetyConfig (0.00s)
+=== RUN   TestDevelopmentSafetyConfig
+--- PASS: TestDevelopmentSafetyConfig (0.00s)
+=== RUN   TestSafetyConfig_CheckTransportableEdit
+=== RUN   TestSafetyConfig_CheckTransportableEdit/No_transport_-_always_allowed
+=== RUN   TestSafetyConfig_CheckTransportableEdit/Transport_provided_but_not_allowed_-_blocked
+=== RUN   TestSafetyConfig_CheckTransportableEdit/Transport_provided_and_allowed_-_success
+=== RUN   TestSafetyConfig_CheckTransportableEdit/Transport_allowed_but_not_in_whitelist_-_blocked
+=== RUN   TestSafetyConfig_CheckTransportableEdit/Transport_allowed_and_in_whitelist_-_success
+--- PASS: TestSafetyConfig_CheckTransportableEdit (0.00s)
+    --- PASS: TestSafetyConfig_CheckTransportableEdit/No_transport_-_always_allowed (0.00s)
+    --- PASS: TestSafetyConfig_CheckTransportableEdit/Transport_provided_but_not_allowed_-_blocked (0.00s)
+    --- PASS: TestSafetyConfig_CheckTransportableEdit/Transport_provided_and_allowed_-_success (0.00s)
+    --- PASS: TestSafetyConfig_CheckTransportableEdit/Transport_allowed_but_not_in_whitelist_-_blocked (0.00s)
+    --- PASS: TestSafetyConfig_CheckTransportableEdit/Transport_allowed_and_in_whitelist_-_success (0.00s)
+=== RUN   TestSafetyConfig_CheckTransportableEdit_ErrorMessage
+--- PASS: TestSafetyConfig_CheckTransportableEdit_ErrorMessage (0.00s)
+=== RUN   TestParseUserTransports
+--- PASS: TestParseUserTransports (0.00s)
+=== RUN   TestParseUserTransportsEmpty
+--- PASS: TestParseUserTransportsEmpty (0.00s)
+=== RUN   TestParseTransportInfo
+--- PASS: TestParseTransportInfo (0.00s)
+=== RUN   TestParseReleaseResult
+--- PASS: TestParseReleaseResult (0.00s)
+=== RUN   TestParseReleaseResultEmpty
+--- PASS: TestParseReleaseResultEmpty (0.00s)
+=== RUN   TestTransportTypes
+--- PASS: TestTransportTypes (0.00s)
+=== RUN   TestClient_GetSource_Program
+--- PASS: TestClient_GetSource_Program (0.00s)
+=== RUN   TestClient_GetSource_Class
+--- PASS: TestClient_GetSource_Class (0.00s)
+=== RUN   TestClient_GetSource_Function
+--- PASS: TestClient_GetSource_Function (0.00s)
+=== RUN   TestClient_GetSource_InvalidType
+--- PASS: TestClient_GetSource_InvalidType (0.00s)
+=== RUN   TestClient_WriteSource_Create
+--- PASS: TestClient_WriteSource_Create (0.00s)
+=== RUN   TestClient_WriteSource_Update
+--- PASS: TestClient_WriteSource_Update (0.00s)
+=== RUN   TestClient_GrepObjects
+--- PASS: TestClient_GrepObjects (0.00s)
+=== RUN   TestClient_GrepObjects_NoMatches
+--- PASS: TestClient_GrepObjects_NoMatches (0.00s)
+=== RUN   TestClient_GrepPackages
+--- PASS: TestClient_GrepPackages (0.00s)
+=== RUN   TestClient_GrepPackages_Recursive
+--- PASS: TestClient_GrepPackages_Recursive (0.00s)
+=== RUN   TestClient_GrepPackages_MultiplePackages
+--- PASS: TestClient_GrepPackages_MultiplePackages (0.00s)
+=== RUN   TestExecuteABAPResult
+--- PASS: TestExecuteABAPResult (0.00s)
+=== RUN   TestExecuteABAPOptions
+--- PASS: TestExecuteABAPOptions (0.00s)
+=== RUN   TestNormalizeLineEndings
+=== RUN   TestNormalizeLineEndings/CRLF_to_LF
+=== RUN   TestNormalizeLineEndings/Already_LF
+=== RUN   TestNormalizeLineEndings/Mixed
+=== RUN   TestNormalizeLineEndings/No_newlines
+=== RUN   TestNormalizeLineEndings/Empty
+--- PASS: TestNormalizeLineEndings (0.00s)
+    --- PASS: TestNormalizeLineEndings/CRLF_to_LF (0.00s)
+    --- PASS: TestNormalizeLineEndings/Already_LF (0.00s)
+    --- PASS: TestNormalizeLineEndings/Mixed (0.00s)
+    --- PASS: TestNormalizeLineEndings/No_newlines (0.00s)
+    --- PASS: TestNormalizeLineEndings/Empty (0.00s)
+=== RUN   TestCountMatches_LineEndings
+--- PASS: TestCountMatches_LineEndings (0.00s)
+=== RUN   TestReplaceMatches_LineEndings
+--- PASS: TestReplaceMatches_LineEndings (0.00s)
+=== RUN   TestParseSearchResults
+--- PASS: TestParseSearchResults (0.00s)
+=== RUN   TestParseSearchResults_Empty
+--- PASS: TestParseSearchResults_Empty (0.00s)
+=== RUN   TestFindLink
+=== RUN   TestFindLink/self
+=== RUN   TestFindLink/http://www.sap.com/adt/relations/source/main
+=== RUN   TestFindLink/edit
+=== RUN   TestFindLink/nonexistent
+--- PASS: TestFindLink (0.00s)
+    --- PASS: TestFindLink/self (0.00s)
+    --- PASS: TestFindLink/http://www.sap.com/adt/relations/source/main (0.00s)
+    --- PASS: TestFindLink/edit (0.00s)
+    --- PASS: TestFindLink/nonexistent (0.00s)
+=== RUN   TestFindLinkByType
+=== RUN   TestFindLinkByType/application/xml
+=== RUN   TestFindLinkByType/text/plain
+=== RUN   TestFindLinkByType/programs
+=== RUN   TestFindLinkByType/nonexistent
+--- PASS: TestFindLinkByType (0.00s)
+    --- PASS: TestFindLinkByType/application/xml (0.00s)
+    --- PASS: TestFindLinkByType/text/plain (0.00s)
+    --- PASS: TestFindLinkByType/programs (0.00s)
+    --- PASS: TestFindLinkByType/nonexistent (0.00s)
+=== RUN   TestExtractSourceLink
+=== RUN   TestExtractSourceLink/main_source_relation
+=== RUN   TestExtractSourceLink/source_relation
+=== RUN   TestExtractSourceLink/simple_source
+=== RUN   TestExtractSourceLink/prefers_main_over_source
+=== RUN   TestExtractSourceLink/no_source_link
+=== RUN   TestExtractSourceLink/empty_links
+--- PASS: TestExtractSourceLink (0.00s)
+    --- PASS: TestExtractSourceLink/main_source_relation (0.00s)
+    --- PASS: TestExtractSourceLink/source_relation (0.00s)
+    --- PASS: TestExtractSourceLink/simple_source (0.00s)
+    --- PASS: TestExtractSourceLink/prefers_main_over_source (0.00s)
+    --- PASS: TestExtractSourceLink/no_source_link (0.00s)
+    --- PASS: TestExtractSourceLink/empty_links (0.00s)
+=== RUN   TestParseObjectStructure
+--- PASS: TestParseObjectStructure (0.00s)
+FAIL
+FAIL	github.com/oisee/vibing-steampunk/pkg/adt	41.395s
+FAIL

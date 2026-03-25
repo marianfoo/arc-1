@@ -1,9 +1,9 @@
 name: Docker
 
-# Builds and pushes the vsp container image to GitHub Container Registry (GHCR).
+# Builds and pushes the arc1 container image to GitHub Container Registry (GHCR).
 # No Docker Hub account required — authentication uses the built-in GITHUB_TOKEN.
 #
-# Image: ghcr.io/oisee/vsp
+# Image: ghcr.io/marianfoo/arc1
 # Platforms: linux/amd64, linux/arm64
 #
 # Triggers:
@@ -64,10 +64,10 @@ jobs:
       # 5. Generate tags and OCI labels from the git tag
       #
       #    For a tag like v2.22.0 this produces:
-      #      ghcr.io/oisee/vsp:2.22.0
-      #      ghcr.io/oisee/vsp:2.22
-      #      ghcr.io/oisee/vsp:2
-      #      ghcr.io/oisee/vsp:latest   (only for non-pre-release tags)
+      #      ghcr.io/marianfoo/arc1:2.22.0
+      #      ghcr.io/marianfoo/arc1:2.22
+      #      ghcr.io/marianfoo/arc1:2
+      #      ghcr.io/marianfoo/arc1:latest   (only for non-pre-release tags)
       #
       #    Pre-release tags (v2.22.0-rc1, v2.22.0-beta) do NOT receive `latest`.
       # ------------------------------------------------------------------ #
@@ -75,7 +75,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/oisee/vsp
+          images: ghcr.io/marianfoo/arc1
           flavor: |
             latest=auto
           tags: |

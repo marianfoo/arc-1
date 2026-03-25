@@ -14,7 +14,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 const (
@@ -65,14 +65,6 @@ type Config struct {
 
 	// Verbose output
 	Verbose bool
-
-	// Mode: focused or expert (default: focused)
-	Mode string
-
-	// DisabledGroups disables groups of tools using short codes:
-	// 5/U = UI5/BSP tools, T = Test tools, H = HANA/AMDP debugger, D = ABAP Debugger
-	// Example: "TH" disables Tests and HANA debugger tools
-	DisabledGroups string
 
 	// Transport mode: stdio (default) or http-streamable
 	Transport string
@@ -132,10 +124,6 @@ type Config struct {
 	// BTP connectivity proxy transport (set when using BTP Destination Service)
 	CustomTransport http.RoundTripper
 
-	// Granular tool visibility (from .vsp.json)
-	// Key: tool name, Value: true=enabled, false=disabled
-	// Takes highest priority over mode and disabled groups
-	ToolsConfig map[string]bool
 }
 
 // NewServer creates a new MCP server for ABAP ADT tools.
@@ -157,7 +145,7 @@ func NewServer(cfg *Config) *Server {
 
 	// Configure safety settings
 	safety := adt.UnrestrictedSafetyConfig() // Default: unrestricted for backwards compatibility
-	if cfg.ReadOnly || cfg.Mode == "readonly" {
+	if cfg.ReadOnly {
 		// readonly mode implies ReadOnly safety (belt-and-suspenders)
 		safety.ReadOnly = true
 	}
@@ -250,7 +238,7 @@ func NewServer(cfg *Config) *Server {
 
 	// Create MCP server
 	mcpServer := server.NewMCPServer(
-		"mcp-abap-adt-go",
+		"arc1",
 		"1.0.0",
 		server.WithResourceCapabilities(true, true),
 		server.WithLogging(),
@@ -265,7 +253,7 @@ func NewServer(cfg *Config) *Server {
 	}
 
 	// Register tools based on mode, disabled groups, and granular tool config
-	s.registerTools(cfg.Mode, cfg.DisabledGroups, cfg.ToolsConfig)
+	s.registerTools()
 
 	return s
 }

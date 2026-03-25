@@ -1,4 +1,4 @@
-# Roadmap: vsp Development Plan
+# Roadmap: ARC-1 Development Plan
 
 > Last Updated: 2025-12-21
 
@@ -60,7 +60,7 @@
 **Goal:** Scriptable, replayable debugging inspired by Tool-Assisted Speedruns.
 
 #### 5.1 Lua Scripting Integration
-- [x] Integrate gopher-lua into vsp
+- [x] Integrate gopher-lua into arc1
 - [x] Expose all MCP tools to Lua
 - [x] Create Lua REPL for interactive debugging
 - [x] Document scripting API (examples + reports)
@@ -324,7 +324,7 @@ forceReplay("production_dump_001")  -- Inject and debug!
 | 4 | Call Graph & RCA Tools (`reports/2025-12-05-013`) |
 | 3 | Debugger Deep Dive (`reports/2025-12-11-002`) |
 
-Full reports are available in the [reports/](https://github.com/marianfoo/vibing-steampunk/tree/main/reports) directory of the repository.
+Full reports are available in the [reports/](https://github.com/marianfoo/arc-1/tree/main/reports) directory of the repository.
 
 ---
 

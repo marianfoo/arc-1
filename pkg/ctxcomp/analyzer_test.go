@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 func TestAnalyzerOffline(t *testing.T) {

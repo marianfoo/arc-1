@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/oisee/vibing-steampunk/internal/mcp"
+	"github.com/marianfoo/arc-1/internal/mcp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -35,7 +35,6 @@ func newTestCmd() *cobra.Command {
 func TestValidateConfig_TransportNormalization(t *testing.T) {
 	withTestConfig(t, &mcp.Config{
 		BaseURL:   "https://sap.example.com:44300",
-		Mode:      "focused",
 		Transport: " HTTP-Streamable ",
 	})
 
@@ -50,7 +49,6 @@ func TestValidateConfig_TransportNormalization(t *testing.T) {
 func TestValidateConfig_TransportDefault(t *testing.T) {
 	withTestConfig(t, &mcp.Config{
 		BaseURL:   "https://sap.example.com:44300",
-		Mode:      "focused",
 		Transport: "   ",
 	})
 
@@ -65,7 +63,6 @@ func TestValidateConfig_TransportDefault(t *testing.T) {
 func TestValidateConfig_TransportInvalid(t *testing.T) {
 	withTestConfig(t, &mcp.Config{
 		BaseURL:   "https://sap.example.com:44300",
-		Mode:      "focused",
 		Transport: "sse",
 	})
 

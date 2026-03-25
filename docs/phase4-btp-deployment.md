@@ -62,7 +62,7 @@ In BTP Cockpit → Connectivity → Destinations:
 
 ```bash
 # Build for Linux
-GOOS=linux GOARCH=amd64 go build -o arc1 ./cmd/vsp
+GOOS=linux GOARCH=amd64 go build -o arc1 ./cmd/arc1
 
 # Deploy
 cf push

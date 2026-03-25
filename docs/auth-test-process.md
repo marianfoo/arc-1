@@ -6,7 +6,7 @@ Step-by-step verification for each authentication phase. Run these tests after d
 
 ```bash
 # Build vsp
-go build -o arc1 ./cmd/vsp
+go build -o arc1 ./cmd/arc1
 
 # Run unit tests first (all 250+ must pass)
 go test ./...
@@ -276,7 +276,7 @@ Phase 4 is currently deferred. The core BTP building blocks (VCAP_SERVICES parsi
 **1. Deploy to CF:**
 
 ```bash
-GOOS=linux GOARCH=amd64 go build -o arc1 ./cmd/vsp
+GOOS=linux GOARCH=amd64 go build -o arc1 ./cmd/arc1
 cf push
 ```
 

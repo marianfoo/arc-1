@@ -1,6 +1,6 @@
 # CLI Coding Agents + VSP (SAP ADT MCP Server)
 
-Guia para configurar asistentes CLI de programacion para trabajar con SAP a traves de [VSP (vibing-steampunk)](https://github.com/oisee/vibing-steampunk).
+Guia para configurar asistentes CLI de programacion para trabajar con SAP a traves de [VSP (vibing-steampunk)](https://github.com/marianfoo/arc-1).
 
 **VSP** es un servidor MCP que da a los asistentes de IA acceso a la API SAP ADT: lectura/escritura de codigo, depuracion, pruebas, transportes y mas.
 
@@ -513,12 +513,12 @@ Ejemplo de config (Claude Code / Codex / Gemini):
 
 ```bash
 # Descargar binario
-curl -LO https://github.com/oisee/vibing-steampunk/releases/latest/download/vsp-darwin-arm64
+curl -LO https://github.com/marianfoo/arc-1/releases/latest/download/vsp-darwin-arm64
 chmod +x vsp-darwin-arm64
 
 # O compilar desde fuente
-git clone https://github.com/oisee/vibing-steampunk.git
-cd vibing-steampunk && make build
+git clone https://github.com/marianfoo/arc-1.git
+cd arc-1 && make build
 ```
 
 Variables de entorno:
@@ -530,4 +530,4 @@ export SAP_CLIENT=001          # por defecto
 export SAP_MODE=focused        # focused (48 herramientas) o expert (96)
 ```
 
-Mas informacion: [VSP README](https://github.com/oisee/vibing-steampunk) | [MCP Usage Guide](https://github.com/oisee/vibing-steampunk/blob/main/MCP_USAGE.md)
+Mas informacion: [VSP README](https://github.com/marianfoo/arc-1) | [MCP Usage Guide](https://github.com/marianfoo/arc-1/blob/main/MCP_USAGE.md)

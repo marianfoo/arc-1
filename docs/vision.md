@@ -211,7 +211,7 @@ The difference?
 
 ## Get Involved
 
-- **GitHub**: [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk)
+- **GitHub**: [marianfoo/arc-1](https://github.com/marianfoo/arc-1)
 - **Reports**: See `reports/` for detailed technical designs
 - **Discussions**: Open an issue to propose ideas
 

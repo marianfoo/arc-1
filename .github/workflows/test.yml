@@ -28,7 +28,7 @@ jobs:
       - name: Run unit tests
         run: go test ./... -count=1 -race
       - name: Verify build
-        run: go build -o /dev/null ./cmd/vsp
+        run: go build -o /dev/null ./cmd/arc1
 
   integration:
     name: Integration Tests (SAP)

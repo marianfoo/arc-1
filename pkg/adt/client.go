@@ -2173,3 +2173,250 @@ func parseSQLTraceDirectory(data []byte) ([]SQLTraceEntry, error) {
 	return result, nil
 }
 
+// --- Quick Win Features (Gap Analysis) ---
+
+// GetAbapDoc retrieves ABAP documentation for a keyword or object at a cursor position.
+// Uses the /sap/bc/adt/docu/abap/langu endpoint which returns F1-style help content.
+func (c *Client) GetAbapDoc(ctx context.Context, objectURI string, line, column int) (string, error) {
+	params := url.Values{}
+	params.Set("uri", fmt.Sprintf("%s#start=%d,%d", objectURI, line, column))
+	params.Set("format", "text")
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/docu/abap/langu", &RequestOptions{
+		Method: http.MethodGet,
+		Query:  params,
+		Accept: "text/html, text/plain",
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting ABAP documentation: %w", err)
+	}
+
+	return string(resp.Body), nil
+}
+
+// APIReleaseInfo represents the release status of an ABAP object's API.
+type APIReleaseInfo struct {
+	ObjectName    string `json:"objectName"`
+	ObjectType    string `json:"objectType"`
+	ReleaseState  string `json:"releaseState"`
+	Deprecated    bool   `json:"deprecated"`
+	UseInCloudDev bool   `json:"useInCloudDev"`
+	Visibility    string `json:"visibility,omitempty"`
+}
+
+// GetAPIReleaseState retrieves the API release state (C1 contract) of an ABAP object.
+// This tells whether an object is released for use in ABAP Cloud (key user extensibility, etc.).
+func (c *Client) GetAPIReleaseState(ctx context.Context, objectType, objectName string) (*APIReleaseInfo, error) {
+	objectName = strings.ToUpper(objectName)
+	objectType = strings.ToUpper(objectType)
+
+	objectURL := buildObjectURL(objectType, objectName)
+
+	resp, err := c.transport.Request(ctx, objectURL, &RequestOptions{
+		Method: http.MethodGet,
+		Accept: "application/vnd.sap.adt.objectstructure.v2+xml, application/xml",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting object structure for release state: %w", err)
+	}
+
+	return parseReleaseInfo(resp.Body, objectType, objectName)
+}
+
+func parseReleaseInfo(data []byte, objectType, objectName string) (*APIReleaseInfo, error) {
+	xmlStr := string(data)
+
+	info := &APIReleaseInfo{
+		ObjectName: objectName,
+		ObjectType: objectType,
+	}
+
+	if strings.Contains(xmlStr, "releaseState=\"") {
+		start := strings.Index(xmlStr, "releaseState=\"") + len("releaseState=\"")
+		end := strings.Index(xmlStr[start:], "\"")
+		if end > 0 {
+			info.ReleaseState = xmlStr[start : start+end]
+		}
+	}
+	if info.ReleaseState == "" && strings.Contains(xmlStr, "released=\"") {
+		start := strings.Index(xmlStr, "released=\"") + len("released=\"")
+		end := strings.Index(xmlStr[start:], "\"")
+		if end > 0 {
+			info.ReleaseState = xmlStr[start : start+end]
+		}
+	}
+
+	info.Deprecated = strings.Contains(xmlStr, "deprecated=\"X\"") || strings.Contains(xmlStr, "deprecated=\"true\"")
+	info.UseInCloudDev = strings.Contains(xmlStr, "useInCloudDevelopment=\"X\"") || strings.Contains(xmlStr, "useInCloudDevelopment=\"true\"")
+
+	if strings.Contains(xmlStr, "visibility=\"") {
+		start := strings.Index(xmlStr, "visibility=\"") + len("visibility=\"")
+		end := strings.Index(xmlStr[start:], "\"")
+		if end > 0 {
+			info.Visibility = xmlStr[start : start+end]
+		}
+	}
+
+	if info.ReleaseState == "" {
+		info.ReleaseState = "notReleased"
+	}
+
+	return info, nil
+}
+
+// buildObjectURL constructs the ADT URL for an object based on its type.
+func buildObjectURL(objectType, objectName string) string {
+	encodedName := url.PathEscape(objectName)
+	switch objectType {
+	case "CLAS":
+		return fmt.Sprintf("/sap/bc/adt/oo/classes/%s", encodedName)
+	case "INTF":
+		return fmt.Sprintf("/sap/bc/adt/oo/interfaces/%s", encodedName)
+	case "PROG":
+		return fmt.Sprintf("/sap/bc/adt/programs/programs/%s", encodedName)
+	case "FUGR":
+		return fmt.Sprintf("/sap/bc/adt/functions/groups/%s", encodedName)
+	case "TABL":
+		return fmt.Sprintf("/sap/bc/adt/ddic/tables/%s", encodedName)
+	case "DDLS":
+		return fmt.Sprintf("/sap/bc/adt/ddic/ddl/sources/%s", encodedName)
+	case "DTEL":
+		return fmt.Sprintf("/sap/bc/adt/ddic/dataelements/%s", encodedName)
+	case "DOMA":
+		return fmt.Sprintf("/sap/bc/adt/ddic/domains/%s", encodedName)
+	default:
+		return fmt.Sprintf("/sap/bc/adt/programs/programs/%s", encodedName)
+	}
+}
+
+// GetPackageTree retrieves the full recursive package tree starting from the given package.
+func (c *Client) GetPackageTree(ctx context.Context, packageName string, maxDepth int) (*PackageContent, error) {
+	root, err := c.GetPackage(ctx, packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	if maxDepth == 0 {
+		maxDepth = 10
+	}
+
+	if len(root.SubPackages) > 0 && maxDepth > 1 {
+		root.SubPackageContents = make([]*PackageContent, 0, len(root.SubPackages))
+		for _, subPkg := range root.SubPackages {
+			subContent, err := c.GetPackageTree(ctx, subPkg, maxDepth-1)
+			if err != nil {
+				subContent = &PackageContent{
+					Name:  subPkg,
+					Error: fmt.Sprintf("failed to read: %v", err),
+				}
+			}
+			root.SubPackageContents = append(root.SubPackageContents, subContent)
+		}
+	}
+
+	return root, nil
+}
+
+// UsageSnippet represents a where-used result with surrounding code context.
+type UsageSnippet struct {
+	ObjectName  string `json:"objectName"`
+	ObjectType  string `json:"objectType"`
+	ObjectURI   string `json:"objectUri"`
+	PackageName string `json:"packageName,omitempty"`
+	Line        int    `json:"line"`
+	Column      int    `json:"column"`
+	Snippet     string `json:"snippet"`
+}
+
+// GetWhereUsedWithSnippets returns where-used results including code context (snippets).
+func (c *Client) GetWhereUsedWithSnippets(ctx context.Context, objectType, objectName string) ([]UsageSnippet, error) {
+	results, err := c.GetWhereUsedByType(ctx, objectType, objectName, true)
+	if err != nil {
+		return nil, fmt.Errorf("getting where-used results: %w", err)
+	}
+
+	snippets := make([]UsageSnippet, 0, len(results))
+	for _, ref := range results {
+		snippet := UsageSnippet{
+			ObjectName:  ref.Name,
+			ObjectType:  ref.Type,
+			ObjectURI:   ref.URI,
+			PackageName: ref.PackageName,
+		}
+
+		if ref.URI != "" {
+			snippetText, err := c.getUsageSnippet(ctx, ref.URI)
+			if err == nil {
+				snippet.Snippet = snippetText
+			}
+		}
+
+		snippets = append(snippets, snippet)
+	}
+
+	return snippets, nil
+}
+
+func (c *Client) getUsageSnippet(ctx context.Context, objectURI string) (string, error) {
+	params := url.Values{}
+	params.Set("uri", objectURI)
+
+	resp, err := c.transport.Request(ctx, "/sap/bc/adt/repository/informationsystem/usageSnippets", &RequestOptions{
+		Method: http.MethodPost,
+		Query:  params,
+		Accept: "application/*",
+	})
+	if err != nil {
+		return "", fmt.Errorf("getting usage snippet: %w", err)
+	}
+
+	return string(resp.Body), nil
+}
+
+// GetProgramWithIncludes retrieves the full source of a program including all its INCLUDEs.
+func (c *Client) GetProgramWithIncludes(ctx context.Context, programName string) (string, error) {
+	programName = strings.ToUpper(programName)
+
+	mainSource, err := c.GetProgram(ctx, programName)
+	if err != nil {
+		return "", fmt.Errorf("getting main program: %w", err)
+	}
+
+	var result strings.Builder
+	lines := strings.Split(mainSource, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.ToUpper(line))
+		if strings.HasPrefix(trimmed, "INCLUDE ") {
+			includeName := strings.TrimPrefix(trimmed, "INCLUDE ")
+			includeName = strings.TrimSuffix(includeName, ".")
+			includeName = strings.TrimSpace(includeName)
+
+			if includeName == "" || strings.HasPrefix(includeName, "\"") {
+				result.WriteString(line)
+				result.WriteString("\n")
+				continue
+			}
+
+			result.WriteString(fmt.Sprintf("* >>> BEGIN INCLUDE %s <<<\n", includeName))
+
+			includeSource, err := c.GetInclude(ctx, includeName)
+			if err != nil {
+				result.WriteString(fmt.Sprintf("* ERROR: Could not fetch include %s: %v\n", includeName, err))
+				result.WriteString(line)
+				result.WriteString("\n")
+			} else {
+				result.WriteString(includeSource)
+				if !strings.HasSuffix(includeSource, "\n") {
+					result.WriteString("\n")
+				}
+			}
+			result.WriteString(fmt.Sprintf("* >>> END INCLUDE %s <<<\n", includeName))
+		} else {
+			result.WriteString(line)
+			result.WriteString("\n")
+		}
+	}
+
+	return result.String(), nil
+}
+

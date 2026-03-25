@@ -2,10 +2,56 @@
 
 This document describes how to run the SAP ABAP Platform Trial 2023 Docker
 container on a Linux server (e.g. Hetzner Cloud), configure it for ADT access,
-and connect the integration test suite and GitHub Actions CI to it.
+connect it to SAP BTP via Cloud Connector, and wire up the integration test
+suite and GitHub Actions CI.
 
 > **Security note:** This guide intentionally omits the server IP/hostname.
 > Never commit connection URLs, credentials, or license keys to the repository.
+
+---
+
+## Architecture
+
+```
+Internet
+    │
+    │  HTTPS :443          HTTPS :8443
+    ▼                      ▼
+┌─────────────────────────────────────────────────────┐
+│  Linux host (Hetzner Cloud)                         │
+│                                                     │
+│  nginx (reverse proxy + TLS termination)            │
+│  ├── :443  → localhost:50000  (ABAP ICM HTTP)       │
+│  └── :8443 → 172.17.0.2:8443 (CC admin, SSL pass)  │
+│                                                     │
+│  Docker container "a4h"  (172.17.0.2)              │
+│  ├── SAP ABAP Platform Trial 2023                   │
+│  │   └── ICM listening on :50000 (HTTP)             │
+│  └── SAP Cloud Connector 2.18                       │
+│      └── Tomcat listening on :8443 (HTTPS)          │
+│          └── outbound tunnel → BTP Connectivity     │
+└─────────────────────────────────────────────────────┘
+    │
+    │  Outbound HTTPS (tunnel to BTP)
+    ▼
+┌──────────────────────────────┐
+│  SAP BTP (us10)              │
+│  ├── Connectivity Service    │
+│  ├── Destination Service     │
+│  └── Subaccount "dev"        │
+└──────────────────────────────┘
+```
+
+**Traffic flows:**
+
+| Use case | Path |
+|----------|------|
+| ADT / integration tests | `https://<host>` → nginx:443 → ABAP:50000 |
+| CC admin panel | `https://<host>:8443` → nginx:8443 → CC:8443 |
+| BTP → on-premises ABAP | BTP Connectivity → CC tunnel → `localhost:50000` |
+
+The Cloud Connector is included in the `sapse/abap-cloud-developer-trial:2023`
+image and runs as a separate Java process inside the same container.
 
 ---
 
@@ -23,17 +69,25 @@ and connect the integration test suite and GitHub Actions CI to it.
    - [User Access](#user-access)
    - [Unlocking the DEVELOPER User](#unlocking-the-developer-user)
 5. [HTTPS / Reverse Proxy Setup](#https--reverse-proxy-setup)
-6. [Integration Tests](#integration-tests)
+6. [Cloud Connector Setup](#cloud-connector-setup)
+   - [Starting Cloud Connector](#starting-cloud-connector)
+   - [Nginx HTTPS Proxy for CC Admin](#nginx-https-proxy-for-cc-admin)
+   - [Initial CC Setup](#initial-cc-setup)
+   - [Connecting CC to BTP](#connecting-cc-to-btp)
+   - [Adding a System Mapping](#adding-a-system-mapping)
+   - [Adding Resources](#adding-resources)
+   - [Password Reset](#password-reset)
+7. [Integration Tests](#integration-tests)
    - [Running Locally](#running-locally)
    - [Test Categories](#test-categories)
    - [Skipped Tests](#skipped-tests)
    - [Known Test Failures](#known-test-failures)
    - [Running a Specific Test](#running-a-specific-test)
-7. [GitHub Actions CI](#github-actions-ci)
+8. [GitHub Actions CI](#github-actions-ci)
    - [Workflow Overview](#workflow-overview)
    - [GitHub Secrets Setup](#github-secrets-setup)
    - [CI-Specific Considerations](#ci-specific-considerations)
-8. [Troubleshooting](#troubleshooting)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -351,6 +405,218 @@ up auto-renewal via a systemd timer.
 
 ---
 
+## Cloud Connector Setup
+
+SAP Cloud Connector (CC) is bundled with the `sapse/abap-cloud-developer-trial:2023`
+image. It allows BTP services (Connectivity, Destination) to reach the
+on-premises ABAP system through an outbound tunnel — no inbound firewall rules
+needed.
+
+### Starting Cloud Connector
+
+CC is not started automatically when the Docker container boots. Start it once
+after the container is up:
+
+```bash
+docker exec a4h bash -c "rcscc_daemon start"
+```
+
+CC logs to `/opt/sap/scc/scc_daemon.log` inside the container and listens on
+`https://vhcala4hci:8443` (the container's hostname). To verify it started:
+
+```bash
+docker exec a4h curl -sk https://localhost:8443/index.jsp | grep -i "title"
+```
+
+> **Note:** CC does not automatically restart when the container restarts.
+> Add the `rcscc_daemon start` call to your container startup script or
+> run it manually after each container restart.
+
+### Nginx HTTPS Proxy for CC Admin
+
+The CC admin UI is served over HTTPS with a self-signed certificate. Browsers
+block XHR calls to self-signed certificates even after clicking "proceed", which
+breaks the CC admin panel's JavaScript entirely.
+
+The fix is an nginx HTTPS-to-HTTPS reverse proxy: nginx terminates TLS with the
+trusted Let's Encrypt certificate and forwards requests to CC's self-signed
+backend with `proxy_ssl_verify off`. The browser sees the trusted cert; CC
+still handles authentication internally.
+
+Add this server block to your nginx site config
+(`/etc/nginx/sites-enabled/<your-subdomain>`):
+
+```nginx
+server {
+    listen 8443 ssl;
+    server_name <your-subdomain>;
+
+    ssl_certificate     /etc/letsencrypt/live/<your-subdomain>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<your-subdomain>/privkey.pem;
+
+    location / {
+        proxy_pass          https://172.17.0.2:8443;
+        proxy_ssl_verify    off;
+        proxy_set_header    Host              $http_host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto https;
+        proxy_http_version  1.1;
+        proxy_set_header    Upgrade           $http_upgrade;
+        proxy_set_header    Connection        "";
+        proxy_read_timeout  300s;
+        proxy_connect_timeout 75s;
+        proxy_buffer_size   128k;
+        proxy_buffers       4 256k;
+        proxy_busy_buffers_size 256k;
+    }
+}
+```
+
+Open port 8443 in the firewall:
+
+```bash
+ufw allow 8443/tcp
+nginx -t && systemctl reload nginx
+```
+
+The CC admin panel is then accessible at `https://<your-subdomain>:8443`.
+
+> **Why not TCP stream pass-through?** A plain TCP proxy (`stream` module)
+> forwards CC's self-signed certificate directly to the browser.
+> The browser accepts the initial page load after a manual "proceed" click,
+> but blocks all subsequent XHR/fetch calls with `ERR_CERT_AUTHORITY_INVALID`.
+> The HTTPS reverse proxy solves this completely.
+
+### Initial CC Setup
+
+On first access, CC shows an **Initial Setup** wizard.
+
+1. Navigate to `https://<your-subdomain>:8443` and log in:
+   - Username: `Administrator`
+   - Password: `manage`
+2. You will be prompted to change the password. Set a strong password and save it.
+3. On the **Installation Type** screen, select **Master (Primary Installation)**.
+4. Complete the wizard. CC saves `<haRole>master</haRole>` in its config.
+
+> **If the wizard does not appear** (CC jumps directly to the dashboard), the
+> initial setup was already completed in a previous session.
+
+### Connecting CC to BTP
+
+In the CC admin panel, go to **Define Subaccount → On-Premises to Cloud** and
+click **+ Add Subaccount**.
+
+**Step 1 — HTTPS Proxy:** Leave all fields empty (no proxy needed) and click
+**Next**.
+
+**Step 2 — BTP Subaccount details:**
+
+| Field | Value |
+|-------|-------|
+| Region | `cf.us10-001.hana.ondemand.com` |
+| Subaccount | Your BTP subaccount GUID (find it in the BTP Cockpit URL or via `btp list accounts/subaccount`) |
+| Display Name | Any label, e.g. `dev` |
+| Login | Your BTP user (e.g. S-User or email) |
+| Password | Your BTP password |
+
+Click **Next**, then **Finish**. CC will establish the outbound tunnel to BTP.
+The status dot next to the subaccount turns green when the tunnel is active.
+
+> **BTP Prerequisites:** The BTP subaccount must have the **Connectivity**
+> entitlement assigned. The `connectivity/lite` service instance must exist
+> in the subaccount before the tunnel can be established. Create it manually
+> in the BTP Cockpit (Service Marketplace → Connectivity → Create with plan
+> `lite`).
+
+### Adding a System Mapping
+
+Once the subaccount tunnel is active, map the on-premises ABAP system so BTP
+can route requests to it.
+
+In the CC admin panel, go to **Cloud to On-Premises** and click **+ Add**.
+Walk through the wizard:
+
+| Step | Field | Value |
+|------|-------|-------|
+| Protocol | Protocol | `HTTP` |
+| Back-end Type | Back-end Type | `ABAP System` |
+| Internal Host | Internal Host | `localhost` |
+| Internal Host | Internal Port | `50000` |
+| Virtual Host | Virtual Host | `a4h-abap` |
+| Virtual Host | Virtual Port | `50000` |
+| Host Header | Host in Request Header | `Use Internal Host` |
+
+> **Virtual Host** is the name BTP uses to refer to this system in
+> Destinations. **Internal Host** is the real address as seen from CC inside
+> the container. Use `Use Internal Host` for the request header so the ABAP
+> system sees `localhost:50000` in the `Host` header, which matches its ICM
+> configuration.
+
+Click **Finish**.
+
+### Adding Resources
+
+After saving the system mapping, CC shows it in the list with a warning that no
+resources are accessible yet. Click the system mapping row, then click
+**+ Add** under **Resources**.
+
+| Field | Value |
+|-------|-------|
+| URL Path | `/` |
+| Access Policy | `Path and all sub-paths` |
+| Description | `All ADT/OData paths` |
+
+Click **Save**. The system mapping is now fully configured.
+
+### Password Reset
+
+If the CC admin password is lost or the account is locked, reset it directly
+in `users.xml` inside the container:
+
+```bash
+# Stop CC
+docker exec a4h bash -c "rcscc_daemon stop"
+
+# Compute SHA-256 of new password (replace "manage" with your desired password)
+NEW_PASS=$(echo -n 'manage' | sha256sum | awk '{print $1}' | tr '[:lower:]' '[:upper:]')
+echo "Hash: $NEW_PASS"
+
+# Write users.xml with the new password
+docker exec a4h bash -c "cat > /opt/sap/scc/config/users.xml << 'EOF'
+<?xml version='1.0' encoding='utf-8'?>
+<tomcat-users xmlns=\"http://tomcat.apache.org/xml\"
+              xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"
+              xsi:schemaLocation=\"http://tomcat.apache.org/xml tomcat-users.xsd\"
+              version=\"1.0\">
+  <role rolename=\"admin\"/>
+  <group groupname=\"initial\" roles=\"\"/>
+  <user username=\"Administrator\" password=\"$NEW_PASS\" groups=\"\" roles=\"admin\"/>
+</tomcat-users>
+EOF"
+
+# Start CC again
+docker exec a4h bash -c "rcscc_daemon start"
+```
+
+> **Important:** The `roles="admin"` attribute on the `<user>` element is
+> required. If it is missing or set to `roles=""`, Tomcat returns HTTP 408
+> on every login attempt. The `groups=""` attribute must also be empty
+> (not `groups="initial"`) to avoid inheriting the group's empty role set.
+
+If the CC initial setup needs to be reset as well (not just the password):
+
+```bash
+docker exec a4h bash -c "rcscc_daemon stop"
+docker exec a4h rm -f /opt/sap/scc/scc_config/scc_config.ini \
+                       /opt/sap/scc/scc_config/scc_config.stamp
+docker exec a4h bash -c "rcscc_daemon start"
+```
+
+This forces the Initial Setup wizard to appear again on next login.
+
+---
+
 ## Integration Tests
 
 ### Running Locally
@@ -438,7 +704,7 @@ push / pull_request / workflow_dispatch
       │
       ├── unit (ubuntu-latest)
       │     ├── go test ./... -count=1 -race    ← all unit tests
-      │     └── go build ./cmd/vsp              ← verify binary builds
+      │     └── go build ./cmd/arc1              ← verify binary builds
       │
       └── integration (ubuntu-latest) [needs: unit]
             ├── condition: PR, push to main, or manual dispatch

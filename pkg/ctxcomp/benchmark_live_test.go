@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 // TestBenchmarkLive runs the benchmark against a real SAP system.

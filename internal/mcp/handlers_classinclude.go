@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 // routeClassIncludeAction routes class include operations.

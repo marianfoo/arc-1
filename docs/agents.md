@@ -2,11 +2,11 @@
 
 This file provides context for developers and AI assistants (Claude, etc.) working on this project.
 
-> **Repository:** [marianfoo/vibing-steampunk](https://github.com/marianfoo/vibing-steampunk) — the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
+> **Repository:** [marianfoo/arc-1](https://github.com/marianfoo/arc-1) — the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
 
 ## Project Overview
 
-**vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 81 essential tools (focused mode, default) or 122 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.
+**ARC-1** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 11 intent-based tools for use with Claude, Copilot Studio, and other MCP-compatible LLMs.
 
 ## Quick Reference
 
@@ -14,7 +14,7 @@ This file provides context for developers and AI assistants (Claude, etc.) worki
 
 ```bash
 # Build
-go build -o vsp ./cmd/vsp
+go build -o arc1 ./cmd/arc1
 
 # Run unit tests
 go test ./...
@@ -28,14 +28,14 @@ SAP_URL=http://host:port SAP_USER=user SAP_PASSWORD=pass SAP_CLIENT=001 \
 
 ```bash
 # Using CLI flags
-./vsp --url http://host:50000 --user admin --password secret
+./arc1 --url http://host:50000 --user admin --password secret
 
 # Using environment variables
-SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
+SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./arc1
 
 # Using cookie authentication
-./vsp --url http://host:50000 --cookie-string "sap-usercontext=abc; SAP_SESSIONID=xyz"
-./vsp --url http://host:50000 --cookie-file cookies.txt
+./arc1 --url http://host:50000 --cookie-string "sap-usercontext=abc; SAP_SESSIONID=xyz"
+./arc1 --url http://host:50000 --cookie-file cookies.txt
 ```
 
 | Variable / Flag | Description |
@@ -48,8 +48,6 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_COOKIE_FILE` / `--cookie-file` | Path to Netscape-format cookie file |
 | `SAP_COOKIE_STRING` / `--cookie-string` | Cookie string (key1=val1; key2=val2) |
-| `SAP_MODE` / `--mode` | Tool mode: `focused` (81 tools, default), `expert` (122 tools), or `hyperfocused` (1 tool) |
-| `SAP_DISABLED_GROUPS` / `--disabled-groups` | Disable tool groups: `5`/`U`=UI5, `T`=Tests, `H`=HANA, `D`=Debug |
 | `SAP_VERBOSE` / `--verbose` | Enable verbose logging to stderr |
 | **Safety Configuration** | |
 | `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: false) |
@@ -68,7 +66,7 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass ./vsp
 ## Codebase Structure
 
 ```
-cmd/vsp/main.go       # Entry point
+cmd/arc1/main.go       # Entry point
 internal/mcp/server.go       # MCP server (122 tool handlers, mode-aware)
 pkg/
 ├── adt/
@@ -289,7 +287,7 @@ All research reports, analysis documents, and design specifications follow this 
 - **004:** Graph Architecture Improvements (vs-punk) - Alternative design approach
 - **005:** Improved Graph Architecture Design - Clean architecture redesign for ZRAY graph system
 - **006:** Standard API Surface Scraper - Tool to discover and analyze SAP standard API usage
-- **007:** Graph Traversal Implementation Plan - Step-by-step implementation for vsp
+- **007:** Graph Traversal Implementation Plan - Step-by-step implementation for arc1
 - **008:** Test Intelligence Plan - Smart test execution based on code changes
 - **009:** Library Architecture & Caching Strategy - Multi-layer architecture and SQLite caching
 
@@ -300,7 +298,7 @@ All research reports, analysis documents, and design specifications follow this 
 #### 2025-12-05 Reports
 - **001:** Code Injection & Bootstrap Strategies - Unit Test execution vehicle, data injection options
 - **002:** Self-Replicating Deploy Agent Design - Rejected due to STRUST/SSL certificate concerns
-- **003:** ADT-Assisted Universal Deployment - Factory Pattern strategy via vsp (ADT-native)
+- **003:** ADT-Assisted Universal Deployment - Factory Pattern strategy via arc1 (ADT-native)
 - **004:** ExecuteABAP Implementation - ABAP code execution via Unit Test wrapper (385 LOC, 2 tests)
 - **014:** External Debugger Scripting Vision - Watchpoints API, AI-powered debugger scripting architecture
 - **017:** AMDP Debugging & UI5/BSP Capabilities - Investigation of ADT endpoints
@@ -321,7 +319,7 @@ All research reports, analysis documents, and design specifications follow this 
 - **003:** RAP OData Service Lessons - BDEF XML format, SRVB creation, OData V4 action URLs
 
 #### 2026-02-03 Reports
-- **001:** abapGit Dependencies & Submodules - Git submodules analysis, dependency management patterns, vsp opportunity `[ROADMAP]`
+- **001:** abapGit Dependencies & Submodules - Git submodules analysis, dependency management patterns, arc1 opportunity `[ROADMAP]`
 
 #### Reference Documentation (Non-numbered)
 - `abap-adt-discovery-guide.md` - ADT API discovery process
@@ -358,7 +356,7 @@ When creating a new report:
 
 | Metric | Value |
 |--------|-------|
-| **Tools** | 122 (81 focused, 122 expert) |
+| **Tools** | 11 intent-based |
 | **Unit Tests** | 270+ |
 | **Integration Tests** | 34+ |
 | **Platforms** | 9 (Linux/macOS/Windows × amd64/arm64/386) |
@@ -367,7 +365,7 @@ When creating a new report:
 | **abapGit Integration** | ✅ Complete (GitTypes, GitExport — 158 object types) |
 | **Install Tools** | ✅ Complete (InstallZADTVSP, InstallAbapGit) |
 | **External Debugger** | ⚠️ Use WebSocket ZADT_VSP (stateful APC) |
-| **AMDP Debugger** | ⚠️ Experimental (expert mode only) |
+| **AMDP Debugger** | ⚠️ Experimental |
 
 See [docs/roadmap.md](roadmap.md) for planned features.
 

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt"
-	"github.com/oisee/vibing-steampunk/pkg/config"
+	"github.com/marianfoo/arc-1/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +43,7 @@ type systemParams struct {
 func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 	// Debug: show which system is being used
 	verbose, _ := cmd.Flags().GetBool("verbose")
-	if verbose || os.Getenv("VSP_DEBUG") == "true" {
+	if verbose || os.Getenv("ARC1_DEBUG") == "true" {
 		fmt.Fprintf(os.Stderr, "[DEBUG] resolveSystemParams: systemName=%q\n", systemName)
 	}
 
@@ -54,7 +54,7 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 			return nil, fmt.Errorf("failed to load systems config: %w", err)
 		}
 		if cfg == nil {
-			return nil, fmt.Errorf("no systems config found. Create .vsp.json or ~/.vsp.json\n\nExample:\n%s", config.ExampleConfig())
+			return nil, fmt.Errorf("no systems config found. Create .arc1.json or ~/.arc1.json\n\nExample:\n%s", config.ExampleConfig())
 		}
 
 		sys, err := cfg.GetSystem(systemName)
@@ -65,11 +65,11 @@ func resolveSystemParams(cmd *cobra.Command) (*systemParams, error) {
 		// Require either password or cookie auth
 		hasCookieAuth := sys.CookieFile != "" || sys.CookieString != ""
 		if sys.Password == "" && !hasCookieAuth {
-			return nil, fmt.Errorf("auth not found for system '%s'. Set VSP_%s_PASSWORD env var or use cookie_file/cookie_string", systemName, strings.ToUpper(systemName))
+			return nil, fmt.Errorf("auth not found for system '%s'. Set ARC1_%s_PASSWORD env var or use cookie_file/cookie_string", systemName, strings.ToUpper(systemName))
 		}
 
 		verbose, _ := cmd.Flags().GetBool("verbose")
-		if verbose || os.Getenv("VSP_VERBOSE") == "true" || os.Getenv("VSP_DEBUG") == "true" {
+		if verbose || os.Getenv("ARC1_VERBOSE") == "true" || os.Getenv("ARC1_DEBUG") == "true" {
 			fmt.Fprintf(os.Stderr, "[INFO] Using system '%s' from %s\n", systemName, path)
 			fmt.Fprintf(os.Stderr, "[DEBUG] URL: %s, User: %s\n", sys.URL, sys.User)
 		}
@@ -208,7 +208,7 @@ var sourceCmd = &cobra.Command{
 	Long: `Retrieve source code for an ABAP object.
 
 Subcommands:
-  read     Read source code (same as 'vsp source <type> <name>')
+  read     Read source code (same as 'arc1 source <type> <name>')
   write    Write source code from stdin
   edit     Surgical string replacement
   context  Source with compressed dependency contracts
@@ -276,10 +276,10 @@ var systemsCmd = &cobra.Command{
 	Long: `List all configured SAP systems from the systems config file.
 
 Config file locations (searched in order):
-  .vsp-systems.json
-  .vsp/systems.json
-  ~/.vsp-systems.json
-  ~/.vsp/systems.json`,
+  .arc1-systems.json
+  .arc1/systems.json
+  ~/.arc1-systems.json
+  ~/.arc1/systems.json`,
 	RunE: runSystems,
 }
 
@@ -295,7 +295,7 @@ func runSystems(cmd *cobra.Command, args []string) error {
 
 	if cfg == nil {
 		fmt.Println("No systems config found.")
-		fmt.Println("\nCreate .vsp-systems.json with:")
+		fmt.Println("\nCreate .arc1-systems.json with:")
 		fmt.Println(config.ExampleConfig())
 		return nil
 	}
@@ -318,7 +318,7 @@ func runSystems(cmd *cobra.Command, args []string) error {
 			// Password auth
 			if sys.Password != "" {
 				authStatus = "pwd:inline"
-			} else if os.Getenv(fmt.Sprintf("VSP_%s_PASSWORD", strings.ToUpper(name))) != "" {
+			} else if os.Getenv(fmt.Sprintf("ARC1_%s_PASSWORD", strings.ToUpper(name))) != "" {
 				authStatus = "pwd:env ✓"
 			} else {
 				authStatus = "pwd:env ✗"
@@ -339,7 +339,7 @@ var systemsInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Create example systems config",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath := ".vsp-systems.json"
+		configPath := ".arc1-systems.json"
 		if _, err := os.Stat(configPath); err == nil {
 			return fmt.Errorf("%s already exists", configPath)
 		}
@@ -350,7 +350,7 @@ var systemsInitCmd = &cobra.Command{
 
 		fmt.Printf("Created %s\n", configPath)
 		fmt.Println("\nEdit the file to add your SAP systems.")
-		fmt.Println("Set passwords via environment variables: VSP_<SYSTEM>_PASSWORD")
+		fmt.Println("Set passwords via environment variables: ARC1_<SYSTEM>_PASSWORD")
 		return nil
 	},
 }

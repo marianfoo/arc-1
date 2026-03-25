@@ -1,6 +1,6 @@
 # Phase 2: OAuth / JWT Authentication Setup
 
-Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (EntraID, Cognito, Okta, Keycloak). vsp validates JWT Bearer tokens and extracts user identity.
+Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (EntraID, Cognito, Okta, Keycloak). ARC-1 validates JWT Bearer tokens and extracts user identity.
 
 ## When to Use
 
@@ -18,7 +18,7 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
                                  └──────┬──────────────┘
                                         │ OIDC tokens
 ┌──────────────────┐     JWT Bearer     │     ┌──────────────────┐     Basic Auth      ┌────────────┐
-│  MCP Client      │ ──────────────────►├────►│  vsp Server      │ ──────────────────► │  SAP ABAP  │
+│  MCP Client      │ ──────────────────►├────►│  arc1 Server      │ ──────────────────► │  SAP ABAP  │
 │  (IDE / Copilot) │   Authorization    │     │  validates JWT    │   service account  │  System    │
 └──────────────────┘                    │     └──────────────────┘                     └────────────┘
                                         │
@@ -33,13 +33,13 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
 
 1. **Create App Registration:**
    - Azure Portal → Microsoft Entra ID → App registrations → New registration
-   - Name: `vsp SAP MCP Server`
+   - Name: `ARC-1 SAP MCP Server`
    - Supported account types: Single tenant (or multi-tenant)
    - Redirect URI: not needed for service-to-service
 
 2. **Expose an API:**
    - App registration → Expose an API
-   - Set Application ID URI: `api://vsp-sap-connector`
+   - Set Application ID URI: `api://arc1-sap-connector`
    - Add scope: `SAP.Access` (admin consent)
 
 3. **Note the values:**
@@ -62,16 +62,16 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
 
 ## Server Setup
 
-### Start vsp with OIDC Validation
+### Start arc1 with OIDC Validation
 
 ```bash
-vsp --url https://sap.example.com:44300 \
+arc1 --url https://sap.example.com:44300 \
     --user SAP_SERVICE_USER \
     --password 'ServicePassword123' \
     --transport http-streamable \
     --http-addr 0.0.0.0:8080 \
     --oidc-issuer 'https://login.microsoftonline.com/{tenant-id}/v2.0' \
-    --oidc-audience 'api://vsp-sap-connector'
+    --oidc-audience 'api://arc1-sap-connector'
 ```
 
 ### Environment Variables
@@ -83,7 +83,7 @@ export SAP_PASSWORD=ServicePassword123
 export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
 export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
-export SAP_OIDC_AUDIENCE='api://vsp-sap-connector'
+export SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
 export SAP_OIDC_USERNAME_CLAIM='preferred_username'  # default
 ```
 
@@ -99,7 +99,7 @@ carol@company.com: CAROL
 ```
 
 ```bash
-vsp ... --oidc-user-mapping oidc-user-mapping.yaml
+arc1 ... --oidc-user-mapping oidc-user-mapping.yaml
 ```
 
 ## Client Configuration
@@ -111,9 +111,9 @@ VS Code supports MCP OAuth natively. Configure in `.vscode/mcp.json`:
 ```json
 {
   "servers": {
-    "vsp": {
+    "arc1": {
       "type": "http",
-      "url": "https://vsp.company.com/mcp"
+      "url": "https://arc1.company.com/mcp"
     }
   }
 }
@@ -129,7 +129,7 @@ VS Code will:
 
 1. Go to **Settings** → **Connectors** → **MCP Servers**
 2. Click **Add MCP Server**
-3. URL: `https://vsp.company.com/mcp`
+3. URL: `https://arc1.company.com/mcp`
 4. Authentication: **OAuth 2.0** → **Dynamic Discovery**
 5. Copilot Studio auto-discovers endpoints via `/.well-known/oauth-protected-resource`
 
@@ -137,23 +137,23 @@ VS Code will:
 
 ```bash
 # Get a token from your IdP (example with Azure CLI)
-TOKEN=$(az account get-access-token --resource api://vsp-sap-connector --query accessToken -o tsv)
+TOKEN=$(az account get-access-token --resource api://arc1-sap-connector --query accessToken -o tsv)
 
-# Use with vsp
-curl -H "Authorization: Bearer $TOKEN" https://vsp.company.com/mcp
+# Use with arc1
+curl -H "Authorization: Bearer $TOKEN" https://arc1.company.com/mcp
 ```
 
 ## How It Works
 
 1. MCP client sends request without token
-2. vsp returns `401` with `WWW-Authenticate: Bearer resource_metadata="..."`
+2. ARC-1 returns `401` with `WWW-Authenticate: Bearer resource_metadata="..."`
 3. Client fetches Protected Resource Metadata
 4. Client discovers IdP authorization server
 5. Client performs OAuth 2.1 Authorization Code + PKCE flow
 6. Client sends `Authorization: Bearer <jwt>` on every request
-7. vsp validates JWT signature via JWKS (cached 1 hour)
-8. vsp checks issuer, audience, expiry
-9. vsp extracts username from configured claim
+7. ARC-1 validates JWT signature via JWKS (cached 1 hour)
+8. arc1 checks issuer, audience, expiry
+9. ARC-1 extracts username from configured claim
 10. Request proceeds (SAP auth still via service account)
 
 ## Security Notes
@@ -161,7 +161,7 @@ curl -H "Authorization: Bearer $TOKEN" https://vsp.company.com/mcp
 - JWT signatures are cryptographically verified via JWKS
 - JWKS keys are cached for 1 hour (auto-refresh)
 - Tokens must have correct issuer AND audience
-- vsp never sees user passwords (IdP handles login)
+- ARC-1 never sees user passwords (IdP handles login)
 - SAP still uses a shared service account (for per-user SAP auth, add Phase 3)
 
 ## References

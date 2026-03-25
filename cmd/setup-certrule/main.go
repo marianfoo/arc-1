@@ -6,13 +6,13 @@ import (
 	"log"
 	"os"
 
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 func main() {
-	sapURL := getenv("TEST_SAP_URL", "http://a4h.marianzeis.de:50000")
-	sapUser := getenv("TEST_SAP_USER", "DEVELOPER")
-	sapPass := getenv("TEST_SAP_PASSWORD", "ABAPtr2023#00")
+	sapURL := getenv("TEST_SAP_URL", "http://your-sap-host:50000")
+	sapUser := getenv("TEST_SAP_USER", "YOUR_USER")
+	sapPass := getenv("TEST_SAP_PASSWORD", "YOUR_PASSWORD")
 	sapClient := getenv("TEST_SAP_CLIENT", "001")
 
 	safety := adt.SafetyConfig{ReadOnly: false, BlockFreeSQL: false}

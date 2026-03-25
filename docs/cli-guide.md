@@ -1,17 +1,17 @@
-# VSP CLI Guide
+# ARC-1 CLI Guide
 
-**vsp** provides a complete ABAP development toolchain from the terminal. Single binary, 28+ commands, 50+ Lua scripting functions. No SAP GUI, no Eclipse, no IDE required.
+**arc1** provides a complete ABAP development toolchain from the terminal. Single binary, 28+ commands, 50+ Lua scripting functions. No SAP GUI, no Eclipse, no IDE required.
 
 ## Quick Start
 
 ```bash
 # Option 1: Environment variables
 export SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret
-vsp search "ZCL_*"
+arc1 search "ZCL_*"
 
-# Option 2: Saved system profiles (.vsp.json)
-vsp -s dev search "ZCL_*"
-vsp -s prod query T000 --top 3
+# Option 2: Saved system profiles (.arc1.json)
+arc1 -s dev search "ZCL_*"
+arc1 -s prod query T000 --top 3
 ```
 
 ## Command Reference
@@ -20,22 +20,22 @@ vsp -s prod query T000 --top 3
 
 ```bash
 # Read source
-vsp source read CLAS ZCL_MY_CLASS
-vsp source read PROG ZTEST_REPORT
+arc1 source read CLAS ZCL_MY_CLASS
+arc1 source read PROG ZTEST_REPORT
 
 # Read with compressed dependency context (7-30x compression)
-vsp context CLAS ZCL_MY_CLASS
-vsp context CLAS ZCL_MY_CLASS --max-deps 30
-vsp context CLAS ZCL_DEEP --depth 2             # deps of deps
-vsp context CLAS ZCL_COMPLEX --depth 3           # 3 levels deep
+arc1 context CLAS ZCL_MY_CLASS
+arc1 context CLAS ZCL_MY_CLASS --max-deps 30
+arc1 context CLAS ZCL_DEEP --depth 2             # deps of deps
+arc1 context CLAS ZCL_COMPLEX --depth 3           # 3 levels deep
 
 # Write source (pipe-friendly)
-vsp source write CLAS ZCL_MY_CLASS < new_source.abap
-cat source.abap | vsp source write PROG ZTEST
+arc1 source write CLAS ZCL_MY_CLASS < new_source.abap
+cat source.abap | arc1 source write PROG ZTEST
 
 # Surgical edit (find & replace, auto lock/unlock/activate)
-vsp source edit CLAS ZCL_MY_CLASS --old "old_code" --new "new_code"
-vsp source edit CLAS ZCL_MY_CLASS --old "ADD 1 TO lv_x" --new "lv_x = lv_x + 1" --replace-all
+arc1 source edit CLAS ZCL_MY_CLASS --old "old_code" --new "new_code"
+arc1 source edit CLAS ZCL_MY_CLASS --old "ADD 1 TO lv_x" --new "lv_x = lv_x + 1" --replace-all
 ```
 
 **Requirements:** Standard ADT. No ZADT_VSP needed.
@@ -44,16 +44,16 @@ vsp source edit CLAS ZCL_MY_CLASS --old "ADD 1 TO lv_x" --new "lv_x = lv_x + 1" 
 
 ```bash
 # Search objects by name pattern
-vsp search "ZCL_ORDER*"
-vsp search "Z*" --type CLAS --max 50
+arc1 search "ZCL_ORDER*"
+arc1 search "Z*" --type CLAS --max 50
 
 # Search source code across entire packages
-vsp grep "SELECT.*FROM.*mara" --package '$TMP'
-vsp grep "TYPE REF TO" --package 'ZFINANCE' -i
-vsp grep "cl_abap_unit" --package '$ZADT' --type CLAS
+arc1 grep "SELECT.*FROM.*mara" --package '$TMP'
+arc1 grep "TYPE REF TO" --package 'ZFINANCE' -i
+arc1 grep "cl_abap_unit" --package '$ZADT' --type CLAS
 
 # System information + ZADT_VSP availability check
-vsp system info
+arc1 system info
 ```
 
 **Requirements:** Standard ADT. No ZADT_VSP needed.
@@ -62,25 +62,25 @@ vsp system info
 
 ```bash
 # What does a class use? (callees)
-vsp graph CLAS ZCL_MY_CLASS
-vsp graph CLAS ZCL_MY_CLASS --depth 2
+arc1 graph CLAS ZCL_MY_CLASS
+arc1 graph CLAS ZCL_MY_CLASS --depth 2
 
 # Who uses this interface? (callers / where-used)
-vsp graph INTF ZIF_MY_INTERFACE --direction callers
+arc1 graph INTF ZIF_MY_INTERFACE --direction callers
 
 # Both directions
-vsp graph CLAS ZCL_MY_CLASS --direction both
+arc1 graph CLAS ZCL_MY_CLASS --direction both
 
 # All object types — classes, interfaces, programs, function groups, transactions
-vsp graph INTF ZIF_MY_INTERFACE --direction callers
-vsp graph PROG ZREPORT
-vsp graph TRAN SE80           # resolves transaction → program via TSTC automatically
+arc1 graph INTF ZIF_MY_INTERFACE --direction callers
+arc1 graph PROG ZREPORT
+arc1 graph TRAN SE80           # resolves transaction → program via TSTC automatically
 
 # Package dependency analysis + transport readiness
-vsp deps '$ZADT_VSP'
-vsp deps '$ZADT_VSP' --format summary
-vsp deps '$ZFINANCE' --include-subpackages
-vsp deps '$TMP' --object ZCL_MY_CLASS
+arc1 deps '$ZADT_VSP'
+arc1 deps '$ZADT_VSP' --format summary
+arc1 deps '$ZFINANCE' --include-subpackages
+arc1 deps '$TMP' --object ZCL_MY_CLASS
 ```
 
 **How `graph` works:**
@@ -102,19 +102,19 @@ vsp deps '$TMP' --object ZCL_MY_CLASS
 
 ```bash
 # Simple table query
-vsp query T000
-vsp query T000 --top 5
+arc1 query T000
+arc1 query T000 --top 5
 
 # Filtered queries
-vsp query USR02 --where "BNAME = 'DEVELOPER'" --top 10
-vsp query TADIR --where "DEVCLASS = '\$TMP' AND OBJECT = 'CLAS'" --top 20 --order "OBJ_NAME"
+arc1 query USR02 --where "BNAME = 'DEVELOPER'" --top 10
+arc1 query TADIR --where "DEVCLASS = '\$TMP' AND OBJECT = 'CLAS'" --top 20 --order "OBJ_NAME"
 
 # Data dictionary exploration
-vsp query DD03L --where "TABNAME = 'T000'" --fields "FIELDNAME,DATATYPE,LENG"
-vsp query DD02L --where "TABNAME LIKE 'Z%'" --fields "TABNAME,TABCLASS" --top 20
+arc1 query DD03L --where "TABNAME = 'T000'" --fields "FIELDNAME,DATATYPE,LENG"
+arc1 query DD02L --where "TABNAME LIKE 'Z%'" --fields "TABNAME,TABCLASS" --top 20
 
 # Cross-reference tables (who uses what)
-vsp query WBCROSSGT --where "NAME = 'ZCL_MY_CLASS'" --fields "INCLUDE,OTYPE,NAME" --top 20
+arc1 query WBCROSSGT --where "NAME = 'ZCL_MY_CLASS'" --fields "INCLUDE,OTYPE,NAME" --top 20
 ```
 
 **Requirements:** Standard ADT. No ZADT_VSP needed.
@@ -124,18 +124,18 @@ vsp query WBCROSSGT --where "NAME = 'ZCL_MY_CLASS'" --fields "INCLUDE,OTYPE,NAME
 
 ```bash
 # Unit tests
-vsp test CLAS ZCL_MY_CLASS
-vsp test --package '$TMP'
+arc1 test CLAS ZCL_MY_CLASS
+arc1 test --package '$TMP'
 
 # ATC checks (ABAP Test Cockpit)
-vsp atc CLAS ZCL_MY_CLASS
-vsp atc PROG ZTEST --variant MY_VARIANT
+arc1 atc CLAS ZCL_MY_CLASS
+arc1 atc PROG ZTEST --variant MY_VARIANT
 
 # ABAP Lint — offline, no SAP needed!
-vsp lint CLAS ZCL_MY_CLASS              # fetch from SAP, lint locally
-vsp lint --file myclass.clas.abap       # local file
-echo "DATA x." | vsp lint --stdin       # piped input
-vsp lint --file src.abap --max-length 100
+arc1 lint CLAS ZCL_MY_CLASS              # fetch from SAP, lint locally
+arc1 lint --file myclass.clas.abap       # local file
+echo "DATA x." | arc1 lint --stdin       # piped input
+arc1 lint --file src.abap --max-length 100
 ```
 
 **Lint rules (8):** `line_length`, `empty_statement`, `obsolete_statement`, `max_one_statement`, `preferred_compare_operator`, `colon_missing_space`, `double_space`, `local_variable_names`.
@@ -150,20 +150,20 @@ Oracle-verified: 100% match against TypeScript abaplint on 4 rules, 29 files.
 
 ```bash
 # WASM → ABAP (fully offline)
-vsp compile wasm program.wasm                          # stdout
-vsp compile wasm program.wasm --class ZCL_MY_WASM      # custom class name
-vsp compile wasm program.wasm -o ./src/                # write to file
-vsp compile wasm program.wasm -o ./src/ --deploy '$TMP' # compile + deploy
+arc1 compile wasm program.wasm                          # stdout
+arc1 compile wasm program.wasm --class ZCL_MY_WASM      # custom class name
+arc1 compile wasm program.wasm -o ./src/                # write to file
+arc1 compile wasm program.wasm -o ./src/ --deploy '$TMP' # compile + deploy
 
 # TypeScript → ABAP (needs Node.js for TS parsing)
-vsp compile ts lexer.ts --prefix zcl_
-vsp compile ts lexer.ts -o ./src/ --deploy '$TMP'
+arc1 compile ts lexer.ts --prefix zcl_
+arc1 compile ts lexer.ts -o ./src/ --deploy '$TMP'
 
 # Parse ABAP into structured statements (fully offline)
-vsp parse --file myclass.clas.abap --format summary    # statement type counts
-vsp parse --file source.abap --format json             # machine-readable
-echo "DATA lv_x TYPE i. lv_x = 42." | vsp parse --stdin
-vsp parse CLAS ZCL_TEST --format json                  # fetch from SAP + parse
+arc1 parse --file myclass.clas.abap --format summary    # statement type counts
+arc1 parse --file source.abap --format json             # machine-readable
+echo "DATA lv_x TYPE i. lv_x = 42." | arc1 parse --stdin
+arc1 parse CLAS ZCL_TEST --format json                  # fetch from SAP + parse
 ```
 
 **WASM compiler verified:** 3-way correctness proof on 12 functions (add, factorial, fibonacci, gcd, is_prime, abs, max, min, pow, sum_to, collatz, select) — Native WASM, Go compiler, and ABAP self-host on SAP all produce identical results.
@@ -172,11 +172,11 @@ vsp parse CLAS ZCL_TEST --format json                  # fetch from SAP + parse
 
 ### Lua Scripting
 
-vsp embeds a complete Lua 5.1 engine with 50+ SAP bindings. Use it for automation, analysis, debugging, and scripting.
+ARC-1 embeds a complete Lua 5.1 engine with 50+ SAP bindings. Use it for automation, analysis, debugging, and scripting.
 
 **Interactive REPL:**
 ```bash
-vsp -s dev lua
+arc1 -s dev lua
 ```
 ```lua
 lua> objs = searchObject("ZCL_VSP*")
@@ -202,19 +202,19 @@ lua> print(info.systemId, info.sapRelease)
 **Run scripts:**
 ```bash
 # Package audit — lint + parse + structure analysis
-vsp -s dev lua examples/scripts/package-audit.lua
+arc1 -s dev lua examples/scripts/package-audit.lua
 
 # Table explorer — interactive SQL queries
-vsp -s dev lua examples/scripts/table-explorer.lua
+arc1 -s dev lua examples/scripts/table-explorer.lua
 
 # Dependency check — transport readiness via WBCROSSGT
-vsp -s dev lua examples/scripts/dependency-check.lua
+arc1 -s dev lua examples/scripts/dependency-check.lua
 
 # Debug session — set breakpoints, step through code
-vsp -s dev lua examples/scripts/debug-session.lua
+arc1 -s dev lua examples/scripts/debug-session.lua
 
 # Record execution — capture variable changes over time
-vsp -s dev lua examples/scripts/record-debug-session.lua
+arc1 -s dev lua examples/scripts/record-debug-session.lua
 ```
 
 **Complete Lua API (50+ functions):**
@@ -239,13 +239,13 @@ Declarative automation via YAML files with variable substitution, step chaining,
 
 ```bash
 # CI pipeline: discover → syntax check → test → fail on errors
-vsp -s dev workflow run examples/workflows/ci-pipeline.yaml
+arc1 -s dev workflow run examples/workflows/ci-pipeline.yaml
 
 # Quality gate with variables
-vsp -s dev workflow run examples/workflows/quality-gate.yaml --var PACKAGE='$ZADT_VSP'
+arc1 -s dev workflow run examples/workflows/quality-gate.yaml --var PACKAGE='$ZADT_VSP'
 
 # Dry run (preview without executing)
-vsp -s dev workflow run pipeline.yaml --dry-run
+arc1 -s dev workflow run pipeline.yaml --dry-run
 ```
 
 **Example workflow:**
@@ -300,18 +300,18 @@ pipeline := dsl.DeployPipeline(client, "./src/", "$ZRAY")
 
 ```bash
 # Deploy source files (supports abapGit-compatible extensions)
-vsp deploy zcl_test.clas.abap '$TMP'
-vsp deploy zreport.prog.abap '$TMP' --transport A4HK900001
+arc1 deploy zcl_test.clas.abap '$TMP'
+arc1 deploy zreport.prog.abap '$TMP' --transport A4HK900001
 
 # Transport management
-vsp transport list
-vsp transport list --user DEVELOPER
-vsp transport get A4HK900001
+arc1 transport list
+arc1 transport list --user DEVELOPER
+arc1 transport get A4HK900001
 
 # Install components to SAP
-vsp install zadt-vsp          # deploy ZADT_VSP service classes
-vsp install abapgit           # deploy abapGit
-vsp install list              # check what's installed
+arc1 install zadt-vsp          # deploy ZADT_VSP service classes
+arc1 install abapgit           # deploy abapGit
+arc1 install list              # check what's installed
 ```
 
 **Requirements:** Standard ADT for deploy. `install` creates objects in `$TMP` or specified package.
@@ -320,23 +320,23 @@ vsp install list              # check what's installed
 
 ```bash
 # Run code on SAP
-vsp execute "WRITE sy-datum."
-vsp execute --file script.abap
-echo "WRITE 'hello'." | vsp execute --stdin
+arc1 execute "WRITE sy-datum."
+arc1 execute --file script.abap
+echo "WRITE 'hello'." | arc1 execute --stdin
 ```
 
 **Requirements:** Write permissions. Uses ExecuteABAP (unit test wrapper).
-If blocked: `vsp install zadt-vsp` for WebSocket-based execution.
+If blocked: `arc1 install zadt-vsp` for WebSocket-based execution.
 
 ### Export & Import
 
 ```bash
 # Export packages to ZIP (abapGit format)
-vsp export '$ZPACKAGE' -o backup.zip
-vsp export '$ZORK' '$ZLLM' -o combined.zip --subpackages
+arc1 export '$ZPACKAGE' -o backup.zip
+arc1 export '$ZORK' '$ZLLM' -o combined.zip --subpackages
 
 # Import from ZIP
-vsp copy backup.zip '$TMP'
+arc1 copy backup.zip '$TMP'
 ```
 
 **Requirements:** Export needs ZADT_VSP WebSocket. Standard ADT for import via deploy.
@@ -371,7 +371,7 @@ vsp copy backup.zip '$TMP'
 
 **Legend:**
 - **Standard ADT** — works with any SAP system that has ADT enabled (default since 7.50)
-- **ZADT_VSP** — enhanced features via `vsp install zadt-vsp` (WebSocket, RFC, Git export)
+- **ZADT_VSP** — enhanced features via `arc1 install zadt-vsp` (WebSocket, RFC, Git export)
 - **Node.js** — required for TypeScript parsing only
 - **Offline** — no SAP connection needed at all
 
@@ -379,7 +379,7 @@ vsp copy backup.zip '$TMP'
 
 ## Fallback Behavior
 
-vsp is designed to work with what's available:
+ARC-1 is designed to work with what's available:
 
 1. **No SAP connection?** → `lint`, `parse`, `compile wasm` work fully offline
 2. **Standard ADT only?** → `source`, `search`, `query`, `grep`, `graph`, `deps`, `lua`, `workflow`, `test`, `atc`, `deploy` all work
@@ -388,20 +388,20 @@ vsp is designed to work with what's available:
 5. **ADT call graph unavailable?** → `graph` falls back to WBCROSSGT/CROSS tables automatically
 
 ```
-$ vsp execute "WRITE 'hello'."
+$ arc1 execute "WRITE 'hello'."
 Error: ExecuteABAP requires write permissions.
 Check --read-only and --allowed-ops settings.
 
-$ vsp export '$TMP'
+$ arc1 export '$TMP'
 Error: WebSocket connect failed.
-Ensure ZADT_VSP is deployed: vsp install zadt-vsp
+Ensure ZADT_VSP is deployed: arc1 install zadt-vsp
 ```
 
 ---
 
 ## Multi-System Profiles
 
-Save system configs in `.vsp.json`:
+Save system configs in `.arc1.json`:
 
 ```json
 {
@@ -421,12 +421,12 @@ Save system configs in `.vsp.json`:
 ```
 
 ```bash
-vsp -s dev query T000
-vsp -s prod search "ZCL_*"
-vsp -s dev deploy myclass.clas.abap '$TMP'
+arc1 -s dev query T000
+arc1 -s prod search "ZCL_*"
+arc1 -s dev deploy myclass.clas.abap '$TMP'
 ```
 
-Passwords via env vars: `VSP_DEV_PASSWORD`, `VSP_PROD_PASSWORD`.
+Passwords via env vars: `ARC1_DEV_PASSWORD`, `ARC1_PROD_PASSWORD`.
 
 ---
 
@@ -434,30 +434,30 @@ Passwords via env vars: `VSP_DEV_PASSWORD`, `VSP_PROD_PASSWORD`.
 
 ```bash
 # CI/CD: test all custom code
-vsp -s dev test --package '$ZCUSTOM' || exit 1
+arc1 -s dev test --package '$ZCUSTOM' || exit 1
 
 # Lint local files before commit (git pre-commit hook)
-find src/ -name "*.abap" -exec vsp lint --file {} \;
+find src/ -name "*.abap" -exec arc1 lint --file {} \;
 
 # Export for backup
-vsp -s prod export '$ZPRODUCTION' -o "backup-$(date +%F).zip"
+arc1 -s prod export '$ZPRODUCTION' -o "backup-$(date +%F).zip"
 
 # Compile WASM and deploy
-vsp compile wasm calculator.wasm -o ./build/
-vsp -s dev deploy ./build/zcl_wasm_calculator.clas.abap '$TMP'
+arc1 compile wasm calculator.wasm -o ./build/
+arc1 -s dev deploy ./build/zcl_wasm_calculator.clas.abap '$TMP'
 
 # Query and filter with Unix pipes
-vsp -s dev query TADIR --where "DEVCLASS = '\$TMP'" --top 50 | grep CLAS
+arc1 -s dev query TADIR --where "DEVCLASS = '\$TMP'" --top 50 | grep CLAS
 
 # Check transport readiness before release
-vsp -s dev deps '$ZFINANCE' --format summary
+arc1 -s dev deps '$ZFINANCE' --format summary
 
 # Who uses our interface? Impact analysis before change
-vsp -s dev graph INTF ZIF_ORDER_SERVICE --direction callers
+arc1 -s dev graph INTF ZIF_ORDER_SERVICE --direction callers
 
 # Automated quality gate via YAML
-vsp -s dev workflow run quality-gate.yaml --var PACKAGE='$ZFINANCE'
+arc1 -s dev workflow run quality-gate.yaml --var PACKAGE='$ZFINANCE'
 
 # Scripted audit via Lua
-vsp -s dev lua audit-package.lua
+arc1 -s dev lua audit-package.lua
 ```

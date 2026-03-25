@@ -1,13 +1,13 @@
 ---
-# Cloud Foundry deployment manifest for vsp MCP server on SAP BTP.
+# Cloud Foundry deployment manifest for ARC-1 MCP server on SAP BTP.
 # Credentials are NOT stored here — set them via:
-#   cf set-env vsp-mcp-server SAP_USER "<user>"
-#   cf set-env vsp-mcp-server SAP_PASSWORD "<password>"
-#   cf set-env vsp-mcp-server VSP_API_KEY "<api-key>"
+#   cf set-env arc1-mcp-server SAP_USER "<user>"
+#   cf set-env arc1-mcp-server SAP_PASSWORD "<password>"
+#   cf set-env arc1-mcp-server VSP_API_KEY "<api-key>"
 applications:
-  - name: vsp-mcp-server
+  - name: arc1-mcp-server
     docker:
-      image: ghcr.io/marianfoo/vsp:latest
+      image: ghcr.io/marianfoo/arc1:latest
     instances: 1
     memory: 256M
     disk_quota: 512M
@@ -21,12 +21,9 @@ applications:
       SAP_INSECURE: "true"
       # MCP transport (CF sets PORT env var automatically)
       SAP_TRANSPORT: "http-streamable"
-      # Tool mode
-      SAP_MODE: "focused"
-      # Safety: read-only, no SQL, no debugger/HANA/tests
+      # Safety: read-only, no SQL
       SAP_READ_ONLY: "true"
       SAP_BLOCK_FREE_SQL: "true"
-      SAP_DISABLED_GROUPS: "DHT"
       # Logging
       SAP_VERBOSE: "true"
     services:

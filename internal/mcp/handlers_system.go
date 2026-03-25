@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/oisee/vibing-steampunk/pkg/adt"
+	"github.com/marianfoo/arc-1/pkg/adt"
 )
 
 // routeSystemAction routes "system" info/components/connection/features.
@@ -57,7 +57,7 @@ func (s *Server) handleGetConnectionInfo(ctx context.Context, request mcp.CallTo
 		"user":   s.config.Username,
 		"url":    s.config.BaseURL,
 		"client": s.config.Client,
-		"mode":   s.config.Mode,
+		"mode":   "arc1",
 	}
 
 	// Add feature summary

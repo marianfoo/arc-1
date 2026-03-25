@@ -1,4 +1,4 @@
-module github.com/oisee/vibing-steampunk
+module github.com/marianfoo/arc-1
 
 go 1.23.0
 

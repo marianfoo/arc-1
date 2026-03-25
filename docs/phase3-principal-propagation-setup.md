@@ -13,7 +13,7 @@ Authenticate each MCP user to SAP with their own identity using ephemeral X.509 
 
 ```
 ┌──────────────────┐     OAuth JWT        ┌──────────────────────────────┐     mTLS (ephemeral cert)   ┌────────────┐
-│  MCP Client      │ ──────────────────► │  vsp Server                  │ ────────────────────────► │  SAP ABAP  │
+│  MCP Client      │ ──────────────────► │  arc1 Server                  │ ────────────────────────► │  SAP ABAP  │
 │  (IDE / Copilot) │                     │                              │   CN=<sap-username>      │  System    │
 └──────────────────┘                     │  1. Validate JWT (Phase 2)   │   Signed by trusted CA   │            │
                                          │  2. Extract username          │                          │  STRUST:   │
@@ -39,7 +39,7 @@ openssl genrsa -out ca.key 2048
 
 # Generate CA certificate (valid 10 years)
 openssl req -new -x509 -key ca.key -out ca.crt -days 3650 \
-  -subj "/CN=vsp-principal-propagation-ca/O=YourCompany/C=DE"
+  -subj "/CN=arc1-principal-propagation-ca/O=YourCompany/C=DE"
 
 # Verify
 openssl x509 -in ca.crt -text -noout
@@ -109,21 +109,21 @@ If SAP is on-premise behind BTP Cloud Connector:
 
 2. **Configure trusted reverse proxy** in SAP:
    ```
-   icm/trusted_reverse_proxy_0 = SUBJECT="CN=SCC, O=SAP, C=DE", ISSUER="CN=vsp-principal-propagation-ca, O=YourCompany, C=DE"
+   icm/trusted_reverse_proxy_0 = SUBJECT="CN=SCC, O=SAP, C=DE", ISSUER="CN=arc1-principal-propagation-ca, O=YourCompany, C=DE"
    ```
 
 3. **Enable principal propagation** in Cloud Connector:
    - Cloud to On-Premises → system mapping → Allow Principal Propagation
    - Principal type: X.509 Certificate
 
-## Step 3: Start vsp with Principal Propagation
+## Step 3: Start arc1 with Principal Propagation
 
 ```bash
-vsp --url https://sap.example.com:44300 \
+arc1 --url https://sap.example.com:44300 \
     --transport http-streamable \
     --http-addr 0.0.0.0:8080 \
     --oidc-issuer 'https://login.microsoftonline.com/{tenant-id}/v2.0' \
-    --oidc-audience 'api://vsp-sap-connector' \
+    --oidc-audience 'api://arc1-sap-connector' \
     --pp-ca-key ca.key \
     --pp-ca-cert ca.crt \
     --pp-cert-ttl 5m \
@@ -137,7 +137,7 @@ export SAP_URL=https://sap.example.com:44300
 export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
 export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
-export SAP_OIDC_AUDIENCE='api://vsp-sap-connector'
+export SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
 export SAP_PP_CA_KEY=/secrets/ca.key
 export SAP_PP_CA_CERT=/secrets/ca.crt
 export SAP_PP_CERT_TTL=5m
@@ -149,23 +149,23 @@ export SAP_PP_CERT_TTL=5m
 
 ```bash
 # Get an OAuth token
-TOKEN=$(az account get-access-token --resource api://vsp-sap-connector --query accessToken -o tsv)
+TOKEN=$(az account get-access-token --resource api://arc1-sap-connector --query accessToken -o tsv)
 
-# Call vsp — it will generate an ephemeral cert for your user and authenticate to SAP
-curl -H "Authorization: Bearer $TOKEN" https://vsp.company.com/mcp \
+# Call arc1 — it will generate an ephemeral cert for your user and authenticate to SAP
+curl -H "Authorization: Bearer $TOKEN" https://arc1.company.com/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
 ## How It Works (Per Request)
 
 1. MCP client sends request with `Authorization: Bearer <jwt>`
-2. vsp validates JWT signature, issuer, audience, expiry
-3. vsp extracts SAP username from JWT claim (e.g., `preferred_username`)
-4. vsp generates ephemeral X.509 certificate:
+2. ARC-1 validates JWT signature, issuer, audience, expiry
+3. ARC-1 extracts SAP username from JWT claim (e.g., `preferred_username`)
+4. ARC-1 generates ephemeral X.509 certificate:
    - Subject CN = SAP username (e.g., `DEVELOPER`)
    - Valid for 5 minutes
    - Signed by the CA key
-5. vsp creates a per-request HTTPS client with the ephemeral cert
+5. ARC-1 creates a per-request HTTPS client with the ephemeral cert
 6. SAP receives the mTLS connection, verifies the cert against STRUST
 7. SAP maps Subject CN to SAP user via CERTRULE
 8. SAP processes the ADT request as that user
@@ -184,7 +184,7 @@ curl -H "Authorization: Bearer $TOKEN" https://vsp.company.com/mcp \
 ### Certificate Mapping Not Working
 
 1. Open transaction **`/nCERTRULE`**
-2. Upload the actual ephemeral cert (from vsp verbose logs) to test the mapping
+2. Upload the actual ephemeral cert (from arc1 verbose logs) to test the mapping
 3. Verify the rule matches
 
 ### Cloud Connector Issues
