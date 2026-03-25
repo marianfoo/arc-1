@@ -2,6 +2,8 @@
 
 This file provides context for developers and AI assistants (Claude, etc.) working on this project.
 
+> **Repository:** [marianfoo/vibing-steampunk](https://github.com/marianfoo/vibing-steampunk) — the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
+
 ## Project Overview
 
 **vsp** is a Go-native MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides a single-binary distribution with 81 essential tools (focused mode, default) or 122 complete tools (expert mode) for use with Claude and other MCP-compatible LLMs.

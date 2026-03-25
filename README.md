@@ -4,6 +4,8 @@
 
 vsp is a single Go binary that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and translates AI tool calls into [SAP ABAP Development Tools (ADT)](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools) REST API requests. It works with Claude, GitHub Copilot, VS Code, and any MCP-compatible client.
 
+> **This repository** ([marianfoo/vibing-steampunk](https://github.com/marianfoo/vibing-steampunk)) is the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
+
 ![Vibing ABAP Developer](./media/vibing-steampunk.png)
 
 ## Why vsp?
@@ -29,11 +31,11 @@ As an **admin**, you control what the AI can and cannot do:
 
 ```bash
 # Download from releases
-curl -LO https://github.com/oisee/vibing-steampunk/releases/latest/download/vsp-linux-amd64
+curl -LO https://github.com/marianfoo/vibing-steampunk/releases/latest/download/vsp-linux-amd64
 chmod +x vsp-linux-amd64 && mv vsp-linux-amd64 vsp
 
 # Or build from source
-git clone https://github.com/oisee/vibing-steampunk.git && cd vibing-steampunk
+git clone https://github.com/marianfoo/vibing-steampunk.git && cd vibing-steampunk
 make build
 ```
 
