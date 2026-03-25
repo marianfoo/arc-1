@@ -626,3 +626,155 @@ export SAP_INSECURE=true
 
 or use the plain HTTP URL (`http://server-ip:50000`). Let's Encrypt certificates
 do not require `SAP_INSECURE`.
+
+---
+
+## X.509 Certificate Authentication Setup (mTLS)
+
+This section describes how to configure the SAP trial system for X.509 client
+certificate authentication. This is required for testing mTLS and principal
+propagation features.
+
+### Generate Test CA and Client Certificate
+
+```bash
+# Generate CA (self-signed, for testing only)
+openssl genrsa -out ca.key 4096
+openssl req -new -x509 -key ca.key -out ca.crt -days 365 \
+  -subj "/CN=vsp-test-ca/O=vsp testing"
+
+# Generate client certificate for the DEVELOPER user
+openssl genrsa -out developer.key 2048
+openssl req -new -key developer.key -out developer.csr \
+  -subj "/CN=DEVELOPER"
+openssl x509 -req -in developer.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out developer.crt -days 365
+
+# Verify the certificate
+openssl x509 -in developer.crt -text -noout | grep Subject
+# Expected: Subject: CN = DEVELOPER
+```
+
+### Import CA into SAP STRUST
+
+The CA certificate must be added to the SAP system's trust store so it can
+verify client certificates signed by this CA.
+
+**Option A: Via SAP GUI (if available)**
+
+1. Open transaction `/nSTRUST`
+2. Navigate to **SSL Server Standard** PSE
+3. Click **Import** in the Certificate section
+4. Paste the content of `ca.crt`
+5. Click **Add to Certificate List**
+6. Save
+
+**Option B: Via HANA SQL (for headless trial system)**
+
+The trial system may not have SAP GUI access. In this case, use the HANA SQL
+approach to insert the certificate directly:
+
+```bash
+docker exec -it a4h bash
+su - a4hadm
+
+# Copy the CA cert content (base64 encoded)
+cat /path/to/ca.crt | base64 -w0
+
+# Use sapgenpse to import (if available)
+# Or use the STRUST-related ABAP program via SM38
+```
+
+> **Note:** Direct STRUST manipulation via SQL is complex. The recommended approach
+> is to use SAP GUI or ADT's STRUST functionality. If you have ADT access from
+> Eclipse, you can use the STRUST transaction there.
+
+### Configure SAP Profile for Certificate Login
+
+Edit the instance profile inside the container:
+
+```bash
+docker exec -it a4h bash
+vi /usr/sap/A4H/SYS/profile/A4H_D00_vhcala4hci
+```
+
+Add these parameters:
+
+```
+# Enable rule-based certificate mapping (allows CERTRULE to work)
+login/certificate_mapping_rulebased = 1
+
+# Accept client certificates during TLS handshake
+# 0 = don't request, 1 = request (optional), 2 = require
+icm/HTTPS/verify_client = 1
+```
+
+### Configure Certificate Mapping Rule (CERTRULE)
+
+This tells SAP how to map the certificate's Subject CN to a SAP user.
+
+1. Open transaction `/nCERTRULE` in SAP GUI or ADT
+2. Import the client certificate (`developer.crt`)
+3. Create a rule:
+   - Certificate Attribute: `Subject CN`
+   - Login As: `Use CN value as SAP username`
+4. Save and activate
+
+### Restart SAP ICM
+
+After profile and CERTRULE changes:
+
+```bash
+# Restart ABAP (not the whole container)
+docker exec a4h /usr/sap/hostctrl/exe/sapcontrol -nr 00 -function Stop
+# Wait ~60s
+docker exec a4h /usr/sap/hostctrl/exe/sapcontrol -nr 00 -function Start
+```
+
+### Test Certificate Authentication
+
+```bash
+# Test with curl (using the HTTPS port)
+curl --cert developer.crt --key developer.key \
+  --cacert ca.crt \
+  "https://<your-subdomain>/sap/bc/adt/core/discovery?sap-client=001"
+
+# Test with vsp
+./vsp --url https://<your-subdomain> \
+  --client-cert developer.crt \
+  --client-key developer.key \
+  --ca-cert ca.crt \
+  --verbose
+
+# If using the trial system's Let's Encrypt cert (no --ca-cert needed):
+./vsp --url https://<your-subdomain> \
+  --client-cert developer.crt \
+  --client-key developer.key
+```
+
+> **Important:** The `--ca-cert` flag is for trusting the SAP **server** certificate.
+> If your SAP system uses Let's Encrypt (as configured in the HTTPS section above),
+> the system's default CA store already trusts it and `--ca-cert` is not needed.
+> The client certificate (`--client-cert`) is what SAP uses to authenticate the
+> user — these are two different certificates for two different purposes.
+
+### Principal Propagation Test Setup
+
+To test principal propagation (OIDC → ephemeral X.509), the SAP configuration
+is the same as above. The CA in STRUST is the same CA that signs the ephemeral
+certificates.
+
+```bash
+# Test ephemeral cert generation + SAP auth
+./vsp --url https://<your-subdomain> \
+  --pp-ca-key ca.key \
+  --pp-ca-cert ca.crt \
+  --oidc-issuer https://login.microsoftonline.com/{tenant-id}/v2.0 \
+  --oidc-audience api://vsp-test \
+  --transport http-streamable \
+  --verbose
+```
+
+For full OIDC + principal propagation testing, you also need an EntraID app
+registration. See [docs/enterprise-auth.md](enterprise-auth.md) for the
+complete setup guide.

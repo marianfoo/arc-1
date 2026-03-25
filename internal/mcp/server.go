@@ -97,11 +97,27 @@ type Config struct {
 	FeatureUI5       string // UI5/Fiori BSP management
 	FeatureTransport string // CTS transport management (distinct from EnableTransports safety)
 
+	// X.509 client certificate authentication (mTLS)
+	ClientCertFile string // Path to PEM client certificate
+	ClientKeyFile  string // Path to PEM private key
+	CACertFile     string // Path to PEM CA certificate (for custom CAs)
+
 	// OAuth2/XSUAA authentication (for BTP/Cloud systems)
 	ServiceKeyFile    string // Path to service key JSON file
 	OAuthURL          string // OAuth2 token endpoint URL
 	OAuthClientID     string // OAuth2 client ID
 	OAuthClientSecret string // OAuth2 client secret
+
+	// OIDC token validation (for incoming MCP HTTP requests)
+	OIDCIssuer        string // OIDC issuer URL (e.g., https://login.microsoftonline.com/{tenant}/v2.0)
+	OIDCAudience      string // Expected audience claim
+	OIDCUsernameClaim string // JWT claim for SAP username (default: preferred_username)
+	OIDCUserMapping   string // Path to username mapping YAML file
+
+	// Principal propagation (OIDC identity → ephemeral X.509 cert → SAP mTLS)
+	PPCAKeyFile  string // CA private key for signing ephemeral certs
+	PPCACertFile string // CA certificate (must be trusted in SAP STRUST)
+	PPCertTTL    string // Certificate validity duration (e.g., "5m")
 
 	// Debugger configuration
 	TerminalID string // SAP GUI terminal ID for cross-tool breakpoint sharing
@@ -160,6 +176,14 @@ func NewServer(cfg *Config) *Server {
 		safety.AllowTransportableEdits = true
 	}
 	opts = append(opts, adt.WithSafety(safety))
+
+	// Configure X.509 client certificate authentication
+	if cfg.ClientCertFile != "" && cfg.ClientKeyFile != "" {
+		opts = append(opts, adt.WithClientCert(cfg.ClientCertFile, cfg.ClientKeyFile))
+	}
+	if cfg.CACertFile != "" {
+		opts = append(opts, adt.WithCACert(cfg.CACertFile))
+	}
 
 	// Configure OAuth/XSUAA authentication
 	if cfg.ServiceKeyFile != "" {

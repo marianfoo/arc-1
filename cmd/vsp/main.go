@@ -93,11 +93,27 @@ func init() {
 	rootCmd.Flags().String("cookie-file", "", "Path to cookie file in Netscape format")
 	rootCmd.Flags().String("cookie-string", "", "Cookie string (key1=val1; key2=val2)")
 
+	// X.509 client certificate authentication (mTLS)
+	rootCmd.Flags().String("client-cert", "", "Path to PEM client certificate for X.509 mTLS auth (SAP maps Subject CN to user via CERTRULE)")
+	rootCmd.Flags().String("client-key", "", "Path to PEM private key for X.509 mTLS auth")
+	rootCmd.Flags().String("ca-cert", "", "Path to PEM CA certificate (for SAP servers using internal/custom CAs)")
+
 	// OAuth2/XSUAA authentication (for BTP/Cloud systems)
 	rootCmd.Flags().String("service-key", "", "Path to SAP service key JSON file (BTP/XSUAA authentication)")
 	rootCmd.Flags().String("oauth-url", "", "OAuth2/XSUAA token endpoint URL")
 	rootCmd.Flags().String("oauth-client-id", "", "OAuth2 client ID")
 	rootCmd.Flags().String("oauth-client-secret", "", "OAuth2 client secret")
+
+	// OIDC token validation (for incoming MCP requests in HTTP Streamable mode)
+	rootCmd.Flags().String("oidc-issuer", "", "OIDC issuer URL for token validation (e.g., https://login.microsoftonline.com/{tenant}/v2.0)")
+	rootCmd.Flags().String("oidc-audience", "", "Expected OIDC token audience claim")
+	rootCmd.Flags().String("oidc-username-claim", "preferred_username", "JWT claim to extract SAP username from")
+	rootCmd.Flags().String("oidc-user-mapping", "", "Path to YAML file mapping OIDC usernames to SAP usernames")
+
+	// Principal propagation (OIDC identity → ephemeral X.509 cert → SAP mTLS)
+	rootCmd.Flags().String("pp-ca-key", "", "CA private key for signing ephemeral certs (PEM)")
+	rootCmd.Flags().String("pp-ca-cert", "", "CA certificate matching the key (must be trusted in SAP STRUST)")
+	rootCmd.Flags().String("pp-cert-ttl", "5m", "Validity duration for ephemeral certificates (e.g., 5m, 1h)")
 
 	// Safety options
 	rootCmd.Flags().BoolVar(&cfg.ReadOnly, "read-only", false, "Block all write operations (create, update, delete, activate)")
@@ -140,10 +156,20 @@ func init() {
 	viper.BindPFlag("insecure", rootCmd.Flags().Lookup("insecure"))
 	viper.BindPFlag("cookie-file", rootCmd.Flags().Lookup("cookie-file"))
 	viper.BindPFlag("cookie-string", rootCmd.Flags().Lookup("cookie-string"))
+	viper.BindPFlag("client-cert", rootCmd.Flags().Lookup("client-cert"))
+	viper.BindPFlag("client-key", rootCmd.Flags().Lookup("client-key"))
+	viper.BindPFlag("ca-cert", rootCmd.Flags().Lookup("ca-cert"))
 	viper.BindPFlag("service-key", rootCmd.Flags().Lookup("service-key"))
 	viper.BindPFlag("oauth-url", rootCmd.Flags().Lookup("oauth-url"))
 	viper.BindPFlag("oauth-client-id", rootCmd.Flags().Lookup("oauth-client-id"))
 	viper.BindPFlag("oauth-client-secret", rootCmd.Flags().Lookup("oauth-client-secret"))
+	viper.BindPFlag("oidc-issuer", rootCmd.Flags().Lookup("oidc-issuer"))
+	viper.BindPFlag("oidc-audience", rootCmd.Flags().Lookup("oidc-audience"))
+	viper.BindPFlag("oidc-username-claim", rootCmd.Flags().Lookup("oidc-username-claim"))
+	viper.BindPFlag("oidc-user-mapping", rootCmd.Flags().Lookup("oidc-user-mapping"))
+	viper.BindPFlag("pp-ca-key", rootCmd.Flags().Lookup("pp-ca-key"))
+	viper.BindPFlag("pp-ca-cert", rootCmd.Flags().Lookup("pp-ca-cert"))
+	viper.BindPFlag("pp-cert-ttl", rootCmd.Flags().Lookup("pp-cert-ttl"))
 	viper.BindPFlag("read-only", rootCmd.Flags().Lookup("read-only"))
 	viper.BindPFlag("block-free-sql", rootCmd.Flags().Lookup("block-free-sql"))
 	viper.BindPFlag("allowed-ops", rootCmd.Flags().Lookup("allowed-ops"))
@@ -205,10 +231,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP URL: %s\n", cfg.BaseURL)
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Client: %s\n", cfg.Client)
 		fmt.Fprintf(os.Stderr, "[VERBOSE] SAP Language: %s\n", cfg.Language)
-		if cfg.Username != "" {
+		if cfg.PPCAKeyFile != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Principal Propagation (OIDC → ephemeral X.509)\n")
+		} else if cfg.ClientCertFile != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: X.509 mTLS (cert: %s)\n", cfg.ClientCertFile)
+		} else if cfg.ServiceKeyFile != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Service Key / OAuth2 XSUAA\n")
+		} else if cfg.OAuthURL != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: OAuth2 (url: %s)\n", cfg.OAuthURL)
+		} else if cfg.Username != "" {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Basic (user: %s)\n", cfg.Username)
 		} else if len(cfg.Cookies) > 0 {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Auth: Cookie (%d cookies)\n", len(cfg.Cookies))
+		}
+		if cfg.OIDCIssuer != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] OIDC: Issuer=%s, Audience=%s\n", cfg.OIDCIssuer, cfg.OIDCAudience)
+		}
+		if cfg.CACertFile != "" {
+			fmt.Fprintf(os.Stderr, "[VERBOSE] TLS: Custom CA cert: %s\n", cfg.CACertFile)
 		}
 
 		// Safety status
@@ -464,6 +504,71 @@ func processCookieAuth(cmd *cobra.Command) error {
 		cookieString = viper.GetString("COOKIE_STRING")
 	}
 
+	// Process X.509 client certificate auth
+	clientCert := viper.GetString("CLIENT_CERT")
+	if cc, _ := cmd.Flags().GetString("client-cert"); cc != "" {
+		clientCert = cc
+	}
+	clientKey := viper.GetString("CLIENT_KEY")
+	if ck, _ := cmd.Flags().GetString("client-key"); ck != "" {
+		clientKey = ck
+	}
+	caCert := viper.GetString("CA_CERT")
+	if ca, _ := cmd.Flags().GetString("ca-cert"); ca != "" {
+		caCert = ca
+	}
+
+	if clientCert != "" {
+		cfg.ClientCertFile = clientCert
+	}
+	if clientKey != "" {
+		cfg.ClientKeyFile = clientKey
+	}
+	if caCert != "" {
+		cfg.CACertFile = caCert
+	}
+
+	// Process OIDC configuration
+	oidcIssuer := viper.GetString("OIDC_ISSUER")
+	if v, _ := cmd.Flags().GetString("oidc-issuer"); v != "" {
+		oidcIssuer = v
+	}
+	oidcAudience := viper.GetString("OIDC_AUDIENCE")
+	if v, _ := cmd.Flags().GetString("oidc-audience"); v != "" {
+		oidcAudience = v
+	}
+	oidcUsernameClaim := viper.GetString("OIDC_USERNAME_CLAIM")
+	if v, _ := cmd.Flags().GetString("oidc-username-claim"); v != "" {
+		oidcUsernameClaim = v
+	}
+	oidcUserMapping := viper.GetString("OIDC_USER_MAPPING")
+	if v, _ := cmd.Flags().GetString("oidc-user-mapping"); v != "" {
+		oidcUserMapping = v
+	}
+
+	cfg.OIDCIssuer = oidcIssuer
+	cfg.OIDCAudience = oidcAudience
+	cfg.OIDCUsernameClaim = oidcUsernameClaim
+	cfg.OIDCUserMapping = oidcUserMapping
+
+	// Process principal propagation configuration
+	ppCAKey := viper.GetString("PP_CA_KEY")
+	if v, _ := cmd.Flags().GetString("pp-ca-key"); v != "" {
+		ppCAKey = v
+	}
+	ppCACert := viper.GetString("PP_CA_CERT")
+	if v, _ := cmd.Flags().GetString("pp-ca-cert"); v != "" {
+		ppCACert = v
+	}
+	ppCertTTL := viper.GetString("PP_CERT_TTL")
+	if v, _ := cmd.Flags().GetString("pp-cert-ttl"); v != "" {
+		ppCertTTL = v
+	}
+
+	cfg.PPCAKeyFile = ppCAKey
+	cfg.PPCACertFile = ppCACert
+	cfg.PPCertTTL = ppCertTTL
+
 	// Process OAuth/service key
 	serviceKeyFile := viper.GetString("SERVICE_KEY")
 	if sk, _ := cmd.Flags().GetString("service-key"); sk != "" {
@@ -506,19 +611,26 @@ func processCookieAuth(cmd *cobra.Command) error {
 	if cookieString != "" {
 		authMethods++
 	}
+	if clientCert != "" && clientKey != "" {
+		authMethods++
+	}
 	if serviceKeyFile != "" {
 		authMethods++
 	}
 	if oauthURL != "" && oauthClientID != "" {
 		authMethods++
 	}
+	if ppCAKey != "" && ppCACert != "" {
+		// Principal propagation is its own auth method (OIDC identity → ephemeral cert)
+		authMethods++
+	}
 
 	if authMethods > 1 {
-		return fmt.Errorf("only one authentication method can be used at a time (basic auth, cookie-file, cookie-string, service-key, or oauth)")
+		return fmt.Errorf("only one authentication method can be used at a time (basic auth, cookie-file, cookie-string, client-cert, service-key, oauth, or principal-propagation)")
 	}
 
 	if authMethods == 0 {
-		return fmt.Errorf("authentication required. Use --user/--password, --cookie-file, --cookie-string, --service-key, or --oauth-url/--oauth-client-id/--oauth-client-secret")
+		return fmt.Errorf("authentication required. Use --user/--password, --cookie-file, --cookie-string, --client-cert/--client-key, --service-key, --oauth-url/--oauth-client-id/--oauth-client-secret, or --pp-ca-key/--pp-ca-cert")
 	}
 
 	// Process cookie file
