@@ -1,96 +1,73 @@
 # =============================================================================
 # ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP systems
-# Multi-stage build: builder (CGO + gcc) → minimal Alpine runtime
+# Multi-stage build: npm ci + tsc → minimal Node.js runtime
+#
+# Build:  docker build -t arc-1 .
+# Run:    docker run -p 8080:8080 -e SAP_URL=... -e SAP_USER=... arc-1
 # =============================================================================
 
 # --- Build Stage -------------------------------------------------------------
-FROM golang:1.23-alpine AS builder
+FROM node:22-alpine AS builder
 
-# CGO is required for go-sqlite3
-RUN apk add --no-cache gcc musl-dev
+# better-sqlite3 requires build tools for native addon compilation
+RUN apk add --no-cache python3 make g++
 
-WORKDIR /src
+WORKDIR /app
 
 # Cache dependencies separately from source
-COPY go.mod go.sum ./
-RUN go mod download
+COPY package*.json ./
+RUN npm ci
 
 # Copy source and build
-COPY . .
+COPY tsconfig.json ./
+COPY ts-src/ ./ts-src/
+RUN npm run build
 
-# Build args for version injection (pass via --build-arg or CI)
-ARG VERSION=dev
-ARG COMMIT=unknown
-ARG BUILD_DATE=unknown
-
-RUN CGO_ENABLED=1 GOOS=linux go build \
-    -ldflags="-s -w \
-      -X main.Version=${VERSION} \
-      -X main.Commit=${COMMIT} \
-      -X main.BuildDate=${BUILD_DATE}" \
-    -o /arc1 ./cmd/arc1
+# Remove dev dependencies for smaller image
+RUN npm prune --omit=dev
 
 # --- Runtime Stage -----------------------------------------------------------
-FROM alpine:3.21
+FROM node:22-alpine
 
-# ca-certificates: needed for HTTPS connections to SAP systems with valid TLS
-# libgcc / libstdc++: required by CGO-compiled go-sqlite3
-RUN apk add --no-cache ca-certificates libgcc libstdc++
+# tini: proper PID 1 init (handles SIGTERM gracefully)
+# ca-certificates: needed for HTTPS connections to SAP systems
+RUN apk add --no-cache tini ca-certificates
 
 # Run as non-root user
 RUN addgroup -S arc1 && adduser -S arc1 -G arc1
-
 WORKDIR /home/arc1
 
-COPY --from=builder /arc1 /usr/local/bin/arc1
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
 
 USER arc1
 
 # ─── Connection ──────────────────────────────────────────────────────────────
-# SAP system URL (required)
 ENV SAP_URL=""
-# Basic auth
 ENV SAP_USER=""
 ENV SAP_PASSWORD=""
-# SAP client / language
 ENV SAP_CLIENT="001"
 ENV SAP_LANGUAGE="EN"
-# Skip TLS verification (set to "true" for self-signed certs)
 ENV SAP_INSECURE="false"
 
 # ─── Safety ──────────────────────────────────────────────────────────────────
-# Block ALL write operations (read-only access to the SAP system)
 ENV SAP_READ_ONLY="false"
-# Block arbitrary SQL via RunQuery
 ENV SAP_BLOCK_FREE_SQL="false"
-# Whitelist operation types: R=Read, S=Search, Q=Query, C=Create, D=Delete,
-#   U=Update, A=Activate  (e.g. "RSQ" = read-only equivalent via allowlist)
 ENV SAP_ALLOWED_OPS=""
-# Blacklist operation types (e.g. "CDUA" blocks create/delete/update/activate)
 ENV SAP_DISALLOWED_OPS=""
-# Restrict to packages, comma-separated, wildcards OK  (e.g. "Z*,$TMP")
 ENV SAP_ALLOWED_PACKAGES=""
-# Allow editing objects that need a transport request
 ENV SAP_ALLOW_TRANSPORTABLE_EDITS="false"
 
-# ─── MCP Transport ───────────────────────────────────────────────────────────
-# stdio  = default, for local MCP client spawning docker run -i
-# http-streamable = recommended for containerised / remote deployments
+# ─── MCP Transport ──────────────────────────────────────────────────────────
+# http-streamable is the default for Docker (not stdio)
 ENV SAP_TRANSPORT="http-streamable"
-# Listen on all interfaces so the container port is reachable from the host.
-# Override with SAP_HTTP_ADDR=127.0.0.1:8080 to restrict to localhost.
 ENV SAP_HTTP_ADDR="0.0.0.0:8080"
 
-# ─── Transport Management ────────────────────────────────────────────────────
-# Enable CTS transport tools (disabled by default)
+# ─── Transport Management ───────────────────────────────────────────────────
 ENV SAP_ENABLE_TRANSPORTS="false"
-# Allow only read operations on transports
-ENV SAP_TRANSPORT_READ_ONLY="false"
-# Restrict to specific transports, comma-separated, wildcards OK
-ENV SAP_ALLOWED_TRANSPORTS=""
 
-# ─── Feature Flags ───────────────────────────────────────────────────────────
-# Each accepts: auto (default) | on | off
+# ─── Feature Flags ──────────────────────────────────────────────────────────
 ENV SAP_FEATURE_ABAPGIT="auto"
 ENV SAP_FEATURE_RAP="auto"
 ENV SAP_FEATURE_AMDP="auto"
@@ -98,15 +75,9 @@ ENV SAP_FEATURE_UI5="auto"
 ENV SAP_FEATURE_TRANSPORT="auto"
 ENV SAP_FEATURE_HANA="auto"
 
-# ─── Debugger ────────────────────────────────────────────────────────────────
-# Match SAP GUI terminal ID for shared breakpoints
-ENV SAP_TERMINAL_ID=""
-
-# ─── Output ──────────────────────────────────────────────────────────────────
 ENV SAP_VERBOSE="false"
 
-# Expose the MCP streamable HTTP port (default transport in this image).
-# Map to any host port: docker run -p 8080:8080 ...
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/arc1"]
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "dist/index.js"]

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <COLUMNS>
+      <COLUMN>
+        <METADATA name="MANDT" type="CLNT" description="Client" length="3" keyAttribute="true"/>
+        <DATASET>
+          <DATA>001</DATA>
+          <DATA>002</DATA>
+        </DATASET>
+      </COLUMN>
+      <COLUMN>
+        <METADATA name="MTEXT" type="CHAR" description="Client Name" length="25" keyAttribute="false"/>
+        <DATASET>
+          <DATA>Production</DATA>
+          <DATA>Test</DATA>
+        </DATASET>
+      </COLUMN>
+      <COLUMN>
+        <METADATA name="LOGSYS" type="CHAR" description="Logical System" length="10" keyAttribute="false"/>
+        <DATASET>
+          <DATA>PRODCLNT001</DATA>
+          <DATA>TESTCLNT002</DATA>
+        </DATASET>
+      </COLUMN>
+    </COLUMNS>
+  </asx:values>
+</asx:abap>

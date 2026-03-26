@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:author><atom:name>SAP SE</atom:name></atom:author>
+  <atom:title>Installed Components</atom:title>
+  <atom:updated>2026-03-26T18:56:33Z</atom:updated>
+  <atom:entry>
+    <atom:id>SAP_BASIS</atom:id>
+    <atom:title>753;SAPKB75308;0099;SAP Basis Component</atom:title>
+  </atom:entry>
+  <atom:entry>
+    <atom:id>SAP_ABA</atom:id>
+    <atom:title>753;SAPKA75308;0099;Cross-Application Component</atom:title>
+  </atom:entry>
+  <atom:entry>
+    <atom:id>SAP_GWFND</atom:id>
+    <atom:title>753;SAPK-75308INSAPGWFND;0099;SAP Gateway Foundation</atom:title>
+  </atom:entry>
+</atom:feed>

@@ -79,3 +79,9 @@ node_modules/
 
 # Claude worktrees
 .claude/worktrees/
+
+# TypeScript / Node.js
+dist/
+node_modules/
+*.tsbuildinfo
+.vitest/

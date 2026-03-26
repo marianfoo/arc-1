@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <TREE_CONTENT>
+        <SEU_ADT_REPOSITORY_OBJ_NODE>
+          <OBJECT_TYPE>PROG/P</OBJECT_TYPE>
+          <OBJECT_NAME>ZTEST_REPORT</OBJECT_NAME>
+          <OBJECT_URI>/sap/bc/adt/programs/programs/ZTEST_REPORT</OBJECT_URI>
+          <DESCRIPTION>Test Report</DESCRIPTION>
+        </SEU_ADT_REPOSITORY_OBJ_NODE>
+        <SEU_ADT_REPOSITORY_OBJ_NODE>
+          <OBJECT_TYPE>CLAS/OC</OBJECT_TYPE>
+          <OBJECT_NAME>ZCL_HELPER</OBJECT_NAME>
+          <OBJECT_URI>/sap/bc/adt/oo/classes/ZCL_HELPER</OBJECT_URI>
+          <DESCRIPTION>Helper Class</DESCRIPTION>
+        </SEU_ADT_REPOSITORY_OBJ_NODE>
+        <SEU_ADT_REPOSITORY_OBJ_NODE>
+          <OBJECT_TYPE>DEVC/K</OBJECT_TYPE>
+          <OBJECT_NAME>ZSUBPKG</OBJECT_NAME>
+          <OBJECT_URI></OBJECT_URI>
+          <DESCRIPTION>Sub Package</DESCRIPTION>
+        </SEU_ADT_REPOSITORY_OBJ_NODE>
+      </TREE_CONTENT>
+    </DATA>
+  </asx:values>
+</asx:abap>
