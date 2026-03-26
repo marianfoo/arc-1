@@ -118,6 +118,10 @@ type Config struct {
 	// API Key authentication (for centralized HTTP Streamable deployment)
 	APIKey string // Shared API key for authenticating MCP clients
 
+	// Public URL override for RFC 9728 Protected Resource Metadata
+	// Auto-detected from VCAP_APPLICATION on BTP CF if not set
+	PublicURL string
+
 	// Debugger configuration
 	TerminalID string // SAP GUI terminal ID for cross-tool breakpoint sharing
 
@@ -311,6 +315,12 @@ func (s *Server) ServeStreamableHTTP(addr string) error {
 		server.WithEndpointPath(DefaultStreamableHTTPPath),
 	)
 
+	// Resolve the public URL for RFC 9728 metadata
+	publicURL := s.config.PublicURL
+	if publicURL == "" {
+		publicURL = resolvePublicURL(addr)
+	}
+
 	// Build middleware chain (innermost to outermost)
 	var handler http.Handler = originValidationMiddleware(addr, mcpHandler)
 
@@ -323,7 +333,8 @@ func (s *Server) ServeStreamableHTTP(addr string) error {
 			UsernameClaim:   s.config.OIDCUsernameClaim,
 			UsernameMapping: loadUsernameMapping(s.config.OIDCUserMapping),
 		})
-		handler = adt.OIDCMiddleware(validator, handler)
+		metadataURL := publicURL + "/.well-known/oauth-protected-resource"
+		handler = adt.OIDCMiddleware(validator, metadataURL, handler)
 	} else if s.config.APIKey != "" {
 		// Phase 1: API Key authentication
 		handler = apiKeyMiddleware(s.config.APIKey, handler)
@@ -338,7 +349,7 @@ func (s *Server) ServeStreamableHTTP(addr string) error {
 	// Protected Resource Metadata (MCP OAuth spec, RFC 9728)
 	if s.config.OIDCIssuer != "" {
 		mux.HandleFunc("/.well-known/oauth-protected-resource",
-			protectedResourceMetadataHandler(addr, s.config.OIDCIssuer))
+			protectedResourceMetadataHandler(publicURL, s.config.OIDCIssuer))
 	}
 
 	return listenAndServeFunc(addr, mux)
@@ -378,17 +389,41 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // protectedResourceMetadataHandler returns the OAuth Protected Resource Metadata (RFC 9728)
-// so MCP clients can discover the authorization server.
-func protectedResourceMetadataHandler(serverAddr, issuerURL string) http.HandlerFunc {
+// for auto-discovery by MCP clients (Copilot Studio, VS Code, etc.).
+func protectedResourceMetadataHandler(publicURL, issuerURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metadata := map[string]interface{}{
-			"resource":                serverAddr,
-			"authorization_servers":   []string{issuerURL},
+			"resource":                 publicURL,
+			"authorization_servers":    []string{issuerURL},
 			"bearer_methods_supported": []string{"header"},
+			"scopes_supported":         []string{},
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		json.NewEncoder(w).Encode(metadata)
 	}
+}
+
+// resolvePublicURL determines the externally reachable URL for this server.
+// Priority: SAP_PUBLIC_URL env var > VCAP_APPLICATION (BTP CF) > listen address.
+func resolvePublicURL(listenAddr string) string {
+	// Check explicit env var
+	if u := os.Getenv("SAP_PUBLIC_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+
+	// Auto-detect from BTP Cloud Foundry VCAP_APPLICATION
+	if vcap := os.Getenv("VCAP_APPLICATION"); vcap != "" {
+		var app struct {
+			URIs []string `json:"application_uris"`
+		}
+		if err := json.Unmarshal([]byte(vcap), &app); err == nil && len(app.URIs) > 0 {
+			return "https://" + app.URIs[0]
+		}
+	}
+
+	// Fallback to listen address
+	return "http://" + listenAddr
 }
 
 // parseDuration parses a duration string like "5m", "1h", "30s".

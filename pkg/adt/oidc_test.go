@@ -319,7 +319,7 @@ func TestOIDCMiddleware(t *testing.T) {
 	})
 
 	// Wrap with OIDC middleware
-	protected := OIDCMiddleware(validator, handler)
+	protected := OIDCMiddleware(validator, "http://localhost/.well-known/oauth-protected-resource", handler)
 
 	// Test: no auth header → 401
 	t.Run("missing auth header", func(t *testing.T) {

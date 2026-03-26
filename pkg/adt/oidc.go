@@ -426,21 +426,29 @@ func verifyRS256(key *rsa.PublicKey, signingInput, signature []byte) error {
 // OIDCMiddleware creates an HTTP middleware that validates OIDC Bearer tokens.
 // It extracts the SAP username and stores it in the request context.
 // Requests without a Bearer token are rejected with 401 Unauthorized.
-func OIDCMiddleware(validator *OIDCValidator, next http.Handler) http.Handler {
+// OIDCMiddleware validates Bearer JWT tokens on incoming requests.
+// resourceMetadataURL is the full URL to the /.well-known/oauth-protected-resource endpoint.
+// When auth fails, the WWW-Authenticate header includes the resource_metadata URL
+// per MCP spec / RFC 9728 so clients can auto-discover the authorization server.
+func OIDCMiddleware(validator *OIDCValidator, resourceMetadataURL string, next http.Handler) http.Handler {
+	wwwAuth := fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth == "" {
+			w.Header().Set("WWW-Authenticate", wwwAuth)
 			http.Error(w, `{"error":"missing Authorization header"}`, http.StatusUnauthorized)
 			return
 		}
 
 		if !strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+			w.Header().Set("WWW-Authenticate", wwwAuth)
 			http.Error(w, `{"error":"expected Bearer token"}`, http.StatusUnauthorized)
 			return
 		}
 
 		username, err := validator.ValidateToken(r.Context(), auth)
 		if err != nil {
+			w.Header().Set("WWW-Authenticate", wwwAuth)
 			http.Error(w, fmt.Sprintf(`{"error":"token validation failed: %s"}`, err.Error()), http.StatusUnauthorized)
 			return
 		}
