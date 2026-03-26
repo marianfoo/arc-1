@@ -93,8 +93,12 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     logger.info('ARC-1 MCP server running on stdio');
   } else {
     // HTTP Streamable transport — for containerized/BTP deployments
+    // Pass the factory function so HTTP server can create fresh server+transport
+    // per request. This is required because MCP SDK's Server can only connect
+    // to one transport at a time, and clients like Copilot Studio send
+    // concurrent requests.
     const { startHttpServer } = await import('./http.js');
-    await startHttpServer(server, config);
+    await startHttpServer(() => createServer(config), config);
   }
 
   return server;

@@ -39,9 +39,18 @@ let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = nu
 
 /**
  * Start the HTTP Streamable server.
+ *
+ * Uses a per-request server pattern: each incoming MCP request gets a fresh
+ * Server + Transport pair. This is necessary because:
+ * 1. MCP SDK's Server can only connect to one transport at a time
+ * 2. Clients like Copilot Studio send multiple concurrent requests
+ * 3. Stateless mode means no session state to preserve between requests
+ *
+ * The serverFactory creates a new configured MCP server for each request,
+ * sharing the same ADT client and config but with independent transport state.
  */
 export async function startHttpServer(
-  mcpServer: McpServer,
+  serverFactory: () => McpServer,
   config: ServerConfig,
 ): Promise<void> {
   const [host, portStr] = config.httpAddr.split(':');
@@ -52,14 +61,6 @@ export async function startHttpServer(
   if (config.oidcIssuer) {
     await initJwks(config.oidcIssuer);
   }
-
-  // Create a single shared transport and connect it once.
-  // Stateless mode (sessionIdGenerator: undefined) means each request
-  // is independent — no session tracking needed.
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  await mcpServer.connect(transport);
 
   const httpServer = createHttpServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
@@ -81,8 +82,15 @@ export async function startHttpServer(
         return;
       }
 
-      // Route the request through the shared transport
+      // Create a fresh server + transport per request.
+      // This avoids "already connected" errors when clients send
+      // concurrent requests (e.g., Copilot Studio).
       try {
+        const server = serverFactory();
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined, // Stateless mode
+        });
+        await server.connect(transport);
         await transport.handleRequest(req, res);
       } catch (err) {
         logger.error('MCP request error', { error: err instanceof Error ? err.message : String(err) });
