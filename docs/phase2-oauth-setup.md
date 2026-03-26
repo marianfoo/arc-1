@@ -34,18 +34,51 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
 1. **Create App Registration:**
    - Azure Portal → Microsoft Entra ID → App registrations → New registration
    - Name: `ARC-1 SAP MCP Server`
-   - Supported account types: Single tenant (or multi-tenant)
-   - Redirect URI: not needed for service-to-service
+   - Supported account types: **Single tenant** (`Accounts in this organizational directory only`)
+   - Redirect URI: leave blank (will be set after Copilot Studio connector creation)
 
 2. **Expose an API:**
-   - App registration → Expose an API
-   - Set Application ID URI: `api://arc1-sap-connector`
-   - Add scope: `SAP.Access` (admin consent)
+   - App registration → Expose an API → Set Application ID URI (accept default `api://{client-id}`)
+   - Add a scope: `access_as_user` — Type: `Admins and users`, Display name: `Access ARC-1`
 
-3. **Note the values:**
-   - Application (client) ID
-   - Directory (tenant) ID
-   - Issuer URL: `https://login.microsoftonline.com/{tenant-id}/v2.0`
+3. **Set Token Version to v2.0:**
+   - App registration → Manifest → set `"requestedAccessTokenVersion": 2`
+   - Or via Azure CLI:
+     ```bash
+     # Get the object ID of the service principal's associated app
+     az ad app show --id {client-id} --query id -o tsv
+     # Patch the API application to use v2.0 tokens
+     az rest --method PATCH \
+       --url "https://graph.microsoft.com/v1.0/applications/{object-id}" \
+       --body '{"api":{"requestedAccessTokenVersion":2}}'
+     ```
+   - **Why:** v2.0 tokens use the raw client ID as `aud` claim, while v1.0 uses `api://...` URI. The OIDC validator needs a consistent audience value.
+
+4. **Add Microsoft Graph User.Read permission:**
+   - App registration → API permissions → Add a permission → Microsoft Graph → Delegated → `User.Read`
+   - Click **Grant admin consent** for your organization
+   - Or via Azure CLI:
+     ```bash
+     az ad app permission add --id {client-id} \
+       --api 00000003-0000-0000-c000-000000000000 \
+       --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
+     az ad app permission admin-consent --id {client-id}
+     ```
+   - **Why:** Power Platform requires this permission for OAuth connectors.
+
+5. **Create a Client Secret:**
+   - App registration → Certificates & secrets → New client secret
+   - Copy the secret value immediately (it won't be shown again)
+   - Or via Azure CLI:
+     ```bash
+     az ad app credential reset --id {client-id} --display-name "PowerAutomate" --years 2
+     ```
+
+6. **Note the values:**
+   - **Application (client) ID** — used as both Client ID and audience
+   - **Directory (tenant) ID** — e.g., `9ef3a122-4319-496a-a394-a7318c2d0a7e`
+   - **Client secret** — from step 5
+   - **Issuer URL:** `https://login.microsoftonline.com/{tenant-id}/v2.0`
 
 ### AWS Cognito
 
@@ -125,22 +158,94 @@ VS Code will:
 3. Open browser for OAuth login
 4. Send Bearer tokens automatically
 
-### Copilot Studio (with OAuth)
+### Microsoft Copilot Studio / Power Automate
 
-1. Go to **Settings** → **Connectors** → **MCP Servers**
-2. Click **Add MCP Server**
-3. URL: `https://arc1.company.com/mcp`
-4. Authentication: **OAuth 2.0** → **Dynamic Discovery**
-5. Copilot Studio auto-discovers endpoints via `/.well-known/oauth-protected-resource`
+Copilot Studio uses Power Automate custom connectors to connect to MCP servers. The connector handles OAuth token acquisition automatically.
+
+#### Step 1: Create Custom Connector
+
+1. Go to [Power Automate](https://make.powerautomate.com/) → **Custom connectors** → **New custom connector** → **Create from blank**
+2. **General tab:**
+   - Connector name: `ARC-1 SAP MCP`
+   - Host: `your-arc1-server.cfapps.us10-001.hana.ondemand.com` (or your server hostname)
+   - Base URL: `/`
+
+#### Step 2: Configure Security Tab
+
+3. **Security tab** → Authentication type: **OAuth 2.0**
+   - Identity Provider: **Azure Active Directory**
+   - Enable **Dienstprinzipal-Unterstützung** (Service Principal support)
+   - **Client ID:** `{client-id}` (from Entra ID app registration)
+   - **Client secret:** `{client-secret}` (from Entra ID app registration)
+   - **Authorization URL:** `https://login.microsoftonline.com`
+   - **Tenant ID:** `{tenant-id}` (your actual tenant ID — **NOT** `common`)
+   - **Resource URL:** `{client-id}` (the raw GUID, **NOT** `api://...`)
+   - **Scope:** `api://{client-id}/access_as_user offline_access`
+
+> **⚠️ Critical:** The **Tenant ID** must be your actual tenant GUID, not `common`. Using `common` fails for single-tenant apps.
+>
+> **⚠️ Critical:** The **Resource URL** must be the raw client ID GUID (e.g., `aa34a3d1-...`), not the `api://` URI. When an app requests a token for itself, Entra ID requires the GUID format.
+
+#### Step 3: Create Definition
+
+4. **Definition tab** → Create an action:
+   - Summary: `InvokeServer`
+   - Operation ID: `InvokeServer`
+   - Verb: **POST**
+   - URL: `https://your-arc1-server.example.com/mcp`
+5. Click **Connector aktualisieren** (Update Connector)
+
+#### Step 4: Add Redirect URI to Entra ID
+
+6. After creating the connector, copy the **Umleitungs-URL** (Redirect URL) shown at the bottom of the Security tab
+   - It looks like: `https://global.consent.azure-apim.net/redirect/crc25-5farc-2d1-20...`
+7. Go to Azure Portal → App registration → **Authentication** → Add platform → **Web**
+   - Add the redirect URI from step 6
+   - Also add the base: `https://global.consent.azure-apim.net/redirect`
+
+   Or via Azure CLI:
+   ```bash
+   az ad app update --id {client-id} \
+     --web-redirect-uris \
+       "https://global.consent.azure-apim.net/redirect" \
+       "https://global.consent.azure-apim.net/redirect/your-connector-specific-uri"
+   ```
+
+#### Step 5: Create Connection
+
+8. Click **Verbindung erstellen** (Create Connection)
+9. A Microsoft login popup will appear — sign in with your organization account
+10. Grant the requested permissions (Sign in and read user profile)
+
+#### Troubleshooting Copilot Studio
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `AADSTS50011` (Reply address mismatch) | Redirect URI not registered | Add the connector's specific redirect URI to the app registration |
+| `AADSTS90009` (Requesting token for itself) | Resource URL uses `api://` format | Change Resource URL to raw client ID GUID |
+| `AADSTS90008` (Not consented, must require Graph) | Missing `User.Read` permission | Add Microsoft Graph `User.Read` and grant admin consent |
+| `AADSTS65001` (Consent not granted) | App not authorized | Run `az ad app permission admin-consent --id {client-id}` |
+| `Anmelden nicht möglich` (Login not possible) | Tenant ID is `common` or Resource URL empty | Set Tenant ID to actual GUID; set Resource URL to client ID |
+| OAuth popup opens/closes immediately | Multiple issues possible | Check Tenant ID, Resource URL, and redirect URI registration |
 
 ### Manual Token Testing
 
 ```bash
 # Get a token from your IdP (example with Azure CLI)
-TOKEN=$(az account get-access-token --resource api://arc1-sap-connector --query accessToken -o tsv)
+# First, authorize Azure CLI for your app:
+az ad app update --id {client-id} --set "api.preAuthorizedApplications=[{\"appId\":\"04b07795-8ddb-461a-bbee-02f9e1bf7b46\",\"delegatedPermissionIds\":[\"your-scope-id\"]}]"
 
-# Use with arc1
-curl -H "Authorization: Bearer $TOKEN" https://arc1.company.com/mcp
+# Login with the scope
+az login --scope "api://{client-id}/access_as_user"
+
+# Get a token
+TOKEN=$(az account get-access-token --scope "api://{client-id}/access_as_user" --query accessToken -o tsv)
+
+# Test against arc1
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' \
+  https://your-arc1-server.example.com/mcp
 ```
 
 ## How It Works

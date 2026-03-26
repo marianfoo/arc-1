@@ -482,13 +482,35 @@ requests and is typically combined with principal propagation for the SAP connec
 - Verify the `--oidc-issuer` URL is correct (must match the `iss` claim)
 
 **"JWT audience mismatch"**
-- The `--oidc-audience` must match the `aud` claim in the token
-- Check the App Registration's Application ID URI in Azure Portal
+- For Entra ID v2.0 tokens (`requestedAccessTokenVersion: 2`), the `aud` claim is the raw client ID GUID
+- For Entra ID v1.0 tokens (default), the `aud` claim is `api://{client-id}`
+- Set `SAP_OIDC_AUDIENCE` to match what your tokens actually contain
+- Check with: `az account get-access-token --scope "api://{client-id}/access_as_user" --query accessToken -o tsv | jwt decode -` (or paste into jwt.ms)
 
 **"JWT issuer mismatch"**
 - EntraID v2.0 issuer format: `https://login.microsoftonline.com/{tenant-id}/v2.0`
 - EntraID v1.0 issuer format: `https://sts.windows.net/{tenant-id}/`
-- Verify which version your app registration uses
+- Set `requestedAccessTokenVersion: 2` in the app manifest to get v2.0 tokens
+
+### Power Platform / Copilot Studio OAuth errors
+
+**"AADSTS50011" (Reply address mismatch)**
+- Each Power Automate connector generates a unique redirect URI
+- Copy the exact URI from the connector's Security tab → Umleitungs-URL
+- Add it to the Entra ID app registration under Authentication → Web → Redirect URIs
+
+**"AADSTS90009" (Requesting token for itself, use GUID)**
+- When an app requests a token for itself (client ID = resource), the Resource URL must be the raw GUID
+- Change Resource URL from `api://...` to just the client ID GUID
+
+**"AADSTS90008" (Must require Microsoft Graph access)**
+- Add `User.Read` delegated permission from Microsoft Graph
+- Grant admin consent: `az ad app permission admin-consent --id {client-id}`
+
+**"Anmelden nicht möglich" / Login popup opens and closes**
+- Verify Tenant ID in the connector is the actual tenant GUID, not `common`
+- Verify Resource URL is set (not empty)
+- Verify the redirect URI is registered in the app registration
 
 ### Principal propagation: SAP rejects ephemeral cert
 

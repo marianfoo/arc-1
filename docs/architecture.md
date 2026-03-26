@@ -14,9 +14,15 @@ flowchart TB
         direction TB
 
         subgraph Entry["Entry Points"]
-            MCP[MCP Server<br/>JSON-RPC / stdio]
+            MCP[MCP Server<br/>JSON-RPC / stdio + HTTP Streamable]
             CLI[CLI Mode<br/>search · source · export · debug]
             LUA[Lua Scripting<br/>REPL · Scripts]
+        end
+
+        subgraph Auth["Authentication Layer"]
+            APIKEY[API Key<br/>VSP_API_KEY]
+            OIDC[OIDC/JWT Validator<br/>EntraID · Cognito · Keycloak]
+            PRM[RFC 9728 Metadata<br/>/.well-known/oauth-protected-resource]
         end
 
         subgraph Core["internal/mcp/server.go"]
@@ -79,10 +85,11 @@ flowchart TB
         HANA[HANA DB<br/>AMDP Debug]
     end
 
-    CC & CD & Other <-->|JSON-RPC / stdio| MCP
+    CC & CD & Other <-->|"JSON-RPC / stdio or HTTP"| MCP
     CLI --> Core
     LUA --> Core
-    MCP --> Core
+    MCP --> Auth
+    Auth --> Core
     Core --> Safety
     Safety --> ADTLib
     ADTLib --> Transport
@@ -320,20 +327,91 @@ arc-1/
 
 ## Authentication
 
+ARC-1 supports two independent authentication layers:
+
+1. **MCP Client Auth** — authenticates the MCP client (API Key or OAuth/OIDC)
+2. **SAP Auth** — authenticates to the SAP system (Basic, Cookie, mTLS, or Principal Propagation)
+
 ```mermaid
 flowchart TD
-    Start[Request] --> Auth{Auth Method?}
+    Request[Incoming Request] --> MCPAuth{MCP Client Auth?}
 
-    Auth -->|Basic| Basic[Username + Password<br/>--user / --password]
-    Auth -->|Cookie File| CFile[Netscape Format<br/>--cookie-file]
-    Auth -->|Cookie String| CStr[Key=Value pairs<br/>--cookie-string]
+    MCPAuth -->|API Key| APIKey[VSP_API_KEY header check]
+    MCPAuth -->|OAuth/OIDC| OIDC[JWT Validation<br/>via IdP JWKS]
+    MCPAuth -->|None| NoAuth[No client auth<br/>local/trusted network]
+
+    APIKey --> SAPAuth
+    OIDC --> SAPAuth
+    NoAuth --> SAPAuth
+
+    SAPAuth{SAP Auth Method?}
+
+    SAPAuth -->|Basic| Basic[Username + Password<br/>--user / --password]
+    SAPAuth -->|Cookie| Cookie[Cookie File/String]
+    SAPAuth -->|mTLS| MTLS[Client Certificate<br/>SAP CERTRULE]
+    SAPAuth -->|Principal Prop| PP[Ephemeral X.509 Cert<br/>per OIDC user]
+    SAPAuth -->|BTP Destination| BTP[Destination Service<br/>Cloud Connector]
 
     Basic --> CSRF[Fetch CSRF Token]
-    CFile --> CSRF
-    CStr --> CSRF
+    Cookie --> CSRF
+    MTLS --> CSRF
+    PP --> CSRF
+    BTP --> CSRF
 
     CSRF --> Session[Stateful Session<br/>Cookie Jar]
     Session --> SAP[SAP ADT API]
+```
+
+### OAuth/OIDC Flow (RFC 9728)
+
+```mermaid
+sequenceDiagram
+    participant Client as MCP Client
+    participant ARC1 as ARC-1 Server
+    participant IdP as Identity Provider<br/>(Entra ID)
+    participant SAP as SAP System
+
+    Client->>ARC1: POST /mcp (no token)
+    ARC1-->>Client: 401 + WWW-Authenticate:<br/>Bearer resource_metadata="/.well-known/oauth-protected-resource"
+
+    Client->>ARC1: GET /.well-known/oauth-protected-resource
+    ARC1-->>Client: {resource, authorization_servers, scopes_supported}
+
+    Client->>IdP: OAuth 2.0 Authorization Code + PKCE
+    IdP-->>Client: Access Token (JWT)
+
+    Client->>ARC1: POST /mcp + Authorization: Bearer <jwt>
+    ARC1->>IdP: Fetch JWKS (cached 1h)
+    ARC1->>ARC1: Validate JWT (signature, issuer, audience, expiry)
+    ARC1->>SAP: ADT REST API (using SAP auth method)
+    SAP-->>ARC1: Response
+    ARC1-->>Client: MCP Tool Result
+```
+
+### BTP Cloud Foundry Deployment
+
+```mermaid
+flowchart LR
+    subgraph Internet
+        Client[MCP Client<br/>Copilot Studio / IDE]
+    end
+
+    subgraph BTP["SAP BTP Cloud Foundry"]
+        ARC1[ARC-1 Container<br/>Docker on CF]
+        DS[Destination Service]
+        CS[Connectivity Service<br/>Proxy]
+    end
+
+    subgraph OnPrem["On-Premise"]
+        CC[Cloud Connector]
+        SAP[SAP ABAP System]
+    end
+
+    Client -->|"HTTPS + Bearer JWT"| ARC1
+    ARC1 -->|"Lookup SAP_TRIAL"| DS
+    ARC1 -->|"HTTP via proxy"| CS
+    CS -->|"Secure tunnel"| CC
+    CC -->|"HTTP"| SAP
 ```
 
 ## Safety System
