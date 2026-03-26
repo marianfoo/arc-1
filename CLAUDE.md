@@ -65,6 +65,10 @@ npm run dev
 | `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
 | `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
 | `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict to packages (supports wildcards: "Z*") |
+| `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
+| `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
+| `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
+| `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
 
 ## Codebase Structure
 
@@ -75,6 +79,7 @@ ts-src/
 ├── server/
 │   ├── server.ts               # MCP server setup, tool registration
 │   ├── config.ts               # Config parser (CLI > env > .env > defaults)
+│   ├── http.ts                 # HTTP Streamable transport + API key/OIDC auth
 │   ├── logger.ts               # Structured logger (stderr only, never stdout)
 │   └── types.ts                # ServerConfig type, defaults
 ├── handlers/
@@ -89,6 +94,7 @@ ts-src/
 │   ├── config.ts               # ADT client configuration types
 │   ├── types.ts                # ADT response types
 │   ├── xml-parser.ts           # XML parser (fast-xml-parser v5)
+│   ├── btp.ts                  # BTP Destination Service + Connectivity proxy
 │   ├── cookies.ts              # Cookie file parsing (Netscape format)
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
 │   ├── devtools.ts             # Dev tools (syntax check, activate, unit tests)
@@ -155,7 +161,7 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ## Testing
 
-### Unit Tests (184 tests)
+### Unit Tests (320 tests)
 - No SAP system required — always run with `npm test`
 - Mock HTTP via `vi.mock('axios', ...)`
 - XML fixtures in `tests/fixtures/xml/`
@@ -188,8 +194,7 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 - Sensitive fields (password, token, cookie) are redacted in logs
 - CSRF tokens are auto-managed by `ts-src/adt/http.ts`
 
-## Migration Note
+## History
 
 This project was migrated from Go to TypeScript on 2026-03-26.
-See `reports/2026-03-26-001-typescript-migration-plan.md` for the full plan.
-Go source files (`cmd/`, `internal/`, `pkg/`) will be removed after migration validation.
+See `reports/2026-03-26-001-typescript-migration-plan.md` for the migration plan.
