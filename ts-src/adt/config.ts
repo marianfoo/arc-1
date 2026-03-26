@@ -6,6 +6,7 @@
  * only needs to know about SAP — it doesn't care about MCP.
  */
 
+import type { BTPProxyConfig } from './btp.js';
 import type { SafetyConfig } from './safety.js';
 import { unrestrictedSafetyConfig } from './safety.js';
 
@@ -56,6 +57,8 @@ export interface AdtClientConfig {
   features: FeatureConfig;
   /** Enable verbose logging */
   verbose: boolean;
+  /** BTP Connectivity proxy (Cloud Connector) */
+  btpProxy?: BTPProxyConfig;
 }
 
 /** Create default ADT client config */

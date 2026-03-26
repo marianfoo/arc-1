@@ -45,6 +45,7 @@ export class AdtClient {
       language: config.language,
       insecure: config.insecure,
       cookies: config.cookies,
+      btpProxy: config.btpProxy,
     };
 
     this.http = new AdtHttpClient(httpConfig);

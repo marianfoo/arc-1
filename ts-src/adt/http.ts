@@ -27,8 +27,10 @@
  */
 
 import { Agent as HttpsAgent } from 'node:https';
+import { Agent as HttpAgent } from 'node:http';
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { AdtApiError, AdtNetworkError } from './errors.js';
+import type { BTPProxyConfig } from './btp.js';
 
 /** Session type for ADT requests */
 export type SessionType = 'stateful' | 'stateless' | undefined;
@@ -43,6 +45,8 @@ export interface AdtHttpConfig {
   insecure?: boolean;
   cookies?: Record<string, string>;
   sessionType?: SessionType;
+  /** BTP Connectivity proxy (Cloud Connector) */
+  btpProxy?: BTPProxyConfig;
 }
 
 /** Response from an ADT HTTP request */
@@ -99,6 +103,19 @@ export class AdtHttpClient {
     // Skip TLS verification (for self-signed SAP certs)
     if (config.insecure) {
       axiosConfig.httpsAgent = new HttpsAgent({ rejectUnauthorized: false });
+    }
+
+    // BTP Connectivity proxy (Cloud Connector)
+    // Routes requests through the BTP connectivity service to reach on-premise SAP.
+    // The Proxy-Authorization header is injected per-request in the request() method.
+    if (config.btpProxy) {
+      axiosConfig.proxy = {
+        host: config.btpProxy.host,
+        port: config.btpProxy.port,
+        protocol: config.btpProxy.protocol,
+      };
+      // Need an HTTP agent for the proxy connection (not HTTPS)
+      axiosConfig.httpAgent = new HttpAgent({ keepAlive: true });
     }
 
     this.axios = axios.create(axiosConfig);
@@ -184,6 +201,12 @@ export class AdtHttpClient {
     }
     if (cookieParts.length > 0) {
       headers['Cookie'] = cookieParts.join('; ');
+    }
+
+    // BTP Connectivity proxy: inject Proxy-Authorization JWT
+    if (this.config.btpProxy) {
+      const proxyToken = await this.config.btpProxy.getProxyToken();
+      headers['Proxy-Authorization'] = `Bearer ${proxyToken}`;
     }
 
     const url = this.buildUrl(path);

@@ -15,6 +15,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
+import type { BTPProxyConfig } from '../adt/btp.js';
 import { handleToolCall } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
@@ -25,8 +26,10 @@ export const VERSION = '3.0.0-alpha.1';
 
 /**
  * Create the MCP server with registered tool handlers.
+ * @param config Server configuration
+ * @param btpProxy Optional BTP connectivity proxy config (resolved at startup)
  */
-export function createServer(config: ServerConfig): Server {
+export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig): Server {
   const server = new Server(
     { name: 'arc-1', version: VERSION },
     { capabilities: { tools: {} } },
@@ -40,6 +43,7 @@ export function createServer(config: ServerConfig): Server {
     client: config.client,
     language: config.language,
     insecure: config.insecure,
+    btpProxy,
     safety: {
       readOnly: config.readOnly,
       blockFreeSQL: config.blockFreeSQL,
@@ -85,7 +89,26 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     readOnly: config.readOnly,
   });
 
-  const server = createServer(config);
+  // Resolve BTP Destination if configured (overrides SAP_URL/USER/PASSWORD)
+  let btpProxy: BTPProxyConfig | undefined;
+  const btpDestination = process.env['SAP_BTP_DESTINATION'];
+  if (btpDestination) {
+    const { resolveBTPDestination } = await import('../adt/btp.js');
+    const resolved = await resolveBTPDestination(btpDestination);
+    config.url = resolved.url;
+    config.username = resolved.username;
+    config.password = resolved.password;
+    config.client = resolved.client;
+    btpProxy = resolved.proxy ?? undefined;
+    logger.info('BTP destination resolved', {
+      destination: btpDestination,
+      url: resolved.url,
+      user: resolved.username,
+      hasProxy: !!btpProxy,
+    });
+  }
+
+  const server = createServer(config, btpProxy);
 
   if (config.transport === 'stdio') {
     const transport = new StdioServerTransport();
@@ -98,7 +121,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     // to one transport at a time, and clients like Copilot Studio send
     // concurrent requests.
     const { startHttpServer } = await import('./http.js');
-    await startHttpServer(() => createServer(config), config);
+    await startHttpServer(() => createServer(config, btpProxy), config);
   }
 
   return server;
