@@ -82,7 +82,9 @@ export function parseSearchResults(xml: string): AdtSearchResult[] {
  *   </SEU_ADT_REPOSITORY_OBJ_NODE>
  * </TREE_CONTENT></DATA></asx:values></asx:abap>
  */
-export function parsePackageContents(xml: string): Array<{ type: string; name: string; description: string; uri: string }> {
+export function parsePackageContents(
+  xml: string,
+): Array<{ type: string; name: string; description: string; uri: string }> {
   const parsed = parseXml(xml);
   // After namespace stripping, asx:abap → abap, asx:values → values
   // fast-xml-parser structure depends on XML depth — use recursive finder as fallback
@@ -91,10 +93,10 @@ export function parsePackageContents(xml: string): Array<{ type: string; name: s
     nodes = findDeepNodes(parsed, 'SEU_ADT_REPOSITORY_OBJ_NODE');
   }
   return nodes.map((node: Record<string, unknown>) => ({
-    type: String(node['OBJECT_TYPE'] ?? ''),
-    name: String(node['OBJECT_NAME'] ?? ''),
-    description: String(node['DESCRIPTION'] ?? ''),
-    uri: String(node['OBJECT_URI'] ?? ''),
+    type: String(node.OBJECT_TYPE ?? ''),
+    name: String(node.OBJECT_NAME ?? ''),
+    description: String(node.DESCRIPTION ?? ''),
+    uri: String(node.OBJECT_URI ?? ''),
   }));
 }
 
@@ -130,19 +132,19 @@ export function parseTableContents(xml: string): { columns: string[]; rows: Reco
   for (const col of columns) {
     // Old format: METADATA/@_name, DATASET/DATA
     // New format: metadata/@_name, dataSet/data
-    const metadata = (col['METADATA'] ?? col['metadata']) as Record<string, unknown> | undefined;
+    const metadata = (col.METADATA ?? col.metadata) as Record<string, unknown> | undefined;
     const name = String(metadata?.['@_name'] ?? metadata?.['@_dataPreview:name'] ?? '');
     if (!name) continue; // skip non-column entries like totalRows, name, etc.
     colNames.push(name);
 
-    const dataset = (col['DATASET'] ?? col['dataSet']) as Record<string, unknown> | undefined;
-    const rawData = dataset?.['DATA'] ?? dataset?.['data'];
+    const dataset = (col.DATASET ?? col.dataSet) as Record<string, unknown> | undefined;
+    const rawData = dataset?.DATA ?? dataset?.data;
     const data = Array.isArray(rawData) ? rawData.map(String) : rawData != null ? [String(rawData)] : [];
     colData.push(data as string[]);
   }
 
   // Pivot column-oriented to row-oriented
-  const rowCount = colData.length > 0 ? colData[0]!.length : 0;
+  const rowCount = colData.length > 0 ? colData[0]?.length : 0;
   const rows: Record<string, string>[] = [];
 
   for (let i = 0; i < rowCount; i++) {
@@ -175,8 +177,8 @@ export function parseInstalledComponents(xml: string): Array<{ name: string; rel
   // After removeNSPrefix: atom:feed → feed, atom:entry → entry
   const entries = getNestedArray(parsed, 'feed', 'entry');
   return entries.map((entry: Record<string, unknown>) => {
-    const name = String(entry['id'] ?? '');
-    const title = String(entry['title'] ?? '');
+    const name = String(entry.id ?? '');
+    const title = String(entry.title ?? '');
     // Title format: "release;sp_name;sp_level;description"
     const parts = title.split(';');
     return {
@@ -196,8 +198,8 @@ export function parseInstalledComponents(xml: string): Array<{ name: string; rel
  */
 export function parseFunctionGroup(xml: string): { name: string; functions: string[] } {
   const parsed = parseXml(xml);
-  const group = (parsed['group'] ?? {}) as Record<string, unknown>;
-  const fmods = Array.isArray(group['functionModule']) ? group['functionModule'] : [];
+  const group = (parsed.group ?? {}) as Record<string, unknown>;
+  const fmods = Array.isArray(group.functionModule) ? group.functionModule : [];
   return {
     name: String(group['@_name'] ?? ''),
     functions: fmods.map((fm: Record<string, unknown>) => String(fm['@_name'] ?? '')),

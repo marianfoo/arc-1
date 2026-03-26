@@ -26,11 +26,11 @@
  */
 
 import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { logger } from './logger.js';
-import type { ServerConfig } from './types.js';
 import { VERSION } from './server.js';
+import type { ServerConfig } from './types.js';
 
 // ─── JWKS / JWT types (lazy-loaded from jose) ────────────────────────
 
@@ -49,10 +49,7 @@ let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = nu
  * The serverFactory creates a new configured MCP server for each request,
  * sharing the same ADT client and config but with independent transport state.
  */
-export async function startHttpServer(
-  serverFactory: () => McpServer,
-  config: ServerConfig,
-): Promise<void> {
+export async function startHttpServer(serverFactory: () => McpServer, config: ServerConfig): Promise<void> {
   const [host, portStr] = config.httpAddr.split(':');
   const port = Number.parseInt(portStr || '8080', 10);
   const bindHost = host || '0.0.0.0';
@@ -140,8 +137,8 @@ async function checkAuth(req: IncomingMessage, config: ServerConfig): Promise<Au
     return { ok: true, status: 200, message: '' };
   }
 
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
     return {
       ok: false,
       status: 401,

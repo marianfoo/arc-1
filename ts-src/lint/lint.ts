@@ -56,12 +56,9 @@ export function detectFilename(source: string, objectName: string): string {
   const upper = source.toUpperCase().trimStart();
   if (upper.startsWith('CLASS')) return `${objectName.toLowerCase()}.clas.abap`;
   if (upper.startsWith('INTERFACE')) return `${objectName.toLowerCase()}.intf.abap`;
-  if (upper.startsWith('FUNCTION-POOL') || upper.startsWith('FUNCTION'))
-    return `${objectName.toLowerCase()}.fugr.abap`;
-  if (upper.startsWith('REPORT') || upper.startsWith('PROGRAM'))
-    return `${objectName.toLowerCase()}.prog.abap`;
-  if (upper.startsWith('DEFINE VIEW') || upper.startsWith('@'))
-    return `${objectName.toLowerCase()}.ddls.asddls`;
+  if (upper.startsWith('FUNCTION-POOL') || upper.startsWith('FUNCTION')) return `${objectName.toLowerCase()}.fugr.abap`;
+  if (upper.startsWith('REPORT') || upper.startsWith('PROGRAM')) return `${objectName.toLowerCase()}.prog.abap`;
+  if (upper.startsWith('DEFINE VIEW') || upper.startsWith('@')) return `${objectName.toLowerCase()}.ddls.asddls`;
   if (upper.startsWith('MANAGED') || upper.startsWith('UNMANAGED') || upper.startsWith('ABSTRACT'))
     return `${objectName.toLowerCase()}.bdef.asbdef`;
   // Default to class (enables most rules)

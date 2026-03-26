@@ -9,13 +9,10 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
-import type { BTPProxyConfig } from '../adt/btp.js';
 import { handleToolCall } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
@@ -30,10 +27,7 @@ export const VERSION = '3.0.0-alpha.1';
  * @param btpProxy Optional BTP connectivity proxy config (resolved at startup)
  */
 export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig): Server {
-  const server = new Server(
-    { name: 'arc-1', version: VERSION },
-    { capabilities: { tools: {} } },
-  );
+  const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
   // Create ADT client (may be unconfigured — tools will fail gracefully)
   const adtConfig: Partial<AdtClientConfig> = {
@@ -91,7 +85,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
   // Resolve BTP Destination if configured (overrides SAP_URL/USER/PASSWORD)
   let btpProxy: BTPProxyConfig | undefined;
-  const btpDestination = process.env['SAP_BTP_DESTINATION'];
+  const btpDestination = process.env.SAP_BTP_DESTINATION;
   if (btpDestination) {
     const { resolveBTPDestination } = await import('../adt/btp.js');
     const resolved = await resolveBTPDestination(btpDestination);

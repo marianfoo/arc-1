@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { syntaxCheck, activate, runUnitTests, runAtcCheck } from '../../../ts-src/adt/devtools.js';
+import { activate, runAtcCheck, runUnitTests, syntaxCheck } from '../../../ts-src/adt/devtools.js';
 import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -32,9 +32,9 @@ describe('DevTools', () => {
       const result = await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
       expect(result.hasErrors).toBe(true);
       expect(result.messages).toHaveLength(1);
-      expect(result.messages[0]!.severity).toBe('error');
-      expect(result.messages[0]!.line).toBe(5);
-      expect(result.messages[0]!.column).toBe(1);
+      expect(result.messages[0]?.severity).toBe('error');
+      expect(result.messages[0]?.line).toBe(5);
+      expect(result.messages[0]?.column).toBe(1);
     });
 
     it('distinguishes warnings from errors (Issue #33: EditSource treats warnings as errors)', async () => {
@@ -48,8 +48,8 @@ describe('DevTools', () => {
       const result = await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
       expect(result.hasErrors).toBe(false); // Only warnings + info, no errors
       expect(result.messages).toHaveLength(2);
-      expect(result.messages[0]!.severity).toBe('warning');
-      expect(result.messages[1]!.severity).toBe('info');
+      expect(result.messages[0]?.severity).toBe('warning');
+      expect(result.messages[1]?.severity).toBe('info');
     });
 
     it('handles mixed errors and warnings', async () => {
@@ -77,9 +77,7 @@ describe('DevTools', () => {
     it('is blocked when Read is disallowed', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
-      await expect(
-        syntaxCheck(http, safety, '/sap/bc/adt/programs/programs/ZTEST'),
-      ).rejects.toThrow(AdtSafetyError);
+      await expect(syntaxCheck(http, safety, '/sap/bc/adt/programs/programs/ZTEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -95,9 +93,7 @@ describe('DevTools', () => {
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
-      await expect(
-        activate(http, safety, '/sap/bc/adt/programs/programs/ZTEST'),
-      ).rejects.toThrow(AdtSafetyError);
+      await expect(activate(http, safety, '/sap/bc/adt/programs/programs/ZTEST')).rejects.toThrow(AdtSafetyError);
     });
 
     it('detects activation errors from severity="error"', async () => {
@@ -144,8 +140,8 @@ describe('DevTools', () => {
       const http = mockHttp(xml);
       const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(results).toHaveLength(1);
-      expect(results[0]!.testMethod).toBe('test_success');
-      expect(results[0]!.status).toBe('passed');
+      expect(results[0]?.testMethod).toBe('test_success');
+      expect(results[0]?.status).toBe('passed');
     });
 
     it('detects failing tests (with alerts)', async () => {
@@ -155,7 +151,7 @@ describe('DevTools', () => {
       const http = mockHttp(xml);
       const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(results).toHaveLength(1);
-      expect(results[0]!.status).toBe('failed');
+      expect(results[0]?.status).toBe('failed');
     });
 
     it('handles empty results (no test methods)', async () => {
@@ -173,17 +169,15 @@ describe('DevTools', () => {
       const http = mockHttp(xml);
       const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(results).toHaveLength(3);
-      expect(results[0]!.status).toBe('passed');
-      expect(results[1]!.status).toBe('failed');
-      expect(results[2]!.status).toBe('passed');
+      expect(results[0]?.status).toBe('passed');
+      expect(results[1]?.status).toBe('failed');
+      expect(results[2]?.status).toBe('passed');
     });
 
     it('is blocked when T is disallowed', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'T' };
-      await expect(
-        runUnitTests(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST'),
-      ).rejects.toThrow(AdtSafetyError);
+      await expect(runUnitTests(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -203,9 +197,9 @@ describe('DevTools', () => {
 
       const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(result.findings).toHaveLength(2);
-      expect(result.findings[0]!.priority).toBe(1);
-      expect(result.findings[0]!.checkTitle).toBe('Extended Check');
-      expect(result.findings[1]!.priority).toBe(2);
+      expect(result.findings[0]?.priority).toBe(1);
+      expect(result.findings[0]?.checkTitle).toBe('Extended Check');
+      expect(result.findings[1]?.priority).toBe(2);
     });
 
     it('handles empty ATC results', async () => {

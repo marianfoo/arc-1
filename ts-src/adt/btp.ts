@@ -79,7 +79,7 @@ interface VCAPServices {
  * Returns null if not running on BTP (VCAP_SERVICES not set).
  */
 export function parseVCAPServices(): BTPConfig | null {
-  const vcapJson = process.env['VCAP_SERVICES'];
+  const vcapJson = process.env.VCAP_SERVICES;
   if (!vcapJson) return null;
 
   const vcap: VCAPServices = JSON.parse(vcapJson);
@@ -101,35 +101,35 @@ export function parseVCAPServices(): BTPConfig | null {
   // XSUAA binding
   if (vcap.xsuaa?.[0]?.credentials) {
     const c = vcap.xsuaa[0].credentials;
-    config.xsuaaUrl = (c['url'] as string) || '';
-    config.xsuaaClientId = (c['clientid'] as string) || '';
-    config.xsuaaSecret = (c['clientsecret'] as string) || '';
+    config.xsuaaUrl = (c.url as string) || '';
+    config.xsuaaClientId = (c.clientid as string) || '';
+    config.xsuaaSecret = (c.clientsecret as string) || '';
   }
 
   // Destination binding
   if (vcap.destination?.[0]?.credentials) {
     const c = vcap.destination[0].credentials;
-    config.destinationUrl = (c['uri'] as string) || (c['url'] as string) || '';
-    config.destinationClientId = (c['clientid'] as string) || '';
-    config.destinationSecret = (c['clientsecret'] as string) || '';
-    config.destinationTokenUrl = (c['token_service_url'] as string) || '';
+    config.destinationUrl = (c.uri as string) || (c.url as string) || '';
+    config.destinationClientId = (c.clientid as string) || '';
+    config.destinationSecret = (c.clientsecret as string) || '';
+    config.destinationTokenUrl = (c.token_service_url as string) || '';
     // Fallback: construct from URL
-    if (!config.destinationTokenUrl && c['url']) {
-      config.destinationTokenUrl = `${(c['url'] as string).replace(/\/$/, '')}/oauth/token`;
+    if (!config.destinationTokenUrl && c.url) {
+      config.destinationTokenUrl = `${(c.url as string).replace(/\/$/, '')}/oauth/token`;
     }
   }
 
   // Connectivity binding
   if (vcap.connectivity?.[0]?.credentials) {
     const c = vcap.connectivity[0].credentials;
-    config.connectivityProxyHost = (c['onpremise_proxy_host'] as string) || '';
-    config.connectivityProxyPort = (c['onpremise_proxy_http_port'] as string) || '';
-    config.connectivityClientId = (c['clientid'] as string) || '';
-    config.connectivitySecret = (c['clientsecret'] as string) || '';
-    config.connectivityTokenUrl = (c['token_service_url'] as string) || '';
+    config.connectivityProxyHost = (c.onpremise_proxy_host as string) || '';
+    config.connectivityProxyPort = (c.onpremise_proxy_http_port as string) || '';
+    config.connectivityClientId = (c.clientid as string) || '';
+    config.connectivitySecret = (c.clientsecret as string) || '';
+    config.connectivityTokenUrl = (c.token_service_url as string) || '';
     // Fallback + ensure /oauth/token suffix
-    if (!config.connectivityTokenUrl && c['url']) {
-      config.connectivityTokenUrl = `${(c['url'] as string).replace(/\/$/, '')}/oauth/token`;
+    if (!config.connectivityTokenUrl && c.url) {
+      config.connectivityTokenUrl = `${(c.url as string).replace(/\/$/, '')}/oauth/token`;
     } else if (config.connectivityTokenUrl && !config.connectivityTokenUrl.endsWith('/oauth/token')) {
       config.connectivityTokenUrl = `${config.connectivityTokenUrl.replace(/\/$/, '')}/oauth/token`;
     }
@@ -180,10 +180,7 @@ async function fetchClientCredentialsToken(
  * Look up a destination from the BTP Destination Service.
  * Returns SAP URL, credentials, and proxy type.
  */
-export async function lookupDestination(
-  btpConfig: BTPConfig,
-  destinationName: string,
-): Promise<Destination> {
+export async function lookupDestination(btpConfig: BTPConfig, destinationName: string): Promise<Destination> {
   // Get token for Destination Service API
   const tokenUrl = btpConfig.destinationTokenUrl || `${btpConfig.xsuaaUrl}/oauth/token`;
   const { accessToken } = await fetchClientCredentialsToken(

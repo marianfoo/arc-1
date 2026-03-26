@@ -19,7 +19,7 @@
 import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
-import { type SafetyConfig, OperationType, checkOperation } from './safety.js';
+import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { AdtSearchResult } from './types.js';
 import {
   parseFunctionGroup,
@@ -187,16 +187,9 @@ export class AdtClient {
   }
 
   /** Execute freestyle SQL query */
-  async runQuery(
-    sql: string,
-    maxRows = 100,
-  ): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
+  async runQuery(sql: string, maxRows = 100): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
     checkOperation(this.safety, OperationType.FreeSQL, 'RunQuery');
-    const resp = await this.http.post(
-      `/sap/bc/adt/datapreview/freestyle?rowNumber=${maxRows}`,
-      sql,
-      'text/plain',
-    );
+    const resp = await this.http.post(`/sap/bc/adt/datapreview/freestyle?rowNumber=${maxRows}`, sql, 'text/plain');
     return parseTableContents(resp.body);
   }
 
@@ -226,18 +219,14 @@ export class AdtClient {
   /** Get program text elements */
   async getTextElements(program: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetTextElements');
-    const resp = await this.http.get(
-      `/sap/bc/adt/programs/programs/${encodeURIComponent(program)}/textelements`,
-    );
+    const resp = await this.http.get(`/sap/bc/adt/programs/programs/${encodeURIComponent(program)}/textelements`);
     return resp.body;
   }
 
   /** Get program variants */
   async getVariants(program: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetVariants');
-    const resp = await this.http.get(
-      `/sap/bc/adt/programs/programs/${encodeURIComponent(program)}/variants`,
-    );
+    const resp = await this.http.get(`/sap/bc/adt/programs/programs/${encodeURIComponent(program)}/variants`);
     return resp.body;
   }
 }

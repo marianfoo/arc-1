@@ -8,7 +8,7 @@ vi.mock('axios', async () => {
   const mockAxiosInstance = {
     request: vi.fn().mockResolvedValue({
       status: 200,
-      data: 'REPORT zhello.\nWRITE: / \'Hello\'.',
+      data: "REPORT zhello.\nWRITE: / 'Hello'.",
       headers: {},
     }),
   };

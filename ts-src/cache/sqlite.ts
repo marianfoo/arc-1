@@ -80,7 +80,9 @@ export class SqliteCache implements Cache {
   }
 
   getNodesByPackage(packageName: string): CacheNode[] {
-    const rows = this.db.prepare('SELECT * FROM nodes WHERE UPPER(package_name) = UPPER(?)').all(packageName) as Array<Record<string, unknown>>;
+    const rows = this.db.prepare('SELECT * FROM nodes WHERE UPPER(package_name) = UPPER(?)').all(packageName) as Array<
+      Record<string, unknown>
+    >;
     return rows.map(rowToNode);
   }
 
@@ -108,14 +110,16 @@ export class SqliteCache implements Cache {
   }
 
   getApi(name: string, type: string): CacheApi | null {
-    const row = this.db.prepare('SELECT * FROM apis WHERE type = ? AND name = ?').get(type, name) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT * FROM apis WHERE type = ? AND name = ?').get(type, name) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) return null;
     return {
-      name: String(row['name']),
-      type: String(row['type']),
-      releaseState: String(row['release_state']),
-      cleanCoreLevel: row['clean_core_level'] as string | undefined,
-      applicationComponent: row['application_component'] as string | undefined,
+      name: String(row.name),
+      type: String(row.type),
+      releaseState: String(row.release_state),
+      cleanCoreLevel: row.clean_core_level as string | undefined,
+      applicationComponent: row.application_component as string | undefined,
     };
   }
 
@@ -137,24 +141,24 @@ export class SqliteCache implements Cache {
 
 function rowToNode(row: Record<string, unknown>): CacheNode {
   return {
-    id: String(row['id']),
-    objectType: String(row['object_type']),
-    objectName: String(row['object_name']),
-    packageName: String(row['package_name']),
-    sourceHash: row['source_hash'] as string | undefined,
-    cachedAt: String(row['cached_at']),
-    valid: row['valid'] === 1,
-    metadata: row['metadata'] ? JSON.parse(String(row['metadata'])) : undefined,
+    id: String(row.id),
+    objectType: String(row.object_type),
+    objectName: String(row.object_name),
+    packageName: String(row.package_name),
+    sourceHash: row.source_hash as string | undefined,
+    cachedAt: String(row.cached_at),
+    valid: row.valid === 1,
+    metadata: row.metadata ? JSON.parse(String(row.metadata)) : undefined,
   };
 }
 
 function rowToEdge(row: Record<string, unknown>): CacheEdge {
   return {
-    fromId: String(row['from_id']),
-    toId: String(row['to_id']),
-    edgeType: String(row['edge_type']) as CacheEdge['edgeType'],
-    source: row['source'] as string | undefined,
-    discoveredAt: String(row['discovered_at']),
-    valid: row['valid'] === 1,
+    fromId: String(row.from_id),
+    toId: String(row.to_id),
+    edgeType: String(row.edge_type) as CacheEdge['edgeType'],
+    source: row.source as string | undefined,
+    discoveredAt: String(row.discovered_at),
+    valid: row.valid === 1,
   };
 }

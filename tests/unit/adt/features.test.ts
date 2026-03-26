@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { FeatureConfig } from '../../../ts-src/adt/config.js';
 import { resolveWithoutProbing } from '../../../ts-src/adt/features.js';
 

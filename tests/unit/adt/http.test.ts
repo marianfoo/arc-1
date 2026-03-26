@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import axios from 'axios';
-import { AdtHttpClient, type AdtHttpConfig } from '../../../ts-src/adt/http.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError, AdtNetworkError } from '../../../ts-src/adt/errors.js';
+import { AdtHttpClient, type AdtHttpConfig } from '../../../ts-src/adt/http.js';
 
 // Mock axios
 vi.mock('axios', async () => {
@@ -173,9 +173,7 @@ describe('AdtHttpClient', () => {
           headers: expect.objectContaining({ 'X-CSRF-Token': 'fetch' }),
         }),
       );
-      expect(mockRequest.mock.calls[1]?.[0]?.headers).toEqual(
-        expect.objectContaining({ 'X-CSRF-Token': 'TOKEN123' }),
-      );
+      expect(mockRequest.mock.calls[1]?.[0]?.headers).toEqual(expect.objectContaining({ 'X-CSRF-Token': 'TOKEN123' }));
     });
 
     it('does not re-fetch CSRF token for second POST', async () => {
@@ -260,7 +258,9 @@ describe('AdtHttpClient', () => {
       mockRequest.mockResolvedValueOnce({
         status: 200,
         data: 'ok',
-        headers: { 'set-cookie': ['SAP_SESSIONID_A4H_001=abc123; Path=/; HttpOnly', 'sap-usercontext=lang=EN; Path=/'] },
+        headers: {
+          'set-cookie': ['SAP_SESSIONID_A4H_001=abc123; Path=/; HttpOnly', 'sap-usercontext=lang=EN; Path=/'],
+        },
       });
       // Second request should include those cookies
       mockRequest.mockResolvedValueOnce({
@@ -350,8 +350,7 @@ describe('AdtHttpClient', () => {
       });
 
       const client = new AdtHttpClient(getDefaultConfig());
-      await expect(client.get('/sap/bc/adt/programs/programs/ZNOTFOUND/source/main'))
-        .rejects.toThrow(AdtApiError);
+      await expect(client.get('/sap/bc/adt/programs/programs/ZNOTFOUND/source/main')).rejects.toThrow(AdtApiError);
     });
 
     it('throws AdtApiError on 500', async () => {
@@ -494,7 +493,7 @@ describe('AdtHttpClient', () => {
       });
 
       const client = new AdtHttpClient(getDefaultConfig());
-      client['csrfToken'] = 'MAIN_TOKEN';
+      client.csrfToken = 'MAIN_TOKEN';
 
       await client.withStatefulSession(async (session) => {
         const resp = await session.post('/sap/bc/adt/lock', '<lock/>');
@@ -515,7 +514,7 @@ describe('AdtHttpClient', () => {
       });
 
       const client = new AdtHttpClient(getDefaultConfig());
-      client['csrfToken'] = 'T';
+      client.csrfToken = 'T';
 
       await client.withStatefulSession(async (session) => {
         await session.post('/lock', '<xml/>');
@@ -528,20 +527,20 @@ describe('AdtHttpClient', () => {
 
     it('session client shares CSRF token with parent', async () => {
       const client = new AdtHttpClient(getDefaultConfig());
-      client['csrfToken'] = 'PARENT_TOKEN';
+      client.csrfToken = 'PARENT_TOKEN';
 
       await client.withStatefulSession(async (session) => {
         // Session should have the parent's token
-        expect(session['csrfToken']).toBe('PARENT_TOKEN');
+        expect(session.csrfToken).toBe('PARENT_TOKEN');
       });
     });
 
     it('session client shares cookie jar with parent', async () => {
       const client = new AdtHttpClient(getDefaultConfig());
-      client['cookieJar'].set('SAP_SESSIONID', 'sess1');
+      client.cookieJar.set('SAP_SESSIONID', 'sess1');
 
       await client.withStatefulSession(async (session) => {
-        expect(session['cookieJar'].get('SAP_SESSIONID')).toBe('sess1');
+        expect(session.cookieJar.get('SAP_SESSIONID')).toBe('sess1');
       });
     });
   });

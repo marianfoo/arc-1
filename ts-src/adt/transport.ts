@@ -6,7 +6,7 @@
  */
 
 import type { AdtHttpClient } from './http.js';
-import { type SafetyConfig, checkTransport } from './safety.js';
+import { checkTransport, type SafetyConfig } from './safety.js';
 import type { TransportRequest } from './types.js';
 
 /** List transport requests for a user */
@@ -66,11 +66,7 @@ export async function createTransport(
 }
 
 /** Release a transport request */
-export async function releaseTransport(
-  http: AdtHttpClient,
-  safety: SafetyConfig,
-  transportId: string,
-): Promise<void> {
+export async function releaseTransport(http: AdtHttpClient, safety: SafetyConfig, transportId: string): Promise<void> {
   checkTransport(safety, transportId, 'ReleaseTransport', true);
 
   await http.post(`/sap/bc/adt/cts/transportrequests/${encodeURIComponent(transportId)}/newreleasejobs`);
@@ -80,7 +76,8 @@ export async function releaseTransport(
 
 function parseTransportList(xml: string): TransportRequest[] {
   const transports: TransportRequest[] = [];
-  const trRegex = /<tm:request[^>]*tm:number="([^"]*)"[^>]*tm:owner="([^"]*)"[^>]*tm:desc="([^"]*)"[^>]*tm:status="([^"]*)"[^>]*tm:type="([^"]*)"/g;
+  const trRegex =
+    /<tm:request[^>]*tm:number="([^"]*)"[^>]*tm:owner="([^"]*)"[^>]*tm:desc="([^"]*)"[^>]*tm:status="([^"]*)"[^>]*tm:type="([^"]*)"/g;
 
   let match: RegExpExecArray | null;
   while ((match = trRegex.exec(xml)) !== null) {
@@ -98,9 +95,5 @@ function parseTransportList(xml: string): TransportRequest[] {
 }
 
 function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

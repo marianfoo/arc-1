@@ -1,8 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { lockObject, unlockObject, createObject, updateSource, deleteObject, safeUpdateSource } from '../../../ts-src/adt/crud.js';
+import {
+  createObject,
+  deleteObject,
+  lockObject,
+  safeUpdateSource,
+  unlockObject,
+  updateSource,
+} from '../../../ts-src/adt/crud.js';
 import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 
 function mockHttp(body = ''): AdtHttpClient {
   return {
@@ -19,7 +26,8 @@ function mockHttp(body = ''): AdtHttpClient {
       const session = {
         get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body }),
         post: vi.fn().mockResolvedValue({
-          statusCode: 200, headers: {},
+          statusCode: 200,
+          headers: {},
           body: '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>SESS_HANDLE</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
         }),
         put: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
@@ -43,7 +51,8 @@ describe('CRUD Operations', () => {
     });
 
     it('parses transport number from lock response', async () => {
-      const lockBody = '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>A4HK900100</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>';
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>A4HK900100</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>';
       const http = {
         ...mockHttp(),
         post: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: lockBody }),
@@ -111,12 +120,8 @@ describe('CRUD Operations', () => {
     it('sends unlock request with handle', async () => {
       const http = mockHttp();
       await unlockObject(http, '/sap/bc/adt/programs/programs/ZTEST', 'HANDLE123');
-      expect(http.post).toHaveBeenCalledWith(
-        expect.stringContaining('_action=UNLOCK'),
-      );
-      expect(http.post).toHaveBeenCalledWith(
-        expect.stringContaining('lockHandle=HANDLE123'),
-      );
+      expect(http.post).toHaveBeenCalledWith(expect.stringContaining('_action=UNLOCK'));
+      expect(http.post).toHaveBeenCalledWith(expect.stringContaining('lockHandle=HANDLE123'));
     });
 
     it('encodes lock handle in URL', async () => {
@@ -141,11 +146,7 @@ describe('CRUD Operations', () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowTransportableEdits: true };
       await createObject(http, safety, '/sap/bc/adt/programs/programs', '<xml/>', 'application/xml', 'DEVK900001');
-      expect(http.post).toHaveBeenCalledWith(
-        expect.stringContaining('corrNr=DEVK900001'),
-        '<xml/>',
-        'application/xml',
-      );
+      expect(http.post).toHaveBeenCalledWith(expect.stringContaining('corrNr=DEVK900001'), '<xml/>', 'application/xml');
     });
 
     it('is blocked in read-only mode', async () => {
@@ -157,9 +158,9 @@ describe('CRUD Operations', () => {
     it('is blocked when transport not allowed', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowTransportableEdits: false };
-      await expect(
-        createObject(http, safety, '/url', '<xml/>', 'application/xml', 'DEVK900001'),
-      ).rejects.toThrow(AdtSafetyError);
+      await expect(createObject(http, safety, '/url', '<xml/>', 'application/xml', 'DEVK900001')).rejects.toThrow(
+        AdtSafetyError,
+      );
     });
 
     it('allows transport when allowTransportableEdits is true', async () => {
@@ -176,12 +177,14 @@ describe('CRUD Operations', () => {
   describe('updateSource', () => {
     it('sends PUT with lock handle', async () => {
       const http = mockHttp();
-      await updateSource(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST/source/main', 'REPORT z.', 'HANDLE');
-      expect(http.put).toHaveBeenCalledWith(
-        expect.stringContaining('lockHandle=HANDLE'),
+      await updateSource(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
         'REPORT z.',
-        'text/plain',
+        'HANDLE',
       );
+      expect(http.put).toHaveBeenCalledWith(expect.stringContaining('lockHandle=HANDLE'), 'REPORT z.', 'text/plain');
     });
 
     it('includes transport in URL when provided', async () => {
@@ -214,9 +217,7 @@ describe('CRUD Operations', () => {
     it('sends DELETE with lock handle', async () => {
       const http = mockHttp();
       await deleteObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST', 'HANDLE');
-      expect(http.delete).toHaveBeenCalledWith(
-        expect.stringContaining('lockHandle=HANDLE'),
-      );
+      expect(http.delete).toHaveBeenCalledWith(expect.stringContaining('lockHandle=HANDLE'));
     });
 
     it('includes transport in URL', async () => {
@@ -245,7 +246,8 @@ describe('CRUD Operations', () => {
     it('performs lock → update → unlock in stateful session', async () => {
       const http = mockHttp();
       await safeUpdateSource(
-        http, unrestrictedSafetyConfig(),
+        http,
+        unrestrictedSafetyConfig(),
         '/sap/bc/adt/programs/programs/ZTEST',
         '/sap/bc/adt/programs/programs/ZTEST/source/main',
         'REPORT ztest.',
@@ -254,9 +256,11 @@ describe('CRUD Operations', () => {
     });
 
     it('unlocks even if update fails (try-finally)', async () => {
-      const postMock = vi.fn()
+      const postMock = vi
+        .fn()
         .mockResolvedValueOnce({
-          statusCode: 200, headers: {},
+          statusCode: 200,
+          headers: {},
           body: '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
         })
         // unlock post

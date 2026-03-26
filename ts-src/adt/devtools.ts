@@ -8,7 +8,7 @@
  */
 
 import type { AdtHttpClient } from './http.js';
-import { type SafetyConfig, OperationType, checkOperation } from './safety.js';
+import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
 
 /** Run syntax check on an ABAP object */
@@ -89,9 +89,14 @@ export async function runUnitTests(
   </adtcore:objectSets>
 </aunit:runConfiguration>`;
 
-  const resp = await http.post('/sap/bc/adt/abapunit/testruns', body, 'application/vnd.sap.adt.abapunit.testruns.config.v4+xml', {
-    Accept: 'application/xml',
-  });
+  const resp = await http.post(
+    '/sap/bc/adt/abapunit/testruns',
+    body,
+    'application/vnd.sap.adt.abapunit.testruns.config.v4+xml',
+    {
+      Accept: 'application/xml',
+    },
+  );
 
   return parseUnitTestResults(resp.body);
 }

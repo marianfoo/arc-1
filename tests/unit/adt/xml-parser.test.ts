@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  findDeepNodes,
   parseFunctionGroup,
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
   parseTableContents,
   parseXml,
-  findDeepNodes,
 } from '../../../ts-src/adt/xml-parser.js';
 
 const fixturesDir = join(import.meta.dirname, '../../fixtures/xml');
@@ -21,30 +21,32 @@ describe('XML Parser', () => {
     it('parses simple XML', () => {
       const result = parseXml('<root><child attr="val">text</child></root>');
       expect(result).toBeDefined();
-      expect((result['root'] as any)['child']).toBeDefined();
+      expect((result.root as any).child).toBeDefined();
     });
 
     it('strips namespace prefixes', () => {
-      const result = parseXml('<adtcore:root xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:child>val</adtcore:child></adtcore:root>');
-      expect(result['root']).toBeDefined();
+      const result = parseXml(
+        '<adtcore:root xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:child>val</adtcore:child></adtcore:root>',
+      );
+      expect(result.root).toBeDefined();
     });
 
     it('preserves attributes with @_ prefix', () => {
       const result = parseXml('<item name="test" type="PROG"/>');
-      const item = result['item'] as Record<string, unknown>;
+      const item = result.item as Record<string, unknown>;
       expect(item['@_name']).toBe('test');
       expect(item['@_type']).toBe('PROG');
     });
 
     it('keeps values as strings (does not parse numbers)', () => {
       const result = parseXml('<item code="001"/>');
-      const item = result['item'] as Record<string, unknown>;
+      const item = result.item as Record<string, unknown>;
       expect(item['@_code']).toBe('001'); // NOT number 1
     });
 
     it('handles empty XML', () => {
       const result = parseXml('<root/>');
-      expect(result['root']).toBeDefined();
+      expect(result.root).toBeDefined();
     });
   });
 
@@ -56,8 +58,8 @@ describe('XML Parser', () => {
       const results = parseSearchResults(xml);
 
       expect(results.length).toBeGreaterThan(0);
-      expect(results[0]!.objectName).toBeTruthy();
-      expect(results[0]!.objectType).toBeTruthy();
+      expect(results[0]?.objectName).toBeTruthy();
+      expect(results[0]?.objectType).toBeTruthy();
     });
 
     it('handles single result (not array)', () => {
@@ -66,10 +68,10 @@ describe('XML Parser', () => {
       </adtcore:objectReferences>`;
       const results = parseSearchResults(xml);
       expect(results).toHaveLength(1);
-      expect(results[0]!.objectName).toBe('ZTEST');
-      expect(results[0]!.objectType).toBe('PROG/P');
-      expect(results[0]!.packageName).toBe('$TMP');
-      expect(results[0]!.description).toBe('Test');
+      expect(results[0]?.objectName).toBe('ZTEST');
+      expect(results[0]?.objectType).toBe('PROG/P');
+      expect(results[0]?.packageName).toBe('$TMP');
+      expect(results[0]?.description).toBe('Test');
     });
 
     it('handles empty results', () => {
@@ -85,8 +87,8 @@ describe('XML Parser', () => {
       </adtcore:objectReferences>`;
       const results = parseSearchResults(xml);
       expect(results).toHaveLength(2);
-      expect(results[0]!.objectName).toBe('PROG1');
-      expect(results[1]!.objectName).toBe('ZCL_1');
+      expect(results[0]?.objectName).toBe('PROG1');
+      expect(results[1]?.objectName).toBe('ZCL_1');
     });
 
     it('handles missing attributes gracefully', () => {
@@ -95,8 +97,8 @@ describe('XML Parser', () => {
       </adtcore:objectReferences>`;
       const results = parseSearchResults(xml);
       expect(results).toHaveLength(1);
-      expect(results[0]!.objectName).toBe('');
-      expect(results[0]!.objectType).toBe('');
+      expect(results[0]?.objectName).toBe('');
+      expect(results[0]?.objectType).toBe('');
     });
   });
 
@@ -191,8 +193,8 @@ describe('XML Parser', () => {
         release: '753',
         description: 'SAP Basis Component',
       });
-      expect(components[1]!.name).toBe('SAP_ABA');
-      expect(components[2]!.name).toBe('SAP_GWFND');
+      expect(components[1]?.name).toBe('SAP_ABA');
+      expect(components[2]?.name).toBe('SAP_GWFND');
     });
 
     it('handles empty feed', () => {
@@ -230,8 +232,8 @@ describe('XML Parser', () => {
   </atom:entry>
 </atom:feed>`;
       const components = parseInstalledComponents(xml);
-      expect(components[0]!.name).toBe('CUSTOM');
-      expect(components[0]!.release).toBe('100');
+      expect(components[0]?.name).toBe('CUSTOM');
+      expect(components[0]?.release).toBe('100');
     });
   });
 

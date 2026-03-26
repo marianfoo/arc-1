@@ -61,8 +61,8 @@ export function parseArgs(args: string[]): ServerConfig {
   config.insecure = resolveBool('insecure', 'SAP_INSECURE', false);
 
   // --- Cookie Auth ---
-  config.cookieFile = getFlag('cookie-file') ?? process.env['SAP_COOKIE_FILE'];
-  config.cookieString = getFlag('cookie-string') ?? process.env['SAP_COOKIE_STRING'];
+  config.cookieFile = getFlag('cookie-file') ?? process.env.SAP_COOKIE_FILE;
+  config.cookieString = getFlag('cookie-string') ?? process.env.SAP_COOKIE_STRING;
 
   // --- Transport ---
   const transport = resolve('transport', 'SAP_TRANSPORT', 'stdio');
@@ -76,11 +76,7 @@ export function parseArgs(args: string[]): ServerConfig {
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
   const pkgs = resolve('allowed-packages', 'SAP_ALLOWED_PACKAGES', '');
   config.allowedPackages = pkgs ? pkgs.split(',').map((p) => p.trim()) : [];
-  config.allowTransportableEdits = resolveBool(
-    'allow-transportable-edits',
-    'SAP_ALLOW_TRANSPORTABLE_EDITS',
-    false,
-  );
+  config.allowTransportableEdits = resolveBool('allow-transportable-edits', 'SAP_ALLOW_TRANSPORTABLE_EDITS', false);
   config.enableTransports = resolveBool('enable-transports', 'SAP_ENABLE_TRANSPORTS', false);
 
   // --- Features ---
@@ -92,9 +88,9 @@ export function parseArgs(args: string[]): ServerConfig {
   config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA');
 
   // --- Authentication (MCP client → ARC-1) ---
-  config.apiKey = getFlag('api-key') ?? process.env['ARC1_API_KEY'] ?? process.env['VSP_API_KEY'];
-  config.oidcIssuer = getFlag('oidc-issuer') ?? process.env['SAP_OIDC_ISSUER'];
-  config.oidcAudience = getFlag('oidc-audience') ?? process.env['SAP_OIDC_AUDIENCE'];
+  config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY ?? process.env.VSP_API_KEY;
+  config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
+  config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
 
   // --- Misc ---
   config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false);

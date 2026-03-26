@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleToolCall } from '../../../ts-src/handlers/intent.js';
 import { AdtClient } from '../../../ts-src/adt/client.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+import { handleToolCall } from '../../../ts-src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
 
 // Mock axios so AdtClient doesn't make real requests
@@ -9,7 +9,7 @@ vi.mock('axios', async () => {
   const mockAxiosInstance = {
     request: vi.fn().mockResolvedValue({
       status: 200,
-      data: 'REPORT zhello.\nWRITE: / \'Hello\'.',
+      data: "REPORT zhello.\nWRITE: / 'Hello'.",
       headers: {},
     }),
   };
@@ -40,7 +40,7 @@ describe('Intent Handler', () => {
         name: 'ZHELLO',
       });
       expect(result.isError).toBeUndefined();
-      expect(result.content[0]!.text).toContain('REPORT zhello');
+      expect(result.content[0]?.text).toContain('REPORT zhello');
     });
 
     it('reads a class (CLAS)', async () => {
@@ -177,10 +177,10 @@ describe('Intent Handler', () => {
         name: 'TEST',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]!.text).toContain('Unknown SAPRead type');
+      expect(result.content[0]?.text).toContain('Unknown SAPRead type');
       // Should list supported types
-      expect(result.content[0]!.text).toContain('PROG');
-      expect(result.content[0]!.text).toContain('CLAS');
+      expect(result.content[0]?.text).toContain('PROG');
+      expect(result.content[0]?.text).toContain('CLAS');
     });
 
     it('handles missing type parameter', async () => {
@@ -236,7 +236,7 @@ describe('Intent Handler', () => {
       });
       // Either succeeds (if XML parsed) or error is caught gracefully
       expect(result.content).toHaveLength(1);
-      expect(result.content[0]!.type).toBe('text');
+      expect(result.content[0]?.type).toBe('text');
     });
 
     it('is blocked when free SQL is disallowed', async () => {
@@ -248,7 +248,7 @@ describe('Intent Handler', () => {
         sql: 'SELECT * FROM T000',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]!.text).toContain('blocked');
+      expect(result.content[0]?.text).toContain('blocked');
     });
   });
 
@@ -258,11 +258,11 @@ describe('Intent Handler', () => {
     it('lints ABAP source code', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
         action: 'lint',
-        source: 'REPORT ztest.\nWRITE: / \'Hello\'.',
+        source: "REPORT ztest.\nWRITE: / 'Hello'.",
         name: 'ZTEST',
       });
       expect(result.isError).toBeUndefined();
-      const issues = JSON.parse(result.content[0]!.text);
+      const issues = JSON.parse(result.content[0]?.text);
       expect(Array.isArray(issues)).toBe(true);
     });
 
@@ -294,7 +294,7 @@ describe('Intent Handler', () => {
     it('returns error for unknown tool name', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'UnknownTool', {});
       expect(result.isError).toBe(true);
-      expect(result.content[0]!.text).toContain('Unknown tool');
+      expect(result.content[0]?.text).toContain('Unknown tool');
     });
   });
 
@@ -311,7 +311,7 @@ describe('Intent Handler', () => {
         name: 'ZHELLO',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]!.text).toContain('blocked by safety');
+      expect(result.content[0]?.text).toContain('blocked by safety');
     });
 
     it('returns isError=true for all error responses', async () => {
@@ -321,7 +321,7 @@ describe('Intent Handler', () => {
       });
       expect(result.isError).toBe(true);
       expect(result.content).toHaveLength(1);
-      expect(result.content[0]!.type).toBe('text');
+      expect(result.content[0]?.type).toBe('text');
     });
 
     it('catches non-Error exceptions', async () => {

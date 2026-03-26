@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteCache } from '../../../ts-src/cache/sqlite.js';
 import type { CacheNode } from '../../../ts-src/cache/cache.js';
+import { SqliteCache } from '../../../ts-src/cache/sqlite.js';
 
 function makeNode(id: string, pkg = '$TMP'): CacheNode {
   return {
@@ -29,8 +29,8 @@ describe('SqliteCache', () => {
     cache.putNode(makeNode('ZCL_TEST'));
     const node = cache.getNode('ZCL_TEST');
     expect(node).not.toBeNull();
-    expect(node!.objectName).toBe('ZCL_TEST');
-    expect(node!.valid).toBe(true);
+    expect(node?.objectName).toBe('ZCL_TEST');
+    expect(node?.valid).toBe(true);
   });
 
   it('returns null for missing node', () => {
@@ -49,7 +49,7 @@ describe('SqliteCache', () => {
     cache.putNode(makeNode('ZCL_TEST'));
     cache.invalidateNode('ZCL_TEST');
     const node = cache.getNode('ZCL_TEST');
-    expect(node!.valid).toBe(false);
+    expect(node?.valid).toBe(false);
   });
 
   it('stores and retrieves edges', () => {
@@ -62,7 +62,7 @@ describe('SqliteCache', () => {
     });
     const edges = cache.getEdgesFrom('A');
     expect(edges).toHaveLength(1);
-    expect(edges[0]!.toId).toBe('B');
+    expect(edges[0]?.toId).toBe('B');
   });
 
   it('stores and retrieves API objects', () => {
@@ -74,7 +74,7 @@ describe('SqliteCache', () => {
     });
     const api = cache.getApi('CL_ABAP_REGEX', 'CLAS');
     expect(api).not.toBeNull();
-    expect(api!.cleanCoreLevel).toBe('A');
+    expect(api?.cleanCoreLevel).toBe('A');
   });
 
   it('clears all data', () => {
@@ -97,6 +97,6 @@ describe('SqliteCache', () => {
   it('stores metadata as JSON', () => {
     cache.putNode({ ...makeNode('A'), metadata: { foo: 'bar', count: 42 } });
     const node = cache.getNode('A');
-    expect(node!.metadata).toEqual({ foo: 'bar', count: 42 });
+    expect(node?.metadata).toEqual({ foo: 'bar', count: 42 });
   });
 });

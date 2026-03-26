@@ -11,9 +11,9 @@
  */
 
 import type { AdtClient } from '../adt/client.js';
-import type { ServerConfig } from '../server/types.js';
-import { lintAbapSource, detectFilename } from '../lint/lint.js';
+import { detectFilename, lintAbapSource } from '../lint/lint.js';
 import { logger } from '../server/logger.js';
+import type { ServerConfig } from '../server/types.js';
 
 /** MCP tool call result */
 export interface ToolResult {
@@ -77,18 +77,18 @@ export async function handleToolCall(
 // ─── Individual Tool Handlers ────────────────────────────────────────
 
 async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const type = String(args['type'] ?? '');
-  const name = String(args['name'] ?? '');
+  const type = String(args.type ?? '');
+  const name = String(args.name ?? '');
 
   switch (type) {
     case 'PROG':
       return textResult(await client.getProgram(name));
     case 'CLAS':
-      return textResult(await client.getClass(name, args['include'] as string | undefined));
+      return textResult(await client.getClass(name, args.include as string | undefined));
     case 'INTF':
       return textResult(await client.getInterface(name));
     case 'FUNC':
-      return textResult(await client.getFunction(String(args['group'] ?? ''), name));
+      return textResult(await client.getFunction(String(args.group ?? ''), name));
     case 'FUGR': {
       const fg = await client.getFunctionGroup(name);
       return textResult(JSON.stringify(fg, null, 2));
@@ -106,8 +106,8 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
     case 'VIEW':
       return textResult(await client.getView(name));
     case 'TABLE_CONTENTS': {
-      const maxRows = Number(args['maxRows'] ?? 100);
-      const data = await client.getTableContents(name, maxRows, args['sqlFilter'] as string | undefined);
+      const maxRows = Number(args.maxRows ?? 100);
+      const data = await client.getTableContents(name, maxRows, args.sqlFilter as string | undefined);
       return textResult(JSON.stringify(data, null, 2));
     }
     case 'DEVC': {
@@ -127,31 +127,33 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
     case 'VARIANTS':
       return textResult(await client.getVariants(name));
     default:
-      return errorResult(`Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`);
+      return errorResult(
+        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
+      );
   }
 }
 
 async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const query = String(args['query'] ?? '');
-  const maxResults = Number(args['maxResults'] ?? 100);
+  const query = String(args.query ?? '');
+  const maxResults = Number(args.maxResults ?? 100);
   const results = await client.searchObject(query, maxResults);
   return textResult(JSON.stringify(results, null, 2));
 }
 
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const sql = String(args['sql'] ?? '');
-  const maxRows = Number(args['maxRows'] ?? 100);
+  const sql = String(args.sql ?? '');
+  const maxRows = Number(args.maxRows ?? 100);
   const data = await client.runQuery(sql, maxRows);
   return textResult(JSON.stringify(data, null, 2));
 }
 
 async function handleSAPLint(_client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const action = String(args['action'] ?? '');
+  const action = String(args.action ?? '');
 
   switch (action) {
     case 'lint': {
-      const source = String(args['source'] ?? '');
-      const name = String(args['name'] ?? 'UNKNOWN');
+      const source = String(args.source ?? '');
+      const name = String(args.name ?? 'UNKNOWN');
       const filename = detectFilename(source, name);
       const issues = lintAbapSource(source, filename);
       return textResult(JSON.stringify(issues, null, 2));

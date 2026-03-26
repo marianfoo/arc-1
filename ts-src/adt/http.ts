@@ -26,11 +26,11 @@
  *    This is an SAP convention, not ADT-specific.
  */
 
-import { Agent as HttpsAgent } from 'node:https';
 import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { AdtApiError, AdtNetworkError } from './errors.js';
 import type { BTPProxyConfig } from './btp.js';
+import { AdtApiError, AdtNetworkError } from './errors.js';
 
 /** Session type for ADT requests */
 export type SessionType = 'stateful' | 'stateless' | undefined;
@@ -127,7 +127,12 @@ export class AdtHttpClient {
   }
 
   /** POST request (includes CSRF token) */
-  async post(path: string, body?: string, contentType?: string, headers?: Record<string, string>): Promise<AdtResponse> {
+  async post(
+    path: string,
+    body?: string,
+    contentType?: string,
+    headers?: Record<string, string>,
+  ): Promise<AdtResponse> {
     return this.request('POST', path, body, contentType, headers);
   }
 
@@ -200,7 +205,7 @@ export class AdtHttpClient {
       cookieParts.push(`${k}=${v}`);
     }
     if (cookieParts.length > 0) {
-      headers['Cookie'] = cookieParts.join('; ');
+      headers.Cookie = cookieParts.join('; ');
     }
 
     // BTP Connectivity proxy: inject Proxy-Authorization JWT
@@ -232,7 +237,7 @@ export class AdtHttpClient {
           updatedCookieParts.push(`${k}=${v}`);
         }
         if (updatedCookieParts.length > 0) {
-          headers['Cookie'] = updatedCookieParts.join('; ');
+          headers.Cookie = updatedCookieParts.join('; ');
         }
         const retryResponse = await this.axios.request({
           method,
@@ -308,7 +313,7 @@ export class AdtHttpClient {
       cookieParts.push(`${k}=${v}`);
     }
     if (cookieParts.length > 0) {
-      headers['Cookie'] = cookieParts.join('; ');
+      headers.Cookie = cookieParts.join('; ');
     }
 
     try {
@@ -324,12 +329,20 @@ export class AdtHttpClient {
       const token = response.headers['x-csrf-token'];
       if (!token || token === 'Required') {
         if (response.status === 401) {
-          throw new AdtApiError('Authentication failed (401): check username/password', 401, '/sap/bc/adt/core/discovery');
+          throw new AdtApiError(
+            'Authentication failed (401): check username/password',
+            401,
+            '/sap/bc/adt/core/discovery',
+          );
         }
         if (response.status === 403) {
           throw new AdtApiError('Access forbidden (403): check user authorizations', 403, '/sap/bc/adt/core/discovery');
         }
-        throw new AdtApiError(`No CSRF token in response (HTTP ${response.status})`, response.status, '/sap/bc/adt/core/discovery');
+        throw new AdtApiError(
+          `No CSRF token in response (HTTP ${response.status})`,
+          response.status,
+          '/sap/bc/adt/core/discovery',
+        );
       }
 
       this.csrfToken = token;

@@ -7,7 +7,7 @@
  */
 
 import type { AdtHttpClient } from './http.js';
-import { type SafetyConfig, OperationType, checkOperation } from './safety.js';
+import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 
 /** Definition navigation result */
 export interface DefinitionResult {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VERSION, createServer } from '../../../ts-src/server/server.js';
+import { createServer, VERSION } from '../../../ts-src/server/server.js';
 import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
 
 describe('MCP Server', () => {

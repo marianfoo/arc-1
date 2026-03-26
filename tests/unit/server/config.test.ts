@@ -42,9 +42,9 @@ describe('parseArgs', () => {
   });
 
   it('reads from environment variables', () => {
-    process.env['SAP_URL'] = 'http://env:8000';
-    process.env['SAP_USER'] = 'envuser';
-    process.env['SAP_CLIENT'] = '200';
+    process.env.SAP_URL = 'http://env:8000';
+    process.env.SAP_USER = 'envuser';
+    process.env.SAP_CLIENT = '200';
     const config = parseArgs([]);
     expect(config.url).toBe('http://env:8000');
     expect(config.username).toBe('envuser');
@@ -52,7 +52,7 @@ describe('parseArgs', () => {
   });
 
   it('CLI flags take precedence over env vars', () => {
-    process.env['SAP_URL'] = 'http://env:8000';
+    process.env.SAP_URL = 'http://env:8000';
     const config = parseArgs(['--url', 'http://cli:9000']);
     expect(config.url).toBe('http://cli:9000');
   });
@@ -64,8 +64,8 @@ describe('parseArgs', () => {
   });
 
   it('parses boolean env vars', () => {
-    process.env['SAP_READ_ONLY'] = 'true';
-    process.env['SAP_BLOCK_FREE_SQL'] = '1';
+    process.env.SAP_READ_ONLY = 'true';
+    process.env.SAP_BLOCK_FREE_SQL = '1';
     const config = parseArgs([]);
     expect(config.readOnly).toBe(true);
     expect(config.blockFreeSQL).toBe(true);
@@ -93,7 +93,7 @@ describe('parseArgs', () => {
   });
 
   it('parses allowed packages as comma-separated list', () => {
-    process.env['SAP_ALLOWED_PACKAGES'] = 'Z*,$TMP,YFOO';
+    process.env.SAP_ALLOWED_PACKAGES = 'Z*,$TMP,YFOO';
     const config = parseArgs([]);
     expect(config.allowedPackages).toEqual(['Z*', '$TMP', 'YFOO']);
   });

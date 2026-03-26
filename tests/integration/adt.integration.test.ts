@@ -7,9 +7,9 @@
  * Run: npm run test:integration
  */
 
-import { describe, expect, it, beforeAll } from 'vitest';
-import { hasSapCredentials, getTestClient, SKIP_REASON } from './helpers.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../ts-src/adt/client.js';
+import { getTestClient, hasSapCredentials } from './helpers.js';
 
 // Skip entire suite if no SAP credentials
 const describeIf = hasSapCredentials() ? describe : describe.skip;
@@ -36,7 +36,7 @@ describeIf('ADT Integration Tests', () => {
       expect(components.length).toBeGreaterThan(0);
       const basis = components.find((c) => c.name === 'SAP_BASIS');
       expect(basis).toBeDefined();
-      expect(basis!.release).toBeTruthy();
+      expect(basis?.release).toBeTruthy();
     });
 
     it('installed components have valid structure', async () => {
@@ -56,7 +56,7 @@ describeIf('ADT Integration Tests', () => {
     it('searches for objects by pattern', async () => {
       const results = await client.searchObject('CL_ABAP_*', 10);
       expect(results.length).toBeGreaterThan(0);
-      expect(results[0]!.objectName).toMatch(/^CL_ABAP_/);
+      expect(results[0]?.objectName).toMatch(/^CL_ABAP_/);
     });
 
     it('returns empty results for non-existent pattern', async () => {
@@ -203,10 +203,10 @@ describeIf('ADT Integration Tests', () => {
     it('read-only client can still read', async () => {
       const { AdtClient } = await import('../../ts-src/adt/client.js');
       const roClient = new AdtClient({
-        baseUrl: process.env['TEST_SAP_URL'] || process.env['SAP_URL'] || '',
-        username: process.env['TEST_SAP_USER'] || process.env['SAP_USER'] || '',
-        password: process.env['TEST_SAP_PASSWORD'] || process.env['SAP_PASSWORD'] || '',
-        insecure: (process.env['TEST_SAP_INSECURE'] || process.env['SAP_INSECURE']) === 'true',
+        baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
+        username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
+        password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
+        insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
         safety: {
           readOnly: true,
           blockFreeSQL: true,
@@ -229,10 +229,10 @@ describeIf('ADT Integration Tests', () => {
     it('read-only client can search', async () => {
       const { AdtClient } = await import('../../ts-src/adt/client.js');
       const roClient = new AdtClient({
-        baseUrl: process.env['TEST_SAP_URL'] || process.env['SAP_URL'] || '',
-        username: process.env['TEST_SAP_USER'] || process.env['SAP_USER'] || '',
-        password: process.env['TEST_SAP_PASSWORD'] || process.env['SAP_PASSWORD'] || '',
-        insecure: (process.env['TEST_SAP_INSECURE'] || process.env['SAP_INSECURE']) === 'true',
+        baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
+        username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
+        password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
+        insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
         safety: {
           readOnly: true,
           blockFreeSQL: true,
@@ -254,10 +254,10 @@ describeIf('ADT Integration Tests', () => {
     it('read-only client blocks free SQL', async () => {
       const { AdtClient } = await import('../../ts-src/adt/client.js');
       const roClient = new AdtClient({
-        baseUrl: process.env['TEST_SAP_URL'] || process.env['SAP_URL'] || '',
-        username: process.env['TEST_SAP_USER'] || process.env['SAP_USER'] || '',
-        password: process.env['TEST_SAP_PASSWORD'] || process.env['SAP_PASSWORD'] || '',
-        insecure: (process.env['TEST_SAP_INSECURE'] || process.env['SAP_INSECURE']) === 'true',
+        baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
+        username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
+        password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
+        insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
         safety: {
           readOnly: true,
           blockFreeSQL: true,

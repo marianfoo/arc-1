@@ -51,12 +51,7 @@ describe('parseCookieFileContent', () => {
   });
 
   it('skips comments and empty lines', () => {
-    const content = [
-      '# This is a comment',
-      '',
-      '  ',
-      '.example.com\tTRUE\t/\tFALSE\t0\tkey\tvalue',
-    ].join('\n');
+    const content = ['# This is a comment', '', '  ', '.example.com\tTRUE\t/\tFALSE\t0\tkey\tvalue'].join('\n');
 
     const cookies = parseCookieFileContent(content);
     expect(cookies).toEqual({ key: 'value' });
@@ -69,11 +64,9 @@ describe('parseCookieFileContent', () => {
   });
 
   it('handles mixed formats', () => {
-    const content = [
-      '# Comment',
-      '.example.com\tTRUE\t/\tFALSE\t0\tnetscape\tcookievalue',
-      'simple=keyvalue',
-    ].join('\n');
+    const content = ['# Comment', '.example.com\tTRUE\t/\tFALSE\t0\tnetscape\tcookievalue', 'simple=keyvalue'].join(
+      '\n',
+    );
 
     const cookies = parseCookieFileContent(content);
     expect(cookies).toEqual({

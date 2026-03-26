@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
 import {
-  type SafetyConfig,
-  OperationType,
   checkOperation,
   checkPackage,
   checkTransport,
@@ -13,6 +11,8 @@ import {
   isPackageAllowed,
   isTransportAllowed,
   isTransportWriteAllowed,
+  OperationType,
+  type SafetyConfig,
   unrestrictedSafetyConfig,
 } from '../../../ts-src/adt/safety.js';
 

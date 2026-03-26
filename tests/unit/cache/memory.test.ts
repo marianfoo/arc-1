@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { CacheApi, CacheEdge, CacheNode } from '../../../ts-src/cache/cache.js';
 import { MemoryCache } from '../../../ts-src/cache/memory.js';
-import type { CacheNode, CacheEdge, CacheApi } from '../../../ts-src/cache/cache.js';
 
 function makeNode(id: string, pkg = '$TMP'): CacheNode {
   return {
@@ -25,7 +25,7 @@ describe('MemoryCache', () => {
       cache.putNode(makeNode('ZCL_TEST'));
       const node = cache.getNode('ZCL_TEST');
       expect(node).not.toBeNull();
-      expect(node!.objectName).toBe('ZCL_TEST');
+      expect(node?.objectName).toBe('ZCL_TEST');
     });
 
     it('returns null for missing node', () => {
@@ -36,7 +36,7 @@ describe('MemoryCache', () => {
       cache.putNode(makeNode('ZCL_TEST'));
       cache.putNode({ ...makeNode('ZCL_TEST'), objectType: 'PROG' });
       const node = cache.getNode('ZCL_TEST');
-      expect(node!.objectType).toBe('PROG');
+      expect(node?.objectType).toBe('PROG');
     });
 
     it('finds nodes by package', () => {
@@ -51,7 +51,7 @@ describe('MemoryCache', () => {
       cache.putNode(makeNode('ZCL_TEST'));
       cache.invalidateNode('ZCL_TEST');
       const node = cache.getNode('ZCL_TEST');
-      expect(node!.valid).toBe(false);
+      expect(node?.valid).toBe(false);
     });
   });
 
@@ -67,7 +67,7 @@ describe('MemoryCache', () => {
       cache.putEdge(edge);
       const edges = cache.getEdgesFrom('ZCL_A');
       expect(edges).toHaveLength(1);
-      expect(edges[0]!.toId).toBe('ZCL_B');
+      expect(edges[0]?.toId).toBe('ZCL_B');
     });
 
     it('returns empty array for no edges', () => {
@@ -86,7 +86,7 @@ describe('MemoryCache', () => {
       cache.putApi(api);
       const found = cache.getApi('CL_ABAP_REGEX', 'CLAS');
       expect(found).not.toBeNull();
-      expect(found!.releaseState).toBe('released');
+      expect(found?.releaseState).toBe('released');
     });
 
     it('returns null for missing API', () => {

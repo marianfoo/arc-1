@@ -11,7 +11,7 @@
  */
 
 import type { AdtHttpClient } from './http.js';
-import { type SafetyConfig, OperationType, checkOperation, checkTransportableEdit } from './safety.js';
+import { checkOperation, checkTransportableEdit, OperationType, type SafetyConfig } from './safety.js';
 /** Lock result from SAP */
 export interface LockResult {
   lockHandle: string;
@@ -30,12 +30,9 @@ export async function lockObject(
     checkOperation(safety, OperationType.Lock, 'LockObject');
   }
 
-  const resp = await http.post(
-    `${objectUrl}?_action=LOCK&accessMode=${accessMode}`,
-    undefined,
-    undefined,
-    { Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result' },
-  );
+  const resp = await http.post(`${objectUrl}?_action=LOCK&accessMode=${accessMode}`, undefined, undefined, {
+    Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result',
+  });
 
   // Parse lock response (asx:abap format) — simple regex extraction
   const lockHandle = extractXmlValue(resp.body, 'LOCK_HANDLE');
@@ -46,11 +43,7 @@ export async function lockObject(
 }
 
 /** Unlock an ABAP object */
-export async function unlockObject(
-  http: AdtHttpClient,
-  objectUrl: string,
-  lockHandle: string,
-): Promise<void> {
+export async function unlockObject(http: AdtHttpClient, objectUrl: string, lockHandle: string): Promise<void> {
   await http.post(`${objectUrl}?_action=UNLOCK&lockHandle=${encodeURIComponent(lockHandle)}`);
 }
 

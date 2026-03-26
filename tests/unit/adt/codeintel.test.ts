@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { findDefinition, findReferences, getCompletion } from '../../../ts-src/adt/codeintel.js';
 import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -20,25 +20,26 @@ describe('Code Intelligence', () => {
 
   describe('findDefinition', () => {
     it('returns definition location', async () => {
-      const xml = '<navigation uri="/sap/bc/adt/oo/classes/CL_ABAP_REGEX/source/main" type="CLAS/OC" name="CL_ABAP_REGEX"/>';
+      const xml =
+        '<navigation uri="/sap/bc/adt/oo/classes/CL_ABAP_REGEX/source/main" type="CLAS/OC" name="CL_ABAP_REGEX"/>';
       const http = mockHttp(xml);
       const result = await findDefinition(
-        http, unrestrictedSafetyConfig(),
+        http,
+        unrestrictedSafetyConfig(),
         '/sap/bc/adt/programs/programs/ZTEST/source/main',
-        10, 5, 'DATA: lo_regex TYPE REF TO cl_abap_regex.',
+        10,
+        5,
+        'DATA: lo_regex TYPE REF TO cl_abap_regex.',
       );
       expect(result).not.toBeNull();
-      expect(result!.uri).toContain('CL_ABAP_REGEX');
-      expect(result!.type).toBe('CLAS/OC');
-      expect(result!.name).toBe('CL_ABAP_REGEX');
+      expect(result?.uri).toContain('CL_ABAP_REGEX');
+      expect(result?.type).toBe('CLAS/OC');
+      expect(result?.name).toBe('CL_ABAP_REGEX');
     });
 
     it('returns null when no definition found', async () => {
       const http = mockHttp('<navigation/>');
-      const result = await findDefinition(
-        http, unrestrictedSafetyConfig(),
-        '/source', 1, 1, 'DATA: lv_x.',
-      );
+      const result = await findDefinition(http, unrestrictedSafetyConfig(), '/source', 1, 1, 'DATA: lv_x.');
       expect(result).toBeNull();
     });
 
@@ -65,9 +66,7 @@ describe('Code Intelligence', () => {
     it('is blocked when Intelligence ops are disallowed', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(
-        findDefinition(http, safety, '/source', 1, 1, 'x'),
-      ).rejects.toThrow(AdtSafetyError);
+      await expect(findDefinition(http, safety, '/source', 1, 1, 'x')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -80,13 +79,10 @@ describe('Code Intelligence', () => {
         <ref uri="/sap/bc/adt/oo/classes/ZCL_USER" type="CLAS/OC" name="ZCL_USER"/>
       </references>`;
       const http = mockHttp(xml);
-      const results = await findReferences(
-        http, unrestrictedSafetyConfig(),
-        '/sap/bc/adt/oo/classes/ZCL_HELPER',
-      );
+      const results = await findReferences(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_HELPER');
       expect(results).toHaveLength(2);
-      expect(results[0]!.name).toBe('ZPROG1');
-      expect(results[1]!.name).toBe('ZCL_USER');
+      expect(results[0]?.name).toBe('ZPROG1');
+      expect(results[1]?.name).toBe('ZCL_USER');
     });
 
     it('returns empty array when no references found', async () => {
@@ -115,21 +111,21 @@ describe('Code Intelligence', () => {
       </proposals>`;
       const http = mockHttp(xml);
       const results = await getCompletion(
-        http, unrestrictedSafetyConfig(),
+        http,
+        unrestrictedSafetyConfig(),
         '/sap/bc/adt/programs/programs/ZTEST/source/main',
-        5, 3, 'WR',
+        5,
+        3,
+        'WR',
       );
       expect(results).toHaveLength(2);
-      expect(results[0]!.text).toBe('WRITE');
-      expect(results[0]!.type).toBe('keyword');
+      expect(results[0]?.text).toBe('WRITE');
+      expect(results[0]?.type).toBe('keyword');
     });
 
     it('returns empty for no completions', async () => {
       const http = mockHttp('<proposals/>');
-      const results = await getCompletion(
-        http, unrestrictedSafetyConfig(),
-        '/source', 1, 1, '',
-      );
+      const results = await getCompletion(http, unrestrictedSafetyConfig(), '/source', 1, 1, '');
       expect(results).toEqual([]);
     });
 

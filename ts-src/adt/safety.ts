@@ -101,7 +101,7 @@ export function isOperationAllowed(config: SafetyConfig, op: OperationTypeCode):
   if (op === OperationType.Transport && !config.enableTransports) return false;
 
   // Disallowed ops blacklist (takes precedence over allowed)
-  if (config.disallowedOps && config.disallowedOps.includes(op)) return false;
+  if (config.disallowedOps?.includes(op)) return false;
 
   // Allowed ops whitelist (if set, only listed ops are allowed)
   if (config.allowedOps && !config.allowedOps.includes(op)) return false;

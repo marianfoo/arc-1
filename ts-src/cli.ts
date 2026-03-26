@@ -11,23 +11,20 @@
  *   arc1 version              - Show version
  */
 
+import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { config } from 'dotenv';
-import { readFileSync } from 'node:fs';
 import { AdtClient } from './adt/client.js';
+import { detectFilename, lintAbapSource } from './lint/lint.js';
 import { parseArgs } from './server/config.js';
 import { VERSION } from './server/server.js';
-import { lintAbapSource, detectFilename } from './lint/lint.js';
 
 // Load .env
 config();
 
 const program = new Command();
 
-program
-  .name('arc1')
-  .description('ARC-1 — MCP Server for SAP ABAP Systems')
-  .version(VERSION);
+program.name('arc1').description('ARC-1 — MCP Server for SAP ABAP Systems').version(VERSION);
 
 // Server mode (default)
 program

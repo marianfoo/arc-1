@@ -32,10 +32,24 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           type: {
             type: 'string',
             enum: [
-              'PROG', 'CLAS', 'INTF', 'FUNC', 'FUGR', 'INCL',
-              'DDLS', 'BDEF', 'SRVD', 'TABL', 'VIEW',
-              'TABLE_CONTENTS', 'DEVC', 'SYSTEM', 'COMPONENTS',
-              'MESSAGES', 'TEXT_ELEMENTS', 'VARIANTS',
+              'PROG',
+              'CLAS',
+              'INTF',
+              'FUNC',
+              'FUGR',
+              'INCL',
+              'DDLS',
+              'BDEF',
+              'SRVD',
+              'TABL',
+              'VIEW',
+              'TABLE_CONTENTS',
+              'DEVC',
+              'SYSTEM',
+              'COMPONENTS',
+              'MESSAGES',
+              'TEXT_ELEMENTS',
+              'VARIANTS',
             ],
             description: 'Object type to read',
           },
@@ -50,7 +64,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
     {
       name: 'SAPSearch',
-      description: 'Search for ABAP objects by name pattern. Supports wildcards (* for any characters). Returns object type, name, package, and description.',
+      description:
+        'Search for ABAP objects by name pattern. Supports wildcards (* for any characters). Returns object type, name, package, and description.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -66,7 +81,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   if (!config.readOnly) {
     tools.push({
       name: 'SAPWrite',
-      description: 'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL.',
+      description:
+        'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -98,11 +114,16 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   tools.push(
     {
       name: 'SAPNavigate',
-      description: 'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete.',
+      description:
+        'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete.',
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['definition', 'references', 'completion'], description: 'Navigation action' },
+          action: {
+            type: 'string',
+            enum: ['definition', 'references', 'completion'],
+            description: 'Navigation action',
+          },
           uri: { type: 'string', description: 'Source URI of the object' },
           line: { type: 'number', description: 'Line number (1-based)' },
           column: { type: 'number', description: 'Column number (1-based)' },
@@ -125,7 +146,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
     {
       name: 'SAPContext',
-      description: 'Get compressed context for an ABAP object — public API contracts of dependencies. Minimizes LLM context window usage.',
+      description:
+        'Get compressed context for an ABAP object — public API contracts of dependencies. Minimizes LLM context window usage.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -152,7 +174,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
     {
       name: 'SAPDiagnose',
-      description: 'System diagnostics: runtime errors (short dumps), ABAP profiler traces, SQL traces, call graphs, object structure.',
+      description:
+        'System diagnostics: runtime errors (short dumps), ABAP profiler traces, SQL traces, call graphs, object structure.',
       inputSchema: {
         type: 'object',
         properties: {

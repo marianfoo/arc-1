@@ -25,7 +25,7 @@ config();
 
 /** Check if SAP credentials are configured */
 export function hasSapCredentials(): boolean {
-  return !!(process.env['TEST_SAP_URL'] || process.env['SAP_URL']);
+  return !!(process.env.TEST_SAP_URL || process.env.SAP_URL);
 }
 
 /** Skip reason message */
@@ -33,12 +33,12 @@ export const SKIP_REASON = 'No SAP credentials configured (set TEST_SAP_URL or S
 
 /** Create an ADT client configured for integration tests */
 export function getTestClient(): AdtClient {
-  const url = process.env['TEST_SAP_URL'] || process.env['SAP_URL'] || '';
-  const username = process.env['TEST_SAP_USER'] || process.env['SAP_USER'] || '';
-  const password = process.env['TEST_SAP_PASSWORD'] || process.env['SAP_PASSWORD'] || '';
-  const client = process.env['TEST_SAP_CLIENT'] || process.env['SAP_CLIENT'] || '001';
-  const language = process.env['TEST_SAP_LANGUAGE'] || process.env['SAP_LANGUAGE'] || 'EN';
-  const insecure = (process.env['TEST_SAP_INSECURE'] || process.env['SAP_INSECURE']) === 'true';
+  const url = process.env.TEST_SAP_URL || process.env.SAP_URL || '';
+  const username = process.env.TEST_SAP_USER || process.env.SAP_USER || '';
+  const password = process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '';
+  const client = process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '001';
+  const language = process.env.TEST_SAP_LANGUAGE || process.env.SAP_LANGUAGE || 'EN';
+  const insecure = (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true';
 
   return new AdtClient({
     baseUrl: url,

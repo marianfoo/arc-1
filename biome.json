@@ -1,13 +1,11 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
     "useIgnoreFile": true
   },
-  "organizeImports": {
-    "enabled": true
-  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -26,11 +24,15 @@
     "rules": {
       "recommended": true,
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "warn",
+        "noAssignInExpressions": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
       }
     }
   },
@@ -47,22 +49,6 @@
     }
   ],
   "files": {
-    "ignore": [
-      "dist",
-      "node_modules",
-      "build",
-      "*.go",
-      "*.abap",
-      "reports",
-      "docs",
-      "articles",
-      "contexts",
-      "embedded",
-      "pkg",
-      "cmd",
-      "internal",
-      "vsp",
-      "abap"
-    ]
+    "includes": ["ts-src/**", "tests/**", "bin/**"]
   }
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { listTransports, getTransport, createTransport, releaseTransport } from '../../../ts-src/adt/transport.js';
 import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+import { createTransport, getTransport, listTransports, releaseTransport } from '../../../ts-src/adt/transport.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -34,11 +34,11 @@ describe('Transport Management', () => {
       const http = mockHttp(xml);
       const transports = await listTransports(http, enabledSafety);
       expect(transports).toHaveLength(1);
-      expect(transports[0]!.id).toBe('DEVK900001');
-      expect(transports[0]!.owner).toBe('DEVELOPER');
-      expect(transports[0]!.description).toBe('Test transport');
-      expect(transports[0]!.status).toBe('D');
-      expect(transports[0]!.type).toBe('K');
+      expect(transports[0]?.id).toBe('DEVK900001');
+      expect(transports[0]?.owner).toBe('DEVELOPER');
+      expect(transports[0]?.description).toBe('Test transport');
+      expect(transports[0]?.status).toBe('D');
+      expect(transports[0]?.type).toBe('K');
     });
 
     it('works when allowTransportableEdits is true (read access)', async () => {
@@ -57,7 +57,7 @@ describe('Transport Management', () => {
       const http = mockHttp(xml);
       const transports = await listTransports(http, enabledSafety);
       expect(transports).toHaveLength(3);
-      expect(transports[1]!.status).toBe('R'); // Released
+      expect(transports[1]?.status).toBe('R'); // Released
     });
 
     it('filters by user when provided', async () => {
@@ -91,7 +91,7 @@ describe('Transport Management', () => {
       const http = mockHttp(xml);
       const transport = await getTransport(http, enabledSafety, 'A4HK900100');
       expect(transport).not.toBeNull();
-      expect(transport!.id).toBe('A4HK900100');
+      expect(transport?.id).toBe('A4HK900100');
     });
 
     it('returns null when transport not found (Issue #26)', async () => {

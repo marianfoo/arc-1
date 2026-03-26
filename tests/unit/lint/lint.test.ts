@@ -13,7 +13,7 @@ WRITE: / 'Hello'.`;
     });
 
     it('returns result objects with correct shape', () => {
-      const source = 'REPORT ztest.\nWRITE: / \'Hello\'.';
+      const source = "REPORT ztest.\nWRITE: / 'Hello'.";
       const results = lintAbapSource(source, 'ztest.prog.abap');
       for (const r of results) {
         expect(r).toHaveProperty('rule');
@@ -67,7 +67,9 @@ ENDCLASS.`;
     });
 
     it('detects CDS with annotation as .ddls.asddls', () => {
-      expect(detectFilename('@AbapCatalog.viewEnhancementCategory: [#NONE]\ndefine view', 'Z_TEST')).toBe('z_test.ddls.asddls');
+      expect(detectFilename('@AbapCatalog.viewEnhancementCategory: [#NONE]\ndefine view', 'Z_TEST')).toBe(
+        'z_test.ddls.asddls',
+      );
     });
 
     it('detects BDEF as .bdef.asbdef', () => {
