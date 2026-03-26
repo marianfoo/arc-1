@@ -53,6 +53,14 @@ export async function startHttpServer(
     await initJwks(config.oidcIssuer);
   }
 
+  // Create a single shared transport and connect it once.
+  // Stateless mode (sessionIdGenerator: undefined) means each request
+  // is independent — no session tracking needed.
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+  });
+  await mcpServer.connect(transport);
+
   const httpServer = createHttpServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
@@ -73,12 +81,8 @@ export async function startHttpServer(
         return;
       }
 
-      // Handle MCP request via StreamableHTTP transport
+      // Route the request through the shared transport
       try {
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined, // Stateless mode
-        });
-        await mcpServer.connect(transport);
         await transport.handleRequest(req, res);
       } catch (err) {
         logger.error('MCP request error', { error: err instanceof Error ? err.message : String(err) });
