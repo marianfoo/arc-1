@@ -328,9 +328,7 @@ export async function lookupDestinationWithUserToken(
   if (data.authTokens) {
     for (const token of data.authTokens) {
       if (token.error) {
-        throw new Error(
-          `Destination Service auth token error for '${destinationName}': ${token.error}`,
-        );
+        throw new Error(`Destination Service auth token error for '${destinationName}': ${token.error}`);
       }
 
       // SAP-Connectivity-Authentication header (used by Cloud Connector for PP)

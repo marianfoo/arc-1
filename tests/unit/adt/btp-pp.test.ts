@@ -14,6 +14,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // Must import AFTER mocking fetch
 const { lookupDestinationWithUserToken } = await import('../../../ts-src/adt/btp.js');
+
 import type { BTPConfig } from '../../../ts-src/adt/btp.js';
 
 const TEST_BTP_CONFIG: BTPConfig = {
@@ -146,9 +147,9 @@ describe('lookupDestinationWithUserToken', () => {
       }),
     });
 
-    await expect(
-      lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_TRIAL', 'expired-jwt'),
-    ).rejects.toThrow('auth token error');
+    await expect(lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_TRIAL', 'expired-jwt')).rejects.toThrow(
+      'auth token error',
+    );
   });
 
   it('throws on HTTP error from Destination Service', async () => {
@@ -163,9 +164,9 @@ describe('lookupDestinationWithUserToken', () => {
       text: async () => 'Destination not found',
     });
 
-    await expect(
-      lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'NONEXISTENT', 'user-jwt'),
-    ).rejects.toThrow('HTTP 404');
+    await expect(lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'NONEXISTENT', 'user-jwt')).rejects.toThrow(
+      'HTTP 404',
+    );
   });
 
   it('handles destinations with no authTokens array', async () => {
