@@ -66,11 +66,20 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
   private clients = new Map<string, OAuthClientInformationFull>();
 
   constructor(xsuaaClientId: string, xsuaaClientSecret: string) {
-    // Pre-register the XSUAA client so MCP clients that use it directly work
+    // Pre-register the XSUAA client so MCP clients that use it directly work.
+    // The redirect_uris MUST include all URIs that MCP clients will use,
+    // because the MCP SDK validates redirect_uri against this list BEFORE
+    // calling our authorize override. These must also be registered in xs-security.json.
     this.clients.set(xsuaaClientId, {
       client_id: xsuaaClientId,
       client_secret: xsuaaClientSecret,
-      redirect_uris: [],
+      redirect_uris: [
+        'http://localhost:6274/oauth/callback', // MCP Inspector
+        'http://localhost:3000/oauth/callback', // Local dev servers
+        'https://claude.ai/api/mcp/auth_callback', // Claude Desktop
+        'cursor://anysphere.cursor-retrieval/oauth/callback', // Cursor
+        'vscode://vscode.microsoft-authentication/callback', // VS Code
+      ],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'client_secret_post',
@@ -326,11 +335,7 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
   /**
    * Override exchangeRefreshToken to use XSUAA credentials.
    */
-  override async exchangeRefreshToken(
-    _client: OAuthClientInformationFull,
-    refreshToken: string,
-    _scopes?: string[],
-  ) {
+  override async exchangeRefreshToken(_client: OAuthClientInformationFull, refreshToken: string, _scopes?: string[]) {
     const params = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
@@ -366,10 +371,8 @@ export function createXsuaaOAuthProvider(
   const clientStore = new InMemoryClientStore(credentials.clientid, credentials.clientsecret);
   const verifier = createXsuaaTokenVerifier(credentials);
 
-  const provider = new XsuaaProxyOAuthProvider(
-    credentials,
-    verifier,
-    (clientId: string) => clientStore.getClient(clientId),
+  const provider = new XsuaaProxyOAuthProvider(credentials, verifier, (clientId: string) =>
+    clientStore.getClient(clientId),
   );
 
   logger.info('XSUAA OAuth provider created', {
