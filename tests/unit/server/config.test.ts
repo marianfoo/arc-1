@@ -108,4 +108,20 @@ describe('parseArgs', () => {
     expect(config.cookieFile).toBe('/path/cookies.txt');
     expect(config.cookieString).toBe('a=b; c=d');
   });
+
+  it('defaults xsuaaAuth to false', () => {
+    const config = parseArgs([]);
+    expect(config.xsuaaAuth).toBe(false);
+  });
+
+  it('parses --xsuaa-auth flag', () => {
+    const config = parseArgs(['--xsuaa-auth', 'true']);
+    expect(config.xsuaaAuth).toBe(true);
+  });
+
+  it('parses SAP_XSUAA_AUTH env var', () => {
+    process.env.SAP_XSUAA_AUTH = 'true';
+    const config = parseArgs([]);
+    expect(config.xsuaaAuth).toBe(true);
+  });
 });

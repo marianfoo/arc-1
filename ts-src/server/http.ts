@@ -1,111 +1,159 @@
 /**
  * HTTP Streamable transport for ARC-1.
  *
- * Provides a Node.js HTTP server that:
+ * Provides an Express HTTP server that:
  * - Serves MCP Streamable HTTP protocol on /mcp
  * - Health check endpoint on /health
  * - API key authentication via Bearer token
- * - OIDC/JWT validation via JWKS discovery
+ * - OIDC/JWT validation via JWKS discovery (Entra ID, etc.)
+ * - XSUAA OAuth proxy for MCP-native clients (Claude Desktop, Cursor)
  *
- * The MCP SDK's StreamableHTTPServerTransport handles the protocol details.
- * We just wire up the HTTP server, routing, and auth middleware.
+ * When XSUAA auth is enabled, the MCP SDK's mcpAuthRouter installs standard
+ * OAuth endpoints (authorize, token, register, revoke, discovery metadata).
  *
  * Design decisions:
  *
- * 1. Auth is checked BEFORE creating the MCP transport for each request.
- *    This prevents unauthenticated requests from consuming server resources.
+ * 1. Express is used because the MCP SDK's auth infrastructure (mcpAuthRouter,
+ *    requireBearerAuth) requires Express. Express 5.x is already a transitive
+ *    dependency of the MCP SDK.
  *
- * 2. JWKS keys are cached and refreshed automatically via jose library.
- *    First request may be slower (JWKS fetch), subsequent ones are fast.
+ * 2. Per-request server pattern: each MCP request gets a fresh Server + Transport.
+ *    This avoids "already connected" errors from concurrent clients.
  *
- * 3. Health endpoint is unauthenticated — needed for CF health checks.
+ * 3. Auth is checked BEFORE creating the MCP transport to avoid wasting resources.
  *
- * 4. Stateless mode (no session ID) — each request is independent.
- *    This is simpler and sufficient for our use case where the MCP client
- *    sends complete requests each time.
+ * 4. Health endpoint is always unauthenticated — needed for CF health checks.
  */
 
-import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { logger } from './logger.js';
 import { VERSION } from './server.js';
 import type { ServerConfig } from './types.js';
+import type { XsuaaCredentials } from './xsuaa.js';
 
 // ─── JWKS / JWT types (lazy-loaded from jose) ────────────────────────
 
 let joseModule: typeof import('jose') | null = null;
 let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = null;
 
+// ─── MCP Request Handler ─────────────────────────────────────────────
+
+/**
+ * Create an Express handler that processes MCP requests.
+ * Each request gets a fresh Server + Transport pair.
+ */
+function createMcpHandler(serverFactory: () => McpServer) {
+  return async (req: Request, res: Response) => {
+    try {
+      const server = serverFactory();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // Stateless mode
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res);
+    } catch (err) {
+      logger.error('MCP request error', { error: err instanceof Error ? err.message : String(err) });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
+  };
+}
+
 /**
  * Start the HTTP Streamable server.
- *
- * Uses a per-request server pattern: each incoming MCP request gets a fresh
- * Server + Transport pair. This is necessary because:
- * 1. MCP SDK's Server can only connect to one transport at a time
- * 2. Clients like Copilot Studio send multiple concurrent requests
- * 3. Stateless mode means no session state to preserve between requests
- *
- * The serverFactory creates a new configured MCP server for each request,
- * sharing the same ADT client and config but with independent transport state.
  */
-export async function startHttpServer(serverFactory: () => McpServer, config: ServerConfig): Promise<void> {
+export async function startHttpServer(
+  serverFactory: () => McpServer,
+  config: ServerConfig,
+  xsuaaCredentials?: XsuaaCredentials,
+): Promise<void> {
   const [host, portStr] = config.httpAddr.split(':');
   const port = Number.parseInt(portStr || '8080', 10);
   const bindHost = host || '0.0.0.0';
 
-  // Pre-initialize JWKS client if OIDC is configured
-  if (config.oidcIssuer) {
-    await initJwks(config.oidcIssuer);
-  }
+  const app = express();
+  const mcpHandler = createMcpHandler(serverFactory);
 
-  const httpServer = createHttpServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
-
-    // ─── Health Check (unauthenticated) ────────────────────
-    if (url.pathname === '/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', version: VERSION }));
-      return;
-    }
-
-    // ─── MCP Endpoint ──────────────────────────────────────
-    if (url.pathname === '/mcp') {
-      // Auth check
-      const authResult = await checkAuth(req, config);
-      if (!authResult.ok) {
-        res.writeHead(authResult.status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: authResult.message }));
-        return;
-      }
-
-      // Create a fresh server + transport per request.
-      // This avoids "already connected" errors when clients send
-      // concurrent requests (e.g., Copilot Studio).
-      try {
-        const server = serverFactory();
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined, // Stateless mode
-        });
-        await server.connect(transport);
-        await transport.handleRequest(req, res);
-      } catch (err) {
-        logger.error('MCP request error', { error: err instanceof Error ? err.message : String(err) });
-        if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Internal server error' }));
-        }
-      }
-      return;
-    }
-
-    // ─── 404 for anything else ─────────────────────────────
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found. Use /mcp for MCP protocol, /health for health check.' }));
+  // ─── Health Check (always unauthenticated) ───────────────
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', version: VERSION });
   });
 
-  httpServer.listen(port, bindHost, () => {
-    const authMode = config.apiKey ? 'API key' : config.oidcIssuer ? 'OIDC' : 'NONE (open)';
+  // ─── XSUAA OAuth Proxy Mode ──────────────────────────────
+  if (config.xsuaaAuth && xsuaaCredentials) {
+    const { mcpAuthRouter } = await import('@modelcontextprotocol/sdk/server/auth/router.js');
+    const { requireBearerAuth } = await import(
+      '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
+    );
+    const { createXsuaaOAuthProvider, createChainedTokenVerifier, createXsuaaTokenVerifier } = await import(
+      './xsuaa.js'
+    );
+    const { getAppUrl } = await import('../adt/btp.js');
+
+    // Determine app URL for OAuth metadata
+    const appUrl = getAppUrl() ?? `http://${bindHost}:${port}`;
+
+    // Create XSUAA provider + chained verifier
+    const { provider } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl);
+    const xsuaaVerifier = createXsuaaTokenVerifier(xsuaaCredentials);
+    const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
+    const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
+
+    // Install MCP SDK auth router at root (OAuth endpoints)
+    app.use(
+      mcpAuthRouter({
+        provider,
+        issuerUrl: new URL(appUrl),
+        baseUrl: new URL(appUrl),
+        scopesSupported: ['read', 'write', 'admin'],
+        resourceName: 'ARC-1 SAP MCP Server',
+      }),
+    );
+
+    // Protected MCP endpoint with chained token verification
+    const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: chainedVerifier } });
+    app.all('/mcp', bearerAuth, mcpHandler);
+
+    logger.info('XSUAA OAuth proxy enabled', {
+      xsappname: xsuaaCredentials.xsappname,
+      appUrl,
+    });
+  } else {
+    // ─── Standard Auth Mode (API key / OIDC) ─────────────────
+    if (config.oidcIssuer) {
+      await initJwks(config.oidcIssuer);
+    }
+
+    // Auth middleware for standard mode
+    const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+      const authResult = await checkAuth(req, config);
+      if (!authResult.ok) {
+        res.status(authResult.status).json({ error: authResult.message });
+        return;
+      }
+      next();
+    };
+
+    app.all('/mcp', authMiddleware, mcpHandler);
+  }
+
+  // ─── 404 for anything else ─────────────────────────────────
+  app.use((_req, res) => {
+    res.status(404).json({ error: 'Not found. Use /mcp for MCP protocol, /health for health check.' });
+  });
+
+  // ─── Start listening ───────────────────────────────────────
+  app.listen(port, bindHost, () => {
+    let authMode = 'NONE (open)';
+    if (config.xsuaaAuth && xsuaaCredentials) authMode = 'XSUAA OAuth proxy';
+    else if (config.apiKey && config.oidcIssuer) authMode = 'API key + OIDC';
+    else if (config.apiKey) authMode = 'API key';
+    else if (config.oidcIssuer) authMode = 'OIDC';
+
     logger.info('ARC-1 HTTP server started', {
       addr: `${bindHost}:${port}`,
       health: `http://${bindHost}:${port}/health`,
@@ -115,7 +163,39 @@ export async function startHttpServer(serverFactory: () => McpServer, config: Se
   });
 }
 
-// ─── Authentication ──────────────────────────────────────────────────
+// ─── OIDC Verifier Factory ───────────────────────────────────────────
+
+/**
+ * Create an Entra ID / OIDC token verifier using jose.
+ * Returns a function compatible with the chained verifier.
+ */
+async function createOidcVerifier(
+  config: ServerConfig,
+): Promise<(token: string) => Promise<import('@modelcontextprotocol/sdk/server/auth/types.js').AuthInfo>> {
+  await initJwks(config.oidcIssuer!);
+
+  return async (token: string) => {
+    if (!joseModule || !jwksClient) {
+      throw new Error('OIDC not initialized');
+    }
+    const { payload } = await joseModule.jwtVerify(token, jwksClient, {
+      issuer: config.oidcIssuer,
+      audience: config.oidcAudience,
+    });
+
+    logger.debug('OIDC JWT validated', { sub: payload.sub, iss: payload.iss });
+
+    return {
+      token,
+      clientId: (payload.azp as string) ?? (payload.sub as string) ?? 'oidc-user',
+      scopes: ['read', 'write', 'admin'], // OIDC tokens get full access (scopes managed by OIDC provider)
+      expiresAt: payload.exp,
+      extra: { sub: payload.sub, iss: payload.iss },
+    };
+  };
+}
+
+// ─── Standard Auth (API Key + OIDC) ──────────────────────────────────
 
 interface AuthResult {
   ok: boolean;
@@ -124,14 +204,10 @@ interface AuthResult {
 }
 
 /**
- * Check authentication for an incoming request.
- *
- * Auth methods (checked in order):
- * 1. API key: Bearer token must match ARC1_API_KEY / VSP_API_KEY
- * 2. OIDC: Bearer JWT validated against issuer JWKS + audience
- * 3. No auth configured: allow all requests
+ * Check authentication for standard mode (API key + OIDC).
+ * Used when XSUAA auth is NOT enabled.
  */
-async function checkAuth(req: IncomingMessage, config: ServerConfig): Promise<AuthResult> {
+async function checkAuth(req: Request, config: ServerConfig): Promise<AuthResult> {
   // No auth configured — allow all
   if (!config.apiKey && !config.oidcIssuer) {
     return { ok: true, status: 200, message: '' };
@@ -146,20 +222,19 @@ async function checkAuth(req: IncomingMessage, config: ServerConfig): Promise<Au
     };
   }
 
-  const token = authHeader.slice(7); // Remove "Bearer " prefix
+  const token = authHeader.slice(7);
 
-  // ─── API Key check ─────────────────────────────────────
+  // API Key check
   if (config.apiKey) {
     if (token === config.apiKey) {
       return { ok: true, status: 200, message: '' };
     }
-    // If OIDC is also configured, fall through to try JWT validation
     if (!config.oidcIssuer) {
       return { ok: false, status: 403, message: 'Invalid API key' };
     }
   }
 
-  // ─── OIDC / JWT validation ─────────────────────────────
+  // OIDC / JWT validation
   if (config.oidcIssuer) {
     try {
       await validateJwt(token, config);
@@ -178,11 +253,10 @@ async function checkAuth(req: IncomingMessage, config: ServerConfig): Promise<Au
  * Initialize JWKS client from OIDC discovery.
  */
 async function initJwks(issuer: string): Promise<void> {
-  if (joseModule) return; // Already initialized
+  if (joseModule) return;
 
   try {
     joseModule = await import('jose');
-    // Build JWKS URI from OIDC issuer (standard .well-known path)
     const jwksUri = new URL('.well-known/openid-configuration', issuer.endsWith('/') ? issuer : `${issuer}/`);
     const discoveryResp = await fetch(jwksUri.toString());
     const discovery = (await discoveryResp.json()) as { jwks_uri: string };
@@ -198,7 +272,6 @@ async function initJwks(issuer: string): Promise<void> {
       issuer,
       error: err instanceof Error ? err.message : String(err),
     });
-    // Don't throw — server can still work with API key auth
   }
 }
 
@@ -207,7 +280,6 @@ async function initJwks(issuer: string): Promise<void> {
  */
 async function validateJwt(token: string, config: ServerConfig): Promise<void> {
   if (!joseModule || !jwksClient) {
-    // Try lazy init
     if (config.oidcIssuer) {
       await initJwks(config.oidcIssuer);
     }

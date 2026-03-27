@@ -91,6 +91,7 @@ export function parseArgs(args: string[]): ServerConfig {
   config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY ?? process.env.VSP_API_KEY;
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
+  config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
 
   // --- Misc ---
   config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false);

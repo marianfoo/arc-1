@@ -1,0 +1,68 @@
+{
+  "xsappname": "arc1-mcp",
+  "tenant-mode": "dedicated",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.read",
+      "description": "Read SAP ABAP objects via MCP"
+    },
+    {
+      "name": "$XSAPPNAME.write",
+      "description": "Write SAP ABAP objects via MCP"
+    },
+    {
+      "name": "$XSAPPNAME.admin",
+      "description": "Administrative access to ARC-1"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "MCPReader",
+      "description": "Read-only access to SAP via ARC-1 MCP",
+      "scope-references": ["$XSAPPNAME.read"]
+    },
+    {
+      "name": "MCPEditor",
+      "description": "Read and write access to SAP via ARC-1 MCP",
+      "scope-references": ["$XSAPPNAME.read", "$XSAPPNAME.write"]
+    },
+    {
+      "name": "MCPAdmin",
+      "description": "Full administrative access to ARC-1",
+      "scope-references": [
+        "$XSAPPNAME.read",
+        "$XSAPPNAME.write",
+        "$XSAPPNAME.admin"
+      ]
+    }
+  ],
+  "role-collections": [
+    {
+      "name": "ARC-1 Viewer",
+      "description": "Read-only SAP access via ARC-1 MCP",
+      "role-template-references": ["$XSAPPNAME.MCPReader"]
+    },
+    {
+      "name": "ARC-1 Editor",
+      "description": "Read-write SAP access via ARC-1 MCP",
+      "role-template-references": ["$XSAPPNAME.MCPEditor"]
+    },
+    {
+      "name": "ARC-1 Admin",
+      "description": "Full ARC-1 administrative access",
+      "role-template-references": ["$XSAPPNAME.MCPAdmin"]
+    }
+  ],
+  "oauth2-configuration": {
+    "redirect-uris": [
+      "http://localhost:*/**",
+      "http://127.0.0.1:*/**",
+      "https://*.cfapps.us10-001.hana.ondemand.com/**",
+      "https://claude.ai/api/mcp/auth_callback",
+      "cursor://anysphere.cursor-retrieval/**"
+    ],
+    "grant-types": ["authorization_code", "refresh_token"],
+    "token-validity": 3600,
+    "refresh-token-validity": 43200
+  }
+}

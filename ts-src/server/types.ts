@@ -55,6 +55,7 @@ export interface ServerConfig {
   apiKey?: string;
   oidcIssuer?: string;
   oidcAudience?: string;
+  xsuaaAuth: boolean;
 
   // --- Misc ---
   verbose: boolean;
@@ -83,5 +84,6 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureUi5: 'auto',
   featureTransport: 'auto',
   featureHana: 'auto',
+  xsuaaAuth: false,
   verbose: false,
 };

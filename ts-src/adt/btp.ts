@@ -280,3 +280,25 @@ export async function resolveBTPDestination(destinationName: string): Promise<{
     proxy,
   };
 }
+
+/**
+ * Get the app's public URL from VCAP_APPLICATION.
+ *
+ * CF sets VCAP_APPLICATION with application_uris containing the app's
+ * public route. Returns the first URI as an https URL.
+ */
+export function getAppUrl(): string | undefined {
+  const vcapApp = process.env.VCAP_APPLICATION;
+  if (!vcapApp) return undefined;
+
+  try {
+    const app = JSON.parse(vcapApp);
+    const uris = app.application_uris ?? app.uris;
+    if (Array.isArray(uris) && uris.length > 0) {
+      return `https://${uris[0]}`;
+    }
+  } catch {
+    // Not valid JSON
+  }
+  return undefined;
+}

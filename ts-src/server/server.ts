@@ -114,8 +114,33 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     // per request. This is required because MCP SDK's Server can only connect
     // to one transport at a time, and clients like Copilot Studio send
     // concurrent requests.
+    // Load XSUAA credentials if XSUAA auth is enabled
+    let xsuaaCredentials: import('./xsuaa.js').XsuaaCredentials | undefined;
+    if (config.xsuaaAuth) {
+      try {
+        const xsenv = await import('@sap/xsenv');
+        const services = xsenv.getServices({ uaa: { tag: 'xsuaa' } });
+        const uaa = services.uaa as Record<string, string>;
+        xsuaaCredentials = {
+          url: uaa.url,
+          clientid: uaa.clientid,
+          clientsecret: uaa.clientsecret,
+          xsappname: uaa.xsappname,
+          uaadomain: uaa.uaadomain,
+        };
+        logger.info('XSUAA credentials loaded', {
+          xsappname: xsuaaCredentials.xsappname,
+          url: xsuaaCredentials.url,
+        });
+      } catch (err) {
+        logger.error('Failed to load XSUAA credentials — XSUAA auth will not work', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     const { startHttpServer } = await import('./http.js');
-    await startHttpServer(() => createServer(config, btpProxy), config);
+    await startHttpServer(() => createServer(config, btpProxy), config, xsuaaCredentials);
   }
 
   return server;
