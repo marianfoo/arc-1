@@ -34,6 +34,15 @@ import { logger } from './logger.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
+/** OAuth token endpoint response shape */
+interface TokenResponse {
+  access_token: string;
+  token_type?: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+}
+
 /** XSUAA credentials from VCAP_SERVICES */
 export interface XsuaaCredentials {
   url: string;
@@ -191,6 +200,165 @@ export function createChainedTokenVerifier(
 /**
  * Create a ProxyOAuthServerProvider that proxies OAuth to XSUAA.
  */
+/**
+ * XSUAA-proxying OAuth provider.
+ *
+ * Extends ProxyOAuthServerProvider to replace the MCP client's local client_id
+ * with the XSUAA service binding client_id when forwarding to XSUAA.
+ *
+ * Problem: MCP clients register via DCR and get a local client_id (e.g., "arc1-f63afbab").
+ * But XSUAA only knows about its own client_id ("sb-arc1-mcp!t498139").
+ * The standard ProxyOAuthServerProvider forwards the local client_id to XSUAA, which rejects it.
+ *
+ * Solution: Override authorize() to swap the client_id and use a custom fetch() for
+ * the token exchange to inject the XSUAA credentials.
+ */
+class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
+  private xsuaaClientId: string;
+  private xsuaaClientSecret: string;
+  private xsuaaTokenUrl: string;
+  private xsuaaAuthUrl: string;
+
+  constructor(
+    credentials: XsuaaCredentials,
+    verifier: (token: string) => Promise<AuthInfo>,
+    getClient: (clientId: string) => Promise<OAuthClientInformationFull | undefined>,
+  ) {
+    const authUrl = `${credentials.url}/oauth/authorize`;
+    const tokenUrl = `${credentials.url}/oauth/token`;
+
+    super({
+      endpoints: {
+        authorizationUrl: authUrl,
+        tokenUrl: tokenUrl,
+        revocationUrl: `${credentials.url}/oauth/revoke`,
+      },
+      verifyAccessToken: verifier,
+      getClient,
+    });
+
+    this.xsuaaClientId = credentials.clientid;
+    this.xsuaaClientSecret = credentials.clientsecret;
+    this.xsuaaTokenUrl = tokenUrl;
+    this.xsuaaAuthUrl = authUrl;
+    this.skipLocalPkceValidation = true;
+  }
+
+  /**
+   * Override authorize to replace the MCP client's local client_id
+   * with the XSUAA service binding client_id.
+   */
+  override async authorize(
+    _client: OAuthClientInformationFull,
+    params: {
+      state?: string;
+      scopes?: string[];
+      codeChallenge: string;
+      redirectUri: string;
+      resource?: URL;
+    },
+    res: { redirect(url: string): void },
+  ): Promise<void> {
+    const targetUrl = new URL(this.xsuaaAuthUrl);
+    const searchParams = new URLSearchParams({
+      client_id: this.xsuaaClientId, // Use XSUAA client, not local DCR client
+      response_type: 'code',
+      redirect_uri: params.redirectUri,
+      code_challenge: params.codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    if (params.state) searchParams.set('state', params.state);
+    if (params.scopes?.length) searchParams.set('scope', params.scopes.join(' '));
+    if (params.resource) searchParams.set('resource', params.resource.toString());
+
+    targetUrl.search = searchParams.toString();
+
+    logger.debug('XSUAA authorize redirect', {
+      xsuaaClient: this.xsuaaClientId,
+      redirectUri: params.redirectUri,
+    });
+
+    res.redirect(targetUrl.toString());
+  }
+
+  /**
+   * Override exchangeAuthorizationCode to use XSUAA credentials
+   * instead of the local DCR client credentials.
+   */
+  override async exchangeAuthorizationCode(
+    _client: OAuthClientInformationFull,
+    authorizationCode: string,
+    codeVerifier?: string,
+    redirectUri?: string,
+  ) {
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: authorizationCode,
+      client_id: this.xsuaaClientId,
+      client_secret: this.xsuaaClientSecret,
+    });
+    if (codeVerifier) params.set('code_verifier', codeVerifier);
+    if (redirectUri) params.set('redirect_uri', redirectUri);
+
+    const response = await fetch(this.xsuaaTokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      logger.error('XSUAA token exchange failed', { status: response.status, body: text.slice(0, 200) });
+      throw new Error(`XSUAA token exchange failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as TokenResponse;
+    return {
+      access_token: data.access_token,
+      token_type: data.token_type ?? 'bearer',
+      expires_in: data.expires_in,
+      refresh_token: data.refresh_token,
+      scope: data.scope,
+    };
+  }
+
+  /**
+   * Override exchangeRefreshToken to use XSUAA credentials.
+   */
+  override async exchangeRefreshToken(
+    _client: OAuthClientInformationFull,
+    refreshToken: string,
+    _scopes?: string[],
+  ) {
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: this.xsuaaClientId,
+      client_secret: this.xsuaaClientSecret,
+    });
+
+    const response = await fetch(this.xsuaaTokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`XSUAA refresh token exchange failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as TokenResponse;
+    return {
+      access_token: data.access_token,
+      token_type: data.token_type ?? 'bearer',
+      expires_in: data.expires_in,
+      refresh_token: data.refresh_token,
+      scope: data.scope,
+    };
+  }
+}
+
 export function createXsuaaOAuthProvider(
   credentials: XsuaaCredentials,
   appUrl: string,
@@ -198,18 +366,11 @@ export function createXsuaaOAuthProvider(
   const clientStore = new InMemoryClientStore(credentials.clientid, credentials.clientsecret);
   const verifier = createXsuaaTokenVerifier(credentials);
 
-  const provider = new ProxyOAuthServerProvider({
-    endpoints: {
-      authorizationUrl: `${credentials.url}/oauth/authorize`,
-      tokenUrl: `${credentials.url}/oauth/token`,
-      revocationUrl: `${credentials.url}/oauth/revoke`,
-    },
-    verifyAccessToken: verifier,
-    getClient: (clientId: string) => clientStore.getClient(clientId),
-  });
-
-  // XSUAA handles PKCE validation server-side
-  provider.skipLocalPkceValidation = true;
+  const provider = new XsuaaProxyOAuthProvider(
+    credentials,
+    verifier,
+    (clientId: string) => clientStore.getClient(clientId),
+  );
 
   logger.info('XSUAA OAuth provider created', {
     xsappname: credentials.xsappname,
