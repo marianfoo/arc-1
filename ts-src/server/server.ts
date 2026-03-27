@@ -64,9 +64,13 @@ async function createPerUserClient(
   userJwt: string,
 ): Promise<AdtClient> {
   const { lookupDestinationWithUserToken } = await import('../adt/btp.js');
-  const destName = process.env.SAP_BTP_DESTINATION;
+  // Use SAP_BTP_PP_DESTINATION if set, otherwise fall back to SAP_BTP_DESTINATION.
+  // This enables a dual-destination approach:
+  // - SAP_BTP_DESTINATION = BasicAuth destination (shared client, startup resolution)
+  // - SAP_BTP_PP_DESTINATION = PrincipalPropagation destination (per-user, runtime)
+  const destName = process.env.SAP_BTP_PP_DESTINATION ?? process.env.SAP_BTP_DESTINATION;
   if (!destName) {
-    throw new Error('SAP_BTP_DESTINATION is required for principal propagation');
+    throw new Error('SAP_BTP_PP_DESTINATION or SAP_BTP_DESTINATION is required for principal propagation');
   }
 
   const { destination, authTokens } = await lookupDestinationWithUserToken(btpConfig, destName, userJwt);
