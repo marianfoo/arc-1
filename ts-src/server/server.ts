@@ -126,18 +126,21 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
 
-    // Principal propagation: create per-user ADT client if enabled and user JWT available
+    // Principal propagation: create per-user ADT client if enabled and user JWT available.
+    // Only attempt PP when the token is a JWT (3 dot-separated parts), not a plain API key.
     let client = defaultClient;
-    if (config.ppEnabled && btpConfig && extra.authInfo?.token) {
+    const token = extra.authInfo?.token;
+    const isJwt = token && token.split('.').length === 3;
+    if (config.ppEnabled && btpConfig && isJwt) {
       try {
-        client = await createPerUserClient(config, btpConfig, btpProxy, extra.authInfo.token);
+        client = await createPerUserClient(config, btpConfig, btpProxy, token);
         logger.debug('Per-user ADT client created', {
-          user: extra.authInfo.extra?.userName ?? extra.authInfo.clientId,
+          user: extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId,
         });
       } catch (err) {
         logger.error('Failed to create per-user ADT client — falling back to shared client', {
           error: err instanceof Error ? err.message : String(err),
-          user: extra.authInfo.extra?.userName ?? extra.authInfo.clientId,
+          user: extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId,
         });
         // Fall back to shared client (service account)
       }
