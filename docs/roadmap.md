@@ -36,7 +36,8 @@ The core design principles are:
 | ABAP Linter | ✅ `@abaplint/core` integration (full abaplint rules) |
 | Docker Image | ✅ Multi-platform (amd64/arm64), GHCR `ghcr.io/marianfoo/arc-1` |
 | CI/CD | ✅ GitHub Actions: lint + typecheck + unit tests (Node 20/22) + integration tests |
-| Test Coverage | ✅ 320 unit tests + 28 integration tests (vitest) |
+| XSUAA OAuth Proxy | ✅ MCP SDK ProxyOAuthServerProvider + @sap/xssec JWT validation |
+| Test Coverage | ✅ 339 unit tests + 28 integration tests (vitest) |
 | Documentation | ✅ Architecture, auth guides, Docker guide, setup phases |
 | Phase 3: Principal Propagation | 🔧 Needs porting to TypeScript + SAP-side setup |
 
@@ -243,41 +244,26 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 | **Effort** | L (1–2 weeks) |
 | **Risk** | Medium — requires careful OAuth flow implementation |
 | **Usefulness** | Very High — enables Claude Desktop, Cursor, MCP Inspector to connect via BTP XSUAA |
-| **Status** | Not started |
+| **Status** | ✅ Complete (2026-03-27) |
 
-**What:** MCP clients like Claude Desktop, Cursor, and MCP Inspector perform OAuth2 authorization code flow using RFC 8414 discovery (`/.well-known/oauth-authorization-server`). They expect all OAuth endpoints to live at the MCP server's own URL. But XSUAA's authorize/token endpoints are on a different domain and don't understand MCP-specific OAuth parameters. ARC-1 needs to proxy the OAuth flow.
+**Implemented:**
+- MCP SDK's `ProxyOAuthServerProvider` proxies OAuth flow to XSUAA
+- `@sap/xssec` v4.13+ for SAP-specific JWT validation (offline, JWKS cached)
+- HTTP server refactored from `node:http` to Express 5 (required by MCP SDK auth)
+- RFC 8414 discovery at `/.well-known/oauth-authorization-server`
+- In-memory client store for dynamic client registration (RFC 7591)
+- Chained token verifier: XSUAA → Entra ID OIDC → API key (all coexist)
+- `xs-security.json` with read/write/admin scopes and 3 role collections
+- XSUAA service instance created and bound on BTP CF
+- Configuration: `SAP_XSUAA_AUTH=true` enables the proxy
 
-**The problem (learned from [lemaiwo/btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server)):**
-- MCP clients discover OAuth via `/.well-known/oauth-authorization-server` on the MCP server
-- MCP clients send `redirect_uri` pointing back to themselves (e.g., `http://localhost:6274/...` for MCP Inspector, `cursor://...` for Cursor)
-- XSUAA only accepts redirect URIs registered in `xs-security.json` — it cannot dynamically accept MCP client redirect URIs
-- PKCE `code_challenge` parameters from MCP clients are not forwarded through XSUAA's redirect chain
+**Files:**
+- `ts-src/server/xsuaa.ts` — OAuth provider, client store, chained verifier
+- `ts-src/server/http.ts` — Express-based HTTP server with auth routing
+- `xs-security.json` — XSUAA service instance config
+- `docs/phase5-xsuaa-setup.md` — Setup guide
 
-**Solution — OAuth Proxy Pattern (6 endpoints):**
-1. `/.well-known/oauth-authorization-server` — RFC 8414 metadata pointing to ARC-1's own `/oauth/*` endpoints (not XSUAA's)
-2. `GET /oauth/authorize` — Receives MCP client's OAuth request, stores `redirect_uri` + `state` + `code_challenge` in memory, redirects browser to XSUAA's real authorize endpoint with ARC-1's `/oauth/callback` as redirect_uri
-3. `GET /oauth/callback` — Receives authorization code from XSUAA, retrieves stored MCP state, redirects back to MCP client's original `redirect_uri`
-4. `POST /oauth/token` — Exchanges authorization code with XSUAA for tokens (pass-through)
-5. `POST /oauth/client-registration` — RFC 7591 static client registration returning XSUAA `clientid`/`clientsecret`
-6. `/.well-known/oauth-protected-resource` — RFC 9728 metadata (already implemented)
-
-**Key configuration (xs-security.json redirect URIs):**
-```json
-{
-  "redirect-uris": [
-    "https://*.cfapps.*.hana.ondemand.com/**",
-    "https://claude.ai/api/mcp/auth_callback",
-    "http://localhost:6274/**",
-    "cursor://anysphere.cursor-retrieval/**"
-  ]
-}
-```
-
-**Why this is separate from SEC-01/SEC-02:** SEC-01 and SEC-02 use Entra ID as the IdP (works for Copilot Studio). SEC-07 uses BTP XSUAA as the IdP (works for Claude Desktop, Cursor, MCP Inspector, and any MCP client that supports RFC 8414 discovery). Both can coexist — ARC-1 would detect which IdP issued the token based on the issuer URL.
-
-**vs. current Copilot Studio approach:** Copilot Studio uses a custom Power Automate connector with direct Entra ID OAuth — it doesn't use MCP's RFC 8414 discovery. So the current Phase 2 Entra ID approach works for Copilot Studio. SEC-07 is needed for native MCP clients that use the MCP spec's built-in OAuth discovery.
-
-**Reference implementation:** [lemaiwo/btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server) — TypeScript implementation with `@sap/xssec` for JWT validation, in-memory state store with 10-min expiry, dual destination pattern (technical user for discovery, user JWT for execution).
+**Reference:** Inspired by [lemaiwo/btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server).
 
 ---
 
@@ -517,11 +503,10 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 6. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
 
 ### Phase C: Enterprise Hardening
-7. **SEC-07** XSUAA OAuth Proxy for Claude/Cursor/MCP Inspector (P1, L)
-8. **SEC-02** BTP Cloud Connector Principal Propagation (P1, M)
-9. **SEC-05** Rate Limiting (P2, S)
-10. **SEC-06** Tool Restriction by User Role (P2, M)
-11. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
+7. **SEC-02** BTP Cloud Connector Principal Propagation (P1, M)
+8. **SEC-05** Rate Limiting (P2, S)
+9. **SEC-06** Tool Restriction by User Role (P2, M)
+10. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
 
 ### Phase D: Advanced Features
 12. **FEAT-06** Cloud Readiness Assessment (P2, M)
@@ -536,7 +521,7 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based | API Key, OAuth/OIDC, BTP Destination | Read-only, pkg filter, op filter, transport guard | Docker, BTP CF, npm | Safety system, BTP integration, HTTP Streamable, 348 tests |
+| **ARC-1** | TypeScript | 11 intent-based | API Key, OIDC, XSUAA OAuth proxy | Read-only, pkg filter, op filter, transport guard | Docker, BTP CF, npm | Safety system, BTP integration, XSUAA + OIDC + API key coexistence, 367 tests |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
 | lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, SAP Cloud SDK, principal propagation via Destination Service |
 | mario-andreschak/mcp-abap-adt | TypeScript | ~20 | Basic | None | Node.js | Uses established abap-adt-api library |
@@ -613,6 +598,7 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 | TypeScript Migration | Full Go → TypeScript port, 348 tests, Go code removed | ✅ Complete (2026-03-26) |
 | CI/CD Pipeline | GitHub Actions: lint, typecheck, tests (Node 20/22), Docker, npm publish | ✅ Complete |
 | Copilot Studio E2E | OAuth + MCP + BTP Destination + Cloud Connector → SAP data | ✅ Complete |
+| XSUAA OAuth Proxy | SEC-07: MCP SDK auth + @sap/xssec, Express 5, 3 auth modes coexist | ✅ Complete (2026-03-27) |
 
 ---
 
