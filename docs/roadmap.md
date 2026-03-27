@@ -40,9 +40,9 @@ The core design principles are:
 | Scope Enforcement | ✅ Per-tool scope checks (read/write/admin), ListTools filtered by scope |
 | Audit Logging | ✅ User identity (userName, email, clientId) in every tool call log |
 | Dynamic Client Registration | ✅ /register endpoint for MCP clients (RFC 7591) |
-| Test Coverage | ✅ 351 unit tests + 28 integration tests (vitest) |
+| Principal Propagation | ✅ Per-user ADT client via BTP Destination Service + Cloud Connector |
+| Test Coverage | ✅ 358 unit tests + 28 integration tests (vitest) |
 | Documentation | ✅ Architecture, auth guides, Docker guide, setup phases |
-| Phase 3: Principal Propagation | 🔧 Needs porting to TypeScript + SAP-side setup |
 
 ---
 
@@ -78,31 +78,36 @@ The core design principles are:
 | **Effort** | L (1–2 weeks: code wiring + SAP admin setup + testing) |
 | **Risk** | Medium — requires SAP Basis admin (STRUST, CERTRULE, ICM profile) |
 | **Usefulness** | Critical — enables per-user SAP authorization and audit trail |
-| **Status** | Needs TypeScript implementation (was in Go `pkg/adt/principal_propagation.go`) |
+| **Status** | ✅ Code complete (2026-03-27) — needs SAP-side setup (STRUST, CERTRULE, ICM) for end-to-end testing |
 
-**What:** When a user authenticates via Entra ID OAuth, ARC-1 generates an ephemeral X.509 certificate (CN=SAP_USERNAME, 5-min validity), signed by a trusted CA. SAP's CERTRULE maps the certificate to the actual SAP user. Every ADT call runs as that user, with SAP's native S_DEVELOP authorization enforced.
+**Implemented (2026-03-27) — BTP Cloud Connector approach (SEC-02 merged into SEC-01):**
+- `lookupDestinationWithUserToken()` in `ts-src/adt/btp.ts` — calls Destination Service "Find Destination" API with `X-User-Token` header
+- Per-request ADT client creation in `ts-src/server/server.ts` — `createPerUserClient()` creates a fresh ADT client for each authenticated user
+- `SAP-Connectivity-Authentication` header injection in `ts-src/adt/http.ts` — carries SAML assertion to Cloud Connector
+- `SAP_PP_ENABLED=true` config flag — opt-in for principal propagation
+- Graceful fallback — if per-user lookup fails, falls back to shared service account
+- No basic auth when PP active — username/password cleared, user identity from SAML assertion only
+- 7 unit tests (5 BTP PP destination + 2 HTTP header injection)
 
-**Why this matters:**
-- Currently all Copilot Studio users share one SAP service account — SAP audit log shows the technical user, not who actually did it
-- With principal propagation, SAP enforces its own authorization (S_DEVELOP, package restrictions) per user
-- Zero SAP credentials stored anywhere (only CA key, which goes in Key Vault / secrets manager)
-- Required for any enterprise that needs to differentiate "AI user accessed system" vs "developer used Eclipse"
+**Architecture flow:**
+1. User authenticates via XSUAA/OIDC → JWT token
+2. MCP SDK passes `authInfo.token` to tool handler
+3. ARC-1 calls Destination Service with `X-User-Token: <jwt>` header
+4. Destination Service generates per-user auth tokens (SAML assertion)
+5. ADT client sends `SAP-Connectivity-Authentication` header via connectivity proxy
+6. Cloud Connector generates X.509 cert → CERTRULE → SAP user
+7. SAP enforces `S_DEVELOP` authorization per user
 
-**Implementation:**
-1. Wire Phase 2 OIDC middleware to extract username from JWT `preferred_username` claim
-2. Map OIDC username → SAP username (via mapping file or email prefix extraction)
-3. Generate ephemeral X.509 cert per request (needs TypeScript implementation)
-4. Create per-user ADT HTTP client with ephemeral cert
-5. SAP admin: Import CA cert in STRUST, configure CERTRULE, set ICM params, restart ICM
-
-**Testing:**
-- Unit: Mock cert generation, verify CN/validity/signing
-- Integration: Two different OIDC users → two different SAP users → verify audit log shows correct user
+**SAP-side setup required (not yet done):**
+1. BTP Destination: Change authentication from `BasicAuthentication` to `PrincipalPropagation`
+2. Cloud Connector: Synchronize trust with BTP subaccount, set principal type to X.509
+3. SAP backend: STRUST (import Cloud Connector CA), CERTRULE, ICM params
+4. Subject pattern: Map `${email}` or `${user_name}` to SAP user ID
 
 **References:**
-- [Report 006: Phase 3 Principal Propagation](../reports/2026-03-25-006-phase3-principal-propagation.md)
 - [SAP Help: Configuring Principal Propagation](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/configuring-principal-propagation)
-- [docs/enterprise-auth.md Section 5](enterprise-auth.md#5-oidc-token-validation--principal-propagation)
+- [SAP Cloud SDK: On-Premise Connectivity](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/on-premise)
+- [lemaiwo/btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server) — reference implementation
 
 ---
 
@@ -110,24 +115,12 @@ The core design principles are:
 | Field | Value |
 |-------|-------|
 | **Priority** | 🟠 P1 |
-| **Effort** | M (3–5 days) |
-| **Risk** | Medium — depends on Cloud Connector configuration |
+| **Effort** | — |
+| **Risk** | — |
 | **Usefulness** | High — enables per-user auth when ARC-1 runs on BTP CF |
-| **Status** | Not started |
+| **Status** | ✅ Merged into SEC-01 (2026-03-27) — code complete, SAP-side setup pending |
 
-**What:** When ARC-1 is deployed on BTP CF, forward the Entra ID user identity through the Cloud Connector to SAP on-premise using BTP's built-in principal propagation mechanism. The BTP Destination would use `Authentication: PrincipalPropagation` instead of `BasicAuthentication`.
-
-**How it differs from SEC-01:** SEC-01 generates certs directly in ARC-1. SEC-02 uses BTP's Destination Service + Cloud Connector to propagate the user identity — the Cloud Connector generates the short-lived certificate. Less code in ARC-1, but requires more BTP/Cloud Connector configuration.
-
-**SAP-side setup:**
-1. Cloud Connector: Synchronize trust with BTP subaccount, set principal type to X.509
-2. SAP backend: STRUST (import Cloud Connector CA), CERTRULE, ICM params
-3. BTP Destination: Change authentication from BasicAuthentication to PrincipalPropagation
-4. Subject pattern: Map `${email}` or `${user_name}` to SAP user ID
-
-**References:**
-- [SAP Help: Principal Propagation via Cloud Connector](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/configuring-principal-propagation)
-- [SAP Community: Setting Up Principal Propagation Step by Step](https://community.sap.com/t5/technology-blog-posts-by-sap/setting-up-principal-propagation/ba-p/13510251)
+**Merged:** SEC-02 was implemented as part of SEC-01. The BTP Cloud Connector approach was chosen over direct X.509 cert generation because it leverages existing BTP infrastructure and requires less code in ARC-1. See SEC-01 for implementation details.
 
 ---
 
@@ -491,7 +484,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 ## Prioritized Execution Order
 
 ### Phase A: Enterprise Security (Next)
-1. **SEC-01** Principal Propagation — port to TypeScript, end-to-end testing (P0, L)
+1. **SEC-01** Principal Propagation — SAP-side setup (STRUST, CERTRULE, ICM) + end-to-end testing
 2. **DOC-02** Basis Admin Security Guide (P1, S)
 
 ### Phase B: Feature Completeness
@@ -500,9 +493,8 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 5. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
 
 ### Phase C: Enterprise Hardening
-6. **SEC-02** BTP Cloud Connector Principal Propagation (P1, M)
-7. **SEC-05** Rate Limiting (P2, S)
-8. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
+6. **SEC-05** Rate Limiting (P2, S)
+7. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
 
 ### Phase D: Advanced Features
 12. **FEAT-06** Cloud Readiness Assessment (P2, M)
@@ -517,7 +509,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based | API Key, OIDC, XSUAA OAuth proxy | Read-only, pkg filter, op filter, scope enforcement | Docker, BTP CF, npm | Scope-based tool filtering, 3 auth modes, safety system, 379 tests |
+| **ARC-1** | TypeScript | 11 intent-based | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, scope enforcement | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 386 tests |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
 | lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, SAP Cloud SDK, principal propagation via Destination Service |
 | mario-andreschak/mcp-abap-adt | TypeScript | ~20 | Basic | None | Node.js | Uses established abap-adt-api library |
@@ -526,13 +518,13 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | GitHub Copilot for ABAP | N/A | N/A | GitHub | N/A | Eclipse plugin | Inline completions, chat |
 
 **ARC-1 differentiators:**
-1. **Scope-based tool filtering** — users only see tools they have permission for (read/write/admin via XSUAA roles)
-2. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
-3. Comprehensive safety system (read-only, package filter, operation filter, transport guard) — additive to scopes
-4. BTP-native deployment with Destination Service + Cloud Connector integration
+1. **Principal propagation** — per-user SAP authentication via BTP Destination Service + Cloud Connector
+2. **Scope-based tool filtering** — users only see tools they have permission for (read/write/admin via XSUAA roles)
+3. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
+4. Comprehensive safety system (read-only, package filter, operation filter, transport guard) — additive to scopes
 5. Audit logging with user identity (userName, email, clientId) in every tool call
 6. `@abaplint/core` integration for offline ABAP linting (no SAP round-trip needed)
-7. 379 automated tests (351 unit + 28 integration) with CI on Node 20/22
+7. 386 automated tests (358 unit + 28 integration) with CI on Node 20/22
 
 ---
 
@@ -599,6 +591,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | Scope Enforcement | SEC-06: Per-tool scope checks, ListTools filtering, 12 tests | ✅ Complete (2026-03-27) |
 | Audit Logging | SEC-04: User identity in tool call logs (userName, email, clientId) | ✅ Mostly complete (2026-03-27) |
 | Dynamic Client Registration | RFC 7591 /register endpoint for MCP clients | ✅ Complete (2026-03-27) |
+| Principal Propagation | SEC-01+SEC-02: Per-user ADT client via BTP Dest Service + Cloud Connector | ✅ Code complete (2026-03-27) |
 
 ---
 
