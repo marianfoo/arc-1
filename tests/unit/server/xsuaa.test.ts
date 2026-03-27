@@ -75,6 +75,8 @@ describe('createChainedTokenVerifier', () => {
     const result = await verifier('my-key');
     expect(result.clientId).toBe('api-key');
     expect(result.scopes).toEqual(['read', 'write', 'admin']);
+    // Must have expiresAt for MCP SDK's requireBearerAuth middleware
+    expect(result.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it('throws when API key does not match and no other verifiers', async () => {

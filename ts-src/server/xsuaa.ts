@@ -176,6 +176,8 @@ export function createChainedTokenVerifier(
         token,
         clientId: 'api-key',
         scopes: ['read', 'write', 'admin'],
+        // MCP SDK's requireBearerAuth requires expiresAt — set to 1 year
+        expiresAt: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
         extra: {},
       };
     }

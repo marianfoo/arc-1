@@ -56,10 +56,8 @@
   "oauth2-configuration": {
     "redirect-uris": [
       "http://localhost:*/**",
-      "http://127.0.0.1:*/**",
       "https://*.cfapps.us10-001.hana.ondemand.com/**",
-      "https://claude.ai/api/mcp/auth_callback",
-      "cursor://anysphere.cursor-retrieval/**"
+      "https://claude.ai/api/mcp/auth_callback"
     ],
     "grant-types": ["authorization_code", "refresh_token"],
     "token-validity": 3600,
