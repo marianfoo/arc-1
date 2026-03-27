@@ -114,49 +114,198 @@ MCP Client → XSUAA OAuth → ARC-1 → Destination Service (X-User-Token: <jwt
                               X.509 cert (CN=SAP_USERNAME) → CERTRULE → SAP user
 ```
 
-### Step 1: Change BTP Destination to PrincipalPropagation
+### Step 1: Create a Dual-Destination Setup
 
-In the BTP Cockpit, edit the destination:
+The recommended approach uses **two destinations** — one for the shared service account and one for per-user PP:
+
+**Destination 1: `SAP_TRIAL` (BasicAuth — shared client)**
 
 | Property | Value |
 |----------|-------|
-| **Authentication** | `PrincipalPropagation` |
+| **Name** | `SAP_TRIAL` |
+| **Type** | HTTP |
+| **URL** | `http://a4h-abap:50000` (CC virtual host, HTTP) |
+| **Proxy Type** | OnPremise |
+| **Authentication** | BasicAuthentication |
+| **User** | `DEVELOPER` |
+| **Password** | `<password>` |
+| `sap-client` | `001` |
+
+This destination is resolved at startup and used as the fallback for API key auth and when PP fails.
+
+**Destination 2: `SAP_TRIAL_PP` (PrincipalPropagation — per-user)**
+
+| Property | Value |
+|----------|-------|
+| **Name** | `SAP_TRIAL_PP` |
+| **Type** | HTTP |
+| **URL** | `http://a4h-abap:50001` (CC virtual host, HTTPS port) |
+| **Proxy Type** | OnPremise |
+| **Authentication** | PrincipalPropagation |
 | **User** | *(leave empty)* |
 | **Password** | *(leave empty)* |
+| `sap-client` | `001` |
 
-All other properties (URL, Proxy Type, sap-client) remain the same.
+This destination is used per-request when an authenticated user's JWT is available.
 
-### Step 2: Configure Cloud Connector for Principal Propagation
+> **Why two destinations?** A PrincipalPropagation destination has no User/Password. If ARC-1 only had one PP destination, API key users and unauthenticated health checks would fail because the shared client has no credentials. The dual-destination approach ensures backward compatibility.
 
-In the Cloud Connector Admin UI:
+> **Why port 50001 for PP?** The Cloud Connector needs an HTTPS system mapping with `X509_GENERAL` auth mode for PP. Port 50001 is the SAP HTTPS port. The HTTP mapping (50000) uses `NONE_RESTRICTED` auth which doesn't support PP.
 
-1. **Cloud to On-Premise > Access Control**: ensure the virtual host (`a4h-abap:50000`) is mapped
-2. **Cloud to On-Premise > Principal Propagation**:
-   - Set **Principal Type** to `X.509 Certificate (General)`
-   - Optionally configure the **Subject Pattern** (e.g., `CN=${email}` or `CN=${user_name}`)
-3. **Trust Configuration**: synchronize with your BTP subaccount (should already be done if Cloud Connector is connected)
+### Step 2: Configure Cloud Connector
+
+These steps were validated on SAP Cloud Connector 2.x:
+
+#### 2a. Generate System Certificate
+
+Cloud Connector Admin UI → **Configuration → On-Premises** tab:
+
+1. Under **System Certificate**, click **"Create and use a self-signed certificate"** icon
+2. Fill in: `CN=a4h-cloudconnector, OU=ARC1, O=MZ, C=DE` (or your org details)
+3. Click Create
+
+Or via CC REST API:
+```bash
+curl -sk -u Administrator:<password> -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"type":"selfsigned","subjectDN":"CN=a4h-cloudconnector, OU=ARC1, O=MZ, C=DE","keySize":2048}' \
+  https://localhost:8443/api/v1/configuration/connector/onPremise/systemCertificate
+```
+
+#### 2b. Generate CA Certificate
+
+Cloud Connector Admin UI → **Configuration → On-Premises** tab:
+
+1. Scroll to **CA Certificate** section
+2. Click **"Create and use a self-signed certificate"** icon
+3. Fill in: `CN=SCC-CA-a4h, OU=ARC1, O=MZ, C=DE`
+4. Key size: 4096 bits (recommended)
+5. Click Create
+
+This CA will sign the short-lived X.509 certificates for each propagated user.
+
+#### 2c. Export the CA Certificate
+
+1. In the CA Certificate section, click the **Download** icon
+2. Save as `ca_cert.der` — you'll import this into SAP's STRUST
+
+#### 2d. Add HTTPS System Mapping
+
+Cloud Connector Admin UI → **Cloud to On-Premise → Access Control**:
+
+1. Add a new system mapping:
+   - **Virtual Host**: `a4h-abap`
+   - **Virtual Port**: `50001`
+   - **Internal Host**: `localhost`
+   - **Internal Port**: `50001`
+   - **Protocol**: `HTTPS`
+   - **Back-end Type**: ABAP System
+   - **Authentication Mode**: `X509_GENERAL`
+2. Add resource `/` with all sub-paths enabled
+
+Or via CC REST API:
+```bash
+curl -sk -u Administrator:<password> -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"virtualHost":"a4h-abap","virtualPort":50001,"localHost":"localhost","localPort":50001,"protocol":"HTTPS","backendType":"abapSys","authenticationMode":"X509_GENERAL","sid":"A4H","hostInHeader":"INTERNAL"}' \
+  "https://localhost:8443/api/v1/configuration/subaccounts/<region>/<subaccount>/systemMappings"
+```
+
+#### 2e. Configure Subject Pattern
+
+Cloud Connector Admin UI → **Configuration → On-Premises** → scroll to **Principal Propagation → Subject Pattern Rules**:
+
+- Add rule: `CN=${name}` (maps the user's login name to the cert CN)
+
+#### 2f. Backend Trust Store
+
+Set **"Determining Trust Through Allowlist"** to **OFF** (trusts all backend certs). This is acceptable when your SAP system uses self-signed certificates.
 
 ### Step 3: Configure SAP Backend
 
-On the SAP system (via SAP GUI):
+#### 3a. Import CC CA Certificate into STRUST
 
-1. **STRUST**: Import the Cloud Connector's CA certificate into the **SSL Server Standard** PSE
-2. **CERTRULE** (transaction `SM30`, view `VUSREXTID`): Create a mapping rule:
-   - **External ID Type**: `DN` (Distinguished Name)
-   - **External ID**: `CN=*` (or more specific pattern)
-   - **SAP User**: Map to the corresponding SAP user
-3. **ICM Profile** (transaction `RZ10` or `SMICM`):
-   ```
-   icm/HTTPS/verify_client = 1
-   login/certificate_mapping_rulebased = 1
-   ```
-4. **Restart ICM**: Transaction `SMICM` → Administration → ICM → Soft Restart
+The Cloud Connector's CA certificate must be imported into SAP's SSL Server PSE so SAP trusts the short-lived PP certificates.
+
+**Via CLI** (recommended — no SAP GUI needed):
+```bash
+# Convert DER to PEM
+openssl x509 -inform DER -in ca_cert.der -out ca_cert.pem
+
+# Import into SAPSSLS.pse
+sapgenpse maintain_pk -p /usr/sap/<SID>/<INSTANCE>/sec/SAPSSLS.pse -a ca_cert.pem
+```
+
+Example for SID=A4H, instance=D00:
+```bash
+su - a4hadm -c "sapgenpse maintain_pk -p /usr/sap/A4H/D00/sec/SAPSSLS.pse -a /tmp/ca_cert.pem"
+```
+
+Verify with:
+```bash
+su - a4hadm -c "sapgenpse maintain_pk -p /usr/sap/A4H/D00/sec/SAPSSLS.pse -l"
+```
+
+**Via SAP GUI** (alternative):
+1. Transaction **STRUST**
+2. Expand **SSL Server Standard** → double-click your instance
+3. Click **Import** (📥), browse to `ca_cert.der`
+4. Click **Add to Certificate List**
+5. Click **Save**
+
+#### 3b. Verify ICM Profile Parameters
+
+These must be set in the SAP instance profile (`DEFAULT.PFL` or instance profile):
+
+```ini
+icm/HTTPS/verify_client = 1          # Request client certificates
+login/certificate_mapping_rulebased = 1   # Enable rule-based cert mapping
+login/certificate = 1                    # Enable certificate login
+login/certificate_mapping = 1            # Enable cert-to-user mapping
+```
+
+Check current values:
+```bash
+grep -E "certificate|icm/HTTPS" /sapmnt/<SID>/profile/DEFAULT.PFL
+```
+
+#### 3c. Create Certificate-to-User Mapping (CERTRULE)
+
+Transaction **SM30**, view **VUSREXTID**:
+
+1. Click **New Entries**
+2. **External ID type**: leave empty (default DN)
+3. **External ID**: `CN=DEVELOPER` (must match the Subject Pattern — `CN=${name}` generates `CN=<username>`)
+4. **Seq. No.**: `000`
+5. **User**: `DEVELOPER`
+6. **Activated**: checked ✅
+7. Save
+
+> **Important:** The External ID must match **exactly** what the Cloud Connector generates. With Subject Pattern `CN=${name}`, the cert subject is just `CN=<username>` — NOT `CN=<username>, OU=ARC1, O=MZ, C=DE`. The OU/O/C are in the **issuer** (CA cert), not the **subject**.
+
+> **Known issue:** Transaction `CERTRULE` may dump with `STRING_OFFSET_TOO_LARGE` (CX_SY_RANGE_OUT_OF_BOUNDS in SAPLSUSR_CERTRULE). Use `SM30` with view `VUSREXTID` as a workaround.
+
+Repeat for each SAP user that will be used via PP. Create one entry per user.
+
+#### 3d. Restart ICM
+
+After all changes, restart ICM to pick up the updated certificates:
+
+```bash
+# Via sapcontrol (soft restart, no full SAP restart needed)
+su - <sid>adm -c "sapcontrol -nr <instance_nr> -function RestartService"
+```
+
+Or via SAP GUI: Transaction **SMICM** → Administration → ICM → Soft Restart.
 
 ### Step 4: Enable PP in ARC-1
 
 ```bash
-# Set on the CF app
+# Set the dual-destination config
+cf set-env arc1-mcp-server SAP_BTP_DESTINATION SAP_TRIAL        # BasicAuth (shared)
+cf set-env arc1-mcp-server SAP_BTP_PP_DESTINATION SAP_TRIAL_PP  # PP (per-user)
 cf set-env arc1-mcp-server SAP_PP_ENABLED true
+cf set-env arc1-mcp-server SAP_XSUAA_AUTH true
 cf restage arc1-mcp-server
 ```
 
@@ -164,17 +313,19 @@ Or in `manifest.yml`:
 
 ```yaml
 env:
-  SAP_PP_ENABLED: "true"
   SAP_BTP_DESTINATION: "SAP_TRIAL"
+  SAP_BTP_PP_DESTINATION: "SAP_TRIAL_PP"
+  SAP_PP_ENABLED: "true"
   SAP_XSUAA_AUTH: "true"
 ```
 
 ### Step 5: Graceful Fallback
 
 When `SAP_PP_ENABLED=true`:
-- If the user has a valid JWT → per-user ADT client is created
-- If PP fails (destination error, missing user mapping, etc.) → falls back to shared service account
+- If the user has a valid JWT (XSUAA/OIDC, 3 dot-separated parts) → per-user ADT client via `SAP_BTP_PP_DESTINATION`
+- If PP fails (destination error, missing user mapping, etc.) → falls back to shared service account via `SAP_BTP_DESTINATION`
 - If no JWT available (API key auth, stdio) → uses shared service account
+- API key tokens are detected as non-JWT and skip PP entirely (no wasted API calls)
 
 This means you can enable PP without breaking existing API key users.
 
@@ -306,11 +457,14 @@ If PP isn't mapping to the correct SAP user:
 
 | Env Var / Flag | Description | Default |
 |----------------|-------------|---------|
-| `SAP_BTP_DESTINATION` | BTP Destination name to use | *(none)* |
+| `SAP_BTP_DESTINATION` | BTP Destination name (BasicAuth, startup) | *(none)* |
+| `SAP_BTP_PP_DESTINATION` | BTP Destination name (PP, per-user) | Falls back to `SAP_BTP_DESTINATION` |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable principal propagation | `false` |
 | `SAP_XSUAA_AUTH` / `--xsuaa-auth` | Enable XSUAA OAuth proxy | `false` |
 | `SAP_URL` / `--url` | Direct SAP URL (overridden by destination) | *(none)* |
 | `SAP_USER` / `--user` | Direct SAP user (overridden by destination/PP) | *(none)* |
 | `SAP_PASSWORD` / `--password` | Direct SAP password (overridden by destination/PP) | *(none)* |
 
-**Priority:** BTP Destination > env vars. When PP is enabled, per-user auth > destination credentials > env vars.
+**Priority:** PP per-user > BTP Destination > env vars.
+
+**SAP Reference:** [Authenticating Users against On-Premise Systems](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/authenticating-users-against-on-premise-systems)
