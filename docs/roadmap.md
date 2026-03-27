@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-03-26
+**Last Updated:** 2026-03-27
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -37,7 +37,10 @@ The core design principles are:
 | Docker Image | ✅ Multi-platform (amd64/arm64), GHCR `ghcr.io/marianfoo/arc-1` |
 | CI/CD | ✅ GitHub Actions: lint + typecheck + unit tests (Node 20/22) + integration tests |
 | XSUAA OAuth Proxy | ✅ MCP SDK ProxyOAuthServerProvider + @sap/xssec JWT validation |
-| Test Coverage | ✅ 339 unit tests + 28 integration tests (vitest) |
+| Scope Enforcement | ✅ Per-tool scope checks (read/write/admin), ListTools filtered by scope |
+| Audit Logging | ✅ User identity (userName, email, clientId) in every tool call log |
+| Dynamic Client Registration | ✅ /register endpoint for MCP clients (RFC 7591) |
+| Test Coverage | ✅ 351 unit tests + 28 integration tests (vitest) |
 | Documentation | ✅ Architecture, auth guides, Docker guide, setup phases |
 | Phase 3: Principal Propagation | 🔧 Needs porting to TypeScript + SAP-side setup |
 
@@ -158,21 +161,18 @@ The core design principles are:
 | **Effort** | M (3–5 days) |
 | **Risk** | Low |
 | **Usefulness** | High — required for enterprise compliance |
-| **Status** | Structured logger exists (`ts-src/server/logger.ts`), needs correlation ID + user context |
+| **Status** | ✅ Mostly complete (2026-03-27) — user context in logs, remaining: correlation ID, log-to-file |
 
-**What:** Structured JSON audit log for every MCP tool call, including:
-- Timestamp, correlation ID (MCP session ID)
-- Authenticated user (from OIDC token)
-- Tool name, action, target object
-- SAP user used (service account or propagated user)
-- Result (success/error), duration
-- Client info (from MCP initialize)
+**Implemented (2026-03-27):**
+- User identity (userName, email, clientId) logged with every tool call via `authInfo.extra`
+- Structured logger (`ts-src/server/logger.ts`) with text/JSON output and sensitive field redaction
+- Tool call duration, success/error status in every log entry
+- Works for XSUAA (JWT claims), OIDC (sub), and API key auth
 
-**Implementation:**
-- Structured logger already exists (`ts-src/server/logger.ts`) with text/JSON output and field redaction
-- Add correlation ID from MCP session headers
-- Add user context from OIDC middleware (JWT `sub`/`preferred_username`)
-- Support log output to stderr (default), file, or syslog
+**Remaining:**
+- Correlation ID from MCP session headers
+- SAP user identity (when principal propagation is implemented)
+- Log output to file or syslog (currently stderr only)
 
 **References:**
 - [OWASP: MCP Server Security - Logging](https://genai.owasp.org/resource/a-practical-guide-for-secure-mcp-server-development/)
@@ -211,29 +211,27 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | M (3–5 days) |
 | **Risk** | Medium — needs careful design |
 | **Usefulness** | High — differentiates AI usage from Eclipse/ADT usage |
-| **Status** | Concept only |
+| **Status** | ✅ Complete via scope enforcement (2026-03-27) |
 
-**What:** Allow admins to define which MCP tools are available based on the authenticated user's role or group membership. This enables the enterprise use case: "AI users can only read, but the same SAP user in Eclipse can write."
+**Implemented (2026-03-27):**
+- `TOOL_SCOPES` map in `ts-src/handlers/intent.ts` — each tool requires a scope (read/write/admin)
+- Scope enforcement in `handleToolCall()` — checks `authInfo.scopes` before executing any tool
+- `ListTools` filtering in `ts-src/server/server.ts` — users only see tools they have scopes for
+- XSUAA role collections (ARC-1 Viewer/Editor/Admin) map to scopes via `xs-security.json`
+- Additive to safety system — both scope check AND safety check must pass
+- Backward compatible — no authInfo (stdio, simple API key) = no scope enforcement
+- 12 unit tests covering all scope enforcement scenarios
 
-**How it could work:**
-- OIDC tokens contain group/role claims (e.g., Entra ID groups: `arc1-readers`, `arc1-writers`)
-- ARC-1 checks group membership from JWT and applies tool restrictions:
-  - `arc1-readers`: Only SAPRead, SAPSearch, SAPQuery, SAPContext, SAPNavigate
-  - `arc1-writers`: All tools
-  - `arc1-admins`: All tools + SAPManage
-- This is **independent** of SAP's S_DEVELOP — it restricts what the AI agent can attempt, while SAP enforces what the SAP user can actually do
-
-**Configuration:**
-```bash
-SAP_OIDC_READER_GROUPS="arc1-readers,sap-viewers"
-SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
-```
+**How it works:**
+- `read` scope → SAPRead, SAPSearch, SAPQuery, SAPNavigate, SAPContext, SAPLint, SAPDiagnose (7 tools)
+- `write` scope → adds SAPWrite, SAPActivate, SAPManage (10 tools)
+- `admin` scope → adds SAPTransport (11 tools)
+- XSUAA role collections assign scopes to users via BTP cockpit
 
 **Why this matters for basis admins:**
-- An SAP developer user (with full S_DEVELOP authorization in Eclipse) could be restricted to read-only when using AI
-- The admin controls the AI's capabilities separately from SAP authorization
-- Provides a "safety net" that doesn't exist when the same user uses Eclipse directly
-- **This is unique to ARC-1** — no other MCP server or SAP AI tool offers this level of AI-specific access control
+- An SAP developer user (with full S_DEVELOP in Eclipse) can be restricted to read-only via AI
+- The admin controls AI capabilities separately from SAP authorization
+- **This is unique to ARC-1** — no other MCP server offers scope-based tool filtering
 
 ---
 
@@ -493,20 +491,18 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 ## Prioritized Execution Order
 
 ### Phase A: Enterprise Security (Next)
-1. **SEC-04** Audit Logging — add correlation ID + user context to existing logger (P1, XS)
-2. **SEC-01** Principal Propagation — port to TypeScript, end-to-end testing (P0, L)
-3. **DOC-02** Basis Admin Security Guide (P1, S)
+1. **SEC-01** Principal Propagation — port to TypeScript, end-to-end testing (P0, L)
+2. **DOC-02** Basis Admin Security Guide (P1, S)
 
 ### Phase B: Feature Completeness
-4. **FEAT-01** Where-Used Analysis (P1, XS)
-5. **FEAT-02** API Release Status (P1, S)
-6. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
+3. **FEAT-01** Where-Used Analysis (P1, XS)
+4. **FEAT-02** API Release Status (P1, S)
+5. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
 
 ### Phase C: Enterprise Hardening
-7. **SEC-02** BTP Cloud Connector Principal Propagation (P1, M)
-8. **SEC-05** Rate Limiting (P2, S)
-9. **SEC-06** Tool Restriction by User Role (P2, M)
-10. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
+6. **SEC-02** BTP Cloud Connector Principal Propagation (P1, M)
+7. **SEC-05** Rate Limiting (P2, S)
+8. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
 
 ### Phase D: Advanced Features
 12. **FEAT-06** Cloud Readiness Assessment (P2, M)
@@ -521,7 +517,7 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based | API Key, OIDC, XSUAA OAuth proxy | Read-only, pkg filter, op filter, transport guard | Docker, BTP CF, npm | Safety system, BTP integration, XSUAA + OIDC + API key coexistence, 367 tests |
+| **ARC-1** | TypeScript | 11 intent-based | API Key, OIDC, XSUAA OAuth proxy | Read-only, pkg filter, op filter, scope enforcement | Docker, BTP CF, npm | Scope-based tool filtering, 3 auth modes, safety system, 379 tests |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
 | lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, SAP Cloud SDK, principal propagation via Destination Service |
 | mario-andreschak/mcp-abap-adt | TypeScript | ~20 | Basic | None | Node.js | Uses established abap-adt-api library |
@@ -530,12 +526,13 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 | GitHub Copilot for ABAP | N/A | N/A | GitHub | N/A | Eclipse plugin | Inline completions, chat |
 
 **ARC-1 differentiators:**
-1. Comprehensive safety system (read-only, package filter, operation filter, transport guard) — no other MCP server has this
-2. BTP-native deployment with Destination Service + Cloud Connector integration
-3. `@abaplint/core` integration for offline ABAP linting (no SAP round-trip needed)
-4. HTTP Streamable transport with per-request server isolation (Copilot Studio compatible)
-5. Intent-based tool design optimized for mid-tier LLMs (11 tools vs 20+)
-6. 348 automated tests (320 unit + 28 integration) with CI on Node 20/22
+1. **Scope-based tool filtering** — users only see tools they have permission for (read/write/admin via XSUAA roles)
+2. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
+3. Comprehensive safety system (read-only, package filter, operation filter, transport guard) — additive to scopes
+4. BTP-native deployment with Destination Service + Cloud Connector integration
+5. Audit logging with user identity (userName, email, clientId) in every tool call
+6. `@abaplint/core` integration for offline ABAP linting (no SAP round-trip needed)
+7. 379 automated tests (351 unit + 28 integration) with CI on Node 20/22
 
 ---
 
@@ -599,6 +596,9 @@ SAP_OIDC_WRITER_GROUPS="arc1-writers,sap-developers"
 | CI/CD Pipeline | GitHub Actions: lint, typecheck, tests (Node 20/22), Docker, npm publish | ✅ Complete |
 | Copilot Studio E2E | OAuth + MCP + BTP Destination + Cloud Connector → SAP data | ✅ Complete |
 | XSUAA OAuth Proxy | SEC-07: MCP SDK auth + @sap/xssec, Express 5, 3 auth modes coexist | ✅ Complete (2026-03-27) |
+| Scope Enforcement | SEC-06: Per-tool scope checks, ListTools filtering, 12 tests | ✅ Complete (2026-03-27) |
+| Audit Logging | SEC-04: User identity in tool call logs (userName, email, clientId) | ✅ Mostly complete (2026-03-27) |
+| Dynamic Client Registration | RFC 7591 /register endpoint for MCP clients | ✅ Complete (2026-03-27) |
 
 ---
 
