@@ -93,6 +93,9 @@ export function parseArgs(args: string[]): ServerConfig {
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
 
+  // --- Principal Propagation ---
+  config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
+
   // --- Misc ---
   config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false);
 

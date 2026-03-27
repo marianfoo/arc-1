@@ -57,6 +57,9 @@ export interface ServerConfig {
   oidcAudience?: string;
   xsuaaAuth: boolean;
 
+  // --- Principal Propagation (per-user SAP auth) ---
+  ppEnabled: boolean;
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -85,5 +88,6 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureTransport: 'auto',
   featureHana: 'auto',
   xsuaaAuth: false,
+  ppEnabled: false,
   verbose: false,
 };

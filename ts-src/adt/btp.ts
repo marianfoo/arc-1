@@ -249,6 +249,113 @@ export function createConnectivityProxy(btpConfig: BTPConfig): BTPProxyConfig | 
   };
 }
 
+// ─── Per-User Destination (Principal Propagation) ────────────────────
+
+/**
+ * Per-user authentication tokens returned by Destination Service
+ * when called with X-User-Token header.
+ *
+ * For PrincipalPropagation destinations, the Destination Service
+ * generates a SAML assertion containing the user identity and returns
+ * it as the SAP-Connectivity-Authentication header value.
+ */
+export interface PerUserAuthTokens {
+  /** SAP-Connectivity-Authentication header value (SAML assertion for Cloud Connector) */
+  sapConnectivityAuth?: string;
+  /** Any Bearer token returned by the Destination Service */
+  bearerToken?: string;
+}
+
+/**
+ * Look up a destination with the user's JWT token for principal propagation.
+ *
+ * This is the key API for per-user SAP authentication:
+ * 1. Caller passes the user's JWT (from XSUAA/OIDC)
+ * 2. Destination Service validates the JWT and generates auth tokens
+ * 3. For PrincipalPropagation destinations: returns SAP-Connectivity-Authentication header
+ * 4. For OAuth2SAMLBearerAssertion destinations: returns a Bearer token
+ *
+ * The returned tokens are per-user and typically valid for 5-10 minutes.
+ *
+ * Reference: SAP Destination Service REST API "Find Destination" endpoint
+ * https://api.sap.com/api/SAP_CP_CF_Connectivity_Destination/resource/Find_a_Destination
+ */
+export async function lookupDestinationWithUserToken(
+  btpConfig: BTPConfig,
+  destinationName: string,
+  userJwt: string,
+): Promise<{ destination: Destination; authTokens: PerUserAuthTokens }> {
+  // Get a service token for Destination Service API
+  const tokenUrl = btpConfig.destinationTokenUrl || `${btpConfig.xsuaaUrl}/oauth/token`;
+  const { accessToken: serviceToken } = await fetchClientCredentialsToken(
+    tokenUrl,
+    btpConfig.destinationClientId,
+    btpConfig.destinationSecret,
+  );
+
+  // Call Find Destination API with X-User-Token header
+  // This triggers the Destination Service to perform the user-specific
+  // authentication flow (e.g., generate SAML assertion for PrincipalPropagation)
+  const destUrl = `${btpConfig.destinationUrl.replace(/\/$/, '')}/destination-configuration/v1/destinations/${encodeURIComponent(destinationName)}`;
+  const resp = await fetch(destUrl, {
+    headers: {
+      Authorization: `Bearer ${serviceToken}`,
+      'X-user-token': userJwt,
+    },
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(
+      `Destination Service (per-user) returned HTTP ${resp.status} for '${destinationName}': ${text.slice(0, 300)}`,
+    );
+  }
+
+  const data = (await resp.json()) as {
+    destinationConfiguration: Destination;
+    authTokens?: Array<{
+      type: string;
+      value: string;
+      http_header?: { key: string; value: string };
+      error?: string;
+    }>;
+  };
+
+  const dest = data.destinationConfiguration;
+  const tokens: PerUserAuthTokens = {};
+
+  // Extract auth tokens from the response
+  if (data.authTokens) {
+    for (const token of data.authTokens) {
+      if (token.error) {
+        throw new Error(
+          `Destination Service auth token error for '${destinationName}': ${token.error}`,
+        );
+      }
+
+      // SAP-Connectivity-Authentication header (used by Cloud Connector for PP)
+      if (token.http_header?.key === 'SAP-Connectivity-Authentication') {
+        tokens.sapConnectivityAuth = token.http_header.value;
+      }
+
+      // Bearer token (used for OAuth2SAMLBearerAssertion destinations)
+      if (token.type === 'Bearer') {
+        tokens.bearerToken = token.value;
+      }
+    }
+  }
+
+  logger.info('BTP destination resolved (per-user)', {
+    name: dest.Name,
+    url: dest.URL,
+    auth: dest.Authentication,
+    hasConnectivityAuth: !!tokens.sapConnectivityAuth,
+    hasBearerToken: !!tokens.bearerToken,
+  });
+
+  return { destination: dest, authTokens: tokens };
+}
+
 // ─── Top-Level Resolver ──────────────────────────────────────────────
 
 /**

@@ -59,6 +59,12 @@ export interface AdtClientConfig {
   verbose: boolean;
   /** BTP Connectivity proxy (Cloud Connector) */
   btpProxy?: BTPProxyConfig;
+  /**
+   * Per-user SAP-Connectivity-Authentication header (principal propagation).
+   * Contains a SAML assertion from the BTP Destination Service.
+   * When set, sent with every request to Cloud Connector for user mapping.
+   */
+  sapConnectivityAuth?: string;
 }
 
 /** Create default ADT client config */

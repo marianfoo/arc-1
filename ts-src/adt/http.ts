@@ -47,6 +47,14 @@ export interface AdtHttpConfig {
   sessionType?: SessionType;
   /** BTP Connectivity proxy (Cloud Connector) */
   btpProxy?: BTPProxyConfig;
+  /**
+   * Per-user SAP-Connectivity-Authentication header value.
+   * Set when using BTP Cloud Connector principal propagation.
+   * Contains a SAML assertion with the user's identity.
+   * When set, this header is sent on EVERY request to the connectivity proxy,
+   * which forwards it to the Cloud Connector for user mapping.
+   */
+  sapConnectivityAuth?: string;
 }
 
 /** Response from an ADT HTTP request */
@@ -212,6 +220,14 @@ export class AdtHttpClient {
     if (this.config.btpProxy) {
       const proxyToken = await this.config.btpProxy.getProxyToken();
       headers['Proxy-Authorization'] = `Bearer ${proxyToken}`;
+    }
+
+    // Principal Propagation: inject SAP-Connectivity-Authentication header
+    // This carries a SAML assertion with the user's identity through the
+    // Cloud Connector to the SAP backend. The Cloud Connector uses this
+    // to generate an X.509 certificate mapped to the SAP user via CERTRULE.
+    if (this.config.sapConnectivityAuth) {
+      headers['SAP-Connectivity-Authentication'] = this.config.sapConnectivityAuth;
     }
 
     const url = this.buildUrl(path);

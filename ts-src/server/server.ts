@@ -10,7 +10,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import type { BTPProxyConfig } from '../adt/btp.js';
+import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
 import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
@@ -21,16 +21,9 @@ import type { ServerConfig } from './types.js';
 /** ARC-1 version */
 export const VERSION = '3.0.0-alpha.1';
 
-/**
- * Create the MCP server with registered tool handlers.
- * @param config Server configuration
- * @param btpProxy Optional BTP connectivity proxy config (resolved at startup)
- */
-export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig): Server {
-  const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
-
-  // Create ADT client (may be unconfigured — tools will fail gracefully)
-  const adtConfig: Partial<AdtClientConfig> = {
+/** Build the base ADT client config (without per-user auth) */
+function buildAdtConfig(config: ServerConfig, btpProxy?: BTPProxyConfig): Partial<AdtClientConfig> {
+  return {
     baseUrl: config.url,
     username: config.username,
     password: config.password,
@@ -51,8 +44,63 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig): S
       allowTransportableEdits: config.allowTransportableEdits,
     },
   };
+}
 
-  const client = new AdtClient(adtConfig);
+/**
+ * Create a per-user ADT client for principal propagation.
+ *
+ * Called per MCP request when ppEnabled=true and user JWT is available.
+ * Looks up the BTP Destination with X-User-Token header to get per-user
+ * auth tokens, then creates an ADT client that sends the
+ * SAP-Connectivity-Authentication header with every request.
+ *
+ * The Cloud Connector uses this header to generate an X.509 cert
+ * mapped to the SAP user via CERTRULE.
+ */
+async function createPerUserClient(
+  config: ServerConfig,
+  btpConfig: BTPConfig,
+  btpProxy: BTPProxyConfig | undefined,
+  userJwt: string,
+): Promise<AdtClient> {
+  const { lookupDestinationWithUserToken } = await import('../adt/btp.js');
+  const destName = process.env.SAP_BTP_DESTINATION;
+  if (!destName) {
+    throw new Error('SAP_BTP_DESTINATION is required for principal propagation');
+  }
+
+  const { destination, authTokens } = await lookupDestinationWithUserToken(btpConfig, destName, userJwt);
+
+  const adtConfig = buildAdtConfig(config, btpProxy);
+  // Override URL from destination (in case it differs from startup-resolved URL)
+  adtConfig.baseUrl = destination.URL;
+  // Set per-user auth: either SAP-Connectivity-Authentication (PP via Cloud Connector)
+  // or Bearer token (OAuth2SAMLBearerAssertion)
+  if (authTokens.sapConnectivityAuth) {
+    adtConfig.sapConnectivityAuth = authTokens.sapConnectivityAuth;
+    // Don't send basic auth when using PP — the user identity comes from the SAML assertion
+    adtConfig.username = undefined;
+    adtConfig.password = undefined;
+  } else if (authTokens.bearerToken) {
+    // TODO: Bearer token auth for OAuth2SAMLBearerAssertion destinations
+    // This would replace basic auth with Bearer token
+    logger.warn('Bearer token auth from destination not yet implemented — falling back to basic auth');
+  }
+
+  return new AdtClient(adtConfig);
+}
+
+/**
+ * Create the MCP server with registered tool handlers.
+ * @param config Server configuration
+ * @param btpProxy Optional BTP connectivity proxy config (resolved at startup)
+ * @param btpConfig Optional BTP service config (for per-user destination lookup)
+ */
+export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, btpConfig?: BTPConfig): Server {
+  const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
+
+  // Create default ADT client (shared, uses startup-time credentials)
+  const defaultClient = new AdtClient(buildAdtConfig(config, btpProxy));
 
   // Register tool listing — filtered by user's scopes when auth is active
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
@@ -73,6 +121,24 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig): S
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+
+    // Principal propagation: create per-user ADT client if enabled and user JWT available
+    let client = defaultClient;
+    if (config.ppEnabled && btpConfig && extra.authInfo?.token) {
+      try {
+        client = await createPerUserClient(config, btpConfig, btpProxy, extra.authInfo.token);
+        logger.debug('Per-user ADT client created', {
+          user: extra.authInfo.extra?.userName ?? extra.authInfo.clientId,
+        });
+      } catch (err) {
+        logger.error('Failed to create per-user ADT client — falling back to shared client', {
+          error: err instanceof Error ? err.message : String(err),
+          user: extra.authInfo.extra?.userName ?? extra.authInfo.clientId,
+        });
+        // Fall back to shared client (service account)
+      }
+    }
+
     const result = await handleToolCall(client, config, toolName, args, extra.authInfo);
     return { ...result } as Record<string, unknown>;
   });
@@ -95,24 +161,36 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
   // Resolve BTP Destination if configured (overrides SAP_URL/USER/PASSWORD)
   let btpProxy: BTPProxyConfig | undefined;
+  let btpConfig: BTPConfig | undefined;
   const btpDestination = process.env.SAP_BTP_DESTINATION;
   if (btpDestination) {
-    const { resolveBTPDestination } = await import('../adt/btp.js');
+    const { resolveBTPDestination, parseVCAPServices } = await import('../adt/btp.js');
     const resolved = await resolveBTPDestination(btpDestination);
     config.url = resolved.url;
     config.username = resolved.username;
     config.password = resolved.password;
     config.client = resolved.client;
     btpProxy = resolved.proxy ?? undefined;
+
+    // Keep btpConfig for per-user destination lookup (principal propagation)
+    if (config.ppEnabled) {
+      btpConfig = parseVCAPServices() ?? undefined;
+      logger.info('Principal propagation enabled', {
+        destination: btpDestination,
+        hasBtpConfig: !!btpConfig,
+      });
+    }
+
     logger.info('BTP destination resolved', {
       destination: btpDestination,
       url: resolved.url,
       user: resolved.username,
       hasProxy: !!btpProxy,
+      ppEnabled: config.ppEnabled,
     });
   }
 
-  const server = createServer(config, btpProxy);
+  const server = createServer(config, btpProxy, btpConfig);
 
   if (config.transport === 'stdio') {
     const transport = new StdioServerTransport();
@@ -150,7 +228,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     }
 
     const { startHttpServer } = await import('./http.js');
-    await startHttpServer(() => createServer(config, btpProxy), config, xsuaaCredentials);
+    await startHttpServer(() => createServer(config, btpProxy, btpConfig), config, xsuaaCredentials);
   }
 
   return server;

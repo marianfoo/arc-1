@@ -574,4 +574,44 @@ describe('AdtHttpClient', () => {
       expect(client).toBeDefined();
     });
   });
+
+  // ─── Principal Propagation ─────────────────────────────────────────
+
+  describe('principal propagation', () => {
+    it('sends SAP-Connectivity-Authentication header when sapConnectivityAuth is set', async () => {
+      const ppConfig: AdtHttpConfig = {
+        ...getDefaultConfig(),
+        sapConnectivityAuth: 'Bearer saml-assertion-for-user',
+      };
+      const client = new AdtHttpClient(ppConfig);
+      const ppMockRequest = getMockAxios();
+
+      ppMockRequest.mockResolvedValueOnce({
+        status: 200,
+        data: 'OK',
+        headers: {},
+      });
+
+      await client.get('/sap/bc/adt/programs/programs/ZTEST/source/main');
+
+      const callHeaders = ppMockRequest.mock.calls[0][0].headers;
+      expect(callHeaders['SAP-Connectivity-Authentication']).toBe('Bearer saml-assertion-for-user');
+    });
+
+    it('does NOT send SAP-Connectivity-Authentication when not configured', async () => {
+      const client = new AdtHttpClient(getDefaultConfig());
+      const normalMockRequest = getMockAxios();
+
+      normalMockRequest.mockResolvedValueOnce({
+        status: 200,
+        data: 'OK',
+        headers: {},
+      });
+
+      await client.get('/sap/bc/adt/programs/programs/ZTEST/source/main');
+
+      const callHeaders = normalMockRequest.mock.calls[0][0].headers;
+      expect(callHeaders['SAP-Connectivity-Authentication']).toBeUndefined();
+    });
+  });
 });
