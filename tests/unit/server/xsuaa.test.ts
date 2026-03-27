@@ -5,13 +5,13 @@
  * and provider factory without requiring a live XSUAA instance.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { describe, expect, it, vi } from 'vitest';
 import {
-  InMemoryClientStore,
   createChainedTokenVerifier,
   createXsuaaOAuthProvider,
+  InMemoryClientStore,
 } from '../../../ts-src/server/xsuaa.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 // ─── InMemoryClientStore ─────────────────────────────────────────────
 

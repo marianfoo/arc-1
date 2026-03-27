@@ -25,10 +25,10 @@
  * 4. Health endpoint is always unauthenticated — needed for CF health checks.
  */
 
-import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
 import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { NextFunction, Request, Response } from 'express';
+import express from 'express';
 import { logger } from './logger.js';
 import { VERSION } from './server.js';
 import type { ServerConfig } from './types.js';
@@ -86,9 +86,7 @@ export async function startHttpServer(
   // ─── XSUAA OAuth Proxy Mode ──────────────────────────────
   if (config.xsuaaAuth && xsuaaCredentials) {
     const { mcpAuthRouter } = await import('@modelcontextprotocol/sdk/server/auth/router.js');
-    const { requireBearerAuth } = await import(
-      '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
-    );
+    const { requireBearerAuth } = await import('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js');
     const { createXsuaaOAuthProvider, createChainedTokenVerifier, createXsuaaTokenVerifier } = await import(
       './xsuaa.js'
     );
