@@ -13,7 +13,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
-import { handleToolCall } from '../handlers/intent.js';
+import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
 import type { ServerConfig } from './types.js';
@@ -54,16 +54,26 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig): S
 
   const client = new AdtClient(adtConfig);
 
-  // Register tool listing
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: getToolDefinitions(config),
-  }));
+  // Register tool listing — filtered by user's scopes when auth is active
+  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+    let tools = getToolDefinitions(config);
 
-  // Register tool call handler
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    // When authenticated, only show tools the user has scopes for
+    if (extra.authInfo) {
+      tools = tools.filter((tool) => {
+        const requiredScope = TOOL_SCOPES[tool.name];
+        return !requiredScope || extra.authInfo!.scopes.includes(requiredScope);
+      });
+    }
+
+    return { tools };
+  });
+
+  // Register tool call handler — passes authInfo for scope enforcement + audit logging
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
-    const result = await handleToolCall(client, config, toolName, args);
+    const result = await handleToolCall(client, config, toolName, args, extra.authInfo);
     return { ...result } as Record<string, unknown>;
   });
 

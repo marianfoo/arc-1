@@ -1,7 +1,8 @@
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { describe, expect, it, vi } from 'vitest';
 import { AdtClient } from '../../../ts-src/adt/client.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
-import { handleToolCall } from '../../../ts-src/handlers/intent.js';
+import { handleToolCall, TOOL_SCOPES } from '../../../ts-src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
 
 // Mock axios so AdtClient doesn't make real requests
@@ -334,6 +335,145 @@ describe('Intent Handler', () => {
         sql: 'SELECT * FROM T000',
       });
       expect(result.isError).toBe(true);
+    });
+  });
+
+  // ─── Scope Enforcement ────────────────────────────────────────────
+
+  describe('scope enforcement', () => {
+    const readAuth: AuthInfo = {
+      token: 'test-token',
+      clientId: 'test-client',
+      scopes: ['read'],
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    };
+
+    const writeAuth: AuthInfo = {
+      token: 'test-token',
+      clientId: 'test-client',
+      scopes: ['read', 'write'],
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    };
+
+    const adminAuth: AuthInfo = {
+      token: 'test-token',
+      clientId: 'test-client',
+      scopes: ['read', 'write', 'admin'],
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      extra: { userName: 'test.user@company.com', email: 'test.user@company.com' },
+    };
+
+    it('allows SAPRead with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'PROG', name: 'ZHELLO' },
+        readAuth,
+      );
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('blocks SAPWrite with read-only scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPWrite',
+        { type: 'PROG', name: 'ZHELLO', source: 'test' },
+        readAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain('SAPWrite');
+    });
+
+    it('allows SAPWrite with write scope', async () => {
+      // SAPWrite will fail (unknown tool in switch), but it should NOT be blocked by scope
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPWrite',
+        { type: 'PROG', name: 'ZHELLO', source: 'test' },
+        writeAuth,
+      );
+      // Should reach the switch statement, not be blocked by scope
+      expect(result.content[0]?.text).not.toContain('Insufficient scope');
+    });
+
+    it('blocks SAPTransport with write-only scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPTransport',
+        { action: 'list' },
+        writeAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'admin'");
+    });
+
+    it('allows SAPTransport with admin scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPTransport',
+        { action: 'list' },
+        adminAuth,
+      );
+      // Should reach the switch, not blocked by scope
+      expect(result.content[0]?.text).not.toContain('Insufficient scope');
+    });
+
+    it('allows all tools when no authInfo (backward compat)', async () => {
+      // No authInfo = no scope enforcement (stdio mode, API key without XSUAA)
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZHELLO' });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('scope enforcement is additive to safety system', async () => {
+      // Write scope but readOnly config — safety system should still block
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
+      });
+      const result = await handleToolCall(
+        client,
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'PROG', name: 'ZHELLO' },
+        adminAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('includes user scopes in error message', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {}, readAuth);
+      expect(result.content[0]?.text).toContain('Your scopes: [read]');
+    });
+  });
+
+  // ─── TOOL_SCOPES mapping ──────────────────────────────────────────
+
+  describe('TOOL_SCOPES', () => {
+    it('maps all read tools to read scope', () => {
+      for (const tool of ['SAPRead', 'SAPSearch', 'SAPQuery', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose']) {
+        expect(TOOL_SCOPES[tool]).toBe('read');
+      }
+    });
+
+    it('maps write tools to write scope', () => {
+      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage']) {
+        expect(TOOL_SCOPES[tool]).toBe('write');
+      }
+    });
+
+    it('maps transport to admin scope', () => {
+      expect(TOOL_SCOPES.SAPTransport).toBe('admin');
+    });
+
+    it('covers all 11 tools', () => {
+      expect(Object.keys(TOOL_SCOPES)).toHaveLength(11);
     });
   });
 });

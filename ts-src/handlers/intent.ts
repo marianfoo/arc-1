@@ -10,6 +10,7 @@
  * leaked to the LLM — only user-friendly error messages.
  */
 
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { AdtClient } from '../adt/client.js';
 import { detectFilename, lintAbapSource } from '../lint/lint.js';
 import { logger } from '../server/logger.js';
@@ -21,6 +22,30 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * Scope required for each tool.
+ *
+ * Scope enforcement is ADDITIVE to the safety system:
+ * - Safety system (readOnly, allowedOps, etc.) gates operations at the ADT client level
+ * - Scopes gate operations at the MCP tool level (only enforced when authInfo is present)
+ * - Both must pass for an operation to succeed
+ *
+ * A user with `write` scope but `readOnly=true` in config still can't write.
+ */
+export const TOOL_SCOPES: Record<string, string> = {
+  SAPRead: 'read',
+  SAPSearch: 'read',
+  SAPQuery: 'read',
+  SAPNavigate: 'read',
+  SAPContext: 'read',
+  SAPLint: 'read',
+  SAPDiagnose: 'read',
+  SAPWrite: 'write',
+  SAPActivate: 'write',
+  SAPManage: 'write',
+  SAPTransport: 'admin',
+};
+
 function textResult(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
 }
@@ -31,15 +56,38 @@ function errorResult(message: string): ToolResult {
 
 /**
  * Handle an MCP tool call.
- * This is the main dispatch function — called by the MCP server for every tool invocation.
+ *
+ * @param authInfo - Authenticated user context from MCP SDK (XSUAA/OIDC/API key).
+ *   When present, scope enforcement is active. When absent (stdio, no auth),
+ *   all tools are allowed (backward compatibility).
  */
 export async function handleToolCall(
   client: AdtClient,
   _config: ServerConfig,
   toolName: string,
   args: Record<string, unknown>,
+  authInfo?: AuthInfo,
 ): Promise<ToolResult> {
   const start = Date.now();
+
+  // Build user context for audit logging
+  const userCtx: Record<string, unknown> = {};
+  if (authInfo) {
+    if (authInfo.extra?.userName) userCtx.user = authInfo.extra.userName;
+    if (authInfo.extra?.email) userCtx.email = authInfo.extra.email;
+    if (authInfo.clientId) userCtx.clientId = authInfo.clientId;
+  }
+
+  // Scope enforcement — only when authInfo is present (XSUAA/OIDC mode)
+  if (authInfo) {
+    const requiredScope = TOOL_SCOPES[toolName];
+    if (requiredScope && !authInfo.scopes.includes(requiredScope)) {
+      logger.warn('Tool call blocked by scope', { tool: toolName, requiredScope, scopes: authInfo.scopes, ...userCtx });
+      return errorResult(
+        `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
+      );
+    }
+  }
 
   try {
     let result: ToolResult;
@@ -61,15 +109,16 @@ export async function handleToolCall(
         result = errorResult(`Unknown tool: ${toolName}`);
     }
 
-    logger.debug('Tool call completed', {
+    logger.info('Tool call completed', {
       tool: toolName,
+      ...userCtx,
       duration: Date.now() - start,
     });
 
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error('Tool call failed', { tool: toolName, error: message, duration: Date.now() - start });
+    logger.error('Tool call failed', { tool: toolName, error: message, ...userCtx, duration: Date.now() - start });
     return errorResult(message);
   }
 }

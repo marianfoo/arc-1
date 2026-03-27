@@ -96,10 +96,23 @@ export async function startHttpServer(
     const appUrl = getAppUrl() ?? `http://${bindHost}:${port}`;
 
     // Create XSUAA provider + chained verifier
-    const { provider } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl);
+    const { provider, clientStore } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl);
     const xsuaaVerifier = createXsuaaTokenVerifier(xsuaaCredentials);
     const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
     const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
+
+    // Dynamic Client Registration (RFC 7591) — handles registration locally
+    // since XSUAA doesn't support DCR natively. MCP clients (Claude Desktop,
+    // Cursor) can register dynamically to get client credentials.
+    app.post('/register', express.json(), async (req, res) => {
+      try {
+        const registered = await clientStore.registerClient(req.body);
+        res.status(201).json(registered);
+      } catch (err) {
+        logger.error('DCR registration failed', { error: err instanceof Error ? err.message : String(err) });
+        res.status(400).json({ error: 'Client registration failed' });
+      }
+    });
 
     // Install MCP SDK auth router at root (OAuth endpoints)
     app.use(
