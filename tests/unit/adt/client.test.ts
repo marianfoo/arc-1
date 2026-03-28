@@ -100,10 +100,13 @@ describe('AdtClient', () => {
   });
 
   describe('system information', () => {
-    it('getSystemInfo returns discovery XML', async () => {
+    it('getSystemInfo returns structured JSON with user', async () => {
       const client = createClient();
       const info = await client.getSystemInfo();
       expect(typeof info).toBe('string');
+      const parsed = JSON.parse(info);
+      expect(parsed.user).toBe('admin');
+      expect(Array.isArray(parsed.collections)).toBe(true);
     });
 
     it('getMessages returns message class XML', async () => {

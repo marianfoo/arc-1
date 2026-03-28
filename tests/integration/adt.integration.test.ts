@@ -24,11 +24,14 @@ describeIf('ADT Integration Tests', () => {
   // ─── System Information ─────────────────────────────────────────
 
   describe('system info', () => {
-    it('gets system discovery XML', async () => {
+    it('gets structured system info with user', async () => {
       const info = await client.getSystemInfo();
       expect(info).toBeTruthy();
-      // Response is an Atom service document or discovery XML
-      expect(info).toContain('xml');
+      // Response is structured JSON
+      const parsed = JSON.parse(info);
+      expect(parsed.user).toBeTruthy();
+      expect(Array.isArray(parsed.collections)).toBe(true);
+      // Collections may be empty on minimal SAP systems — that's OK
     });
 
     it('gets installed components', async () => {

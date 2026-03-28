@@ -26,16 +26,20 @@ import {
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
+  parseSystemInfo,
   parseTableContents,
 } from './xml-parser.js';
 
 export class AdtClient {
   readonly http: AdtHttpClient;
   readonly safety: SafetyConfig;
+  /** The configured SAP username (from --user / SAP_USER) */
+  readonly username: string;
 
   constructor(options: Partial<AdtClientConfig> = {}) {
     const config = { ...defaultAdtClientConfig(), ...options };
     this.safety = config.safety;
+    this.username = config.username;
 
     const httpConfig: AdtHttpConfig = {
       baseUrl: config.baseUrl,
@@ -196,11 +200,12 @@ export class AdtClient {
 
   // ─── System Information ────────────────────────────────────────────
 
-  /** Get system discovery XML */
+  /** Get system info as structured JSON (user, system details from discovery XML) */
   async getSystemInfo(): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetSystemInfo');
     const resp = await this.http.get('/sap/bc/adt/core/discovery');
-    return resp.body;
+    const info = parseSystemInfo(resp.body, this.username);
+    return JSON.stringify(info, null, 2);
   }
 
   /** Get installed SAP components */

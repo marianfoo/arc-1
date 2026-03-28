@@ -7,6 +7,7 @@ import {
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
+  parseSystemInfo,
   parseTableContents,
   parseXml,
 } from '../../../ts-src/adt/xml-parser.js';
@@ -290,6 +291,63 @@ describe('XML Parser', () => {
 </asx:abap>`;
       const contents = parsePackageContents(xml);
       expect(contents).toEqual([]);
+    });
+  });
+
+  // ─── parseSystemInfo ──────────────────────────────────────────────
+
+  describe('parseSystemInfo', () => {
+    it('parses discovery XML with workspaces and collections', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<app:service xmlns:app="http://www.w3.org/2007/app" xmlns:atom="http://www.w3.org/2005/Atom">
+  <app:workspace>
+    <atom:title>Object Discovery</atom:title>
+    <app:collection href="/sap/bc/adt/repository/nodestructure">
+      <atom:title>Object Types</atom:title>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/repository/informationsystem/search">
+      <atom:title>Search</atom:title>
+    </app:collection>
+  </app:workspace>
+  <app:workspace>
+    <atom:title>Source Code Library</atom:title>
+    <app:collection href="/sap/bc/adt/programs/programs">
+      <atom:title>Programs</atom:title>
+    </app:collection>
+  </app:workspace>
+</app:service>`;
+      const result = parseSystemInfo(xml, 'DEVELOPER');
+      expect(result.user).toBe('DEVELOPER');
+      expect(result.collections.length).toBeGreaterThan(0);
+      const search = result.collections.find((c) => c.title === 'Search');
+      expect(search).toBeDefined();
+      expect(search?.href).toBe('/sap/bc/adt/repository/informationsystem/search');
+      const programs = result.collections.find((c) => c.title === 'Programs');
+      expect(programs).toBeDefined();
+      expect(programs?.href).toBe('/sap/bc/adt/programs/programs');
+    });
+
+    it('returns username even with empty discovery XML', () => {
+      const xml = '<service/>';
+      const result = parseSystemInfo(xml, 'ADMIN');
+      expect(result.user).toBe('ADMIN');
+      expect(result.collections).toEqual([]);
+    });
+
+    it('handles single workspace with single collection', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<app:service xmlns:app="http://www.w3.org/2007/app" xmlns:atom="http://www.w3.org/2005/Atom">
+  <app:workspace>
+    <atom:title>Single</atom:title>
+    <app:collection href="/sap/bc/adt/core">
+      <atom:title>Core</atom:title>
+    </app:collection>
+  </app:workspace>
+</app:service>`;
+      const result = parseSystemInfo(xml, 'TEST_USER');
+      expect(result.user).toBe('TEST_USER');
+      expect(result.collections).toHaveLength(1);
+      expect(result.collections[0]).toEqual({ title: 'Core', href: '/sap/bc/adt/core' });
     });
   });
 

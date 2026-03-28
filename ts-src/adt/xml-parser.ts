@@ -206,6 +206,47 @@ export function parseFunctionGroup(xml: string): { name: string; functions: stri
   };
 }
 
+/**
+ * Parse ADT system discovery XML into structured info.
+ *
+ * The discovery response is an Atom service document that lists available
+ * ADT workspaces/collections. We extract collection titles and hrefs
+ * to determine what capabilities the SAP system has.
+ *
+ * The authenticated username is passed in from the client config since
+ * the discovery XML doesn't directly contain "you are logged in as X".
+ */
+export function parseSystemInfo(
+  xml: string,
+  username: string,
+): { user: string; collections: Array<{ title: string; href: string }> } {
+  const parsed = parseXml(xml);
+
+  // Atom service document: service > workspace > collection
+  const collections: Array<{ title: string; href: string }> = [];
+
+  // After namespace stripping: app:service → service, app:workspace → workspace, app:collection → collection
+  const service = (parsed.service ?? parsed['service'] ?? {}) as Record<string, unknown>;
+  const workspaces = Array.isArray(service.workspace)
+    ? service.workspace
+    : service.workspace
+      ? [service.workspace]
+      : [];
+
+  for (const ws of workspaces as Array<Record<string, unknown>>) {
+    const cols = Array.isArray(ws.collection) ? ws.collection : ws.collection ? [ws.collection] : [];
+    for (const col of cols as Array<Record<string, unknown>>) {
+      const title = String(col.title ?? col['@_title'] ?? '');
+      const href = String(col['@_href'] ?? '');
+      if (title || href) {
+        collections.push({ title, href });
+      }
+    }
+  }
+
+  return { user: username, collections };
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────
 
 /** Safely get a nested array from parsed XML */
