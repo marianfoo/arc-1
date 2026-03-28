@@ -227,6 +227,7 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
   private xsuaaClientSecret: string;
   private xsuaaTokenUrl: string;
   private xsuaaAuthUrl: string;
+  private xsuaaXsappname: string;
   private _localClientStore: InMemoryClientStore;
 
   constructor(
@@ -251,6 +252,7 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
     this.xsuaaClientSecret = credentials.clientsecret;
     this.xsuaaTokenUrl = tokenUrl;
     this.xsuaaAuthUrl = authUrl;
+    this.xsuaaXsappname = credentials.xsappname;
     this._localClientStore = localClientStore;
     this.skipLocalPkceValidation = true;
   }
@@ -289,7 +291,14 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
     });
 
     if (params.state) searchParams.set('state', params.state);
-    if (params.scopes?.length) searchParams.set('scope', params.scopes.join(' '));
+    if (params.scopes?.length) {
+      // Qualify short scope names (read, write, admin) with XSUAA xsappname prefix.
+      // XSUAA rejects unqualified scopes like "admin" — it needs "arc1-mcp!t498139.admin".
+      const qualifiedScopes = params.scopes.map((s) =>
+        s.includes('.') ? s : `${this.xsuaaXsappname}.${s}`,
+      );
+      searchParams.set('scope', qualifiedScopes.join(' '));
+    }
     if (params.resource) searchParams.set('resource', params.resource.toString());
 
     targetUrl.search = searchParams.toString();

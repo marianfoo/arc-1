@@ -61,7 +61,8 @@
       "https://*.cfapps.us10-001.hana.ondemand.com/**",
       "https://claude.ai/api/mcp/auth_callback",
       "cursor://anysphere.cursor-retrieval/**",
-      "vscode://vscode.microsoft-authentication/**"
+      "vscode://vscode.microsoft-authentication/**",
+      "https://global.consent.azure-apim.net/redirect/**"
     ],
     "grant-types": ["authorization_code", "refresh_token"],
     "token-validity": 3600,
