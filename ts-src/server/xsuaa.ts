@@ -294,10 +294,13 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
     if (params.scopes?.length) {
       // Qualify short scope names (read, write, admin) with XSUAA xsappname prefix.
       // XSUAA rejects unqualified scopes like "admin" — it needs "arc1-mcp!t498139.admin".
-      const qualifiedScopes = params.scopes.map((s) =>
-        s.includes('.') ? s : `${this.xsuaaXsappname}.${s}`,
-      );
-      searchParams.set('scope', qualifiedScopes.join(' '));
+      // Filter out empty strings (Copilot Studio sends scope="" which splits to [""]).
+      const qualifiedScopes = params.scopes
+        .filter((s) => s.length > 0)
+        .map((s) => (s.includes('.') ? s : `${this.xsuaaXsappname}.${s}`));
+      if (qualifiedScopes.length > 0) {
+        searchParams.set('scope', qualifiedScopes.join(' '));
+      }
     }
     if (params.resource) searchParams.set('resource', params.resource.toString());
 
