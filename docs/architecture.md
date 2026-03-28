@@ -10,22 +10,21 @@ flowchart TB
         Other[Other MCP Clients]
     end
 
-    subgraph VSP["arc1 - Go Binary"]
+    subgraph ARC1["arc1 - TypeScript"]
         direction TB
 
         subgraph Entry["Entry Points"]
             MCP[MCP Server<br/>JSON-RPC / stdio + HTTP Streamable]
-            CLI[CLI Mode<br/>search · source · export · debug]
-            LUA[Lua Scripting<br/>REPL · Scripts]
+            CLI[CLI Mode<br/>search · source · lint]
         end
 
         subgraph Auth["Authentication Layer"]
-            APIKEY[API Key<br/>VSP_API_KEY]
+            APIKEY[API Key<br/>ARC1_API_KEY]
             OIDC[OIDC/JWT Validator<br/>EntraID · Cognito · Keycloak]
             PRM[RFC 9728 Metadata<br/>/.well-known/oauth-protected-resource]
         end
 
-        subgraph Core["internal/mcp/server.go"]
+        subgraph Core["ts-src/server/server.ts"]
             direction LR
             Tools[11 Intent-Based Tools]
         end
@@ -33,71 +32,45 @@ flowchart TB
         subgraph Safety["Safety Layer"]
             RO[Read-Only Mode]
             PF[Package Filter]
-            TF[Transport Filter]
             OF[Operation Filter]
-            TE[Transportable<br/>Edit Guard]
         end
 
-        subgraph ADTLib["pkg/adt/ — ADT Client Library"]
+        subgraph ADTLib["ts-src/adt/ — ADT Client Library"]
             direction TB
             subgraph Read["Read"]
-                client[client.go<br/>Search · Get*]
-                cds[cds.go<br/>CDS Dependencies]
+                client[client.ts<br/>Search · Get*]
             end
             subgraph Write["Write"]
-                crud[crud.go<br/>Lock · Create · Update · Delete]
-                workflows[workflows.go<br/>GetSource · WriteSource · Grep*]
+                crud[crud.ts<br/>Lock · Create · Update · Delete]
             end
             subgraph DevTools["DevTools"]
-                devtools[devtools.go<br/>Syntax · Activate · Tests · ATC]
-                codeintel[codeintel.go<br/>FindDef · FindRefs · Completion]
-            end
-            subgraph Debug["Debugger"]
-                dbg[debugger.go<br/>Breakpoints · Listen · Attach · Step]
-                amdp[amdp_debugger.go<br/>HANA SQLScript Debug]
-            end
-            subgraph Extras["Extras"]
-                ui5[ui5.go<br/>UI5/BSP Apps]
-                features[features.go<br/>System Probing]
+                devtools[devtools.ts<br/>Syntax · Activate · Tests]
+                codeintel[codeintel.ts<br/>FindDef · FindRefs · Completion]
             end
         end
 
-        subgraph Transport["Transport Layer"]
-            HTTP[http.go<br/>CSRF · Sessions · Auth]
-            WS[WebSocket Client<br/>ZADT_VSP APC]
+        subgraph TransportLayer["Transport Layer"]
+            HTTP[http.ts<br/>CSRF · Sessions · Auth]
         end
 
         subgraph Packages["Supporting Packages"]
-            DSL[pkg/dsl/<br/>Fluent API · YAML Workflows]
-            Cache[pkg/cache/<br/>Memory · SQLite]
-            Script[pkg/scripting/<br/>Lua VM · Bindings]
-        end
-
-        subgraph Embedded["Embedded Assets"]
-            ABAP[embedded/abap/<br/>ZADT_VSP Source]
-            Deps[embedded/deps/<br/>abapGit ZIPs]
+            Cache[ts-src/cache/<br/>Memory · SQLite]
+            Lint[ts-src/lint/<br/>abaplint]
         end
     end
 
     subgraph SAP["SAP System"]
         ADT[ADT REST API<br/>/sap/bc/adt/*]
-        APC[ZADT_VSP<br/>WebSocket APC]
-        HANA[HANA DB<br/>AMDP Debug]
     end
 
     CC & CD & Other <-->|"JSON-RPC / stdio or HTTP"| MCP
     CLI --> Core
-    LUA --> Core
     MCP --> Auth
     Auth --> Core
     Core --> Safety
     Safety --> ADTLib
-    ADTLib --> Transport
+    ADTLib --> TransportLayer
     HTTP <-->|HTTPS| ADT
-    WS <-->|WebSocket| APC
-    amdp <-->|WebSocket| HANA
-    DSL --> ADTLib
-    Script --> ADTLib
 ```
 
 ## Request Flow
@@ -121,7 +94,7 @@ sequenceDiagram
         Safety->>ADT: Execute operation
         ADT->>HTTP: HTTP request
         HTTP->>HTTP: Add CSRF token + cookies
-        HTTP->>SAP: HTTPS / WebSocket
+        HTTP->>SAP: HTTPS
         SAP-->>HTTP: Response
         HTTP-->>ADT: Parsed response
         ADT-->>Server: Result
@@ -129,200 +102,92 @@ sequenceDiagram
     end
 ```
 
-## Write Operation Flow (EditSource)
-
-```mermaid
-sequenceDiagram
-    participant AI as AI Assistant
-    participant VSP as arc1
-    participant SAP as SAP System
-
-    AI->>VSP: EditSource(url, old_string, new_string)
-
-    VSP->>SAP: GET source
-    SAP-->>VSP: Current source code
-
-    VSP->>VSP: Find & replace (uniqueness check)
-
-    VSP->>SAP: POST syntax check
-    SAP-->>VSP: OK / Errors
-
-    alt Syntax Errors
-        VSP-->>AI: Error (no changes saved)
-    else Syntax OK
-        VSP->>SAP: POST lock
-        VSP->>SAP: PUT source
-        VSP->>SAP: POST unlock
-        VSP->>SAP: POST activate
-        VSP-->>AI: Success
-    end
-```
-
 ## Tool Categories
 
 ```mermaid
 flowchart LR
-    subgraph Search["Search (3)"]
-        SO[SearchObject]
-        GO[GrepObjects]
-        GP[GrepPackages]
+    subgraph ReadTools["Read (1)"]
+        SR[SAPRead<br/>PROG · CLAS · INTF · FUNC<br/>FUGR · INCL · DDLS · BDEF<br/>SRVD · TABL · VIEW<br/>TABLE_CONTENTS · DEVC<br/>SYSTEM · COMPONENTS<br/>MESSAGES · TEXT_ELEMENTS<br/>VARIANTS]
     end
 
-    subgraph Read["Read (10)"]
-        GS[GetSource]
-        GT[GetTable]
-        GTC[GetTableContents]
-        RQ[RunQuery]
-        GPk[GetPackage]
-        GFG[GetFunctionGroup]
-        GCD[GetCDSDependencies]
-        GCI[GetClassInfo]
-        GMs[GetMessages]
-        CS[CompareSource]
+    subgraph SearchTools["Search (1)"]
+        SS[SAPSearch<br/>Name pattern with wildcards]
     end
 
-    subgraph Write["Write (5)"]
-        WS[WriteSource]
-        ES[EditSource]
-        IF[ImportFromFile]
-        EF[ExportToFile]
-        MO[MoveObject]
+    subgraph QueryTools["Query (1)"]
+        SQ[SAPQuery<br/>ABAP SQL against tables]
     end
 
-    subgraph Dev["Dev (5)"]
-        SC[SyntaxCheck]
-        UT[RunUnitTests]
-        ATC[RunATCCheck]
-        LO[LockObject]
-        UO[UnlockObject]
+    subgraph WriteTools["Write (2)"]
+        SW[SAPWrite<br/>Create · Update · Delete]
+        SA[SAPActivate<br/>Activate objects]
     end
 
-    subgraph Intel["Intelligence (2)"]
-        FD[FindDefinition]
-        FR[FindReferences]
+    subgraph NavTools["Navigate (1)"]
+        SN[SAPNavigate<br/>Definition · References · Completion]
     end
 
-    subgraph Debug["Debugger (6)"]
-        DL[Listen]
-        DA[Attach]
-        DD[Detach]
-        DS[Step]
-        DGS[GetStack]
-        DGV[GetVariables]
+    subgraph ContextTools["Context (1)"]
+        SC[SAPContext<br/>Compressed dependency context]
     end
 
-    subgraph System["System (5)"]
-        SI[GetSystemInfo]
-        IC[GetInstalledComponents]
-        CG[GetCallGraph]
-        OS[GetObjectStructure]
-        GF[GetFeatures]
+    subgraph QualityTools["Quality (1)"]
+        SL[SAPLint<br/>Lint · ATC · Syntax]
     end
 
-    subgraph Diag["Diagnostics (6)"]
-        LD[ListDumps]
-        GD[GetDump]
-        LT[ListTraces]
-        GTr[GetTrace]
-        STS[GetSQLTraceState]
-        LST[ListSQLTraces]
+    subgraph DiagTools["Diagnostics (1)"]
+        SD[SAPDiagnose<br/>Dumps · Traces · SQL Traces]
     end
 
-    subgraph Git["Git (2)"]
-        GiT[GitTypes]
-        GiE[GitExport]
+    subgraph AdminTools["Admin (2)"]
+        ST[SAPTransport<br/>List · Create · Release]
+        SM[SAPManage<br/>Feature probing]
     end
-
-    subgraph Reports["Reports (4)"]
-        RR[RunReport]
-        GV[GetVariants]
-        GTE[GetTextElements]
-        STE[SetTextElements]
-    end
-
-    subgraph Install["Install (3)"]
-        IV[InstallZADTVSP]
-        IA[InstallAbapGit]
-        LDp[ListDependencies]
-    end
-```
-
-## Dual Transport: HTTP + WebSocket
-
-```mermaid
-flowchart LR
-    subgraph VSP["ARC-1"]
-        HTTP[HTTP Client<br/>pkg/adt/http.go]
-        WS[WebSocket Client<br/>pkg/adt/websocket.go]
-    end
-
-    subgraph SAP["SAP System"]
-        ADT[ADT REST API<br/>/sap/bc/adt/*]
-        APC[ZADT_VSP APC Handler<br/>/sap/bc/apc/ws/zadt_vsp]
-    end
-
-    HTTP -->|"CRUD · Search · Read<br/>Syntax · Activate · Debug"| ADT
-    WS -->|"RFC Calls · Breakpoints<br/>Git Export · Reports<br/>AMDP Debug"| APC
-
-    subgraph WSServices["WebSocket Domains"]
-        direction TB
-        RFC[rfc — Function Calls]
-        BRK[debug — Breakpoints]
-        GIT[git — abapGit Export]
-        RPT[report — Report Execution]
-        HLP[help — ABAP Documentation]
-    end
-
-    APC --- WSServices
 ```
 
 ## Package Structure
 
 ```
 arc-1/
-├── cmd/arc1/                    # CLI entry point (cobra/viper)
-│   └── main.go                 #   Flags, env vars, auth, server startup
+├── ts-src/
+│   ├── index.ts                    # MCP server entry point
+│   ├── cli.ts                      # CLI entry point (commander)
+│   ├── server/
+│   │   ├── server.ts               # MCP server setup, tool registration
+│   │   ├── config.ts               # Config parser (CLI > env > .env > defaults)
+│   │   ├── http.ts                 # HTTP Streamable transport + API key/OIDC auth
+│   │   ├── logger.ts               # Structured logger (stderr only)
+│   │   └── types.ts                # ServerConfig type, defaults
+│   ├── handlers/
+│   │   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
+│   │   └── tools.ts                # Tool definitions (names, descriptions, schemas)
+│   ├── adt/
+│   │   ├── client.ts               # ADT client facade (all read operations)
+│   │   ├── http.ts                 # HTTP transport (axios, CSRF, cookies, sessions)
+│   │   ├── errors.ts               # Typed error classes (AdtApiError, AdtSafetyError)
+│   │   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
+│   │   ├── features.ts             # Feature detection (auto/on/off)
+│   │   ├── config.ts               # ADT client configuration types
+│   │   ├── types.ts                # ADT response types
+│   │   ├── xml-parser.ts           # XML parser (fast-xml-parser v5)
+│   │   ├── btp.ts                  # BTP Destination Service + Connectivity proxy
+│   │   ├── cookies.ts              # Cookie file parsing (Netscape format)
+│   │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
+│   │   ├── devtools.ts             # Dev tools (syntax check, activate, unit tests)
+│   │   ├── codeintel.ts            # Code intelligence (find def, refs, completion)
+│   │   └── transport.ts            # CTS transport management
+│   ├── cache/
+│   │   ├── cache.ts                # Cache interface + types
+│   │   ├── memory.ts               # In-memory cache
+│   │   └── sqlite.ts               # SQLite cache (better-sqlite3)
+│   └── lint/
+│       └── lint.ts                 # ABAP lint wrapper (@abaplint/core)
 │
-├── internal/mcp/               # MCP protocol layer
-│   └── server.go               #   122 tool handlers, mode-aware registration
+├── tests/
+│   ├── unit/                       # Unit tests (no SAP system needed)
+│   └── integration/                # Integration tests (need SAP credentials)
 │
-├── pkg/adt/                    # ADT client library (core)
-│   ├── client.go               #   Read operations + search
-│   ├── crud.go                 #   Lock / create / update / delete
-│   ├── devtools.go             #   Syntax check, activate, unit tests, ATC
-│   ├── codeintel.go            #   Find definition, references, completion
-│   ├── workflows.go            #   High-level: GetSource, WriteSource, Grep*
-│   ├── debugger.go             #   External ABAP debugger (HTTP + WebSocket)
-│   ├── amdp_debugger.go        #   HANA/AMDP SQLScript debugger
-│   ├── ui5.go                  #   UI5/Fiori BSP management
-│   ├── cds.go                  #   CDS view dependency analysis
-│   ├── safety.go               #   Read-only, package/op filtering
-│   ├── features.go             #   System capability detection
-│   ├── http.go                 #   HTTP transport (CSRF, sessions, auth)
-│   └── xml.go                  #   ADT XML type definitions
-│
-├── pkg/dsl/                    # Fluent API & workflow engine
-│   ├── search.go               #   Search builder
-│   ├── test_runner.go          #   Unit test orchestration
-│   ├── workflow.go             #   YAML workflow engine
-│   └── batch.go                #   Batch import/export, pipelines
-│
-├── pkg/scripting/              # Lua scripting engine
-│   ├── lua.go                  #   Lua VM, REPL
-│   └── bindings.go             #   40+ ADT tool bindings
-│
-├── pkg/cache/                  # Caching infrastructure
-│   ├── memory.go               #   In-memory cache
-│   └── sqlite.go               #   SQLite persistent cache
-│
-├── embedded/                   # Assets embedded in binary
-│   ├── abap/                   #   ZADT_VSP ABAP source files
-│   └── deps/                   #   abapGit ZIP packages
-│
-└── docs/                       # Documentation
-    ├── architecture.md         #   This file
-    ├── DSL.md                  #   DSL & workflow guide
-    └── adr/                    #   Architecture Decision Records
+└── docs/                           # Documentation (MkDocs Material)
 ```
 
 ## Authentication
@@ -330,13 +195,13 @@ arc-1/
 ARC-1 supports two independent authentication layers:
 
 1. **MCP Client Auth** — authenticates the MCP client (API Key or OAuth/OIDC)
-2. **SAP Auth** — authenticates to the SAP system (Basic, Cookie, mTLS, or Principal Propagation)
+2. **SAP Auth** — authenticates to the SAP system (Basic, Cookie, or BTP Destination)
 
 ```mermaid
 flowchart TD
     Request[Incoming Request] --> MCPAuth{MCP Client Auth?}
 
-    MCPAuth -->|API Key| APIKey[VSP_API_KEY header check]
+    MCPAuth -->|API Key| APIKey[ARC1_API_KEY header check]
     MCPAuth -->|OAuth/OIDC| OIDC[JWT Validation<br/>via IdP JWKS]
     MCPAuth -->|None| NoAuth[No client auth<br/>local/trusted network]
 
@@ -348,14 +213,10 @@ flowchart TD
 
     SAPAuth -->|Basic| Basic[Username + Password<br/>--user / --password]
     SAPAuth -->|Cookie| Cookie[Cookie File/String]
-    SAPAuth -->|mTLS| MTLS[Client Certificate<br/>SAP CERTRULE]
-    SAPAuth -->|Principal Prop| PP[Ephemeral X.509 Cert<br/>per OIDC user]
     SAPAuth -->|BTP Destination| BTP[Destination Service<br/>Cloud Connector]
 
     Basic --> CSRF[Fetch CSRF Token]
     Cookie --> CSRF
-    MTLS --> CSRF
-    PP --> CSRF
     BTP --> CSRF
 
     CSRF --> Session[Stateful Session<br/>Cookie Jar]
@@ -430,11 +291,5 @@ flowchart TD
     Ops -->|Allowed| Pkg{Package<br/>Allowed?}
 
     Pkg -->|Outside whitelist| Block4[BLOCKED]
-    Pkg -->|In whitelist| TE{Transportable<br/>Package?}
-
-    TE -->|Yes, not enabled| Block5[BLOCKED]
-    TE -->|No / Enabled| TR{Transport<br/>Allowed?}
-
-    TR -->|Outside whitelist| Block6[BLOCKED]
-    TR -->|In whitelist| OK[EXECUTE]
+    Pkg -->|In whitelist| OK[EXECUTE]
 ```

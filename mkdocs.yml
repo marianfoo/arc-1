@@ -1,5 +1,5 @@
 site_name: ARC-1 — SAP ADT MCP Server
-site_description: Enterprise-ready MCP proxy for SAP ABAP Development Tools. Single binary, admin safety controls, works with Claude, Copilot, and all MCP clients.
+site_description: Enterprise-ready MCP proxy for SAP ABAP Development Tools. npm package + Docker image, admin safety controls, works with Claude, Copilot, and all MCP clients.
 site_url: https://marianfoo.github.io/arc-1/
 repo_url: https://github.com/marianfoo/arc-1
 repo_name: marianfoo/arc-1
@@ -40,31 +40,17 @@ nav:
   - Tools Reference: tools.md
   - MCP Usage Guide: mcp-usage.md
   - CLI Guide: cli-guide.md
-  - Client Setup:
-      - Overview: cli-agents/README.md
-      - Español: cli-agents/README_ES.md
-      - Русский: cli-agents/README_RU.md
-      - Українська: cli-agents/README_UA.md
   - SAP Trial Setup: sap-trial-setup.md
   - Docker: docker.md
-  - DSL & Workflows: DSL.md
   - Authentication:
       - Enterprise Auth: enterprise-auth.md
       - Phase 1 – API Key: phase1-api-key-setup.md
       - Phase 2 – OAuth / JWT: phase2-oauth-setup.md
       - Phase 3 – Principal Propagation: phase3-principal-propagation-setup.md
       - Phase 4 – BTP Deployment: phase4-btp-deployment.md
+      - Phase 5 – XSUAA Setup: phase5-xsuaa-setup.md
+      - BTP Destination Setup: btp-destination-setup.md
       - Auth Test Process: auth-test-process.md
-  - Vision: vision.md
-  - Developer Guide: agents.md
-  - Reviewer Guide: reviewer-guide.md
-  - Architecture Decisions:
-      - WebSocket Stateful Debugging: adr/001-websocket-stateful-debugging.md
-      - RCA Tooling Architecture: adr/002-rca-tooling-architecture.md
-      - ZADT VSP Unified Handler: adr/003-zadt-vsp-apc-unified-handler.md
-  - Plans:
-      - TAS Debugging: plans/phase5-tas-debugging.md
-  - Changelog: changelog.md
   - Roadmap: roadmap.md
 
 markdown_extensions:

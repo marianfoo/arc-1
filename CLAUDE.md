@@ -197,4 +197,3 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 ## History
 
 This project was migrated from Go to TypeScript on 2026-03-26.
-See `reports/2026-03-26-001-typescript-migration-plan.md` for the migration plan.

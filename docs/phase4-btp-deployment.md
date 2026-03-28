@@ -164,7 +164,7 @@ cf push
 
 ```bash
 # API Key for simple auth (Phase 1)
-cf set-env arc1-mcp-server VSP_API_KEY "your-secure-api-key"
+cf set-env arc1-mcp-server ARC1_API_KEY "your-secure-api-key"
 
 # OR OAuth/OIDC validation (Phase 2) — recommended
 cf set-env arc1-mcp-server SAP_OIDC_ISSUER "https://login.microsoftonline.com/{tenant-id}/v2.0"

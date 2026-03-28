@@ -2,7 +2,7 @@
 
 **Enterprise-ready proxy between AI clients and SAP systems.**
 
-ARC-1 is a single Go binary that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and translates AI tool calls into [SAP ABAP Development Tools (ADT)](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools) REST API requests. It works with Claude, GitHub Copilot, VS Code, and any MCP-compatible client.
+ARC-1 is a TypeScript MCP server (distributed as an npm package and Docker image) that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and translates AI tool calls into [SAP ABAP Development Tools (ADT)](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools) REST API requests. It works with Claude, GitHub Copilot, VS Code, and any MCP-compatible client.
 
 > **This repository** ([marianfoo/arc-1](https://github.com/marianfoo/arc-1)) is the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
 
@@ -10,7 +10,7 @@ ARC-1 is a single Go binary that implements the [Model Context Protocol (MCP)](h
 
 | | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | **ARC-1** |
 |---|:---:|:---:|:---:|
-| Single binary, zero runtime deps | — | — | **Y** |
+| npm package + Docker image | — | — | **Y** |
 | Read-only mode / package whitelist | — | — | **Y** |
 | Transport controls (CTS safety) | — | — | **Y** |
 | HTTP Streamable transport (Copilot Studio) | — | — | **Y** |
@@ -29,13 +29,16 @@ As an **admin**, you control what the AI can and cannot do:
 ## Quick Start
 
 ```bash
-# Download from releases
-curl -LO https://github.com/marianfoo/arc-1/releases/latest/download/arc1-linux-amd64
-chmod +x arc1-linux-amd64 && mv arc1-linux-amd64 arc1
+# Run directly with npx (no install needed)
+npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER
 
-# Or build from source
-git clone https://github.com/marianfoo/arc-1.git && cd arc-1
-make build
+# Or install globally
+npm install -g arc-1
+arc1 --url https://your-sap-host:44300 --user YOUR_USER
+
+# Or use Docker
+docker run -e SAP_URL=https://host:44300 -e SAP_USER=dev -e SAP_PASSWORD=secret \
+  ghcr.io/marianfoo/arc-1
 ```
 
 ## Connect Your Client
@@ -48,7 +51,8 @@ Add to `~/.config/claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "sap": {
-      "command": "/path/to/arc1",
+      "command": "npx",
+      "args": ["-y", "arc-1"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "your-username",
@@ -67,7 +71,8 @@ Add `.mcp.json` to your project root:
 {
   "mcpServers": {
     "sap": {
-      "command": "/path/to/arc1",
+      "command": "npx",
+      "args": ["-y", "arc-1"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "your-username",
@@ -84,7 +89,7 @@ Start arc1 as an HTTP server, then point your MCP client to it:
 
 ```bash
 SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \
-  arc1 --transport http-streamable --port 3000
+  npx arc-1 --transport http-streamable --port 3000
 ```
 
 Add to VS Code / Copilot MCP config:
@@ -103,8 +108,7 @@ HTTP Streamable is also the transport for **Copilot Studio** (Microsoft Power Pl
 
 ### Other MCP Clients
 
-All MCP clients that support stdio work out of the box — just point them at the `arc1` binary.
-See **[cli-agents/README.md](cli-agents/README.md)** for per-client config templates.
+All MCP clients that support stdio work out of the box — just point them at `npx arc-1`.
 
 ## Tools
 
@@ -119,7 +123,6 @@ arc1 --read-only                              # block all writes
 arc1 --allowed-packages "ZPROD*,$TMP"        # restrict packages
 arc1 --block-free-sql                         # block RunQuery
 arc1 --allowed-ops "RSQ"                      # whitelist operations
-arc1 --allow-transportable-edits             # opt-in for transport objects
 ```
 
 ## Documentation
@@ -127,15 +130,10 @@ arc1 --allow-transportable-edits             # opt-in for transport objects
 | Doc | Description |
 |-----|-------------|
 | [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
-| [tools.md](tools.md) | Complete tool reference |
+| [tools.md](tools.md) | Complete tool reference (11 intent-based tools) |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
-| [cli-guide.md](cli-guide.md) | CLI command reference |
-| [cli-agents/README.md](cli-agents/README.md) | Setup guides for 8 MCP clients |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial setup |
 | [docker.md](docker.md) | Docker deployment |
-| [DSL.md](DSL.md) | Go fluent API & YAML workflow engine |
-| [agents.md](agents.md) | Developer & AI assistant guide |
-| [changelog.md](changelog.md) | Version history |
 | [roadmap.md](roadmap.md) | Planned features |
 
 ## License

@@ -630,7 +630,7 @@ export SAP_USER=DEVELOPER
 export SAP_PASSWORD='ABAPtr2023#00'
 export SAP_CLIENT=001
 
-go test -tags=integration -v -count=1 -timeout 10m ./pkg/adt/
+npm run test:integration
 ```
 
 The tests:
@@ -660,9 +660,9 @@ The following tests are automatically skipped in CI and must be run manually:
 
 | Test | Reason | Manual Run Command |
 |------|--------|--------------------|
-| `TestIntegration_ExternalBreakpoints` | Requires interactive debug session; breakpoint API needs specific user authorization | `go test -tags=integration -v -run TestIntegration_ExternalBreakpoints ./pkg/adt/` |
-| `TestIntegration_DebuggerListener` | Requires a debuggee (running ABAP program hitting a breakpoint) to catch | `go test -tags=integration -v -run TestIntegration_DebuggerListener ./pkg/adt/` |
-| `TestIntegration_DebugSessionAPIs` | Tests debug attach/step/stack APIs that need an active debug session | `go test -tags=integration -v -run TestIntegration_DebugSessionAPIs ./pkg/adt/` |
+| `TestIntegration_ExternalBreakpoints` | Requires interactive debug session; breakpoint API needs specific user authorization | `npm run test:integration -- --grep ExternalBreakpoints` |
+| `TestIntegration_DebuggerListener` | Requires a debuggee (running ABAP program hitting a breakpoint) to catch | `npm run test:integration -- --grep DebuggerListener` |
+| `TestIntegration_DebugSessionAPIs` | Tests debug attach/step/stack APIs that need an active debug session | `npm run test:integration -- --grep DebugSessionAPIs` |
 
 These tests are skipped with `t.Skip()` because debugger operations require
 interactive sessions that cannot be reliably automated. They still exist in the
@@ -680,7 +680,7 @@ work process and session timeout tuning described above.
 ### Running a Specific Test
 
 ```bash
-go test -tags=integration -v -run TestIntegration_CRUD_FullWorkflow ./pkg/adt/
+npm run test:integration -- --grep CRUD_FullWorkflow
 ```
 
 ### Running Tests Without Debugger Tests
@@ -688,7 +688,7 @@ go test -tags=integration -v -run TestIntegration_CRUD_FullWorkflow ./pkg/adt/
 To explicitly exclude debugger tests (they are already skipped, but for clarity):
 
 ```bash
-go test -tags=integration -v -run "TestIntegration_[^D]|TestIntegration_D[^e]" ./pkg/adt/
+npm run test:integration
 ```
 
 ---
@@ -703,13 +703,13 @@ The workflow is defined in `.github/workflows/test.yml`:
 push / pull_request / workflow_dispatch
       │
       ├── unit (ubuntu-latest)
-      │     ├── go test ./... -count=1 -race    ← all unit tests
-      │     └── go build ./cmd/arc1              ← verify binary builds
+      │     ├── npm test                          ← all unit tests
+      │     └── npm run build                    ← verify TypeScript builds
       │
       └── integration (ubuntu-latest) [needs: unit]
             ├── condition: PR, push to main, or manual dispatch
             ├── environment: sap-trial          ← uses GitHub environment secrets
-            └── go test -tags=integration -v -timeout 10m ./pkg/adt/
+            └── npm run test:integration
 ```
 
 The integration job only runs when:
@@ -827,16 +827,10 @@ su - a4hadm
 hdbsql -U DEFAULT -d HDB
 ```
 
-### Build fails: undefined debugger types in integration tests
+### Build fails: TypeScript compilation errors
 
-If you see errors like:
-```
-pkg/adt/integration_test.go:1642:28: client.GetExternalBreakpoints undefined
-```
-
-The `pkg/adt/debugger.go` file is missing from your working tree. Ensure it is
-committed and present — it defines the external breakpoint API
-(`GetExternalBreakpoints`, `SetExternalBreakpoint`, `BreakpointRequest`, etc.).
+If you see TypeScript errors during `npm run build`, ensure all dependencies
+are installed with `npm ci` and you're using Node.js 20+.
 
 ### DDIC user returns 403 on CRUD operations
 
@@ -907,7 +901,7 @@ propagation features.
 # Generate CA (self-signed, for testing only)
 openssl genrsa -out ca.key 4096
 openssl req -new -x509 -key ca.key -out ca.crt -days 365 \
-  -subj "/CN=vsp-test-ca/O=vsp testing"
+  -subj "/CN=arc1-test-ca/O=arc1 testing"
 
 # Generate client certificate for the DEVELOPER user
 openssl genrsa -out developer.key 2048
@@ -1005,15 +999,14 @@ curl --cert developer.crt --key developer.key \
   --cacert ca.crt \
   "https://<your-subdomain>/sap/bc/adt/core/discovery?sap-client=001"
 
-# Test with vsp
-./vsp --url https://<your-subdomain> \
+# Test with arc1
+npx arc-1 --url https://<your-subdomain> \
   --client-cert developer.crt \
   --client-key developer.key \
-  --ca-cert ca.crt \
-  --verbose
+  --ca-cert ca.crt
 
 # If using the trial system's Let's Encrypt cert (no --ca-cert needed):
-./vsp --url https://<your-subdomain> \
+npx arc-1 --url https://<your-subdomain> \
   --client-cert developer.crt \
   --client-key developer.key
 ```
@@ -1032,13 +1025,12 @@ certificates.
 
 ```bash
 # Test ephemeral cert generation + SAP auth
-./vsp --url https://<your-subdomain> \
+npx arc-1 --url https://<your-subdomain> \
   --pp-ca-key ca.key \
   --pp-ca-cert ca.crt \
   --oidc-issuer https://login.microsoftonline.com/{tenant-id}/v2.0 \
-  --oidc-audience api://vsp-test \
-  --transport http-streamable \
-  --verbose
+  --oidc-audience api://arc1 \
+  --transport http-streamable
 ```
 
 For full OIDC + principal propagation testing, you also need an EntraID app

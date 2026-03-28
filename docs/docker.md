@@ -1,6 +1,6 @@
 # Docker Guide for arc1
 
-arc1 ships as a single static-ish binary that speaks MCP over **HTTP streamable**
+arc1 ships as a Docker image (and npm package) that speaks MCP over **HTTP streamable**
 (the default transport in the Docker image). This makes it easy to run as a
 long-lived, port-accessible container that multiple MCP clients can connect to
 without spawning a new process per session.
@@ -196,10 +196,9 @@ docker buildx build \
   --push .
 ```
 
-> **CGO note:** The image uses `golang:1.23-alpine` as builder with `gcc` and
-> `musl-dev` installed because `go-sqlite3` requires CGO. The runtime image is
-> `alpine:3.21` with only `libgcc`, `libstdc++`, and `ca-certificates`. No Go
-> toolchain is present in the final image.
+> **Build note:** The image uses `node:20-alpine` as builder. The runtime image
+> is `node:20-alpine` with only production dependencies installed.
+> `better-sqlite3` requires native compilation during `npm install`.
 
 ---
 
