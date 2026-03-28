@@ -227,11 +227,12 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
   private xsuaaClientSecret: string;
   private xsuaaTokenUrl: string;
   private xsuaaAuthUrl: string;
+  private _localClientStore: InMemoryClientStore;
 
   constructor(
     credentials: XsuaaCredentials,
     verifier: (token: string) => Promise<AuthInfo>,
-    getClient: (clientId: string) => Promise<OAuthClientInformationFull | undefined>,
+    localClientStore: InMemoryClientStore,
   ) {
     const authUrl = `${credentials.url}/oauth/authorize`;
     const tokenUrl = `${credentials.url}/oauth/token`;
@@ -243,14 +244,24 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
         revocationUrl: `${credentials.url}/oauth/revoke`,
       },
       verifyAccessToken: verifier,
-      getClient,
+      getClient: (clientId: string) => localClientStore.getClient(clientId),
     });
 
     this.xsuaaClientId = credentials.clientid;
     this.xsuaaClientSecret = credentials.clientsecret;
     this.xsuaaTokenUrl = tokenUrl;
     this.xsuaaAuthUrl = authUrl;
+    this._localClientStore = localClientStore;
     this.skipLocalPkceValidation = true;
+  }
+
+  /**
+   * Override clientsStore to expose registerClient for DCR.
+   * The MCP SDK checks this to decide whether to advertise
+   * registration_endpoint in OAuth metadata and handle POST /register.
+   */
+  override get clientsStore() {
+    return this._localClientStore;
   }
 
   /**
@@ -371,9 +382,7 @@ export function createXsuaaOAuthProvider(
   const clientStore = new InMemoryClientStore(credentials.clientid, credentials.clientsecret);
   const verifier = createXsuaaTokenVerifier(credentials);
 
-  const provider = new XsuaaProxyOAuthProvider(credentials, verifier, (clientId: string) =>
-    clientStore.getClient(clientId),
-  );
+  const provider = new XsuaaProxyOAuthProvider(credentials, verifier, clientStore);
 
   logger.info('XSUAA OAuth provider created', {
     xsappname: credentials.xsappname,
