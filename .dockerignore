@@ -1,6 +1,5 @@
 # Build artifacts
 /build/
-/vsp
 *.exe
 *.dll
 *.so
@@ -18,9 +17,6 @@ cookies
 cookie
 .mcp.json
 .mcp*.json
-.vsp*.json
-vsp*.tmp.json
-.vsp/
 
 # Session data
 *SESSION-SUMMARY*

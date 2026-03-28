@@ -56,8 +56,12 @@
   "oauth2-configuration": {
     "redirect-uris": [
       "http://localhost:*/**",
+      "http://localhost:6274/**",
+      "http://localhost:6274/oauth/callback",
       "https://*.cfapps.us10-001.hana.ondemand.com/**",
-      "https://claude.ai/api/mcp/auth_callback"
+      "https://claude.ai/api/mcp/auth_callback",
+      "cursor://anysphere.cursor-retrieval/**",
+      "vscode://vscode.microsoft-authentication/**"
     ],
     "grant-types": ["authorization_code", "refresh_token"],
     "token-validity": 3600,
