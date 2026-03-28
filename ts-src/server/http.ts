@@ -76,6 +76,7 @@ export async function startHttpServer(
   const bindHost = host || '0.0.0.0';
 
   const app = express();
+  app.use(express.json());
   const mcpHandler = createMcpHandler(serverFactory);
 
   // ─── Health Check (always unauthenticated) ───────────────
