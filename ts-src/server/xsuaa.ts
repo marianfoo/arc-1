@@ -88,7 +88,14 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
   }
 
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    return this.clients.get(clientId);
+    const client = this.clients.get(clientId);
+    logger.debug('OAuth client lookup', {
+      clientId,
+      found: !!client,
+      clientName: client?.client_name,
+      registeredClients: [...this.clients.keys()],
+    });
+    return client;
   }
 
   async registerClient(
@@ -127,6 +134,7 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
   });
 
   return async (token: string): Promise<AuthInfo> => {
+    logger.debug('XSUAA token verification: creating security context');
     const securityContext = await xsuaaService.createSecurityContext(token, { jwt: token });
 
     // Extract scopes (remove xsappname prefix for local scope names)
@@ -141,7 +149,7 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
 
     const expiresAt = securityContext.token?.payload?.exp;
 
-    return {
+    const authInfo = {
       token,
       clientId: securityContext.getClientId(),
       scopes: grantedScopes,
@@ -151,6 +159,13 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
         email: securityContext.getEmail?.() ?? undefined,
       },
     };
+    logger.debug('XSUAA token verified', {
+      clientId: authInfo.clientId,
+      scopes: grantedScopes,
+      userName: authInfo.extra.userName,
+      email: authInfo.extra.email,
+    });
+    return authInfo;
   };
 }
 
@@ -170,26 +185,45 @@ export function createChainedTokenVerifier(
   oidcVerifier?: (token: string) => Promise<AuthInfo>,
 ): (token: string) => Promise<AuthInfo> {
   return async (token: string): Promise<AuthInfo> => {
+    const tokenPreview = `${token.slice(0, 20)}...${token.slice(-10)}`;
+    logger.debug('Chained token verifier: starting', { tokenPreview });
+
     // 1. Try XSUAA
     if (xsuaaVerifier) {
       try {
-        return await xsuaaVerifier(token);
-      } catch {
-        // Not an XSUAA token, try next
+        const result = await xsuaaVerifier(token);
+        logger.debug('Chained token verifier: XSUAA succeeded', {
+          clientId: result.clientId,
+          scopes: result.scopes,
+          user: result.extra?.email || result.extra?.userName,
+        });
+        return result;
+      } catch (err) {
+        logger.debug('Chained token verifier: XSUAA failed, trying next', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     // 2. Try Entra ID OIDC
     if (oidcVerifier) {
       try {
-        return await oidcVerifier(token);
-      } catch {
-        // Not an Entra ID token, try next
+        const result = await oidcVerifier(token);
+        logger.debug('Chained token verifier: OIDC succeeded', {
+          clientId: result.clientId,
+          scopes: result.scopes,
+        });
+        return result;
+      } catch (err) {
+        logger.debug('Chained token verifier: OIDC failed, trying next', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     // 3. Try API key
     if (config.apiKey && token === config.apiKey) {
+      logger.debug('Chained token verifier: API key matched');
       return {
         token,
         clientId: 'api-key',
@@ -200,6 +234,7 @@ export function createChainedTokenVerifier(
       };
     }
 
+    logger.debug('Chained token verifier: all methods failed', { tokenPreview });
     throw new Error('Token validation failed: not a valid XSUAA, OIDC, or API key token');
   };
 }
@@ -324,6 +359,10 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
     codeVerifier?: string,
     redirectUri?: string,
   ) {
+    logger.debug('XSUAA token exchange: authorization_code', {
+      hasCodeVerifier: !!codeVerifier,
+      redirectUri,
+    });
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       code: authorizationCode,
@@ -346,6 +385,12 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
     }
 
     const data = (await response.json()) as TokenResponse;
+    logger.debug('XSUAA token exchange: success', {
+      tokenType: data.token_type,
+      expiresIn: data.expires_in,
+      hasRefreshToken: !!data.refresh_token,
+      scope: data.scope,
+    });
     return {
       access_token: data.access_token,
       token_type: data.token_type ?? 'bearer',

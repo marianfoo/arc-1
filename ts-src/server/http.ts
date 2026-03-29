@@ -47,6 +47,13 @@ let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = nu
  */
 function createMcpHandler(serverFactory: () => McpServer) {
   return async (req: Request, res: Response) => {
+    logger.debug('MCP handler invoked', {
+      method: req.method,
+      contentType: req.headers['content-type'],
+      hasBody: !!req.body,
+      bodyMethod: req.body?.method,
+      bodyId: req.body?.id,
+    });
     try {
       const server = serverFactory();
       const transport = new StreamableHTTPServerTransport({
@@ -82,6 +89,20 @@ export async function startHttpServer(
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
+
+  // ─── Global Request Logger ──────────────────────────────────
+  // Log every inbound request for debugging OAuth/MCP flows.
+  app.use((req, _res, next) => {
+    logger.debug('HTTP request', {
+      method: req.method,
+      path: req.path,
+      contentType: req.headers['content-type'],
+      userAgent: req.headers['user-agent']?.slice(0, 80),
+      hasAuth: !!req.headers.authorization,
+      ip: req.ip,
+    });
+    next();
+  });
 
   // ─── Health Check (always unauthenticated) ───────────────
   app.get('/health', (_req, res) => {
@@ -130,11 +151,16 @@ export async function startHttpServer(
     });
 
     // Install MCP SDK auth router at root (OAuth endpoints + DCR)
+    // resourceServerUrl must point to /mcp so that the protected resource
+    // metadata is served at /.well-known/oauth-protected-resource/mcp
+    // (per RFC 9728). Without this, MCP clients can't discover the
+    // resource endpoint and may send JSON-RPC to the wrong path.
     app.use(
       mcpAuthRouter({
         provider,
         issuerUrl: new URL(appUrl),
         baseUrl: new URL(appUrl),
+        resourceServerUrl: new URL(`${appUrl}/mcp`),
         scopesSupported: ['read', 'write', 'admin'],
         resourceName: 'ARC-1 SAP MCP Server',
       }),
@@ -168,7 +194,8 @@ export async function startHttpServer(
   }
 
   // ─── 404 for anything else ─────────────────────────────────
-  app.use((_req, res) => {
+  app.use((req, res) => {
+    logger.debug('404 Not Found', { method: req.method, path: req.path, url: req.originalUrl });
     res.status(404).json({ error: 'Not found. Use /mcp for MCP protocol, /health for health check.' });
   });
 
