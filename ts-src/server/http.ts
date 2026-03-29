@@ -76,7 +76,11 @@ export async function startHttpServer(
   const bindHost = host || '0.0.0.0';
 
   const app = express();
+  // Trust first proxy (CF gorouter) — required for express-rate-limit
+  // and correct client IP detection behind CF's reverse proxy.
+  app.set('trust proxy', 1);
   app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
 
   // ─── Health Check (always unauthenticated) ───────────────
@@ -101,6 +105,29 @@ export async function startHttpServer(
     const xsuaaVerifier = createXsuaaTokenVerifier(xsuaaCredentials);
     const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
     const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
+
+    // ─── OAuth authorize normalization ────────────────────────
+    // The MCP SDK's authorize handler reads POST params from req.body
+    // and GET params from req.query. Some OAuth clients (e.g. Copilot
+    // Studio) send POST /authorize with params in the query string or
+    // with an unexpected Content-Type, leaving req.body empty.
+    // This middleware merges query params into body as a fallback.
+    app.use('/authorize', (req, _res, next) => {
+      logger.debug('OAuth authorize request', {
+        method: req.method,
+        contentType: req.headers['content-type'],
+        hasBody: !!req.body,
+        bodyKeys: req.body ? Object.keys(req.body) : [],
+        queryKeys: Object.keys(req.query),
+      });
+      if (req.method === 'POST' && req.query.client_id && (!req.body || !req.body.client_id)) {
+        req.body = { ...req.query, ...(req.body || {}) };
+        logger.debug('OAuth authorize: merged query params into body', {
+          client_id: req.body.client_id,
+        });
+      }
+      next();
+    });
 
     // Install MCP SDK auth router at root (OAuth endpoints + DCR)
     app.use(
