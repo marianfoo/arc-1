@@ -75,7 +75,6 @@ In the SAP Cloud Connector admin UI:
    - Add mapping: **Virtual Host** `a4h-abap` port `50000` → **Internal Host** `sap-host` port `50000`
    - Protocol: HTTP
    - Add resource: Path prefix `/sap/bc/adt/` with all sub-paths
-   - Add resource: Path prefix `/sap/bc/apc/` with all sub-paths (for WebSocket/ZADT_VSP)
 
 ### 3. Configure BTP Destination
 
@@ -239,7 +238,7 @@ Then configure your MCP client (Copilot Studio, VS Code) to use OAuth authentica
 
 ## Troubleshooting
 
-### App crashes with "unable to find user vsp/arc1"
+### App crashes with "unable to find user arc1"
 
 The Docker image user doesn't match what CF cached. Fix with explicit command:
 ```bash
