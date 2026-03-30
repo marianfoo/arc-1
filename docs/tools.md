@@ -170,15 +170,54 @@ Manage CTS transport requests.
 
 ## SAPContext
 
-Get compressed context for an ABAP object — public API contracts of dependencies. Minimizes LLM context window usage.
+Get compressed dependency context for an ABAP object. Returns only the public API contracts (method signatures, interface definitions, type declarations) of all objects that the target depends on — NOT the full source code. Typical compression: 7-30x fewer tokens.
+
+**What gets extracted per dependency:**
+- **Classes:** `CLASS DEFINITION` with `PUBLIC SECTION` only. `PROTECTED`, `PRIVATE` sections and `CLASS IMPLEMENTATION` are stripped.
+- **Interfaces:** Full interface definition (interfaces are already public contracts).
+- **Function modules:** `FUNCTION` signature block only (`IMPORTING`/`EXPORTING` parameters). Function body is stripped.
+
+**Filtering:** SAP standard objects (`CL_ABAP_*`, `IF_ABAP_*`, `CX_SY_*`) are excluded by default. Custom objects (`Z*`, `Y*`) are prioritized in the output.
+
+**Dependency detection:** Uses `@abaplint/core` AST parsing to find `TYPE REF TO`, `NEW`, `CAST`, `INHERITING FROM`, `INTERFACES`, `CALL FUNCTION`, `RAISING`, `CATCH`, and static method calls (`=>`).
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `name` | string | Yes | Object name |
-| `type` | string | Yes | Object type (`CLAS`, `PROG`, etc.) |
-| `depth` | number | No | Dependency expansion depth (1-3, default 1) |
+| `type` | string | Yes | Object type: `CLAS`, `INTF`, `PROG`, `FUNC` |
+| `name` | string | Yes | Object name (e.g., `ZCL_ORDER`) |
+| `source` | string | No | Provide source directly instead of fetching from SAP |
+| `group` | string | No | Required for `FUNC` type. The function group name. |
+| `maxDeps` | number | No | Maximum dependencies to resolve (default 20) |
+| `depth` | number | No | Dependency depth: 1 = direct only (default), 2 = deps of deps, 3 = max |
+
+**Examples:**
+```
+SAPContext(type="CLAS", name="ZCL_ORDER")
+SAPContext(type="CLAS", name="ZCL_ORDER", depth=2, maxDeps=10)
+SAPContext(type="INTF", name="ZIF_ORDER", source="<already fetched source>")
+```
+
+**Output format:**
+```
+* === Dependency context for ZCL_ORDER (3 deps resolved) ===
+
+* --- ZIF_ORDER (intf, 4 methods) ---
+INTERFACE zif_order PUBLIC.
+  METHODS create IMPORTING order TYPE t_order.
+  ...
+ENDINTERFACE.
+
+* --- ZCL_ITEM (clas, 3 methods) ---
+CLASS zcl_item DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS get_price RETURNING VALUE(result) TYPE p.
+    ...
+ENDCLASS.
+
+* Stats: 5 deps found, 3 resolved, 0 failed, 25 lines
+```
 
 ---
 
@@ -219,12 +258,24 @@ System diagnostics: runtime errors (short dumps), ABAP profiler traces, SQL trac
 
 ## SAPManage
 
-Manage ARC-1 features: probe system features, get feature status.
+Probe and report SAP system capabilities. Use this before attempting operations that depend on optional features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports).
+
+**Actions:**
+- `features` — Get cached feature status from last probe (fast, no SAP round-trip).
+- `probe` — Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s).
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `features` or `probe` |
+
+**Probed features:** `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `transport`. Each returns `available` (bool), `mode` (auto/on/off), `message`, and `probedAt` timestamp.
+
+**Examples:**
+```
+SAPManage(action="probe")     → discover system capabilities
+SAPManage(action="features")  → get cached results
+```
 
 **Note:** Blocked when `--read-only` is active.

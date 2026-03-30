@@ -28,9 +28,9 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPNavigate');
     expect(names).toContain('SAPDiagnose');
     expect(names).toContain('SAPTransport');
-    // Tools with no real backend should NOT be registered
-    expect(names).not.toContain('SAPContext');
-    expect(names).not.toContain('SAPManage');
+    // SAPContext and SAPManage are now implemented
+    expect(names).toContain('SAPContext');
+    expect(names).toContain('SAPManage');
   });
 
   it('hides write tools in read-only mode', () => {
@@ -38,9 +38,11 @@ describe('Tool Definitions', () => {
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPWrite');
     expect(names).not.toContain('SAPActivate');
-    // Navigate and Diagnose should still be available
+    expect(names).not.toContain('SAPManage');
+    // Navigate, Diagnose, and SAPContext should still be available
     expect(names).toContain('SAPNavigate');
     expect(names).toContain('SAPDiagnose');
+    expect(names).toContain('SAPContext');
   });
 
   it('hides SAPTransport in read-only mode without enableTransports', () => {

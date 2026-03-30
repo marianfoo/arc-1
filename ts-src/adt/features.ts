@@ -17,9 +17,11 @@
  * just check if the endpoint exists (returns 200 or 404).
  */
 
+import { Version } from '@abaplint/core';
 import type { FeatureConfig, FeatureMode } from './config.js';
 import type { AdtHttpClient } from './http.js';
 import type { FeatureStatus, ResolvedFeatures } from './types.js';
+import { parseInstalledComponents } from './xml-parser.js';
 
 /** Probe definition: which URL to check for each feature */
 interface FeatureProbe {
@@ -75,17 +77,20 @@ export async function probeFeatures(client: AdtHttpClient, config: FeatureConfig
   // Only probe features that are in "auto" mode
   const probesToRun = PROBES.filter((p) => modeMap[p.id] === 'auto');
 
-  // Run probes in parallel
-  const probeResults = await Promise.all(
-    probesToRun.map(async (probe) => {
-      try {
-        const response = await client.get(probe.endpoint);
-        return { id: probe.id, available: response.statusCode < 400 };
-      } catch {
-        return { id: probe.id, available: false };
-      }
-    }),
-  );
+  // Run feature probes + release detection in parallel
+  const [probeResults, abapRelease] = await Promise.all([
+    Promise.all(
+      probesToRun.map(async (probe) => {
+        try {
+          const response = await client.get(probe.endpoint);
+          return { id: probe.id, available: response.statusCode < 400 };
+        } catch {
+          return { id: probe.id, available: false };
+        }
+      }),
+    ),
+    detectAbapRelease(client),
+  ]);
 
   // Build result map
   const resultMap = new Map<string, boolean>();
@@ -101,7 +106,60 @@ export async function probeFeatures(client: AdtHttpClient, config: FeatureConfig
     result[probe.id] = resolveFeature(mode, probeResult, probe.id, probe.description);
   }
 
-  return result as unknown as ResolvedFeatures;
+  const resolved = result as unknown as ResolvedFeatures;
+  if (abapRelease) {
+    resolved.abapRelease = abapRelease;
+  }
+  return resolved;
+}
+
+/**
+ * Map SAP_BASIS release string to the closest @abaplint/core Version.
+ *
+ * abaplint versions are additive — each version accepts all syntax from
+ * previous versions plus new features. We map to the closest matching
+ * version, falling back to Cloud (the superset) for unknown releases.
+ *
+ * SAP_BASIS release examples: "700", "702", "740", "750", "757", "758"
+ * BTP ABAP Environment reports release like "sap_btp" or similar.
+ */
+export function mapSapReleaseToAbaplintVersion(release: string): Version {
+  const r = release.replace(/\D/g, ''); // strip non-digits ("750" → "750", "7.57" → "757")
+  const num = Number.parseInt(r, 10);
+
+  if (Number.isNaN(num)) return Version.Cloud;
+
+  if (num >= 758) return Version.v758;
+  if (num >= 757) return Version.v757;
+  if (num >= 756) return Version.v756;
+  if (num >= 755) return Version.v755;
+  if (num >= 754) return Version.v754;
+  if (num >= 753) return Version.v753;
+  if (num >= 752) return Version.v752;
+  if (num >= 751) return Version.v751;
+  if (num >= 750) return Version.v750;
+  // v740 has sub-versions in abaplint
+  if (num >= 74008) return Version.v740sp08;
+  if (num >= 74005) return Version.v740sp05;
+  if (num >= 740) return Version.v740sp02;
+  if (num >= 702) return Version.v702;
+  return Version.v700;
+}
+
+/**
+ * Detect the SAP_BASIS release from installed components.
+ * Returns the release string (e.g. "757") or undefined on failure.
+ */
+async function detectAbapRelease(client: AdtHttpClient): Promise<string | undefined> {
+  try {
+    const resp = await client.get('/sap/bc/adt/system/components');
+    if (resp.statusCode >= 400) return undefined;
+    const components = parseInstalledComponents(resp.body);
+    const basis = components.find((c) => c.name.toUpperCase() === 'SAP_BASIS');
+    return basis?.release || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Get features without probing (for offline/test scenarios) */

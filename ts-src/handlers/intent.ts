@@ -13,11 +13,14 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { AdtClient } from '../adt/client.js';
-import { safeUpdateSource, createObject, deleteObject, lockObject, unlockObject } from '../adt/crud.js';
-import { activate, syntaxCheck, runUnitTests, runAtcCheck } from '../adt/devtools.js';
 import { findDefinition, findReferences, getCompletion } from '../adt/codeintel.js';
-import { listTransports, getTransport, createTransport, releaseTransport } from '../adt/transport.js';
+import { createObject, deleteObject, lockObject, safeUpdateSource, unlockObject } from '../adt/crud.js';
+import { activate, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
+import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
+import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
+import type { ResolvedFeatures } from '../adt/types.js';
+import { compressContext } from '../context/compressor.js';
 import { detectFilename, lintAbapSource } from '../lint/lint.js';
 import { sanitizeArgs } from '../server/audit.js';
 import { generateRequestId, requestContext } from '../server/context.js';
@@ -179,6 +182,12 @@ export async function handleToolCall(
           break;
         case 'SAPTransport':
           result = await handleSAPTransport(client, args);
+          break;
+        case 'SAPContext':
+          result = await handleSAPContext(client, args);
+          break;
+        case 'SAPManage':
+          result = await handleSAPManage(client, _config, args);
           break;
         default:
           result = errorResult(`Unknown tool: ${toolName}`);
@@ -408,7 +417,9 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   const result = await activate(client.http, client.safety, objectUrl);
 
   if (result.success) {
-    return textResult(`Successfully activated ${type} ${name}.${result.messages.length > 0 ? `\nMessages: ${result.messages.join('; ')}` : ''}`);
+    return textResult(
+      `Successfully activated ${type} ${name}.${result.messages.length > 0 ? `\nMessages: ${result.messages.join('; ')}` : ''}`,
+    );
   }
   return errorResult(`Activation failed for ${type} ${name}.\nErrors: ${result.messages.join('; ')}`);
 }
@@ -506,4 +517,102 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
     default:
       return errorResult(`Unknown SAPTransport action: ${action}. Supported: list, get, create, release`);
   }
+}
+
+// ─── SAPContext Handler ───────────────────────────────────────────────
+
+async function handleSAPContext(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+  const type = String(args.type ?? '');
+  const name = String(args.name ?? '');
+  const maxDeps = Number(args.maxDeps ?? 20);
+  const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);
+
+  if (!type || !name) {
+    return errorResult('Both "type" and "name" are required for SAPContext.');
+  }
+
+  // Get source — either provided or fetched from SAP
+  let source: string;
+  if (args.source) {
+    source = String(args.source);
+  } else {
+    switch (type) {
+      case 'CLAS':
+        source = await client.getClass(name);
+        break;
+      case 'INTF':
+        source = await client.getInterface(name);
+        break;
+      case 'PROG':
+        source = await client.getProgram(name);
+        break;
+      case 'FUNC': {
+        const group = String(args.group ?? '');
+        if (!group) {
+          return errorResult(
+            'The "group" parameter is required for FUNC type. Use SAPSearch to find the function group.',
+          );
+        }
+        source = await client.getFunction(group, name);
+        break;
+      }
+      default:
+        return errorResult(`SAPContext supports types: CLAS, INTF, PROG, FUNC. Got: ${type}`);
+    }
+  }
+
+  // Use detected ABAP version from probe if available, otherwise Cloud (superset)
+  const abaplintVersion = cachedFeatures?.abapRelease
+    ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
+    : undefined;
+
+  const result = await compressContext(client, source, name, type, maxDeps, depth, abaplintVersion);
+  return textResult(result.output);
+}
+
+// ─── SAPManage Handler ────────────────────────────────────────────────
+
+/** Cached feature status — populated on first probe */
+let cachedFeatures: ResolvedFeatures | undefined;
+
+async function handleSAPManage(
+  client: AdtClient,
+  config: ServerConfig,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const action = String(args.action ?? '');
+
+  switch (action) {
+    case 'features': {
+      if (!cachedFeatures) {
+        return textResult(
+          JSON.stringify({ message: 'No features probed yet. Use action="probe" to probe the SAP system first.' }),
+        );
+      }
+      return textResult(JSON.stringify(cachedFeatures, null, 2));
+    }
+
+    case 'probe': {
+      const { defaultFeatureConfig } = await import('../adt/config.js');
+      const featureConfig = defaultFeatureConfig();
+      // Override with server config feature toggles
+      featureConfig.hana = config.featureHana as 'auto' | 'on' | 'off';
+      featureConfig.abapGit = config.featureAbapGit as 'auto' | 'on' | 'off';
+      featureConfig.rap = config.featureRap as 'auto' | 'on' | 'off';
+      featureConfig.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
+      featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
+      featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
+
+      cachedFeatures = await probeFeatures(client.http, featureConfig);
+      return textResult(JSON.stringify(cachedFeatures, null, 2));
+    }
+
+    default:
+      return errorResult(`Unknown SAPManage action: ${action}. Supported: features, probe`);
+  }
+}
+
+/** Reset cached features (for testing) */
+export function resetCachedFeatures(): void {
+  cachedFeatures = undefined;
 }

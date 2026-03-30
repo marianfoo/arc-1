@@ -1,6 +1,7 @@
+import { Version } from '@abaplint/core';
 import { describe, expect, it } from 'vitest';
 import type { FeatureConfig } from '../../../ts-src/adt/config.js';
-import { resolveWithoutProbing } from '../../../ts-src/adt/features.js';
+import { mapSapReleaseToAbaplintVersion, resolveWithoutProbing } from '../../../ts-src/adt/features.js';
 
 describe('Feature Detection', () => {
   describe('resolveWithoutProbing', () => {
@@ -85,6 +86,41 @@ describe('Feature Detection', () => {
       expect(result.hana.message).toContain('Forced on');
       expect(result.abapGit.message).toContain('Disabled');
       expect(result.rap.message).toContain('not available');
+    });
+  });
+
+  describe('mapSapReleaseToAbaplintVersion', () => {
+    it('maps SAP_BASIS releases to correct abaplint versions', () => {
+      expect(mapSapReleaseToAbaplintVersion('700')).toBe(Version.v700);
+      expect(mapSapReleaseToAbaplintVersion('702')).toBe(Version.v702);
+      expect(mapSapReleaseToAbaplintVersion('740')).toBe(Version.v740sp02);
+      expect(mapSapReleaseToAbaplintVersion('750')).toBe(Version.v750);
+      expect(mapSapReleaseToAbaplintVersion('751')).toBe(Version.v751);
+      expect(mapSapReleaseToAbaplintVersion('752')).toBe(Version.v752);
+      expect(mapSapReleaseToAbaplintVersion('753')).toBe(Version.v753);
+      expect(mapSapReleaseToAbaplintVersion('754')).toBe(Version.v754);
+      expect(mapSapReleaseToAbaplintVersion('755')).toBe(Version.v755);
+      expect(mapSapReleaseToAbaplintVersion('756')).toBe(Version.v756);
+      expect(mapSapReleaseToAbaplintVersion('757')).toBe(Version.v757);
+      expect(mapSapReleaseToAbaplintVersion('758')).toBe(Version.v758);
+    });
+
+    it('maps releases >= 758 to v758', () => {
+      expect(mapSapReleaseToAbaplintVersion('759')).toBe(Version.v758);
+      expect(mapSapReleaseToAbaplintVersion('800')).toBe(Version.v758);
+    });
+
+    it('returns Cloud for non-numeric or empty input', () => {
+      expect(mapSapReleaseToAbaplintVersion('')).toBe(Version.Cloud);
+      expect(mapSapReleaseToAbaplintVersion('sap_btp')).toBe(Version.Cloud);
+      expect(mapSapReleaseToAbaplintVersion('unknown')).toBe(Version.Cloud);
+    });
+
+    it('handles versions between known mappings', () => {
+      // 710 is between 702 and 740, should map to 702
+      expect(mapSapReleaseToAbaplintVersion('710')).toBe(Version.v702);
+      // 745 is between 740 and 750, should map to v740sp02
+      expect(mapSapReleaseToAbaplintVersion('745')).toBe(Version.v740sp02);
     });
   });
 });

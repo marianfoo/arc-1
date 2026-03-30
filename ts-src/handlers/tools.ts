@@ -59,7 +59,11 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             description:
               'For CLAS only. DO NOT use this to read the main class — omit include entirely to get the full class source (CLASS DEFINITION + CLASS IMPLEMENTATION). This parameter reads class-LOCAL auxiliary files only: definitions (local type definitions, NOT the main class definition), implementations (local helper class implementations), macros, testclasses (ABAP Unit). Comma-separated. Not all classes have these sections — missing ones return a note instead of an error.',
           },
-          group: { type: 'string', description: 'Required for FUNC type. The function group containing the function module. Use SAPSearch to find it if unknown.' },
+          group: {
+            type: 'string',
+            description:
+              'Required for FUNC type. The function group containing the function module. Use SAPSearch to find it if unknown.',
+          },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
         },
@@ -182,6 +186,88 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
       },
     },
   );
+
+  // SAPContext — always available (read-only tool)
+  tools.push({
+    name: 'SAPContext',
+    description:
+      'Get compressed dependency context for an ABAP object. Returns only the public API contracts ' +
+      '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
+      'NOT the full source code. This is the most token-efficient way to understand dependencies. ' +
+      'Instead of N separate SAPRead calls returning full source (~200 lines each), SAPContext returns ONE response ' +
+      'with compressed contracts (~15-30 lines each). Typical compression: 7-30x fewer tokens.\n\n' +
+      'What gets extracted per dependency:\n' +
+      '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants). PROTECTED, PRIVATE and IMPLEMENTATION stripped.\n' +
+      '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
+      '- Function modules: FUNCTION signature block only (IMPORTING/EXPORTING parameters).\n\n' +
+      'Filtering: SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded — the LLM already knows standard SAP APIs. ' +
+      'Custom objects (Z*, Y*) are prioritized.\n\n' +
+      'Use SAPContext BEFORE writing code that modifies or extends existing objects. ' +
+      'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['CLAS', 'INTF', 'PROG', 'FUNC'],
+          description: 'Object type',
+        },
+        name: {
+          type: 'string',
+          description: 'Object name (e.g., ZCL_ORDER)',
+        },
+        source: {
+          type: 'string',
+          description:
+            'Optional: provide source directly instead of fetching from SAP. ' +
+            'Saves one round-trip if you already have the source from SAPRead.',
+        },
+        group: {
+          type: 'string',
+          description: 'Required for FUNC type. The function group containing the function module.',
+        },
+        maxDeps: {
+          type: 'number',
+          description: 'Maximum dependencies to resolve (default 20). Lower = faster + fewer tokens.',
+        },
+        depth: {
+          type: 'number',
+          description:
+            'Dependency depth: 1 = direct deps only (default), 2 = deps of deps, 3 = maximum. ' +
+            'Higher depth = more context but more SAP calls.',
+        },
+      },
+      required: ['type', 'name'],
+    },
+  });
+
+  // SAPManage — registered when not in read-only mode
+  if (!config.readOnly) {
+    tools.push({
+      name: 'SAPManage',
+      description:
+        'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
+        'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports).\n\n' +
+        'Actions:\n' +
+        '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
+        'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
+        '- "probe": Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). ' +
+        'Use this on first use or if you suspect feature availability has changed.\n\n' +
+        'Returns JSON with 6 features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
+        '"available: false" means do NOT attempt operations that depend on it.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['features', 'probe'],
+            description: 'Action: "features" for cached status, "probe" to re-check SAP system',
+          },
+        },
+        required: ['action'],
+      },
+    });
+  }
 
   // Transport tools — registered when transports are enabled or not in read-only mode
   if (config.enableTransports || !config.readOnly) {

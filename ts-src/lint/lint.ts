@@ -53,7 +53,9 @@ export function lintAbapSource(source: string, filename: string, config?: Config
  * abaplint uses the file extension to determine the object type.
  */
 export function detectFilename(source: string, objectName: string): string {
-  const upper = source.toUpperCase().trimStart();
+  // Strip leading comment lines ("! doc comments, * comments) and blank lines to find the first keyword
+  const stripped = source.replace(/^(\s*(["*!].*)?[\r\n]*)*/m, '');
+  const upper = stripped.toUpperCase().trimStart();
   if (upper.startsWith('CLASS')) return `${objectName.toLowerCase()}.clas.abap`;
   if (upper.startsWith('INTERFACE')) return `${objectName.toLowerCase()}.intf.abap`;
   if (upper.startsWith('FUNCTION-POOL') || upper.startsWith('FUNCTION')) return `${objectName.toLowerCase()}.fugr.abap`;

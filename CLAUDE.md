@@ -103,6 +103,11 @@ ts-src/
 │   ├── devtools.ts             # Dev tools (syntax check, activate, unit tests)
 │   ├── codeintel.ts            # Code intelligence (find def, refs, completion)
 │   └── transport.ts            # CTS transport management
+├── context/
+│   ├── types.ts                # Context compression types
+│   ├── deps.ts                 # AST-based dependency extraction (@abaplint/core)
+│   ├── contract.ts             # Public API contract extraction
+│   └── compressor.ts           # Orchestrator (fetch + compress + format)
 ├── cache/
 │   ├── cache.ts                # Cache interface + types
 │   ├── memory.ts               # In-memory cache
@@ -114,13 +119,15 @@ tests/
 ├── unit/                       # Unit tests (no SAP system needed)
 │   ├── adt/                    # ADT client tests
 │   ├── cache/                  # Cache tests
+│   ├── context/                # Context compression tests
 │   ├── handlers/               # Handler tests
 │   ├── server/                 # Server tests
 │   ├── lint/                   # Lint tests
 │   └── cli/                    # CLI tests
 ├── integration/                # Integration tests (need SAP credentials)
 │   ├── helpers.ts              # Test client factory, skip logic
-│   └── adt.integration.test.ts # Live SAP tests
+│   ├── adt.integration.test.ts # Live SAP tests
+│   └── context.integration.test.ts # SAPContext live tests
 └── fixtures/
     └── xml/                    # Sample ADT XML responses
 ```
@@ -134,6 +141,9 @@ tests/
 | Add XML response parser | `ts-src/adt/xml-parser.ts` |
 | Add safety check | `ts-src/adt/safety.ts` |
 | Add lint rule config | `ts-src/lint/lint.ts` |
+| Add dependency pattern | `ts-src/context/deps.ts` |
+| Add contract extraction for new type | `ts-src/context/contract.ts` |
+| Modify context output format | `ts-src/context/compressor.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 
 ## Code Patterns

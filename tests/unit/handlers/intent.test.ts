@@ -479,6 +479,76 @@ describe('Intent Handler', () => {
     });
   });
 
+  // ─── SAPContext ──────────────────────────────────────────────────────
+
+  describe('SAPContext', () => {
+    it('returns error when type is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('type');
+    });
+
+    it('returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        type: 'CLAS',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('name');
+    });
+
+    it('returns error for unsupported type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        type: 'TABL',
+        name: 'MARA',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAPContext supports types');
+    });
+
+    it('dispatches successfully with provided source', async () => {
+      const source = `CLASS zcl_standalone DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS run.
+ENDCLASS.
+CLASS zcl_standalone IMPLEMENTATION.
+  METHOD run. ENDMETHOD.
+ENDCLASS.`;
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        type: 'CLAS',
+        name: 'zcl_standalone',
+        source,
+      });
+      // Should not be an error — it processes the source and returns context
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Dependency context for zcl_standalone');
+    });
+  });
+
+  // ─── SAPManage ─────────────────────────────────────────────────────
+
+  describe('SAPManage', () => {
+    it('returns message when features not yet probed', async () => {
+      const { resetCachedFeatures } = await import('../../../ts-src/handlers/intent.js');
+      resetCachedFeatures();
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'features',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('No features probed yet');
+    });
+
+    it('returns error for unknown action', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'invalid',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Unknown SAPManage action');
+    });
+  });
+
   // ─── Error Guidance ────────────────────────────────────────────────
 
   describe('error guidance', () => {
