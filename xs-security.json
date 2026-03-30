@@ -61,6 +61,7 @@
       "https://*.cfapps.us10-001.hana.ondemand.com/**",
       "https://claude.ai/api/mcp/auth_callback",
       "cursor://anysphere.cursor-retrieval/**",
+      "cursor://anysphere.cursor-mcp/**",
       "vscode://vscode.microsoft-authentication/**",
       "https://global.consent.azure-apim.net/redirect/**"
     ],
