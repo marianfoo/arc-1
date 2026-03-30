@@ -60,6 +60,11 @@ export interface ServerConfig {
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
 
+  // --- Logging ---
+  logFile?: string;
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  logFormat: 'text' | 'json';
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -89,5 +94,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureHana: 'auto',
   xsuaaAuth: false,
   ppEnabled: false,
+  logLevel: 'info',
+  logFormat: 'text',
   verbose: false,
 };

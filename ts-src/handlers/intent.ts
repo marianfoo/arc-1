@@ -11,8 +11,12 @@
  */
 
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { AdtClient } from '../adt/client.js';
+import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
 import { detectFilename, lintAbapSource } from '../lint/lint.js';
+import { sanitizeArgs } from '../server/audit.js';
+import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
 
@@ -54,12 +58,22 @@ function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+/** Classify error type for audit logging */
+function classifyError(err: unknown): string {
+  if (err instanceof AdtApiError) return 'AdtApiError';
+  if (err instanceof AdtNetworkError) return 'AdtNetworkError';
+  if (err instanceof AdtSafetyError) return 'AdtSafetyError';
+  if (err instanceof Error) return err.constructor.name;
+  return 'Unknown';
+}
+
 /**
  * Handle an MCP tool call.
  *
  * @param authInfo - Authenticated user context from MCP SDK (XSUAA/OIDC/API key).
  *   When present, scope enforcement is active. When absent (stdio, no auth),
  *   all tools are allowed (backward compatibility).
+ * @param server - MCP Server instance for elicitation support.
  */
 export async function handleToolCall(
   client: AdtClient,
@@ -67,60 +81,109 @@ export async function handleToolCall(
   toolName: string,
   args: Record<string, unknown>,
   authInfo?: AuthInfo,
+  _server?: Server,
 ): Promise<ToolResult> {
+  const reqId = generateRequestId();
   const start = Date.now();
 
   // Build user context for audit logging
-  const userCtx: Record<string, unknown> = {};
-  if (authInfo) {
-    if (authInfo.extra?.userName) userCtx.user = authInfo.extra.userName;
-    if (authInfo.extra?.email) userCtx.email = authInfo.extra.email;
-    if (authInfo.clientId) userCtx.clientId = authInfo.clientId;
-  }
+  const user = authInfo?.extra?.userName as string | undefined;
+  const clientId = authInfo?.clientId;
+
+  // Emit tool_call_start audit event
+  logger.emitAudit({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    event: 'tool_call_start',
+    requestId: reqId,
+    user,
+    clientId,
+    tool: toolName,
+    args: sanitizeArgs(args),
+  });
 
   // Scope enforcement — only when authInfo is present (XSUAA/OIDC mode)
   if (authInfo) {
     const requiredScope = TOOL_SCOPES[toolName];
     if (requiredScope && !authInfo.scopes.includes(requiredScope)) {
-      logger.warn('Tool call blocked by scope', { tool: toolName, requiredScope, scopes: authInfo.scopes, ...userCtx });
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        event: 'auth_scope_denied',
+        requestId: reqId,
+        user,
+        clientId,
+        tool: toolName,
+        requiredScope,
+        availableScopes: authInfo.scopes,
+      });
       return errorResult(
         `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
       );
     }
   }
 
-  try {
-    let result: ToolResult;
+  // Run within request context so HTTP-level logs get the requestId
+  return requestContext.run({ requestId: reqId, user, tool: toolName }, async () => {
+    try {
+      let result: ToolResult;
 
-    switch (toolName) {
-      case 'SAPRead':
-        result = await handleSAPRead(client, args);
-        break;
-      case 'SAPSearch':
-        result = await handleSAPSearch(client, args);
-        break;
-      case 'SAPQuery':
-        result = await handleSAPQuery(client, args);
-        break;
-      case 'SAPLint':
-        result = await handleSAPLint(client, args);
-        break;
-      default:
-        result = errorResult(`Unknown tool: ${toolName}`);
+      switch (toolName) {
+        case 'SAPRead':
+          result = await handleSAPRead(client, args);
+          break;
+        case 'SAPSearch':
+          result = await handleSAPSearch(client, args);
+          break;
+        case 'SAPQuery':
+          result = await handleSAPQuery(client, args);
+          break;
+        case 'SAPLint':
+          result = await handleSAPLint(client, args);
+          break;
+        default:
+          result = errorResult(`Unknown tool: ${toolName}`);
+      }
+
+      const durationMs = Date.now() - start;
+      const resultSize = result.content.reduce((acc, c) => acc + c.text.length, 0);
+
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        event: 'tool_call_end',
+        requestId: reqId,
+        user,
+        clientId,
+        tool: toolName,
+        durationMs,
+        status: result.isError ? 'error' : 'success',
+        errorMessage: result.isError ? result.content[0]?.text : undefined,
+        resultSize,
+      });
+
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const durationMs = Date.now() - start;
+
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        event: 'tool_call_end',
+        requestId: reqId,
+        user,
+        clientId,
+        tool: toolName,
+        durationMs,
+        status: 'error',
+        errorClass: classifyError(err),
+        errorMessage: message,
+      });
+
+      return errorResult(message);
     }
-
-    logger.info('Tool call completed', {
-      tool: toolName,
-      ...userCtx,
-      duration: Date.now() - start,
-    });
-
-    return result;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error('Tool call failed', { tool: toolName, error: message, ...userCtx, duration: Date.now() - start });
-    return errorResult(message);
-  }
+  });
 }
 
 // ─── Individual Tool Handlers ────────────────────────────────────────
