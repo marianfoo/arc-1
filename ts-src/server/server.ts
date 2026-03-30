@@ -236,8 +236,10 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
       logger.addSink(new BTPAuditLogSink(auditLogConfig));
       logger.info('BTP Audit Log sink enabled', { url: auditLogConfig.url });
     }
-  } catch {
-    // BTP audit log sink is optional — ignore if parsing fails
+  } catch (err) {
+    logger.warn('BTP Audit Log sink initialization failed (optional)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   // Emit structured server_start audit event
