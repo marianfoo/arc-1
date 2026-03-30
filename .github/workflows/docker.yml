@@ -35,9 +35,9 @@ jobs:
         with:
           images: ghcr.io/marianfoo/arc-1
           tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=edge,branch=main
 
       - name: Build and push
         uses: docker/build-push-action@v6
