@@ -60,7 +60,13 @@ function createMcpHandler(serverFactory: () => McpServer) {
         sessionIdGenerator: undefined, // Stateless mode
       });
       await server.connect(transport);
-      await transport.handleRequest(req, res);
+      // IMPORTANT: Pass req.body as pre-parsed body (3rd argument).
+      // express.json() middleware (line 91) consumes the raw request stream.
+      // Without this, the MCP SDK's transport tries to re-read the stream,
+      // gets nothing, and returns "Parse error: Invalid JSON" (-32700).
+      // The SDK explicitly supports this pattern — see their docs/comments
+      // in StreamableHTTPServerTransport.handleRequest().
+      await transport.handleRequest(req, res, req.body);
     } catch (err) {
       logger.error('MCP request error', { error: err instanceof Error ? err.message : String(err) });
       if (!res.headersSent) {
@@ -127,13 +133,35 @@ export async function startHttpServer(
     const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
     const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
 
-    // ─── OAuth authorize normalization ────────────────────────
-    // The MCP SDK's authorize handler reads POST params from req.body
-    // and GET params from req.query. Some OAuth clients (e.g. Copilot
-    // Studio) send POST /authorize with params in the query string or
-    // with an unexpected Content-Type, leaving req.body empty.
-    // This middleware merges query params into body as a fallback.
-    app.use('/authorize', (req, _res, next) => {
+    const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: chainedVerifier } });
+
+    // ─── OAuth authorize normalization + Copilot Studio MCP workaround ──
+    // Copilot Studio sends MCP JSON-RPC requests to /authorize instead of
+    // /mcp after completing the OAuth flow. When we detect a JSON-RPC body
+    // (has "jsonrpc" field) on POST /authorize, we bypass the OAuth handler
+    // and route directly to bearerAuth + mcpHandler.
+    //
+    // For normal OAuth requests, merge query params into body as fallback
+    // (some clients send POST /authorize with params in query string).
+    app.use('/authorize', (req, res, next) => {
+      // Detect MCP JSON-RPC on /authorize (Copilot Studio quirk)
+      if (req.method === 'POST' && req.body?.jsonrpc) {
+        logger.info('MCP JSON-RPC on /authorize, routing to MCP handler', {
+          rpcMethod: req.body.method,
+          id: req.body.id,
+          userAgent: req.headers['user-agent']?.slice(0, 60),
+        });
+        // Run bearerAuth, then mcpHandler — skip the OAuth authorize handler
+        bearerAuth(req, res, (err?: unknown) => {
+          if (err) {
+            next(err);
+            return;
+          }
+          mcpHandler(req, res);
+        });
+        return;
+      }
+
       logger.debug('OAuth authorize request', {
         method: req.method,
         contentType: req.headers['content-type'],
@@ -167,7 +195,6 @@ export async function startHttpServer(
     );
 
     // Protected MCP endpoint with chained token verification
-    const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: chainedVerifier } });
     app.all('/mcp', bearerAuth, mcpHandler);
 
     logger.info('XSUAA OAuth proxy enabled', {

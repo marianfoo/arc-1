@@ -69,6 +69,9 @@ npm run dev
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
 | `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
 | `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
+| `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
+| `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
+| `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
 
 ## Codebase Structure
 
