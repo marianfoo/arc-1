@@ -16,7 +16,14 @@
  * All writes are fire-and-forget — errors go to stderr, never block tool calls.
  */
 
-import type { AuditEvent } from '../audit.js';
+import type {
+  AuditEvent,
+  ToolCallStartEvent,
+  ToolCallEndEvent,
+  AuthScopeDeniedEvent,
+  SafetyBlockedEvent,
+  AuthPPCreatedEvent,
+} from '../audit.js';
 import type { LogSink } from './types.js';
 
 /** BTP Audit Log service credentials from VCAP_SERVICES */
@@ -34,6 +41,13 @@ export interface BTPAuditLogConfig {
 /** Audit log category endpoints */
 type AuditCategory = 'security-events' | 'data-accesses' | 'data-modifications' | 'configuration-changes';
 
+/** Categorize tool by its access pattern */
+function toolCategory(tool: string): AuditCategory {
+  if (['SAPWrite', 'SAPManage'].includes(tool)) return 'data-modifications';
+  if (['SAPTransport', 'SAPActivate'].includes(tool)) return 'configuration-changes';
+  return 'data-accesses';
+}
+
 /** Map ARC-1 event types to BTP Audit Log categories */
 function categorize(event: AuditEvent): AuditCategory | null {
   switch (event.event) {
@@ -41,16 +55,9 @@ function categorize(event: AuditEvent): AuditCategory | null {
     case 'safety_blocked':
       return 'security-events';
 
-    case 'tool_call_end': {
-      // Only log completed tool calls (not starts)
-      const tool = (event as { tool?: string }).tool ?? '';
-      // Write tools → data-modifications
-      if (['SAPWrite', 'SAPManage'].includes(tool)) return 'data-modifications';
-      // Transport/activate → configuration-changes
-      if (['SAPTransport', 'SAPActivate'].includes(tool)) return 'configuration-changes';
-      // Read tools → data-accesses
-      return 'data-accesses';
-    }
+    case 'tool_call_start':
+    case 'tool_call_end':
+      return toolCategory(event.tool);
 
     case 'auth_pp_created':
       return event.level === 'error' ? 'security-events' : null;
@@ -150,41 +157,85 @@ export class BTPAuditLogSink implements LogSink {
   }
 
   private buildPayload(event: AuditEvent): Record<string, unknown> {
+    const user = event.user ?? '$USER';
     const base: Record<string, unknown> = {
       uuid: crypto.randomUUID(),
-      user: '$USER',
+      user,
       time: event.timestamp,
       tenant: '$PROVIDER',
     };
 
     switch (event.event) {
-      case 'auth_scope_denied':
-      case 'safety_blocked':
+      case 'tool_call_start': {
+        const e = event as ToolCallStartEvent;
+        const argsStr = JSON.stringify(e.args);
+        const argsSummary = argsStr.length > 500 ? `${argsStr.slice(0, 500)}...` : argsStr;
         return {
           ...base,
-          user: event.user ?? '$USER',
-          data: `[${event.event}] ${JSON.stringify(event)}`,
-        };
-
-      case 'tool_call_end':
-        return {
-          ...base,
-          user: event.user ?? '$USER',
           object: {
             type: 'MCP Tool Call',
-            id: { tool: (event as { tool?: string }).tool },
+            id: { tool: e.tool, requestId: e.requestId ?? '' },
           },
           attributes: [
-            {
-              name: 'status',
-              new: (event as { status?: string }).status,
-            },
-            {
-              name: 'durationMs',
-              new: String((event as { durationMs?: number }).durationMs),
-            },
+            { name: 'action', new: 'invoke' },
+            { name: 'tool', new: e.tool },
+            { name: 'user', new: user },
+            { name: 'clientId', new: e.clientId ?? '' },
+            { name: 'args', new: argsSummary },
           ],
         };
+      }
+
+      case 'tool_call_end': {
+        const e = event as ToolCallEndEvent;
+        const attrs = [
+          { name: 'action', new: 'complete' },
+          { name: 'tool', new: e.tool },
+          { name: 'user', new: user },
+          { name: 'clientId', new: e.clientId ?? '' },
+          { name: 'status', new: e.status },
+          { name: 'durationMs', new: String(e.durationMs) },
+          { name: 'resultSize', new: String(e.resultSize ?? 0) },
+        ];
+        if (e.errorMessage) {
+          attrs.push({ name: 'error', new: e.errorMessage.slice(0, 500) });
+        }
+        if (e.errorClass) {
+          attrs.push({ name: 'errorClass', new: e.errorClass });
+        }
+        return {
+          ...base,
+          object: {
+            type: 'MCP Tool Call',
+            id: { tool: e.tool, requestId: e.requestId ?? '' },
+          },
+          attributes: attrs,
+        };
+      }
+
+      case 'auth_scope_denied': {
+        const e = event as AuthScopeDeniedEvent;
+        return {
+          ...base,
+          data: `Access denied: user "${user}" lacks scope "${e.requiredScope}" for tool ${e.tool}. Available scopes: [${e.availableScopes.join(', ')}]`,
+        };
+      }
+
+      case 'safety_blocked': {
+        const e = event as SafetyBlockedEvent;
+        return {
+          ...base,
+          data: `Safety blocked: operation "${e.operation}" denied — ${e.reason}. User: ${user}`,
+        };
+      }
+
+      case 'auth_pp_created': {
+        const e = event as AuthPPCreatedEvent;
+        return {
+          ...base,
+          data: `Principal propagation ${e.success ? 'succeeded' : 'failed'} for user "${user}" via destination "${e.destination}"${e.errorMessage ? `: ${e.errorMessage}` : ''}`,
+        };
+      }
 
       default:
         return {

@@ -29,3 +29,4 @@ applications:
     services:
       - vsp-connectivity
       - vsp-destination
+      - arc1-auditlog
