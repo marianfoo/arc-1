@@ -160,7 +160,7 @@ When XSUAA auth is enabled, the chained token verifier tries three methods in or
 
 1. **XSUAA JWT** — validated by `@sap/xssec` against XSUAA JWKS (offline, cached)
 2. **Entra ID JWT** — validated by `jose` against OIDC issuer JWKS (if `SAP_OIDC_ISSUER` is set)
-3. **API Key** — simple string match against `ARC1_API_KEY` / `VSP_API_KEY`
+3. **API Key** — simple string match against `ARC1_API_KEY`
 
 The first successful validation wins. This means:
 - Copilot Studio (Entra ID OIDC) continues to work

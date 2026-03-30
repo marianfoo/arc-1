@@ -249,7 +249,6 @@ describe('Safety System', () => {
     it('handles $-prefixed packages with wildcard', () => {
       const cfg = config({ allowedPackages: ['$*'] });
       expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, '$ZADT_VSP')).toBe(true);
       expect(isPackageAllowed(cfg, 'ZTEST')).toBe(false);
     });
 
@@ -258,7 +257,6 @@ describe('Safety System', () => {
       const cfg = config({ allowedPackages: ['Z*', '$*'] });
       expect(isPackageAllowed(cfg, 'ZTEST')).toBe(true);
       expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, '$ZADT_VSP')).toBe(true);
       expect(isPackageAllowed(cfg, 'SAP_BASIS')).toBe(false);
     });
 

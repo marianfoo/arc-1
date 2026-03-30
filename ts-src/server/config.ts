@@ -88,13 +88,14 @@ export function parseArgs(args: string[]): ServerConfig {
   config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA');
 
   // --- Authentication (MCP client → ARC-1) ---
-  config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY ?? process.env.VSP_API_KEY;
+  config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY;
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
 
   // --- Principal Propagation ---
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
+  config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);
 
   // --- Logging ---
   config.logFile = getFlag('log-file') ?? process.env.ARC1_LOG_FILE;

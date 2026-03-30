@@ -47,13 +47,26 @@ let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = nu
  */
 function createMcpHandler(serverFactory: () => McpServer) {
   return async (req: Request, res: Response) => {
+    logger.debug('MCP handler invoked', {
+      method: req.method,
+      contentType: req.headers['content-type'],
+      hasBody: !!req.body,
+      bodyMethod: req.body?.method,
+      bodyId: req.body?.id,
+    });
     try {
       const server = serverFactory();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // Stateless mode
       });
       await server.connect(transport);
-      await transport.handleRequest(req, res);
+      // IMPORTANT: Pass req.body as pre-parsed body (3rd argument).
+      // express.json() middleware (line 91) consumes the raw request stream.
+      // Without this, the MCP SDK's transport tries to re-read the stream,
+      // gets nothing, and returns "Parse error: Invalid JSON" (-32700).
+      // The SDK explicitly supports this pattern — see their docs/comments
+      // in StreamableHTTPServerTransport.handleRequest().
+      await transport.handleRequest(req, res, req.body);
     } catch (err) {
       logger.error('MCP request error', { error: err instanceof Error ? err.message : String(err) });
       if (!res.headersSent) {
@@ -83,6 +96,20 @@ export async function startHttpServer(
   app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
 
+  // ─── Global Request Logger ──────────────────────────────────
+  // Log every inbound request for debugging OAuth/MCP flows.
+  app.use((req, _res, next) => {
+    logger.debug('HTTP request', {
+      method: req.method,
+      path: req.path,
+      contentType: req.headers['content-type'],
+      userAgent: req.headers['user-agent']?.slice(0, 80),
+      hasAuth: !!req.headers.authorization,
+      ip: req.ip,
+    });
+    next();
+  });
+
   // ─── Health Check (always unauthenticated) ───────────────
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', version: VERSION });
@@ -106,13 +133,35 @@ export async function startHttpServer(
     const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
     const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
 
-    // ─── OAuth authorize normalization ────────────────────────
-    // The MCP SDK's authorize handler reads POST params from req.body
-    // and GET params from req.query. Some OAuth clients (e.g. Copilot
-    // Studio) send POST /authorize with params in the query string or
-    // with an unexpected Content-Type, leaving req.body empty.
-    // This middleware merges query params into body as a fallback.
-    app.use('/authorize', (req, _res, next) => {
+    const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: chainedVerifier } });
+
+    // ─── OAuth authorize normalization + Copilot Studio MCP workaround ──
+    // Copilot Studio sends MCP JSON-RPC requests to /authorize instead of
+    // /mcp after completing the OAuth flow. When we detect a JSON-RPC body
+    // (has "jsonrpc" field) on POST /authorize, we bypass the OAuth handler
+    // and route directly to bearerAuth + mcpHandler.
+    //
+    // For normal OAuth requests, merge query params into body as fallback
+    // (some clients send POST /authorize with params in query string).
+    app.use('/authorize', (req, res, next) => {
+      // Detect MCP JSON-RPC on /authorize (Copilot Studio quirk)
+      if (req.method === 'POST' && req.body?.jsonrpc) {
+        logger.info('MCP JSON-RPC on /authorize, routing to MCP handler', {
+          rpcMethod: req.body.method,
+          id: req.body.id,
+          userAgent: req.headers['user-agent']?.slice(0, 60),
+        });
+        // Run bearerAuth, then mcpHandler — skip the OAuth authorize handler
+        bearerAuth(req, res, (err?: unknown) => {
+          if (err) {
+            next(err);
+            return;
+          }
+          mcpHandler(req, res);
+        });
+        return;
+      }
+
       logger.debug('OAuth authorize request', {
         method: req.method,
         contentType: req.headers['content-type'],
@@ -130,18 +179,22 @@ export async function startHttpServer(
     });
 
     // Install MCP SDK auth router at root (OAuth endpoints + DCR)
+    // resourceServerUrl must point to /mcp so that the protected resource
+    // metadata is served at /.well-known/oauth-protected-resource/mcp
+    // (per RFC 9728). Without this, MCP clients can't discover the
+    // resource endpoint and may send JSON-RPC to the wrong path.
     app.use(
       mcpAuthRouter({
         provider,
         issuerUrl: new URL(appUrl),
         baseUrl: new URL(appUrl),
+        resourceServerUrl: new URL(`${appUrl}/mcp`),
         scopesSupported: ['read', 'write', 'admin'],
         resourceName: 'ARC-1 SAP MCP Server',
       }),
     );
 
     // Protected MCP endpoint with chained token verification
-    const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: chainedVerifier } });
     app.all('/mcp', bearerAuth, mcpHandler);
 
     logger.info('XSUAA OAuth proxy enabled', {
@@ -168,7 +221,8 @@ export async function startHttpServer(
   }
 
   // ─── 404 for anything else ─────────────────────────────────
-  app.use((_req, res) => {
+  app.use((req, res) => {
+    logger.debug('404 Not Found', { method: req.method, path: req.path, url: req.originalUrl });
     res.status(404).json({ error: 'Not found. Use /mcp for MCP protocol, /health for health check.' });
   });
 

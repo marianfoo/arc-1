@@ -79,17 +79,42 @@ async function createPerUserClient(
   const adtConfig = buildAdtConfig(config, btpProxy);
   // Override URL from destination (in case it differs from startup-resolved URL)
   adtConfig.baseUrl = destination.URL;
-  // Set per-user auth: either SAP-Connectivity-Authentication (PP via Cloud Connector)
-  // or Bearer token (OAuth2SAMLBearerAssertion)
-  if (authTokens.sapConnectivityAuth) {
+  // Set per-user auth for principal propagation.
+  // Option 1 (Recommended): jwt-bearer exchanged token → Proxy-Authorization
+  // Option 2 (Backward compat): SAML assertion → SAP-Connectivity-Authentication
+  // Preserve the username for display only (e.g. SAPRead SYSTEM) by extracting it from the JWT.
+  // Safety: the JWT signature was already verified by the OIDC middleware in http.ts —
+  // we're just reading a claim from an already-trusted token. This value is never used
+  // for auth or access control; the actual SAP identity comes from the SAML assertion.
+  let displayUsername: string | undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(userJwt.split('.')[1], 'base64url').toString());
+    displayUsername = payload.user_name ?? payload.email ?? undefined;
+  } catch {
+    displayUsername = undefined;
+  }
+
+  if (authTokens.ppProxyAuth) {
+    // Option 1: exchanged token replaces Proxy-Authorization
+    adtConfig.ppProxyAuth = authTokens.ppProxyAuth;
+    adtConfig.username = displayUsername;
+    adtConfig.password = undefined;
+  } else if (authTokens.sapConnectivityAuth) {
+    // Option 2: SAML assertion from Destination Service
     adtConfig.sapConnectivityAuth = authTokens.sapConnectivityAuth;
-    // Don't send basic auth when using PP — the user identity comes from the SAML assertion
-    adtConfig.username = undefined;
+    adtConfig.username = displayUsername;
     adtConfig.password = undefined;
   } else if (authTokens.bearerToken) {
     // TODO: Bearer token auth for OAuth2SAMLBearerAssertion destinations
     // This would replace basic auth with Bearer token
     logger.warn('Bearer token auth from destination not yet implemented — falling back to basic auth');
+  } else {
+    // No per-user auth token received.
+    throw new Error(
+      `Principal propagation failed for destination '${destName}': ` +
+        'no SAP-Connectivity-Authentication header, Bearer token, or jwt-bearer exchange token returned. ' +
+        'Check Cloud Connector status, destination configuration, and user JWT validity.',
+    );
   }
 
   return new AdtClient(adtConfig);
@@ -146,6 +171,7 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
           success: true,
         });
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         logger.emitAudit({
           timestamp: new Date().toISOString(),
           level: 'error',
@@ -153,10 +179,34 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
           user: ppUser,
           destination: ppDest,
           success: false,
-          errorMessage: err instanceof Error ? err.message : String(err),
+          errorMessage: errMsg,
         });
+        if (config.ppStrict) {
+          // Strict mode: PP failure is a hard error — never fall back to shared client.
+          // This ensures every request runs with the authenticated user's identity.
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Principal propagation failed (SAP_PP_STRICT=true): ${errMsg}`,
+              },
+            ],
+            isError: true,
+          } as Record<string, unknown>;
+        }
         // Fall back to shared client (service account)
       }
+    } else if (config.ppStrict && config.ppEnabled && !isJwt) {
+      // Strict mode with non-JWT token (e.g., API key) — reject
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: 'Principal propagation requires a JWT token (SAP_PP_STRICT=true). API key authentication is not supported in strict PP mode.',
+          },
+        ],
+        isError: true,
+      } as Record<string, unknown>;
     }
 
     const result = await handleToolCall(client, config, toolName, args, extra.authInfo, server);

@@ -28,7 +28,7 @@ The core design principles are:
 | TypeScript Migration | ✅ Complete — Go code removed, pure TypeScript |
 | Core MCP Server | ✅ 11 intent-based tools, HTTP Streamable + stdio |
 | Safety System | ✅ Read-only, package filter, operation filter, transport guard |
-| Phase 1: API Key Auth | ✅ `ARC1_API_KEY` / `VSP_API_KEY` Bearer token |
+| Phase 1: API Key Auth | ✅ `ARC1_API_KEY` Bearer token |
 | Phase 2: OAuth/OIDC (Entra ID) | ✅ JWT validation via `jose` library, tested with Copilot Studio |
 | Phase 4: BTP CF Deployment | ✅ Docker on CF with Destination Service + Cloud Connector |
 | BTP Destination Service | ✅ Auto-resolves SAP credentials from BTP Destination at startup |
@@ -581,7 +581,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 |-------|-------------|--------|
 | Go v1.x–v2.32 | ADT client, 40+ tools, CRUD, debugging, WebSocket, Lua scripting | ✅ Complete (Go) |
 | Enterprise Rename | vsp → ARC-1, 11 intent-based tools | ✅ Complete |
-| Auth Phase 1: API Key | `ARC1_API_KEY` / `VSP_API_KEY` Bearer token | ✅ Complete |
+| Auth Phase 1: API Key | `ARC1_API_KEY` Bearer token | ✅ Complete |
 | Auth Phase 2: OAuth/OIDC | Entra ID JWT validation via `jose` library | ✅ Complete |
 | Auth Phase 4: BTP CF | Docker on CF with Destination Service + Cloud Connector | ✅ Complete |
 | TypeScript Migration | Full Go → TypeScript port, 348 tests, Go code removed | ✅ Complete (2026-03-26) |

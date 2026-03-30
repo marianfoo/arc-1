@@ -56,6 +56,8 @@ export interface AdtHttpConfig {
    * which forwards it to the Cloud Connector for user mapping.
    */
   sapConnectivityAuth?: string;
+  /** PP Option 1: jwt-bearer exchanged token replacing Proxy-Authorization */
+  ppProxyAuth?: string;
 }
 
 /** Response from an ADT HTTP request */
@@ -217,17 +219,28 @@ export class AdtHttpClient {
       headers.Cookie = cookieParts.join('; ');
     }
 
-    // BTP Connectivity proxy: inject Proxy-Authorization JWT
+    // BTP Connectivity proxy: inject Proxy-Authorization JWT for Cloud Connector tunnel
     if (this.config.btpProxy) {
-      const proxyToken = await this.config.btpProxy.getProxyToken();
-      headers['Proxy-Authorization'] = `Bearer ${proxyToken}`;
+      if (this.config.ppProxyAuth) {
+        // PP Option 1 (not currently used — kept for future compatibility):
+        // The jwt-bearer exchanged token replaces the regular proxy token.
+        headers['Proxy-Authorization'] = this.config.ppProxyAuth;
+      } else {
+        // Regular proxy auth — used for both non-PP and PP Option 2.
+        // For PP Option 2, this is the standard connectivity service token;
+        // the user identity is carried separately in SAP-Connectivity-Authentication.
+        const proxyToken = await this.config.btpProxy.getProxyToken();
+        headers['Proxy-Authorization'] = `Bearer ${proxyToken}`;
+      }
     }
 
-    // Principal Propagation: inject SAP-Connectivity-Authentication header
-    // This carries a SAML assertion with the user's identity through the
-    // Cloud Connector to the SAP backend. The Cloud Connector uses this
-    // to generate an X.509 certificate mapped to the SAP user via CERTRULE.
-    if (this.config.sapConnectivityAuth) {
+    // Principal Propagation via SAP-Connectivity-Authentication header (Option 2).
+    // Contains the ORIGINAL user JWT (not exchanged). The Cloud Connector reads
+    // this header, extracts the user identity (email), generates a short-lived
+    // X.509 certificate (CN=<email>), and injects it as SSL_CLIENT_CERT when
+    // connecting to SAP's HTTPS port. SAP CERTRULE maps the cert to a SAP user.
+    // See: https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/configure-principal-propagation-via-user-exchange-token
+    if (this.config.sapConnectivityAuth && !this.config.ppProxyAuth) {
       headers['SAP-Connectivity-Authentication'] = this.config.sapConnectivityAuth;
     }
 

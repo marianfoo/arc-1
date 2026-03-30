@@ -244,7 +244,7 @@ export function parseSystemInfo(
     }
   }
 
-  return { user: username, collections };
+  return { user: username ?? '', collections };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────

@@ -54,7 +54,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             description: 'Object type to read',
           },
           name: { type: 'string', description: 'Object name (e.g., ZTEST_PROGRAM, ZCL_ORDER, MARA)' },
-          include: { type: 'string', description: 'For CLAS: testclasses, definitions, implementations, macros' },
+          include: { type: 'string', description: 'For CLAS: one or more of testclasses, definitions, implementations, macros (comma-separated)' },
           group: { type: 'string', description: 'For FUNC: function group name' },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },

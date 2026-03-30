@@ -503,7 +503,6 @@ Use `on` or `off` to skip the probe and force the behavior:
 
 | Variable | Feature | Notes |
 |---|---|---|
-| `SAP_FEATURE_ABAPGIT` | abapGit integration | Requires ZADT_VSP installed |
 | `SAP_FEATURE_RAP` | RAP/OData development | BDEF, SRVD, SRVB tools |
 | `SAP_FEATURE_AMDP` | AMDP/HANA debugger | Expert mode only |
 | `SAP_FEATURE_UI5` | UI5/Fiori BSP | BSP app management |

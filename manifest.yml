@@ -3,7 +3,7 @@
 # Credentials are NOT stored here — set them via:
 #   cf set-env arc1-mcp-server SAP_USER "<user>"
 #   cf set-env arc1-mcp-server SAP_PASSWORD "<password>"
-#   cf set-env arc1-mcp-server VSP_API_KEY "<api-key>"
+#   cf set-env arc1-mcp-server ARC1_API_KEY "<api-key>"
 applications:
   - name: arc1-mcp-server
     docker:
