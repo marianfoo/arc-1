@@ -63,8 +63,17 @@ export interface AdtClientConfig {
    * Per-user SAP-Connectivity-Authentication header (principal propagation).
    * Contains a SAML assertion from the BTP Destination Service.
    * When set, sent with every request to Cloud Connector for user mapping.
+   * Used for Approach A (Destination Service generates token) or Approach B Option 2 (backward compat).
    */
   sapConnectivityAuth?: string;
+  /**
+   * Per-user Proxy-Authorization override (principal propagation, recommended approach).
+   * Contains the user exchange access token from jwt-bearer exchange with the Connectivity Service.
+   * When set, replaces the regular connectivity proxy token in the Proxy-Authorization header.
+   * Per SAP docs (page 209): "Recommended. The application sends one header containing the
+   * user exchange token to the Connectivity proxy."
+   */
+  ppProxyAuth?: string;
 }
 
 /** Create default ADT client config */

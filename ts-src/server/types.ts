@@ -59,6 +59,7 @@ export interface ServerConfig {
 
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
+  ppStrict: boolean; // If true, PP failure = error (no fallback to shared client)
 
   // --- Misc ---
   verbose: boolean;
@@ -89,5 +90,6 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureHana: 'auto',
   xsuaaAuth: false,
   ppEnabled: false,
+  ppStrict: false,
   verbose: false,
 };

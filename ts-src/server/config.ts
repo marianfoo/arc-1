@@ -95,6 +95,7 @@ export function parseArgs(args: string[]): ServerConfig {
 
   // --- Principal Propagation ---
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
+  config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);
 
   // --- Misc ---
   config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false);
