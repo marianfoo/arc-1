@@ -81,15 +81,27 @@ async function createPerUserClient(
   // Set per-user auth for principal propagation.
   // Option 1 (Recommended): jwt-bearer exchanged token → Proxy-Authorization
   // Option 2 (Backward compat): SAML assertion → SAP-Connectivity-Authentication
+  // Preserve the username for display only (e.g. SAPRead SYSTEM) by extracting it from the JWT.
+  // Safety: the JWT signature was already verified by the OIDC middleware in http.ts —
+  // we're just reading a claim from an already-trusted token. This value is never used
+  // for auth or access control; the actual SAP identity comes from the SAML assertion.
+  let displayUsername: string | undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(userJwt.split('.')[1], 'base64url').toString());
+    displayUsername = payload.user_name ?? payload.email ?? undefined;
+  } catch {
+    displayUsername = undefined;
+  }
+
   if (authTokens.ppProxyAuth) {
     // Option 1: exchanged token replaces Proxy-Authorization
     adtConfig.ppProxyAuth = authTokens.ppProxyAuth;
-    adtConfig.username = undefined;
+    adtConfig.username = displayUsername;
     adtConfig.password = undefined;
   } else if (authTokens.sapConnectivityAuth) {
     // Option 2: SAML assertion from Destination Service
     adtConfig.sapConnectivityAuth = authTokens.sapConnectivityAuth;
-    adtConfig.username = undefined;
+    adtConfig.username = displayUsername;
     adtConfig.password = undefined;
   } else if (authTokens.bearerToken) {
     // TODO: Bearer token auth for OAuth2SAMLBearerAssertion destinations
