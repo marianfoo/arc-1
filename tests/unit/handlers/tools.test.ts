@@ -15,18 +15,44 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPSearch');
   });
 
-  it('includes write tools when not read-only', () => {
+  it('registers all implemented tools', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
     const names = tools.map((t) => t.name);
+    // All implemented tools should be registered
+    expect(names).toContain('SAPRead');
+    expect(names).toContain('SAPSearch');
+    expect(names).toContain('SAPQuery');
+    expect(names).toContain('SAPLint');
     expect(names).toContain('SAPWrite');
     expect(names).toContain('SAPActivate');
+    expect(names).toContain('SAPNavigate');
+    expect(names).toContain('SAPDiagnose');
+    expect(names).toContain('SAPTransport');
+    // Tools with no real backend should NOT be registered
+    expect(names).not.toContain('SAPContext');
+    expect(names).not.toContain('SAPManage');
   });
 
-  it('excludes write tools when read-only', () => {
+  it('hides write tools in read-only mode', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPWrite');
     expect(names).not.toContain('SAPActivate');
+    // Navigate and Diagnose should still be available
+    expect(names).toContain('SAPNavigate');
+    expect(names).toContain('SAPDiagnose');
+  });
+
+  it('hides SAPTransport in read-only mode without enableTransports', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true, enableTransports: false });
+    const names = tools.map((t) => t.name);
+    expect(names).not.toContain('SAPTransport');
+  });
+
+  it('shows SAPTransport in read-only mode with enableTransports', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true, enableTransports: true });
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('SAPTransport');
   });
 
   it('all tools have required schema properties', () => {
@@ -39,13 +65,10 @@ describe('Tool Definitions', () => {
     }
   });
 
-  it('includes SAPLint, SAPContext, SAPDiagnose, SAPNavigate, SAPQuery', () => {
+  it('includes SAPLint and SAPQuery', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPLint');
-    expect(names).toContain('SAPContext');
-    expect(names).toContain('SAPDiagnose');
-    expect(names).toContain('SAPNavigate');
     expect(names).toContain('SAPQuery');
   });
 

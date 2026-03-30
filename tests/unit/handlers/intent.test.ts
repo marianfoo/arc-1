@@ -1,6 +1,8 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { describe, expect, it, vi } from 'vitest';
+import axios from 'axios';
 import { AdtClient } from '../../../ts-src/adt/client.js';
+import { AdtApiError } from '../../../ts-src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 import { handleToolCall, TOOL_SCOPES } from '../../../ts-src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
@@ -474,6 +476,26 @@ describe('Intent Handler', () => {
 
     it('covers all 11 tools', () => {
       expect(Object.keys(TOOL_SCOPES)).toHaveLength(11);
+    });
+  });
+
+  // ─── Error Guidance ────────────────────────────────────────────────
+
+  describe('error guidance', () => {
+    it('404 error includes SAPSearch hint', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // Make the mock reject with a 404 AdtApiError
+      requestSpy.mockRejectedValueOnce(
+        new AdtApiError('Not found', 404, '/sap/bc/adt/programs/programs/ZNONEXIST/source/main'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZNONEXIST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAPSearch');
+      expect(result.content[0]?.text).toContain('ZNONEXIST');
     });
   });
 });

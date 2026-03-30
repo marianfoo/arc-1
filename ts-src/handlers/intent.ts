@@ -13,6 +13,10 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { AdtClient } from '../adt/client.js';
+import { safeUpdateSource, createObject, deleteObject, lockObject, unlockObject } from '../adt/crud.js';
+import { activate, syntaxCheck, runUnitTests, runAtcCheck } from '../adt/devtools.js';
+import { findDefinition, findReferences, getCompletion } from '../adt/codeintel.js';
+import { listTransports, getTransport, createTransport, releaseTransport } from '../adt/transport.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
 import { detectFilename, lintAbapSource } from '../lint/lint.js';
 import { sanitizeArgs } from '../server/audit.js';
@@ -59,6 +63,26 @@ function errorResult(message: string): ToolResult {
 }
 
 /** Classify error type for audit logging */
+/** Format error messages with LLM-friendly remediation hints */
+function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
+  if (err instanceof AdtApiError) {
+    if (err.isNotFound) {
+      const name = String(args.name ?? '');
+      const type = String(args.type ?? '');
+      return `${message}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
+    }
+    if (err.isUnauthorized || err.isForbidden) {
+      return `${message}\n\nHint: Authorization error. The configured SAP user may lack permissions for this object.`;
+    }
+  }
+
+  if (err instanceof AdtNetworkError) {
+    return `${message}\n\nHint: Cannot reach the SAP system. This is a connectivity issue, not a usage error.`;
+  }
+
+  return message;
+}
+
 function classifyError(err: unknown): string {
   if (err instanceof AdtApiError) return 'AdtApiError';
   if (err instanceof AdtNetworkError) return 'AdtNetworkError';
@@ -138,8 +162,23 @@ export async function handleToolCall(
         case 'SAPQuery':
           result = await handleSAPQuery(client, args);
           break;
+        case 'SAPWrite':
+          result = await handleSAPWrite(client, args);
+          break;
+        case 'SAPActivate':
+          result = await handleSAPActivate(client, args);
+          break;
+        case 'SAPNavigate':
+          result = await handleSAPNavigate(client, args);
+          break;
         case 'SAPLint':
           result = await handleSAPLint(client, args);
+          break;
+        case 'SAPDiagnose':
+          result = await handleSAPDiagnose(client, args);
+          break;
+        case 'SAPTransport':
+          result = await handleSAPTransport(client, args);
           break;
         default:
           result = errorResult(`Unknown tool: ${toolName}`);
@@ -181,7 +220,7 @@ export async function handleToolCall(
         errorMessage: message,
       });
 
-      return errorResult(message);
+      return errorResult(formatErrorForLLM(err, message, toolName, args));
     }
   });
 }
@@ -272,5 +311,199 @@ async function handleSAPLint(_client: AdtClient, args: Record<string, unknown>):
     }
     default:
       return errorResult(`Unknown SAPLint action: ${action}. Supported: lint, atc, syntax`);
+  }
+}
+
+// ─── Object URL Mapping ──────────────────────────────────────────────
+
+/** Map object type + name to the ADT object URL used by CRUD/DevTools/etc. */
+function objectUrlForType(type: string, name: string): string {
+  const encoded = encodeURIComponent(name);
+  switch (type) {
+    case 'PROG':
+      return `/sap/bc/adt/programs/programs/${encoded}`;
+    case 'CLAS':
+      return `/sap/bc/adt/oo/classes/${encoded}`;
+    case 'INTF':
+      return `/sap/bc/adt/oo/interfaces/${encoded}`;
+    case 'FUNC':
+      return `/sap/bc/adt/functions/groups/${encoded}`;
+    case 'INCL':
+      return `/sap/bc/adt/programs/includes/${encoded}`;
+    case 'FUGR':
+      return `/sap/bc/adt/functions/groups/${encoded}`;
+    case 'DDLS':
+      return `/sap/bc/adt/ddic/ddl/sources/${encoded}`;
+    case 'BDEF':
+      return `/sap/bc/adt/bo/behaviordefinitions/${encoded}`;
+    case 'SRVD':
+      return `/sap/bc/adt/ddic/srvd/sources/${encoded}`;
+    case 'TABL':
+      return `/sap/bc/adt/ddic/tables/${encoded}`;
+    default:
+      return `/sap/bc/adt/programs/programs/${encoded}`;
+  }
+}
+
+/** Get the source URL for an object (appends /source/main) */
+function sourceUrlForType(type: string, name: string): string {
+  return `${objectUrlForType(type, name)}/source/main`;
+}
+
+// ─── SAPWrite Handler ────────────────────────────────────────────────
+
+async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+  const action = String(args.action ?? '');
+  const type = String(args.type ?? '');
+  const name = String(args.name ?? '');
+  const source = String(args.source ?? '');
+  const transport = args.transport as string | undefined;
+
+  const objectUrl = objectUrlForType(type, name);
+  const srcUrl = sourceUrlForType(type, name);
+
+  switch (action) {
+    case 'update': {
+      await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
+      return textResult(`Successfully updated ${type} ${name}.`);
+    }
+    case 'create': {
+      const pkg = String(args.package ?? '$TMP');
+      // Build creation XML body
+      const body = `<?xml version="1.0" encoding="UTF-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="${objectUrl}" adtcore:type="${type}" adtcore:name="${name}" adtcore:packageName="${pkg}"/>
+</adtcore:objectReferences>`;
+      const result = await createObject(client.http, client.safety, objectUrl, body, 'application/xml', transport);
+      return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
+    }
+    case 'delete': {
+      // Lock, delete, unlock pattern
+      await client.http.withStatefulSession(async (session) => {
+        const lock = await lockObject(session, client.safety, objectUrl);
+        try {
+          await deleteObject(session, client.safety, objectUrl, lock.lockHandle, transport);
+        } finally {
+          try {
+            await unlockObject(session, objectUrl, lock.lockHandle);
+          } catch {
+            // Object may already be deleted — unlock failure is expected
+          }
+        }
+      });
+      return textResult(`Deleted ${type} ${name}.`);
+    }
+    default:
+      return errorResult(`Unknown SAPWrite action: ${action}. Supported: create, update, delete`);
+  }
+}
+
+// ─── SAPActivate Handler ─────────────────────────────────────────────
+
+async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+  const name = String(args.name ?? '');
+  const type = String(args.type ?? '');
+  const objectUrl = objectUrlForType(type, name);
+
+  const result = await activate(client.http, client.safety, objectUrl);
+
+  if (result.success) {
+    return textResult(`Successfully activated ${type} ${name}.${result.messages.length > 0 ? `\nMessages: ${result.messages.join('; ')}` : ''}`);
+  }
+  return errorResult(`Activation failed for ${type} ${name}.\nErrors: ${result.messages.join('; ')}`);
+}
+
+// ─── SAPNavigate Handler ─────────────────────────────────────────────
+
+async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+  const action = String(args.action ?? '');
+  const uri = String(args.uri ?? '');
+  const line = Number(args.line ?? 1);
+  const column = Number(args.column ?? 1);
+  const source = String(args.source ?? '');
+
+  switch (action) {
+    case 'definition': {
+      const result = await findDefinition(client.http, client.safety, uri, line, column, source);
+      if (!result) {
+        return textResult('No definition found at this position.');
+      }
+      return textResult(JSON.stringify(result, null, 2));
+    }
+    case 'references': {
+      const results = await findReferences(client.http, client.safety, uri);
+      if (results.length === 0) {
+        return textResult('No references found.');
+      }
+      return textResult(JSON.stringify(results, null, 2));
+    }
+    case 'completion': {
+      const proposals = await getCompletion(client.http, client.safety, uri, line, column, source);
+      return textResult(JSON.stringify(proposals, null, 2));
+    }
+    default:
+      return errorResult(`Unknown SAPNavigate action: ${action}. Supported: definition, references, completion`);
+  }
+}
+
+// ─── SAPDiagnose Handler ─────────────────────────────────────────────
+
+async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+  const action = String(args.action ?? '');
+  const name = String(args.name ?? '');
+  const type = String(args.type ?? '');
+  const objectUrl = objectUrlForType(type, name);
+
+  switch (action) {
+    case 'syntax': {
+      const result = await syntaxCheck(client.http, client.safety, objectUrl);
+      return textResult(JSON.stringify(result, null, 2));
+    }
+    case 'unittest': {
+      const results = await runUnitTests(client.http, client.safety, objectUrl);
+      return textResult(JSON.stringify(results, null, 2));
+    }
+    case 'atc': {
+      const variant = args.variant as string | undefined;
+      const result = await runAtcCheck(client.http, client.safety, objectUrl, variant);
+      return textResult(JSON.stringify(result, null, 2));
+    }
+    default:
+      return errorResult(`Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc`);
+  }
+}
+
+// ─── SAPTransport Handler ────────────────────────────────────────────
+
+async function handleSAPTransport(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+  const action = String(args.action ?? '');
+
+  switch (action) {
+    case 'list': {
+      const user = args.user as string | undefined;
+      const transports = await listTransports(client.http, client.safety, user);
+      return textResult(JSON.stringify(transports, null, 2));
+    }
+    case 'get': {
+      const id = String(args.id ?? '');
+      if (!id) return errorResult('Transport ID is required for "get" action.');
+      const transport = await getTransport(client.http, client.safety, id);
+      if (!transport) return textResult(`Transport ${id} not found.`);
+      return textResult(JSON.stringify(transport, null, 2));
+    }
+    case 'create': {
+      const description = String(args.description ?? '');
+      if (!description) return errorResult('Description is required for "create" action.');
+      const id = await createTransport(client.http, client.safety, description);
+      return textResult(`Created transport request: ${id}`);
+    }
+    case 'release': {
+      const id = String(args.id ?? '');
+      if (!id) return errorResult('Transport ID is required for "release" action.');
+      await releaseTransport(client.http, client.safety, id);
+      return textResult(`Released transport request: ${id}`);
+    }
+    default:
+      return errorResult(`Unknown SAPTransport action: ${action}. Supported: list, get, create, release`);
   }
 }
