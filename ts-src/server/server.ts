@@ -83,7 +83,16 @@ async function createPerUserClient(
   if (authTokens.sapConnectivityAuth) {
     adtConfig.sapConnectivityAuth = authTokens.sapConnectivityAuth;
     // Don't send basic auth when using PP — the user identity comes from the SAML assertion
-    adtConfig.username = undefined;
+    // Preserve the username for display only (e.g. SAPRead SYSTEM) by extracting it from the JWT.
+    // Safety: the JWT signature was already verified by the OIDC middleware in http.ts —
+    // we're just reading a claim from an already-trusted token. This value is never used
+    // for auth or access control; the actual SAP identity comes from the SAML assertion.
+    try {
+      const payload = JSON.parse(Buffer.from(userJwt.split('.')[1], 'base64url').toString());
+      adtConfig.username = payload.user_name ?? payload.email ?? undefined;
+    } catch {
+      adtConfig.username = undefined;
+    }
     adtConfig.password = undefined;
   } else if (authTokens.bearerToken) {
     // TODO: Bearer token auth for OAuth2SAMLBearerAssertion destinations
