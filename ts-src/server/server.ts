@@ -228,6 +228,18 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     logger.info('File logging enabled', { logFile: config.logFile });
   }
 
+  // Add BTP Audit Log sink if auditlog service is bound (auto-detected from VCAP_SERVICES)
+  try {
+    const { BTPAuditLogSink, parseBTPAuditLogConfig } = await import('./sinks/btp-auditlog.js');
+    const auditLogConfig = parseBTPAuditLogConfig();
+    if (auditLogConfig) {
+      logger.addSink(new BTPAuditLogSink(auditLogConfig));
+      logger.info('BTP Audit Log sink enabled', { url: auditLogConfig.url });
+    }
+  } catch {
+    // BTP audit log sink is optional — ignore if parsing fails
+  }
+
   // Emit structured server_start audit event
   logger.emitAudit({
     timestamp: new Date().toISOString(),
