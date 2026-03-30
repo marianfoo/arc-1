@@ -25,7 +25,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPRead',
       description:
-        'Read any SAP ABAP object. Supports: PROG (program), CLAS (class), INTF (interface), FUNC (function module), FUGR (function group), INCL (include), DDLS (CDS view), BDEF (behavior definition), SRVD (service definition), TABL (table definition), VIEW (DDIC view), TABLE_CONTENTS (table data), DEVC (package contents), SYSTEM (system info), COMPONENTS (installed components), MESSAGES (message class), TEXT_ELEMENTS (program texts), VARIANTS (program variants).',
+        'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC (requires group param), FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -56,9 +56,10 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           name: { type: 'string', description: 'Object name (e.g., ZTEST_PROGRAM, ZCL_ORDER, MARA)' },
           include: {
             type: 'string',
-            description: 'For CLAS: one or more of testclasses, definitions, implementations, macros (comma-separated)',
+            description:
+              'For CLAS only. DO NOT use this to read the main class — omit include entirely to get the full class source (CLASS DEFINITION + CLASS IMPLEMENTATION). This parameter reads class-LOCAL auxiliary files only: definitions (local type definitions, NOT the main class definition), implementations (local helper class implementations), macros, testclasses (ABAP Unit). Comma-separated. Not all classes have these sections — missing ones return a note instead of an error.',
           },
-          group: { type: 'string', description: 'For FUNC: function group name' },
+          group: { type: 'string', description: 'Required for FUNC type. The function group containing the function module. Use SAPSearch to find it if unknown.' },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
         },
@@ -80,7 +81,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
   ];
 
-  // Write tools (blocked in read-only mode — but still registered so LLM knows they exist)
+  // Write tools — only registered when not in read-only mode
   if (!config.readOnly) {
     tools.push({
       name: 'SAPWrite',
@@ -148,20 +149,6 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
       },
     },
     {
-      name: 'SAPContext',
-      description:
-        'Get compressed context for an ABAP object — public API contracts of dependencies. Minimizes LLM context window usage.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Object name' },
-          type: { type: 'string', description: 'Object type (CLAS, PROG, etc.)' },
-          depth: { type: 'number', description: 'Dependency expansion depth (1-3, default 1)' },
-        },
-        required: ['name', 'type'],
-      },
-    },
-    {
       name: 'SAPLint',
       description: 'Check ABAP code quality. Runs abaplint rules locally and/or ATC checks on the SAP system.',
       inputSchema: {
@@ -178,29 +165,29 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPDiagnose',
       description:
-        'System diagnostics: runtime errors (short dumps), ABAP profiler traces, SQL traces, call graphs, object structure.',
+        'Run diagnostics on ABAP objects: syntax check, ABAP unit tests, and ATC (ABAP Test Cockpit) code quality checks.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['dumps', 'dump_detail', 'traces', 'trace_detail', 'sql_traces', 'call_graph', 'object_structure'],
+            enum: ['syntax', 'unittest', 'atc'],
             description: 'Diagnostic action',
           },
-          name: { type: 'string', description: 'Object or dump ID' },
-          user: { type: 'string', description: 'Filter by user (for dumps/traces)' },
-          maxResults: { type: 'number', description: 'Maximum results' },
+          name: { type: 'string', description: 'Object name' },
+          type: { type: 'string', description: 'Object type (PROG, CLAS, etc.)' },
+          variant: { type: 'string', description: 'ATC check variant (for atc action)' },
         },
-        required: ['action'],
+        required: ['action', 'name', 'type'],
       },
     },
   );
 
-  // Transport tools
+  // Transport tools — registered when transports are enabled or not in read-only mode
   if (config.enableTransports || !config.readOnly) {
     tools.push({
       name: 'SAPTransport',
-      description: 'Manage CTS transport requests: list, create, release. Requires --enable-transports flag.',
+      description: 'Manage CTS transport requests: list, get details, create, and release.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -208,21 +195,6 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           id: { type: 'string', description: 'Transport request ID (for get/release)' },
           description: { type: 'string', description: 'Description (for create)' },
           user: { type: 'string', description: 'Filter by user (for list)' },
-        },
-        required: ['action'],
-      },
-    });
-  }
-
-  // Manage tools (blocked in read-only)
-  if (!config.readOnly) {
-    tools.push({
-      name: 'SAPManage',
-      description: 'Manage ARC-1 features: probe system features, get feature status.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: { type: 'string', enum: ['features', 'probe'], description: 'Management action' },
         },
         required: ['action'],
       },

@@ -150,6 +150,37 @@ describeIf('ADT Integration Tests', () => {
     it('returns error for non-existent class', async () => {
       await expect(client.getClass('ZCL_NONEXISTENT_999')).rejects.toThrow();
     });
+
+    it('reads class local definitions include', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions');
+      expect(typeof source).toBe('string');
+      expect(source).toContain('=== definitions ===');
+    });
+
+    it('reads class local implementations include', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'implementations');
+      expect(typeof source).toBe('string');
+      expect(source).toContain('=== implementations ===');
+    });
+
+    it('reads class with multiple includes', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions,implementations');
+      expect(source).toContain('=== definitions ===');
+      expect(source).toContain('=== implementations ===');
+    });
+
+    it('gracefully handles non-existent testclasses include', async () => {
+      // If the class has no test classes, should return a helpful note rather than throwing
+      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'testclasses');
+      expect(typeof source).toBe('string');
+      expect(source).toContain('testclasses');
+    });
+
+    it('reads full class source without include (default)', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP');
+      expect(source).toBeTruthy();
+      expect(source.length).toBeGreaterThan(0);
+    });
   });
 
   // ─── Interface Operations ───────────────────────────────────────

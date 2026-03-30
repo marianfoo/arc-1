@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import axios from 'axios';
 import { AdtClient } from '../../../ts-src/adt/client.js';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
+import { AdtApiError, AdtSafetyError } from '../../../ts-src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
 
 // Mock axios for all client tests
@@ -48,6 +49,79 @@ describe('AdtClient', () => {
       const client = createClient();
       const source = await client.getClass('ZCL_TEST', 'testclasses');
       expect(typeof source).toBe('string');
+    });
+
+    it('getClass with include uses correct URL path (no /source/main suffix)', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      const client = createClient();
+      await client.getClass('ZCL_TEST', 'definitions');
+      // Should call /includes/definitions, NOT /includes/definitions/source/main
+      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
+      const urlUsed = callArgs.find((a: any) => a.url?.includes('ZCL_TEST'));
+      expect(urlUsed?.url).toContain('/includes/definitions');
+      expect(urlUsed?.url).not.toContain('/source/main');
+    });
+
+    it('getClass with include=main uses /source/main path', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      const client = createClient();
+      await client.getClass('ZCL_TEST', 'main');
+      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
+      const urlUsed = callArgs.find((a: any) => a.url?.includes('ZCL_TEST'));
+      expect(urlUsed?.url).toContain('/source/main');
+    });
+
+    it('getClass with multiple comma-separated includes', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      const client = createClient();
+      const source = await client.getClass('ZCL_TEST', 'definitions,implementations');
+      // Should make two HTTP calls
+      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
+      const classUrls = callArgs.filter((a: any) => a.url?.includes('ZCL_TEST'));
+      expect(classUrls).toHaveLength(2);
+      expect(classUrls[0]?.url).toContain('/includes/definitions');
+      expect(classUrls[1]?.url).toContain('/includes/implementations');
+      // Result should contain both section headers
+      expect(source).toContain('=== definitions ===');
+      expect(source).toContain('=== implementations ===');
+    });
+
+    it('getClass gracefully handles 404 for non-existent includes', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      // Make the request reject with a 404 AdtApiError
+      requestSpy.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/testclasses'));
+      const client = createClient();
+      const source = await client.getClass('ZCL_TEST', 'testclasses');
+      // Should not throw; should contain a helpful message
+      expect(source).toContain('testclasses');
+      expect(source).toContain('not available');
+    });
+
+    it('getClass validates include values', async () => {
+      const client = createClient();
+      const source = await client.getClass('ZCL_TEST', 'foobar');
+      expect(source).toContain('Unknown include');
+      expect(source).toContain('foobar');
+    });
+
+    it('getClass normalizes include to lowercase', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      const client = createClient();
+      await client.getClass('ZCL_TEST', 'DEFINITIONS');
+      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
+      const urlUsed = callArgs.find((a: any) => a.url?.includes('ZCL_TEST'));
+      // Should use lowercase 'definitions' in the URL path
+      expect(urlUsed?.url).toContain('/includes/definitions');
     });
 
     it('getInterface returns source code', async () => {

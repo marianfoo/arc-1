@@ -19,6 +19,7 @@
 import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
+import { isNotFoundError } from './errors.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { AdtSearchResult } from './types.js';
 import {
@@ -68,21 +69,41 @@ export class AdtClient {
   /** Get class source code (main include by default) */
   async getClass(name: string, include?: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetClass');
-    if (include) {
-      const includes = include
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const parts: string[] = [];
-      for (const inc of includes) {
-        const path = `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${inc}/source/main`;
+    const encodedName = encodeURIComponent(name);
+
+    if (!include) {
+      // Default: return full combined class source
+      const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/source/main`);
+      return resp.body;
+    }
+
+    const validIncludes = new Set(['main', 'definitions', 'implementations', 'macros', 'testclasses']);
+    const includes = include.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+    const parts: string[] = [];
+    for (const inc of includes) {
+      if (!validIncludes.has(inc)) {
+        parts.push(`=== ${inc} ===\n[Unknown include "${inc}". Valid: main, definitions, implementations, macros, testclasses]`);
+        continue;
+      }
+
+      // "main" uses /source/main; others use /includes/{type}
+      const path = inc === 'main'
+        ? `/sap/bc/adt/oo/classes/${encodedName}/source/main`
+        : `/sap/bc/adt/oo/classes/${encodedName}/includes/${inc}`;
+
+      try {
         const resp = await this.http.get(path);
         parts.push(`=== ${inc} ===\n${resp.body}`);
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          parts.push(`=== ${inc} ===\n[Include "${inc}" is not available for this class. Try reading without the include parameter to get the full source.]`);
+        } else {
+          throw err; // Re-throw non-404 errors
+        }
       }
-      return parts.join('\n\n');
     }
-    const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return parts.join('\n\n');
   }
 
   /** Get interface source code */
