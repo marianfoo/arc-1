@@ -68,11 +68,17 @@ export class AdtClient {
   /** Get class source code (main include by default) */
   async getClass(name: string, include?: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetClass');
-    let path = `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/source/main`;
     if (include) {
-      path = `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${include}`;
+      const includes = include.split(',').map((s) => s.trim()).filter(Boolean);
+      const parts: string[] = [];
+      for (const inc of includes) {
+        const path = `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${inc}/source/main`;
+        const resp = await this.http.get(path);
+        parts.push(`=== ${inc} ===\n${resp.body}`);
+      }
+      return parts.join('\n\n');
     }
-    const resp = await this.http.get(path);
+    const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/source/main`);
     return resp.body;
   }
 
