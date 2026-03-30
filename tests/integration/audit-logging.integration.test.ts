@@ -145,9 +145,7 @@ describeIf('Audit Logging Integration', () => {
       name: 'ZNONEXISTENT_PROG_AUDIT_TEST',
     });
 
-    const httpErrors = events.filter(
-      (e) => e.event === 'http_request' && (e as any).statusCode >= 400,
-    );
+    const httpErrors = events.filter((e) => e.event === 'http_request' && (e as any).statusCode >= 400);
 
     // Should have at least one failed HTTP request
     expect(httpErrors.length).toBeGreaterThanOrEqual(1);
@@ -166,7 +164,10 @@ describeIf('Audit Logging Integration', () => {
 
     expect(existsSync(logFile)).toBe(true);
     const content = readFileSync(logFile, 'utf-8');
-    const lines = content.trim().split('\n').filter((l) => l.length > 0);
+    const lines = content
+      .trim()
+      .split('\n')
+      .filter((l) => l.length > 0);
 
     expect(lines.length).toBeGreaterThan(0);
 
@@ -189,11 +190,17 @@ describeIf('Audit Logging Integration', () => {
       extra: { userName: 'test-user' },
     };
 
-    const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
-      type: 'PROG',
-      name: 'ZHELLO',
-      source: 'test',
-    }, authInfo);
+    const result = await handleToolCall(
+      client,
+      DEFAULT_CONFIG,
+      'SAPWrite',
+      {
+        type: 'PROG',
+        name: 'ZHELLO',
+        source: 'test',
+      },
+      authInfo,
+    );
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('Insufficient scope');

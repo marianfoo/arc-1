@@ -9,11 +9,11 @@
  * interaction between server and client.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { confirmDestructive, promptString, selectOption } from '../../ts-src/server/elicit.js';
-import type { AuditEvent } from '../../ts-src/server/audit.js';
-import { logger } from '../../ts-src/server/logger.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuditEvent } from '../../ts-src/server/audit.js';
+import { confirmDestructive, promptString, selectOption } from '../../ts-src/server/elicit.js';
+import { logger } from '../../ts-src/server/logger.js';
 
 describe('Elicitation Integration', () => {
   let events: AuditEvent[] = [];
@@ -292,9 +292,7 @@ describe('Elicitation Integration', () => {
 
       await confirmDestructive(server, 'SAPManage', 'Delete?');
 
-      const elicitEvents = events.filter(
-        (e) => e.event === 'elicitation_sent' || e.event === 'elicitation_response',
-      );
+      const elicitEvents = events.filter((e) => e.event === 'elicitation_sent' || e.event === 'elicitation_response');
       expect(elicitEvents).toHaveLength(0);
     });
 
@@ -302,9 +300,7 @@ describe('Elicitation Integration', () => {
       const server = mockServer({ action: 'accept', content: { selection: 'ZTEST' } });
       events.length = 0;
 
-      await selectOption(server, 'SAPWrite', 'Pick package:', [
-        { value: 'ZTEST', title: 'Test' },
-      ]);
+      await selectOption(server, 'SAPWrite', 'Pick package:', [{ value: 'ZTEST', title: 'Test' }]);
 
       const sent = events.filter((e) => e.event === 'elicitation_sent');
       expect(sent).toHaveLength(1);
