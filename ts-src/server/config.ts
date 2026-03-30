@@ -97,8 +97,21 @@ export function parseArgs(args: string[]): ServerConfig {
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
   config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);
 
+  // --- Logging ---
+  config.logFile = getFlag('log-file') ?? process.env.ARC1_LOG_FILE;
+  const logLevel = resolve('log-level', 'ARC1_LOG_LEVEL', 'info');
+  config.logLevel = (
+    ['debug', 'info', 'warn', 'error'].includes(logLevel) ? logLevel : 'info'
+  ) as ServerConfig['logLevel'];
+  const logFormat = resolve('log-format', 'ARC1_LOG_FORMAT', 'text');
+  config.logFormat = (logFormat === 'json' ? 'json' : 'text') as ServerConfig['logFormat'];
+
   // --- Misc ---
   config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false);
+  // --verbose is sugar for --log-level debug
+  if (config.verbose) {
+    config.logLevel = 'debug';
+  }
 
   return config;
 }

@@ -61,6 +61,11 @@ export interface ServerConfig {
   ppEnabled: boolean;
   ppStrict: boolean; // If true, PP failure = error (no fallback to shared client)
 
+  // --- Logging ---
+  logFile?: string;
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  logFormat: 'text' | 'json';
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -91,5 +96,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   xsuaaAuth: false,
   ppEnabled: false,
   ppStrict: false,
+  logLevel: 'info',
+  logFormat: 'text',
   verbose: false,
 };

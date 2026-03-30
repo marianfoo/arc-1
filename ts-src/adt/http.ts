@@ -29,6 +29,7 @@
 import { Agent as HttpAgent } from 'node:http';
 import { Agent as HttpsAgent } from 'node:https';
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { logger } from '../server/logger.js';
 import type { BTPProxyConfig } from './btp.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
 
@@ -244,6 +245,7 @@ export class AdtHttpClient {
     }
 
     const url = this.buildUrl(path);
+    const httpStart = Date.now();
 
     try {
       const response = await this.axios.request({
@@ -275,7 +277,19 @@ export class AdtHttpClient {
           headers,
         });
         this.storeCookies(retryResponse);
-        return this.handleResponse(retryResponse, path);
+        const result = this.handleResponse(retryResponse, path);
+
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          event: 'http_request',
+          method,
+          path,
+          statusCode: retryResponse.status,
+          durationMs: Date.now() - httpStart,
+        });
+
+        return result;
       }
 
       // Store CSRF token from response
@@ -284,8 +298,35 @@ export class AdtHttpClient {
         this.csrfToken = responseToken;
       }
 
-      return this.handleResponse(response, path);
+      const result = this.handleResponse(response, path);
+
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'debug',
+        event: 'http_request',
+        method,
+        path,
+        statusCode: response.status,
+        durationMs: Date.now() - httpStart,
+      });
+
+      return result;
     } catch (err) {
+      // Log failed HTTP requests
+      const durationMs = Date.now() - httpStart;
+      if (err instanceof AdtApiError) {
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'http_request',
+          method,
+          path,
+          statusCode: err.statusCode,
+          durationMs,
+          errorBody: err.responseBody?.slice(0, 200),
+        });
+      }
+
       if (axios.isAxiosError(err)) {
         throw new AdtNetworkError(err.message, err);
       }

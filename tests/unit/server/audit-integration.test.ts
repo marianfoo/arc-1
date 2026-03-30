@@ -1,0 +1,212 @@
+/**
+ * Integration tests for the audit logging system.
+ *
+ * Tests the full flow: tool call → audit events → sinks.
+ * Uses mocked axios (no real SAP connection) but exercises
+ * the real Logger, StderrSink, FileSink, and requestContext.
+ */
+
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AdtClient } from '../../../ts-src/adt/client.js';
+import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+import { handleToolCall } from '../../../ts-src/handlers/intent.js';
+import type { AuditEvent } from '../../../ts-src/server/audit.js';
+import { FileSink } from '../../../ts-src/server/sinks/file.js';
+import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
+
+// Mock axios
+vi.mock('axios', async () => {
+  const mockAxiosInstance = {
+    request: vi.fn().mockResolvedValue({
+      status: 200,
+      data: "REPORT zhello.\nWRITE: / 'Hello'.",
+      headers: {},
+    }),
+  };
+  return {
+    default: {
+      create: vi.fn(() => mockAxiosInstance),
+      isAxiosError: vi.fn(() => false),
+    },
+  };
+});
+
+function createClient(): AdtClient {
+  return new AdtClient({
+    baseUrl: 'http://sap:8000',
+    username: 'admin',
+    password: 'secret',
+    safety: unrestrictedSafetyConfig(),
+  });
+}
+
+describe('Audit Logging Integration', () => {
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
+  const tmpFile = join(tmpdir(), `arc1-audit-integ-${Date.now()}.jsonl`);
+
+  beforeEach(() => {
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    stderrSpy.mockRestore();
+    if (existsSync(tmpFile)) {
+      unlinkSync(tmpFile);
+    }
+  });
+
+  it('emits tool_call_start and tool_call_end for successful calls', async () => {
+    const events: AuditEvent[] = [];
+    const captureSink = { write: (e: AuditEvent) => events.push(e) };
+
+    // Replace the global logger temporarily
+    const { logger } = await import('../../../ts-src/server/logger.js');
+    logger.addSink(captureSink);
+
+    await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+      type: 'PROG',
+      name: 'ZHELLO',
+    });
+
+    const starts = events.filter((e) => e.event === 'tool_call_start');
+    const ends = events.filter((e) => e.event === 'tool_call_end');
+
+    expect(starts).toHaveLength(1);
+    expect(ends).toHaveLength(1);
+
+    const start = starts[0]!;
+    const end = ends[0]!;
+
+    // Both should share the same requestId
+    expect(start.requestId).toBe(end.requestId);
+    expect(start.requestId).toMatch(/^REQ-/);
+
+    // Start event has tool and sanitized args
+    expect((start as any).tool).toBe('SAPRead');
+    expect((start as any).args).toEqual({ type: 'PROG', name: 'ZHELLO' });
+
+    // End event has status and duration
+    expect((end as any).status).toBe('success');
+    expect((end as any).durationMs).toBeGreaterThanOrEqual(0);
+    expect((end as any).resultSize).toBeGreaterThan(0);
+  });
+
+  it('emits error details for failed tool calls', async () => {
+    const events: AuditEvent[] = [];
+    const captureSink = { write: (e: AuditEvent) => events.push(e) };
+    const { logger } = await import('../../../ts-src/server/logger.js');
+    logger.addSink(captureSink);
+
+    // Use restricted config that blocks reads
+    const client = new AdtClient({
+      baseUrl: 'http://sap:8000',
+      username: 'admin',
+      password: 'secret',
+      safety: {
+        readOnly: false,
+        blockFreeSQL: false,
+        allowedOps: 'X', // Only allow 'X' operations (nothing real)
+        disallowedOps: '',
+        allowedPackages: [],
+        dryRun: false,
+        enableTransports: false,
+        transportReadOnly: false,
+        allowedTransports: [],
+        allowTransportableEdits: false,
+      },
+    });
+
+    await handleToolCall(client, DEFAULT_CONFIG, 'SAPRead', {
+      type: 'PROG',
+      name: 'ZHELLO',
+    });
+
+    const ends = events.filter((e) => e.event === 'tool_call_end');
+    expect(ends).toHaveLength(1);
+
+    const end = ends[0]!;
+    expect((end as any).status).toBe('error');
+    expect((end as any).errorClass).toBe('AdtSafetyError');
+    expect((end as any).errorMessage).toContain('blocked by safety');
+  });
+
+  it('emits auth_scope_denied for insufficient scopes', async () => {
+    const events: AuditEvent[] = [];
+    const captureSink = { write: (e: AuditEvent) => events.push(e) };
+    const { logger } = await import('../../../ts-src/server/logger.js');
+    logger.addSink(captureSink);
+
+    const authInfo = {
+      token: 'test-token',
+      clientId: 'test-client',
+      scopes: ['read'],
+      extra: {},
+    };
+
+    await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {}, authInfo);
+
+    const denied = events.filter((e) => e.event === 'auth_scope_denied');
+    expect(denied).toHaveLength(1);
+    expect((denied[0] as any).requiredScope).toBe('write');
+    expect((denied[0] as any).availableScopes).toEqual(['read']);
+  });
+
+  it('sanitizes sensitive args in tool_call_start events', async () => {
+    const events: AuditEvent[] = [];
+    const captureSink = { write: (e: AuditEvent) => events.push(e) };
+    const { logger } = await import('../../../ts-src/server/logger.js');
+    logger.addSink(captureSink);
+
+    await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+      type: 'PROG',
+      name: 'ZHELLO',
+      password: 'should-be-redacted',
+    });
+
+    const starts = events.filter((e) => e.event === 'tool_call_start');
+    expect(starts).toHaveLength(1);
+    expect((starts[0] as any).args.password).toBe('[REDACTED]');
+    expect((starts[0] as any).args.name).toBe('ZHELLO');
+  });
+
+  it('writes events to file sink', async () => {
+    const { logger } = await import('../../../ts-src/server/logger.js');
+    const fileSink = new FileSink(tmpFile);
+    logger.addSink(fileSink);
+
+    await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+      type: 'PROG',
+      name: 'ZHELLO',
+    });
+
+    await fileSink.flush();
+
+    expect(existsSync(tmpFile)).toBe(true);
+    const content = readFileSync(tmpFile, 'utf-8');
+    const lines = content
+      .trim()
+      .split('\n')
+      .filter((l) => l.length > 0);
+
+    // Should have at least tool_call_start + tool_call_end + http_request events
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+
+    // All lines should be valid JSON
+    for (const line of lines) {
+      expect(() => JSON.parse(line)).not.toThrow();
+    }
+
+    // Find the tool_call events in the file
+    const fileEvents = lines.map((l) => JSON.parse(l));
+    const toolStart = fileEvents.find((e: any) => e.event === 'tool_call_start');
+    const toolEnd = fileEvents.find((e: any) => e.event === 'tool_call_end');
+
+    expect(toolStart).toBeDefined();
+    expect(toolEnd).toBeDefined();
+    expect(toolStart.tool).toBe('SAPRead');
+    expect(toolEnd.status).toBe('success');
+  });
+});

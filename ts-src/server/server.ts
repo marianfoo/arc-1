@@ -16,6 +16,7 @@ import type { AdtClientConfig } from '../adt/config.js';
 import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
+import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
 /** ARC-1 version */
@@ -157,20 +158,32 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
     const token = extra.authInfo?.token;
     const isJwt = token && token.split('.').length === 3;
     if (config.ppEnabled && btpConfig && isJwt) {
+      const ppUser = (extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId) as string | undefined;
+      const ppDest = process.env.SAP_BTP_PP_DESTINATION ?? process.env.SAP_BTP_DESTINATION ?? '';
       try {
         client = await createPerUserClient(config, btpConfig, btpProxy, token);
-        logger.debug('Per-user ADT client created', {
-          user: extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId,
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          event: 'auth_pp_created',
+          user: ppUser,
+          destination: ppDest,
+          success: true,
         });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          event: 'auth_pp_created',
+          user: ppUser,
+          destination: ppDest,
+          success: false,
+          errorMessage: errMsg,
+        });
         if (config.ppStrict) {
           // Strict mode: PP failure is a hard error — never fall back to shared client.
           // This ensures every request runs with the authenticated user's identity.
-          logger.error('PP strict mode: per-user client creation failed — request rejected', {
-            error: errMsg,
-            user: extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId,
-          });
           return {
             content: [
               {
@@ -181,10 +194,6 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
             isError: true,
           } as Record<string, unknown>;
         }
-        logger.error('Failed to create per-user ADT client — falling back to shared client', {
-          error: errMsg,
-          user: extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId,
-        });
         // Fall back to shared client (service account)
       }
     } else if (config.ppStrict && config.ppEnabled && !isJwt) {
@@ -200,7 +209,7 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
       } as Record<string, unknown>;
     }
 
-    const result = await handleToolCall(client, config, toolName, args, extra.authInfo);
+    const result = await handleToolCall(client, config, toolName, args, extra.authInfo, server);
     return { ...result } as Record<string, unknown>;
   });
 
@@ -211,7 +220,24 @@ export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, bt
  * Create and start the MCP server.
  */
 export async function createAndStartServer(config: ServerConfig): Promise<Server> {
-  initLogger(config.verbose ? 'text' : 'text', config.verbose);
+  initLogger(config.logFormat, config.verbose);
+
+  // Add file sink if configured
+  if (config.logFile) {
+    logger.addSink(new FileSink(config.logFile));
+    logger.info('File logging enabled', { logFile: config.logFile });
+  }
+
+  // Emit structured server_start audit event
+  logger.emitAudit({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    event: 'server_start',
+    version: VERSION,
+    transport: config.transport,
+    readOnly: config.readOnly,
+    url: config.url || '(not configured)',
+  });
 
   logger.info('ARC-1 starting', {
     version: VERSION,

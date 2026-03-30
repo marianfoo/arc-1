@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +34,13 @@ jobs:
       - name: Run unit tests
         run: npm test
 
-  # Integration tests run only on main branch pushes (needs SAP credentials)
+  # Integration tests run on PRs from internal branches (secrets available)
+  # Skipped for external/fork PRs (secrets are not exposed)
   integration:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     needs: test
 
     steps:
