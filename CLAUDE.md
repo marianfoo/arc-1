@@ -200,6 +200,41 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 | `vitest` | Testing |
 | `biome` | Linting + formatting |
 
+## Releasing
+
+Automated via [release-please](https://github.com/googleapis/release-please). No manual version bumps or changelog edits.
+
+### Commit conventions
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) in PR titles / commit messages:
+- `feat:` → minor bump, `fix:` → patch bump, `feat!:` / `BREAKING CHANGE:` → major bump
+- `chore:`, `docs:`, `ci:` → no release triggered
+
+### Process
+
+1. Merge PRs to `main` with conventional commit messages
+2. release-please auto-creates/updates a Release PR with version bump + `CHANGELOG.md`
+3. Merge the Release PR to trigger: npm publish, Docker push, GitHub Release
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `.github/workflows/release.yml` | release-please + npm publish + Docker push |
+| `.github/workflows/docker.yml` | Dev `latest` Docker image on every main push |
+| `release-please-config.json` | Config: extra files to version-bump |
+| `.release-please-manifest.json` | Tracks current version |
+| `ts-src/server/server.ts` | `VERSION` constant (auto-bumped via `x-release-please-version` marker) |
+
+### Version is maintained in two places
+
+- `package.json` — bumped by release-please automatically
+- `ts-src/server/server.ts` `VERSION` constant — bumped via the `x-release-please-version` annotation comment
+
+### npm trusted publishing
+
+npm publish uses OIDC provenance (no `NPM_TOKEN` secret needed). Configured at npmjs.com → package settings → Trusted Publisher: `marianfoo/arc-1` / `release.yml`.
+
 ## Security Notes
 
 - Never commit `.env`, `cookies.txt`, or `.arc1.json` (all in `.gitignore`)

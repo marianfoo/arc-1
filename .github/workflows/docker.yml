@@ -1,9 +1,8 @@
-name: Docker
+name: Docker (dev)
 
 on:
   push:
     branches: ['main']
-    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -35,9 +34,7 @@ jobs:
         with:
           images: ghcr.io/marianfoo/arc-1
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v6

@@ -20,7 +20,7 @@ import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
 /** ARC-1 version */
-export const VERSION = '3.0.0-alpha.1';
+export const VERSION = '0.1.0'; // x-release-please-version
 
 /** Build the base ADT client config (without per-user auth) */
 function buildAdtConfig(config: ServerConfig, btpProxy?: BTPProxyConfig): Partial<AdtClientConfig> {

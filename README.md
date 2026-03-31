@@ -209,6 +209,41 @@ npm run test:integration  # integration tests (skipped if no SAP vars set)
 
 See [CLAUDE.md](CLAUDE.md) for codebase structure and contribution guidelines.
 
+## Releasing
+
+Releases are fully automated via [release-please](https://github.com/googleapis/release-please) and GitHub Actions.
+
+### How it works
+
+1. **Merge PRs to `main`** using [Conventional Commits](https://www.conventionalcommits.org/):
+   - `feat: add SAPDeploy tool` → minor bump (0.1.0 → 0.2.0)
+   - `fix: handle empty XML response` → patch bump (0.1.0 → 0.1.1)
+   - `feat!: rename tools` or `BREAKING CHANGE:` in body → major bump (0.1.0 → 1.0.0)
+   - `chore:`, `docs:`, `ci:` → no release
+
+2. **release-please automatically creates a Release PR** that accumulates all changes since the last release, with a bumped version and generated `CHANGELOG.md`.
+
+3. **Merge the Release PR** when you're ready. This triggers:
+   - **npm publish** with provenance (trusted publishing via OIDC, no tokens)
+   - **Docker push** to `ghcr.io/marianfoo/arc-1` with semver tags (`:0.2.0`, `:0.2`, `:latest`)
+   - **GitHub Release** with auto-generated release notes
+
+### Versioned artifacts
+
+| Artifact | Location |
+|----------|----------|
+| npm package | [npmjs.com/package/arc-1](https://www.npmjs.com/package/arc-1) |
+| Docker image | `ghcr.io/marianfoo/arc-1:{version}` |
+| GitHub Release | [Releases](https://github.com/marianfoo/arc-1/releases) |
+
+### CI workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `test.yml` | push / PR to main | Lint, typecheck, unit tests (Node 20/22/24) |
+| `release.yml` | push to main | release-please PR; on merge: npm + Docker + GitHub Release |
+| `docker.yml` | push to main | Dev `latest` Docker image (every commit) |
+
 ## Credits
 
 | Project | Author | Contribution |
