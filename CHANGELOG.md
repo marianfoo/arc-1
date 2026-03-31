@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/marianfoo/arc-1/compare/v0.1.4...v0.2.0) (2026-03-31)
+
+
+### Features
+
+* E2E testing infrastructure, XML error cleanup, and CI hardening ([#13](https://github.com/marianfoo/arc-1/issues/13)) ([3c5f2ae](https://github.com/marianfoo/arc-1/commit/3c5f2aecd67af8f527ea265b287f3e43e102bdf5))
+* improve tooling based on real-world LLM feedback ([#14](https://github.com/marianfoo/arc-1/issues/14)) ([63e59a2](https://github.com/marianfoo/arc-1/commit/63e59a2fc81e7bd0512848687beb6591c3e5b625))
+
+
+### Bug Fixes
+
+* correct Docker image name to arc-1 and fix GHCR link ([d472107](https://github.com/marianfoo/arc-1/commit/d47210785d5d861bd9b6d3105957f517ce797616))
+
 ## [0.1.4](https://github.com/marianfoo/arc-1/compare/v0.1.3...v0.1.4) (2026-03-31)
 
 
