@@ -129,11 +129,14 @@ arc1 --allowed-ops "RSQ"                      # whitelist operations
 
 | Doc | Description |
 |-----|-------------|
+| [setup-guide.md](setup-guide.md) | **Start here** — deployment options, auth methods, decision tree |
 | [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
 | [tools.md](tools.md) | Complete tool reference (11 intent-based tools) |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
+| [docker.md](docker.md) | Full Docker reference |
+| [enterprise-auth.md](enterprise-auth.md) | Enterprise authentication (all methods) |
+| [cli-guide.md](cli-guide.md) | CLI commands and configuration |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial setup |
-| [docker.md](docker.md) | Docker deployment |
 | [roadmap.md](roadmap.md) | Planned features |
 
 ## License

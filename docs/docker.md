@@ -93,24 +93,22 @@ ghcr.io/marianfoo/arc1
 
 ### Available tags
 
-| Tag | Meaning |
-|---|---|
-| `latest` | Most recent stable release |
-| `2.22.0` | Exact version |
-| `2.22` | Latest patch of `2.22.x` |
-| `2` | Latest minor/patch of major `2` |
+| Tag | Example | Description |
+|---|---|---|
+| `latest` | `ghcr.io/marianfoo/arc-1:latest` | Updated on every push to main (dev builds) and on every release |
+| `x.y.z` | `ghcr.io/marianfoo/arc-1:0.2.0` | Exact version (immutable, created on release) |
+| `x.y` | `ghcr.io/marianfoo/arc-1:0.2` | Latest patch within minor (created on release) |
 
-Pre-release tags (e.g. `v2.22.0-rc1`) are published but do **not** move the
-`latest` tag.
+**`latest`** is rebuilt on every push to `main`, so it always reflects the newest code — even unreleased changes. Use versioned tags for production.
 
 ### Pulling
 
 ```bash
-# Latest stable
-docker pull ghcr.io/marianfoo/arc1:latest
+# Latest (includes unreleased changes from main)
+docker pull ghcr.io/marianfoo/arc-1:latest
 
 # Pinned version (recommended for production/team use)
-docker pull ghcr.io/marianfoo/arc1:2.22.0
+docker pull ghcr.io/marianfoo/arc-1:0.2.0
 ```
 
 ### Supported platforms
@@ -760,25 +758,23 @@ docker run -i --rm \
 
 ## Updating the Image
 
-### Pulling a newer pre-built image (GHCR)
+For a comprehensive update guide covering all deployment modes (Docker, BTP, npm), see **[setup-guide.md — Updating arc1](setup-guide.md#updating-arc1)**.
+
+### Quick reference
 
 ```bash
-# Pull latest
-docker pull ghcr.io/marianfoo/arc1:latest
+# Pull a specific version (recommended for production)
+docker pull ghcr.io/marianfoo/arc-1:0.2.0
 
-# Pull a specific version (recommended)
-docker pull ghcr.io/marianfoo/arc1:2.22.0
-```
+# Pull latest (includes unreleased changes from main)
+docker pull ghcr.io/marianfoo/arc-1:latest
 
-### Rebuilding from source
+# Stop, remove, restart with new image
+docker stop arc1 && docker rm arc1
+docker run -d --name arc1 -p 8080:8080 --env-file .env ghcr.io/marianfoo/arc-1:0.2.0
 
-```bash
-git pull
-docker build \
-  --build-arg VERSION=$(git describe --tags --abbrev=0) \
-  --build-arg COMMIT=$(git rev-parse --short HEAD) \
-  --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  -t arc1:latest .
+# Verify version
+docker run --rm ghcr.io/marianfoo/arc-1:0.2.0 --version
 ```
 
 ### Pinning a version (recommended)
@@ -786,33 +782,28 @@ docker build \
 For production or shared team environments, always pin to a specific version
 tag rather than `latest`:
 
-```json
-"ghcr.io/marianfoo/arc1:2.22.0"
+```
+ghcr.io/marianfoo/arc-1:0.2.0
 ```
 
-This ensures every team member and every CI run uses the same binary regardless
+This ensures every team member uses the same binary regardless
 of when the image was pulled. Check the
 [GitHub releases page](https://github.com/marianfoo/arc-1/releases)
 for the latest version.
 
-### Verifying the version
+### Rebuilding from source
 
 ```bash
-docker run --rm ghcr.io/marianfoo/arc1:latest --version
+git pull
+docker build -t arc1:latest .
 ```
-
-### Updating after a Dockerfile fix (no Go change)
-
-If only the `Dockerfile` changed (e.g. base image bump, added CA cert), trigger
-the Docker workflow manually via **Actions → Docker → Run workflow** on the
-desired tag. No new Go release is needed.
 
 ### Staying up to date automatically
 
 Teams that want automatic image updates can use tools like
 [Renovate](https://docs.renovatebot.com/) or
 [Dependabot](https://docs.github.com/en/code-security/dependabot) to open PRs
-when a new `ghcr.io/marianfoo/arc1` image tag is published.
+when a new `ghcr.io/marianfoo/arc-1` image tag is published.
 
 ---
 

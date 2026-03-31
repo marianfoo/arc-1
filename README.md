@@ -190,11 +190,13 @@ Full configuration reference: **[CLAUDE.md](CLAUDE.md#configuration)**
 
 | Doc | Description |
 |-----|-------------|
+| [docs/setup-guide.md](docs/setup-guide.md) | **Start here** — deployment options, auth methods, decision tree |
 | [docs/architecture.md](docs/architecture.md) | System architecture with Mermaid diagrams |
 | [docs/tools.md](docs/tools.md) | Complete tool reference (11 intent-based tools) |
 | [docs/mcp-usage.md](docs/mcp-usage.md) | AI agent usage guide & workflow patterns |
+| [docs/docker.md](docs/docker.md) | Full Docker reference |
+| [docs/enterprise-auth.md](docs/enterprise-auth.md) | Enterprise authentication (all methods) |
 | [docs/sap-trial-setup.md](docs/sap-trial-setup.md) | SAP BTP trial setup |
-| [docs/docker.md](docs/docker.md) | Docker deployment |
 | [docs/roadmap.md](docs/roadmap.md) | Planned features |
 | [CLAUDE.md](CLAUDE.md) | AI development guidelines (codebase structure, patterns) |
 
