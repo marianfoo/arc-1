@@ -267,7 +267,8 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       const expand = Boolean(args.expand_includes);
       if (expand) {
         const source = await client.getFunctionGroupSource(name);
-        const includePattern = /INCLUDE\s+(\S+)\s*\./gi;
+        // Match INCLUDE statements but skip ABAP comment lines (starting with *)
+        const includePattern = /^[^*\n]*\bINCLUDE\s+(\S+)\s*\./gim;
         const parts: string[] = [`=== FUGR ${name} (main) ===\n${source}`];
         let m: RegExpExecArray | null;
         while ((m = includePattern.exec(source)) !== null) {
@@ -303,10 +304,18 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
     }
     case 'SOBJ': {
       const method = String(args.method ?? '');
-      if (method) {
+      // Sanitize inputs to prevent SQL injection — BOR names are alphanumeric + underscore only
+      const safeName = name.toUpperCase().replace(/[^A-Z0-9_/]/g, '');
+      const safeMethod = method.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+      if (safeName !== name.toUpperCase().replace(/\s/g, '')) {
+        return errorResult(
+          `Invalid BOR object name: "${name}". Only alphanumeric characters, underscores, and slashes are allowed.`,
+        );
+      }
+      if (safeMethod) {
         // Read specific BOR method implementation via SWOTLV lookup
         const data = await client.runQuery(
-          `SELECT PROGNAME, FORMNAME FROM SWOTLV WHERE LOBJTYPE = '${name.toUpperCase()}' AND VERB = '${method.toUpperCase()}'`,
+          `SELECT PROGNAME, FORMNAME FROM SWOTLV WHERE LOBJTYPE = '${safeName}' AND VERB = '${safeMethod}'`,
           1,
         );
         if (data.rows.length > 0) {
@@ -325,7 +334,7 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       }
       // List all methods for this BOR object
       const methods = await client.runQuery(
-        `SELECT VERB, PROGNAME, FORMNAME, DESCRIPT FROM SWOTLV WHERE LOBJTYPE = '${name.toUpperCase()}'`,
+        `SELECT VERB, PROGNAME, FORMNAME, DESCRIPT FROM SWOTLV WHERE LOBJTYPE = '${safeName}'`,
         100,
       );
       if (methods.rows.length === 0) {
@@ -391,9 +400,9 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
   } catch (err) {
     if (err instanceof AdtApiError && err.isNotFound) {
       // Try to extract table name from SQL and suggest similar names
-      const tableMatch = sql.match(/FROM\s+(\S+)/i);
+      const tableMatch = sql.match(/FROM\s+["']?([A-Za-z0-9_/$]+)["']?/i);
       if (tableMatch) {
-        const tableName = tableMatch[1]!.replace(/['"]/g, '');
+        const tableName = tableMatch[1]!;
         try {
           const suggestions = await client.searchObject(`${tableName}*`, 10);
           const tableNames = suggestions
@@ -545,7 +554,21 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
 
   // Allow symbolic type+name as alternative to uri for references
   if (!uri && args.type && args.name) {
-    uri = objectUrlForType(String(args.type), String(args.name));
+    const symType = String(args.type);
+    const symName = String(args.name);
+    if (symType === 'FUNC') {
+      // FUNC needs group to build URL — auto-resolve it
+      const group = await client.resolveFunctionGroup(symName);
+      if (group) {
+        uri = `/sap/bc/adt/functions/groups/${encodeURIComponent(group)}/fmodules/${encodeURIComponent(symName)}`;
+      } else {
+        return errorResult(
+          `Cannot resolve function group for "${symName}". Provide the full uri parameter, or use SAPSearch("${symName}") to find the ADT URI.`,
+        );
+      }
+    } else {
+      uri = objectUrlForType(symType, symName);
+    }
   }
 
   switch (action) {

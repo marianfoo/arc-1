@@ -571,9 +571,7 @@ ENDCLASS.`;
     it('401 error includes client hint', async () => {
       const mockInstance = (axios.create as any)();
       const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockRejectedValueOnce(
-        new AdtApiError('Auth failed', 401, '/sap/bc/adt/core/discovery'),
-      );
+      requestSpy.mockRejectedValueOnce(new AdtApiError('Auth failed', 401, '/sap/bc/adt/core/discovery'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'PROG',
         name: 'ZTEST',
@@ -776,7 +774,7 @@ ENDCLASS.`;
       // Read program source (GET - no CSRF needed)
       requestSpy.mockResolvedValueOnce({
         status: 200,
-        data: "REPORT zprog1.\nFORM create_obj.\nENDFORM.",
+        data: 'REPORT zprog1.\nFORM create_obj.\nENDFORM.',
         headers: {},
       });
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
