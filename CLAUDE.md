@@ -233,7 +233,13 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) in PR titles / 
 
 ### npm trusted publishing
 
-npm publish uses OIDC provenance (no `NPM_TOKEN` secret needed). Configured at npmjs.com → package settings → Trusted Publisher: `marianfoo/arc-1` / `release.yml`.
+npm publish uses OIDC trusted publishing — no `NPM_TOKEN` secret, no token rotation.
+
+Requirements (all already configured):
+- **npmjs.com**: Trusted Publisher linked to `marianfoo/arc-1` / `release.yml`
+- **package.json**: `repository.url` must match the GitHub repo URL (npm verifies this against the provenance bundle)
+- **npm 11.5+**: The publish job installs `npm@latest` because Node 22's bundled npm 10.x doesn't support the OIDC handshake
+- **GitHub Actions**: `id-token: write` permission on the publish job
 
 ## Security Notes
 
