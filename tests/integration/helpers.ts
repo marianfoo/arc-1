@@ -8,7 +8,7 @@
  *   TEST_SAP_URL      > SAP_URL
  *   TEST_SAP_USER     > SAP_USER
  *   TEST_SAP_PASSWORD > SAP_PASSWORD
- *   TEST_SAP_CLIENT   > SAP_CLIENT   (default: 001)
+ *   TEST_SAP_CLIENT   > SAP_CLIENT   (default: 100)
  *   TEST_SAP_LANGUAGE > SAP_LANGUAGE  (default: EN)
  *   TEST_SAP_INSECURE > SAP_INSECURE (default: false)
  *
@@ -36,7 +36,7 @@ export function getTestClient(): AdtClient {
   const url = process.env.TEST_SAP_URL || process.env.SAP_URL || '';
   const username = process.env.TEST_SAP_USER || process.env.SAP_USER || '';
   const password = process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '';
-  const client = process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '001';
+  const client = process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100';
   const language = process.env.TEST_SAP_LANGUAGE || process.env.SAP_LANGUAGE || 'EN';
   const insecure = (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true';
 

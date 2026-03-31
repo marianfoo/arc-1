@@ -240,6 +240,7 @@ describeIf('ADT Integration Tests', () => {
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
         username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
+        client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
         safety: {
           readOnly: true,
@@ -266,6 +267,7 @@ describeIf('ADT Integration Tests', () => {
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
         username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
+        client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
         safety: {
           readOnly: true,
@@ -291,6 +293,7 @@ describeIf('ADT Integration Tests', () => {
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
         username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
+        client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
         safety: {
           readOnly: true,

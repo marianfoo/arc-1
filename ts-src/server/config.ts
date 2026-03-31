@@ -56,7 +56,7 @@ export function parseArgs(args: string[]): ServerConfig {
   config.url = resolve('url', 'SAP_URL', '');
   config.username = resolve('user', 'SAP_USER', '');
   config.password = resolve('password', 'SAP_PASSWORD', '');
-  config.client = resolve('client', 'SAP_CLIENT', '001');
+  config.client = resolve('client', 'SAP_CLIENT', '100');
   config.language = resolve('language', 'SAP_LANGUAGE', 'EN');
   config.insecure = resolveBool('insecure', 'SAP_INSECURE', false);
 

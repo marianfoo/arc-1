@@ -91,6 +91,17 @@ export interface TransportTask {
   status: string;
 }
 
+/** Source code search result */
+export interface SourceSearchResult {
+  objectType: string;
+  objectName: string;
+  uri: string;
+  matches: Array<{
+    line: number;
+    snippet: string;
+  }>;
+}
+
 /** Table structure */
 export interface TableField {
   name: string;
