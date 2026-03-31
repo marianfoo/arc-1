@@ -37,6 +37,11 @@ const PROBES: FeatureProbe[] = [
   { id: 'amdp', endpoint: '/sap/bc/adt/debugger/amdp', description: 'AMDP debugging' },
   { id: 'ui5', endpoint: '/sap/bc/adt/filestore/ui5-bsp', description: 'UI5/Fiori BSP' },
   { id: 'transport', endpoint: '/sap/bc/adt/cts/transportrequests', description: 'CTS transport management' },
+  {
+    id: 'sourceSearch',
+    endpoint: '/sap/bc/adt/repository/informationsystem/textSearch?searchString=_&maxResults=1',
+    description: 'Source code full-text search (requires SAP_BASIS ≥ 7.51)',
+  },
 ];
 
 /** Resolve a single feature based on its mode */
@@ -172,6 +177,7 @@ export function resolveWithoutProbing(config: FeatureConfig): ResolvedFeatures {
     amdp: 'AMDP debugging',
     ui5: 'UI5/Fiori BSP',
     transport: 'CTS transport management',
+    sourceSearch: 'Source code full-text search (requires SAP_BASIS ≥ 7.51)',
   };
 
   for (const [id, mode] of Object.entries(config)) {

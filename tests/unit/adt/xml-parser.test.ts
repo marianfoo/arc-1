@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   findDeepNodes,
+  parseClassStructure,
   parseFunctionGroup,
   parseInstalledComponents,
   parsePackageContents,
@@ -348,6 +349,53 @@ describe('XML Parser', () => {
       expect(result.user).toBe('TEST_USER');
       expect(result.collections).toHaveLength(1);
       expect(result.collections[0]).toEqual({ title: 'Core', href: '/sap/bc/adt/core' });
+    });
+  });
+
+  // ─── parseClassStructure ───────────────────────────────────────────
+
+  describe('parseClassStructure', () => {
+    it('parses method line ranges from objectstructure XML', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<objectStructure>
+  <objectStructureElement type="CLAS/OM" name="RUN">
+    <link href="source/main#start=5,4;end=5,6" rel="definition"/>
+    <link href="source/main#start=10,2;end=20,11" rel="implementation"/>
+  </objectStructureElement>
+  <objectStructureElement type="CLAS/OM" name="EXECUTE">
+    <link href="source/main#start=22,2;end=30,11"/>
+  </objectStructureElement>
+  <objectStructureElement type="CLAS/OA" name="GV_DATA">
+    <link href="source/main#start=3,4;end=3,20"/>
+  </objectStructureElement>
+</objectStructure>`;
+      const methods = parseClassStructure(xml);
+      expect(methods).toHaveLength(2);
+      expect(methods[0]?.name).toBe('RUN');
+      expect(methods[0]?.startLine).toBe(10);
+      expect(methods[0]?.endLine).toBe(20);
+      expect(methods[1]?.name).toBe('EXECUTE');
+      expect(methods[1]?.startLine).toBe(22);
+      expect(methods[1]?.endLine).toBe(30);
+    });
+
+    it('handles empty objectstructure', () => {
+      const xml = '<objectStructure/>';
+      const methods = parseClassStructure(xml);
+      expect(methods).toEqual([]);
+    });
+
+    it('picks widest line range for methods with multiple links', () => {
+      const xml = `<objectStructure>
+  <objectStructureElement type="CLAS/OM" name="SAVE">
+    <link href="source/main#start=50,12;end=50,15"/>
+    <link href="source/main#start=50,4;end=80,11"/>
+  </objectStructureElement>
+</objectStructure>`;
+      const methods = parseClassStructure(xml);
+      expect(methods).toHaveLength(1);
+      expect(methods[0]?.startLine).toBe(50);
+      expect(methods[0]?.endLine).toBe(80);
     });
   });
 

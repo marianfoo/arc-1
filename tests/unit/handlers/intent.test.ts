@@ -465,9 +465,13 @@ describe('Intent Handler', () => {
     });
 
     it('maps write tools to write scope', () => {
-      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage']) {
+      for (const tool of ['SAPWrite', 'SAPActivate']) {
         expect(TOOL_SCOPES[tool]).toBe('write');
       }
+    });
+
+    it('maps SAPManage to read scope (probe/features are read-only operations)', () => {
+      expect(TOOL_SCOPES.SAPManage).toBe('read');
     });
 
     it('maps transport to admin scope', () => {
@@ -785,6 +789,112 @@ ENDCLASS.`;
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('BOR ZBUS_OBJ.CREATE');
       expect(result.content[0]?.text).toContain('REPORT zprog1');
+    });
+  });
+
+  // ─── CLAS method-level reading ──────────────────────────────────────
+
+  describe('SAPRead CLAS method', () => {
+    it('reads a single method from a class', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // First call: objectstructure
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<objectStructure>
+          <objectStructureElement type="CLAS/OM" name="RUN">
+            <link href="source/main#start=5,4;end=5,6" rel="definition"/>
+            <link href="source/main#start=10,2;end=20,11" rel="implementation"/>
+          </objectStructureElement>
+        </objectStructure>`,
+        headers: {},
+      });
+      // Second call: full source
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\n  METHOD run.\n    WRITE: / hello.\n    WRITE: / world.\n    DATA: lv_test TYPE string.\n    lv_test = |Hello|.\n    WRITE: / lv_test.\n    IF lv_test IS NOT INITIAL.\n      WRITE: / lv_test.\n    ENDIF.\n    WRITE: / bye.\n  ENDMETHOD.',
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'RUN',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('METHOD run');
+      // Should NOT contain the first 9 lines
+      expect(result.content[0]?.text).not.toContain('line1');
+    });
+
+    it('returns error with method list when method not found', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // First call: objectstructure (for getClassMethod)
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<objectStructure>
+          <objectStructureElement type="CLAS/OM" name="RUN">
+            <link href="source/main#start=10,2;end=20,11"/>
+          </objectStructureElement>
+          <objectStructureElement type="CLAS/OM" name="EXECUTE">
+            <link href="source/main#start=22,2;end=30,11"/>
+          </objectStructureElement>
+        </objectStructure>`,
+        headers: {},
+      });
+      // Second call: objectstructure (for getClassMethods, to list available methods)
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<objectStructure>
+          <objectStructureElement type="CLAS/OM" name="RUN">
+            <link href="source/main#start=10,2;end=20,11"/>
+          </objectStructureElement>
+          <objectStructureElement type="CLAS/OM" name="EXECUTE">
+            <link href="source/main#start=22,2;end=30,11"/>
+          </objectStructureElement>
+        </objectStructure>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'NONEXISTENT',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not found');
+      expect(result.content[0]?.text).toContain('RUN');
+      expect(result.content[0]?.text).toContain('EXECUTE');
+    });
+  });
+
+  // ─── SAPSearch with objectType/packageName ─────────────────────────
+
+  describe('SAPSearch object search with filters', () => {
+    it('passes objectType to object search', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'ZCL_*',
+        objectType: 'CLAS',
+      });
+      // Find the quickSearch call among all calls (auto-probe may add background calls)
+      const allUrls = requestSpy.mock.calls.map((c: any[]) => c[0]?.url ?? '');
+      const searchUrl = allUrls.find((u: string) => u.includes('quickSearch'));
+      expect(searchUrl).toContain('objectType=CLAS%2FOC');
+    });
+
+    it('passes packageName to object search', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'Z*',
+        packageName: 'ZTEST_PKG',
+      });
+      const allUrls = requestSpy.mock.calls.map((c: any[]) => c[0]?.url ?? '');
+      const searchUrl = allUrls.find((u: string) => u.includes('quickSearch'));
+      expect(searchUrl).toContain('packageName=ZTEST_PKG');
     });
   });
 

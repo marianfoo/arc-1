@@ -38,7 +38,8 @@ describe('Tool Definitions', () => {
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPWrite');
     expect(names).not.toContain('SAPActivate');
-    expect(names).not.toContain('SAPManage');
+    // SAPManage is now always registered (probe/features are read-only operations)
+    expect(names).toContain('SAPManage');
     // Navigate, Diagnose, and SAPContext should still be available
     expect(names).toContain('SAPNavigate');
     expect(names).toContain('SAPDiagnose');

@@ -23,6 +23,7 @@ import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { AdtSearchResult, SourceSearchResult } from './types.js';
 import {
+  parseClassStructure,
   parseFunctionGroup,
   parseInstalledComponents,
   parsePackageContents,
@@ -31,6 +32,26 @@ import {
   parseSystemInfo,
   parseTableContents,
 } from './xml-parser.js';
+
+/** Map simple object type names to ADT compound format for quickSearch filtering */
+const ADT_OBJECT_TYPE_MAP: Record<string, string> = {
+  CLAS: 'CLAS/OC',
+  INTF: 'INTF/OI',
+  PROG: 'PROG/P',
+  FUGR: 'FUGR/F',
+  FUNC: 'FUGR/FF',
+  TABL: 'TABL/DT',
+  VIEW: 'VIEW/DV',
+  DDLS: 'DDLS/DF',
+  BDEF: 'BDEF/BDO',
+  SRVD: 'SRVD/SRV',
+  INCL: 'PROG/I',
+  DTEL: 'DTEL/DE',
+  DOMA: 'DOMA/DD',
+  TTYP: 'TTYP/DA',
+  MSAG: 'MSAG/N',
+  DEVC: 'DEVC/K',
+};
 
 export class AdtClient {
   readonly http: AdtHttpClient;
@@ -113,6 +134,45 @@ export class AdtClient {
       }
     }
     return parts.join('\n\n');
+  }
+
+  /**
+   * Get a single method's source from a class.
+   *
+   * Fetches the class objectstructure to find the method's line range,
+   * then reads the full source and extracts just that method.
+   */
+  async getClassMethod(name: string, method: string): Promise<string | null> {
+    checkOperation(this.safety, OperationType.Read, 'GetClassMethod');
+    const encodedName = encodeURIComponent(name);
+
+    // Get class structure to find method line ranges
+    const structResp = await this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/objectstructure`);
+    const methods = parseClassStructure(structResp.body);
+
+    // Find the requested method (case-insensitive, handle interface methods with ~)
+    const methodUpper = method.toUpperCase();
+    const found = methods.find((m) => {
+      const mName = m.name.toUpperCase();
+      return mName === methodUpper || mName.endsWith(`~${methodUpper}`);
+    });
+
+    if (!found) return null;
+
+    // Fetch full source and extract the method lines
+    const sourceResp = await this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/source/main`);
+    const lines = sourceResp.body.split('\n');
+    // ADT line numbers are 1-based
+    const extracted = lines.slice(found.startLine - 1, found.endLine);
+    return extracted.join('\n');
+  }
+
+  /** Get the list of methods in a class with their line ranges */
+  async getClassMethods(name: string): Promise<Array<{ name: string; startLine: number; endLine: number }>> {
+    checkOperation(this.safety, OperationType.Read, 'GetClassMethods');
+    const encodedName = encodeURIComponent(name);
+    const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/objectstructure`);
+    return parseClassStructure(resp.body);
   }
 
   /** Get interface source code */
@@ -201,12 +261,22 @@ export class AdtClient {
 
   // ─── Search Operations ─────────────────────────────────────────────
 
-  /** Search for ABAP objects by name pattern */
-  async searchObject(query: string, maxResults = 100): Promise<AdtSearchResult[]> {
+  /** Search for ABAP objects by name pattern, optionally filtered by type and package */
+  async searchObject(
+    query: string,
+    maxResults = 100,
+    objectType?: string,
+    packageName?: string,
+  ): Promise<AdtSearchResult[]> {
     checkOperation(this.safety, OperationType.Search, 'SearchObject');
-    const resp = await this.http.get(
-      `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=${encodeURIComponent(query)}&maxResults=${maxResults}`,
-    );
+    let url = `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=${encodeURIComponent(query)}&maxResults=${maxResults}`;
+    if (objectType) {
+      // Map simple type names to ADT compound format (CLAS → CLAS/OC, etc.)
+      const adtType = ADT_OBJECT_TYPE_MAP[objectType.toUpperCase()] ?? objectType;
+      url += `&objectType=${encodeURIComponent(adtType)}`;
+    }
+    if (packageName) url += `&packageName=${encodeURIComponent(packageName)}`;
+    const resp = await this.http.get(url);
     return parseSearchResults(resp.body);
   }
 

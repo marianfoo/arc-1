@@ -21,6 +21,7 @@ export interface FeatureConfig {
   amdp: FeatureMode;
   ui5: FeatureMode;
   transport: FeatureMode;
+  sourceSearch: FeatureMode;
 }
 
 /** Default feature config: all auto-detect */
@@ -32,6 +33,7 @@ export function defaultFeatureConfig(): FeatureConfig {
     amdp: 'auto',
     ui5: 'auto',
     transport: 'auto',
+    sourceSearch: 'auto',
   };
 }
 
