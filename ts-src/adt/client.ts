@@ -21,12 +21,13 @@ import { defaultAdtClientConfig } from './config.js';
 import { isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import type { AdtSearchResult } from './types.js';
+import type { AdtSearchResult, SourceSearchResult } from './types.js';
 import {
   parseFunctionGroup,
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
+  parseSourceSearchResults,
   parseSystemInfo,
   parseTableContents,
 } from './xml-parser.js';
@@ -130,6 +131,18 @@ export class AdtClient {
     return resp.body;
   }
 
+  /** Resolve function group for a function module via quickSearch */
+  async resolveFunctionGroup(fmName: string): Promise<string | null> {
+    const results = await this.searchObject(fmName, 10);
+    for (const r of results) {
+      if (r.objectName.toUpperCase() === fmName.toUpperCase() && r.uri.includes('/groups/')) {
+        const match = r.uri.match(/\/groups\/([^/]+)\//);
+        if (match) return match[1]!.toUpperCase();
+      }
+    }
+    return null;
+  }
+
   /** Get function group structure (list of function modules) */
   async getFunctionGroup(name: string): Promise<{ name: string; functions: string[] }> {
     checkOperation(this.safety, OperationType.Read, 'GetFunctionGroup');
@@ -195,6 +208,21 @@ export class AdtClient {
       `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=${encodeURIComponent(query)}&maxResults=${maxResults}`,
     );
     return parseSearchResults(resp.body);
+  }
+
+  /** Search within ABAP source code (full-text search) */
+  async searchSource(
+    pattern: string,
+    maxResults = 50,
+    objectType?: string,
+    packageName?: string,
+  ): Promise<SourceSearchResult[]> {
+    checkOperation(this.safety, OperationType.Search, 'SearchSource');
+    let url = `/sap/bc/adt/repository/informationsystem/textSearch?searchString=${encodeURIComponent(pattern)}&maxResults=${maxResults}`;
+    if (objectType) url += `&objectType=${encodeURIComponent(objectType)}`;
+    if (packageName) url += `&packageName=${encodeURIComponent(packageName)}`;
+    const resp = await this.http.get(url);
+    return parseSourceSearchResults(resp.body);
   }
 
   // ─── Package Operations ────────────────────────────────────────────

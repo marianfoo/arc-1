@@ -56,7 +56,7 @@ npm run dev
 | `SAP_URL` / `--url` | SAP system URL (e.g., `http://host:50000`) |
 | `SAP_USER` / `--user` | SAP username |
 | `SAP_PASSWORD` / `--password` | SAP password |
-| `SAP_CLIENT` / `--client` | SAP client number (default: 001) |
+| `SAP_CLIENT` / `--client` | SAP client number (default: 100) |
 | `SAP_LANGUAGE` / `--language` | SAP language (default: EN) |
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |

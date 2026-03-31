@@ -567,5 +567,263 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('SAPSearch');
       expect(result.content[0]?.text).toContain('ZNONEXIST');
     });
+
+    it('401 error includes client hint', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockRejectedValueOnce(new AdtApiError('Auth failed', 401, '/sap/bc/adt/core/discovery'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAP_CLIENT');
+    });
+  });
+
+  // ─── Issue 2: FUNC auto-resolve group ───────────────────────────────
+
+  describe('FUNC auto-resolve group', () => {
+    it('reads FUNC without group by auto-resolving via search', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // First call: search for FM → returns result with URI containing group
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<objectReferences><objectReference type="FUGR/FF" name="Z_MY_FUNC" uri="/sap/bc/adt/functions/groups/zgroup/fmodules/z_my_func" packageName="ZTEST" description="Test FM"/></objectReferences>`,
+        headers: {},
+      });
+      // Second call: read the FM source
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'FUNCTION z_my_func.\nENDFUNCTION.',
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'FUNC',
+        name: 'Z_MY_FUNC',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('FUNCTION z_my_func');
+    });
+
+    it('returns error when FUNC group cannot be resolved', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // Search returns empty results
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: '<objectReferences/>',
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'FUNC',
+        name: 'Z_NONEXIST_FM',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Cannot resolve function group');
+    });
+  });
+
+  // ─── Issue 3: FUGR include expansion ────────────────────────────────
+
+  describe('FUGR include expansion', () => {
+    it('reads FUGR with expand_includes=true', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // First call: read FUGR main source
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'INCLUDE LZ_TESTTOP.\nINCLUDE LZ_TESTI01.',
+        headers: {},
+      });
+      // Second call: read first include
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'DATA: gv_test TYPE string.',
+        headers: {},
+      });
+      // Third call: read second include
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'MODULE user_command_0100 INPUT.\nENDMODULE.',
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'FUGR',
+        name: 'Z_TEST',
+        expand_includes: true,
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('=== FUGR Z_TEST (main) ===');
+      expect(result.content[0]?.text).toContain('=== LZ_TESTTOP ===');
+      expect(result.content[0]?.text).toContain('DATA: gv_test');
+      expect(result.content[0]?.text).toContain('=== LZ_TESTI01 ===');
+    });
+
+    it('handles failed includes gracefully', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // Main source
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'INCLUDE LZ_BADINCL.',
+        headers: {},
+      });
+      // Include read fails
+      requestSpy.mockRejectedValueOnce(
+        new AdtApiError('Not found', 404, '/sap/bc/adt/programs/includes/LZ_BADINCL/source/main'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'FUGR',
+        name: 'Z_TEST',
+        expand_includes: true,
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Could not read include');
+    });
+  });
+
+  // ─── Issue 4: Source code search ────────────────────────────────────
+
+  describe('SAPSearch source code', () => {
+    it('searches source code with searchType=source_code', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<objectReferences><objectReference type="CLAS/OC" name="ZCL_TEST" uri="/sap/bc/adt/oo/classes/zcl_test"/></objectReferences>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'cl_lsapi_manager',
+        searchType: 'source_code',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].objectName).toBe('ZCL_TEST');
+    });
+
+    it('returns helpful error when source search is not available', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockRejectedValueOnce(
+        new AdtApiError('Not found', 404, '/sap/bc/adt/repository/informationsystem/textSearch'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'test_pattern',
+        searchType: 'source_code',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on this SAP system');
+    });
+  });
+
+  // ─── Issue 5: SOBJ/BOR reading ──────────────────────────────────────
+
+  describe('SAPRead SOBJ', () => {
+    it('lists BOR methods when no method specified', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // CSRF HEAD request (POST triggers CSRF fetch)
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: '',
+        headers: { 'x-csrf-token': 'TOKEN123' },
+      });
+      // runQuery POST returns SWOTLV data
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<abap><values><COLUMNS>
+          <COLUMN><METADATA name="VERB"/><DATASET><DATA>CREATE</DATA><DATA>DISPLAY</DATA></DATASET></COLUMN>
+          <COLUMN><METADATA name="PROGNAME"/><DATASET><DATA>ZPROG1</DATA><DATA>ZPROG2</DATA></DATASET></COLUMN>
+          <COLUMN><METADATA name="FORMNAME"/><DATASET><DATA>CREATE_OBJ</DATA><DATA>DISPLAY_OBJ</DATA></DATASET></COLUMN>
+          <COLUMN><METADATA name="DESCRIPT"/><DATASET><DATA>Create</DATA><DATA>Display</DATA></DATASET></COLUMN>
+        </COLUMNS></values></abap>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'SOBJ',
+        name: 'ZBUS_OBJ',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed.columns).toContain('VERB');
+      expect(parsed.rows).toHaveLength(2);
+    });
+
+    it('reads specific BOR method implementation', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // CSRF HEAD request
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: '',
+        headers: { 'x-csrf-token': 'TOKEN123' },
+      });
+      // SWOTLV query POST returns program+form
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<abap><values><COLUMNS>
+          <COLUMN><METADATA name="PROGNAME"/><DATASET><DATA>ZPROG1</DATA></DATASET></COLUMN>
+          <COLUMN><METADATA name="FORMNAME"/><DATASET><DATA>CREATE_OBJ</DATA></DATASET></COLUMN>
+        </COLUMNS></values></abap>`,
+        headers: {},
+      });
+      // Read program source (GET - no CSRF needed)
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: 'REPORT zprog1.\nFORM create_obj.\nENDFORM.',
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'SOBJ',
+        name: 'ZBUS_OBJ',
+        method: 'CREATE',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('BOR ZBUS_OBJ.CREATE');
+      expect(result.content[0]?.text).toContain('REPORT zprog1');
+    });
+  });
+
+  // ─── Issue 7: SAPNavigate symbolic references ──────────────────────
+
+  describe('SAPNavigate symbolic references', () => {
+    it('resolves type+name to URI for references action', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<usageReferences><objectReference uri="/sap/bc/adt/programs/programs/zcaller" type="PROG/P" name="ZCALLER"/></usageReferences>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      // Should not get "No references found" since we have a match
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toHaveLength(1);
+    });
+
+    it('returns error when neither uri nor type+name provided for references', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Provide uri or type+name');
+    });
+
+    it('returns error when neither uri nor type+name provided for definition', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'definition',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Provide uri');
+    });
   });
 });

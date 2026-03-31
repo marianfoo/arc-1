@@ -43,7 +43,7 @@ export interface AdtClientConfig {
   username: string;
   /** SAP password */
   password: string;
-  /** SAP client number (default: "001") */
+  /** SAP client number (default: "100") */
   client: string;
   /** SAP language (default: "EN") */
   language: string;
@@ -82,7 +82,7 @@ export function defaultAdtClientConfig(): AdtClientConfig {
     baseUrl: '',
     username: '',
     password: '',
-    client: '001',
+    client: '100',
     language: 'EN',
     insecure: false,
     cookies: {},

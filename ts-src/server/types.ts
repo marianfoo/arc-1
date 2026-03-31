@@ -75,7 +75,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   url: '',
   username: '',
   password: '',
-  client: '001',
+  client: '100',
   language: 'EN',
   insecure: false,
   transport: 'stdio',

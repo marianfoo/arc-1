@@ -246,7 +246,7 @@ All config options work as environment variables in the `env` block of MCP clien
 | `SAP_ALLOWED_PACKAGES` | `"Z*,$TMP"` | Only allow writes to matching packages |
 | `SAP_ALLOWED_OPS` | `"RSQ"` | Only allow Read, Search, Query operations |
 | `SAP_INSECURE` | `"true"` | Skip TLS verification (dev only) |
-| `SAP_CLIENT` | `"100"` | SAP client number (default: 001) |
+| `SAP_CLIENT` | `"100"` | SAP client number (default: 100) |
 
 See [Safety Controls](#safety-controls) and [Quick Reference](#quick-reference-all-configuration) for all options.
 
