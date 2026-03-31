@@ -23,7 +23,8 @@ describe('AdtApiError', () => {
     });
 
     it('extracts title from HTML error page', () => {
-      const html = '<html><head><title>503 Service Unavailable</title></head><body><h1>Service Unavailable</h1></body></html>';
+      const html =
+        '<html><head><title>503 Service Unavailable</title></head><body><h1>Service Unavailable</h1></body></html>';
       expect(AdtApiError.extractCleanMessage(html)).toBe('503 Service Unavailable');
     });
 
@@ -64,7 +65,9 @@ describe('AdtApiError', () => {
 </exc:exception>`;
       const err = new AdtApiError(xml, 404, '/sap/bc/adt/programs/programs/ZTEST', xml);
 
-      expect(err.message).toBe('ADT API error: status 404 at /sap/bc/adt/programs/programs/ZTEST: Program ZTEST not found');
+      expect(err.message).toBe(
+        'ADT API error: status 404 at /sap/bc/adt/programs/programs/ZTEST: Program ZTEST not found',
+      );
       expect(err.responseBody).toContain('exc:exception'); // Raw body preserved for debugging
       expect(err.message).not.toContain('<'); // No XML in message
     });

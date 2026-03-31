@@ -48,7 +48,8 @@ export class AdtApiError extends AdtError {
     if (!raw || raw.length === 0) return 'Unknown error';
 
     // 1. Try XML: extract <localizedMessage> or <message> content
-    const xmlMatch = raw.match(/<(?:\w+:)?localizedMessage[^>]*>([^<]+)</) ?? raw.match(/<(?:\w+:)?message[^>]*>([^<]+)</);
+    const xmlMatch =
+      raw.match(/<(?:\w+:)?localizedMessage[^>]*>([^<]+)</) ?? raw.match(/<(?:\w+:)?message[^>]*>([^<]+)</);
     if (xmlMatch?.[1]) {
       return xmlMatch[1].trim();
     }
@@ -65,7 +66,10 @@ export class AdtApiError extends AdtError {
     }
 
     // 4. Fallback: strip all tags and use whatever text remains
-    const stripped = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const stripped = raw
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     return stripped.length > 0 ? stripped.slice(0, 300) : 'SAP returned an error (no readable message)';
   }
 

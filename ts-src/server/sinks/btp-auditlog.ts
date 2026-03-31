@@ -18,11 +18,11 @@
 
 import type {
   AuditEvent,
-  ToolCallStartEvent,
-  ToolCallEndEvent,
+  AuthPPCreatedEvent,
   AuthScopeDeniedEvent,
   SafetyBlockedEvent,
-  AuthPPCreatedEvent,
+  ToolCallEndEvent,
+  ToolCallStartEvent,
 } from '../audit.js';
 import type { LogSink } from './types.js';
 

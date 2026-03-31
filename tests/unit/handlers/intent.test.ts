@@ -1,6 +1,6 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { describe, expect, it, vi } from 'vitest';
 import axios from 'axios';
+import { describe, expect, it, vi } from 'vitest';
 import { AdtClient } from '../../../ts-src/adt/client.js';
 import { AdtApiError } from '../../../ts-src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';

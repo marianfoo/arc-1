@@ -48,11 +48,7 @@ export async function connectClient(): Promise<Client> {
  * Call an MCP tool with rich error context on failure.
  * Logs every call for debugging (visible in vitest verbose output).
  */
-export async function callTool(
-  client: Client,
-  name: string,
-  args: Record<string, unknown> = {},
-): Promise<ToolResult> {
+export async function callTool(client: Client, name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = Date.now();
   try {
     const result = (await client.callTool({ name, arguments: args })) as ToolResult;
