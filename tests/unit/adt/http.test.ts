@@ -364,7 +364,7 @@ describe('AdtHttpClient', () => {
       await expect(client.get('/sap/bc/adt/core/discovery')).rejects.toThrow(AdtApiError);
     });
 
-    it('throws AdtApiError on 401 during CSRF fetch', async () => {
+    it('throws AdtApiError on 401 during CSRF fetch with client info', async () => {
       mockRequest.mockResolvedValueOnce({
         status: 401,
         data: 'Unauthorized',
@@ -372,7 +372,7 @@ describe('AdtHttpClient', () => {
       });
 
       const client = new AdtHttpClient(getDefaultConfig());
-      await expect(client.fetchCsrfToken()).rejects.toThrow(AdtApiError);
+      await expect(client.fetchCsrfToken()).rejects.toThrow(/sap-client=001/);
     });
 
     it('throws AdtApiError on 403 during CSRF fetch', async () => {

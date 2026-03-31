@@ -400,13 +400,17 @@ export class AdtHttpClient {
       if (!token || token === 'Required') {
         if (response.status === 401) {
           throw new AdtApiError(
-            'Authentication failed (401): check username/password',
+            `Authentication failed (401) using sap-client=${this.config.client ?? '100'}. Check SAP_CLIENT, SAP_USER, and SAP_PASSWORD.`,
             401,
             '/sap/bc/adt/core/discovery',
           );
         }
         if (response.status === 403) {
-          throw new AdtApiError('Access forbidden (403): check user authorizations', 403, '/sap/bc/adt/core/discovery');
+          throw new AdtApiError(
+            `Access forbidden (403) using sap-client=${this.config.client ?? '100'}. Check user authorizations.`,
+            403,
+            '/sap/bc/adt/core/discovery',
+          );
         }
         throw new AdtApiError(
           `No CSRF token in response (HTTP ${response.status})`,

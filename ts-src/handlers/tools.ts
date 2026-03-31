@@ -25,7 +25,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPRead',
       description:
-        'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC (requires group param), FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit).',
+        'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -45,6 +45,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
               'VIEW',
               'TABLE_CONTENTS',
               'DEVC',
+              'SOBJ',
               'SYSTEM',
               'COMPONENTS',
               'MESSAGES',
@@ -62,7 +63,17 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           group: {
             type: 'string',
             description:
-              'Required for FUNC type. The function group containing the function module. Use SAPSearch to find it if unknown.',
+              'For FUNC type. The function group containing the function module. Optional — auto-resolved via SAPSearch if omitted.',
+          },
+          method: {
+            type: 'string',
+            description:
+              'For SOBJ type only. BOR method name to read. If omitted, returns the full method catalog for the BOR object.',
+          },
+          expand_includes: {
+            type: 'boolean',
+            description:
+              'For FUGR type only. When true, expands all INCLUDE statements and returns the full source of each include inline.',
           },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
@@ -73,12 +84,30 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPSearch',
       description:
-        'Search for ABAP objects by name pattern. Supports wildcards (* for any characters). Returns object type, name, package, and description.',
+        'Search for ABAP objects or search within source code. Two modes:\n' +
+        '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
+        '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS ≥ 7.51.\n\n' +
+        'Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.',
       inputSchema: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search pattern (e.g., ZCL_ORDER*, Z*TEST*)' },
-          maxResults: { type: 'number', description: 'Maximum results (default 100)' },
+          query: {
+            type: 'string',
+            description:
+              'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
+          },
+          searchType: {
+            type: 'string',
+            enum: ['object', 'source_code'],
+            description:
+              'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code.',
+          },
+          objectType: {
+            type: 'string',
+            description: 'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC)',
+          },
+          packageName: { type: 'string', description: 'For source_code search: filter by package name' },
+          maxResults: { type: 'number', description: 'Maximum results (default 100 for object, 50 for source_code)' },
         },
         required: ['query'],
       },
@@ -123,7 +152,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPNavigate',
       description:
-        'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete.',
+        'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: you can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -132,17 +161,29 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             enum: ['definition', 'references', 'completion'],
             description: 'Navigation action',
           },
-          uri: { type: 'string', description: 'Source URI of the object' },
+          uri: {
+            type: 'string',
+            description: 'Source URI of the object. Optional for references if type+name are provided.',
+          },
+          type: {
+            type: 'string',
+            description: 'Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to uri for references.',
+          },
+          name: { type: 'string', description: 'Object name — alternative to uri for references.' },
           line: { type: 'number', description: 'Line number (1-based)' },
           column: { type: 'number', description: 'Column number (1-based)' },
           source: { type: 'string', description: 'Current source code (for definition/completion)' },
         },
-        required: ['action', 'uri'],
+        required: ['action'],
       },
     },
     {
       name: 'SAPQuery',
-      description: 'Execute ABAP SQL queries against SAP tables. Returns structured data with column names and rows.',
+      description:
+        'Execute ABAP SQL queries against SAP tables. Returns structured data with column names and rows. ' +
+        'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
+        'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
+        'If a table is not found, similar table names will be suggested automatically.',
       inputSchema: {
         type: 'object',
         properties: {

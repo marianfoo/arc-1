@@ -75,7 +75,7 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
       return `${message}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
     }
     if (err.isUnauthorized || err.isForbidden) {
-      return `${message}\n\nHint: Authorization error. The configured SAP user may lack permissions for this object.`;
+      return `${message}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
     }
   }
 
@@ -250,9 +250,37 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       return textResult(await client.getClass(name, args.include as string | undefined));
     case 'INTF':
       return textResult(await client.getInterface(name));
-    case 'FUNC':
-      return textResult(await client.getFunction(String(args.group ?? ''), name));
+    case 'FUNC': {
+      let group = String(args.group ?? '');
+      if (!group) {
+        const resolved = await client.resolveFunctionGroup(name);
+        if (!resolved) {
+          return errorResult(
+            `Cannot resolve function group for "${name}". Provide the group parameter explicitly, or use SAPSearch("${name}") to find the function group.`,
+          );
+        }
+        group = resolved;
+      }
+      return textResult(await client.getFunction(group, name));
+    }
     case 'FUGR': {
+      const expand = Boolean(args.expand_includes);
+      if (expand) {
+        const source = await client.getFunctionGroupSource(name);
+        const includePattern = /INCLUDE\s+(\S+)\s*\./gi;
+        const parts: string[] = [`=== FUGR ${name} (main) ===\n${source}`];
+        let m: RegExpExecArray | null;
+        while ((m = includePattern.exec(source)) !== null) {
+          const inclName = m[1]!;
+          try {
+            const inclSource = await client.getInclude(inclName);
+            parts.push(`\n=== ${inclName} ===\n${inclSource}`);
+          } catch {
+            parts.push(`\n=== ${inclName} ===\n[Could not read include "${inclName}"]`);
+          }
+        }
+        return textResult(parts.join('\n'));
+      }
       const fg = await client.getFunctionGroup(name);
       return textResult(JSON.stringify(fg, null, 2));
     }
@@ -273,6 +301,38 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       const data = await client.getTableContents(name, maxRows, args.sqlFilter as string | undefined);
       return textResult(JSON.stringify(data, null, 2));
     }
+    case 'SOBJ': {
+      const method = String(args.method ?? '');
+      if (method) {
+        // Read specific BOR method implementation via SWOTLV lookup
+        const data = await client.runQuery(
+          `SELECT PROGNAME, FORMNAME FROM SWOTLV WHERE LOBJTYPE = '${name.toUpperCase()}' AND VERB = '${method.toUpperCase()}'`,
+          1,
+        );
+        if (data.rows.length > 0) {
+          const prog = String(data.rows[0]!.PROGNAME ?? '').trim();
+          if (!prog) {
+            return errorResult(`BOR method "${method}" on "${name}" has no program assigned.`);
+          }
+          const source = await client.getProgram(prog);
+          return textResult(
+            `=== BOR ${name}.${method} (program: ${prog}, form: ${String(data.rows[0]!.FORMNAME ?? '').trim()}) ===\n${source}`,
+          );
+        }
+        return errorResult(
+          `BOR method "${method}" not found on object type "${name}". Use SAPRead(type="SOBJ", name="${name}") without method to list all methods.`,
+        );
+      }
+      // List all methods for this BOR object
+      const methods = await client.runQuery(
+        `SELECT VERB, PROGNAME, FORMNAME, DESCRIPT FROM SWOTLV WHERE LOBJTYPE = '${name.toUpperCase()}'`,
+        100,
+      );
+      if (methods.rows.length === 0) {
+        return errorResult(`No BOR methods found for object type "${name}". Verify the BOR object type name.`);
+      }
+      return textResult(JSON.stringify(methods, null, 2));
+    }
     case 'DEVC': {
       const contents = await client.getPackageContents(name);
       return textResult(JSON.stringify(contents, null, 2));
@@ -291,7 +351,7 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       return textResult(await client.getVariants(name));
     default:
       return errorResult(
-        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
+        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
       );
   }
 }
@@ -299,6 +359,25 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
 async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const query = String(args.query ?? '');
   const maxResults = Number(args.maxResults ?? 100);
+  const searchType = String(args.searchType ?? 'object');
+
+  if (searchType === 'source_code') {
+    const objectType = args.objectType as string | undefined;
+    const packageName = args.packageName as string | undefined;
+    try {
+      const results = await client.searchSource(query, maxResults, objectType, packageName);
+      return textResult(JSON.stringify(results, null, 2));
+    } catch (err) {
+      if (err instanceof AdtApiError && (err.statusCode === 404 || err.statusCode === 501)) {
+        return errorResult(
+          `Source code search is not available on this SAP system (requires SAP_BASIS ≥ 7.51). ` +
+            `Use SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+        );
+      }
+      throw err;
+    }
+  }
+
   const results = await client.searchObject(query, maxResults);
   return textResult(JSON.stringify(results, null, 2));
 }
@@ -306,8 +385,36 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const sql = String(args.sql ?? '');
   const maxRows = Number(args.maxRows ?? 100);
-  const data = await client.runQuery(sql, maxRows);
-  return textResult(JSON.stringify(data, null, 2));
+  try {
+    const data = await client.runQuery(sql, maxRows);
+    return textResult(JSON.stringify(data, null, 2));
+  } catch (err) {
+    if (err instanceof AdtApiError && err.isNotFound) {
+      // Try to extract table name from SQL and suggest similar names
+      const tableMatch = sql.match(/FROM\s+(\S+)/i);
+      if (tableMatch) {
+        const tableName = tableMatch[1]!.replace(/['"]/g, '');
+        try {
+          const suggestions = await client.searchObject(`${tableName}*`, 10);
+          const tableNames = suggestions
+            .filter(
+              (s) =>
+                s.objectType.startsWith('TABL') || s.objectType.startsWith('VIEW') || s.objectType.startsWith('DDLS'),
+            )
+            .map((s) => s.objectName)
+            .slice(0, 5);
+          if (tableNames.length > 0) {
+            return errorResult(
+              `Table "${tableName}" not found.\n\nDid you mean: ${tableNames.join(', ')}?\n\nUse SAPSearch("${tableName}*") for more results, or discover tables with: SAPQuery(sql="SELECT tabname FROM dd02l WHERE tabname LIKE '%${tableName}%'")`,
+            );
+          }
+        } catch {
+          // Search failed — fall through to original error
+        }
+      }
+    }
+    throw err;
+  }
 }
 
 async function handleSAPLint(_client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
@@ -431,13 +538,21 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
 
 async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const action = String(args.action ?? '');
-  const uri = String(args.uri ?? '');
+  let uri = String(args.uri ?? '');
   const line = Number(args.line ?? 1);
   const column = Number(args.column ?? 1);
   const source = String(args.source ?? '');
 
+  // Allow symbolic type+name as alternative to uri for references
+  if (!uri && args.type && args.name) {
+    uri = objectUrlForType(String(args.type), String(args.name));
+  }
+
   switch (action) {
     case 'definition': {
+      if (!uri) {
+        return errorResult('Provide uri (or type+name) and line+column for definition lookup.');
+      }
       const result = await findDefinition(client.http, client.safety, uri, line, column, source);
       if (!result) {
         return textResult('No definition found at this position.');
@@ -445,6 +560,9 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       return textResult(JSON.stringify(result, null, 2));
     }
     case 'references': {
+      if (!uri) {
+        return errorResult('Provide uri or type+name to find references.');
+      }
       const results = await findReferences(client.http, client.safety, uri);
       if (results.length === 0) {
         return textResult('No references found.');

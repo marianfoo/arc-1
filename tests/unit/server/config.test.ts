@@ -21,7 +21,7 @@ describe('parseArgs', () => {
   it('returns defaults when no args or env vars', () => {
     const config = parseArgs([]);
     expect(config.url).toBe('');
-    expect(config.client).toBe('001');
+    expect(config.client).toBe('100');
     expect(config.language).toBe('EN');
     expect(config.transport).toBe('stdio');
     expect(config.readOnly).toBe(false);

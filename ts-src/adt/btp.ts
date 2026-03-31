@@ -513,7 +513,7 @@ export async function resolveBTPDestination(destinationName: string): Promise<{
     url: dest.URL,
     username: dest.User,
     password: dest.Password,
-    client: dest['sap-client'] || '001',
+    client: dest['sap-client'] || '100',
     proxy,
   };
 }
