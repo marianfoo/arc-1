@@ -36,22 +36,27 @@ theme:
 
 nav:
   - Home: index.md
-  - Architecture: architecture.md
-  - Tools Reference: tools.md
-  - MCP Usage Guide: mcp-usage.md
-  - CLI Guide: cli-guide.md
-  - SAP Trial Setup: sap-trial-setup.md
-  - Docker: docker.md
+  - Getting Started:
+      - Setup Guide: setup-guide.md
+      - CLI Guide: cli-guide.md
+      - SAP Trial Setup: sap-trial-setup.md
+  - Using arc1:
+      - Tools Reference: tools.md
+      - MCP Usage Guide: mcp-usage.md
+  - Deployment:
+      - Docker: docker.md
+      - BTP Cloud Foundry: phase4-btp-deployment.md
   - Authentication:
-      - Enterprise Auth: enterprise-auth.md
+      - Overview: enterprise-auth.md
       - Phase 1 – API Key: phase1-api-key-setup.md
       - Phase 2 – OAuth / JWT: phase2-oauth-setup.md
       - Phase 3 – Principal Propagation: phase3-principal-propagation-setup.md
-      - Phase 4 – BTP Deployment: phase4-btp-deployment.md
       - Phase 5 – XSUAA Setup: phase5-xsuaa-setup.md
       - BTP Destination Setup: btp-destination-setup.md
       - Auth Test Process: auth-test-process.md
-  - Roadmap: roadmap.md
+  - Reference:
+      - Architecture: architecture.md
+      - Roadmap: roadmap.md
 
 markdown_extensions:
   - admonition
