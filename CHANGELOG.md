@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/marianfoo/arc-1/compare/v0.1.2...v0.1.3) (2026-03-31)
+
+
+### Bug Fixes
+
+* install npm 11.5+ for OIDC trusted publishing support ([d2e0581](https://github.com/marianfoo/arc-1/commit/d2e0581c0fd1a306c98590422fff94003584340f))
+
 ## [0.1.2](https://github.com/marianfoo/arc-1/compare/v0.1.1...v0.1.2) (2026-03-31)
 
 
