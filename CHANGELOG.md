@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/marianfoo/arc-1/compare/v0.1.3...v0.1.4) (2026-03-31)
+
+
+### Bug Fixes
+
+* add repository field for npm OIDC provenance verification ([2064986](https://github.com/marianfoo/arc-1/commit/20649868ec8c7a8233b49373fec241d8c6d29445))
+
 ## [0.1.3](https://github.com/marianfoo/arc-1/compare/v0.1.2...v0.1.3) (2026-03-31)
 
 
