@@ -117,7 +117,7 @@ it('returns error for invalid input', async () => {
 
 `expectToolError` checks:
 - `isError` is true
-- No raw XML in response (TODO: currently some XML leaks — see known issues)
+- No raw XML in response
 - No stack traces in response
 - Contains expected substring(s)
 
@@ -152,5 +152,4 @@ grep 'SAPRead.*DDLS' /tmp/arc1-e2e-logs/mcp-server.log
 
 ## Known Issues
 
-- **Raw XML in error messages:** `AdtApiError` currently includes raw SAP XML in the message body. The LLM hint is appended correctly, but the XML leaks. Tracked as TODO.
 - **SAPQuery can be slow:** First query after SAP restart may take 10-15s (ABAP SQL engine warmup). Subsequent queries are fast.

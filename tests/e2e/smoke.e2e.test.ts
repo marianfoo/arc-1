@@ -153,13 +153,9 @@ describe('E2E Smoke Tests', () => {
 
   it('SAPRead — 404 for non-existent program returns error with hint', async () => {
     const result = await callTool(client, 'SAPRead', { type: 'PROG', name: 'ZZZNOTEXIST999' });
-    // Verify it's an error with the remediation hint
-    expect(result.isError).toBe(true);
+    expectToolError(result, 'ZZZNOTEXIST999');
     const text = result.content[0].text;
     expect(text).toContain('SAPSearch'); // LLM remediation hint
-    expect(text).toContain('ZZZNOTEXIST999');
-    // TODO: raw XML is currently leaked in error messages — fix in AdtApiError
-    // Once fixed, re-enable: expectToolError(result, 'not found');
   });
 
   it('SAPRead — unknown type returns clear error', async () => {
