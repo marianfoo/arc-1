@@ -7,7 +7,7 @@ DEPLOY_DIR="/opt/arc1-e2e"
 MCP_PORT="${MCP_PORT:-3000}"
 LOCKFILE="/tmp/arc1-e2e.lock"
 
-echo "Lock acquired by $(whoami)@$(hostname) at $(date -Iseconds)" > "${LOCKFILE}.info"
+echo "Lock acquired at $(date -Iseconds) (PID: $$)" > "${LOCKFILE}.info"
 
 # Kill any previous MCP server
 OLD_PID=$(cat /tmp/arc1-e2e.pid 2>/dev/null || echo "")
@@ -29,7 +29,7 @@ iptables -C INPUT -p tcp --dport "${MCP_PORT}" -j ACCEPT 2>/dev/null || \
 # Start MCP server
 cd "${DEPLOY_DIR}"
 SAP_URL=http://localhost:50000 \
-SAP_USER="${SAP_USER:-MARIAN}" \
+SAP_USER="${SAP_USER:?SAP_USER must be set}" \
 SAP_PASSWORD=$(cat "${DEPLOY_DIR}/.sap_password") \
 SAP_CLIENT="${SAP_CLIENT:-001}" \
 SAP_INSECURE=true \

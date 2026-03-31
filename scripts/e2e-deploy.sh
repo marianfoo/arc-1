@@ -24,7 +24,7 @@ echo "======================================================================"
 echo "  E2E Deploy"
 echo "======================================================================"
 echo ""
-echo "  Server:     ${SERVER_USER}@${MASKED_SERVER}"
+echo "  Server:     ***@${MASKED_SERVER}"
 echo "  Deploy dir: ${DEPLOY_DIR}"
 echo "  MCP port:   ${MCP_PORT}"
 echo "  Lock file:  ${LOCKFILE} (timeout: ${LOCK_TIMEOUT}s)"
@@ -93,7 +93,7 @@ echo ""
 echo "-- Acquiring lock (waiting up to ${LOCK_TIMEOUT}s if another run is active)..."
 
 ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
-  "flock --timeout ${LOCK_TIMEOUT} ${LOCKFILE} ${DEPLOY_DIR}/start.sh" \
+  "SAP_USER='${SAP_USER:?SAP_USER must be set}' flock --timeout ${LOCK_TIMEOUT} ${LOCKFILE} ${DEPLOY_DIR}/start.sh" \
   || {
   RC=$?
   echo ""
