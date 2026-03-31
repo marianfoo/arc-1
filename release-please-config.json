@@ -1,5 +1,4 @@
 {
-  "last-release-sha": "377e89c",
   "packages": {
     ".": {
       "release-type": "node",
