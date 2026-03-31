@@ -194,7 +194,9 @@ export async function handleToolCall(
       }
 
       const durationMs = Date.now() - start;
-      const resultSize = result.content.reduce((acc, c) => acc + c.text.length, 0);
+      const fullText = result.content.map((c) => c.text).join('');
+      const resultSize = fullText.length;
+      const resultPreview = fullText.length > 500 ? `${fullText.slice(0, 500)}...` : fullText;
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
@@ -208,6 +210,7 @@ export async function handleToolCall(
         status: result.isError ? 'error' : 'success',
         errorMessage: result.isError ? result.content[0]?.text : undefined,
         resultSize,
+        resultPreview,
       });
 
       return result;

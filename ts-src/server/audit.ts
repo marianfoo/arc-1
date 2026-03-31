@@ -36,6 +36,8 @@ export interface ToolCallEndEvent extends AuditEventBase {
   errorClass?: string;
   errorMessage?: string;
   resultSize?: number;
+  /** First 500 chars of the response text (for debugging in server logs) */
+  resultPreview?: string;
 }
 
 /** HTTP request to SAP ADT */

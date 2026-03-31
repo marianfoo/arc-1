@@ -14,6 +14,9 @@ LOG_DIR="${E2E_LOG_DIR:-/tmp/arc1-e2e-logs}"
 
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
 
+# Mask server address in logs (CI logs are public)
+MASKED_SERVER="$(echo "${SERVER}" | sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/***.***/g')"
+
 mkdir -p "${LOG_DIR}"
 
 echo ""
@@ -21,7 +24,7 @@ echo "======================================================================"
 echo "  E2E Deploy"
 echo "======================================================================"
 echo ""
-echo "  Server:     ${SERVER_USER}@${SERVER}"
+echo "  Server:     ${SERVER_USER}@${MASKED_SERVER}"
 echo "  Deploy dir: ${DEPLOY_DIR}"
 echo "  MCP port:   ${MCP_PORT}"
 echo "  Lock file:  ${LOCKFILE} (timeout: ${LOCK_TIMEOUT}s)"
@@ -31,10 +34,10 @@ echo ""
 # ── Pre-flight: SSH ─────────────────────────────────────────────────
 echo "-- Checking SSH connectivity..."
 if ! ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "echo ok" > /dev/null 2>&1; then
-  echo "ERROR: Cannot SSH to ${SERVER_USER}@${SERVER}"
+  echo "ERROR: Cannot SSH to server"
   echo "  - Is the server running?"
   echo "  - Is your SSH key configured? (~/.ssh/id_rsa or id_ed25519)"
-  echo "  - Try: ssh ${SERVER_USER}@${SERVER}"
+  echo "  - Try: ssh \$E2E_SERVER_USER@\$E2E_SERVER"
   exit 1
 fi
 echo "   SSH: OK"
@@ -45,8 +48,8 @@ SAP_STATUS=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
   "curl -s -o /dev/null -w '%{http_code}' http://localhost:50000/sap/bc/adt/discovery 2>/dev/null || echo '000'")
 if [ "$SAP_STATUS" = "000" ]; then
   echo "ERROR: SAP system not reachable at localhost:50000"
-  echo "  - Check Docker container: ssh ${SERVER_USER}@${SERVER} 'docker ps | grep a4h'"
-  echo "  - Start SAP: ssh ${SERVER_USER}@${SERVER} 'docker start a4h'"
+  echo "  - Check Docker container: ssh \$E2E_SERVER_USER@\$E2E_SERVER 'docker ps | grep a4h'"
+  echo "  - Start SAP: ssh \$E2E_SERVER_USER@\$E2E_SERVER 'docker start a4h'"
   exit 1
 fi
 echo "   SAP: OK (HTTP ${SAP_STATUS})"
@@ -60,8 +63,8 @@ echo "   Lock: ${LOCK_INFO}"
 echo "-- Checking Node.js on server..."
 NODE_VERSION=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "node --version 2>/dev/null || echo 'MISSING'")
 if [ "$NODE_VERSION" = "MISSING" ]; then
-  echo "ERROR: Node.js not installed on ${SERVER}"
-  echo "  Install: ssh ${SERVER_USER}@${SERVER} 'curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs'"
+  echo "ERROR: Node.js not installed on server"
+  echo "  Install: ssh \$E2E_SERVER_USER@\$E2E_SERVER 'curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs'"
   exit 1
 fi
 echo "   Node: ${NODE_VERSION}"
@@ -112,6 +115,6 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
 
 echo ""
 echo "======================================================================"
-echo "  MCP server running at http://${SERVER}:${MCP_PORT}/mcp"
+echo "  MCP server running on port ${MCP_PORT}"
 echo "======================================================================"
 echo ""
