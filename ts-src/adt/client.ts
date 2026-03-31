@@ -18,8 +18,8 @@
 
 import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
-import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { isNotFoundError } from './errors.js';
+import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { AdtSearchResult } from './types.js';
 import {
@@ -78,26 +78,34 @@ export class AdtClient {
     }
 
     const validIncludes = new Set(['main', 'definitions', 'implementations', 'macros', 'testclasses']);
-    const includes = include.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const includes = include
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
 
     const parts: string[] = [];
     for (const inc of includes) {
       if (!validIncludes.has(inc)) {
-        parts.push(`=== ${inc} ===\n[Unknown include "${inc}". Valid: main, definitions, implementations, macros, testclasses]`);
+        parts.push(
+          `=== ${inc} ===\n[Unknown include "${inc}". Valid: main, definitions, implementations, macros, testclasses]`,
+        );
         continue;
       }
 
       // "main" uses /source/main; others use /includes/{type}
-      const path = inc === 'main'
-        ? `/sap/bc/adt/oo/classes/${encodedName}/source/main`
-        : `/sap/bc/adt/oo/classes/${encodedName}/includes/${inc}`;
+      const path =
+        inc === 'main'
+          ? `/sap/bc/adt/oo/classes/${encodedName}/source/main`
+          : `/sap/bc/adt/oo/classes/${encodedName}/includes/${inc}`;
 
       try {
         const resp = await this.http.get(path);
         parts.push(`=== ${inc} ===\n${resp.body}`);
       } catch (err) {
         if (isNotFoundError(err)) {
-          parts.push(`=== ${inc} ===\n[Include "${inc}" is not available for this class. Try reading without the include parameter to get the full source.]`);
+          parts.push(
+            `=== ${inc} ===\n[Include "${inc}" is not available for this class. Try reading without the include parameter to get the full source.]`,
+          );
         } else {
           throw err; // Re-throw non-404 errors
         }

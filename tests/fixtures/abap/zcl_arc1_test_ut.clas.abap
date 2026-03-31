@@ -1,0 +1,10 @@
+CLASS zcl_arc1_test_ut DEFINITION PUBLIC FINAL CREATE PUBLIC.
+  PUBLIC SECTION.
+    METHODS get_value RETURNING VALUE(rv_val) TYPE i.
+ENDCLASS.
+
+CLASS zcl_arc1_test_ut IMPLEMENTATION.
+  METHOD get_value.
+    rv_val = 42.
+  ENDMETHOD.
+ENDCLASS.

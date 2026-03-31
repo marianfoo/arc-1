@@ -31,8 +31,46 @@ export class AdtApiError extends AdtError {
     public readonly path: string,
     public readonly responseBody?: string,
   ) {
-    super(`ADT API error: status ${statusCode} at ${path}: ${message}`);
+    // Extract a human-readable message, stripping raw XML/HTML
+    const clean = AdtApiError.extractCleanMessage(message);
+    super(`ADT API error: status ${statusCode} at ${path}: ${clean}`);
     this.name = 'AdtApiError';
+  }
+
+  /**
+   * Extract a human-readable error message from SAP's XML/HTML error responses.
+   *
+   * SAP ADT returns errors as XML like:
+   *   <exc:exception ...><exc:localizedMessage lang="EN">...</exc:localizedMessage></exc:exception>
+   * or HTML error pages. We extract the meaningful text and discard the markup.
+   */
+  static extractCleanMessage(raw: string): string {
+    if (!raw || raw.length === 0) return 'Unknown error';
+
+    // 1. Try XML: extract <localizedMessage> or <message> content
+    const xmlMatch =
+      raw.match(/<(?:\w+:)?localizedMessage[^>]*>([^<]+)</) ?? raw.match(/<(?:\w+:)?message[^>]*>([^<]+)</);
+    if (xmlMatch?.[1]) {
+      return xmlMatch[1].trim();
+    }
+
+    // 2. Try HTML: extract <title> or <h1> content
+    const htmlMatch = raw.match(/<title>([^<]+)</) ?? raw.match(/<h1>([^<]+)</);
+    if (htmlMatch?.[1]) {
+      return htmlMatch[1].trim();
+    }
+
+    // 3. If no XML/HTML tags at all, it's plain text — use as-is (truncated)
+    if (!raw.includes('<')) {
+      return raw.slice(0, 300);
+    }
+
+    // 4. Fallback: strip all tags and use whatever text remains
+    const stripped = raw
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return stripped.length > 0 ? stripped.slice(0, 300) : 'SAP returned an error (no readable message)';
   }
 
   get isNotFound(): boolean {

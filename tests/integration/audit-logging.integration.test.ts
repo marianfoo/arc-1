@@ -17,7 +17,7 @@ import type { AuditEvent } from '../../ts-src/server/audit.js';
 import { logger } from '../../ts-src/server/logger.js';
 import { FileSink } from '../../ts-src/server/sinks/file.js';
 import { DEFAULT_CONFIG } from '../../ts-src/server/types.js';
-import { getTestClient, hasSapCredentials, SKIP_REASON } from './helpers.js';
+import { getTestClient, hasSapCredentials } from './helpers.js';
 
 const describeIf = hasSapCredentials() ? describe : describe.skip;
 

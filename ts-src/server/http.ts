@@ -169,7 +169,7 @@ export async function startHttpServer(
         bodyKeys: req.body ? Object.keys(req.body) : [],
         queryKeys: Object.keys(req.query),
       });
-      if (req.method === 'POST' && req.query.client_id && (!req.body || !req.body.client_id)) {
+      if (req.method === 'POST' && req.query.client_id && !req.body?.client_id) {
         req.body = { ...req.query, ...(req.body || {}) };
         logger.debug('OAuth authorize: merged query params into body', {
           client_id: req.body.client_id,

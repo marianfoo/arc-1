@@ -7,11 +7,7 @@
 
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createChainedTokenVerifier,
-  createXsuaaOAuthProvider,
-  InMemoryClientStore,
-} from '../../../ts-src/server/xsuaa.js';
+import { createChainedTokenVerifier, InMemoryClientStore } from '../../../ts-src/server/xsuaa.js';
 
 // ─── InMemoryClientStore ─────────────────────────────────────────────
 

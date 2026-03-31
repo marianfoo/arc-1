@@ -226,7 +226,7 @@ export function parseSystemInfo(
   const collections: Array<{ title: string; href: string }> = [];
 
   // After namespace stripping: app:service → service, app:workspace → workspace, app:collection → collection
-  const service = (parsed.service ?? parsed['service'] ?? {}) as Record<string, unknown>;
+  const service = (parsed.service ?? parsed.service ?? {}) as Record<string, unknown>;
   const workspaces = Array.isArray(service.workspace)
     ? service.workspace
     : service.workspace

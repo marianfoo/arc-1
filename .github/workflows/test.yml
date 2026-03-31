@@ -14,10 +14,10 @@ jobs:
         node-version: [20, 22, 24]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -44,10 +44,10 @@ jobs:
     needs: test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: 'npm'
@@ -63,3 +63,70 @@ jobs:
           TEST_SAP_PASSWORD: ${{ secrets.TEST_SAP_PASSWORD }}
           TEST_SAP_CLIENT: ${{ secrets.TEST_SAP_CLIENT }}
           TEST_SAP_INSECURE: ${{ secrets.TEST_SAP_INSECURE }}
+
+  # E2E tests: deploy MCP server to SAP test server, run real tool calls
+  # Only runs on PRs from internal branches (needs SSH key + server access)
+  e2e:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: test
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.E2E_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.E2E_SERVER }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy MCP server
+        run: npm run test:e2e:deploy
+        env:
+          E2E_SERVER: ${{ secrets.E2E_SERVER }}
+          E2E_SERVER_USER: ${{ secrets.E2E_SERVER_USER }}
+          SAP_USER: ${{ secrets.SAP_USER }}
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          E2E_MCP_URL: http://${{ secrets.E2E_SERVER }}:3000/mcp
+
+      - name: Stop MCP server & collect logs
+        if: always()
+        run: npm run test:e2e:stop
+        env:
+          E2E_SERVER: ${{ secrets.E2E_SERVER }}
+          E2E_SERVER_USER: ${{ secrets.E2E_SERVER_USER }}
+
+      - name: Upload E2E logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-logs
+          path: /tmp/arc1-e2e-logs/
+          retention-days: 7
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-junit
+          path: /tmp/arc1-e2e-logs/junit-results.xml
+          retention-days: 7
