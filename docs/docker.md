@@ -41,8 +41,8 @@ without spawning a new process per session.
 ## Quick Start
 
 > **No Docker Hub needed.** Pre-built images are published automatically to
-> [GitHub Container Registry (GHCR)](https://ghcr.io/marianfoo/arc1) on every
-> release. Pull them with `docker pull ghcr.io/marianfoo/arc1:latest`.
+> [GitHub Container Registry (GHCR)](https://github.com/marianfoo/arc-1/pkgs/container/arc-1) on every
+> release. Pull them with `docker pull ghcr.io/marianfoo/arc-1:latest`.
 
 ### HTTP streamable (default — recommended)
 
@@ -57,7 +57,7 @@ docker run -d --rm \
   -e SAP_URL=https://host:44300 \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 
 # Verify it is up
 curl -s http://localhost:8080/mcp   # should return an MCP protocol response
@@ -71,7 +71,7 @@ docker run -i --rm \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
   -e SAP_TRANSPORT=stdio \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 > **`-i` is required for stdio mode.** MCP communicates over stdin/stdout.
@@ -88,7 +88,7 @@ pulling or publishing.
 ### Image location
 
 ```
-ghcr.io/marianfoo/arc1
+ghcr.io/marianfoo/arc-1
 ```
 
 ### Available tags
@@ -562,7 +562,7 @@ docker run -i --rm \
 For a permanent fix, extend the image:
 
 ```dockerfile
-FROM ghcr.io/marianfoo/arc1:latest
+FROM ghcr.io/marianfoo/arc-1:latest
 USER root
 COPY company-ca.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
@@ -619,7 +619,7 @@ docker run -d --name arc1 \
   -e SAP_URL=https://my-sap-system:44300 \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 Then configure your MCP client to use the HTTP URL:
@@ -653,7 +653,7 @@ stdio mode by overriding the transport:
         "-e", "SAP_USER=developer",
         "-e", "SAP_PASSWORD=secret",
         "-e", "SAP_TRANSPORT=stdio",
-        "ghcr.io/marianfoo/arc1:latest"
+        "ghcr.io/marianfoo/arc-1:latest"
       ]
     }
   }
@@ -674,7 +674,7 @@ For a production system where you want read-only access:
         "-e", "SAP_PASSWORD=secret",
         "-e", "SAP_TRANSPORT=stdio",
         "-e", "SAP_READ_ONLY=true",
-        "ghcr.io/marianfoo/arc1:latest"
+        "ghcr.io/marianfoo/arc-1:latest"
       ]
     }
   }
@@ -685,7 +685,7 @@ For a production system where you want read-only access:
 > out of the config file. Reference the absolute path to the env file:
 >
 > ```json
-> "args": ["run", "-i", "--rm", "-e", "SAP_TRANSPORT=stdio", "--env-file", "/Users/me/.arc1-prod.env", "ghcr.io/marianfoo/arc1:latest"]
+> "args": ["run", "-i", "--rm", "-e", "SAP_TRANSPORT=stdio", "--env-file", "/Users/me/.arc1-prod.env", "ghcr.io/marianfoo/arc-1:latest"]
 > ```
 
 ### Gemini CLI / Other Agents
@@ -713,7 +713,7 @@ docker run -d --rm \
   -e SAP_BLOCK_FREE_SQL=true \
   -e SAP_FEATURE_TRANSPORT=off \
   -e SAP_VERBOSE=true \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 ### Sandboxed AI (Z* packages only)
@@ -728,7 +728,7 @@ docker run -i --rm \
   -e SAP_ALLOWED_PACKAGES="Z*,\$TMP" \
   -e SAP_BLOCK_FREE_SQL=true \
   -e SAP_DISALLOWED_OPS=D \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 This setup lets the AI read system objects, write only to custom packages, and
@@ -741,7 +741,7 @@ docker run -i --rm \
   -e SAP_URL=https://host:44300 \
   -e SAP_COOKIE_FILE=/cookies/cookies.txt \
   -v "${HOME}/.sap-cookies/my-system.txt:/cookies/cookies.txt:ro" \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 ### Corporate Proxy
@@ -751,7 +751,7 @@ docker run -i --rm \
   --env-file .env \
   -e HTTPS_PROXY=http://proxy.corp.example:3128 \
   -e NO_PROXY=localhost,127.0.0.1 \
-  ghcr.io/marianfoo/arc1:latest
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 ---
