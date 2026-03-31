@@ -93,6 +93,12 @@ export function parseArgs(args: string[]): ServerConfig {
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
 
+  // --- BTP ABAP Environment (direct connection via service key) ---
+  config.btpServiceKey = getFlag('btp-service-key') ?? process.env.SAP_BTP_SERVICE_KEY;
+  config.btpServiceKeyFile = getFlag('btp-service-key-file') ?? process.env.SAP_BTP_SERVICE_KEY_FILE;
+  const cbPort = resolve('btp-oauth-callback-port', 'SAP_BTP_OAUTH_CALLBACK_PORT', '0');
+  config.btpOAuthCallbackPort = Number.parseInt(cbPort, 10) || 0;
+
   // --- Principal Propagation ---
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
   config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);

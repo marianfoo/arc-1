@@ -23,7 +23,11 @@ import type { ServerConfig } from './types.js';
 export const VERSION = '0.1.0'; // x-release-please-version
 
 /** Build the base ADT client config (without per-user auth) */
-function buildAdtConfig(config: ServerConfig, btpProxy?: BTPProxyConfig): Partial<AdtClientConfig> {
+function buildAdtConfig(
+  config: ServerConfig,
+  btpProxy?: BTPProxyConfig,
+  bearerTokenProvider?: () => Promise<string>,
+): Partial<AdtClientConfig> {
   return {
     baseUrl: config.url,
     username: config.username,
@@ -32,6 +36,7 @@ function buildAdtConfig(config: ServerConfig, btpProxy?: BTPProxyConfig): Partia
     language: config.language,
     insecure: config.insecure,
     btpProxy,
+    bearerTokenProvider,
     safety: {
       readOnly: config.readOnly,
       blockFreeSQL: config.blockFreeSQL,
@@ -125,12 +130,18 @@ async function createPerUserClient(
  * @param config Server configuration
  * @param btpProxy Optional BTP connectivity proxy config (resolved at startup)
  * @param btpConfig Optional BTP service config (for per-user destination lookup)
+ * @param bearerTokenProvider Optional OAuth bearer token provider (BTP ABAP Environment)
  */
-export function createServer(config: ServerConfig, btpProxy?: BTPProxyConfig, btpConfig?: BTPConfig): Server {
+export function createServer(
+  config: ServerConfig,
+  btpProxy?: BTPProxyConfig,
+  btpConfig?: BTPConfig,
+  bearerTokenProvider?: () => Promise<string>,
+): Server {
   const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
-  // Create default ADT client (shared, uses startup-time credentials)
-  const defaultClient = new AdtClient(buildAdtConfig(config, btpProxy));
+  // Create default ADT client (shared, uses startup-time credentials or OAuth bearer)
+  const defaultClient = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
 
   // Register tool listing — filtered by user's scopes when auth is active
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
@@ -260,6 +271,38 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     readOnly: config.readOnly,
   });
 
+  // Resolve BTP ABAP Environment direct connection (service key + OAuth)
+  let bearerTokenProvider: (() => Promise<string>) | undefined;
+  if (config.btpServiceKey || config.btpServiceKeyFile) {
+    const { resolveServiceKey, createBearerTokenProvider } = await import('../adt/oauth.js');
+
+    // Temporarily set env vars so resolveServiceKey picks them up
+    if (config.btpServiceKey) process.env.SAP_BTP_SERVICE_KEY = config.btpServiceKey;
+    if (config.btpServiceKeyFile) process.env.SAP_BTP_SERVICE_KEY_FILE = config.btpServiceKeyFile;
+
+    const serviceKey = resolveServiceKey();
+    if (!serviceKey) {
+      throw new Error(
+        'BTP service key configured but could not be resolved — check SAP_BTP_SERVICE_KEY or SAP_BTP_SERVICE_KEY_FILE',
+      );
+    }
+
+    // Override URL from service key (abap.url takes precedence over url)
+    config.url = serviceKey.abap?.url ?? serviceKey.url;
+    // Override client from service key if available
+    if (serviceKey.abap?.sapClient) {
+      config.client = serviceKey.abap.sapClient;
+    }
+
+    bearerTokenProvider = createBearerTokenProvider(serviceKey, config.btpOAuthCallbackPort);
+
+    logger.info('BTP ABAP Environment configured (service key)', {
+      url: config.url,
+      uaaUrl: serviceKey.uaa.url,
+      callbackPort: config.btpOAuthCallbackPort || 'auto',
+    });
+  }
+
   // Resolve BTP Destination if configured (overrides SAP_URL/USER/PASSWORD)
   let btpProxy: BTPProxyConfig | undefined;
   let btpConfig: BTPConfig | undefined;
@@ -291,7 +334,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     });
   }
 
-  const server = createServer(config, btpProxy, btpConfig);
+  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider);
 
   if (config.transport === 'stdio') {
     const transport = new StdioServerTransport();
@@ -329,7 +372,11 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     }
 
     const { startHttpServer } = await import('./http.js');
-    await startHttpServer(() => createServer(config, btpProxy, btpConfig), config, xsuaaCredentials);
+    await startHttpServer(
+      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider),
+      config,
+      xsuaaCredentials,
+    );
   }
 
   return server;

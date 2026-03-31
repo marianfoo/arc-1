@@ -57,6 +57,11 @@ export interface ServerConfig {
   oidcAudience?: string;
   xsuaaAuth: boolean;
 
+  // --- BTP ABAP Environment (direct connection via service key) ---
+  btpServiceKey?: string; // Inline service key JSON
+  btpServiceKeyFile?: string; // Path to service key file
+  btpOAuthCallbackPort: number; // Port for OAuth browser callback (0 = auto)
+
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
   ppStrict: boolean; // If true, PP failure = error (no fallback to shared client)
@@ -94,6 +99,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureTransport: 'auto',
   featureHana: 'auto',
   xsuaaAuth: false,
+  btpOAuthCallbackPort: 0,
   ppEnabled: false,
   ppStrict: false,
   logLevel: 'info',

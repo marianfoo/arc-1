@@ -53,6 +53,7 @@ export class AdtClient {
       cookies: config.cookies,
       btpProxy: config.btpProxy,
       sapConnectivityAuth: config.sapConnectivityAuth,
+      bearerTokenProvider: config.bearerTokenProvider,
     };
 
     this.http = new AdtHttpClient(httpConfig);

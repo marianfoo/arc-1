@@ -58,6 +58,13 @@ export interface AdtHttpConfig {
   sapConnectivityAuth?: string;
   /** PP Option 1: jwt-bearer exchanged token replacing Proxy-Authorization */
   ppProxyAuth?: string;
+  /**
+   * Bearer token provider for BTP ABAP Environment (OAuth 2.0).
+   * When set, replaces Basic Auth with `Authorization: Bearer <token>`.
+   * The function handles token lifecycle (caching, refresh, re-login).
+   * Used for direct BTP ABAP connections via service key.
+   */
+  bearerTokenProvider?: () => Promise<string>;
 }
 
 /** Response from an ADT HTTP request */
@@ -103,8 +110,8 @@ export class AdtHttpClient {
       },
     };
 
-    // Basic auth
-    if (config.username && config.password) {
+    // Basic auth (skip when using Bearer token provider — token is injected per-request)
+    if (config.username && config.password && !config.bearerTokenProvider) {
       axiosConfig.auth = {
         username: config.username,
         password: config.password,
@@ -203,6 +210,12 @@ export class AdtHttpClient {
 
     if (contentType) {
       headers['Content-Type'] = contentType;
+    }
+
+    // Bearer token auth for BTP ABAP Environment (replaces Basic Auth)
+    if (this.config.bearerTokenProvider) {
+      const token = await this.config.bearerTokenProvider();
+      headers.Authorization = `Bearer ${token}`;
     }
 
     // Build cookie header from: config cookies + cookie jar (jar takes precedence)
@@ -370,6 +383,12 @@ export class AdtHttpClient {
 
     if (this.config.sessionType === 'stateful') {
       headers['X-sap-adt-sessiontype'] = 'stateful';
+    }
+
+    // Bearer token auth for BTP ABAP Environment
+    if (this.config.bearerTokenProvider) {
+      const token = await this.config.bearerTokenProvider();
+      headers.Authorization = `Bearer ${token}`;
     }
 
     // Include existing cookies (config + jar) so session is maintained
