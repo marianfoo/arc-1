@@ -91,6 +91,43 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
 }
 ```
 
+With safety controls (read-only, restricted packages):
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_READ_ONLY": "true"
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_ALLOWED_PACKAGES": "Z*,$TMP",
+        "SAP_BLOCK_FREE_SQL": "true"
+      }
+    }
+  }
+}
+```
+
 #### Connect Claude Code
 
 Add `.mcp.json` to your project root:
@@ -111,6 +148,26 @@ Add `.mcp.json` to your project root:
 }
 ```
 
+With read-only mode:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_READ_ONLY": "true",
+        "SAP_BLOCK_FREE_SQL": "true"
+      }
+    }
+  }
+}
+```
+
 #### Connect VS Code / GitHub Copilot (HTTP mode)
 
 VS Code and Copilot use HTTP Streamable transport, not stdio. Start arc1 as an HTTP server first:
@@ -118,6 +175,14 @@ VS Code and Copilot use HTTP Streamable transport, not stdio. Start arc1 as an H
 ```bash
 npx arc-1 --url https://host:44300 --user dev --password secret \
   --transport http-streamable --port 3000
+```
+
+With safety controls:
+
+```bash
+npx arc-1 --url https://host:44300 --user dev --password secret \
+  --transport http-streamable --port 3000 \
+  --read-only --block-free-sql
 ```
 
 Then add to VS Code MCP settings:
@@ -131,6 +196,59 @@ Then add to VS Code MCP settings:
   }
 }
 ```
+
+#### Connect Cursor
+
+For stdio mode, add to Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS"
+      }
+    }
+  }
+}
+```
+
+For HTTP mode (same as VS Code), start the server first and point Cursor to `http://localhost:3000/mcp`.
+
+#### Connect any other MCP client (Gemini CLI, Goose, OpenCode, etc.)
+
+All MCP clients that support **stdio** work out of the box:
+
+```bash
+npx arc-1 --url https://host:44300 --user dev --password secret
+```
+
+For clients that support **HTTP Streamable**, start the server and connect to the URL:
+
+```bash
+npx arc-1 --url https://host:44300 --user dev --password secret \
+  --transport http-streamable --port 3000
+# Connect your client to http://localhost:3000/mcp
+```
+
+#### Configuration via environment variables
+
+All config options work as environment variables in the `env` block of MCP client configs. The most common safety options:
+
+| Env Var | Example | Effect |
+|---------|---------|--------|
+| `SAP_READ_ONLY` | `"true"` | Block all write operations |
+| `SAP_BLOCK_FREE_SQL` | `"true"` | Block SQL query execution |
+| `SAP_ALLOWED_PACKAGES` | `"Z*,$TMP"` | Only allow writes to matching packages |
+| `SAP_ALLOWED_OPS` | `"RSQ"` | Only allow Read, Search, Query operations |
+| `SAP_INSECURE` | `"true"` | Skip TLS verification (dev only) |
+| `SAP_CLIENT` | `"100"` | SAP client number (default: 001) |
+
+See [Safety Controls](#safety-controls) and [Quick Reference](#quick-reference-all-configuration) for all options.
 
 ### Local: npm install
 
