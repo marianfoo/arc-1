@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/marianfoo/arc-1/compare/v0.2.0...v0.3.0) (2026-03-31)
+
+
+### Features
+
+* improve tooling based on real-world LLM usage review ([#16](https://github.com/marianfoo/arc-1/issues/16)) ([07e3b07](https://github.com/marianfoo/arc-1/commit/07e3b07b752166217fd4d5c34d40deae5be70688))
+
 ## [0.2.0](https://github.com/marianfoo/arc-1/compare/v0.1.4...v0.2.0) (2026-03-31)
 
 
