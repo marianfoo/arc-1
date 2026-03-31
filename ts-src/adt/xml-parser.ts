@@ -305,6 +305,55 @@ export function parseSourceSearchResults(xml: string): SourceSearchResult[] {
   return results;
 }
 
+/**
+ * Parse class objectstructure response to extract method line ranges.
+ *
+ * The objectstructure endpoint returns the class structure with
+ * ADT links containing fragment identifiers that encode line ranges:
+ *   source/main#start=20,2;end=58,11
+ *
+ * We extract the method name and its implementation line range.
+ */
+export function parseClassStructure(xml: string): Array<{ name: string; startLine: number; endLine: number }> {
+  const parsed = parseXml(xml);
+  const elements = findDeepNodes(parsed, 'objectStructureElement');
+  const methods: Array<{ name: string; startLine: number; endLine: number }> = [];
+
+  for (const el of elements) {
+    const type = String(el['@_type'] ?? '');
+    // Match method types: CLAS/OM (instance method), CLAS/OO (class/static method)
+    // Exclude: CLAS/OA (attributes), CLAS/OC (class), CLAS/OE (events), CLAS/OT (types)
+    if (type !== 'CLAS/OM' && type !== 'CLAS/OO') continue;
+
+    const name = String(el['@_name'] ?? '');
+    if (!name) continue;
+
+    // Find the implementation link — it has rel="source" or rel="impl" or contains the largest block
+    const links = Array.isArray(el.link) ? el.link : el.link ? [el.link] : [];
+    for (const link of links as Array<Record<string, unknown>>) {
+      const href = String(link['@_href'] ?? '');
+      // Look for implementation block (typically the second fragment, or the one with larger range)
+      const fragMatch = href.match(/source\/main#start=(\d+),\d+;end=(\d+),\d+/);
+      if (fragMatch) {
+        const startLine = Number(fragMatch[1]);
+        const endLine = Number(fragMatch[2]);
+        // Pick the widest range for this method (implementation, not definition identifier)
+        const existing = methods.find((m) => m.name === name);
+        if (!existing || endLine - startLine > existing.endLine - existing.startLine) {
+          if (existing) {
+            existing.startLine = startLine;
+            existing.endLine = endLine;
+          } else {
+            methods.push({ name, startLine, endLine });
+          }
+        }
+      }
+    }
+  }
+
+  return methods;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────
 
 /** Safely get a nested array from parsed XML */

@@ -13,6 +13,7 @@ describe('Feature Detection', () => {
         amdp: 'on',
         ui5: 'on',
         transport: 'on',
+        sourceSearch: 'on',
       };
       const result = resolveWithoutProbing(config);
 
@@ -30,6 +31,7 @@ describe('Feature Detection', () => {
         amdp: 'off',
         ui5: 'off',
         transport: 'off',
+        sourceSearch: 'off',
       };
       const result = resolveWithoutProbing(config);
 
@@ -46,6 +48,7 @@ describe('Feature Detection', () => {
         amdp: 'auto',
         ui5: 'auto',
         transport: 'auto',
+        sourceSearch: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -61,6 +64,7 @@ describe('Feature Detection', () => {
         amdp: 'on',
         ui5: 'off',
         transport: 'auto',
+        sourceSearch: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -80,6 +84,7 @@ describe('Feature Detection', () => {
         amdp: 'auto',
         ui5: 'auto',
         transport: 'auto',
+        sourceSearch: 'auto',
       };
       const result = resolveWithoutProbing(config);
 

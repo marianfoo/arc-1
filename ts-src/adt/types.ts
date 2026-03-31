@@ -40,6 +40,7 @@ export interface ResolvedFeatures {
   amdp: FeatureStatus;
   ui5: FeatureStatus;
   transport: FeatureStatus;
+  sourceSearch: FeatureStatus;
   /** Detected SAP_BASIS release (e.g. "750", "757"). Populated during probe. */
   abapRelease?: string;
 }

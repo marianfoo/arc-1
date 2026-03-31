@@ -14,6 +14,7 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { AdtClient } from '../adt/client.js';
 import { findDefinition, findReferences, getCompletion } from '../adt/codeintel.js';
+import { defaultFeatureConfig } from '../adt/config.js';
 import { createObject, deleteObject, lockObject, safeUpdateSource, unlockObject } from '../adt/crud.js';
 import { activate, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
@@ -53,7 +54,7 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPDiagnose: 'read',
   SAPWrite: 'write',
   SAPActivate: 'write',
-  SAPManage: 'write',
+  SAPManage: 'read',
   SAPTransport: 'admin',
 };
 
@@ -148,6 +149,14 @@ export async function handleToolCall(
         `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
       );
     }
+  }
+
+  // Auto-probe features on first tool call (background, non-blocking)
+  if (!cachedFeatures && !autoProbeTriggered) {
+    autoProbeTriggered = true;
+    triggerAutoProbe(client, _config).catch(() => {
+      // Swallow errors — auto-probe is best-effort
+    });
   }
 
   // Run within request context so HTTP-level logs get the requestId
@@ -246,8 +255,22 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
   switch (type) {
     case 'PROG':
       return textResult(await client.getProgram(name));
-    case 'CLAS':
+    case 'CLAS': {
+      const method = args.method as string | undefined;
+      if (method) {
+        const methodSource = await client.getClassMethod(name, method);
+        if (methodSource === null) {
+          // If method not found, list available methods
+          const methods = await client.getClassMethods(name);
+          const methodNames = methods.map((m) => m.name).join(', ');
+          return errorResult(
+            `Method "${method}" not found in class ${name}. Available methods: ${methodNames || '(none)'}`,
+          );
+        }
+        return textResult(methodSource);
+      }
       return textResult(await client.getClass(name, args.include as string | undefined));
+    }
     case 'INTF':
       return textResult(await client.getInterface(name));
     case 'FUNC': {
@@ -369,10 +392,10 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   const query = String(args.query ?? '');
   const maxResults = Number(args.maxResults ?? 100);
   const searchType = String(args.searchType ?? 'object');
+  const objectType = args.objectType as string | undefined;
+  const packageName = args.packageName as string | undefined;
 
   if (searchType === 'source_code') {
-    const objectType = args.objectType as string | undefined;
-    const packageName = args.packageName as string | undefined;
     try {
       const results = await client.searchSource(query, maxResults, objectType, packageName);
       return textResult(JSON.stringify(results, null, 2));
@@ -380,14 +403,15 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
       if (err instanceof AdtApiError && (err.statusCode === 404 || err.statusCode === 501)) {
         return errorResult(
           `Source code search is not available on this SAP system (requires SAP_BASIS ≥ 7.51). ` +
-            `Use SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+            `Use SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables ` +
+            `(e.g., SEOCOMPO for class methods, REPOSRC for source text).`,
         );
       }
       throw err;
     }
   }
 
-  const results = await client.searchObject(query, maxResults);
+  const results = await client.searchObject(query, maxResults, objectType, packageName);
   return textResult(JSON.stringify(results, null, 2));
 }
 
@@ -718,6 +742,8 @@ async function handleSAPContext(client: AdtClient, args: Record<string, unknown>
 
 /** Cached feature status — populated on first probe */
 let cachedFeatures: ResolvedFeatures | undefined;
+/** Whether auto-probe has been triggered (to avoid duplicate probes) */
+let autoProbeTriggered = false;
 
 async function handleSAPManage(
   client: AdtClient,
@@ -737,7 +763,6 @@ async function handleSAPManage(
     }
 
     case 'probe': {
-      const { defaultFeatureConfig } = await import('../adt/config.js');
       const featureConfig = defaultFeatureConfig();
       // Override with server config feature toggles
       featureConfig.hana = config.featureHana as 'auto' | 'on' | 'off';
@@ -746,6 +771,7 @@ async function handleSAPManage(
       featureConfig.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
       featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
       featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
+      featureConfig.sourceSearch = 'auto'; // Always auto-detect
 
       cachedFeatures = await probeFeatures(client.http, featureConfig);
       return textResult(JSON.stringify(cachedFeatures, null, 2));
@@ -756,7 +782,22 @@ async function handleSAPManage(
   }
 }
 
+/** Auto-probe features in the background on first tool call */
+async function triggerAutoProbe(client: AdtClient, config: ServerConfig): Promise<void> {
+  const featureConfig = defaultFeatureConfig();
+  featureConfig.hana = config.featureHana as 'auto' | 'on' | 'off';
+  featureConfig.abapGit = config.featureAbapGit as 'auto' | 'on' | 'off';
+  featureConfig.rap = config.featureRap as 'auto' | 'on' | 'off';
+  featureConfig.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
+  featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
+  featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
+  featureConfig.sourceSearch = 'auto';
+  cachedFeatures = await probeFeatures(client.http, featureConfig);
+  logger.info('Auto-probe completed', { features: Object.keys(cachedFeatures).length });
+}
+
 /** Reset cached features (for testing) */
 export function resetCachedFeatures(): void {
   cachedFeatures = undefined;
+  autoProbeTriggered = false;
 }
