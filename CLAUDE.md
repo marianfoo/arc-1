@@ -34,6 +34,9 @@ npm run lint
 # Run integration tests (SAP system optional — skipped if not configured)
 npm run test:integration
 
+# Run BTP ABAP integration tests (local only — needs BTP service key + browser login)
+TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
+
 # Dev mode (stdio transport)
 npm run dev
 
@@ -149,6 +152,7 @@ tests/
 | Add contract extraction for new type | `ts-src/context/contract.ts` |
 | Modify context output format | `ts-src/context/compressor.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
+| Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `ts-src/adt/oauth.ts`, `ts-src/server/server.ts` |
 
 ## Code Patterns
@@ -179,15 +183,22 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ## Testing
 
-### Unit Tests (320 tests)
+### Unit Tests (546 tests)
 - No SAP system required — always run with `npm test`
 - Mock HTTP via `vi.mock('axios', ...)`
 - XML fixtures in `tests/fixtures/xml/`
 
-### Integration Tests
+### Integration Tests (on-premise)
 - Skipped automatically when `TEST_SAP_URL` is not set
 - Run: `npm run test:integration`
 - Uses `TEST_SAP_*` env vars (falls back to `SAP_*`)
+
+### BTP ABAP Integration Tests (28 tests, local only)
+- Skipped automatically when `TEST_BTP_SERVICE_KEY_FILE` is not set
+- Run: `TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp`
+- Tests BTP-specific behavior: OAuth login, restricted ABAP, released APIs, component differences
+- **Not run in CI** — BTP free tier instances stop nightly and expire after 90 days
+- Requires interactive browser login (OAuth Authorization Code flow)
 
 ## Technology Stack
 
