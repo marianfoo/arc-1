@@ -6,9 +6,78 @@ This is the same authentication flow used by Eclipse ADT when connecting to BTP 
 
 ## Prerequisites
 
-- A SAP BTP ABAP Environment service instance
+- A SAP BTP ABAP Environment service instance (see [Provisioning a BTP ABAP Free Tier Instance](#provisioning-a-btp-abap-free-tier-instance) if you don't have one)
 - A service key for the instance (created in BTP Cockpit)
 - ARC-1 installed (`npm install -g arc-1` or via Docker)
+
+## Provisioning a BTP ABAP Free Tier Instance
+
+If you don't have a BTP ABAP Environment instance yet, you can create one on the free tier:
+
+### Prerequisites for Free Tier
+
+- A SAP BTP trial or pay-as-you-go account
+- Cloud Foundry enabled in your subaccount (with an org and space)
+- The `abap` / `free` entitlement assigned to your subaccount
+
+### Assign the Entitlement
+
+1. Go to **Global Account** > **Entitlements** > **Entity Assignments**
+2. Select your subaccount
+3. Click **Configure Entitlements** > **Add Service Plans**
+4. Search for **ABAP Environment**, select the **free** plan
+5. Click **Save**
+
+### Create the Instance
+
+**Via BTP Cockpit:**
+1. Go to your **Subaccount** > **Service Marketplace**
+2. Find **ABAP Environment** and click **Create**
+3. Select plan **free**
+4. In the JSON parameters, provide:
+   ```json
+   {
+     "admin_email": "your.email@example.com",
+     "is_development_allowed": true,
+     "sap_system_name": "H01"
+   }
+   ```
+5. Click **Create**
+
+**Via CF CLI:**
+```bash
+# Login to Cloud Foundry
+cf login -a https://api.cf.<region>.hana.ondemand.com
+
+# Create the instance (use a params file to avoid shell quoting issues)
+cat > params.json << 'EOF'
+{
+  "admin_email": "your.email@example.com",
+  "is_development_allowed": true,
+  "sap_system_name": "H01"
+}
+EOF
+
+cf create-service abap free my-abap-instance -c params.json
+```
+
+**Important notes:**
+- `admin_email` must be a valid email address (the one you use to log into BTP)
+- `sap_system_name` is a 3-character SID (e.g., `H01`, `DEV`, `Z01`)
+- Free tier is only available in certain regions (`eu10`, `us10`, `ap10`)
+- Only **one** free instance per global account
+- Provisioning takes **30-60 minutes** — check status with `cf service my-abap-instance`
+- After provisioning, the initial admin user (your email) will have full developer access
+
+### Common Error: admin_email Validation
+
+If you see:
+```
+Service broker error: Failed to validate service parameters,
+reason: /admin_email must NOT have fewer than 6 characters, /admin_email must match pattern...
+```
+
+This means `admin_email` was missing or invalid in your parameters JSON. Make sure you provide a valid email address in the JSON body (not as a separate field).
 
 ## Step 1: Create a Service Key
 
@@ -184,3 +253,102 @@ The browser login works on all platforms:
 - **Windows**: Opens with `start` command
 
 If the system cannot open a browser (e.g., headless server or WSL without browser integration), the authorization URL is logged to stderr for manual copy-paste.
+
+## Testing the Connection
+
+### Quick Smoke Test (CLI)
+
+Before using with an MCP client, test the connection directly:
+
+```bash
+# Test with verbose logging to see the OAuth flow
+SAP_BTP_SERVICE_KEY_FILE=/path/to/service-key.json arc1 search "ZCL_*" --verbose
+```
+
+This will:
+1. Open browser for login
+2. After authentication, search for classes matching `ZCL_*`
+3. Print results as JSON
+
+### Manual Token Test (curl)
+
+If you want to test the OAuth flow manually without ARC-1:
+
+```bash
+# 1. Get values from your service key
+UAA_URL="https://your-subdomain.authentication.eu10.hana.ondemand.com"
+CLIENT_ID="sb-abap-12345..."
+CLIENT_SECRET="your-secret"
+ABAP_URL="https://your-system.abap.eu10.hana.ondemand.com"
+
+# 2. Get a token (client credentials — for quick testing only)
+TOKEN=$(curl -s -X POST "$UAA_URL/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -d "grant_type=client_credentials" | jq -r '.access_token')
+
+# 3. Test ADT API access
+curl -s "$ABAP_URL/sap/bc/adt/core/discovery" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/xml"
+```
+
+If this returns XML with ADT discovery info, the connection works. If you get a 401/403, the service key may not have ADT access (see Troubleshooting).
+
+### What to Expect on BTP ABAP
+
+When connected to a BTP ABAP system, some ARC-1 tools behave differently:
+
+| Tool | Expected Behavior |
+|---|---|
+| `SAPSearch` | Works — finds `Z*` objects and released SAP objects |
+| `SAPRead` | Works — reads source code of classes, interfaces, etc. |
+| `SAPWrite` | Works — but only for objects in customer namespace (`Z*`) |
+| `SAPActivate` | Works — activates objects |
+| `SAPQuery` | **May be restricted** — `RunQuery` (free SQL) is often blocked on BTP |
+| `SAPTransport` | **Different** — BTP uses software components / gCTS, not classic transports |
+| `SAPLint` | Works — runs entirely client-side (abaplint) |
+| `SAPDiagnose` | Works — ATC checks available |
+
+## Troubleshooting
+
+### Browser opens but login fails
+
+- Verify the service key is correct and not expired
+- Check that the XSUAA URL in the service key matches your BTP region
+- Try creating a fresh service key in BTP Cockpit
+
+### 401 Unauthorized after login
+
+- The OAuth token was obtained but SAP rejected it
+- This can happen if your BTP user doesn't have developer access
+- Check your user's role collections in BTP Cockpit (need at least `SAP_BR_DEVELOPER`)
+
+### 403 Forbidden on specific ADT endpoints
+
+- Some ADT endpoints may require Communication Arrangements on BTP
+- ATC checks may need `SAP_COM_0763` communication scenario
+- Check the ABAP system's Communication Management (in Fiori Launchpad)
+
+### Token expires and browser doesn't open for re-login
+
+- ARC-1 tries to refresh the token automatically using the refresh token
+- If refresh also fails, it should re-open the browser
+- Restart the MCP server if token issues persist
+
+### Connection works in curl but not in ARC-1
+
+- Enable verbose logging: `--verbose` or `SAP_VERBOSE=true`
+- Check stderr output for OAuth flow details
+- Verify the service key file path is correct and readable
+
+### Free tier provisioning fails
+
+- **Entitlement missing**: Assign `abap` / `free` in Global Account > Entitlements
+- **Region not supported**: Free tier is only in `eu10`, `us10`, `ap10`
+- **Already have an instance**: Only one free instance per global account
+- **CF not enabled**: Enable Cloud Foundry in your subaccount first
+
+## Architecture Details
+
+For the research report covering authentication options, competitor analysis, and design decisions, see [docs/reports/btp-abap-environment-connectivity.md](reports/btp-abap-environment-connectivity.md).

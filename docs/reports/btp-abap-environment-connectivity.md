@@ -1,13 +1,24 @@
 # Connecting to SAP BTP ABAP Environment via ADT API
 
-**Date:** 2026-03-31
-**Status:** Research / Investigation
+**Date:** 2026-04-01
+**Status:** Implemented (pending live testing)
 
 ## Executive Summary
 
-The ADT API (`/sap/bc/adt/*`) is fully available on BTP ABAP Environment (Steampunk). The main difference from on-premise is **authentication** — BTP ABAP requires OAuth 2.0 via XSUAA instead of Basic Auth. CSRF token handling remains identical. ARC-1 currently supports BTP only via the Destination Service → Cloud Connector → on-premise path. Direct BTP ABAP Environment connectivity is **not yet implemented**.
+The ADT API (`/sap/bc/adt/*`) is fully available on BTP ABAP Environment (Steampunk). The main difference from on-premise is **authentication** — BTP ABAP requires OAuth 2.0 via XSUAA instead of Basic Auth. CSRF token handling remains identical.
 
-**Recommended approach:** Follow the fr0ster model — service key file + OAuth Authorization Code flow (browser login). This gives per-user identity and works for both local (stdio) and deployed (HTTP) scenarios.
+**Implementation:** ARC-1 now supports direct BTP ABAP Environment connections via service key + OAuth Authorization Code flow (browser login), following the fr0ster model. See [BTP ABAP Environment Setup](../btp-abap-environment.md) for usage.
+
+**Files added/changed:**
+- `ts-src/adt/oauth.ts` — OAuth module (service key parsing, browser flow, token lifecycle)
+- `ts-src/adt/http.ts` — `bearerTokenProvider` in config, Bearer token injection
+- `ts-src/adt/config.ts` — `bearerTokenProvider` in `AdtClientConfig`
+- `ts-src/adt/client.ts` — Pass bearer token provider to HTTP client
+- `ts-src/server/types.ts` — `btpServiceKey`, `btpServiceKeyFile`, `btpOAuthCallbackPort`
+- `ts-src/server/config.ts` — Parse new env vars and CLI flags
+- `ts-src/server/server.ts` — Wire up service key → OAuth provider → ADT client
+- `tests/unit/adt/oauth.test.ts` — 27 tests
+- `tests/unit/server/config.test.ts` — 7 new config tests
 
 ---
 
@@ -256,148 +267,39 @@ When the third parameter is a function (`BearerFetcher`), the library uses `Auth
 
 ---
 
-## 6. Current ARC-1 Implementation Gap
+## 6. ARC-1 Implementation (Completed)
 
-### What Exists (ts-src/adt/btp.ts)
+### What Was Added
 
-- VCAP_SERVICES parsing for Destination Service + Connectivity Service credentials
-- OAuth2 `client_credentials` token exchange (but only for Destination/Connectivity Service tokens)
-- Cloud Connector proxy setup (`onpremise_proxy_host`)
-- Principal Propagation via SAML assertions through Destination Service
-- Destination lookup at `/destination-configuration/v1/destinations/{name}`
+1. **`ts-src/adt/oauth.ts`** — New OAuth 2.0 module:
+   - Service key parsing and validation (`parseServiceKey`, `loadServiceKeyFile`, `resolveServiceKey`)
+   - Browser Authorization Code flow (`performBrowserLogin`, `startCallbackServer`, `openBrowser`)
+   - Token exchange and refresh (`exchangeCodeForToken`, `refreshAccessToken`)
+   - BearerFetcher pattern (`createBearerTokenProvider`) — caches token, auto-refreshes, re-authenticates
 
-### What's Missing for Direct BTP ABAP
+2. **`ts-src/adt/http.ts`** — Bearer token support:
+   - `bearerTokenProvider?: () => Promise<string>` in `AdtHttpConfig`
+   - Injected on every request + CSRF token fetch (replaces Basic Auth when set)
 
-1. **OAuth2 Bearer Auth in HTTP client** — `ts-src/adt/http.ts` only supports Basic Auth for the ADT connection itself
-2. **Service key parsing** — No support for reading BTP ABAP service key JSON
-3. **Token lifecycle management** — Need caching + auto-refresh (tokens expire in ~12h)
-4. **Direct HTTPS connection** — Current flow always routes through Destination Service → Cloud Connector
-5. **`ProxyType: 'Internet'` handling** — `btp.ts` line 510 only creates proxy for `OnPremise` type; `Internet` destinations are not fully supported
+3. **`ts-src/server/server.ts`** — Startup wiring:
+   - If `btpServiceKey` or `btpServiceKeyFile` is configured, resolves the service key
+   - Overrides `config.url` and `config.client` from service key
+   - Creates `bearerTokenProvider` and passes to `AdtClient`
 
-### Relevant Code Note
+### What Still Exists (On-Premise BTP Path)
 
-In `btp.ts` there is already a TODO:
-```typescript
-// TODO: Bearer token auth for OAuth2SAMLBearerAssertion destinations
-// This would replace basic auth with Bearer token
-logger.warn('Bearer token auth from destination not yet implemented');
-```
+The existing `ts-src/adt/btp.ts` Destination Service path is unchanged and still works for on-premise connectivity via Cloud Connector. The two paths are independent — service key is for direct BTP ABAP, Destination Service is for on-premise via BTP.
 
 ---
 
-## 7. Implementation Plan — Direct Connection via Service Key
+## 7. ARC-1 Usage — See Setup Guide
 
-Following the fr0ster model (most practical for ARC-1). Authorization Code flow only — no Client Credentials.
+For end-to-end setup instructions, see **[docs/btp-abap-environment.md](../btp-abap-environment.md)**.
 
-### End-to-End Setup (How fr0ster Does It)
-
-fr0ster documents this in `docs/installation/examples/SERVICE_KEY_SETUP.md`:
-
-**Step 1: Create Service Key in SAP BTP Cockpit**
-1. Go to BTP Cockpit → your Subaccount → Service Instances
-2. Find your ABAP Environment service instance
-3. Create a Service Key (or download existing one)
-4. Save the JSON file
-
-**Step 2: Place Service Key Locally**
+Quick start:
 ```bash
-# fr0ster convention:
-mkdir -p ~/.config/mcp-abap-adt/service-keys
-cp ~/Downloads/service-key.json ~/.config/mcp-abap-adt/service-keys/TRIAL.json
-# The filename (minus .json) becomes the "destination" name
+SAP_BTP_SERVICE_KEY_FILE=/path/to/service-key.json arc1
 ```
-
-**Step 3: Configure MCP Client**
-
-fr0ster's Claude Desktop config:
-```json
-{
-  "mcpServers": {
-    "mcp-abap-adt": {
-      "type": "stdio",
-      "command": "mcp-abap-adt",
-      "args": ["--unsafe", "--mcp=TRIAL"],
-      "timeout": 60
-    }
-  }
-}
-```
-
-Or via npx:
-```json
-{
-  "mcpServers": {
-    "mcp-abap-adt": {
-      "command": "npx",
-      "args": ["-y", "@fr0ster/mcp-abap-adt", "--transport=stdio", "--mcp=TRIAL"]
-    }
-  }
-}
-```
-
-**Step 4: First Use**
-- Start the MCP client (Claude Desktop, VS Code, etc.)
-- Make any tool call → server detects no cached token
-- **Browser opens automatically** to XSUAA login page
-- User authenticates in browser
-- Token is captured and cached → subsequent calls just work
-- Token auto-refreshes; browser only opens again if refresh token also expires
-
-**`--unsafe` flag**: Enables writing cached session tokens to disk (`~/.config/mcp-abap-adt/sessions/TRIAL.env`). Without it, tokens are in-memory only and lost on restart (re-login via browser each time).
-
-### Proposed ARC-1 Configuration
-
-```bash
-# Option 1: Path to service key file (recommended)
-SAP_BTP_SERVICE_KEY_FILE=/path/to/service-key.json
-
-# Option 2: Inline service key JSON (e.g., for Docker)
-SAP_BTP_SERVICE_KEY='{"uaa":{...},"url":"..."}'
-
-# Optional: callback port for browser OAuth (default: auto)
-SAP_OAUTH_CALLBACK_PORT=3001
-```
-
-When a service key is provided, ARC-1 would:
-- Extract `url` as the SAP system URL (replaces `SAP_URL`)
-- Extract `uaa.url`, `uaa.clientid`, `uaa.clientsecret` for OAuth
-- Ignore `SAP_USER` / `SAP_PASSWORD` (not applicable)
-- On first request: open browser → capture code → exchange for JWT → cache
-
-### Changes Required in ARC-1
-
-| File | Change |
-|------|--------|
-| `ts-src/adt/http.ts` | Accept `bearerTokenProvider?: () => Promise<string>` in config. When set, use `Authorization: Bearer` instead of Basic Auth. |
-| `ts-src/server/config.ts` | Parse `SAP_BTP_SERVICE_KEY` / `SAP_BTP_SERVICE_KEY_FILE` env vars |
-| `ts-src/server/types.ts` | Add service key config fields |
-| New: `ts-src/adt/oauth.ts` | Authorization Code flow: browser open, local callback server, code→token exchange, token caching + refresh |
-| `ts-src/server/server.ts` | If service key present, create OAuth token provider and pass to ADT client |
-
-### Core Code Change (BearerFetcher Pattern)
-
-Following `abap-adt-api`'s approach, the HTTP client change is small:
-
-```typescript
-// In AdtHttpClient — add bearer token support
-if (this.config.bearerTokenProvider) {
-  const token = await this.config.bearerTokenProvider();
-  headers['Authorization'] = `Bearer ${token}`;
-} else {
-  // Existing Basic Auth path
-  headers['Authorization'] = 'Basic ' + btoa(`${user}:${pass}`);
-}
-```
-
-The real work is in the new `oauth.ts` module:
-- Start local HTTP server for callback
-- Open browser via `child_process` (`open` on macOS, `xdg-open` on Linux)
-- Exchange authorization code for tokens
-- Cache tokens (in-memory + optional disk persistence)
-- Auto-refresh before expiry
-- Retry on 401/403
-
-CSRF token handling and cookie management remain unchanged.
 
 ---
 
