@@ -67,7 +67,8 @@ cf create-service abap free my-abap-instance -c params.json
 - Free tier is only available in certain regions (`eu10`, `us10`, `ap10`)
 - Only **one** free instance per global account
 - Provisioning takes **30-60 minutes** — check status with `cf service my-abap-instance`
-- After provisioning, the initial admin user (your email) will have full developer access
+- Free tier instances are **stopped each night** — restart via Landscape Portal or BTP Cockpit
+- Free tier has a **90-day time limit**
 
 ### Common Error: admin_email Validation
 
@@ -78,6 +79,28 @@ reason: /admin_email must NOT have fewer than 6 characters, /admin_email must ma
 ```
 
 This means `admin_email` was missing or invalid in your parameters JSON. Make sure you provide a valid email address in the JSON body (not as a separate field).
+
+### Required: Run the Booster and Assign Developer Role
+
+After provisioning, you **cannot log in** to the ABAP system directly — the classic login form (Benutzer/Kennwort) appears but you have no password. You must first set up trust with SAP Cloud Identity Services:
+
+1. **Run the Booster**: BTP Cockpit → **Global Account** → **Boosters** → search for **"Prepare an Account for ABAP Development"** → run it
+   - This configures trust between your subaccount and SAP Cloud Identity Services (IAS)
+   - Creates the initial admin user with SSO-based login
+   - After the booster, login redirects to IAS instead of showing the classic form
+
+2. **Subscribe to "Web Access for ABAP"** (if not already done): BTP Cockpit → subaccount → **Service Marketplace** → "Web access for ABAP" → **Create**
+
+3. **Assign the Developer Role**:
+   - Access the admin launchpad: BTP Cockpit → your space → Service Instances → your instance → **View Dashboard**
+   - Open **"Maintain Business Users"**
+   - Find your user
+   - Go to **"Assigned Business Roles"** → **Add** → search for **`SAP_BR_DEVELOPER`**
+   - Save
+
+   > **Note:** The booster only assigns the administrator role. Without `SAP_BR_DEVELOPER`, Eclipse ADT and ARC-1 connections will fail with: "You have not been successfully logged on. Make sure the developer role is assigned to the user."
+
+4. **Verify**: Connect with Eclipse ADT to confirm login works before testing with ARC-1.
 
 ## Step 1: Create a Service Key
 
@@ -312,6 +335,23 @@ When connected to a BTP ABAP system, some ARC-1 tools behave differently:
 
 ## Troubleshooting
 
+### Classic login form (Benutzer/Kennwort) instead of SSO redirect
+
+- The "Prepare an Account for ABAP Development" booster has not been run
+- Without the booster, trust to SAP Cloud Identity Services (IAS) is not configured
+- Run the booster first (see [Required: Run the Booster](#required-run-the-booster-and-assign-developer-role))
+
+### "You have not been successfully logged on" / Developer role missing
+
+- The booster only assigns the administrator role, not the developer role
+- Open the admin launchpad → **Maintain Business Users** → find your user → add **`SAP_BR_DEVELOPER`** business role
+- Both Eclipse ADT and ARC-1 require the developer role for ADT API access
+
+### "Entity is currently being edited by another user" when assigning roles
+
+- A previous browser session or the booster may still hold a lock on the user record
+- Close all browser tabs accessing the admin launchpad, wait 1-2 minutes for the lock to expire, then try again
+
 ### Browser opens but login fails
 
 - Verify the service key is correct and not expired
@@ -322,7 +362,7 @@ When connected to a BTP ABAP system, some ARC-1 tools behave differently:
 
 - The OAuth token was obtained but SAP rejected it
 - This can happen if your BTP user doesn't have developer access
-- Check your user's role collections in BTP Cockpit (need at least `SAP_BR_DEVELOPER`)
+- Check that `SAP_BR_DEVELOPER` is assigned in the admin launchpad (not just BTP role collections)
 
 ### 403 Forbidden on specific ADT endpoints
 
