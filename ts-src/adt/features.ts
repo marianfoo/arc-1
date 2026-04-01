@@ -20,7 +20,7 @@
 import { Version } from '@abaplint/core';
 import type { FeatureConfig, FeatureMode } from './config.js';
 import type { AdtHttpClient } from './http.js';
-import type { FeatureStatus, ResolvedFeatures } from './types.js';
+import type { FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
 import { parseInstalledComponents } from './xml-parser.js';
 
 /** Probe definition: which URL to check for each feature */
@@ -64,7 +64,11 @@ function resolveFeature(mode: FeatureMode, probeResult: boolean, id: string, des
  * Each probe is a HEAD request — if it returns 2xx, the feature exists.
  * 404 or network error means the feature is not available.
  */
-export async function probeFeatures(client: AdtHttpClient, config: FeatureConfig): Promise<ResolvedFeatures> {
+export async function probeFeatures(
+  client: AdtHttpClient,
+  config: FeatureConfig,
+  systemTypeOverride?: string,
+): Promise<ResolvedFeatures> {
   const modeMap: Record<string, FeatureMode> = {
     hana: config.hana,
     abapGit: config.abapGit,
@@ -77,8 +81,8 @@ export async function probeFeatures(client: AdtHttpClient, config: FeatureConfig
   // Only probe features that are in "auto" mode
   const probesToRun = PROBES.filter((p) => modeMap[p.id] === 'auto');
 
-  // Run feature probes + release detection in parallel
-  const [probeResults, abapRelease] = await Promise.all([
+  // Run feature probes + system detection in parallel
+  const [probeResults, systemDetection] = await Promise.all([
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
@@ -89,7 +93,7 @@ export async function probeFeatures(client: AdtHttpClient, config: FeatureConfig
         }
       }),
     ),
-    detectAbapRelease(client),
+    detectSystemFromComponents(client),
   ]);
 
   // Build result map
@@ -107,8 +111,14 @@ export async function probeFeatures(client: AdtHttpClient, config: FeatureConfig
   }
 
   const resolved = result as unknown as ResolvedFeatures;
-  if (abapRelease) {
-    resolved.abapRelease = abapRelease;
+  if (systemDetection.abapRelease) {
+    resolved.abapRelease = systemDetection.abapRelease;
+  }
+  // Apply system type: manual override takes precedence over auto-detection
+  if (systemTypeOverride && systemTypeOverride !== 'auto') {
+    resolved.systemType = systemTypeOverride as SystemType;
+  } else if (systemDetection.systemType) {
+    resolved.systemType = systemDetection.systemType;
   }
   return resolved;
 }
@@ -146,20 +156,47 @@ export function mapSapReleaseToAbaplintVersion(release: string): Version {
   return Version.v700;
 }
 
+/** Result of component-based system detection */
+interface SystemDetection {
+  abapRelease?: string;
+  systemType?: SystemType;
+}
+
 /**
- * Detect the SAP_BASIS release from installed components.
- * Returns the release string (e.g. "757") or undefined on failure.
+ * Detect SAP_BASIS release and system type from installed components.
+ *
+ * System type detection:
+ * - BTP ABAP Environment has `SAP_CLOUD` component (and no `SAP_ABA`)
+ * - On-premise has `SAP_ABA` component (and no `SAP_CLOUD`)
+ *
+ * This reuses the same `/sap/bc/adt/system/components` call — zero extra HTTP requests.
  */
-async function detectAbapRelease(client: AdtHttpClient): Promise<string | undefined> {
+async function detectSystemFromComponents(client: AdtHttpClient): Promise<SystemDetection> {
   try {
     const resp = await client.get('/sap/bc/adt/system/components');
-    if (resp.statusCode >= 400) return undefined;
+    if (resp.statusCode >= 400) return {};
     const components = parseInstalledComponents(resp.body);
     const basis = components.find((c) => c.name.toUpperCase() === 'SAP_BASIS');
-    return basis?.release || undefined;
+    const hasSapCloud = components.some((c) => c.name.toUpperCase() === 'SAP_CLOUD');
+    const systemType: SystemType | undefined = hasSapCloud ? 'btp' : 'onprem';
+    return {
+      abapRelease: basis?.release || undefined,
+      systemType,
+    };
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+/**
+ * Detect system type from installed components (exported for testing).
+ * Returns 'btp' if SAP_CLOUD component is present, 'onprem' otherwise.
+ */
+export function detectSystemType(
+  components: Array<{ name: string; release: string; description: string }>,
+): SystemType {
+  const hasSapCloud = components.some((c) => c.name.toUpperCase() === 'SAP_CLOUD');
+  return hasSapCloud ? 'btp' : 'onprem';
 }
 
 /** Get features without probing (for offline/test scenarios) */

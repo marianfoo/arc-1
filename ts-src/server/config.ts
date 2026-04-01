@@ -87,6 +87,10 @@ export function parseArgs(args: string[]): ServerConfig {
   config.featureTransport = resolveFeature('feature-transport', 'SAP_FEATURE_TRANSPORT');
   config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA');
 
+  // --- System Type Detection ---
+  const systemType = resolve('system-type', 'SAP_SYSTEM_TYPE', 'auto');
+  config.systemType = (['btp', 'onprem'].includes(systemType) ? systemType : 'auto') as ServerConfig['systemType'];
+
   // --- Authentication (MCP client → ARC-1) ---
   config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY;
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;

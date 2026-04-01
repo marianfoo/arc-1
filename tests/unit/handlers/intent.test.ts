@@ -1,10 +1,16 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import axios from 'axios';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdtClient } from '../../../ts-src/adt/client.js';
 import { AdtApiError } from '../../../ts-src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
-import { handleToolCall, TOOL_SCOPES } from '../../../ts-src/handlers/intent.js';
+import type { ResolvedFeatures } from '../../../ts-src/adt/types.js';
+import {
+  handleToolCall,
+  resetCachedFeatures,
+  setCachedFeatures,
+  TOOL_SCOPES,
+} from '../../../ts-src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
 
 // Mock axios so AdtClient doesn't make real requests
@@ -824,6 +830,146 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Provide uri');
+    });
+  });
+
+  // ─── BTP ABAP Handler Adaptation ────────────────────────────────────
+
+  describe('BTP ABAP handler adaptation', () => {
+    /** Create minimal BTP-detected features for testing */
+    function setBtpMode(): void {
+      const btpFeatures: ResolvedFeatures = {
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        abapRelease: '758',
+        systemType: 'btp',
+      };
+      setCachedFeatures(btpFeatures);
+    }
+
+    afterEach(() => {
+      resetCachedFeatures();
+    });
+
+    it('returns helpful error for PROG read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'RSHOWTIM',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+      expect(result.content[0]?.text).toContain('IF_OO_ADT_CLASSRUN');
+    });
+
+    it('returns helpful error for INCL read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'INCL',
+        name: 'ZSOME_INCLUDE',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+      expect(result.content[0]?.text).toContain('ABAP Cloud');
+    });
+
+    it('returns helpful error for VIEW read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VIEW',
+        name: 'V_T002',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+      expect(result.content[0]?.text).toContain('CDS views');
+    });
+
+    it('returns helpful error for TEXT_ELEMENTS read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TEXT_ELEMENTS',
+        name: 'RSHOWTIM',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+    });
+
+    it('returns helpful error for VARIANTS read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VARIANTS',
+        name: 'RSHOWTIM',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+    });
+
+    it('returns helpful error for SOBJ read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'SOBJ',
+        name: 'BUS2032',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+      expect(result.content[0]?.text).toContain('BDEF');
+    });
+
+    it('allows CLAS read on BTP (works normally)', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      // Should succeed (not an error about BTP)
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('blocks known SAP standard table queries on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT * FROM DD02L WHERE tabname LIKE 'Z%'",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('DD02L');
+      expect(result.content[0]?.text).toContain('not accessible on BTP');
+      expect(result.content[0]?.text).toContain('released CDS');
+    });
+
+    it('blocks TADIR query on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT obj_name FROM TADIR WHERE pgmid = 'R3TR'",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('TADIR');
+      expect(result.content[0]?.text).toContain('not accessible on BTP');
+    });
+
+    it('allows custom table query on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: 'SELECT * FROM ZCUSTOM_TABLE',
+      });
+      // Should not be blocked — custom tables are allowed
+      // (may fail for other reasons in test, but should not get BTP block message)
+      const text = result.content[0]?.text ?? '';
+      expect(text).not.toContain('not accessible on BTP');
+    });
+
+    it('does not block queries when not in BTP mode', async () => {
+      // No cachedFeatures = not BTP
+      resetCachedFeatures();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT * FROM DD02L WHERE tabname LIKE 'Z%'",
+      });
+      // Should not get BTP block message
+      const text = result.content[0]?.text ?? '';
+      expect(text).not.toContain('not accessible on BTP');
     });
   });
 });

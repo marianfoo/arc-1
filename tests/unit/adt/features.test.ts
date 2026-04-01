@@ -1,7 +1,11 @@
 import { Version } from '@abaplint/core';
 import { describe, expect, it } from 'vitest';
 import type { FeatureConfig } from '../../../ts-src/adt/config.js';
-import { mapSapReleaseToAbaplintVersion, resolveWithoutProbing } from '../../../ts-src/adt/features.js';
+import {
+  detectSystemType,
+  mapSapReleaseToAbaplintVersion,
+  resolveWithoutProbing,
+} from '../../../ts-src/adt/features.js';
 
 describe('Feature Detection', () => {
   describe('resolveWithoutProbing', () => {
@@ -121,6 +125,49 @@ describe('Feature Detection', () => {
       expect(mapSapReleaseToAbaplintVersion('710')).toBe(Version.v702);
       // 745 is between 740 and 750, should map to v740sp02
       expect(mapSapReleaseToAbaplintVersion('745')).toBe(Version.v740sp02);
+    });
+  });
+
+  // ─── System Type Detection ──────────────────────────────────────────
+
+  describe('detectSystemType', () => {
+    it('detects BTP when SAP_CLOUD component is present', () => {
+      const components = [
+        { name: 'SAP_BASIS', release: '758', description: 'SAP Basis' },
+        { name: 'SAP_CLOUD', release: '100', description: 'SAP Cloud' },
+        { name: 'DW4CORE', release: '100', description: 'DW4 Core' },
+      ];
+      expect(detectSystemType(components)).toBe('btp');
+    });
+
+    it('detects on-premise when SAP_ABA is present and no SAP_CLOUD', () => {
+      const components = [
+        { name: 'SAP_BASIS', release: '757', description: 'SAP Basis' },
+        { name: 'SAP_ABA', release: '757', description: 'SAP Application Basis' },
+        { name: 'SAP_UI', release: '757', description: 'SAP UI' },
+      ];
+      expect(detectSystemType(components)).toBe('onprem');
+    });
+
+    it('detects on-premise when components list is empty', () => {
+      expect(detectSystemType([])).toBe('onprem');
+    });
+
+    it('detects on-premise for typical S/4HANA components', () => {
+      const components = [
+        { name: 'SAP_BASIS', release: '758', description: 'SAP Basis' },
+        { name: 'SAP_ABA', release: '758', description: 'SAP Application Basis' },
+        { name: 'S4CORE', release: '108', description: 'S/4HANA Core' },
+      ];
+      expect(detectSystemType(components)).toBe('onprem');
+    });
+
+    it('is case-insensitive for component names', () => {
+      const components = [
+        { name: 'sap_basis', release: '758', description: 'SAP Basis' },
+        { name: 'sap_cloud', release: '100', description: 'SAP Cloud' },
+      ];
+      expect(detectSystemType(components)).toBe('btp');
     });
   });
 });

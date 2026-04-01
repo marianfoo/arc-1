@@ -32,6 +32,9 @@ export interface FeatureStatus {
   probedAt?: string;
 }
 
+/** SAP system type: BTP ABAP Environment or on-premise */
+export type SystemType = 'btp' | 'onprem';
+
 /** Resolved features after probing */
 export interface ResolvedFeatures {
   hana: FeatureStatus;
@@ -42,6 +45,8 @@ export interface ResolvedFeatures {
   transport: FeatureStatus;
   /** Detected SAP_BASIS release (e.g. "750", "757"). Populated during probe. */
   abapRelease?: string;
+  /** Detected system type: 'btp' (SAP_CLOUD component present) or 'onprem'. */
+  systemType?: SystemType;
 }
 
 /** System info from /sap/bc/adt/core/discovery */

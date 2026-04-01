@@ -51,6 +51,8 @@ Is arc1 exposed to a network?
 | **Enterprise (per-user SAP)** | BTP CF | Principal Propagation | XSUAA | [BTP deployment](phase4-btp-deployment.md) |
 | **BTP ABAP Environment** | Docker / BTP | OAuth2/XSUAA | API Key or OIDC | [Docker + OAuth2](#docker-with-oauth2-xsuaa) |
 
+> **Best practices:** For enterprise deployments with multiple SAP systems, see [Deployment Best Practices](deployment-best-practices.md) — covers one-instance-per-system architecture, security recommendations, and BTP-specific tool adaptation.
+
 ---
 
 ## Local Deployment

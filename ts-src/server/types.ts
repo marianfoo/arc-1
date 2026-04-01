@@ -51,6 +51,10 @@ export interface ServerConfig {
   featureTransport: FeatureToggle;
   featureHana: FeatureToggle;
 
+  // --- System Type Detection ---
+  /** System type: 'auto' (detect from components), 'btp', or 'onprem' */
+  systemType: 'auto' | 'btp' | 'onprem';
+
   // --- Authentication (MCP client → ARC-1) ---
   apiKey?: string;
   oidcIssuer?: string;
@@ -98,6 +102,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureUi5: 'auto',
   featureTransport: 'auto',
   featureHana: 'auto',
+  systemType: 'auto',
   xsuaaAuth: false,
   btpOAuthCallbackPort: 0,
   ppEnabled: false,

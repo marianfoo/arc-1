@@ -166,4 +166,38 @@ describe('parseArgs', () => {
     const config = parseArgs([]);
     expect(config.btpOAuthCallbackPort).toBe(4001);
   });
+
+  // --- System Type Detection ---
+
+  it('defaults systemType to auto', () => {
+    const config = parseArgs([]);
+    expect(config.systemType).toBe('auto');
+  });
+
+  it('parses --system-type btp flag', () => {
+    const config = parseArgs(['--system-type', 'btp']);
+    expect(config.systemType).toBe('btp');
+  });
+
+  it('parses --system-type onprem flag', () => {
+    const config = parseArgs(['--system-type', 'onprem']);
+    expect(config.systemType).toBe('onprem');
+  });
+
+  it('parses SAP_SYSTEM_TYPE env var', () => {
+    process.env.SAP_SYSTEM_TYPE = 'btp';
+    const config = parseArgs([]);
+    expect(config.systemType).toBe('btp');
+  });
+
+  it('defaults unknown system type to auto', () => {
+    const config = parseArgs(['--system-type', 'invalid']);
+    expect(config.systemType).toBe('auto');
+  });
+
+  it('CLI --system-type takes precedence over SAP_SYSTEM_TYPE env', () => {
+    process.env.SAP_SYSTEM_TYPE = 'onprem';
+    const config = parseArgs(['--system-type', 'btp']);
+    expect(config.systemType).toBe('btp');
+  });
 });
