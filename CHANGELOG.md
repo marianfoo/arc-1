@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/marianfoo/arc-1/compare/v0.2.0...v0.3.0) (2026-04-01)
+
+
+### Features
+
+* direct BTP ABAP Environment connectivity via OAuth 2.0 ([#18](https://github.com/marianfoo/arc-1/issues/18)) ([b1cf86c](https://github.com/marianfoo/arc-1/commit/b1cf86c3755294f1873be80f67e480d54b1427b3))
+
 ## [0.2.0](https://github.com/marianfoo/arc-1/compare/v0.1.4...v0.2.0) (2026-03-31)
 
 
