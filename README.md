@@ -92,25 +92,6 @@ npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER
 
 For Docker, BTP deployment, client configuration (Claude Desktop, Claude Code, VS Code, Copilot Studio), and all authentication methods, see the **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)**.
 
-## Comparison
-
-| | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | **arc1** |
-|---|:---:|:---:|:---:|
-| npm package + Docker image | — | — | Y |
-| Read-only mode / operation allowlists | — | — | Y |
-| Package restrictions (wildcards) | — | — | Y |
-| Transport safety controls | — | — | Y |
-| BTP deployment + Principal Propagation | — | — | Y |
-| OIDC / XSUAA / OAuth authentication | — | — | Y |
-| Audit logging (stderr, file, BTP) | — | — | Y |
-| HTTP Streamable transport (Copilot Studio) | — | — | Y |
-| 11 intent-based tools (~5K tokens) | — | — | Y |
-| Method-level read/edit | — | — | Y |
-| Context compression (7-30x) | — | — | Y |
-| BTP ABAP Environment support | — | — | Y |
-| Feature auto-detection | — | — | Y |
-| 700+ automated tests | — | — | Y |
-
 ## Documentation
 
 Full documentation is available at **[marianfoo.github.io/arc-1](https://marianfoo.github.io/arc-1/)**.
