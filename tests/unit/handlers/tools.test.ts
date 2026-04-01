@@ -115,4 +115,176 @@ describe('Tool Definitions', () => {
       expect(tool.description.length, `Tool ${tool.name} description too short`).toBeGreaterThan(10);
     }
   });
+
+  // ─── BTP System Type Adaptation ─────────────────────────────────
+
+  describe('BTP system type adaptation', () => {
+    const btpConfig = { ...DEFAULT_CONFIG, systemType: 'btp' as const };
+    const onpremConfig = { ...DEFAULT_CONFIG, systemType: 'onprem' as const };
+    const autoConfig = { ...DEFAULT_CONFIG, systemType: 'auto' as const };
+
+    it('removes PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS from SAPRead on BTP', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+      const schema = sapRead.inputSchema as Record<string, any>;
+      const typeEnum: string[] = schema.properties.type.enum;
+
+      expect(typeEnum).not.toContain('PROG');
+      expect(typeEnum).not.toContain('INCL');
+      expect(typeEnum).not.toContain('VIEW');
+      expect(typeEnum).not.toContain('TEXT_ELEMENTS');
+      expect(typeEnum).not.toContain('VARIANTS');
+      expect(typeEnum).not.toContain('SOBJ');
+    });
+
+    it('keeps CLAS, INTF, DDLS, BDEF, SRVD on BTP', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+      const schema = sapRead.inputSchema as Record<string, any>;
+      const typeEnum: string[] = schema.properties.type.enum;
+
+      expect(typeEnum).toContain('CLAS');
+      expect(typeEnum).toContain('INTF');
+      expect(typeEnum).toContain('DDLS');
+      expect(typeEnum).toContain('BDEF');
+      expect(typeEnum).toContain('SRVD');
+      expect(typeEnum).toContain('TABLE_CONTENTS');
+    });
+
+    it('includes all types on on-premise', () => {
+      const tools = getToolDefinitions(onpremConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+      const schema = sapRead.inputSchema as Record<string, any>;
+      const typeEnum: string[] = schema.properties.type.enum;
+
+      expect(typeEnum).toContain('PROG');
+      expect(typeEnum).toContain('INCL');
+      expect(typeEnum).toContain('VIEW');
+      expect(typeEnum).toContain('TEXT_ELEMENTS');
+      expect(typeEnum).toContain('VARIANTS');
+      expect(typeEnum).toContain('SOBJ');
+    });
+
+    it('uses on-premise types when systemType is auto (default)', () => {
+      const tools = getToolDefinitions(autoConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+      const schema = sapRead.inputSchema as Record<string, any>;
+      const typeEnum: string[] = schema.properties.type.enum;
+
+      // auto mode = full tool set (on-premise superset)
+      expect(typeEnum).toContain('PROG');
+      expect(typeEnum).toContain('INCL');
+    });
+
+    it('removes PROG and INCL from SAPWrite on BTP', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapWrite = tools.find((t) => t.name === 'SAPWrite')!;
+      const schema = sapWrite.inputSchema as Record<string, any>;
+      const typeEnum: string[] = schema.properties.type.enum;
+
+      expect(typeEnum).not.toContain('PROG');
+      expect(typeEnum).not.toContain('INCL');
+      expect(typeEnum).not.toContain('FUNC');
+      expect(typeEnum).toContain('CLAS');
+      expect(typeEnum).toContain('INTF');
+    });
+
+    it('removes PROG and FUNC from SAPContext on BTP', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const typeEnum: string[] = schema.properties.type.enum;
+
+      expect(typeEnum).not.toContain('PROG');
+      expect(typeEnum).not.toContain('FUNC');
+      expect(typeEnum).toContain('CLAS');
+      expect(typeEnum).toContain('INTF');
+    });
+
+    it('BTP SAPQuery description warns about blocked tables and suggests CDS views', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapQuery = tools.find((t) => t.name === 'SAPQuery')!;
+
+      expect(sapQuery.description).toContain('BTP');
+      expect(sapQuery.description).toContain('custom Z/Y tables');
+      expect(sapQuery.description).toContain('blocked');
+      expect(sapQuery.description).toContain('I_LANGUAGE');
+    });
+
+    it('on-premise SAPQuery description suggests metadata tables for reverse-engineering', () => {
+      const tools = getToolDefinitions(onpremConfig);
+      const sapQuery = tools.find((t) => t.name === 'SAPQuery')!;
+
+      expect(sapQuery.description).toContain('DD02L');
+      expect(sapQuery.description).toContain('TADIR');
+      expect(sapQuery.description).toContain('reverse-engineering');
+    });
+
+    it('BTP SAPTransport description mentions gCTS', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapTransport = tools.find((t) => t.name === 'SAPTransport')!;
+
+      expect(sapTransport.description).toContain('gCTS');
+      expect(sapTransport.description).toContain('BTP');
+    });
+
+    it('BTP SAPRead description mentions BTP limitations', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+
+      expect(sapRead.description).toContain('BTP');
+      expect(sapRead.description).toContain('IF_OO_ADT_CLASSRUN');
+    });
+
+    it('BTP SAPSearch description mentions released objects', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
+
+      expect(sapSearch.description).toContain('BTP');
+      expect(sapSearch.description).toContain('released');
+    });
+
+    it('does not include method or expand_includes props on BTP SAPRead', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+      const schema = sapRead.inputSchema as Record<string, any>;
+
+      expect(schema.properties.method).toBeUndefined();
+      expect(schema.properties.expand_includes).toBeUndefined();
+    });
+
+    it('includes method and expand_includes props on on-premise SAPRead', () => {
+      const tools = getToolDefinitions(onpremConfig);
+      const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+      const schema = sapRead.inputSchema as Record<string, any>;
+
+      expect(schema.properties.method).toBeDefined();
+      expect(schema.properties.expand_includes).toBeDefined();
+    });
+
+    it('does not include group prop in BTP SAPContext', () => {
+      const tools = getToolDefinitions(btpConfig);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+
+      expect(schema.properties.group).toBeUndefined();
+    });
+
+    it('still passes schema validation for BTP tools', () => {
+      const tools = getToolDefinitions(btpConfig);
+      for (const tool of tools) {
+        const schema = tool.inputSchema as Record<string, any>;
+        expect(schema.type).toBe('object');
+        expect(tool.description.length).toBeGreaterThan(10);
+        // Check array items (Issue #47)
+        if (schema.properties) {
+          for (const [propName, propDef] of Object.entries(schema.properties as Record<string, any>)) {
+            if (propDef.type === 'array') {
+              expect(propDef.items, `BTP Tool ${tool.name}, property ${propName}: array missing items`).toBeDefined();
+            }
+          }
+        }
+      }
+    });
+  });
 });

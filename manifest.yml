@@ -1,9 +1,19 @@
 ---
 # Cloud Foundry deployment manifest for ARC-1 MCP server on SAP BTP.
+#
+# This is a TEMPLATE. Copy and customize per deployment scenario:
+#   manifest-onprem.yml  — on-premise SAP via Cloud Connector
+#   manifest-btp.yml     — BTP ABAP Environment (direct OAuth)
+#
 # Credentials are NOT stored here — set them via:
-#   cf set-env arc1-mcp-server SAP_USER "<user>"
-#   cf set-env arc1-mcp-server SAP_PASSWORD "<password>"
 #   cf set-env arc1-mcp-server ARC1_API_KEY "<api-key>"
+#
+# See docs/deployment-best-practices.md for architecture guidance.
+# See docs/phase4-btp-deployment.md for step-by-step BTP deployment.
+
+# ──────────────────────────────────────────────────────────────────────
+# Example: On-Premise SAP via Cloud Connector + Principal Propagation
+# ──────────────────────────────────────────────────────────────────────
 applications:
   - name: arc1-mcp-server
     docker:
@@ -19,14 +29,25 @@ applications:
       SAP_CLIENT: "001"
       SAP_LANGUAGE: "EN"
       SAP_INSECURE: "true"
+      # System type (auto-detects, or set explicitly)
+      SAP_SYSTEM_TYPE: "auto"
       # MCP transport (CF sets PORT env var automatically)
       SAP_TRANSPORT: "http-streamable"
+      # BTP Destination Service (reads credentials from destination config)
+      SAP_BTP_DESTINATION: "SAP_TRIAL"
+      # Principal Propagation (per-user SAP auth)
+      # SAP_BTP_PP_DESTINATION: "SAP_TRIAL_PP"
+      # SAP_PP_ENABLED: "true"
+      # SAP_PP_STRICT: "true"
+      # XSUAA auth for MCP-native clients (Claude Desktop, Cursor, etc.)
+      # SAP_XSUAA_AUTH: "true"
       # Safety: read-only, no SQL
       SAP_READ_ONLY: "true"
       SAP_BLOCK_FREE_SQL: "true"
       # Logging
       SAP_VERBOSE: "true"
     services:
-      - vsp-connectivity
-      - vsp-destination
-      - arc1-auditlog
+      - arc1-connectivity
+      - arc1-destination
+      # - arc1-xsuaa       # Uncomment for XSUAA OAuth
+      # - arc1-auditlog    # Uncomment for BTP Audit Log

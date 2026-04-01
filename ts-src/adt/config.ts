@@ -74,6 +74,12 @@ export interface AdtClientConfig {
    * user exchange token to the Connectivity proxy."
    */
   ppProxyAuth?: string;
+  /**
+   * Bearer token provider for BTP ABAP Environment (OAuth 2.0).
+   * When set, replaces Basic Auth with `Authorization: Bearer <token>`.
+   * The function handles token lifecycle (caching, refresh, re-login).
+   */
+  bearerTokenProvider?: () => Promise<string>;
 }
 
 /** Create default ADT client config */

@@ -124,4 +124,80 @@ describe('parseArgs', () => {
     const config = parseArgs([]);
     expect(config.xsuaaAuth).toBe(true);
   });
+
+  // --- BTP ABAP Environment (service key) ---
+
+  it('defaults BTP service key fields', () => {
+    const config = parseArgs([]);
+    expect(config.btpServiceKey).toBeUndefined();
+    expect(config.btpServiceKeyFile).toBeUndefined();
+    expect(config.btpOAuthCallbackPort).toBe(0);
+  });
+
+  it('parses --btp-service-key flag', () => {
+    const config = parseArgs(['--btp-service-key', '{"uaa":{}}']);
+    expect(config.btpServiceKey).toBe('{"uaa":{}}');
+  });
+
+  it('parses SAP_BTP_SERVICE_KEY env var', () => {
+    process.env.SAP_BTP_SERVICE_KEY = '{"uaa":{"url":"x"}}';
+    const config = parseArgs([]);
+    expect(config.btpServiceKey).toBe('{"uaa":{"url":"x"}}');
+  });
+
+  it('parses --btp-service-key-file flag', () => {
+    const config = parseArgs(['--btp-service-key-file', '/path/to/key.json']);
+    expect(config.btpServiceKeyFile).toBe('/path/to/key.json');
+  });
+
+  it('parses SAP_BTP_SERVICE_KEY_FILE env var', () => {
+    process.env.SAP_BTP_SERVICE_KEY_FILE = '/path/to/key.json';
+    const config = parseArgs([]);
+    expect(config.btpServiceKeyFile).toBe('/path/to/key.json');
+  });
+
+  it('parses --btp-oauth-callback-port flag', () => {
+    const config = parseArgs(['--btp-oauth-callback-port', '3001']);
+    expect(config.btpOAuthCallbackPort).toBe(3001);
+  });
+
+  it('parses SAP_BTP_OAUTH_CALLBACK_PORT env var', () => {
+    process.env.SAP_BTP_OAUTH_CALLBACK_PORT = '4001';
+    const config = parseArgs([]);
+    expect(config.btpOAuthCallbackPort).toBe(4001);
+  });
+
+  // --- System Type Detection ---
+
+  it('defaults systemType to auto', () => {
+    const config = parseArgs([]);
+    expect(config.systemType).toBe('auto');
+  });
+
+  it('parses --system-type btp flag', () => {
+    const config = parseArgs(['--system-type', 'btp']);
+    expect(config.systemType).toBe('btp');
+  });
+
+  it('parses --system-type onprem flag', () => {
+    const config = parseArgs(['--system-type', 'onprem']);
+    expect(config.systemType).toBe('onprem');
+  });
+
+  it('parses SAP_SYSTEM_TYPE env var', () => {
+    process.env.SAP_SYSTEM_TYPE = 'btp';
+    const config = parseArgs([]);
+    expect(config.systemType).toBe('btp');
+  });
+
+  it('defaults unknown system type to auto', () => {
+    const config = parseArgs(['--system-type', 'invalid']);
+    expect(config.systemType).toBe('auto');
+  });
+
+  it('CLI --system-type takes precedence over SAP_SYSTEM_TYPE env', () => {
+    process.env.SAP_SYSTEM_TYPE = 'onprem';
+    const config = parseArgs(['--system-type', 'btp']);
+    expect(config.systemType).toBe('btp');
+  });
 });

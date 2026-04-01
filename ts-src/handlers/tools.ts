@@ -10,6 +10,11 @@
  * instead of 200+ individual tools (one per object type per operation),
  * we group by *intent* with a `type` parameter for routing.
  * This keeps the LLM's tool selection simple and the context window small.
+ *
+ * Tool definitions adapt based on system type (BTP vs on-premise):
+ * - BTP ABAP Environment: removes unavailable types (PROG, INCL, VIEW,
+ *   TEXT_ELEMENTS, VARIANTS), adjusts descriptions for restricted features
+ * - On-premise: full tool set with all types and descriptions
  */
 
 import type { ServerConfig } from '../server/types.js';
@@ -20,38 +25,176 @@ export interface ToolDefinition {
   inputSchema: Record<string, unknown>;
 }
 
+/** Check if tools should use BTP-adapted definitions */
+function isBtpMode(config: ServerConfig): boolean {
+  return config.systemType === 'btp';
+}
+
+// ─── SAPRead Types ──────────────────────────────────────────────────
+
+/** All SAPRead types available on on-premise */
+const SAPREAD_TYPES_ONPREM = [
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'FUGR',
+  'INCL',
+  'DDLS',
+  'BDEF',
+  'SRVD',
+  'TABL',
+  'VIEW',
+  'TABLE_CONTENTS',
+  'DEVC',
+  'SOBJ',
+  'SYSTEM',
+  'COMPONENTS',
+  'MESSAGES',
+  'TEXT_ELEMENTS',
+  'VARIANTS',
+];
+
+/** SAPRead types available on BTP ABAP Environment (no PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS) */
+const SAPREAD_TYPES_BTP = [
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'FUGR',
+  'DDLS',
+  'BDEF',
+  'SRVD',
+  'TABL',
+  'TABLE_CONTENTS',
+  'DEVC',
+  'SYSTEM',
+  'COMPONENTS',
+  'MESSAGES',
+];
+
+const SAPREAD_DESC_ONPREM =
+  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
+
+const SAPREAD_DESC_BTP =
+  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), BDEF (RAP behavior definitions), SRVD (service definitions), TABL (custom tables only), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. Note: PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
+
+// ─── SAPWrite Types ─────────────────────────────────────────────────
+
+const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL'];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF'];
+
+const SAPWRITE_DESC_ONPREM =
+  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL.';
+
+const SAPWRITE_DESC_BTP =
+  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF. Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP.';
+
+// ─── SAPContext Types ───────────────────────────────────────────────
+
+const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC'];
+const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF'];
+
+const SAPCONTEXT_DESC_ONPREM =
+  'Get compressed dependency context for an ABAP object. Returns only the public API contracts ' +
+  '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
+  'NOT the full source code. This is the most token-efficient way to understand dependencies. ' +
+  'Instead of N separate SAPRead calls returning full source (~200 lines each), SAPContext returns ONE response ' +
+  'with compressed contracts (~15-30 lines each). Typical compression: 7-30x fewer tokens.\n\n' +
+  'What gets extracted per dependency:\n' +
+  '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants). PROTECTED, PRIVATE and IMPLEMENTATION stripped.\n' +
+  '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
+  '- Function modules: FUNCTION signature block only (IMPORTING/EXPORTING parameters).\n\n' +
+  'Filtering: SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded — the LLM already knows standard SAP APIs. ' +
+  'Custom objects (Z*, Y*) are prioritized.\n\n' +
+  'Use SAPContext BEFORE writing code that modifies or extends existing objects. ' +
+  'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.';
+
+const SAPCONTEXT_DESC_BTP =
+  'Get compressed dependency context for an ABAP object (BTP ABAP Environment). Returns only the public API contracts ' +
+  '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
+  'NOT the full source code. This is the most token-efficient way to understand dependencies.\n\n' +
+  'What gets extracted per dependency:\n' +
+  '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants).\n' +
+  '- Interfaces: Full interface definition (interfaces are already public contracts).\n\n' +
+  'On BTP: released SAP objects (CL_ABAP_*, IF_ABAP_*) are included since they form the primary development API surface. ' +
+  'Custom objects (Z*, Y*) are also included.\n\n' +
+  'Use SAPContext BEFORE writing code that modifies or extends existing objects.';
+
+// ─── SAPQuery ───────────────────────────────────────────────────────
+
+const SAPQUERY_DESC_ONPREM =
+  'Execute ABAP SQL queries against SAP tables. Returns structured data with column names and rows. ' +
+  'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
+  'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
+  'If a table is not found, similar table names will be suggested automatically.';
+
+const SAPQUERY_DESC_BTP =
+  'Execute ABAP SQL queries (BTP ABAP Environment). Returns structured data with column names and rows. ' +
+  'IMPORTANT: On BTP, only custom Z/Y tables and released CDS entities can be queried. ' +
+  'SAP standard tables (MARA, VBAK, DD02L, DD03L, TADIR, etc.) are blocked. ' +
+  'Use released CDS views instead: I_LANGUAGE, I_COUNTRY, I_CURRENCY, I_UnitOfMeasure, etc. ' +
+  'If a table is not found, similar table names will be suggested automatically.';
+
+// ─── SAPSearch ──────────────────────────────────────────────────────
+
+const SAPSEARCH_DESC_ONPREM =
+  'Search for ABAP objects or search within source code. Two modes:\n' +
+  '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
+  '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
+  'Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.';
+
+const SAPSEARCH_DESC_BTP =
+  'Search for ABAP objects or search within source code (BTP ABAP Environment). Two modes:\n' +
+  '1. Object search (default): Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects. Classic programs, includes, and DDIC views are not searchable on BTP.\n' +
+  '2. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
+  'Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.';
+
+// ─── SAPTransport ───────────────────────────────────────────────────
+
+const SAPTRANSPORT_DESC_ONPREM = 'Manage CTS transport requests: list, get details, create, and release.';
+
+const SAPTRANSPORT_DESC_BTP =
+  'Manage transport requests (BTP ABAP Environment): list, get details, create, and release. ' +
+  'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
+  'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
+
+// ─── SAPManage ──────────────────────────────────────────────────────
+
+const SAPMANAGE_DESC_ONPREM =
+  'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
+  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports).\n\n' +
+  'Actions:\n' +
+  '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
+  'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
+  '- "probe": Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). ' +
+  'Use this on first use or if you suspect feature availability has changed.\n\n' +
+  'Returns JSON with 6 features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
+  'Also returns systemType ("btp" or "onprem") for understanding available capabilities. ' +
+  '"available: false" means do NOT attempt operations that depend on it.';
+
+const SAPMANAGE_DESC_BTP =
+  'Probe and report SAP system capabilities (BTP ABAP Environment). ' +
+  'Returns feature status and system type.\n\n' +
+  'Actions:\n' +
+  '- "features": Get cached feature status from last probe.\n' +
+  '- "probe": Re-probe the SAP system now.\n\n' +
+  'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
+  'abapGit, AMDP, UI5/BSP may not be available depending on the BTP ABAP configuration.';
+
+// ─── Main Tool Definitions ──────────────────────────────────────────
+
 export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
+  const btp = isBtpMode(config);
   const tools: ToolDefinition[] = [
     {
       name: 'SAPRead',
-      description:
-        'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.',
+      description: btp ? SAPREAD_DESC_BTP : SAPREAD_DESC_ONPREM,
       inputSchema: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: [
-              'PROG',
-              'CLAS',
-              'INTF',
-              'FUNC',
-              'FUGR',
-              'INCL',
-              'DDLS',
-              'BDEF',
-              'SRVD',
-              'TABL',
-              'VIEW',
-              'TABLE_CONTENTS',
-              'DEVC',
-              'SOBJ',
-              'SYSTEM',
-              'COMPONENTS',
-              'MESSAGES',
-              'TEXT_ELEMENTS',
-              'VARIANTS',
-            ],
+            enum: btp ? SAPREAD_TYPES_BTP : SAPREAD_TYPES_ONPREM,
             description: 'Object type to read',
           },
           name: { type: 'string', description: 'Object name (e.g., ZTEST_PROGRAM, ZCL_ORDER, MARA)' },
@@ -65,16 +208,20 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             description:
               'For FUNC type. The function group containing the function module. Optional — auto-resolved via SAPSearch if omitted.',
           },
-          method: {
-            type: 'string',
-            description:
-              'For SOBJ type only. BOR method name to read. If omitted, returns the full method catalog for the BOR object.',
-          },
-          expand_includes: {
-            type: 'boolean',
-            description:
-              'For FUGR type only. When true, expands all INCLUDE statements and returns the full source of each include inline.',
-          },
+          ...(btp
+            ? {}
+            : {
+                method: {
+                  type: 'string',
+                  description:
+                    'For SOBJ type only. BOR method name to read. If omitted, returns the full method catalog for the BOR object.',
+                },
+                expand_includes: {
+                  type: 'boolean',
+                  description:
+                    'For FUGR type only. When true, expands all INCLUDE statements and returns the full source of each include inline.',
+                },
+              }),
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
         },
@@ -83,11 +230,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
     {
       name: 'SAPSearch',
-      description:
-        'Search for ABAP objects or search within source code. Two modes:\n' +
-        '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
-        '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS ≥ 7.51.\n\n' +
-        'Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.',
+      description: btp ? SAPSEARCH_DESC_BTP : SAPSEARCH_DESC_ONPREM,
       inputSchema: {
         type: 'object',
         properties: {
@@ -118,13 +261,16 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   if (!config.readOnly) {
     tools.push({
       name: 'SAPWrite',
-      description:
-        'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL.',
+      description: btp ? SAPWRITE_DESC_BTP : SAPWRITE_DESC_ONPREM,
       inputSchema: {
         type: 'object',
         properties: {
           action: { type: 'string', enum: ['create', 'update', 'delete'], description: 'Write action' },
-          type: { type: 'string', enum: ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL'], description: 'Object type' },
+          type: {
+            type: 'string',
+            enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
+            description: 'Object type',
+          },
           name: { type: 'string', description: 'Object name' },
           source: { type: 'string', description: 'ABAP source code (for create/update)' },
           package: { type: 'string', description: 'Package for new objects (default $TMP)' },
@@ -151,8 +297,9 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   tools.push(
     {
       name: 'SAPNavigate',
-      description:
-        'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: you can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+      description: btp
+        ? 'Navigate code (BTP ABAP Environment): find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete. On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
+        : 'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: you can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -179,11 +326,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
     {
       name: 'SAPQuery',
-      description:
-        'Execute ABAP SQL queries against SAP tables. Returns structured data with column names and rows. ' +
-        'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
-        'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
-        'If a table is not found, similar table names will be suggested automatically.',
+      description: btp ? SAPQUERY_DESC_BTP : SAPQUERY_DESC_ONPREM,
       inputSchema: {
         type: 'object',
         properties: {
@@ -231,26 +374,13 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   // SAPContext — always available (read-only tool)
   tools.push({
     name: 'SAPContext',
-    description:
-      'Get compressed dependency context for an ABAP object. Returns only the public API contracts ' +
-      '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
-      'NOT the full source code. This is the most token-efficient way to understand dependencies. ' +
-      'Instead of N separate SAPRead calls returning full source (~200 lines each), SAPContext returns ONE response ' +
-      'with compressed contracts (~15-30 lines each). Typical compression: 7-30x fewer tokens.\n\n' +
-      'What gets extracted per dependency:\n' +
-      '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants). PROTECTED, PRIVATE and IMPLEMENTATION stripped.\n' +
-      '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
-      '- Function modules: FUNCTION signature block only (IMPORTING/EXPORTING parameters).\n\n' +
-      'Filtering: SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded — the LLM already knows standard SAP APIs. ' +
-      'Custom objects (Z*, Y*) are prioritized.\n\n' +
-      'Use SAPContext BEFORE writing code that modifies or extends existing objects. ' +
-      'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.',
+    description: btp ? SAPCONTEXT_DESC_BTP : SAPCONTEXT_DESC_ONPREM,
     inputSchema: {
       type: 'object',
       properties: {
         type: {
           type: 'string',
-          enum: ['CLAS', 'INTF', 'PROG', 'FUNC'],
+          enum: btp ? SAPCONTEXT_TYPES_BTP : SAPCONTEXT_TYPES_ONPREM,
           description: 'Object type',
         },
         name: {
@@ -263,10 +393,14 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             'Optional: provide source directly instead of fetching from SAP. ' +
             'Saves one round-trip if you already have the source from SAPRead.',
         },
-        group: {
-          type: 'string',
-          description: 'Required for FUNC type. The function group containing the function module.',
-        },
+        ...(btp
+          ? {}
+          : {
+              group: {
+                type: 'string',
+                description: 'Required for FUNC type. The function group containing the function module.',
+              },
+            }),
         maxDeps: {
           type: 'number',
           description: 'Maximum dependencies to resolve (default 20). Lower = faster + fewer tokens.',
@@ -286,16 +420,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   if (!config.readOnly) {
     tools.push({
       name: 'SAPManage',
-      description:
-        'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
-        'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports).\n\n' +
-        'Actions:\n' +
-        '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
-        'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
-        '- "probe": Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). ' +
-        'Use this on first use or if you suspect feature availability has changed.\n\n' +
-        'Returns JSON with 6 features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
-        '"available: false" means do NOT attempt operations that depend on it.',
+      description: btp ? SAPMANAGE_DESC_BTP : SAPMANAGE_DESC_ONPREM,
       inputSchema: {
         type: 'object',
         properties: {
@@ -314,7 +439,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
   if (config.enableTransports || !config.readOnly) {
     tools.push({
       name: 'SAPTransport',
-      description: 'Manage CTS transport requests: list, get details, create, and release.',
+      description: btp ? SAPTRANSPORT_DESC_BTP : SAPTRANSPORT_DESC_ONPREM,
       inputSchema: {
         type: 'object',
         properties: {

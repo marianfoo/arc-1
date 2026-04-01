@@ -67,6 +67,10 @@ ENV SAP_HTTP_ADDR="0.0.0.0:8080"
 # ─── Transport Management ───────────────────────────────────────────────────
 ENV SAP_ENABLE_TRANSPORTS="false"
 
+# ─── System Type ────────────────────────────────────────────────────────────
+# auto = detect from SAP_CLOUD component, btp = BTP ABAP, onprem = on-premise
+ENV SAP_SYSTEM_TYPE="auto"
+
 # ─── Feature Flags ──────────────────────────────────────────────────────────
 ENV SAP_FEATURE_ABAPGIT="auto"
 ENV SAP_FEATURE_RAP="auto"
@@ -74,6 +78,18 @@ ENV SAP_FEATURE_AMDP="auto"
 ENV SAP_FEATURE_UI5="auto"
 ENV SAP_FEATURE_TRANSPORT="auto"
 ENV SAP_FEATURE_HANA="auto"
+
+# ─── BTP ABAP Environment ──────────────────────────────────────────────────
+# For direct connection via service key (local dev / Docker)
+# ENV SAP_BTP_SERVICE_KEY=""
+# ENV SAP_BTP_SERVICE_KEY_FILE=""
+# ENV SAP_BTP_OAUTH_CALLBACK_PORT="0"
+
+# ─── BTP CF Deployment ─────────────────────────────────────────────────────
+# ENV SAP_BTP_DESTINATION=""
+# ENV SAP_PP_ENABLED="false"
+# ENV SAP_PP_STRICT="false"
+# ENV SAP_XSUAA_AUTH="false"
 
 ENV SAP_VERBOSE="false"
 

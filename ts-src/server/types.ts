@@ -51,11 +51,20 @@ export interface ServerConfig {
   featureTransport: FeatureToggle;
   featureHana: FeatureToggle;
 
+  // --- System Type Detection ---
+  /** System type: 'auto' (detect from components), 'btp', or 'onprem' */
+  systemType: 'auto' | 'btp' | 'onprem';
+
   // --- Authentication (MCP client → ARC-1) ---
   apiKey?: string;
   oidcIssuer?: string;
   oidcAudience?: string;
   xsuaaAuth: boolean;
+
+  // --- BTP ABAP Environment (direct connection via service key) ---
+  btpServiceKey?: string; // Inline service key JSON
+  btpServiceKeyFile?: string; // Path to service key file
+  btpOAuthCallbackPort: number; // Port for OAuth browser callback (0 = auto)
 
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
@@ -93,7 +102,9 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureUi5: 'auto',
   featureTransport: 'auto',
   featureHana: 'auto',
+  systemType: 'auto',
   xsuaaAuth: false,
+  btpOAuthCallbackPort: 0,
   ppEnabled: false,
   ppStrict: false,
   logLevel: 'info',

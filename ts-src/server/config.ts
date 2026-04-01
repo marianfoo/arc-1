@@ -87,11 +87,21 @@ export function parseArgs(args: string[]): ServerConfig {
   config.featureTransport = resolveFeature('feature-transport', 'SAP_FEATURE_TRANSPORT');
   config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA');
 
+  // --- System Type Detection ---
+  const systemType = resolve('system-type', 'SAP_SYSTEM_TYPE', 'auto');
+  config.systemType = (['btp', 'onprem'].includes(systemType) ? systemType : 'auto') as ServerConfig['systemType'];
+
   // --- Authentication (MCP client → ARC-1) ---
   config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY;
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
+
+  // --- BTP ABAP Environment (direct connection via service key) ---
+  config.btpServiceKey = getFlag('btp-service-key') ?? process.env.SAP_BTP_SERVICE_KEY;
+  config.btpServiceKeyFile = getFlag('btp-service-key-file') ?? process.env.SAP_BTP_SERVICE_KEY_FILE;
+  const cbPort = resolve('btp-oauth-callback-port', 'SAP_BTP_OAUTH_CALLBACK_PORT', '0');
+  config.btpOAuthCallbackPort = Number.parseInt(cbPort, 10) || 0;
 
   // --- Principal Propagation ---
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);

@@ -41,6 +41,16 @@ docker run -e SAP_URL=https://host:44300 -e SAP_USER=dev -e SAP_PASSWORD=secret 
   ghcr.io/marianfoo/arc-1
 ```
 
+### BTP ABAP Environment
+
+For SAP BTP ABAP (Steampunk) systems, use a service key instead of username/password:
+
+```bash
+SAP_BTP_SERVICE_KEY_FILE=/path/to/service-key.json arc1
+```
+
+A browser opens for login (OAuth 2.0 Authorization Code flow). See **[btp-abap-environment.md](btp-abap-environment.md)** for full setup.
+
 ## Connect Your Client
 
 ### Claude Desktop
@@ -134,6 +144,7 @@ arc1 --allowed-ops "RSQ"                      # whitelist operations
 | [tools.md](tools.md) | Complete tool reference (11 intent-based tools) |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
 | [docker.md](docker.md) | Full Docker reference |
+| [btp-abap-environment.md](btp-abap-environment.md) | **BTP ABAP Environment** — direct connection via service key + OAuth |
 | [enterprise-auth.md](enterprise-auth.md) | Enterprise authentication (all methods) |
 | [cli-guide.md](cli-guide.md) | CLI commands and configuration |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial setup |
