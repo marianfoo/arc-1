@@ -1,255 +1,143 @@
 # arc1 — SAP ADT MCP Server
 
-**ARC-1 (ABAP Relay Connector) — Enterprise-ready proxy between AI clients and SAP systems.**
+**Enterprise-ready MCP server for SAP ABAP systems. Secure by default, deployable to BTP or on-premise, battle-tested with 700+ tests.**
 
-arc1 is a TypeScript MCP server (distributed as an npm package and Docker image) that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and translates AI tool calls into [SAP ABAP Development Tools (ADT)](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools) REST API requests. It works with Claude, GitHub Copilot, VS Code, and any MCP-compatible client.
+arc1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MCP client) to SAP systems via the [ADT REST API](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools). It ships as an [npm package](https://www.npmjs.com/package/arc-1) and [Docker image](https://github.com/marianfoo/arc-1/pkgs/container/arc-1).
 
-> **This repository** ([marianfoo/arc-1](https://github.com/marianfoo/arc-1)) is the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
+> Continued from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (Go), rewritten in TypeScript with enterprise security, BTP deployment, and production-grade tooling.
 
 ![Vibing ABAP Developer](./media/vibing-steampunk.png)
 
+**[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
+
 ## Why arc1?
 
-| | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | **arc1** |
-|---|:---:|:---:|:---:|
-| npm package + Docker image | — | — | **Y** |
-| Read-only mode / package whitelist | — | — | **Y** |
-| Transport controls (CTS safety) | — | — | **Y** |
-| HTTP Streamable transport (Copilot Studio) | — | — | **Y** |
-| 11 intent-based tools (~5K schema tokens) | — | — | **Y** |
-| Method-level read/edit (95% token reduction) | — | — | **Y** |
-| Context compression (7–30x) | — | — | **Y** |
-| Works with 8+ MCP clients | — | — | **Y** |
+Built for organizations that need AI-assisted SAP development with guardrails. Inspired by the pioneering work of [abap-adt-api](https://github.com/marcellourbani/abap-adt-api), [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt), and [vibing-steampunk](https://github.com/oisee/vibing-steampunk) — arc1 adds what's needed to run in production:
 
-As an **admin**, you control what the AI can and cannot do:
-- Restrict to read-only, specific packages, or whitelisted operations
-- Require transport assignments before any write
-- Block free-form SQL execution
-- Allow or deny individual operation types per deployment
+### Security & Admin Controls
+
+- **Read-only mode** — block all writes with a single flag (`--read-only`)
+- **Operation allowlists/denylists** — control exactly which operation types (read, write, search, query, activate, transport) are permitted
+- **Package restrictions** — limit AI access to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`)
+- **SQL execution control** — block free-form SQL queries (`--block-free-sql`)
+- **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only
+- **All writes blocked by default** — safe defaults out of the box
+
+### Authentication
+
+- **API key** — simple Bearer token for internal deployments
+- **OIDC / JWT** — Entra ID, Keycloak, or any OpenID Connect provider
+- **OAuth 2.0** — browser-based login for BTP ABAP Environment
+- **XSUAA** — SAP BTP native auth with automatic token proxy for MCP clients
+- **Principal Propagation** — per-user identity forwarded through Cloud Connector (every SAP action runs as the actual user, not a technical account)
+
+### BTP Cloud Foundry Deployment
+
+Deploy arc1 as a Cloud Foundry app on SAP BTP with full platform integration:
+
+- **Destination Service** — connect to SAP systems via managed destinations
+- **Cloud Connector** — reach on-premise systems through the connectivity proxy
+- **Principal Propagation** — user identity forwarded end-to-end via X.509 certificates
+- **XSUAA OAuth proxy** — MCP clients authenticate via standard OAuth, arc1 handles the BTP token exchange
+- **Audit logging** — structured events to stderr, file, or BTP Audit Log Service
+
+### Token Efficiency
+
+- **11 intent-based tools** (~5K schema tokens) instead of 200+ individual tools — keeps the LLM's context window small
+- **Method-level read/edit** — read or update a single class method, not the whole source (up to 20x fewer tokens)
+- **Context compression** — `SAPContext` returns public API contracts of all dependencies in one call (7-30x compression)
+
+### Testing
+
+- **700+ tests** across unit, integration, and E2E
+- **Unit tests** run without SAP system access (33 test files, mocked HTTP)
+- **Integration tests** against live SAP systems (on-premise + BTP ABAP)
+- **E2E tests** deploy the server and execute real MCP tool calls
+- **CI matrix** across Node 20, 22, and 24
+
+### Tools Refined for Real-World Usage
+
+The 11 tools are designed from real LLM interaction feedback:
+
+| Tool | What it does |
+|------|-------------|
+| **SAPRead** | Read ABAP source, table data, CDS views, message classes, BOR objects |
+| **SAPSearch** | Object search + full-text source code search across the system |
+| **SAPWrite** | Create/update/delete ABAP source with automatic lock/unlock |
+| **SAPActivate** | Activate ABAP objects with error reporting |
+| **SAPNavigate** | Go-to-definition, find references, code completion |
+| **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
+| **SAPTransport** | CTS transport management (list, create, release) |
+| **SAPContext** | Compressed dependency context — one call replaces N SAPRead calls |
+| **SAPLint** | ABAP lint (local) + ATC checks (remote) |
+| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality |
+| **SAPManage** | Feature probing — detect what the system supports before acting |
+
+Tool definitions automatically adapt to the target system (BTP vs on-premise), removing unavailable types and adjusting descriptions so the LLM never attempts unsupported operations.
+
+### Feature Detection
+
+arc1 probes the SAP system at startup and adapts its behavior:
+
+- Detects HANA, abapGit, RAP/CDS, AMDP, UI5, and transport availability
+- Auto-detects BTP vs on-premise systems
+- Maps SAP_BASIS release to the correct ABAP language version
+- Each feature can be forced on/off or left on auto-detect
 
 ## Quick Start
 
 ```bash
-# Run directly with npx (no install needed)
 npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER
-
-# Or install globally
-npm install -g arc-1
-arc1 --url https://your-sap-host:44300 --user YOUR_USER
-
-# Or use Docker
-docker run -e SAP_URL=https://host:44300 -e SAP_USER=dev -e SAP_PASSWORD=secret \
-  ghcr.io/marianfoo/arc-1
 ```
 
-## Connect Your Client
+For Docker, BTP deployment, client configuration (Claude Desktop, Claude Code, VS Code, Copilot Studio), and all authentication methods, see the **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)**.
 
-### Claude Desktop
+## Comparison
 
-Add to `~/.config/claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "sap": {
-      "command": "npx",
-      "args": ["-y", "arc-1"],
-      "env": {
-        "SAP_URL": "https://your-sap-host:44300",
-        "SAP_USER": "your-username",
-        "SAP_PASSWORD": "your-password"
-      }
-    }
-  }
-}
-```
-
-### Claude Code
-
-Add `.mcp.json` to your project root:
-
-```json
-{
-  "mcpServers": {
-    "sap": {
-      "command": "npx",
-      "args": ["-y", "arc-1"],
-      "env": {
-        "SAP_URL": "https://your-sap-host:44300",
-        "SAP_USER": "your-username",
-        "SAP_PASSWORD": "your-password"
-      }
-    }
-  }
-}
-```
-
-### GitHub Copilot / VS Code (HTTP Streamable)
-
-Start arc1 as an HTTP server, then point your MCP client to it:
-
-```bash
-SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \
-  npx arc-1 --transport http-streamable --port 3000
-```
-
-Add to VS Code / Copilot MCP config:
-
-```json
-{
-  "mcpServers": {
-    "sap": {
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
-
-HTTP Streamable is also the transport for **Copilot Studio** (Microsoft Power Platform integrations).
-
-### Other MCP Clients (Gemini CLI, OpenCode, Goose, Qwen, …)
-
-All MCP clients that support stdio work out of the box — just point them at `npx arc-1`.
-
-## Tools
-
-arc1 exposes 11 intent-based tools (~5K schema tokens):
-
-| Tool | What it does |
-|------|-------------|
-| **SAPRead** | Read ABAP source, table data, CDS views, message classes, class info |
-| **SAPSearch** | Find objects by name with wildcards |
-| **SAPWrite** | Create/update ABAP source code with auto lock/unlock |
-| **SAPActivate** | Activate (publish) ABAP objects |
-| **SAPNavigate** | Go-to-definition, find references, code completion |
-| **SAPQuery** | Execute ABAP SQL queries against SAP tables |
-| **SAPTransport** | CTS transport management (list, create, release) |
-| **SAPContext** | Compressed dependency context for LLM efficiency |
-| **SAPLint** | ABAP lint and code quality checks |
-| **SAPDiagnose** | Runtime errors (short dumps), profiler traces, SQL traces |
-| **SAPManage** | System feature probing and status |
-
-Full tool reference: **[docs/tools.md](docs/tools.md)**
-
-## Token Efficiency
-
-**Method-level surgery** — read or edit a single method, not the whole class:
-
-```
-SAPRead(type="CLAS", name="ZCL_CALCULATOR", include="implementations")
-SAPWrite(action="update", type="CLAS", name="ZCL_CALCULATOR", source="...")
-```
-
-Up to 20x fewer tokens vs full-class round-trips.
-
-**Context compression** — `SAPContext` auto-appends public API signatures of all referenced classes and interfaces (7–30x compression). One call = source + full dependency context.
-
-## Admin Controls (Safety)
-
-Configure what the AI is allowed to do before deployment:
-
-```bash
-# Read-only mode — no writes at all
-arc1 --read-only
-
-# Restrict to specific packages (wildcards supported)
-arc1 --allowed-packages "ZPROD*,$TMP"
-
-# Block free-form SQL
-arc1 --block-free-sql
-
-# Whitelist operation types (R=Read, S=Search, Q=Query, …)
-arc1 --allowed-ops "RSQ"
-```
-
-Full safety reference:
-
-| Flag / Env | Default | Effect |
-|---|:---:|---|
-| `--read-only` / `SAP_READ_ONLY` | false | Block all write operations |
-| `--block-free-sql` / `SAP_BLOCK_FREE_SQL` | false | Block `RunQuery` execution |
-| `--allowed-ops` / `SAP_ALLOWED_OPS` | (all) | Whitelist operation types |
-| `--disallowed-ops` / `SAP_DISALLOWED_OPS` | (none) | Blacklist operation types |
-| `--allowed-packages` / `SAP_ALLOWED_PACKAGES` | (all) | Restrict to packages (wildcards: `Z*,$TMP`) |
-
-## Configuration
-
-Priority order: CLI flags > environment variables > `.env` file > defaults.
-
-```bash
-# Basic
-arc1 --url https://host:44300 --user admin --password secret
-
-# Cookie auth (SSO / Fiori Launchpad)
-arc1 --url https://host:44300 --cookie-file cookies.txt
-```
-
-Full configuration reference: **[CLAUDE.md](CLAUDE.md#configuration)**
+| | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | **arc1** |
+|---|:---:|:---:|:---:|
+| npm package + Docker image | — | — | Y |
+| Read-only mode / operation allowlists | — | — | Y |
+| Package restrictions (wildcards) | — | — | Y |
+| Transport safety controls | — | — | Y |
+| BTP deployment + Principal Propagation | — | — | Y |
+| OIDC / XSUAA / OAuth authentication | — | — | Y |
+| Audit logging (stderr, file, BTP) | — | — | Y |
+| HTTP Streamable transport (Copilot Studio) | — | — | Y |
+| 11 intent-based tools (~5K tokens) | — | — | Y |
+| Method-level read/edit | — | — | Y |
+| Context compression (7-30x) | — | — | Y |
+| BTP ABAP Environment support | — | — | Y |
+| Feature auto-detection | — | — | Y |
+| 700+ automated tests | — | — | Y |
 
 ## Documentation
 
-| Doc | Description |
-|-----|-------------|
-| [docs/setup-guide.md](docs/setup-guide.md) | **Start here** — deployment options, auth methods, decision tree |
-| [docs/architecture.md](docs/architecture.md) | System architecture with Mermaid diagrams |
-| [docs/tools.md](docs/tools.md) | Complete tool reference (11 intent-based tools) |
-| [docs/mcp-usage.md](docs/mcp-usage.md) | AI agent usage guide & workflow patterns |
-| [docs/docker.md](docs/docker.md) | Full Docker reference |
-| [docs/enterprise-auth.md](docs/enterprise-auth.md) | Enterprise authentication (all methods) |
-| [docs/sap-trial-setup.md](docs/sap-trial-setup.md) | SAP BTP trial setup |
-| [docs/roadmap.md](docs/roadmap.md) | Planned features |
-| [CLAUDE.md](CLAUDE.md) | AI development guidelines (codebase structure, patterns) |
+Full documentation is available at **[marianfoo.github.io/arc-1](https://marianfoo.github.io/arc-1/)**.
+
+| Guide | Description |
+|-------|-------------|
+| [Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/) | Deployment options, auth methods, client configuration |
+| [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 11 tools |
+| [Architecture](https://marianfoo.github.io/arc-1/architecture/) | System architecture with diagrams |
+| [Docker Guide](https://marianfoo.github.io/arc-1/docker/) | Docker deployment reference |
+| [Enterprise Auth](https://marianfoo.github.io/arc-1/enterprise-auth/) | All authentication methods |
+| [BTP Deployment](https://marianfoo.github.io/arc-1/phase4-btp-deployment/) | Cloud Foundry deployment on SAP BTP |
+| [AI Usage Patterns](https://marianfoo.github.io/arc-1/mcp-usage/) | Agent workflow patterns and best practices |
 
 ## Development
 
 ```bash
-npm ci                    # install dependencies
-npm run build             # TypeScript → dist/
-npm test                  # unit tests (no SAP system required)
-npm run test:integration  # integration tests (skipped if no SAP vars set)
+npm ci && npm run build && npm test
 ```
 
-See [CLAUDE.md](CLAUDE.md) for codebase structure and contribution guidelines.
-
-## Releasing
-
-Releases are fully automated via [release-please](https://github.com/googleapis/release-please) and GitHub Actions.
-
-### How it works
-
-1. **Merge PRs to `main`** using [Conventional Commits](https://www.conventionalcommits.org/):
-   - `feat: add SAPDeploy tool` → minor bump (0.1.0 → 0.2.0)
-   - `fix: handle empty XML response` → patch bump (0.1.0 → 0.1.1)
-   - `feat!: rename tools` or `BREAKING CHANGE:` in body → major bump (0.1.0 → 1.0.0)
-   - `chore:`, `docs:`, `ci:` → no release
-
-2. **release-please automatically creates a Release PR** that accumulates all changes since the last release, with a bumped version and generated `CHANGELOG.md`.
-
-3. **Merge the Release PR** when you're ready. This triggers:
-   - **npm publish** with provenance (trusted publishing via OIDC, no tokens)
-   - **Docker push** to `ghcr.io/marianfoo/arc-1` with semver tags (`:0.2.0`, `:0.2`, `:latest`)
-   - **GitHub Release** with auto-generated release notes
-
-### Versioned artifacts
-
-| Artifact | Location |
-|----------|----------|
-| npm package | [npmjs.com/package/arc-1](https://www.npmjs.com/package/arc-1) |
-| Docker image | `ghcr.io/marianfoo/arc-1:{version}` |
-| GitHub Release | [Releases](https://github.com/marianfoo/arc-1/releases) |
-
-### CI workflows
-
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `test.yml` | push / PR to main | Lint, typecheck, unit tests (Node 20/22/24) |
-| `release.yml` | push to main | release-please PR; on merge: npm + Docker + GitHub Release |
-| `docker.yml` | push to main | Dev `latest` Docker image (every commit) |
+See [CLAUDE.md](CLAUDE.md) for codebase structure, testing commands, and contribution guidelines.
 
 ## Credits
 
 | Project | Author | Contribution |
 |---------|--------|--------------|
+| [vibing-steampunk](https://github.com/oisee/vibing-steampunk) | oisee | Original Go MCP server — arc1's starting point |
 | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | Marcello Urbani | TypeScript ADT library, definitive API reference |
 | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | Mario Andreschak | First MCP server for ABAP ADT |
 | [abaplint](https://github.com/abaplint/abaplint) | Lars Hvam | ABAP parser/linter (used via @abaplint/core) |
