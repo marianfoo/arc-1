@@ -1,9 +1,10 @@
-# DassianInc/dassian-adt
+# DassianInc/dassian-adt → albanleong/abap-mcpb
 
-> **Repository**: https://github.com/DassianInc/dassian-adt
-> **Language**: TypeScript | **License**: MIT | **Stars**: New
-> **Status**: Very New/Active (created 2026-03-27, 13 commits, daily updates)
-> **Relationship**: Fork of mario-andreschak's wrapper, rewritten with elicitation and validation
+> **Original**: https://github.com/DassianInc/dassian-adt (may be private/removed)
+> **Successor**: https://github.com/albanleong/abap-mcpb (created 2026-03-31, MCPB format)
+> **Language**: TypeScript / JavaScript | **License**: MIT | **Stars**: 0 (abap-mcpb, very new)
+> **Status**: Active — evolved from dassian-adt v2.0 into MCPB format for Claude Desktop
+> **Relationship**: Fork of mario-andreschak's wrapper → dassian rewrite → MCPB repackaging
 
 ---
 
@@ -157,4 +158,13 @@ Safety system (read-only, op filter, pkg filter, SQL blocking), OIDC/JWT auth, B
 | 2026-03-27 | Initial commit (v2.0) | Yes | Full review of elicitation patterns | TODO |
 | | | | | |
 
-_Last updated: 2026-03-30_
+## abap-mcpb (Successor — March 31, 2026)
+
+albanleong/abap-mcpb packages dassian-adt v2.0 as an **MCPB** (MCP Bundle) for Claude Desktop. Key differences:
+- **Zero build step** — MCPB format with form-based configuration
+- **Per-tool permissions** — Claude Desktop's native authorization UI
+- **Same 25 tools** as dassian-adt
+- 2 files customized from dassian-adt: QualityHandlers.js (enhanced ATC), index.js (error handling)
+- Single commit, no releases yet — very early stage
+
+_Last updated: 2026-04-01_
