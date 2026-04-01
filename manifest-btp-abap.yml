@@ -1,0 +1,41 @@
+---
+# Cloud Foundry deployment manifest for ARC-1 connecting to BTP ABAP Environment.
+#
+# This is for direct BTP ABAP connectivity (no Cloud Connector needed).
+# The server connects via OAuth 2.0 JWT Bearer Exchange.
+#
+# Prerequisites:
+#   1. BTP ABAP Environment instance provisioned
+#   2. Service key created: cf create-service-key <instance> <key-name>
+#   3. XSUAA service instance: cf create-service xsuaa application arc1-xsuaa -c xs-security.json
+#
+# Set the service key (contains secret — NEVER put in manifest):
+#   cf set-env arc1-btp-abap SAP_BTP_SERVICE_KEY "$(cf service-key <instance> <key-name> --output json | jq -c '.credentials')"
+#
+# See docs/btp-abap-environment.md for full setup guide.
+# See docs/deployment-best-practices.md for architecture guidance.
+
+applications:
+  - name: arc1-btp-abap
+    docker:
+      image: ghcr.io/marianfoo/arc-1:latest
+    instances: 1
+    memory: 256M
+    disk_quota: 512M
+    health-check-type: http
+    health-check-http-endpoint: /health
+    env:
+      # System type: BTP ABAP Environment
+      SAP_SYSTEM_TYPE: "btp"
+      # MCP transport
+      SAP_TRANSPORT: "http-streamable"
+      # XSUAA auth for MCP-native clients
+      SAP_XSUAA_AUTH: "true"
+      # Safety defaults (adjust per use case)
+      SAP_READ_ONLY: "false"
+      SAP_BLOCK_FREE_SQL: "false"
+      # Logging
+      SAP_VERBOSE: "true"
+    services:
+      - arc1-xsuaa
+      # - arc1-auditlog    # Uncomment for BTP Audit Log

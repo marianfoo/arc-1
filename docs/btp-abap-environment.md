@@ -169,10 +169,11 @@ Add to your MCP client config (`claude_desktop_config.json` or `.mcp.json`):
 ```json
 {
   "mcpServers": {
-    "arc-1": {
+    "arc-1-btp": {
       "command": "arc1",
       "env": {
-        "SAP_BTP_SERVICE_KEY_FILE": "/path/to/service-key.json"
+        "SAP_BTP_SERVICE_KEY_FILE": "/path/to/service-key.json",
+        "SAP_SYSTEM_TYPE": "btp"
       }
     }
   }
@@ -184,11 +185,12 @@ Or via npx (no global install):
 ```json
 {
   "mcpServers": {
-    "arc-1": {
+    "arc-1-btp": {
       "command": "npx",
       "args": ["-y", "arc-1"],
       "env": {
-        "SAP_BTP_SERVICE_KEY_FILE": "/path/to/service-key.json"
+        "SAP_BTP_SERVICE_KEY_FILE": "/path/to/service-key.json",
+        "SAP_SYSTEM_TYPE": "btp"
       }
     }
   }
@@ -202,14 +204,24 @@ In your `.vscode/mcp.json`:
 ```json
 {
   "servers": {
-    "arc-1": {
+    "arc-1-btp": {
       "command": "arc1",
       "env": {
-        "SAP_BTP_SERVICE_KEY_FILE": "${userHome}/.config/arc-1/btp-service-key.json"
+        "SAP_BTP_SERVICE_KEY_FILE": "${userHome}/.config/arc-1/btp-service-key.json",
+        "SAP_SYSTEM_TYPE": "btp"
       }
     }
   }
 }
+```
+
+### Docker
+
+```bash
+docker run -p 8080:8080 \
+  -e SAP_BTP_SERVICE_KEY='{"uaa":{"url":"...","clientid":"...","clientsecret":"..."},"url":"..."}' \
+  -e SAP_SYSTEM_TYPE=btp \
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
 ## Step 4: First Login
@@ -235,6 +247,19 @@ If the browser fails to open automatically (e.g., on a headless server), ARC-1 l
 | `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | Inline service key JSON |
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to service key JSON file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | Port for OAuth browser callback (default: auto-assigned) |
+| `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
+
+### Recommended: Set SAP_SYSTEM_TYPE=btp
+
+When connecting to BTP ABAP, set `SAP_SYSTEM_TYPE=btp` for the best experience. This adapts tool definitions immediately at startup:
+
+- **SAPRead**: Removes PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS (not available on BTP)
+- **SAPWrite**: Only CLAS, INTF (ABAP Cloud syntax, Z/Y namespace)
+- **SAPQuery**: Warns about blocked SAP standard tables, suggests CDS views instead
+- **SAPTransport**: Explains gCTS behavior (release = Git push, not TMS export)
+- **SAPContext**: Only CLAS, INTF (includes released SAP APIs)
+
+Without this flag, ARC-1 auto-detects the system type on the first `SAPManage probe`, which works but means the first tool listing may show on-premise types.
 
 ## How It Works
 
@@ -295,7 +320,7 @@ This will:
 
 ### Manual Token Test (curl)
 
-If you want to test the OAuth flow manually without ARC-1:
+> **Note:** Client credentials (`grant_type=client_credentials`) does NOT work for ADT endpoints — ADT requires a user context. Use the Authorization Code flow via ARC-1 or Eclipse ADT for interactive testing. The curl test below uses client_credentials for connectivity testing only — it will confirm the XSUAA URL and credentials are valid, but ADT will return 401.
 
 ```bash
 # 1. Get values from your service key
@@ -304,34 +329,41 @@ CLIENT_ID="sb-abap-12345..."
 CLIENT_SECRET="your-secret"
 ABAP_URL="https://your-system.abap.eu10.hana.ondemand.com"
 
-# 2. Get a token (client credentials — for quick testing only)
+# 2. Get a token (client credentials — only tests XSUAA connectivity)
 TOKEN=$(curl -s -X POST "$UAA_URL/oauth/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "grant_type=client_credentials" | jq -r '.access_token')
 
-# 3. Test ADT API access
-curl -s "$ABAP_URL/sap/bc/adt/core/discovery" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Accept: application/xml"
+# 3. Verify token was obtained (non-empty = XSUAA is working)
+echo "Token length: ${#TOKEN}"
+
+# 4. Test ADT API access (expect 401 with client_credentials — this is normal)
+curl -s -o /dev/null -w "%{http_code}" "$ABAP_URL/sap/bc/adt/core/discovery" \
+  -H "Authorization: Bearer $TOKEN"
+# 401 = expected (client_credentials lacks user context for ADT)
+# 200 = connection works (unlikely with client_credentials)
 ```
 
-If this returns XML with ADT discovery info, the connection works. If you get a 401/403, the service key may not have ADT access (see Troubleshooting).
+For proper testing, use ARC-1 with the service key — it performs the Authorization Code flow with browser login to obtain a user-scoped token.
 
 ### What to Expect on BTP ABAP
 
-When connected to a BTP ABAP system, some ARC-1 tools behave differently:
+When `SAP_SYSTEM_TYPE=btp` is set (or auto-detected), tool definitions and behavior adapt:
 
-| Tool | Expected Behavior |
+| Tool | BTP Behavior |
 |---|---|
-| `SAPSearch` | Works — finds `Z*` objects and released SAP objects |
-| `SAPRead` | Works — reads source code of classes, interfaces, etc. |
-| `SAPWrite` | Works — but only for objects in customer namespace (`Z*`) |
-| `SAPActivate` | Works — activates objects |
-| `SAPQuery` | **May be restricted** — `RunQuery` (free SQL) is often blocked on BTP |
-| `SAPTransport` | **Different** — BTP uses software components / gCTS, not classic transports |
-| `SAPLint` | Works — runs entirely client-side (abaplint) |
-| `SAPDiagnose` | Works — ATC checks available |
+| `SAPRead` | Types CLAS, INTF, DDLS, BDEF, SRVD, TABL, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES. PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS, SOBJ are removed — returns helpful error if the LLM tries them. |
+| `SAPSearch` | Works — returns released SAP objects and custom Z/Y objects. Classic programs and includes not searchable. |
+| `SAPWrite` | Only CLAS, INTF. Must use ABAP Cloud language version. Z/Y namespace only. |
+| `SAPActivate` | Works — no changes. |
+| `SAPQuery` | Only custom Z/Y tables and released CDS entities (I_LANGUAGE, I_COUNTRY, etc.). SAP standard tables (DD02L, TADIR, MARA, etc.) are blocked. Returns helpful error with CDS view suggestions. |
+| `SAPTransport` | Works, but release triggers gCTS Git push (not TMS export). Description explains this. |
+| `SAPLint` | Works — runs client-side (abaplint). |
+| `SAPDiagnose` | Works — ATC with ABAP_CLOUD_DEVELOPMENT_DEFAULT variant. |
+| `SAPContext` | Only CLAS, INTF. Includes released SAP APIs (they're the dev surface on BTP). |
+| `SAPNavigate` | Works — scope limited to released and custom objects. |
+| `SAPManage` | Returns `systemType: "btp"` in probe results. |
 
 ## Troubleshooting
 

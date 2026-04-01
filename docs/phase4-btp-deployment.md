@@ -263,6 +263,86 @@ cf push arc1-mcp-server --docker-image ghcr.io/your-org/arc1:latest -c "/usr/loc
 - Check Cloud Connector access control allows `/sap/bc/adt/*` paths
 - Verify `SAP_URL` matches the virtual host configured in Cloud Connector
 
+## Deploying Without Docker (Node.js Buildpack)
+
+If you need customization beyond what the Docker image provides (e.g., custom certificates, native modules, or patching), you can deploy ARC-1 as a Node.js application using the `nodejs_buildpack`:
+
+### 1. Prepare the Application
+
+```bash
+# Clone and build
+git clone https://github.com/marianfoo/arc-1.git
+cd arc-1
+npm ci
+npm run build
+```
+
+### 2. Create a CF-specific manifest
+
+```yaml
+# manifest-nodejs.yml
+applications:
+  - name: arc1-mcp-server
+    buildpacks:
+      - nodejs_buildpack
+    instances: 1
+    memory: 256M
+    disk_quota: 512M
+    health-check-type: http
+    health-check-http-endpoint: /health
+    command: node dist/index.js
+    env:
+      SAP_URL: "http://a4h-abap:50000"
+      SAP_CLIENT: "001"
+      SAP_TRANSPORT: "http-streamable"
+      SAP_SYSTEM_TYPE: "auto"
+      SAP_READ_ONLY: "true"
+      SAP_BLOCK_FREE_SQL: "true"
+    services:
+      - arc1-connectivity
+      - arc1-destination
+```
+
+### 3. Deploy
+
+```bash
+cf push -f manifest-nodejs.yml
+```
+
+**Differences from Docker deployment:**
+- Uses CF's Node.js buildpack (auto-detects `package.json`)
+- `better-sqlite3` native module is compiled during staging — may add 30-60s to deploy
+- You can modify source before pushing (custom tool descriptions, additional middleware, etc.)
+- Environment is Ubuntu-based (not Alpine), which may affect some native dependencies
+
+### 4. Customization Examples
+
+**Custom start script** — add pre-startup logic:
+
+```bash
+# In package.json scripts:
+"start:cf": "node scripts/pre-start.js && node dist/index.js"
+```
+
+Then set `command: npm run start:cf` in the manifest.
+
+**Custom CA certificates** — for on-premise SAP with self-signed certs:
+
+```bash
+# Set NODE_EXTRA_CA_CERTS to a bundled cert file
+cf set-env arc1-mcp-server NODE_EXTRA_CA_CERTS /home/vcap/app/certs/sap-ca.pem
+```
+
+## Deploying for BTP ABAP Environment
+
+For connecting to a BTP ABAP Environment (instead of on-premise), see the separate manifest template `manifest-btp-abap.yml` and the [BTP ABAP Environment guide](btp-abap-environment.md).
+
+Key differences from on-premise deployment:
+- No Cloud Connector or Connectivity Service needed
+- Auth is via service key + JWT Bearer Exchange (not PP)
+- Set `SAP_SYSTEM_TYPE=btp` for adapted tool descriptions
+- Set `SAP_BTP_SERVICE_KEY` as an env var (via `cf set-env` — never in manifest)
+
 ## SAP Documentation References
 
 - [SAP BTP Cloud Foundry Environment](https://help.sap.com/docs/btp/sap-business-technology-platform/cloud-foundry-environment) — CF runtime overview

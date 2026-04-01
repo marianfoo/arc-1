@@ -204,6 +204,29 @@ applications:
 
 ---
 
+## Key Files Reference
+
+| File | Purpose | Customize? |
+|------|---------|-----------|
+| `manifest.yml` | CF deployment manifest (on-premise via Cloud Connector) | Yes — change `SAP_URL`, destination name, safety flags |
+| `manifest-btp-abap.yml` | CF deployment manifest (BTP ABAP direct) | Yes — service key is set via `cf set-env` |
+| `Dockerfile` | Multi-stage Alpine build, all env vars documented | Rarely — use env vars for config |
+| `.env.example` | Template for local `.env` file | Yes — copy to `.env` and fill in |
+| `xs-security.json` | XSUAA scopes, roles, redirect URIs | Yes — add redirect URIs for your MCP clients |
+| `bin/arc1.js` | npm global CLI entry point | No |
+
+## Deploying Without Docker
+
+If the Docker image doesn't fit your needs (custom certs, patching, compliance), deploy as a Node.js app using CF's `nodejs_buildpack`. See [Phase 4: BTP Deployment](phase4-btp-deployment.md#deploying-without-docker-nodejs-buildpack) for the full guide.
+
+Quick summary:
+1. `git clone` + `npm ci` + `npm run build`
+2. Create a `manifest-nodejs.yml` with `buildpacks: [nodejs_buildpack]` and `command: node dist/index.js`
+3. `cf push -f manifest-nodejs.yml`
+4. Set secrets via `cf set-env`
+
+---
+
 ## BTP ABAP Environment Setup
 
 See [BTP ABAP Environment guide](btp-abap-environment.md) for:
@@ -212,3 +235,10 @@ See [BTP ABAP Environment guide](btp-abap-environment.md) for:
 - Creating the service key
 - Configuring ARC-1 with the service key
 - OAuth browser login flow
+- System type detection and tool adaptation
+
+See [Phase 4: BTP Deployment](phase4-btp-deployment.md) for:
+- Cloud Foundry deployment with Docker
+- Destination Service and Cloud Connector setup
+- Principal Propagation configuration
+- Deploying without Docker (Node.js buildpack)
