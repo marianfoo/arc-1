@@ -160,6 +160,59 @@ describe('AdtClient', () => {
       expect(typeof source).toBe('string');
     });
 
+    it('getDdlx returns metadata extension source', async () => {
+      const client = createClient();
+      const source = await client.getDdlx('ZC_TRAVEL');
+      expect(typeof source).toBe('string');
+    });
+
+    it('getDdlx uses correct ADT URL', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      const client = createClient();
+      await client.getDdlx('ZC_TRAVEL');
+      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
+      const urlUsed = callArgs.find((a: any) => a.url?.includes('ddlx'));
+      expect(urlUsed?.url).toContain('/sap/bc/adt/ddic/ddlx/sources/ZC_TRAVEL/source/main');
+    });
+
+    it('getSrvb returns parsed service binding metadata', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?><srvb:serviceBinding srvb:contract="C1" srvb:published="true" srvb:bindingCreated="true" adtcore:name="ZUI_TRAVEL_O4" adtcore:type="SRVB/SVB" adtcore:description="Travel Service Binding" adtcore:language="EN" xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="ZTRAVEL"/><srvb:services srvb:name="ZUI_TRAVEL"><srvb:content srvb:version="0001" srvb:releaseState="NOT_RELEASED"><srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/></srvb:content></srvb:services><srvb:binding srvb:type="ODATA" srvb:version="V4" srvb:category="0"><srvb:implementation adtcore:name="ZUI_TRAVEL_O4"/></srvb:binding></srvb:serviceBinding>`,
+        headers: {},
+      });
+      const client = createClient();
+      const result = await client.getSrvb('ZUI_TRAVEL_O4');
+      const parsed = JSON.parse(result);
+      expect(parsed.name).toBe('ZUI_TRAVEL_O4');
+      expect(parsed.odataVersion).toBe('V4');
+      expect(parsed.bindingCategory).toBe('UI');
+      expect(parsed.published).toBe(true);
+      expect(parsed.serviceDefinition).toBe('ZSD_TRAVEL');
+    });
+
+    it('getSrvb uses correct Accept header', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockClear();
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0"?><srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"><srvb:binding/></srvb:serviceBinding>`,
+        headers: {},
+      });
+      const client = createClient();
+      await client.getSrvb('ZUI_TRAVEL_O4');
+      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
+      const urlUsed = callArgs.find((a: any) => a.url?.includes('businessservices'));
+      expect(urlUsed?.url).toContain('/sap/bc/adt/businessservices/bindings/ZUI_TRAVEL_O4');
+      expect(urlUsed?.headers?.Accept).toContain('application/vnd.sap.adt.businessservices.servicebinding.v2+xml');
+    });
+
     it('getTable returns table definition source', async () => {
       const client = createClient();
       const source = await client.getTable('MARA');

@@ -29,6 +29,7 @@ import {
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
+  parseServiceBinding,
   parseSourceSearchResults,
   parseSystemInfo,
   parseTableContents,
@@ -187,6 +188,22 @@ export class AdtClient {
     checkOperation(this.safety, OperationType.Read, 'GetSRVD');
     const resp = await this.http.get(`/sap/bc/adt/ddic/srvd/sources/${encodeURIComponent(name)}/source/main`);
     return resp.body;
+  }
+
+  /** Get metadata extension source code (DDLX) */
+  async getDdlx(name: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetDDLX');
+    const resp = await this.http.get(`/sap/bc/adt/ddic/ddlx/sources/${encodeURIComponent(name)}/source/main`);
+    return resp.body;
+  }
+
+  /** Get service binding metadata (SRVB) — returns structured XML, not source text */
+  async getSrvb(name: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetSRVB');
+    const resp = await this.http.get(`/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}`, {
+      Accept: 'application/vnd.sap.adt.businessservices.servicebinding.v2+xml',
+    });
+    return parseServiceBinding(resp.body);
   }
 
   /** Get table definition source code */

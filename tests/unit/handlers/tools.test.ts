@@ -137,7 +137,7 @@ describe('Tool Definitions', () => {
       expect(typeEnum).not.toContain('SOBJ');
     });
 
-    it('keeps CLAS, INTF, DDLS, BDEF, SRVD on BTP', () => {
+    it('keeps CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB on BTP', () => {
       const tools = getToolDefinitions(btpConfig);
       const sapRead = tools.find((t) => t.name === 'SAPRead')!;
       const schema = sapRead.inputSchema as Record<string, any>;
@@ -146,8 +146,10 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('CLAS');
       expect(typeEnum).toContain('INTF');
       expect(typeEnum).toContain('DDLS');
+      expect(typeEnum).toContain('DDLX');
       expect(typeEnum).toContain('BDEF');
       expect(typeEnum).toContain('SRVD');
+      expect(typeEnum).toContain('SRVB');
       expect(typeEnum).toContain('TABLE_CONTENTS');
     });
 
@@ -163,6 +165,34 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('TEXT_ELEMENTS');
       expect(typeEnum).toContain('VARIANTS');
       expect(typeEnum).toContain('SOBJ');
+      expect(typeEnum).toContain('DDLX');
+      expect(typeEnum).toContain('SRVB');
+    });
+
+    it('includes DDLS, DDLX, BDEF, SRVD in SAPWrite types on both BTP and on-prem', () => {
+      for (const config of [btpConfig, onpremConfig]) {
+        const tools = getToolDefinitions(config);
+        const sapWrite = tools.find((t) => t.name === 'SAPWrite')!;
+        const schema = sapWrite.inputSchema as Record<string, any>;
+        const typeEnum: string[] = schema.properties.type.enum;
+
+        expect(typeEnum).toContain('DDLS');
+        expect(typeEnum).toContain('DDLX');
+        expect(typeEnum).toContain('BDEF');
+        expect(typeEnum).toContain('SRVD');
+      }
+    });
+
+    it('SAPActivate schema includes objects array for batch activation', () => {
+      const tools = getToolDefinitions(onpremConfig);
+      const sapActivate = tools.find((t) => t.name === 'SAPActivate')!;
+      const schema = sapActivate.inputSchema as Record<string, any>;
+
+      expect(schema.properties.objects).toBeDefined();
+      expect(schema.properties.objects.type).toBe('array');
+      expect(schema.properties.objects.items).toBeDefined();
+      expect(schema.properties.objects.items.properties.type).toBeDefined();
+      expect(schema.properties.objects.items.properties.name).toBeDefined();
     });
 
     it('uses on-premise types when systemType is auto (default)', () => {

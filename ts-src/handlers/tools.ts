@@ -41,8 +41,10 @@ const SAPREAD_TYPES_ONPREM = [
   'FUGR',
   'INCL',
   'DDLS',
+  'DDLX',
   'BDEF',
   'SRVD',
+  'SRVB',
   'TABL',
   'VIEW',
   'STRU',
@@ -66,8 +68,10 @@ const SAPREAD_TYPES_BTP = [
   'FUNC',
   'FUGR',
   'DDLS',
+  'DDLX',
   'BDEF',
   'SRVD',
+  'SRVB',
   'TABL',
   'STRU',
   'DOMA',
@@ -80,21 +84,21 @@ const SAPREAD_TYPES_BTP = [
 ];
 
 const SAPREAD_DESC_ONPREM =
-  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, BDEF, SRVD, TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
+  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
 
 const SAPREAD_DESC_BTP =
-  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), BDEF (RAP behavior definitions), SRVD (service definitions), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
+  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL'];
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF'];
+const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL.';
+  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF. Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP.';
+  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD. Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP.';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -289,14 +293,30 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
 
     tools.push({
       name: 'SAPActivate',
-      description: 'Activate (publish) ABAP objects. Activates the object and reports any activation errors.',
+      description:
+        'Activate (publish) ABAP objects. Supports single object or batch activation.\n' +
+        'For batch: pass "objects" array with {type, name} entries to activate multiple objects in one call. ' +
+        'Essential for RAP stacks where DDLS, BDEF, SRVD, DDLX, and SRVB depend on each other and must be activated together.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Object name to activate' },
-          type: { type: 'string', description: 'Object type (PROG, CLAS, etc.)' },
+          name: { type: 'string', description: 'Object name (for single activation)' },
+          type: { type: 'string', description: 'Object type (PROG, CLAS, DDLS, DDLX, BDEF, SRVD, SRVB, etc.)' },
+          objects: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', description: 'Object type' },
+                name: { type: 'string', description: 'Object name' },
+              },
+              required: ['type', 'name'],
+            },
+            description:
+              'For batch activation: array of objects to activate together. ' +
+              'Use for RAP stacks: [{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]',
+          },
         },
-        required: ['name', 'type'],
       },
     });
   }

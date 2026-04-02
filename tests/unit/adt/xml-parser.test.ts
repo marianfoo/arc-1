@@ -9,6 +9,7 @@ import {
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
+  parseServiceBinding,
   parseSystemInfo,
   parseTableContents,
   parseTransactionMetadata,
@@ -474,6 +475,66 @@ describe('XML Parser', () => {
       const result = findDeepNodes(obj, 'target');
       expect(result).toHaveLength(1);
       expect((result[0] as any).name).toBe('single');
+    });
+  });
+
+  // ─── parseServiceBinding ──────────────────────────────────────────
+
+  describe('parseServiceBinding', () => {
+    it('parses service binding XML from fixture', () => {
+      const xml = loadFixture('service-binding.xml');
+      const result = JSON.parse(parseServiceBinding(xml));
+      expect(result.name).toBe('/DMO/UI_TRAVEL_D_D_O4');
+      expect(result.description).toBe('Service Binding Travel Draft Scenario');
+      expect(result.type).toBe('SRVB/SVB');
+      expect(result.odataVersion).toBe('V4');
+      expect(result.bindingType).toBe('ODATA');
+      expect(result.bindingCategory).toBe('UI'); // category "0" = UI
+      expect(result.published).toBe(true);
+      expect(result.bindingCreated).toBe(true);
+      expect(result.contract).toBe('C1');
+      expect(result.serviceDefinition).toBe('/DMO/UI_TRAVEL_D_D');
+      expect(result.serviceName).toBe('/DMO/UI_TRAVEL_D_D');
+      expect(result.serviceVersion).toBe('0001');
+      expect(result.releaseState).toBe('NOT_RELEASED');
+      expect(result.package).toBe('/DMO/FLIGHT_DRAFT');
+      expect(result.implementation).toBe('/DMO/UI_TRAVEL_D_D_O4');
+    });
+
+    it('parses V2 service binding with Web API category', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<srvb:serviceBinding srvb:contract="C1" srvb:published="false" srvb:bindingCreated="true"
+    adtcore:name="ZAPI_TRAVEL" adtcore:type="SRVB/SVB" adtcore:description="Travel API"
+    adtcore:language="EN" xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
+    xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="ZTRAVEL"/>
+  <srvb:services srvb:name="ZAPI_TRAVEL">
+    <srvb:content srvb:version="0001" srvb:releaseState="RELEASED">
+      <srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>
+    </srvb:content>
+  </srvb:services>
+  <srvb:binding srvb:type="ODATA" srvb:version="V2" srvb:category="1">
+    <srvb:implementation adtcore:name="ZAPI_TRAVEL"/>
+  </srvb:binding>
+</srvb:serviceBinding>`;
+
+      const result = JSON.parse(parseServiceBinding(xml));
+      expect(result.name).toBe('ZAPI_TRAVEL');
+      expect(result.odataVersion).toBe('V2');
+      expect(result.bindingCategory).toBe('Web API'); // category "1" = Web API
+      expect(result.published).toBe(false);
+      expect(result.releaseState).toBe('RELEASED');
+    });
+
+    it('handles minimal service binding XML gracefully', () => {
+      const xml = `<?xml version="1.0"?><srvb:serviceBinding
+        xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
+        xmlns:adtcore="http://www.sap.com/adt/core">
+        <srvb:binding/>
+      </srvb:serviceBinding>`;
+      const result = JSON.parse(parseServiceBinding(xml));
+      expect(result.name).toBe('');
+      expect(result.odataVersion).toBe('');
     });
   });
 });

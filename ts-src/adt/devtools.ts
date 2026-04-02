@@ -61,6 +61,50 @@ export async function activate(
   return { success: !hasErrors, messages };
 }
 
+/**
+ * Activate (publish) multiple ABAP objects in a single batch call.
+ *
+ * The ADT activation endpoint natively supports multiple objectReference elements.
+ * This is essential for RAP stacks where objects depend on each other
+ * (DDLS → BDEF → SRVD → SRVB) and must be activated together.
+ */
+export async function activateBatch(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objects: Array<{ url: string; name: string }>,
+): Promise<{ success: boolean; messages: string[] }> {
+  checkOperation(safety, OperationType.Activate, 'ActivateBatch');
+
+  const refs = objects
+    .map((o) => `  <adtcore:objectReference adtcore:uri="${o.url}" adtcore:name="${o.name}"/>`)
+    .join('\n');
+
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+${refs}
+</adtcore:objectReferences>`;
+
+  const resp = await http.post(
+    '/sap/bc/adt/activation?method=activate&preauditRequested=true',
+    body,
+    'application/xml',
+    {
+      Accept: 'application/xml',
+    },
+  );
+
+  // Check if activation succeeded (no error messages)
+  const hasErrors = resp.body.includes('severity="error"') || resp.body.includes('type="E"');
+  const messages: string[] = [];
+  const msgRegex = /shortText="([^"]+)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = msgRegex.exec(resp.body)) !== null) {
+    messages.push(match[1]!);
+  }
+
+  return { success: !hasErrors, messages };
+}
+
 /** Run ABAP unit tests for an object */
 export async function runUnitTests(
   http: AdtHttpClient,

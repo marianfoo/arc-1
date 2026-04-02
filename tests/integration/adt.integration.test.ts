@@ -513,4 +513,53 @@ describeIf('ADT Integration Tests', () => {
       });
     });
   });
+
+  // ─── DDLX (Metadata Extension) Operations ─────────────────────────
+
+  describe('DDLX read operations', () => {
+    it('reads a DDLX metadata extension source', async () => {
+      // /DMO/C_AGENCYTP is a standard demo DDLX from the Flight Reference Scenario
+      const source = await client.getDdlx('/DMO/C_AGENCYTP');
+      expect(source).toBeTruthy();
+      expect(source).toContain('@Metadata.layer');
+      expect(source).toContain('annotate');
+    });
+
+    it('reads DDLX with UI annotations', async () => {
+      const source = await client.getDdlx('/DMO/C_TRAVEL_A_D');
+      expect(source).toBeTruthy();
+      expect(source).toContain('@UI');
+    });
+
+    it('returns 404 for non-existent DDLX', async () => {
+      await expect(client.getDdlx('ZZZNOTEXIST_DDLX_999')).rejects.toThrow();
+    });
+  });
+
+  // ─── SRVB (Service Binding) Operations ─────────────────────────────
+
+  describe('SRVB read operations', () => {
+    it('reads a service binding and returns parsed JSON', async () => {
+      // /DMO/UI_AGENCY_O4 is a standard demo SRVB from the Flight Reference Scenario
+      const result = await client.getSrvb('/DMO/UI_AGENCY_O4');
+      const parsed = JSON.parse(result);
+      expect(parsed.name).toBe('/DMO/UI_AGENCY_O4');
+      expect(parsed.type).toBe('SRVB/SVB');
+      expect(parsed.odataVersion).toBe('V4');
+      expect(parsed.bindingType).toBe('ODATA');
+      expect(parsed.bindingCategory).toBe('UI');
+      expect(parsed.serviceDefinition).toBeTruthy();
+    });
+
+    it('reads a V2 service binding', async () => {
+      const result = await client.getSrvb('/DMO/UI_TRAVEL_U_V2');
+      const parsed = JSON.parse(result);
+      expect(parsed.name).toBe('/DMO/UI_TRAVEL_U_V2');
+      expect(parsed.odataVersion).toBe('V2');
+    });
+
+    it('returns 404 for non-existent SRVB', async () => {
+      await expect(client.getSrvb('ZZZNOTEXIST_SRVB_999')).rejects.toThrow();
+    });
+  });
 });

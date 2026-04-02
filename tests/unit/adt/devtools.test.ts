@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activate, runAtcCheck, runUnitTests, syntaxCheck } from '../../../ts-src/adt/devtools.js';
+import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../../../ts-src/adt/devtools.js';
 import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
 import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
@@ -127,6 +127,69 @@ describe('DevTools', () => {
         'application/xml',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
+    });
+  });
+
+  // ─── activateBatch ────────────────────────────────────────────────
+
+  describe('activateBatch', () => {
+    it('returns success when no errors', async () => {
+      const http = mockHttp(
+        '<chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist"><chkl:properties checkExecuted="false" activationExecuted="true" generationExecuted="true"/></chkl:messages>',
+      );
+      const result = await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL', name: 'ZI_TRAVEL' },
+        { url: '/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVEL', name: 'ZI_TRAVEL' },
+      ]);
+      expect(result.success).toBe(true);
+    });
+
+    it('includes all objects in activation XML payload', async () => {
+      const http = mockHttp('<activation/>');
+      await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL', name: 'ZI_TRAVEL' },
+        { url: '/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVEL', name: 'ZI_TRAVEL' },
+        { url: '/sap/bc/adt/ddic/srvd/sources/ZSD_TRAVEL', name: 'ZSD_TRAVEL' },
+      ]);
+
+      const callArgs = (http.post as any).mock.calls[0];
+      const body = callArgs[1] as string;
+      expect(body).toContain('adtcore:uri="/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL"');
+      expect(body).toContain('adtcore:uri="/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVEL"');
+      expect(body).toContain('adtcore:uri="/sap/bc/adt/ddic/srvd/sources/ZSD_TRAVEL"');
+      expect(body).toContain('adtcore:name="ZI_TRAVEL"');
+      expect(body).toContain('adtcore:name="ZSD_TRAVEL"');
+    });
+
+    it('sends to activation endpoint with preauditRequested', async () => {
+      const http = mockHttp('<activation/>');
+      await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' },
+      ]);
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/activation?method=activate&preauditRequested=true',
+        expect.any(String),
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('detects errors in batch activation response', async () => {
+      const xml = '<messages><msg severity="error" shortText="Activation failed for ZI_TRAVEL"/></messages>';
+      const http = mockHttp(xml);
+      const result = await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL', name: 'ZI_TRAVEL' },
+      ]);
+      expect(result.success).toBe(false);
+      expect(result.messages).toContain('Activation failed for ZI_TRAVEL');
+    });
+
+    it('is blocked in read-only mode', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      await expect(
+        activateBatch(http, safety, [{ url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' }]),
+      ).rejects.toThrow(AdtSafetyError);
     });
   });
 

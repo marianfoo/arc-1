@@ -15,7 +15,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { AdtClient } from '../adt/client.js';
 import { findDefinition, findReferences, getCompletion } from '../adt/codeintel.js';
 import { createObject, deleteObject, lockObject, safeUpdateSource, unlockObject } from '../adt/crud.js';
-import { activate, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
+import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
 import {
   getDump,
   getTraceDbAccesses,
@@ -324,6 +324,10 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       return textResult(await client.getBdef(name));
     case 'SRVD':
       return textResult(await client.getSrvd(name));
+    case 'DDLX':
+      return textResult(await client.getDdlx(name));
+    case 'SRVB':
+      return textResult(await client.getSrvb(name));
     case 'TABL':
       return textResult(await client.getTable(name));
     case 'VIEW':
@@ -417,7 +421,7 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       return textResult(await client.getVariants(name));
     default:
       return errorResult(
-        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, BDEF, SRVD, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
+        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
       );
   }
 }
@@ -525,6 +529,10 @@ function objectUrlForType(type: string, name: string): string {
       return `/sap/bc/adt/bo/behaviordefinitions/${encoded}`;
     case 'SRVD':
       return `/sap/bc/adt/ddic/srvd/sources/${encoded}`;
+    case 'DDLX':
+      return `/sap/bc/adt/ddic/ddlx/sources/${encoded}`;
+    case 'SRVB':
+      return `/sap/bc/adt/businessservices/bindings/${encoded}`;
     case 'TABL':
       return `/sap/bc/adt/ddic/tables/${encoded}`;
     default:
@@ -588,8 +596,29 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
 // ─── SAPActivate Handler ─────────────────────────────────────────────
 
 async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const name = String(args.name ?? '');
   const type = String(args.type ?? '');
+
+  // Batch activation: multiple objects at once (for RAP stacks etc.)
+  if (args.objects && Array.isArray(args.objects)) {
+    const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
+      const objType = String(o.type ?? type);
+      const objName = String(o.name ?? '');
+      return { url: objectUrlForType(objType, objName), name: objName };
+    });
+
+    const result = await activateBatch(client.http, client.safety, objects);
+    const names = objects.map((o) => o.name).join(', ');
+
+    if (result.success) {
+      return textResult(
+        `Successfully activated ${objects.length} objects: ${names}.${result.messages.length > 0 ? `\nMessages: ${result.messages.join('; ')}` : ''}`,
+      );
+    }
+    return errorResult(`Batch activation failed for: ${names}.\nErrors: ${result.messages.join('; ')}`);
+  }
+
+  // Single activation (existing behavior)
+  const name = String(args.name ?? '');
   const objectUrl = objectUrlForType(type, name);
 
   const result = await activate(client.http, client.safety, objectUrl);

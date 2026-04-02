@@ -414,6 +414,55 @@ export function parseTransactionMetadata(xml: string): TransactionInfo {
   };
 }
 
+/**
+ * Parse service binding metadata XML into a human-readable summary.
+ *
+ * SRVB objects don't have editable source — they're structured XML with binding configuration.
+ * We extract the key fields into a JSON summary:
+ * - name, description, OData version (V2/V4), binding type (UI/Web API)
+ * - service definition reference, publish status, contract
+ */
+export function parseServiceBinding(xml: string): string {
+  const parsed = parseXml(xml);
+  const sb = (parsed.serviceBinding ?? {}) as Record<string, unknown>;
+
+  // Extract binding info
+  const binding = (sb.binding ?? {}) as Record<string, unknown>;
+  const services = sb.services as Record<string, unknown> | undefined;
+  const content = (services?.content ?? {}) as Record<string, unknown>;
+  const srvDef = (content?.serviceDefinition ?? {}) as Record<string, unknown>;
+  const pkg = (sb.packageRef ?? {}) as Record<string, unknown>;
+
+  const result = {
+    name: String(sb['@_name'] ?? ''),
+    description: String(sb['@_description'] ?? ''),
+    type: String(sb['@_type'] ?? ''),
+    odataVersion: String(binding['@_version'] ?? ''),
+    bindingType: String(binding['@_type'] ?? ''),
+    bindingCategory:
+      binding['@_category'] === '0'
+        ? 'UI'
+        : binding['@_category'] === '1'
+          ? 'Web API'
+          : String(binding['@_category'] ?? ''),
+    published: sb['@_published'] === 'true',
+    bindingCreated: sb['@_bindingCreated'] === 'true',
+    contract: String(sb['@_contract'] ?? ''),
+    releaseSupported: sb['@_releaseSupported'] === 'true',
+    serviceDefinition: String(srvDef['@_name'] ?? ''),
+    serviceName: String(services?.['@_name'] ?? ''),
+    serviceVersion: String(content?.['@_version'] ?? ''),
+    releaseState: String(content?.['@_releaseState'] ?? ''),
+    package: String(pkg['@_name'] ?? ''),
+    implementation: String((binding.implementation as Record<string, unknown>)?.['@_name'] ?? ''),
+    language: String(sb['@_language'] ?? ''),
+    changedAt: String(sb['@_changedAt'] ?? ''),
+    changedBy: String(sb['@_changedBy'] ?? ''),
+  };
+
+  return JSON.stringify(result, null, 2);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────
 
 /** Safely get a nested array from parsed XML */

@@ -181,6 +181,10 @@ case 'DOMA': {
   const domain = await client.getDomain(name);
   return textResult(JSON.stringify(domain, null, 2));
 }
+case 'DDLX':
+  return textResult(await client.getDdlx(name));
+case 'SRVB':
+  return textResult(await client.getSrvb(name));
 ```
 
 ### Safety Check
@@ -192,7 +196,7 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ## Testing
 
-### Unit Tests (596 tests)
+### Unit Tests (598 tests)
 - No SAP system required — always run with `npm test`
 - Mock HTTP via `vi.mock('axios', ...)`
 - XML fixtures in `tests/fixtures/xml/`

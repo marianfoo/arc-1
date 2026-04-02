@@ -19,7 +19,7 @@ vi.mock('axios', async () => {
     request: vi.fn().mockResolvedValue({
       status: 200,
       data: "REPORT zhello.\nWRITE: / 'Hello'.",
-      headers: {},
+      headers: { 'x-csrf-token': 'mock-csrf-token' },
     }),
   };
   return {
@@ -124,6 +124,46 @@ describe('Intent Handler', () => {
         name: 'Z_SRVD',
       });
       expect(result.isError).toBeUndefined();
+    });
+
+    it('reads metadata extension (DDLX)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DDLX',
+        name: 'ZC_TRAVEL',
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('reads service binding (SRVB) and returns parsed JSON', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0"?><srvb:serviceBinding srvb:contract="C1" srvb:published="true" srvb:bindingCreated="true"
+          adtcore:name="ZUI_TRAVEL_O4" adtcore:type="SRVB/SVB" adtcore:description="Travel UI"
+          adtcore:language="EN" xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
+          xmlns:adtcore="http://www.sap.com/adt/core">
+          <adtcore:packageRef adtcore:name="ZTRAVEL"/>
+          <srvb:services srvb:name="ZUI_TRAVEL">
+            <srvb:content srvb:version="0001" srvb:releaseState="NOT_RELEASED">
+              <srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>
+            </srvb:content>
+          </srvb:services>
+          <srvb:binding srvb:type="ODATA" srvb:version="V4" srvb:category="0">
+            <srvb:implementation adtcore:name="ZUI_TRAVEL_O4"/>
+          </srvb:binding>
+        </srvb:serviceBinding>`,
+        headers: {},
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'SRVB',
+        name: 'ZUI_TRAVEL_O4',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('ZUI_TRAVEL_O4');
+      expect(parsed.odataVersion).toBe('V4');
     });
 
     it('reads table definition (TABL)', async () => {
@@ -631,6 +671,45 @@ ENDCLASS.`;
       // Should not be an error — it processes the source and returns context
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Dependency context for zcl_standalone');
+    });
+  });
+
+  // ─── SAPActivate ───────────────────────────────────────────────────
+
+  describe('SAPActivate', () => {
+    it('activates a single object', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      // Mock returns generic text with no error markers → activation succeeds
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully activated PROG ZTEST');
+    });
+
+    it('batch activates multiple objects', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        objects: [
+          { type: 'DDLS', name: 'ZI_TRAVEL' },
+          { type: 'BDEF', name: 'ZI_TRAVEL' },
+          { type: 'SRVD', name: 'ZSD_TRAVEL' },
+        ],
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully activated 3 objects');
+      expect(result.content[0]?.text).toContain('ZI_TRAVEL');
+      expect(result.content[0]?.text).toContain('ZSD_TRAVEL');
+    });
+
+    it('batch activation uses type from individual objects', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        objects: [
+          { type: 'DDLX', name: 'ZC_TRAVEL' },
+          { type: 'SRVB', name: 'ZUI_TRAVEL_O4' },
+        ],
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully activated 2 objects');
     });
   });
 
