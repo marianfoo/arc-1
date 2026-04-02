@@ -92,7 +92,16 @@ src/
 │   ├── config.ts               # Config parser (CLI > env > .env > defaults)
 │   ├── http.ts                 # HTTP Streamable transport + API key/OIDC auth
 │   ├── logger.ts               # Structured logger (stderr only, never stdout)
-│   └── types.ts                # ServerConfig type, defaults
+│   ├── types.ts                # ServerConfig type, defaults
+│   ├── audit.ts                # Audit logging (tool calls, elicitation events)
+│   ├── context.ts              # MCP context helpers
+│   ├── elicit.ts               # MCP elicitation (confirmDestructive, selectOption, promptString)
+│   ├── xsuaa.ts                # XSUAA JWT validation for BTP
+│   └── sinks/                  # Audit log sinks
+│       ├── types.ts            # Sink interface
+│       ├── stderr.ts           # Stderr sink
+│       ├── file.ts             # File sink
+│       └── btp-auditlog.ts     # BTP Audit Log Service sink
 ├── handlers/
 │   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
 │   ├── tools.ts                # Tool definitions (names, descriptions, schemas)
@@ -139,9 +148,13 @@ tests/
 ├── integration/                # Integration tests (need SAP credentials)
 │   ├── helpers.ts              # Test client factory, skip logic
 │   ├── adt.integration.test.ts # Live SAP tests
-│   └── context.integration.test.ts # SAPContext live tests
+│   ├── context.integration.test.ts # SAPContext live tests
+│   ├── audit-logging.integration.test.ts # Audit logging tests
+│   ├── btp-abap.integration.test.ts # BTP ABAP tests
+│   └── elicitation.integration.test.ts # MCP elicitation tests
 └── fixtures/
-    └── xml/                    # Sample ADT XML responses
+    ├── xml/                    # Sample ADT XML responses
+    └── abap/                   # Sample ABAP source files
 ```
 
 ## Key Files for Common Tasks
@@ -159,6 +172,9 @@ tests/
 | Add contract extraction for new type | `src/context/contract.ts` |
 | Modify context output format | `src/context/compressor.ts` |
 | Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
+| Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
+| Add elicitation prompt | `src/server/elicit.ts` |
+| Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |
@@ -201,7 +217,7 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ## Testing
 
-### Unit Tests (598 tests)
+### Unit Tests (707 tests)
 - No SAP system required — always run with `npm test`
 - Mock HTTP via `vi.mock('axios', ...)`
 - XML fixtures in `tests/fixtures/xml/`

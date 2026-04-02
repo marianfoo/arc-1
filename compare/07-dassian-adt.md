@@ -126,26 +126,29 @@ Dev: jest ^29.7.0, ts-jest ^29.2.5
 
 ## Features This Project Has That ARC-1 Lacks
 
-| Feature | Priority | Effort | Place in ARC-1 or mcp-sap-docs? |
-|---------|----------|--------|--------------------------------|
-| `abap_run` (execute ABAP via IF_OO_ADT_CLASSRUN) | Medium | 2d | ARC-1 -- with safety gating |
-| `abap_get_function_group` (bulk parallel fetch) | High | 1d | ARC-1 -- reduces round trips |
-| `raw_http` escape hatch | Low | 0.5d | ARC-1 -- only with safety gating |
-| gCTS integration (git_repos, git_pull) | Medium | 2d | ARC-1 -- if gCTS feature detected |
-| Elicitation for destructive ops (7 flows) | High | 1d | ARC-1 -- already have elicitation |
-| Transport contents (E071 objects list) | Medium | 0.5d | ARC-1 -- extend SAPTransport |
-| 16 type auto-mappings (CLAS→CLAS/OC, etc.) | High | 0.5d | ARC-1 -- improve SAPWrite UX |
-| FUGR metadata-only transport assignment | Medium | 1d | ARC-1 -- avoids inactive versions |
-| ATC ciCheckFlavour workaround | High | 0.5d | ARC-1 -- robustness for older systems |
-| Error intelligence with self-correction hints | High | 1d | ARC-1 -- improve error messages |
-| Session auto-recovery (withSession wrapper) | Medium | 0.5d | ARC-1 -- verify session handling |
-| Smart redirect hints (wrong param detection) | Medium | 0.5d | ARC-1 -- improve tool UX |
-| Per-user browser login page (HTTP mode) | Low | 2d | ARC-1 -- OIDC already covers this |
-| AI self-test prompt (scripts/ai-selftest.md) | Medium | 0.5d | ARC-1 -- test harness idea |
+| Feature | Priority | Effort | Status (2026-04-02) |
+|---------|----------|--------|---------------------|
+| `abap_run` (execute ABAP via IF_OO_ADT_CLASSRUN) | Medium | 2d | Not implemented -- needs safety design |
+| `abap_get_function_group` (bulk parallel fetch) | Medium | 1d | Not implemented |
+| `raw_http` escape hatch | Low | 0.5d | Not implemented -- security concern |
+| gCTS integration (git_repos, git_pull) | Low | 2d | Feature flag exists, no tools |
+| ~~Elicitation for destructive ops (7 flows)~~ | ~~High~~ | ~~1d~~ | ~~IMPLEMENTED -- src/server/elicit.ts~~ |
+| Transport contents (E071 objects list) | Medium | 0.5d | Not implemented |
+| Transport assign (no-op save cycle) | Medium | 1d | Not implemented |
+| 16 type auto-mappings (CLAS→CLAS/OC, etc.) | Low | 0.5d | Not implemented |
+| FUGR metadata-only transport assignment | Low | 1d | Not implemented |
+| ATC ciCheckFlavour workaround | Low | 0.5d | Not implemented |
+| SAP-domain error hints (SM12, SPAU, L-prefix) | High | 1d | Partial -- basic HTTP hints exist, no SAP-domain |
+| ~~Session auto-recovery (withSession wrapper)~~ | ~~Medium~~ | ~~0.5d~~ | ~~IMPLEMENTED -- CSRF refresh + stateful sessions~~ |
+| Smart redirect hints (wrong param detection) | Low | 0.5d | Not implemented |
+| Per-user browser login page (HTTP mode) | Low | 2d | Not needed -- OIDC/XSUAA covers this |
+| AI self-test prompt (scripts/ai-selftest.md) | Low | 0.5d | Not implemented |
+
+See [08-dassian-adt-feature-gap.md](08-dassian-adt-feature-gap.md) for detailed gap analysis with implementation recommendations.
 
 ## Features ARC-1 Has That This Project Lacks
 
-Safety system (read-only, op filter, pkg filter, SQL blocking), OIDC/JWT auth, BTP support (Destination Service, PP, Cloud Connector), API key auth, abaplint, caching (SQLite + memory), audit logging, intent-based routing (11 vs 25 tools), code intelligence (find def/refs/completion), npm distribution, Docker image, 320+ unit tests vs 163.
+Safety system (read-only, op filter, pkg filter, SQL blocking), OIDC/JWT auth, BTP support (Destination Service, PP, Cloud Connector), API key auth, abaplint, caching (SQLite + memory), audit logging, intent-based routing (11 vs 25 tools), code intelligence (find def/refs/completion), npm distribution, Docker image, 707+ unit tests vs 163, MCP elicitation with audit, context compression (SAPContext 7-30x), method-level surgery (95% reduction), hyperfocused mode (~200 tokens), DDLX/SRVB/DOMA/DTEL read, batch activation, MCP scope system (OAuth).
 
 ---
 
@@ -153,9 +156,10 @@ Safety system (read-only, op filter, pkg filter, SQL blocking), OIDC/JWT auth, B
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-02 | Gap analysis updated (autoclosed PR report) | Yes | See 08-dassian-adt-feature-gap.md | Done |
 | 2026-03-30 | abap_where_used tool, abap_atc_run fix | Yes | Review where-used implementation | TODO |
 | 2026-03-28 | README cleanup | No | -- | -- |
-| 2026-03-27 | Initial commit (v2.0) | Yes | Full review of elicitation patterns | TODO |
+| 2026-03-27 | Initial commit (v2.0) | Yes | Elicitation patterns reviewed -- ARC-1 now has elicitation | Done |
 | | | | | |
 
 ## abap-mcpb (Successor — March 31, 2026)
@@ -167,4 +171,4 @@ albanleong/abap-mcpb packages dassian-adt v2.0 as an **MCPB** (MCP Bundle) for C
 - 2 files customized from dassian-adt: QualityHandlers.js (enhanced ATC), index.js (error handling)
 - Single commit, no releases yet — very early stage
 
-_Last updated: 2026-04-01_
+_Last updated: 2026-04-02_

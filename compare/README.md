@@ -17,6 +17,7 @@ This folder contains detailed analysis documents for each SAP ADT / MCP project 
 | 5 | [fr0ster/mcp-abap-adt](05-fr0ster-mcp-abap-adt.md) | ADT MCP Server (monorepo) | TypeScript | Very Active |
 | 6 | [lemaiwo/btp-sap-odata-to-mcp-server](06-btp-odata-mcp.md) | OData-to-MCP Bridge | TypeScript | Moderate |
 | 7 | [DassianInc/dassian-adt](07-dassian-adt.md) | ADT MCP Server (abap-adt-api fork) | TypeScript | New/Active |
+| 8 | [Dassian ADT Gap Analysis](08-dassian-adt-feature-gap.md) | Feature gap deep-dive (from autoclosed PR) | — | Updated 2026-04-02 |
 
 ## How to Update
 
