@@ -426,11 +426,28 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
-    it('returns error for unknown action', async () => {
+    it('returns error for unknown action with SAPDiagnose redirect hint', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
         action: 'unknown',
       });
       expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAPDiagnose');
+    });
+
+    it('redirects atc users to SAPDiagnose', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'atc',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAPDiagnose');
+    });
+
+    it('redirects syntax users to SAPDiagnose', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'syntax',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAPDiagnose');
     });
 
     it('returns error for missing action', async () => {
@@ -710,6 +727,55 @@ ENDCLASS.`;
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Successfully activated 2 objects');
+    });
+
+    it('activates DDIC types with correct object URLs in XML body', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+
+      // Activate STRU — the object URL should appear in the activation XML body
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'STRU',
+        name: 'ZTEST_STRUCT',
+      });
+      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
+      expect(lastCall.data).toContain('/sap/bc/adt/ddic/structures/ZTEST_STRUCT');
+    });
+
+    it('activates DOMA with correct object URL in XML body', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'DOMA',
+        name: 'ZBUKRS',
+      });
+      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
+      expect(lastCall.data).toContain('/sap/bc/adt/ddic/domains/ZBUKRS');
+    });
+
+    it('activates DTEL with correct object URL in XML body', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'DTEL',
+        name: 'ZBUKRS_DTEL',
+      });
+      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
+      expect(lastCall.data).toContain('/sap/bc/adt/ddic/dataelements/ZBUKRS_DTEL');
+    });
+
+    it('activates TRAN with correct object URL in XML body', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'TRAN',
+        name: 'ZTRAN01',
+      });
+      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
+      expect(lastCall.data).toContain('/sap/bc/adt/vit/wb/object_type/trant/object_name/ZTRAN01');
     });
   });
 

@@ -200,8 +200,18 @@ describe('E2E Smoke Tests', () => {
     expectToolError(result, 'Unknown SAPRead type');
   });
 
-  it('SAPLint — unknown action returns clear error', async () => {
+  it('SAPLint — unknown action returns clear error with SAPDiagnose hint', async () => {
     const result = await callTool(client, 'SAPLint', { action: 'foobar' });
-    expectToolError(result, 'Unknown SAPLint action');
+    expectToolError(result, 'SAPDiagnose');
+  });
+
+  it('SAPLint — atc action redirects to SAPDiagnose', async () => {
+    const result = await callTool(client, 'SAPLint', { action: 'atc' });
+    expectToolError(result, 'SAPDiagnose');
+  });
+
+  it('SAPLint — syntax action redirects to SAPDiagnose', async () => {
+    const result = await callTool(client, 'SAPLint', { action: 'syntax' });
+    expectToolError(result, 'SAPDiagnose');
   });
 });

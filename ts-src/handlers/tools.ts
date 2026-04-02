@@ -387,16 +387,20 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     },
     {
       name: 'SAPLint',
-      description: 'Check ABAP code quality. Runs abaplint rules locally and/or ATC checks on the SAP system.',
+      description:
+        'Run local abaplint rules on ABAP source code. For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.',
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['lint', 'atc', 'syntax'], description: 'Check type' },
-          source: { type: 'string', description: 'ABAP source code (for lint)' },
-          name: { type: 'string', description: 'Object name (for atc/syntax)' },
-          type: { type: 'string', description: 'Object type (for atc/syntax)' },
+          action: {
+            type: 'string',
+            enum: ['lint'],
+            description: 'Check type (only "lint" — for atc/syntax use SAPDiagnose)',
+          },
+          source: { type: 'string', description: 'ABAP source code to lint' },
+          name: { type: 'string', description: 'Object name (used for filename detection)' },
         },
-        required: ['action'],
+        required: ['action', 'source'],
       },
     },
     {
