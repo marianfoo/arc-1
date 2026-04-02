@@ -15,7 +15,7 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
-import type { AdtSearchResult, SourceSearchResult } from './types.js';
+import type { AdtSearchResult, DataElementInfo, DomainInfo, SourceSearchResult, TransactionInfo } from './types.js';
 
 /** Shared parser instance — configured for ADT XML conventions */
 const parser = new XMLParser({
@@ -303,6 +303,115 @@ export function parseSourceSearchResults(xml: string): SourceSearchResult[] {
   }
 
   return results;
+}
+
+/**
+ * Parse domain metadata XML from /sap/bc/adt/ddic/domains/{name}.
+ *
+ * Domains don't have /source/main — they return structured XML with
+ * type information, output characteristics, value table, and fixed values.
+ *
+ * Expected root: <doma:domain> with nested <doma:content>.
+ */
+export function parseDomainMetadata(xml: string): DomainInfo {
+  const parsed = parseXml(xml);
+  // After NS strip: doma:domain → domain
+  const domain = (parsed.domain ?? {}) as Record<string, unknown>;
+  const content = (domain.content ?? {}) as Record<string, unknown>;
+  const typeInfo = (content.typeInformation ?? {}) as Record<string, unknown>;
+  const outputInfo = (content.outputInformation ?? {}) as Record<string, unknown>;
+  const valueInfo = (content.valueInformation ?? {}) as Record<string, unknown>;
+  const pkgRef = (domain.packageRef ?? {}) as Record<string, unknown>;
+
+  // Parse fixed values if present
+  const fixedValues: Array<{ low: string; high: string; description: string }> = [];
+  const fvContainer = valueInfo.fixValues ?? valueInfo.fixedValues;
+  if (fvContainer && typeof fvContainer === 'object') {
+    const fvNodes = findDeepNodes(fvContainer as Record<string, unknown>, 'fixValue');
+    for (const fv of fvNodes) {
+      fixedValues.push({
+        low: String(fv.low ?? fv['@_low'] ?? ''),
+        high: String(fv.high ?? fv['@_high'] ?? ''),
+        description: String(fv.description ?? fv['@_description'] ?? ''),
+      });
+    }
+  }
+
+  // Parse value table reference
+  const valueTableRef = (valueInfo.valueTableRef ?? {}) as Record<string, unknown>;
+
+  return {
+    name: String(domain['@_name'] ?? ''),
+    description: String(domain['@_description'] ?? ''),
+    dataType: String(typeInfo.datatype ?? ''),
+    length: String(typeInfo.length ?? ''),
+    decimals: String(typeInfo.decimals ?? ''),
+    outputLength: String(outputInfo.length ?? ''),
+    conversionExit: String(outputInfo.conversionExit ?? ''),
+    signExists: String(outputInfo.signExists ?? '') === 'true',
+    lowercase: String(outputInfo.lowercase ?? '') === 'true',
+    valueTable: String(valueTableRef['@_name'] ?? ''),
+    fixedValues,
+    package: String(pkgRef['@_name'] ?? ''),
+  };
+}
+
+/**
+ * Parse data element metadata XML from /sap/bc/adt/ddic/dataelements/{name}.
+ *
+ * Data elements don't have /source/main — they return structured XML with
+ * domain/type reference, field labels, search help, and other metadata.
+ *
+ * Expected root: <blue:wbobj> with nested <dtel:dataElement>.
+ */
+export function parseDataElementMetadata(xml: string): DataElementInfo {
+  const parsed = parseXml(xml);
+  // After NS strip: blue:wbobj → wbobj
+  const wbobj = (parsed.wbobj ?? {}) as Record<string, unknown>;
+  const pkgRef = (wbobj.packageRef ?? {}) as Record<string, unknown>;
+
+  // Find the dataElement node — after NS strip: dtel:dataElement → dataElement
+  const dtelNodes = findDeepNodes(parsed, 'dataElement');
+  const dtel = dtelNodes[0] ?? {};
+
+  return {
+    name: String(wbobj['@_name'] ?? ''),
+    description: String(wbobj['@_description'] ?? ''),
+    typeKind: String(dtel.typeKind ?? ''),
+    typeName: String(dtel.typeName ?? ''),
+    dataType: String(dtel.dataType ?? ''),
+    length: String(dtel.dataTypeLength ?? ''),
+    decimals: String(dtel.dataTypeDecimals ?? ''),
+    shortLabel: String(dtel.shortFieldLabel ?? ''),
+    mediumLabel: String(dtel.mediumFieldLabel ?? ''),
+    longLabel: String(dtel.longFieldLabel ?? ''),
+    headingLabel: String(dtel.headingFieldLabel ?? ''),
+    searchHelp: String(dtel.searchHelp ?? ''),
+    defaultComponentName: String(dtel.defaultComponentName ?? ''),
+    package: String(pkgRef['@_name'] ?? ''),
+  };
+}
+
+/**
+ * Parse transaction metadata XML from /sap/bc/adt/vit/wb/object_type/trant/object_name/{name}.
+ *
+ * Returns basic transaction info: code, description, package.
+ * The program name is not in this endpoint — use SQL (TSTC) for full details.
+ *
+ * Expected root: <adtcore:mainObject>.
+ */
+export function parseTransactionMetadata(xml: string): TransactionInfo {
+  const parsed = parseXml(xml);
+  // After NS strip: adtcore:mainObject → mainObject
+  const obj = (parsed.mainObject ?? {}) as Record<string, unknown>;
+  const pkgRef = (obj.packageRef ?? {}) as Record<string, unknown>;
+
+  return {
+    code: String(obj['@_name'] ?? ''),
+    description: String(obj['@_description'] ?? ''),
+    program: '', // Not available from this endpoint — populated via SQL in handler
+    package: String(pkgRef['@_name'] ?? ''),
+  };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────

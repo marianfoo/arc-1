@@ -131,6 +131,78 @@ describeIf('ADT Integration Tests', () => {
     });
   });
 
+  // ─── DDIC Operations (Structures, Domains, Data Elements) ─────
+
+  describe('DDIC operations', () => {
+    it('reads structure definition (BAPIRET2)', async () => {
+      const source = await client.getStructure('BAPIRET2');
+      expect(source).toBeTruthy();
+      expect(source).toContain('bapiret2');
+      expect(source).toContain('message');
+    });
+
+    it('reads structure definition (SYST)', async () => {
+      const source = await client.getStructure('SYST');
+      expect(source).toBeTruthy();
+      expect(source).toContain('syst');
+      expect(source).toContain('subrc');
+    });
+
+    it('reads domain metadata (MANDT)', async () => {
+      const domain = await client.getDomain('MANDT');
+      expect(domain.name).toBe('MANDT');
+      expect(domain.dataType).toBe('CLNT');
+      expect(domain.length).toBe('000003');
+      expect(domain.package).toBeTruthy();
+    });
+
+    it('reads domain metadata with value table (BUKRS)', async () => {
+      const domain = await client.getDomain('BUKRS');
+      expect(domain.name).toBe('BUKRS');
+      expect(domain.dataType).toBe('CHAR');
+      expect(domain.length).toBe('000004');
+      expect(domain.valueTable).toBe('T001');
+    });
+
+    it('reads data element metadata (MANDT)', async () => {
+      const dtel = await client.getDataElement('MANDT');
+      expect(dtel.name).toBe('MANDT');
+      expect(dtel.typeKind).toBe('domain');
+      expect(dtel.typeName).toBe('MANDT');
+      expect(dtel.dataType).toBe('CLNT');
+      expect(dtel.package).toBeTruthy();
+    });
+
+    it('reads data element metadata with labels (BUKRS)', async () => {
+      const dtel = await client.getDataElement('BUKRS');
+      expect(dtel.name).toBe('BUKRS');
+      expect(dtel.typeKind).toBe('domain');
+      expect(dtel.typeName).toBe('BUKRS');
+      expect(dtel.dataType).toBe('CHAR');
+      expect(dtel.mediumLabel).toBeTruthy();
+      expect(dtel.searchHelp).toBe('C_T001');
+    });
+
+    it('reads transaction metadata (SE38)', async () => {
+      const tran = await client.getTransaction('SE38');
+      expect(tran.code).toBe('SE38');
+      expect(tran.description).toBeTruthy();
+      expect(tran.package).toBeTruthy();
+    });
+
+    it('returns 404 for non-existent domain', async () => {
+      await expect(client.getDomain('ZZZNOTEXIST999')).rejects.toThrow();
+    });
+
+    it('returns 404 for non-existent data element', async () => {
+      await expect(client.getDataElement('ZZZNOTEXIST999')).rejects.toThrow();
+    });
+
+    it('returns 404 for non-existent transaction', async () => {
+      await expect(client.getTransaction('ZZZNOTEXIST999')).rejects.toThrow();
+    });
+  });
+
   // ─── Class Operations ───────────────────────────────────────────
 
   describe('class operations', () => {

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<doma:domain adtcore:responsible="SAP" adtcore:masterLanguage="DE" adtcore:masterSystem="SAP" adtcore:abapLanguageVersion="standard" adtcore:name="BUKRS" adtcore:type="DOMA/DD" adtcore:changedAt="1999-06-29T18:45:23Z" adtcore:version="active" adtcore:changedBy="SAP" adtcore:createdBy="SAP" adtcore:description="Company code" adtcore:language="EN" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atom:link href="versions" rel="http://www.sap.com/adt/relations/versions" title="Historic versions" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <atom:link href="/sap/bc/adt/vit/wb/object_type/domadd/object_name/BUKRS" rel="self" type="application/vnd.sap.sapgui" title="Representation in SAP Gui" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/bf" adtcore:type="DEVC/K" adtcore:name="BF" adtcore:description="FI Cross-application Objects"/>
+  <doma:content>
+    <doma:typeInformation>
+      <doma:datatype>CHAR</doma:datatype>
+      <doma:length>000004</doma:length>
+      <doma:decimals>000000</doma:decimals>
+    </doma:typeInformation>
+    <doma:outputInformation>
+      <doma:length>000004</doma:length>
+      <doma:style>00</doma:style>
+      <doma:conversionExit/>
+      <doma:signExists>false</doma:signExists>
+      <doma:lowercase>false</doma:lowercase>
+      <doma:ampmFormat>false</doma:ampmFormat>
+    </doma:outputInformation>
+    <doma:valueInformation>
+      <doma:valueTableRef adtcore:uri="/sap/bc/adt/ddic/tables/t001" adtcore:type="TABL/DT" adtcore:name="T001"/>
+      <doma:appendExists>false</doma:appendExists>
+      <doma:fixValues/>
+    </doma:valueInformation>
+  </doma:content>
+</doma:domain>

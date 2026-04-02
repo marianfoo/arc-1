@@ -45,6 +45,10 @@ const SAPREAD_TYPES_ONPREM = [
   'SRVD',
   'TABL',
   'VIEW',
+  'STRU',
+  'DOMA',
+  'DTEL',
+  'TRAN',
   'TABLE_CONTENTS',
   'DEVC',
   'SOBJ',
@@ -65,6 +69,9 @@ const SAPREAD_TYPES_BTP = [
   'BDEF',
   'SRVD',
   'TABL',
+  'STRU',
+  'DOMA',
+  'DTEL',
   'TABLE_CONTENTS',
   'DEVC',
   'SYSTEM',
@@ -73,10 +80,10 @@ const SAPREAD_TYPES_BTP = [
 ];
 
 const SAPREAD_DESC_ONPREM =
-  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, BDEF, SRVD, TABL, VIEW, TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
+  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, BDEF, SRVD, TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
 
 const SAPREAD_DESC_BTP =
-  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), BDEF (RAP behavior definitions), SRVD (service definitions), TABL (custom tables only), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. Note: PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
+  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), BDEF (RAP behavior definitions), SRVD (service definitions), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 

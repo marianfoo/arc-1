@@ -21,8 +21,10 @@ import { defaultAdtClientConfig } from './config.js';
 import { isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import type { AdtSearchResult, SourceSearchResult } from './types.js';
+import type { AdtSearchResult, DataElementInfo, DomainInfo, SourceSearchResult, TransactionInfo } from './types.js';
 import {
+  parseDataElementMetadata,
+  parseDomainMetadata,
   parseFunctionGroup,
   parseInstalledComponents,
   parsePackageContents,
@@ -30,6 +32,7 @@ import {
   parseSourceSearchResults,
   parseSystemInfo,
   parseTableContents,
+  parseTransactionMetadata,
 } from './xml-parser.js';
 
 export class AdtClient {
@@ -198,6 +201,34 @@ export class AdtClient {
     checkOperation(this.safety, OperationType.Read, 'GetView');
     const resp = await this.http.get(`/sap/bc/adt/ddic/views/${encodeURIComponent(name)}/source/main`);
     return resp.body;
+  }
+
+  /** Get structure definition source code (CDS-like format) */
+  async getStructure(name: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetStructure');
+    const resp = await this.http.get(`/sap/bc/adt/ddic/structures/${encodeURIComponent(name)}/source/main`);
+    return resp.body;
+  }
+
+  /** Get domain metadata (type, length, value table, fixed values) */
+  async getDomain(name: string): Promise<DomainInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetDomain');
+    const resp = await this.http.get(`/sap/bc/adt/ddic/domains/${encodeURIComponent(name)}`);
+    return parseDomainMetadata(resp.body);
+  }
+
+  /** Get data element metadata (domain, labels, search help) */
+  async getDataElement(name: string): Promise<DataElementInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetDataElement');
+    const resp = await this.http.get(`/sap/bc/adt/ddic/dataelements/${encodeURIComponent(name)}`);
+    return parseDataElementMetadata(resp.body);
+  }
+
+  /** Get transaction code metadata (description, package) */
+  async getTransaction(name: string): Promise<TransactionInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetTransaction');
+    const resp = await this.http.get(`/sap/bc/adt/vit/wb/object_type/trant/object_name/${encodeURIComponent(name)}`);
+    return parseTransactionMetadata(resp.body);
   }
 
   // ─── Search Operations ─────────────────────────────────────────────

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<doma:domain adtcore:responsible="SAP" adtcore:masterLanguage="DE" adtcore:masterSystem="SAP" adtcore:abapLanguageVersion="standard" adtcore:name="BAPI_MTYPE" adtcore:type="DOMA/DD" adtcore:changedAt="2005-03-15T10:00:00Z" adtcore:version="active" adtcore:changedBy="SAP" adtcore:createdBy="SAP" adtcore:description="Message type: S, E, W, I, A" adtcore:language="EN" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/sbf_bapi" adtcore:type="DEVC/K" adtcore:name="SBF_BAPI"/>
+  <doma:content>
+    <doma:typeInformation>
+      <doma:datatype>CHAR</doma:datatype>
+      <doma:length>000001</doma:length>
+      <doma:decimals>000000</doma:decimals>
+    </doma:typeInformation>
+    <doma:outputInformation>
+      <doma:length>000001</doma:length>
+      <doma:style>00</doma:style>
+      <doma:conversionExit/>
+      <doma:signExists>false</doma:signExists>
+      <doma:lowercase>false</doma:lowercase>
+      <doma:ampmFormat>false</doma:ampmFormat>
+    </doma:outputInformation>
+    <doma:valueInformation>
+      <doma:appendExists>false</doma:appendExists>
+      <doma:fixValues>
+        <doma:fixValue>
+          <doma:low>S</doma:low>
+          <doma:high/>
+          <doma:description>Success</doma:description>
+        </doma:fixValue>
+        <doma:fixValue>
+          <doma:low>E</doma:low>
+          <doma:high/>
+          <doma:description>Error</doma:description>
+        </doma:fixValue>
+        <doma:fixValue>
+          <doma:low>W</doma:low>
+          <doma:high/>
+          <doma:description>Warning</doma:description>
+        </doma:fixValue>
+        <doma:fixValue>
+          <doma:low>I</doma:low>
+          <doma:high/>
+          <doma:description>Information</doma:description>
+        </doma:fixValue>
+        <doma:fixValue>
+          <doma:low>A</doma:low>
+          <doma:high/>
+          <doma:description>Abort</doma:description>
+        </doma:fixValue>
+      </doma:fixValues>
+    </doma:valueInformation>
+  </doma:content>
+</doma:domain>

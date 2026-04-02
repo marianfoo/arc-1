@@ -3,12 +3,15 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   findDeepNodes,
+  parseDataElementMetadata,
+  parseDomainMetadata,
   parseFunctionGroup,
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
   parseSystemInfo,
   parseTableContents,
+  parseTransactionMetadata,
   parseXml,
 } from '../../../ts-src/adt/xml-parser.js';
 
@@ -348,6 +351,103 @@ describe('XML Parser', () => {
       expect(result.user).toBe('TEST_USER');
       expect(result.collections).toHaveLength(1);
       expect(result.collections[0]).toEqual({ title: 'Core', href: '/sap/bc/adt/core' });
+    });
+  });
+
+  // ─── parseDomainMetadata ───────────────────────────────────────────
+
+  describe('parseDomainMetadata', () => {
+    it('parses domain metadata from fixture', () => {
+      const xml = loadFixture('domain-metadata.xml');
+      const domain = parseDomainMetadata(xml);
+      expect(domain.name).toBe('BUKRS');
+      expect(domain.description).toBe('Company code');
+      expect(domain.dataType).toBe('CHAR');
+      expect(domain.length).toBe('000004');
+      expect(domain.decimals).toBe('000000');
+      expect(domain.outputLength).toBe('000004');
+      expect(domain.signExists).toBe(false);
+      expect(domain.lowercase).toBe(false);
+      expect(domain.valueTable).toBe('T001');
+      expect(domain.fixedValues).toEqual([]);
+      expect(domain.package).toBe('BF');
+    });
+
+    it('parses domain with fixed values', () => {
+      const xml = loadFixture('domain-with-fixvalues.xml');
+      const domain = parseDomainMetadata(xml);
+      expect(domain.name).toBe('BAPI_MTYPE');
+      expect(domain.description).toBe('Message type: S, E, W, I, A');
+      expect(domain.dataType).toBe('CHAR');
+      expect(domain.length).toBe('000001');
+      expect(domain.fixedValues.length).toBe(5);
+      expect(domain.fixedValues[0]).toEqual({ low: 'S', high: '', description: 'Success' });
+      expect(domain.fixedValues[4]).toEqual({ low: 'A', high: '', description: 'Abort' });
+    });
+
+    it('handles minimal domain XML', () => {
+      const xml =
+        '<doma:domain adtcore:name="ZTEST" adtcore:description="Test" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core"/>';
+      const domain = parseDomainMetadata(xml);
+      expect(domain.name).toBe('ZTEST');
+      expect(domain.description).toBe('Test');
+      expect(domain.dataType).toBe('');
+      expect(domain.fixedValues).toEqual([]);
+    });
+  });
+
+  // ─── parseDataElementMetadata ─────────────────────────────────────
+
+  describe('parseDataElementMetadata', () => {
+    it('parses data element metadata from fixture', () => {
+      const xml = loadFixture('dataelement-metadata.xml');
+      const dtel = parseDataElementMetadata(xml);
+      expect(dtel.name).toBe('BUKRS');
+      expect(dtel.description).toBe('Company code');
+      expect(dtel.typeKind).toBe('domain');
+      expect(dtel.typeName).toBe('BUKRS');
+      expect(dtel.dataType).toBe('CHAR');
+      expect(dtel.length).toBe('000004');
+      expect(dtel.decimals).toBe('000000');
+      expect(dtel.shortLabel).toBe('CoCd');
+      expect(dtel.mediumLabel).toBe('Company Code');
+      expect(dtel.longLabel).toBe('Company Code');
+      expect(dtel.headingLabel).toBe('CoCd');
+      expect(dtel.searchHelp).toBe('C_T001');
+      expect(dtel.defaultComponentName).toBe('COMP_CODE');
+      expect(dtel.package).toBe('BF');
+    });
+
+    it('handles minimal data element XML', () => {
+      const xml =
+        '<blue:wbobj adtcore:name="ZTEST" adtcore:description="Test Element" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core"/>';
+      const dtel = parseDataElementMetadata(xml);
+      expect(dtel.name).toBe('ZTEST');
+      expect(dtel.description).toBe('Test Element');
+      expect(dtel.typeKind).toBe('');
+      expect(dtel.typeName).toBe('');
+    });
+  });
+
+  // ─── parseTransactionMetadata ─────────────────────────────────────
+
+  describe('parseTransactionMetadata', () => {
+    it('parses transaction metadata from fixture', () => {
+      const xml = loadFixture('transaction-metadata.xml');
+      const tran = parseTransactionMetadata(xml);
+      expect(tran.code).toBe('SE38');
+      expect(tran.description).toBe('ABAP Editor');
+      expect(tran.program).toBe(''); // Program not in this endpoint
+      expect(tran.package).toBe('SEDT');
+    });
+
+    it('handles minimal transaction XML', () => {
+      const xml =
+        '<adtcore:mainObject adtcore:name="ZT01" adtcore:description="Custom Transaction" xmlns:adtcore="http://www.sap.com/adt/core"/>';
+      const tran = parseTransactionMetadata(xml);
+      expect(tran.code).toBe('ZT01');
+      expect(tran.description).toBe('Custom Transaction');
+      expect(tran.package).toBe('');
     });
   });
 

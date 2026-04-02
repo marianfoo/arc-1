@@ -202,6 +202,81 @@ describe('AdtClient', () => {
     });
   });
 
+  describe('DDIC read operations', () => {
+    it('getStructure returns source code', async () => {
+      const client = createClient();
+      const source = await client.getStructure('BAPIRET2');
+      expect(typeof source).toBe('string');
+    });
+
+    it('getDomain returns parsed metadata', async () => {
+      // Mock the response with domain XML
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<doma:domain adtcore:name="BUKRS" adtcore:description="Company code" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="BF"/>
+  <doma:content>
+    <doma:typeInformation><doma:datatype>CHAR</doma:datatype><doma:length>000004</doma:length><doma:decimals>000000</doma:decimals></doma:typeInformation>
+    <doma:outputInformation><doma:length>000004</doma:length><doma:conversionExit/><doma:signExists>false</doma:signExists><doma:lowercase>false</doma:lowercase></doma:outputInformation>
+    <doma:valueInformation><doma:valueTableRef adtcore:name="T001"/><doma:fixValues/></doma:valueInformation>
+  </doma:content>
+</doma:domain>`,
+        headers: {},
+      });
+      const client = createClient();
+      const domain = await client.getDomain('BUKRS');
+      expect(domain.name).toBe('BUKRS');
+      expect(domain.dataType).toBe('CHAR');
+      expect(domain.valueTable).toBe('T001');
+    });
+
+    it('getDataElement returns parsed metadata', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<blue:wbobj adtcore:name="BUKRS" adtcore:description="Company code" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="BF"/>
+  <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
+    <dtel:typeKind>domain</dtel:typeKind><dtel:typeName>BUKRS</dtel:typeName>
+    <dtel:dataType>CHAR</dtel:dataType><dtel:dataTypeLength>000004</dtel:dataTypeLength><dtel:dataTypeDecimals>000000</dtel:dataTypeDecimals>
+    <dtel:shortFieldLabel>CoCd</dtel:shortFieldLabel><dtel:mediumFieldLabel>Company Code</dtel:mediumFieldLabel>
+    <dtel:longFieldLabel>Company Code</dtel:longFieldLabel><dtel:headingFieldLabel>CoCd</dtel:headingFieldLabel>
+    <dtel:searchHelp>C_T001</dtel:searchHelp><dtel:defaultComponentName>COMP_CODE</dtel:defaultComponentName>
+  </dtel:dataElement>
+</blue:wbobj>`,
+        headers: {},
+      });
+      const client = createClient();
+      const dtel = await client.getDataElement('BUKRS');
+      expect(dtel.name).toBe('BUKRS');
+      expect(dtel.typeName).toBe('BUKRS');
+      expect(dtel.searchHelp).toBe('C_T001');
+    });
+
+    it('getTransaction returns parsed metadata', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:mainObject adtcore:name="SE38" adtcore:type="TRAN/T" adtcore:description="ABAP Editor" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="SEDT"/>
+</adtcore:mainObject>`,
+        headers: {},
+      });
+      const client = createClient();
+      const tran = await client.getTransaction('SE38');
+      expect(tran.code).toBe('SE38');
+      expect(tran.description).toBe('ABAP Editor');
+      expect(tran.package).toBe('SEDT');
+    });
+  });
+
   // ─── URL Encoding (Issues #18, #52) ─────────────────────────────
 
   describe('URL encoding for namespaced objects', () => {

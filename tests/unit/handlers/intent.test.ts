@@ -180,6 +180,104 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('reads a structure (STRU)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'STRU',
+        name: 'BAPIRET2',
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('reads a domain (DOMA)', async () => {
+      // Mock domain XML response
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<doma:domain adtcore:name="BUKRS" adtcore:description="Company code" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="BF"/>
+  <doma:content>
+    <doma:typeInformation><doma:datatype>CHAR</doma:datatype><doma:length>000004</doma:length><doma:decimals>000000</doma:decimals></doma:typeInformation>
+    <doma:outputInformation><doma:length>000004</doma:length><doma:conversionExit/><doma:signExists>false</doma:signExists><doma:lowercase>false</doma:lowercase></doma:outputInformation>
+    <doma:valueInformation><doma:valueTableRef adtcore:name="T001"/><doma:fixValues/></doma:valueInformation>
+  </doma:content>
+</doma:domain>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DOMA',
+        name: 'BUKRS',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('BUKRS');
+      expect(parsed.dataType).toBe('CHAR');
+      expect(parsed.valueTable).toBe('T001');
+    });
+
+    it('reads a data element (DTEL)', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<blue:wbobj adtcore:name="BUKRS" adtcore:description="Company code" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="BF"/>
+  <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
+    <dtel:typeKind>domain</dtel:typeKind><dtel:typeName>BUKRS</dtel:typeName>
+    <dtel:dataType>CHAR</dtel:dataType><dtel:dataTypeLength>000004</dtel:dataTypeLength>
+    <dtel:mediumFieldLabel>Company Code</dtel:mediumFieldLabel>
+    <dtel:searchHelp>C_T001</dtel:searchHelp>
+  </dtel:dataElement>
+</blue:wbobj>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DTEL',
+        name: 'BUKRS',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('BUKRS');
+      expect(parsed.typeName).toBe('BUKRS');
+      expect(parsed.searchHelp).toBe('C_T001');
+    });
+
+    it('reads a transaction (TRAN)', async () => {
+      const mockInstance = (axios.create as any)();
+      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      // First call: transaction metadata
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:mainObject adtcore:name="SE38" adtcore:description="ABAP Editor" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="SEDT"/>
+</adtcore:mainObject>`,
+        headers: {},
+      });
+      // Second call: SQL query for program name (CSRF fetch first, then actual query)
+      requestSpy.mockResolvedValueOnce({ status: 200, data: '', headers: { 'x-csrf-token': 'token123' } });
+      requestSpy.mockResolvedValueOnce({
+        status: 200,
+        data: `<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values>
+<COLUMNS><COLUMN><METADATA name="TCODE"/><DATASET><DATA>SE38</DATA></DATASET></COLUMN>
+<COLUMN><METADATA name="PGMNA"/><DATASET><DATA>RSABAPPROGRAM</DATA></DATASET></COLUMN></COLUMNS>
+</asx:values></asx:abap>`,
+        headers: {},
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TRAN',
+        name: 'SE38',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.code).toBe('SE38');
+      expect(parsed.description).toBe('ABAP Editor');
+      expect(parsed.package).toBe('SEDT');
+    });
+
     it('returns error for unknown type', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'UNKNOWN',
@@ -190,6 +288,10 @@ describe('Intent Handler', () => {
       // Should list supported types
       expect(result.content[0]?.text).toContain('PROG');
       expect(result.content[0]?.text).toContain('CLAS');
+      expect(result.content[0]?.text).toContain('STRU');
+      expect(result.content[0]?.text).toContain('DOMA');
+      expect(result.content[0]?.text).toContain('DTEL');
+      expect(result.content[0]?.text).toContain('TRAN');
     });
 
     it('handles missing type parameter', async () => {
@@ -926,6 +1028,25 @@ ENDCLASS.`;
         name: 'ZCL_TEST',
       });
       // Should succeed (not an error about BTP)
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('returns helpful error for TRAN read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TRAN',
+        name: 'SE38',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not available on BTP');
+    });
+
+    it('allows STRU read on BTP', async () => {
+      setBtpMode();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'STRU',
+        name: 'BAPIRET2',
+      });
       expect(result.isError).toBeUndefined();
     });
   });

@@ -86,11 +86,11 @@ _Last updated: 2026-04-01_
 | Table contents | ✅ | ✅ | ✅ | ⚠️ Z-service | ❌ | ✅ | N/A | ✅ |
 | Packages (DEVC) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
 | Metadata ext (DDLX) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
-| Structures | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | N/A | ❌ |
-| Domains | ❌ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ |
-| Data elements | ❌ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ |
+| Structures | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | N/A | ❌ |
+| Domains | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ |
+| Data elements | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ |
 | Enhancements | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
-| Transactions | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | N/A | ❌ |
+| Transactions | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | N/A | ❌ |
 | Free SQL | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
 | System info / components | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
 | BOR business objects | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
@@ -206,7 +206,7 @@ _Last updated: 2026-04-01_
 
 | Metric | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb |
 |--------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
-| Unit tests | 546+ | 222 | 0 | 0 | 0 | Yes (Jest) | 0 | 163 |
+| Unit tests | 596+ | 222 | 0 | 0 | 0 | Yes (Jest) | 0 | 163 |
 | Integration tests | ✅ (on-prem + BTP) | ✅ | ❌ | 13 (live SAP) | ❌ | ✅ | ❌ | ⚠️ scaffold |
 | CI/CD | ✅ (release-please) | ✅ (GoReleaser) | ❌ | ❌ | ❌ | ⚠️ (Husky + lint-staged) | ❌ | ❌ |
 | Input validation | Zod v3 | Custom | Untyped | Untyped | Pydantic | Zod v4 | Zod | Manual |
@@ -232,8 +232,8 @@ Based on verified codebase analysis (2026-04-01) and competitive landscape:
 
 | # | Feature | Why | Competition | Effort |
 |---|---------|-----|-------------|--------|
-| 6 | **Structures (STRU) read support** | Currently ❌. VSP, fr0ster, mario, mcp-abap-abap-adt-api all have it. Basic DDIC gap. | VSP, fr0ster, mario | 1d |
-| 7 | **Transaction code read** | Currently ❌. VSP and fr0ster have it. Useful for navigation context. | VSP, fr0ster | 0.5d |
+| 6 | ~~**Structures (STRU) read support**~~ | ✅ Implemented — STRU type in SAPRead returns CDS-like source definition. | VSP, fr0ster, mario | ~~1d~~ |
+| 7 | ~~**Transaction code read**~~ | ✅ Implemented — TRAN type in SAPRead returns description, program, package. | VSP, fr0ster | ~~0.5d~~ |
 | 8 | **Service binding (SRVB) read/CRUD** | Missing from SAPRead. Needed for complete RAP stack support. AWS & fr0ster have it. | AWS, fr0ster, VSP | 1d |
 | 9 | **EditSource (surgical string replacement)** | VSP's killer feature for token efficiency — 95% source reduction for single-method edits. | VSP | 2d |
 | 10 | **Function group bulk fetch** | Dassian fetches ALL includes + FMs in one call. Reduces LLM round trips significantly. | dassian | 1d |
@@ -257,7 +257,7 @@ Based on verified codebase analysis (2026-04-01) and competitive landscape:
 | 23 | **ATC ciCheckFlavour workaround** | Older system compatibility for ATC. Dassian found the fix. | dassian | 0.5d |
 | 24 | **Migration analysis tool** | Custom code migration check (ECC→S/4). AWS-unique. | AWS | 1d |
 | 25 | **CompareSource** | Diff two versions. VSP has it. | VSP | 1d |
-| 26 | **Domain/Data element read** | DDIC completeness. fr0ster and mcp-abap-abap-adt-api have it. | fr0ster | 1d |
+| 26 | ~~**Domain/Data element read**~~ | ✅ Implemented — DOMA and DTEL types in SAPRead return structured metadata (type info, labels, value tables, search help). | fr0ster | ~~1d~~ |
 
 ### 🟢 Low Priority — Niche / Future
 

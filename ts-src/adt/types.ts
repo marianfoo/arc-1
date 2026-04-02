@@ -220,3 +220,47 @@ export interface TraceDbAccess {
   /** Total access time (microseconds) */
   accessTime: number;
 }
+
+// ─── DDIC Types ─────────────────────────────────────────────────────
+
+/** Domain metadata from /sap/bc/adt/ddic/domains/{name} */
+export interface DomainInfo {
+  name: string;
+  description: string;
+  dataType: string;
+  length: string;
+  decimals: string;
+  outputLength: string;
+  conversionExit: string;
+  signExists: boolean;
+  lowercase: boolean;
+  valueTable: string;
+  fixedValues: Array<{ low: string; high: string; description: string }>;
+  package: string;
+}
+
+/** Data element metadata from /sap/bc/adt/ddic/dataelements/{name} */
+export interface DataElementInfo {
+  name: string;
+  description: string;
+  typeKind: string;
+  typeName: string;
+  dataType: string;
+  length: string;
+  decimals: string;
+  shortLabel: string;
+  mediumLabel: string;
+  longLabel: string;
+  headingLabel: string;
+  searchHelp: string;
+  defaultComponentName: string;
+  package: string;
+}
+
+/** Transaction code metadata */
+export interface TransactionInfo {
+  code: string;
+  description: string;
+  program: string;
+  package: string;
+}

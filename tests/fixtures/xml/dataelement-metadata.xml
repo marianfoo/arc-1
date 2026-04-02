@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<blue:wbobj adtcore:responsible="SAP" adtcore:masterLanguage="DE" adtcore:masterSystem="SAP" adtcore:abapLanguageVersion="standard" adtcore:name="BUKRS" adtcore:type="DTEL/DE" adtcore:changedAt="2018-02-06T11:06:53Z" adtcore:version="active" adtcore:changedBy="SAP" adtcore:createdBy="SAP" adtcore:description="Company code" adtcore:language="EN" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atom:link href="versions" rel="http://www.sap.com/adt/relations/versions" title="Historic versions" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <atom:link href="/sap/bc/adt/vit/wb/object_type/dtelde/object_name/BUKRS" rel="self" type="application/vnd.sap.sapgui" title="Representation in SAP Gui" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/bf" adtcore:type="DEVC/K" adtcore:name="BF" adtcore:description="FI Cross-application Objects"/>
+  <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
+    <dtel:typeKind>domain</dtel:typeKind>
+    <dtel:typeName>BUKRS</dtel:typeName>
+    <dtel:dataType>CHAR</dtel:dataType>
+    <dtel:dataTypeLength>000004</dtel:dataTypeLength>
+    <dtel:dataTypeDecimals>000000</dtel:dataTypeDecimals>
+    <dtel:shortFieldLabel>CoCd</dtel:shortFieldLabel>
+    <dtel:shortFieldLength>06</dtel:shortFieldLength>
+    <dtel:shortFieldMaxLength>10</dtel:shortFieldMaxLength>
+    <dtel:mediumFieldLabel>Company Code</dtel:mediumFieldLabel>
+    <dtel:mediumFieldLength>15</dtel:mediumFieldLength>
+    <dtel:mediumFieldMaxLength>20</dtel:mediumFieldMaxLength>
+    <dtel:longFieldLabel>Company Code</dtel:longFieldLabel>
+    <dtel:longFieldLength>15</dtel:longFieldLength>
+    <dtel:longFieldMaxLength>40</dtel:longFieldMaxLength>
+    <dtel:headingFieldLabel>CoCd</dtel:headingFieldLabel>
+    <dtel:headingFieldLength>04</dtel:headingFieldLength>
+    <dtel:headingFieldMaxLength>55</dtel:headingFieldMaxLength>
+    <dtel:searchHelp>C_T001</dtel:searchHelp>
+    <dtel:searchHelpParameter>BUKRS</dtel:searchHelpParameter>
+    <dtel:setGetParameter>BUK</dtel:setGetParameter>
+    <dtel:defaultComponentName>COMP_CODE</dtel:defaultComponentName>
+    <dtel:deactivateInputHistory>false</dtel:deactivateInputHistory>
+    <dtel:changeDocument>true</dtel:changeDocument>
+    <dtel:leftToRightDirection>false</dtel:leftToRightDirection>
+    <dtel:deactivateBIDIFiltering>false</dtel:deactivateBIDIFiltering>
+  </dtel:dataElement>
+</blue:wbobj>

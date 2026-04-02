@@ -145,7 +145,7 @@ tests/
 
 | Task | Files |
 |------|-------|
-| Add new read operation | `ts-src/adt/client.ts`, `ts-src/handlers/intent.ts` |
+| Add new read operation | `ts-src/adt/client.ts`, `ts-src/handlers/intent.ts`, `ts-src/handlers/tools.ts` |
 | Add new tool type | `ts-src/handlers/tools.ts`, `ts-src/handlers/intent.ts` |
 | Add XML response parser | `ts-src/adt/xml-parser.ts` |
 | Add safety check | `ts-src/adt/safety.ts` |
@@ -175,6 +175,12 @@ async getProgram(name: string): Promise<string> {
 ```typescript
 case 'PROG':
   return textResult(await client.getProgram(name));
+case 'STRU':
+  return textResult(await client.getStructure(name));
+case 'DOMA': {
+  const domain = await client.getDomain(name);
+  return textResult(JSON.stringify(domain, null, 2));
+}
 ```
 
 ### Safety Check
@@ -186,7 +192,7 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ## Testing
 
-### Unit Tests (546 tests)
+### Unit Tests (596 tests)
 - No SAP system required — always run with `npm test`
 - Mock HTTP via `vi.mock('axios', ...)`
 - XML fixtures in `tests/fixtures/xml/`
