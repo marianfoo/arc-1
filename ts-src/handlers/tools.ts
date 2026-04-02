@@ -18,6 +18,7 @@
  */
 
 import type { ServerConfig } from '../server/types.js';
+import { getHyperfocusedToolDefinition } from './hyperfocused.js';
 
 export interface ToolDefinition {
   name: string;
@@ -84,10 +85,10 @@ const SAPREAD_TYPES_BTP = [
 ];
 
 const SAPREAD_DESC_ONPREM =
-  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
+  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method implementation (95% fewer tokens than full source). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation.';
 
 const SAPREAD_DESC_BTP =
-  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
+  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method (95% fewer tokens). Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views.';
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
@@ -95,10 +96,14 @@ const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', '
 const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD.';
+  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD. ' +
+  'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
+  'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD. Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP.';
+  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD. ' +
+  'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
+  'For edit_method: surgically replace a single method body in a CLAS without sending the full class source.';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -195,6 +200,11 @@ const SAPMANAGE_DESC_BTP =
 // ─── Main Tool Definitions ──────────────────────────────────────────
 
 export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
+  // Hyperfocused mode: single universal SAP tool (~200 tokens)
+  if (config.toolMode === 'hyperfocused') {
+    return [getHyperfocusedToolDefinition(config)];
+  }
+
   const btp = isBtpMode(config);
   const tools: ToolDefinition[] = [
     {
@@ -219,14 +229,17 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             description:
               'For FUNC type. The function group containing the function module. Optional — auto-resolved via SAPSearch if omitted.',
           },
+          method: {
+            type: 'string',
+            description:
+              'For CLAS: method name to read a single method implementation (e.g., "get_name", "zif_order~process"). ' +
+              'Use "*" to list all methods with signatures and visibility. ' +
+              (btp ? '' : 'For SOBJ: BOR method name to read. If omitted, returns the full BOR method catalog. ') +
+              'Not used with other types.',
+          },
           ...(btp
             ? {}
             : {
-                method: {
-                  type: 'string',
-                  description:
-                    'For SOBJ type only. BOR method name to read. If omitted, returns the full method catalog for the BOR object.',
-                },
                 expand_includes: {
                   type: 'boolean',
                   description:
@@ -276,14 +289,23 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['create', 'update', 'delete'], description: 'Write action' },
+          action: {
+            type: 'string',
+            enum: ['create', 'update', 'delete', 'edit_method'],
+            description:
+              'Write action. edit_method: surgically replace a single method body (requires type=CLAS, method, and source params)',
+          },
           type: {
             type: 'string',
             enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
             description: 'Object type',
           },
           name: { type: 'string', description: 'Object name' },
-          source: { type: 'string', description: 'ABAP source code (for create/update)' },
+          source: { type: 'string', description: 'ABAP source code (for create/update/edit_method)' },
+          method: {
+            type: 'string',
+            description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',
+          },
           package: { type: 'string', description: 'Package for new objects (default $TMP)' },
           transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
         },

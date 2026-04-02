@@ -30,11 +30,13 @@ import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
 import { compressContext } from '../context/compressor.js';
+import { extractMethod, formatMethodListing, listMethods, spliceMethod } from '../context/method-surgery.js';
 import { detectFilename, lintAbapSource } from '../lint/lint.js';
 import { sanitizeArgs } from '../server/audit.js';
 import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
+import { expandHyperfocusedArgs, getHyperfocusedScope } from './hyperfocused.js';
 
 /** MCP tool call result */
 export interface ToolResult {
@@ -198,6 +200,27 @@ export async function handleToolCall(
         case 'SAPManage':
           result = await handleSAPManage(client, _config, args);
           break;
+        case 'SAP': {
+          // Hyperfocused mode: route to the appropriate handler
+          const expanded = expandHyperfocusedArgs(args);
+          if ('error' in expanded) {
+            result = errorResult(expanded.error);
+            break;
+          }
+          // Check scope for the delegated action
+          if (authInfo) {
+            const requiredScope = getHyperfocusedScope(String(args.action ?? ''));
+            if (!authInfo.scopes.includes(requiredScope)) {
+              result = errorResult(
+                `Insufficient scope: '${requiredScope}' required for SAP(action="${args.action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
+              );
+              break;
+            }
+          }
+          // Delegate to the real handler (recursive call, but with the mapped tool name)
+          result = await handleToolCall(client, _config, expanded.toolName, expanded.expandedArgs, authInfo, _server);
+          break;
+        }
         default:
           result = errorResult(`Unknown tool: ${toolName}`);
       }
@@ -277,8 +300,26 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
   switch (type) {
     case 'PROG':
       return textResult(await client.getProgram(name));
-    case 'CLAS':
+    case 'CLAS': {
+      const methodParam = args.method as string | undefined;
+      if (methodParam && !args.include) {
+        // Method-level read — fetch full source then extract
+        const fullSource = await client.getClass(name);
+        const abaplintVer = cachedFeatures?.abapRelease
+          ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
+          : undefined;
+        if (methodParam === '*') {
+          const listing = listMethods(fullSource, name, abaplintVer);
+          return textResult(formatMethodListing(listing));
+        }
+        const extracted = extractMethod(fullSource, name, methodParam, abaplintVer);
+        if (!extracted.success) {
+          return errorResult(extracted.error ?? `Method "${methodParam}" not found in ${name}.`);
+        }
+        return textResult(extracted.methodSource);
+      }
       return textResult(await client.getClass(name, args.include as string | undefined));
+    }
     case 'INTF':
       return textResult(await client.getInterface(name));
     case 'FUNC': {
@@ -572,6 +613,30 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
       const result = await createObject(client.http, client.safety, objectUrl, body, 'application/xml', transport);
       return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
     }
+    case 'edit_method': {
+      const method = String(args.method ?? '');
+      if (!method) return errorResult('"method" is required for edit_method action.');
+      if (!source) return errorResult('"source" (new method body) is required for edit_method action.');
+      if (type !== 'CLAS') return errorResult('edit_method is only supported for type=CLAS.');
+
+      // Fetch current full source
+      const currentSource = await client.getClass(name);
+
+      // Use detected ABAP version from probe if available
+      const abaplintVer = cachedFeatures?.abapRelease
+        ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
+        : undefined;
+
+      // Splice in the new method body
+      const spliced = spliceMethod(currentSource, name, method, source, abaplintVer);
+      if (!spliced.success) {
+        return errorResult(spliced.error ?? `Failed to splice method "${method}" in ${name}.`);
+      }
+
+      // Write the full source back (existing lock/modify/unlock flow)
+      await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
+      return textResult(`Successfully updated method "${method}" in ${type} ${name}.`);
+    }
     case 'delete': {
       // Lock, delete, unlock pattern
       await client.http.withStatefulSession(async (session) => {
@@ -589,7 +654,7 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
       return textResult(`Deleted ${type} ${name}.`);
     }
     default:
-      return errorResult(`Unknown SAPWrite action: ${action}. Supported: create, update, delete`);
+      return errorResult(`Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method`);
   }
 }
 

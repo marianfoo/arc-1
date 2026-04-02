@@ -75,6 +75,10 @@ export interface ServerConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   logFormat: 'text' | 'json';
 
+  // --- Tool Mode ---
+  /** Tool mode: 'standard' (11 intent tools) or 'hyperfocused' (1 universal SAP tool, ~200 tokens) */
+  toolMode: 'standard' | 'hyperfocused';
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -107,6 +111,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   btpOAuthCallbackPort: 0,
   ppEnabled: false,
   ppStrict: false,
+  toolMode: 'standard',
   logLevel: 'info',
   logFormat: 'text',
   verbose: false,

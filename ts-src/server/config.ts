@@ -107,6 +107,10 @@ export function parseArgs(args: string[]): ServerConfig {
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
   config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);
 
+  // --- Tool Mode ---
+  const toolMode = resolve('tool-mode', 'ARC1_TOOL_MODE', 'standard');
+  config.toolMode = (toolMode === 'hyperfocused' ? 'hyperfocused' : 'standard') as ServerConfig['toolMode'];
+
   // --- Logging ---
   config.logFile = getFlag('log-file') ?? process.env.ARC1_LOG_FILE;
   const logLevel = resolve('log-level', 'ARC1_LOG_LEVEL', 'info');

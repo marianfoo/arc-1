@@ -1129,4 +1129,170 @@ ENDCLASS.`;
       expect(result.isError).toBeUndefined();
     });
   });
+
+  // ─── Method-Level Surgery ──────────────────────────────────────────
+
+  describe('method-level SAPRead', () => {
+    it('lists methods with method="*"', async () => {
+      // Mock response: a class with methods
+      const classSource = `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS get_name RETURNING VALUE(rv) TYPE string.
+    METHODS run.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD get_name.
+    rv = 'test'.
+  ENDMETHOD.
+  METHOD run.
+    " run logic
+  ENDMETHOD.
+ENDCLASS.`;
+
+      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        status: 200,
+        data: classSource,
+        headers: {},
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: '*',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('ZCL_TEST');
+      expect(result.content[0]?.text).toContain('get_name');
+      expect(result.content[0]?.text).toContain('run');
+      expect(result.content[0]?.text).toContain('methods');
+    });
+
+    it('extracts single method with method="get_name"', async () => {
+      const classSource = `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS get_name RETURNING VALUE(rv) TYPE string.
+    METHODS run.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD get_name.
+    rv = 'test'.
+  ENDMETHOD.
+  METHOD run.
+    " run logic
+  ENDMETHOD.
+ENDCLASS.`;
+
+      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        status: 200,
+        data: classSource,
+        headers: {},
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'get_name',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('METHOD get_name');
+      expect(result.content[0]?.text).toContain('ENDMETHOD');
+      // Should NOT contain the other method
+      expect(result.content[0]?.text).not.toContain('METHOD run');
+    });
+
+    it('returns error for nonexistent method', async () => {
+      const classSource = `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS get_name RETURNING VALUE(rv) TYPE string.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD get_name.
+    rv = 'test'.
+  ENDMETHOD.
+ENDCLASS.`;
+
+      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        status: 200,
+        data: classSource,
+        headers: {},
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'nonexistent',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not found');
+    });
+  });
+
+  describe('SAPWrite edit_method', () => {
+    it('rejects edit_method without method param', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: 'rv = 1.',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('method');
+    });
+
+    it('rejects edit_method without source param', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'get_name',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('source');
+    });
+
+    it('rejects edit_method for non-CLAS type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'PROG',
+        name: 'ZTEST',
+        method: 'get_name',
+        source: 'rv = 1.',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('CLAS');
+    });
+  });
+
+  describe('hyperfocused mode (SAP tool)', () => {
+    it('routes SAP(read) to SAPRead', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAP', {
+        action: 'read',
+        type: 'PROG',
+        name: 'ZHELLO',
+      });
+      expect(result.isError).toBeUndefined();
+      // Should get the same result as SAPRead(PROG)
+      expect(result.content[0]?.text).toBeTruthy();
+    });
+
+    it('returns error for unknown SAP action', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAP', {
+        action: 'invalid_action',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Unknown action');
+    });
+
+    it('routes SAP(search) with params', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAP', {
+        action: 'search',
+        params: { query: 'ZCL*' },
+      });
+      // Should succeed (mock returns data)
+      expect(result.isError).toBeUndefined();
+    });
+  });
 });

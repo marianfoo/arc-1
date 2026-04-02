@@ -17,6 +17,7 @@ import type { AdtClient } from '../../ts-src/adt/client.js';
 import { compressContext } from '../../ts-src/context/compressor.js';
 import { extractContract } from '../../ts-src/context/contract.js';
 import { extractDependencies } from '../../ts-src/context/deps.js';
+import { extractMethod, listMethods, spliceMethod } from '../../ts-src/context/method-surgery.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 const describeIf = hasSapCredentials() ? describe : describe.skip;
@@ -145,6 +146,84 @@ describeIf('SAPContext Integration Tests', () => {
 
       expect(result.output).toContain('Dependency context for /DMO/IF_FLIGHT_LEGACY');
     }, 30000);
+  });
+
+  // ─── Method-Level Surgery ──────────────────────────────────────────
+
+  describe('method-level surgery', () => {
+    it('lists methods from /DMO/CL_FLIGHT_LEGACY', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
+
+      expect(listing.success).toBe(true);
+      expect(listing.methods.length).toBeGreaterThan(0);
+
+      // Should find methods with valid line ranges
+      for (const method of listing.methods) {
+        expect(method.name).toBeTruthy();
+        expect(method.startLine).toBeGreaterThan(0);
+        expect(method.endLine).toBeGreaterThanOrEqual(method.startLine);
+      }
+
+      // Should have at least some public methods
+      const publicMethods = listing.methods.filter((m) => m.visibility === 'public');
+      expect(publicMethods.length).toBeGreaterThan(0);
+    }, 15000);
+
+    it('extracts a single method from /DMO/CL_FLIGHT_LEGACY', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
+      expect(listing.success).toBe(true);
+      expect(listing.methods.length).toBeGreaterThan(0);
+
+      // Extract the first method
+      const firstMethod = listing.methods[0]!;
+      const extracted = extractMethod(source, '/DMO/CL_FLIGHT_LEGACY', firstMethod.name);
+
+      expect(extracted.success).toBe(true);
+      expect(extracted.methodSource).toContain('METHOD');
+      expect(extracted.methodSource).toContain('ENDMETHOD');
+      expect(extracted.startLine).toBe(firstMethod.startLine);
+      expect(extracted.endLine).toBe(firstMethod.endLine);
+
+      // Extracted method should be much smaller than full source
+      expect(extracted.methodSource.length).toBeLessThan(source.length);
+    }, 15000);
+
+    it('round-trips spliceMethod without changing source', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
+      expect(listing.success).toBe(true);
+
+      const firstMethod = listing.methods[0]!;
+      const extracted = extractMethod(source, '/DMO/CL_FLIGHT_LEGACY', firstMethod.name);
+      expect(extracted.success).toBe(true);
+
+      // Splice back the same method source — should produce identical output
+      // Normalize line endings for comparison (SAP returns CRLF, our functions normalize to LF)
+      const spliced = spliceMethod(source, '/DMO/CL_FLIGHT_LEGACY', firstMethod.name, extracted.methodSource);
+      expect(spliced.success).toBe(true);
+      const normalize = (s: string) => s.replace(/\r\n/g, '\n');
+      expect(normalize(spliced.newSource)).toBe(normalize(source));
+    }, 15000);
+
+    it('achieves significant token reduction vs full source', async () => {
+      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
+      expect(listing.success).toBe(true);
+
+      // Pick a method and measure reduction
+      const method = listing.methods[0]!;
+      const extracted = extractMethod(source, '/DMO/CL_FLIGHT_LEGACY', method.name);
+      expect(extracted.success).toBe(true);
+
+      const fullTokens = source.length;
+      const methodTokens = extracted.methodSource.length;
+      const reduction = 1 - methodTokens / fullTokens;
+
+      // Should achieve at least 50% reduction (typically 90%+)
+      expect(reduction).toBeGreaterThan(0.5);
+    }, 15000);
   });
 
   // ─── SAPManage Feature Probing ────────────────────────────────────

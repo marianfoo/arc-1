@@ -109,7 +109,7 @@ _Last updated: 2026-04-01_
 | Activate | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
 | Batch activate | ⚠️ (single-call capable) | ✅ | ✅ | ❌ | ✅ (with dep resolution) | ✅ | N/A | ❌ |
 | Lock/unlock | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
-| EditSource (surgical) | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
+| EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ |
 | RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ❌ | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ |
@@ -124,7 +124,7 @@ _Last updated: 2026-04-01_
 | Find references | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
 | Code completion | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Context compression | ✅ (SAPContext, 7-30x) | ✅ (auto, 7-30x) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
-| Method-level surgery | ❌ | ✅ (95% reduction) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
+| Method-level surgery | ✅ (95% reduction) | ✅ (95% reduction) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | ABAP AST / parser | ⚠️ (abaplint for lint) | ✅ (native Go port) | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
 | Semantic analysis | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
 | Call graph analysis | ❌ | ✅ (5 tools) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
@@ -196,10 +196,10 @@ _Last updated: 2026-04-01_
 
 | Feature | ARC-1 | vibing-steampunk | fr0ster |
 |---------|-------|-----------------|---------|
-| Schema token cost | ~moderate (11 tools) | ~200 (hyperfocused) / ~14K (focused) / ~40K (expert) | ~high (287 tools) |
+| Schema token cost | ~200 (hyperfocused) / ~moderate (11 tools) | ~200 (hyperfocused) / ~14K (focused) / ~40K (expert) | ~high (287 tools) |
 | Context compression | ✅ SAPContext (7-30x) | ✅ Auto-append (7-30x) | ❌ |
-| Method-level surgery | ❌ | ✅ (95% source reduction) | ❌ |
-| Hyperfocused mode (1 tool) | ❌ | ✅ (~200 tokens) | ❌ |
+| Method-level surgery | ✅ (95% source reduction) | ✅ (95% source reduction) | ❌ |
+| Hyperfocused mode (1 tool) | ✅ (~200 tokens) | ✅ (~200 tokens) | ❌ |
 | Compact/intent mode | ✅ (11 intent tools) | N/A | ✅ (22 compact tools) |
 
 ## 13. Testing & Quality
@@ -319,4 +319,4 @@ The following items were incorrectly marked in the previous version:
 - **Diagnostics**: ARC-1 has zero runtime diagnostics (no dumps, no profiler, no traces). Every active competitor has at least dumps.
 - **RAP completeness**: Missing DDLX, SRVB, batch activation with dependency resolution. fr0ster leads here.
 - **DDIC completeness**: Missing structures, domains, data elements, transactions. fr0ster leads.
-- **Token efficiency**: SAPContext is good but lacks method-level surgery (VSP) and hyperfocused mode (VSP).
+- **Token efficiency**: ~~SAPContext is good but lacks method-level surgery (VSP) and hyperfocused mode (VSP).~~ **CLOSED** — method-level surgery and hyperfocused mode implemented.

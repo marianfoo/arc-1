@@ -274,12 +274,14 @@ describe('Tool Definitions', () => {
       expect(sapSearch.description).toContain('released');
     });
 
-    it('does not include method or expand_includes props on BTP SAPRead', () => {
+    it('includes method but not expand_includes on BTP SAPRead', () => {
       const tools = getToolDefinitions(btpConfig);
       const sapRead = tools.find((t) => t.name === 'SAPRead')!;
       const schema = sapRead.inputSchema as Record<string, any>;
 
-      expect(schema.properties.method).toBeUndefined();
+      // method is available on both BTP and on-prem (for CLAS method-level reads)
+      expect(schema.properties.method).toBeDefined();
+      // expand_includes is on-prem only (for FUGR)
       expect(schema.properties.expand_includes).toBeUndefined();
     });
 
