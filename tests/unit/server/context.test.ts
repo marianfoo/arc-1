@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateRequestId, getCurrentContext, requestContext } from '../../../ts-src/server/context.js';
+import { generateRequestId, getCurrentContext, requestContext } from '../../../src/server/context.js';
 
 describe('Request Context', () => {
   it('generates monotonically increasing request IDs', () => {

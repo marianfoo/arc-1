@@ -20,7 +20,7 @@ RUN npm ci
 
 # Copy source and build
 COPY tsconfig.json ./
-COPY ts-src/ ./ts-src/
+COPY src/ ./src/
 RUN npm run build
 
 # Remove dev dependencies for smaller image

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AuditEvent } from '../../../../ts-src/server/audit.js';
-import { StderrSink } from '../../../../ts-src/server/sinks/stderr.js';
+import type { AuditEvent } from '../../../../src/server/audit.js';
+import { StderrSink } from '../../../../src/server/sinks/stderr.js';
 
 describe('StderrSink', () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;

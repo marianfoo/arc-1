@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AuditEvent } from '../../../ts-src/server/audit.js';
-import { Logger } from '../../../ts-src/server/logger.js';
-import type { LogSink } from '../../../ts-src/server/sinks/types.js';
+import type { AuditEvent } from '../../../src/server/audit.js';
+import { Logger } from '../../../src/server/logger.js';
+import type { LogSink } from '../../../src/server/sinks/types.js';
 
 describe('Logger', () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;

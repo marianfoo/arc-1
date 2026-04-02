@@ -84,7 +84,7 @@ npm run dev
 ## Codebase Structure
 
 ```
-ts-src/
+src/
 ├── index.ts                    # MCP server entry point
 ├── cli.ts                      # CLI entry point (commander)
 ├── server/
@@ -148,20 +148,20 @@ tests/
 
 | Task | Files |
 |------|-------|
-| Add new read operation | `ts-src/adt/client.ts`, `ts-src/handlers/intent.ts`, `ts-src/handlers/tools.ts` |
-| Add new tool type | `ts-src/handlers/tools.ts`, `ts-src/handlers/intent.ts` |
-| Add method-level surgery | `ts-src/context/method-surgery.ts` |
-| Modify hyperfocused mode | `ts-src/handlers/hyperfocused.ts`, `ts-src/handlers/tools.ts` |
-| Add XML response parser | `ts-src/adt/xml-parser.ts` |
-| Add safety check | `ts-src/adt/safety.ts` |
-| Add lint rule config | `ts-src/lint/lint.ts` |
-| Add dependency pattern | `ts-src/context/deps.ts` |
-| Add contract extraction for new type | `ts-src/context/contract.ts` |
-| Modify context output format | `ts-src/context/compressor.ts` |
-| Add runtime diagnostic | `ts-src/adt/diagnostics.ts`, `ts-src/handlers/intent.ts` |
+| Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` |
+| Add new tool type | `src/handlers/tools.ts`, `src/handlers/intent.ts` |
+| Add method-level surgery | `src/context/method-surgery.ts` |
+| Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
+| Add XML response parser | `src/adt/xml-parser.ts` |
+| Add safety check | `src/adt/safety.ts` |
+| Add lint rule config | `src/lint/lint.ts` |
+| Add dependency pattern | `src/context/deps.ts` |
+| Add contract extraction for new type | `src/context/contract.ts` |
+| Modify context output format | `src/context/compressor.ts` |
+| Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
-| BTP ABAP Environment auth | `ts-src/adt/oauth.ts`, `ts-src/server/server.ts` |
+| BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |
 
 ## Code Patterns
 
@@ -258,12 +258,12 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) in PR titles / 
 | `.github/workflows/docker.yml` | Dev `latest` Docker image on every main push |
 | `release-please-config.json` | Config: extra files to version-bump |
 | `.release-please-manifest.json` | Tracks current version |
-| `ts-src/server/server.ts` | `VERSION` constant (auto-bumped via `x-release-please-version` marker) |
+| `src/server/server.ts` | `VERSION` constant (auto-bumped via `x-release-please-version` marker) |
 
 ### Version is maintained in two places
 
 - `package.json` — bumped by release-please automatically
-- `ts-src/server/server.ts` `VERSION` constant — bumped via the `x-release-please-version` annotation comment
+- `src/server/server.ts` `VERSION` constant — bumped via the `x-release-please-version` annotation comment
 
 ### npm trusted publishing
 
@@ -280,7 +280,7 @@ Requirements (all already configured):
 - Never commit `.env`, `cookies.txt`, or `.arc1.json` (all in `.gitignore`)
 - All logging goes to stderr (stdout reserved for MCP JSON-RPC)
 - Sensitive fields (password, token, cookie) are redacted in logs
-- CSRF tokens are auto-managed by `ts-src/adt/http.ts`
+- CSRF tokens are auto-managed by `src/adt/http.ts`
 
 ## History
 

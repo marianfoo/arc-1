@@ -3,12 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  extractMethod,
-  formatMethodListing,
-  listMethods,
-  spliceMethod,
-} from '../../../ts-src/context/method-surgery.js';
+import { extractMethod, formatMethodListing, listMethods, spliceMethod } from '../../../src/context/method-surgery.js';
 
 // ─── Test Fixtures ──────────────────────────────────────────────────
 

@@ -6,10 +6,10 @@ import {
   safeUpdateSource,
   unlockObject,
   updateSource,
-} from '../../../ts-src/adt/crud.js';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+} from '../../../src/adt/crud.js';
+import { AdtSafetyError } from '../../../src/adt/errors.js';
+import type { AdtHttpClient } from '../../../src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 function mockHttp(body = ''): AdtHttpClient {
   return {

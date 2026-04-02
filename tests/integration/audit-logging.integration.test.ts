@@ -11,12 +11,12 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { AdtClient } from '../../ts-src/adt/client.js';
-import { handleToolCall } from '../../ts-src/handlers/intent.js';
-import type { AuditEvent } from '../../ts-src/server/audit.js';
-import { logger } from '../../ts-src/server/logger.js';
-import { FileSink } from '../../ts-src/server/sinks/file.js';
-import { DEFAULT_CONFIG } from '../../ts-src/server/types.js';
+import type { AdtClient } from '../../src/adt/client.js';
+import { handleToolCall } from '../../src/handlers/intent.js';
+import type { AuditEvent } from '../../src/server/audit.js';
+import { logger } from '../../src/server/logger.js';
+import { FileSink } from '../../src/server/sinks/file.js';
+import { DEFAULT_CONFIG } from '../../src/server/types.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 const describeIf = hasSapCredentials() ? describe : describe.skip;

@@ -13,11 +13,11 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { AdtClient } from '../../ts-src/adt/client.js';
-import { compressContext } from '../../ts-src/context/compressor.js';
-import { extractContract } from '../../ts-src/context/contract.js';
-import { extractDependencies } from '../../ts-src/context/deps.js';
-import { extractMethod, listMethods, spliceMethod } from '../../ts-src/context/method-surgery.js';
+import type { AdtClient } from '../../src/adt/client.js';
+import { compressContext } from '../../src/context/compressor.js';
+import { extractContract } from '../../src/context/contract.js';
+import { extractDependencies } from '../../src/context/deps.js';
+import { extractMethod, listMethods, spliceMethod } from '../../src/context/method-surgery.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 const describeIf = hasSapCredentials() ? describe : describe.skip;
@@ -230,8 +230,8 @@ describeIf('SAPContext Integration Tests', () => {
 
   describe('SAPManage feature probing', () => {
     it('probes features successfully', async () => {
-      const { probeFeatures } = await import('../../ts-src/adt/features.js');
-      const { defaultFeatureConfig } = await import('../../ts-src/adt/config.js');
+      const { probeFeatures } = await import('../../src/adt/features.js');
+      const { defaultFeatureConfig } = await import('../../src/adt/config.js');
 
       const features = await probeFeatures(client.http, defaultFeatureConfig());
 

@@ -8,9 +8,9 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { AdtClient } from '../../ts-src/adt/client.js';
-import { getDump, listDumps, listTraces } from '../../ts-src/adt/diagnostics.js';
-import { unrestrictedSafetyConfig } from '../../ts-src/adt/safety.js';
+import type { AdtClient } from '../../src/adt/client.js';
+import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
+import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 // Skip entire suite if no SAP credentials
@@ -304,7 +304,7 @@ describeIf('ADT Integration Tests', () => {
       }
 
       // Note: Full CRUD test requires the create/update/delete methods
-      // which are in ts-src/adt/crud.ts. For now we verify the search works.
+      // which are in src/adt/crud.ts. For now we verify the search works.
       expect(searchResults).toHaveLength(0);
     });
   });
@@ -313,7 +313,7 @@ describeIf('ADT Integration Tests', () => {
 
   describe('safety', () => {
     it('read-only client can still read', async () => {
-      const { AdtClient } = await import('../../ts-src/adt/client.js');
+      const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
         username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
@@ -340,7 +340,7 @@ describeIf('ADT Integration Tests', () => {
     });
 
     it('read-only client can search', async () => {
-      const { AdtClient } = await import('../../ts-src/adt/client.js');
+      const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
         username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',
@@ -366,7 +366,7 @@ describeIf('ADT Integration Tests', () => {
     });
 
     it('read-only client blocks free SQL', async () => {
-      const { AdtClient } = await import('../../ts-src/adt/client.js');
+      const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
         username: process.env.TEST_SAP_USER || process.env.SAP_USER || '',

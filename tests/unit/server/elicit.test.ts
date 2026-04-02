@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { confirmDestructive, promptString, selectOption } from '../../../ts-src/server/elicit.js';
+import { confirmDestructive, promptString, selectOption } from '../../../src/server/elicit.js';
 
 // Mock the logger to avoid stderr output in tests
-vi.mock('../../../ts-src/server/logger.js', () => ({
+vi.mock('../../../src/server/logger.js', () => ({
   logger: {
     emitAudit: vi.fn(),
     info: vi.fn(),

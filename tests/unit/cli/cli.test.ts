@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { detectFilename } from '../../../ts-src/lint/lint.js';
-import { VERSION } from '../../../ts-src/server/server.js';
+import { detectFilename } from '../../../src/lint/lint.js';
+import { VERSION } from '../../../src/server/server.js';
 
 describe('CLI', () => {
   it('has a valid version', () => {

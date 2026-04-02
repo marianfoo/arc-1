@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { CacheNode } from '../../../ts-src/cache/cache.js';
-import { SqliteCache } from '../../../ts-src/cache/sqlite.js';
+import type { CacheNode } from '../../../src/cache/cache.js';
+import { SqliteCache } from '../../../src/cache/sqlite.js';
 
 function makeNode(id: string, pkg = '$TMP'): CacheNode {
   return {

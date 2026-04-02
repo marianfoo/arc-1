@@ -2,8 +2,8 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AuditEvent } from '../../../../ts-src/server/audit.js';
-import { FileSink } from '../../../../ts-src/server/sinks/file.js';
+import type { AuditEvent } from '../../../../src/server/audit.js';
+import { FileSink } from '../../../../src/server/sinks/file.js';
 
 describe('FileSink', () => {
   const tmpFile = join(tmpdir(), `arc1-test-${Date.now()}.jsonl`);

@@ -8,7 +8,7 @@ Current integration tests (`tests/integration/adt.integration.test.ts`) call ADT
 - Tool argument parsing/validation is untested end-to-end
 - LLM-friendly error formatting is untested with real SAP errors
 - Scope enforcement + safety system interaction is untested
-- Elicitation protocol (`ts-src/server/elicit.ts`) is implemented but **never invoked** by any tool handler — needs E2E validation
+- Elicitation protocol (`src/server/elicit.ts`) is implemented but **never invoked** by any tool handler — needs E2E validation
 - The full MCP JSON-RPC roundtrip (client → HTTP transport → tool handler → ADT → SAP → response) is never exercised
 - Error responses from ADT (404, 403, 500, XML parse errors) are not validated through the MCP layer
 
@@ -1019,7 +1019,7 @@ Tests use transient object `ZARC1_E2E_WRITE`:
 
 ## Elicitation Testing
 
-The elicitation system (`ts-src/server/elicit.ts`) provides `confirmDestructive()`, `selectOption()`, `promptString()` but **no handler invokes them yet**. The `_server` param in `handleToolCall` is accepted but unused.
+The elicitation system (`src/server/elicit.ts`) provides `confirmDestructive()`, `selectOption()`, `promptString()` but **no handler invokes them yet**. The `_server` param in `handleToolCall` is accepted but unused.
 
 ### Current State: Test Graceful Fallback
 

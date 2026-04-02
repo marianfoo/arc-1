@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AdtApiError, AdtNetworkError } from '../../../ts-src/adt/errors.js';
-import { AdtHttpClient, type AdtHttpConfig } from '../../../ts-src/adt/http.js';
+import { AdtApiError, AdtNetworkError } from '../../../src/adt/errors.js';
+import { AdtHttpClient, type AdtHttpConfig } from '../../../src/adt/http.js';
 
 // Mock axios
 vi.mock('axios', async () => {

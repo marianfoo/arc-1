@@ -7,7 +7,7 @@
       "extra-files": [
         {
           "type": "generic",
-          "path": "ts-src/server/server.ts",
+          "path": "src/server/server.ts",
           "glob": false
         }
       ]

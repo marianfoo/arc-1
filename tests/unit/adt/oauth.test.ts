@@ -35,7 +35,7 @@ vi.mock('node:os', () => ({
 }));
 
 // Mock logger
-vi.mock('../../../ts-src/server/logger.js', () => ({
+vi.mock('../../../src/server/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -56,7 +56,7 @@ import {
   refreshAccessToken,
   resolveServiceKey,
   startCallbackServer,
-} from '../../../ts-src/adt/oauth.js';
+} from '../../../src/adt/oauth.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────
 

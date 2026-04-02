@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectFilename, lintAbapSource } from '../../../ts-src/lint/lint.js';
+import { detectFilename, lintAbapSource } from '../../../src/lint/lint.js';
 
 describe('ABAP Lint', () => {
   describe('lintAbapSource', () => {

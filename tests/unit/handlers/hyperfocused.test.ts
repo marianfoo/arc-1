@@ -7,9 +7,9 @@ import {
   expandHyperfocusedArgs,
   getHyperfocusedScope,
   getHyperfocusedToolDefinition,
-} from '../../../ts-src/handlers/hyperfocused.js';
-import { getToolDefinitions } from '../../../ts-src/handlers/tools.js';
-import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
+} from '../../../src/handlers/hyperfocused.js';
+import { getToolDefinitions } from '../../../src/handlers/tools.js';
+import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('hyperfocused mode', () => {
   describe('expandHyperfocusedArgs', () => {

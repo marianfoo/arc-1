@@ -14,7 +14,7 @@ import {
   parseTableContents,
   parseTransactionMetadata,
   parseXml,
-} from '../../../ts-src/adt/xml-parser.js';
+} from '../../../src/adt/xml-parser.js';
 
 const fixturesDir = join(import.meta.dirname, '../../fixtures/xml');
 const loadFixture = (name: string) => readFileSync(join(fixturesDir, name), 'utf-8');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdtApiError } from '../../../ts-src/adt/errors.js';
+import { AdtApiError } from '../../../src/adt/errors.js';
 
 describe('AdtApiError', () => {
   describe('extractCleanMessage', () => {

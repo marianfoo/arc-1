@@ -23,7 +23,7 @@ This document researches each feedback item in detail, analyzes the current code
 
 When authentication fails, the error flows through two paths:
 
-1. **CSRF token fetch** (`ts-src/adt/http.ts:401-406`):
+1. **CSRF token fetch** (`src/adt/http.ts:401-406`):
    ```typescript
    throw new AdtApiError(
      'Authentication failed (401): check username/password',
@@ -32,20 +32,20 @@ When authentication fails, the error flows through two paths:
    );
    ```
 
-2. **LLM error formatter** (`ts-src/handlers/intent.ts:77-79`):
+2. **LLM error formatter** (`src/handlers/intent.ts:77-79`):
    ```typescript
    if (err.isUnauthorized || err.isForbidden) {
      return `${message}\n\nHint: Authorization error. The configured SAP user may lack permissions for this object.`;
    }
    ```
 
-Neither path includes the configured `SAP_CLIENT`, even though the HTTP client has it available in `this.config.client` (`ts-src/adt/http.ts:455-457`).
+Neither path includes the configured `SAP_CLIENT`, even though the HTTP client has it available in `this.config.client` (`src/adt/http.ts:455-457`).
 
 ### Proposed Implementation
 
 **Option A — Enrich AdtApiError at throw site** (recommended):
 
-In `ts-src/adt/http.ts:401-406`, include the client in the message:
+In `src/adt/http.ts:401-406`, include the client in the message:
 
 ```typescript
 throw new AdtApiError(
@@ -57,7 +57,7 @@ throw new AdtApiError(
 
 **Option B — Add context field to AdtApiError**:
 
-Extend `AdtApiError` (`ts-src/adt/errors.ts:27-36`) with an optional `context` map:
+Extend `AdtApiError` (`src/adt/errors.ts:27-36`) with an optional `context` map:
 
 ```typescript
 export class AdtApiError extends AdtError {
@@ -71,7 +71,7 @@ export class AdtApiError extends AdtError {
 }
 ```
 
-Then in `formatErrorForLLM` (`ts-src/handlers/intent.ts:77-79`), append context:
+Then in `formatErrorForLLM` (`src/handlers/intent.ts:77-79`), append context:
 
 ```typescript
 if (err.isUnauthorized || err.isForbidden) {
@@ -86,9 +86,9 @@ if (err.isUnauthorized || err.isForbidden) {
 
 | File | Change |
 |------|--------|
-| `ts-src/adt/http.ts:402-403` | Include `this.config.client` in 401 error message |
-| `ts-src/adt/http.ts:409` | Include `this.config.client` in 403 error message |
-| `ts-src/handlers/intent.ts:77-79` | Append client info hint to auth error messages |
+| `src/adt/http.ts:402-403` | Include `this.config.client` in 401 error message |
+| `src/adt/http.ts:409` | Include `this.config.client` in 403 error message |
+| `src/handlers/intent.ts:77-79` | Append client info hint to auth error messages |
 | `tests/unit/adt/http.test.ts` | Update expected error message in 401 test |
 
 ---
@@ -100,7 +100,7 @@ if (err.isUnauthorized || err.isForbidden) {
 
 ### Current Behavior
 
-`getFunction()` (`ts-src/adt/client.ts:117-123`) requires both `group` and `name`:
+`getFunction()` (`src/adt/client.ts:117-123`) requires both `group` and `name`:
 
 ```typescript
 async getFunction(group: string, name: string): Promise<string> {
@@ -111,13 +111,13 @@ async getFunction(group: string, name: string): Promise<string> {
 }
 ```
 
-The handler (`ts-src/handlers/intent.ts:251`) passes group as-is, defaulting to empty string:
+The handler (`src/handlers/intent.ts:251`) passes group as-is, defaulting to empty string:
 ```typescript
 case 'FUNC':
   return textResult(await client.getFunction(String(args.group ?? ''), name));
 ```
 
-The tool description (`ts-src/handlers/tools.ts:28`) explicitly states "requires group param".
+The tool description (`src/handlers/tools.ts:28`) explicitly states "requires group param".
 
 ### Proposed Implementation
 
@@ -160,9 +160,9 @@ Update the tool description to say "group param is optional — auto-resolved if
 
 | File | Change |
 |------|--------|
-| `ts-src/adt/client.ts` | Add `resolveFunctionGroup()` method |
-| `ts-src/handlers/intent.ts:250-251` | Auto-resolve group when missing |
-| `ts-src/handlers/tools.ts:28` | Update description: group is optional |
+| `src/adt/client.ts` | Add `resolveFunctionGroup()` method |
+| `src/handlers/intent.ts:250-251` | Auto-resolve group when missing |
+| `src/handlers/tools.ts:28` | Update description: group is optional |
 | `tests/unit/handlers/intent.test.ts` | Test auto-resolve flow |
 | `tests/unit/adt/client.test.ts` | Test `resolveFunctionGroup()` |
 
@@ -181,7 +181,7 @@ Update the tool description to say "group param is optional — auto-resolved if
 
 ### Current Behavior
 
-`getFunctionGroup()` (`ts-src/adt/client.ts:126-130`) returns structure only:
+`getFunctionGroup()` (`src/adt/client.ts:126-130`) returns structure only:
 ```typescript
 async getFunctionGroup(name: string): Promise<{ name: string; functions: string[] }> {
   const resp = await this.http.get(`/sap/bc/adt/functions/groups/${encodeURIComponent(name)}`);
@@ -189,9 +189,9 @@ async getFunctionGroup(name: string): Promise<{ name: string; functions: string[
 }
 ```
 
-`getFunctionGroupSource()` (`ts-src/adt/client.ts:133-137`) returns top-level source with `INCLUDE` statements.
+`getFunctionGroupSource()` (`src/adt/client.ts:133-137`) returns top-level source with `INCLUDE` statements.
 
-`getInclude()` (`ts-src/adt/client.ts:140-144`) exists and uses the endpoint:
+`getInclude()` (`src/adt/client.ts:140-144`) exists and uses the endpoint:
 ```
 /sap/bc/adt/programs/includes/{name}/source/main
 ```
@@ -238,9 +238,9 @@ case 'FUGR': {
 
 | File | Change |
 |------|--------|
-| `ts-src/adt/client.ts` | Investigate/fix `getInclude()` for PAI/PBO includes |
-| `ts-src/handlers/intent.ts:252-255` | Add `expand_includes` option |
-| `ts-src/handlers/tools.ts` | Add `expand_includes` param to SAPRead schema |
+| `src/adt/client.ts` | Investigate/fix `getInclude()` for PAI/PBO includes |
+| `src/handlers/intent.ts:252-255` | Add `expand_includes` option |
+| `src/handlers/tools.ts` | Add `expand_includes` param to SAPRead schema |
 | `tests/integration/adt.integration.test.ts` | Add FUGR include expansion test |
 
 ---
@@ -252,7 +252,7 @@ case 'FUGR': {
 
 ### Current Behavior
 
-`searchObject()` (`ts-src/adt/client.ts:184-190`) only searches by object **name** pattern:
+`searchObject()` (`src/adt/client.ts:184-190`) only searches by object **name** pattern:
 ```
 /sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=...
 ```
@@ -297,18 +297,18 @@ Fetch all objects in a package, read their sources, and grep locally. This is sl
 
 ### Feasibility Assessment
 
-The `/sap/bc/adt/repository/informationsystem/textSearch` endpoint needs to be validated against the target SAP systems. This is a feature detection scenario — should be gated behind the existing feature detection system (`ts-src/adt/features.ts`).
+The `/sap/bc/adt/repository/informationsystem/textSearch` endpoint needs to be validated against the target SAP systems. This is a feature detection scenario — should be gated behind the existing feature detection system (`src/adt/features.ts`).
 
 ### Files to Change
 
 | File | Change |
 |------|--------|
-| `ts-src/adt/client.ts` | Add `searchSource()` method |
-| `ts-src/adt/xml-parser.ts` | Add `parseSourceSearchResults()` |
-| `ts-src/adt/types.ts` | Add `SourceSearchResult` type |
-| `ts-src/adt/features.ts` | Add feature detection for text search capability |
-| `ts-src/handlers/intent.ts` | Route `searchType="source_code"` in SAPSearch handler |
-| `ts-src/handlers/tools.ts` | Add `searchType` param to SAPSearch schema |
+| `src/adt/client.ts` | Add `searchSource()` method |
+| `src/adt/xml-parser.ts` | Add `parseSourceSearchResults()` |
+| `src/adt/types.ts` | Add `SourceSearchResult` type |
+| `src/adt/features.ts` | Add feature detection for text search capability |
+| `src/handlers/intent.ts` | Route `searchType="source_code"` in SAPSearch handler |
+| `src/handlers/tools.ts` | Add `searchType` param to SAPSearch schema |
 | `tests/unit/adt/xml-parser.test.ts` | Add parser tests with fixture XML |
 
 ---
@@ -372,8 +372,8 @@ case 'SOBJ': {
 
 | File | Change |
 |------|--------|
-| `ts-src/handlers/intent.ts:243-293` | Add `SOBJ` case in SAPRead switch |
-| `ts-src/handlers/tools.ts:28` | Add SOBJ to supported types list, add `method` param |
+| `src/handlers/intent.ts:243-293` | Add `SOBJ` case in SAPRead switch |
+| `src/handlers/tools.ts:28` | Add SOBJ to supported types list, add `method` param |
 | `tests/unit/handlers/intent.test.ts` | Add SOBJ handler tests |
 
 ---
@@ -385,7 +385,7 @@ case 'SOBJ': {
 
 ### Current Behavior
 
-When a table doesn't exist, `runQuery()` (`ts-src/adt/client.ts:225-229`) returns an `AdtApiError` with 404 status. The `formatErrorForLLM()` (`ts-src/handlers/intent.ts:72-76`) suggests using SAPSearch but doesn't suggest similar table names:
+When a table doesn't exist, `runQuery()` (`src/adt/client.ts:225-229`) returns an `AdtApiError` with 404 status. The `formatErrorForLLM()` (`src/handlers/intent.ts:72-76`) suggests using SAPSearch but doesn't suggest similar table names:
 
 ```typescript
 if (err.isNotFound) {
@@ -395,7 +395,7 @@ if (err.isNotFound) {
 
 ### Proposed Implementation
 
-In `handleSAPQuery` (`ts-src/handlers/intent.ts:303-308`), catch 404 errors and perform a fuzzy DDIC lookup:
+In `handleSAPQuery` (`src/handlers/intent.ts:303-308`), catch 404 errors and perform a fuzzy DDIC lookup:
 
 ```typescript
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
@@ -430,7 +430,7 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
 
 | File | Change |
 |------|--------|
-| `ts-src/handlers/intent.ts:303-308` | Add try/catch with DDIC suggestion lookup |
+| `src/handlers/intent.ts:303-308` | Add try/catch with DDIC suggestion lookup |
 | `tests/unit/handlers/intent.test.ts` | Add "did you mean" test |
 
 ---
@@ -442,13 +442,13 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
 
 ### Current Behavior
 
-`findReferences()` (`ts-src/adt/codeintel.ts:70-97`) accepts an `objectUrl` string. The handler (`ts-src/handlers/intent.ts:444-450`) passes the URI directly from args.
+`findReferences()` (`src/adt/codeintel.ts:70-97`) accepts an `objectUrl` string. The handler (`src/handlers/intent.ts:444-450`) passes the URI directly from args.
 
 The LLM must know the full ADT URI (e.g., `/sap/bc/adt/programs/programs/ZTEST`) to use references. For explorative analysis, the user wants to say "find all references to BAPI_EMMA_CASE_COMPLETE" without knowing the URI.
 
 ### Proposed Implementation
 
-There's already a pattern for type→URI mapping in the codebase. Check if `objectUrlForType()` exists in the SAPDiagnose handler (`ts-src/handlers/intent.ts:466`).
+There's already a pattern for type→URI mapping in the codebase. Check if `objectUrlForType()` exists in the SAPDiagnose handler (`src/handlers/intent.ts:466`).
 
 Add a fallback in the SAPNavigate references handler:
 
@@ -472,8 +472,8 @@ This reuses the existing `objectUrlForType()` utility and makes the `uri` parame
 
 | File | Change |
 |------|--------|
-| `ts-src/handlers/intent.ts:444-450` | Add type/name → URI resolution fallback |
-| `ts-src/handlers/tools.ts` | Update SAPNavigate schema: uri optional when type+name given |
+| `src/handlers/intent.ts:444-450` | Add type/name → URI resolution fallback |
+| `src/handlers/tools.ts` | Update SAPNavigate schema: uri optional when type+name given |
 | `tests/unit/handlers/intent.test.ts` | Test symbolic reference lookup |
 
 ---
@@ -512,7 +512,7 @@ This reuses the existing `objectUrlForType()` utility and makes the `uri` parame
 
 ### Documentation Improvements
 
-The report reveals that the LLM needed deep SAP internals knowledge (SWOTLV table, BOR architecture, DDIC discovery patterns). This suggests the tool descriptions in `ts-src/handlers/tools.ts` could include more SAP-specific guidance:
+The report reveals that the LLM needed deep SAP internals knowledge (SWOTLV table, BOR architecture, DDIC discovery patterns). This suggests the tool descriptions in `src/handlers/tools.ts` could include more SAP-specific guidance:
 
 - SAPQuery description should mention common metadata tables (DD02L, DD03L, SWOTLV, TADIR)
 - SAPSearch description should mention that BOR objects appear as SOBJ type

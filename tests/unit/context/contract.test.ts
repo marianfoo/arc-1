@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractContract } from '../../../ts-src/context/contract.js';
+import { extractContract } from '../../../src/context/contract.js';
 
 describe('extractContract', () => {
   // ─── Class Contracts ──────────────────────────────────────────────

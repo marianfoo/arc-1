@@ -5,7 +5,7 @@
     "module": "Node16",
     "moduleResolution": "Node16",
     "outDir": "./dist",
-    "rootDir": "./ts-src",
+    "rootDir": "./src",
     "strict": true,
     "isolatedModules": true,
     "declaration": true,
@@ -20,6 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": false
   },
-  "include": ["ts-src/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }

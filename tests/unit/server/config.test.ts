@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../../../ts-src/server/config.js';
+import { parseArgs } from '../../../src/server/config.js';
 
 describe('parseArgs', () => {
   // Save and restore env to avoid test pollution

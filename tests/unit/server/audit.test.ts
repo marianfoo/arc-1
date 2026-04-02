@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AuditEvent, ToolCallEndEvent, ToolCallStartEvent } from '../../../ts-src/server/audit.js';
-import { sanitizeArgs } from '../../../ts-src/server/audit.js';
+import type { AuditEvent, ToolCallEndEvent, ToolCallStartEvent } from '../../../src/server/audit.js';
+import { sanitizeArgs } from '../../../src/server/audit.js';
 
 describe('Audit Events', () => {
   describe('sanitizeArgs', () => {

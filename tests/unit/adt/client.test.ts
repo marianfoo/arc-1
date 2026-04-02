@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { describe, expect, it, vi } from 'vitest';
-import { AdtClient } from '../../../ts-src/adt/client.js';
-import { AdtApiError, AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+import { AdtClient } from '../../../src/adt/client.js';
+import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 // Mock axios for all client tests
 vi.mock('axios', async () => {
