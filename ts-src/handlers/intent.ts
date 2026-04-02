@@ -542,7 +542,9 @@ async function handleSAPLint(_client: AdtClient, args: Record<string, unknown>):
       return textResult(JSON.stringify(issues, null, 2));
     }
     default:
-      return errorResult(`Unknown SAPLint action: ${action}. Supported: lint, atc, syntax`);
+      return errorResult(
+        `Unknown SAPLint action: "${action}". Supported: lint. For atc/syntax/unittest, use SAPDiagnose instead.`,
+      );
   }
 }
 
@@ -576,6 +578,14 @@ function objectUrlForType(type: string, name: string): string {
       return `/sap/bc/adt/businessservices/bindings/${encoded}`;
     case 'TABL':
       return `/sap/bc/adt/ddic/tables/${encoded}`;
+    case 'STRU':
+      return `/sap/bc/adt/ddic/structures/${encoded}`;
+    case 'DOMA':
+      return `/sap/bc/adt/ddic/domains/${encoded}`;
+    case 'DTEL':
+      return `/sap/bc/adt/ddic/dataelements/${encoded}`;
+    case 'TRAN':
+      return `/sap/bc/adt/vit/wb/object_type/trant/object_name/${encoded}`;
     default:
       return `/sap/bc/adt/programs/programs/${encoded}`;
   }

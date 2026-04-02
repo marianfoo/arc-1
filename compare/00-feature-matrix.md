@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-01_
+_Last updated: 2026-04-02_
 
 ## Legend
 - ✅ = Supported
@@ -81,11 +81,11 @@ _Last updated: 2026-04-01_
 | CDS views (DDLS) | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
 | Behavior defs (BDEF) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ✅ |
 | Service defs (SRVD) | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
-| Service bindings (SRVB) | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ |
+| Service bindings (SRVB) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ |
 | Tables (DDIC) | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | N/A | ✅ |
 | Table contents | ✅ | ✅ | ✅ | ⚠️ Z-service | ❌ | ✅ | N/A | ✅ |
 | Packages (DEVC) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
-| Metadata ext (DDLX) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
+| Metadata ext (DDLX) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
 | Structures | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | N/A | ❌ |
 | Domains | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ |
 | Data elements | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ |
@@ -107,12 +107,12 @@ _Last updated: 2026-04-01_
 | Update source | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
 | Delete objects | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
 | Activate | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
-| Batch activate | ⚠️ (single-call capable) | ✅ | ✅ | ❌ | ✅ (with dep resolution) | ✅ | N/A | ❌ |
+| Batch activate | ✅ | ✅ | ✅ | ❌ | ✅ (with dep resolution) | ✅ | N/A | ❌ |
 | Lock/unlock | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
 | EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ |
-| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ❌ | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ |
+| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ |
 | Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ |
 
@@ -160,8 +160,8 @@ _Last updated: 2026-04-01_
 
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
-| Short dumps (ST22) | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
-| ABAP profiler traces | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ |
+| Short dumps (ST22) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
+| ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ |
 | SQL traces | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | ABAP debugger | ❌ | ✅ (8 tools) | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | AMDP/HANA debugger | ❌ | ✅ (7 tools) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
@@ -206,7 +206,7 @@ _Last updated: 2026-04-01_
 
 | Metric | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb |
 |--------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
-| Unit tests | 596+ | 222 | 0 | 0 | 0 | Yes (Jest) | 0 | 163 |
+| Unit tests | 707+ | 222 | 0 | 0 | 0 | Yes (Jest) | 0 | 163 |
 | Integration tests | ✅ (on-prem + BTP) | ✅ | ❌ | 13 (live SAP) | ❌ | ✅ | ❌ | ⚠️ scaffold |
 | CI/CD | ✅ (release-please) | ✅ (GoReleaser) | ❌ | ❌ | ❌ | ⚠️ (Husky + lint-staged) | ❌ | ❌ |
 | Input validation | Zod v3 | Custom | Untyped | Untyped | Pydantic | Zod v4 | Zod | Manual |
@@ -222,10 +222,10 @@ Based on verified codebase analysis (2026-04-01) and competitive landscape:
 
 | # | Feature | Why | Competition | Effort |
 |---|---------|-----|-------------|--------|
-| 1 | **Short dump analysis (ST22)** | Currently ❌ — listed as ✅ in old matrix was WRONG. VSP, fr0ster, dassian all have it. Basic diagnostic capability gap. | VSP, fr0ster, dassian | 1d |
-| 2 | **DDLX/Metadata Extension read** | fr0ster is the only one with it. Critical for RAP development workflows. | fr0ster | 1d |
+| 1 | ~~**Short dump analysis (ST22)**~~ | ✅ Implemented — SAPDiagnose `dumps` action lists and reads short dumps with formatted text, error analysis, and call stack. | VSP, fr0ster, dassian | ~~1d~~ |
+| 2 | ~~**DDLX/Metadata Extension read**~~ | ✅ Implemented — DDLX type in SAPRead returns CDS metadata extension source. | fr0ster | ~~1d~~ |
 | 3 | **Content-Type 415 auto-retry** | Robustness fix learned from fr0ster issue #22/#23. SAP systems vary in Accept/Content-Type expectations. | fr0ster | 0.5d |
-| 4 | **Batch activation with dependency resolution** | AWS Accelerator has the most robust implementation. Essential for RAP stacks (DDLS→BDEF→SRVD→SRVB chain). | AWS, fr0ster, VSP | 2d |
+| 4 | ~~**Batch activation with dependency resolution**~~ | ✅ Implemented — SAPActivate `objects` array for batch activation. Essential for RAP stacks. | AWS, fr0ster, VSP | ~~2d~~ |
 | 5 | **TLS/HTTPS for HTTP Streamable** | fr0ster added in v4.6.0. Required for production enterprise deployments without reverse proxy. | fr0ster | 1d |
 
 ### 🟠 High Priority — Significant Value
@@ -234,8 +234,8 @@ Based on verified codebase analysis (2026-04-01) and competitive landscape:
 |---|---------|-----|-------------|--------|
 | 6 | ~~**Structures (STRU) read support**~~ | ✅ Implemented — STRU type in SAPRead returns CDS-like source definition. | VSP, fr0ster, mario | ~~1d~~ |
 | 7 | ~~**Transaction code read**~~ | ✅ Implemented — TRAN type in SAPRead returns description, program, package. | VSP, fr0ster | ~~0.5d~~ |
-| 8 | **Service binding (SRVB) read/CRUD** | Missing from SAPRead. Needed for complete RAP stack support. AWS & fr0ster have it. | AWS, fr0ster, VSP | 1d |
-| 9 | **EditSource (surgical string replacement)** | VSP's killer feature for token efficiency — 95% source reduction for single-method edits. | VSP | 2d |
+| 8 | ~~**Service binding (SRVB) read/CRUD**~~ | ✅ Implemented — SRVB type in SAPRead returns structured binding info (OData version, publish status, service definition ref). | AWS, fr0ster, VSP | ~~1d~~ |
+| 9 | ~~**EditSource (surgical string replacement)**~~ | ✅ Implemented — `edit_method` action in SAPWrite for method-level surgery (95% source reduction). | VSP | ~~2d~~ |
 | 10 | **Function group bulk fetch** | Dassian fetches ALL includes + FMs in one call. Reduces LLM round trips significantly. | dassian | 1d |
 | 11 | **Error intelligence with self-correction hints** | Dassian provides actionable SAP error hints (SM12 for locks, SPAU for upgrades). ARC-1 has basic LLM hints but not comprehensive. | dassian | 1d |
 | 12 | **GetProgFullCode (recursive include discovery)** | fr0ster-unique feature. Fetches program with all includes resolved. Reduces round trips for complex programs. | fr0ster | 1d |
@@ -247,7 +247,7 @@ Based on verified codebase analysis (2026-04-01) and competitive landscape:
 |---|---------|-----|-------------|--------|
 | 14 | **PrettyPrint** | Code formatting via ADT. VSP and mcp-abap-abap-adt-api have it. | VSP | 1d |
 | 15 | **gCTS/abapGit integration** | Git repos list + pull. Dassian and VSP have it. | dassian, VSP | 2d |
-| 16 | **ABAP profiler traces** | Runtime performance diagnostics. VSP and fr0ster have it. | VSP, fr0ster | 2d |
+| 16 | ~~**ABAP profiler traces**~~ | ✅ Implemented — SAPDiagnose `traces` action lists and analyzes profiler traces (hitlist, statements, dbAccesses). | VSP, fr0ster | ~~2d~~ |
 | 17 | **SQL trace support** | Performance diagnostics. VSP has it. | VSP | 1d |
 | 18 | **CDS unit tests** | fr0ster-unique. Create/run/check CDS unit tests. | fr0ster | 1d |
 | 19 | **Inactive objects list** | Show what's inactive system-wide. VSP and fr0ster have it. | VSP, fr0ster | 0.5d |
@@ -281,13 +281,17 @@ Based on verified codebase analysis (2026-04-01) and competitive landscape:
 
 ## Corrections from Previous Matrix (2026-03-30)
 
-The following items were incorrectly marked in the previous version:
+The following items were incorrectly marked in the previous version and have since been updated:
 
-| Item | Old Value | Corrected Value | Reason |
-|------|-----------|----------------|--------|
-| ARC-1 Short dumps (ST22) | ✅ | ❌ | No dump-related methods exist in codebase |
-| ARC-1 ABAP profiler | ✅ | ❌ | No profiler/trace support in codebase |
-| ARC-1 SQL traces | ✅ | ❌ | No SQL trace functionality in codebase |
+| Item | 2026-03-30 | 2026-04-01 | 2026-04-02 | Reason |
+|------|-----------|-----------|-----------|--------|
+| ARC-1 Short dumps (ST22) | ✅ (wrong) | ❌ | ✅ | Implemented in PR #24 (SAPDiagnose dumps action) |
+| ARC-1 ABAP profiler | ✅ (wrong) | ❌ | ✅ | Implemented in PR #24 (SAPDiagnose traces action) |
+| ARC-1 SQL traces | ✅ (wrong) | ❌ | ❌ | Still not implemented |
+| ARC-1 DDLX read | — | ❌ | ✅ | Implemented in PR #22 |
+| ARC-1 SRVB read | — | ❌ | ✅ | Implemented in PR #22 |
+| ARC-1 Batch activation | — | ⚠️ | ✅ | Implemented in PR #22 |
+| ARC-1 RAP CRUD | — | ❌ | ✅ | DDLS/DDLX/BDEF/SRVD write in PR #22 |
 | VSP tool count | 1-122 | 1-99 (54 focused, 99 expert per README_TOOLS.md) | Updated from actual tool documentation |
 | fr0ster version | v4.5.2 | v4.7.1 | Updated to current release |
 | fr0ster TLS support | not listed | ✅ (v4.6.0) | New feature added Mar 31 |
@@ -316,7 +320,8 @@ The following items were incorrectly marked in the previous version:
 3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
 
 ### Key Gaps to Close
-- **Diagnostics**: ARC-1 has zero runtime diagnostics (no dumps, no profiler, no traces). Every active competitor has at least dumps.
-- **RAP completeness**: Missing DDLX, SRVB, batch activation with dependency resolution. fr0ster leads here.
-- **DDIC completeness**: Missing structures, domains, data elements, transactions. fr0ster leads.
-- **Token efficiency**: ~~SAPContext is good but lacks method-level surgery (VSP) and hyperfocused mode (VSP).~~ **CLOSED** — method-level surgery and hyperfocused mode implemented.
+- ~~**Diagnostics**: ARC-1 has zero runtime diagnostics.~~ **CLOSED** — Short dumps (ST22) and ABAP profiler traces implemented in SAPDiagnose.
+- ~~**RAP completeness**: Missing DDLX, SRVB, batch activation.~~ **CLOSED** — DDLX/SRVB read, DDLS/DDLX/BDEF/SRVD write, and batch activation all implemented.
+- ~~**DDIC completeness**: Missing structures, domains, data elements, transactions.~~ **CLOSED** — STRU, DOMA, DTEL, TRAN all implemented.
+- ~~**Token efficiency**: SAPContext is good but lacks method-level surgery and hyperfocused mode.~~ **CLOSED** — method-level surgery and hyperfocused mode implemented.
+- **Remaining gaps**: TLS/HTTPS, SQL traces, ABAP debugger, gCTS/abapGit, multi-system support, execute ABAP.

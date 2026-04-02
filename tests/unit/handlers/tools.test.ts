@@ -74,6 +74,37 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPQuery');
   });
 
+  it('SAPLint only exposes lint action (atc/syntax moved to SAPDiagnose)', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG);
+    const sapLint = tools.find((t) => t.name === 'SAPLint')!;
+    const schema = sapLint.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toContain('lint');
+    expect(actionEnum).not.toContain('atc');
+    expect(actionEnum).not.toContain('syntax');
+    expect(actionEnum).toHaveLength(1);
+  });
+
+  it('SAPLint description mentions SAPDiagnose for server-side checks', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG);
+    const sapLint = tools.find((t) => t.name === 'SAPLint')!;
+    expect(sapLint.description).toContain('SAPDiagnose');
+  });
+
+  it('SAPDiagnose exposes syntax, unittest, atc, dumps, traces', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG);
+    const sapDiagnose = tools.find((t) => t.name === 'SAPDiagnose')!;
+    const schema = sapDiagnose.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toContain('syntax');
+    expect(actionEnum).toContain('unittest');
+    expect(actionEnum).toContain('atc');
+    expect(actionEnum).toContain('dumps');
+    expect(actionEnum).toContain('traces');
+  });
+
   // ─── Schema Validation (Issue #47: OpenAI compatibility) ─────────
 
   it('every array property has an items definition (Issue #47)', () => {
