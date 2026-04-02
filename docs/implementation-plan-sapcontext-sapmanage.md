@@ -32,13 +32,13 @@ Two designs existed in the Go era:
 
 ### 1.3 Existing Backend
 
-The feature detection system in `ts-src/adt/features.ts` is complete:
+The feature detection system in `src/adt/features.ts` is complete:
 
 - `probeFeatures(client, config)` — Parallel HEAD requests to 6 SAP endpoints
 - `resolveWithoutProbing(config)` — Offline resolution based on config modes
 - 6 features probed: `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `transport`
 - 3 modes per feature: `auto` (probe), `on` (force), `off` (disable)
-- Types: `FeatureStatus`, `ResolvedFeatures` in `ts-src/adt/types.ts`
+- Types: `FeatureStatus`, `ResolvedFeatures` in `src/adt/types.ts`
 - Tests: 5 passing tests in `tests/unit/adt/features.test.ts`
 
 ### 1.4 Tool Description (LLM-facing)
@@ -91,13 +91,13 @@ or is force-disabled — do NOT attempt operations that depend on it.
 
 #### Step 1: Add feature state to server
 
-**File: `ts-src/server/types.ts`**
+**File: `src/server/types.ts`**
 
 Add a `resolvedFeatures` field to `ServerConfig` (or a separate server state object) so that probed features can be cached and returned by the `features` action without re-probing.
 
 #### Step 2: Probe at startup
 
-**File: `ts-src/server/server.ts`**
+**File: `src/server/server.ts`**
 
 After the `AdtClient` is created, call `probeFeatures()` and store the result:
 
@@ -111,7 +111,7 @@ const features = await probeFeatures(client.http, config.features);
 
 #### Step 3: Add handler function
 
-**File: `ts-src/handlers/intent.ts`**
+**File: `src/handlers/intent.ts`**
 
 ```typescript
 async function handleSAPManage(
@@ -143,7 +143,7 @@ async function handleSAPManage(
 
 #### Step 4: Wire into switch statement
 
-**File: `ts-src/handlers/intent.ts`** (line ~182, before `default:`)
+**File: `src/handlers/intent.ts`** (line ~182, before `default:`)
 
 ```typescript
 case 'SAPManage':
@@ -153,7 +153,7 @@ case 'SAPManage':
 
 #### Step 5: Register tool definition
 
-**File: `ts-src/handlers/tools.ts`**
+**File: `src/handlers/tools.ts`**
 
 Add SAPManage to `getToolDefinitions()`. It should be registered conditionally — only when NOT in read-only mode (consistent with its `write` scope in `TOOL_SCOPES`):
 
@@ -347,11 +347,11 @@ understand its dependencies.
 }
 ```
 
-### 2.5 New Module: `ts-src/context/`
+### 2.5 New Module: `src/context/`
 
-Create a new `context/` module under `ts-src/` with the following files:
+Create a new `context/` module under `src/` with the following files:
 
-#### 2.5.1 `ts-src/context/types.ts` — Type Definitions
+#### 2.5.1 `src/context/types.ts` — Type Definitions
 
 ```typescript
 /** A dependency found in ABAP source code */
@@ -409,7 +409,7 @@ export interface ContextResult {
 }
 ```
 
-#### 2.5.2 `ts-src/context/deps.ts` — Dependency Extraction
+#### 2.5.2 `src/context/deps.ts` — Dependency Extraction
 
 This is the core innovation. Two approaches, choose one:
 
@@ -492,7 +492,7 @@ const PATTERNS: Array<{ pattern: RegExp; kind: DependencyKind }> = [
 - Deduplicate by name (keep first occurrence for line reference)
 - Sort: custom objects (Z*, Y*) first, then SAP standard, alphabetically within each group
 
-#### 2.5.3 `ts-src/context/contract.ts` — Contract Extraction
+#### 2.5.3 `src/context/contract.ts` — Contract Extraction
 
 Extract the public API contract from full source code.
 
@@ -541,7 +541,7 @@ export function extractContract(
 2. Collect `*"` comment lines (the signature block with IMPORTING/EXPORTING/TABLES/CHANGING/EXCEPTIONS)
 3. Return `FUNCTION <name>.\n<signature lines>\nENDFUNCTION.`
 
-#### 2.5.4 `ts-src/context/compressor.ts` — Orchestrator
+#### 2.5.4 `src/context/compressor.ts` — Orchestrator
 
 ```typescript
 import type { AdtClient } from '../adt/client.js';
@@ -746,7 +746,7 @@ function formatResult(
 
 ### 2.6 Handler Implementation
 
-**File: `ts-src/handlers/intent.ts`**
+**File: `src/handlers/intent.ts`**
 
 ```typescript
 import { compressContext } from '../context/compressor.js';
@@ -796,7 +796,7 @@ case 'SAPContext':
 
 ### 2.7 Tool Registration
 
-**File: `ts-src/handlers/tools.ts`**
+**File: `src/handlers/tools.ts`**
 
 SAPContext is a **read** tool — register it unconditionally (same as SAPRead, SAPSearch):
 
@@ -930,7 +930,7 @@ expect(names).toContain('SAPContext');
 Add to the codebase structure:
 
 ```
-ts-src/
+src/
 ├── context/
 │   ├── types.ts                # Context compression types
 │   ├── deps.ts                 # Dependency extraction from ABAP source
@@ -942,9 +942,9 @@ Add to Key Files table:
 
 | Task | Files |
 |------|-------|
-| Add dependency pattern | `ts-src/context/deps.ts` |
-| Add contract extraction for new type | `ts-src/context/contract.ts` |
-| Modify context output format | `ts-src/context/compressor.ts` |
+| Add dependency pattern | `src/context/deps.ts` |
+| Add contract extraction for new type | `src/context/contract.ts` |
+| Modify context output format | `src/context/compressor.ts` |
 
 ---
 

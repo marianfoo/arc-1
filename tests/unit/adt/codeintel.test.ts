@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { findDefinition, findReferences, getCompletion } from '../../../ts-src/adt/codeintel.js';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+import { findDefinition, findReferences, getCompletion } from '../../../src/adt/codeintel.js';
+import { AdtSafetyError } from '../../../src/adt/errors.js';
+import type { AdtHttpClient } from '../../../src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {

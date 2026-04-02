@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractDependencies } from '../../../ts-src/context/deps.js';
+import { extractDependencies } from '../../../src/context/deps.js';
 
 describe('extractDependencies', () => {
   // ─── TYPE REF TO ────────────────────────────────────────────────────

@@ -13,9 +13,9 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 // Must import AFTER mocking fetch
-const { lookupDestinationWithUserToken } = await import('../../../ts-src/adt/btp.js');
+const { lookupDestinationWithUserToken } = await import('../../../src/adt/btp.js');
 
-import type { BTPConfig } from '../../../ts-src/adt/btp.js';
+import type { BTPConfig } from '../../../src/adt/btp.js';
 
 const TEST_BTP_CONFIG: BTPConfig = {
   xsuaaUrl: 'https://test.auth.example.com',

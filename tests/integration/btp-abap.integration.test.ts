@@ -27,9 +27,9 @@
 
 import { config } from 'dotenv';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { AdtClient } from '../../ts-src/adt/client.js';
-import { createBearerTokenProvider, loadServiceKeyFile } from '../../ts-src/adt/oauth.js';
-import { unrestrictedSafetyConfig } from '../../ts-src/adt/safety.js';
+import { AdtClient } from '../../src/adt/client.js';
+import { createBearerTokenProvider, loadServiceKeyFile } from '../../src/adt/oauth.js';
+import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 
 // Load .env before anything else
 config();

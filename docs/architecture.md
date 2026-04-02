@@ -24,7 +24,7 @@ flowchart TB
             PRM[RFC 9728 Metadata<br/>/.well-known/oauth-protected-resource]
         end
 
-        subgraph Core["ts-src/server/server.ts"]
+        subgraph Core["src/server/server.ts"]
             direction LR
             Tools[11 Intent-Based Tools]
         end
@@ -35,7 +35,7 @@ flowchart TB
             OF[Operation Filter]
         end
 
-        subgraph ADTLib["ts-src/adt/ — ADT Client Library"]
+        subgraph ADTLib["src/adt/ — ADT Client Library"]
             direction TB
             subgraph Read["Read"]
                 client[client.ts<br/>Search · Get*]
@@ -54,8 +54,8 @@ flowchart TB
         end
 
         subgraph Packages["Supporting Packages"]
-            Cache[ts-src/cache/<br/>Memory · SQLite]
-            Lint[ts-src/lint/<br/>abaplint]
+            Cache[src/cache/<br/>Memory · SQLite]
+            Lint[src/lint/<br/>abaplint]
         end
     end
 
@@ -149,7 +149,7 @@ flowchart LR
 
 ```
 arc-1/
-├── ts-src/
+├── src/
 │   ├── index.ts                    # MCP server entry point
 │   ├── cli.ts                      # CLI entry point (commander)
 │   ├── server/

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CacheApi, CacheEdge, CacheNode } from '../../../ts-src/cache/cache.js';
-import { MemoryCache } from '../../../ts-src/cache/memory.js';
+import type { CacheApi, CacheEdge, CacheNode } from '../../../src/cache/cache.js';
+import { MemoryCache } from '../../../src/cache/memory.js';
 
 function makeNode(id: string, pkg = '$TMP'): CacheNode {
   return {

@@ -14,10 +14,10 @@ import {
   parseTraceHitlist,
   parseTraceList,
   parseTraceStatements,
-} from '../../../ts-src/adt/diagnostics.js';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+} from '../../../src/adt/diagnostics.js';
+import { AdtSafetyError } from '../../../src/adt/errors.js';
+import type { AdtHttpClient } from '../../../src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 const FIXTURES_DIR = join(__dirname, '../../fixtures/xml');
 

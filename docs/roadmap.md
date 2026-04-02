@@ -81,9 +81,9 @@ The core design principles are:
 | **Status** | ✅ Code complete (2026-03-27) — needs SAP-side setup (STRUST, CERTRULE, ICM) for end-to-end testing |
 
 **Implemented (2026-03-27) — BTP Cloud Connector approach (SEC-02 merged into SEC-01):**
-- `lookupDestinationWithUserToken()` in `ts-src/adt/btp.ts` — calls Destination Service "Find Destination" API with `X-User-Token` header
-- Per-request ADT client creation in `ts-src/server/server.ts` — `createPerUserClient()` creates a fresh ADT client for each authenticated user
-- `SAP-Connectivity-Authentication` header injection in `ts-src/adt/http.ts` — carries SAML assertion to Cloud Connector
+- `lookupDestinationWithUserToken()` in `src/adt/btp.ts` — calls Destination Service "Find Destination" API with `X-User-Token` header
+- Per-request ADT client creation in `src/server/server.ts` — `createPerUserClient()` creates a fresh ADT client for each authenticated user
+- `SAP-Connectivity-Authentication` header injection in `src/adt/http.ts` — carries SAML assertion to Cloud Connector
 - `SAP_PP_ENABLED=true` config flag — opt-in for principal propagation
 - Graceful fallback — if per-user lookup fails, falls back to shared service account
 - No basic auth when PP active — username/password cleared, user identity from SAML assertion only
@@ -158,7 +158,7 @@ The core design principles are:
 
 **Implemented (2026-03-27):**
 - User identity (userName, email, clientId) logged with every tool call via `authInfo.extra`
-- Structured logger (`ts-src/server/logger.ts`) with text/JSON output and sensitive field redaction
+- Structured logger (`src/server/logger.ts`) with text/JSON output and sensitive field redaction
 - Tool call duration, success/error status in every log entry
 - Works for XSUAA (JWT claims), OIDC (sub), and API key auth
 
@@ -207,9 +207,9 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Status** | ✅ Complete via scope enforcement (2026-03-27) |
 
 **Implemented (2026-03-27):**
-- `TOOL_SCOPES` map in `ts-src/handlers/intent.ts` — each tool requires a scope (read/write/admin)
+- `TOOL_SCOPES` map in `src/handlers/intent.ts` — each tool requires a scope (read/write/admin)
 - Scope enforcement in `handleToolCall()` — checks `authInfo.scopes` before executing any tool
-- `ListTools` filtering in `ts-src/server/server.ts` — users only see tools they have scopes for
+- `ListTools` filtering in `src/server/server.ts` — users only see tools they have scopes for
 - XSUAA role collections (ARC-1 Viewer/Editor/Admin) map to scopes via `xs-security.json`
 - Additive to safety system — both scope check AND safety check must pass
 - Backward compatible — no authInfo (stdio, simple API key) = no scope enforcement
@@ -249,8 +249,8 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - Configuration: `SAP_XSUAA_AUTH=true` enables the proxy
 
 **Files:**
-- `ts-src/server/xsuaa.ts` — OAuth provider, client store, chained verifier
-- `ts-src/server/http.ts` — Express-based HTTP server with auth routing
+- `src/server/xsuaa.ts` — OAuth provider, client store, chained verifier
+- `src/server/http.ts` — Express-based HTTP server with auth routing
 - `xs-security.json` — XSUAA service instance config
 - `docs/phase5-xsuaa-setup.md` — Setup guide
 
@@ -341,7 +341,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Usefulness** | High — unique differentiator for S/4HANA migration |
 | **Status** | Not started |
 
-**What:** Run ATC checks with ABAP Cloud check variant to assess whether code is cloud-ready. Combined with the ABAP linter (`@abaplint/core` integration in `ts-src/lint/lint.ts`), provide a comprehensive clean core compliance report.
+**What:** Run ATC checks with ABAP Cloud check variant to assess whether code is cloud-ready. Combined with the ABAP linter (`@abaplint/core` integration in `src/lint/lint.ts`), provide a comprehensive clean core compliance report.
 
 **Why:** AWS ABAP Accelerator has this as a key feature. ARC-1 combines ATC cloud checks with `@abaplint/core` for offline linting.
 
@@ -356,9 +356,9 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | High — required for cloud-native operations |
-| **Status** | ✅ Mostly complete — `ts-src/server/logger.ts` with text/JSON output, field redaction |
+| **Status** | ✅ Mostly complete — `src/server/logger.ts` with text/JSON output, field redaction |
 
-**What:** Structured logging is implemented (`ts-src/server/logger.ts`). Remaining: add correlation IDs from MCP session, add user context from OIDC JWT, configure JSON vs text via env var.
+**What:** Structured logging is implemented (`src/server/logger.ts`). Remaining: add correlation IDs from MCP session, add user context from OIDC JWT, configure JSON vs text via env var.
 
 ---
 

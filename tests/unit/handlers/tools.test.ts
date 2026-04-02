@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getToolDefinitions } from '../../../ts-src/handlers/tools.js';
-import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
+import { getToolDefinitions } from '../../../src/handlers/tools.js';
+import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('Tool Definitions', () => {
   it('returns tools for default config', () => {

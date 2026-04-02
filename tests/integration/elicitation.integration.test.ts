@@ -11,9 +11,9 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AuditEvent } from '../../ts-src/server/audit.js';
-import { confirmDestructive, promptString, selectOption } from '../../ts-src/server/elicit.js';
-import { logger } from '../../ts-src/server/logger.js';
+import type { AuditEvent } from '../../src/server/audit.js';
+import { confirmDestructive, promptString, selectOption } from '../../src/server/elicit.js';
+import { logger } from '../../src/server/logger.js';
 
 describe('Elicitation Integration', () => {
   let events: AuditEvent[] = [];

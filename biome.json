@@ -49,6 +49,6 @@
     }
   ],
   "files": {
-    "includes": ["ts-src/**", "tests/**", "bin/**"]
+    "includes": ["src/**", "tests/**", "bin/**"]
   }
 }

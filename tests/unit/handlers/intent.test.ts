@@ -1,17 +1,12 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import axios from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AdtClient } from '../../../ts-src/adt/client.js';
-import { AdtApiError } from '../../../ts-src/adt/errors.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
-import type { ResolvedFeatures } from '../../../ts-src/adt/types.js';
-import {
-  handleToolCall,
-  resetCachedFeatures,
-  setCachedFeatures,
-  TOOL_SCOPES,
-} from '../../../ts-src/handlers/intent.js';
-import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
+import { AdtClient } from '../../../src/adt/client.js';
+import { AdtApiError } from '../../../src/adt/errors.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import type { ResolvedFeatures } from '../../../src/adt/types.js';
+import { handleToolCall, resetCachedFeatures, setCachedFeatures, TOOL_SCOPES } from '../../../src/handlers/intent.js';
+import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 // Mock axios so AdtClient doesn't make real requests
 vi.mock('axios', async () => {
@@ -783,7 +778,7 @@ ENDCLASS.`;
 
   describe('SAPManage', () => {
     it('returns message when features not yet probed', async () => {
-      const { resetCachedFeatures } = await import('../../../ts-src/handlers/intent.js');
+      const { resetCachedFeatures } = await import('../../../src/handlers/intent.js');
       resetCachedFeatures();
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {

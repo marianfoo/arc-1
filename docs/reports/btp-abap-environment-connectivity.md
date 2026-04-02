@@ -34,21 +34,21 @@ ARC-1 now has full BTP ABAP support across three areas:
 ### Files added/changed
 
 **OAuth + Auth (earlier in PR #18):**
-- `ts-src/adt/oauth.ts` — OAuth module (service key parsing, browser flow, token lifecycle)
-- `ts-src/adt/http.ts` — `bearerTokenProvider` in config, Bearer token injection
-- `ts-src/adt/config.ts` — `bearerTokenProvider` in `AdtClientConfig`
-- `ts-src/adt/client.ts` — Pass bearer token provider to HTTP client
-- `ts-src/server/types.ts` — `btpServiceKey`, `btpServiceKeyFile`, `btpOAuthCallbackPort`, `systemType`
-- `ts-src/server/config.ts` — Parse new env vars and CLI flags
-- `ts-src/server/server.ts` — Wire up service key → OAuth provider → ADT client
+- `src/adt/oauth.ts` — OAuth module (service key parsing, browser flow, token lifecycle)
+- `src/adt/http.ts` — `bearerTokenProvider` in config, Bearer token injection
+- `src/adt/config.ts` — `bearerTokenProvider` in `AdtClientConfig`
+- `src/adt/client.ts` — Pass bearer token provider to HTTP client
+- `src/server/types.ts` — `btpServiceKey`, `btpServiceKeyFile`, `btpOAuthCallbackPort`, `systemType`
+- `src/server/config.ts` — Parse new env vars and CLI flags
+- `src/server/server.ts` — Wire up service key → OAuth provider → ADT client
 - `tests/unit/adt/oauth.test.ts` — 27 tests
 - `tests/unit/server/config.test.ts` — 13 new config tests (7 OAuth + 6 system type)
 
 **System detection + Tool adaptation (later in PR #18):**
-- `ts-src/adt/types.ts` — `SystemType`, `systemType` in `ResolvedFeatures`
-- `ts-src/adt/features.ts` — `detectSystemType()`, `probeFeatures()` accepts override
-- `ts-src/handlers/tools.ts` — Dynamic `getToolDefinitions()` with BTP/on-prem variants
-- `ts-src/handlers/intent.ts` — BTP_HINTS map, `isBtpSystem()`
+- `src/adt/types.ts` — `SystemType`, `systemType` in `ResolvedFeatures`
+- `src/adt/features.ts` — `detectSystemType()`, `probeFeatures()` accepts override
+- `src/handlers/tools.ts` — Dynamic `getToolDefinitions()` with BTP/on-prem variants
+- `src/handlers/intent.ts` — BTP_HINTS map, `isBtpSystem()`
 - `tests/unit/adt/features.test.ts` — 5 detection tests
 - `tests/unit/handlers/tools.test.ts` — 16 BTP tool definition tests
 - `tests/unit/handlers/intent.test.ts` — 10 BTP handler behavior tests
@@ -147,7 +147,7 @@ Two options:
 - Server returns **HTTP 401** + `WWW-Authenticate` header pointing to metadata
 - The **MCP client** (VS Code, Claude Desktop) opens the browser, not the server
 - Client handles the full OAuth dance and attaches `Authorization: Bearer` to requests
-- ARC-1 already has OIDC validation in `ts-src/server/http.ts` — could be extended to point at XSUAA
+- ARC-1 already has OIDC validation in `src/server/http.ts` — could be extended to point at XSUAA
 - VS Code, Claude Desktop, and Claude Code all support this flow (with some quirks)
 
 **Option B: Pre-authenticated token via header (simpler)**
@@ -314,24 +314,24 @@ When the third parameter is a function (`BearerFetcher`), the library uses `Auth
 
 ### What Was Added
 
-1. **`ts-src/adt/oauth.ts`** — New OAuth 2.0 module:
+1. **`src/adt/oauth.ts`** — New OAuth 2.0 module:
    - Service key parsing and validation (`parseServiceKey`, `loadServiceKeyFile`, `resolveServiceKey`)
    - Browser Authorization Code flow (`performBrowserLogin`, `startCallbackServer`, `openBrowser`)
    - Token exchange and refresh (`exchangeCodeForToken`, `refreshAccessToken`)
    - BearerFetcher pattern (`createBearerTokenProvider`) — caches token, auto-refreshes, re-authenticates
 
-2. **`ts-src/adt/http.ts`** — Bearer token support:
+2. **`src/adt/http.ts`** — Bearer token support:
    - `bearerTokenProvider?: () => Promise<string>` in `AdtHttpConfig`
    - Injected on every request + CSRF token fetch (replaces Basic Auth when set)
 
-3. **`ts-src/server/server.ts`** — Startup wiring:
+3. **`src/server/server.ts`** — Startup wiring:
    - If `btpServiceKey` or `btpServiceKeyFile` is configured, resolves the service key
    - Overrides `config.url` and `config.client` from service key
    - Creates `bearerTokenProvider` and passes to `AdtClient`
 
 ### What Still Exists (On-Premise BTP Path)
 
-The existing `ts-src/adt/btp.ts` Destination Service path is unchanged and still works for on-premise connectivity via Cloud Connector. The two paths are independent — service key is for direct BTP ABAP, Destination Service is for on-premise via BTP.
+The existing `src/adt/btp.ts` Destination Service path is unchanged and still works for on-premise connectivity via Cloud Connector. The two paths are independent — service key is for direct BTP ABAP, Destination Service is for on-premise via BTP.
 
 ---
 
@@ -343,7 +343,7 @@ The existing `ts-src/adt/btp.ts` Destination Service path is unchanged and still
 
 **Solution:** Auto-detect BTP from the `SAP_CLOUD` component in `/sap/bc/adt/system/components` (already called for ABAP release detection — zero extra HTTP calls). Manual override via `SAP_SYSTEM_TYPE=btp|onprem|auto`.
 
-**Implementation in `ts-src/adt/features.ts`:**
+**Implementation in `src/adt/features.ts`:**
 
 ```typescript
 export function detectSystemType(
@@ -467,9 +467,9 @@ Communication Arrangement setup:
 5. **Complex to implement and test correctly** — requires XSUAA token exchange grant type config, proper service bindings, and a real multi-user BTP setup to verify.
 
 **If implemented later, it would touch:**
-- `ts-src/adt/oauth.ts` — Add `jwtBearerExchange()` function
-- `ts-src/server/server.ts` — Wire up per-request token exchange
-- `ts-src/server/http.ts` — Extract user JWT from MCP request
+- `src/adt/oauth.ts` — Add `jwtBearerExchange()` function
+- `src/server/server.ts` — Wire up per-request token exchange
+- `src/server/http.ts` — Extract user JWT from MCP request
 
 ### CI/CD Communication User Auth
 

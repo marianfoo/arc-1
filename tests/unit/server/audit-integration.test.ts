@@ -10,12 +10,12 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AdtClient } from '../../../ts-src/adt/client.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
-import { handleToolCall } from '../../../ts-src/handlers/intent.js';
-import type { AuditEvent } from '../../../ts-src/server/audit.js';
-import { FileSink } from '../../../ts-src/server/sinks/file.js';
-import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
+import { AdtClient } from '../../../src/adt/client.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { handleToolCall } from '../../../src/handlers/intent.js';
+import type { AuditEvent } from '../../../src/server/audit.js';
+import { FileSink } from '../../../src/server/sinks/file.js';
+import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 // Mock axios
 vi.mock('axios', async () => {
@@ -63,7 +63,7 @@ describe('Audit Logging Integration', () => {
     const captureSink = { write: (e: AuditEvent) => events.push(e) };
 
     // Replace the global logger temporarily
-    const { logger } = await import('../../../ts-src/server/logger.js');
+    const { logger } = await import('../../../src/server/logger.js');
     logger.addSink(captureSink);
 
     await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
@@ -97,7 +97,7 @@ describe('Audit Logging Integration', () => {
   it('emits error details for failed tool calls', async () => {
     const events: AuditEvent[] = [];
     const captureSink = { write: (e: AuditEvent) => events.push(e) };
-    const { logger } = await import('../../../ts-src/server/logger.js');
+    const { logger } = await import('../../../src/server/logger.js');
     logger.addSink(captureSink);
 
     // Use restricted config that blocks reads
@@ -136,7 +136,7 @@ describe('Audit Logging Integration', () => {
   it('emits auth_scope_denied for insufficient scopes', async () => {
     const events: AuditEvent[] = [];
     const captureSink = { write: (e: AuditEvent) => events.push(e) };
-    const { logger } = await import('../../../ts-src/server/logger.js');
+    const { logger } = await import('../../../src/server/logger.js');
     logger.addSink(captureSink);
 
     const authInfo = {
@@ -157,7 +157,7 @@ describe('Audit Logging Integration', () => {
   it('sanitizes sensitive args in tool_call_start events', async () => {
     const events: AuditEvent[] = [];
     const captureSink = { write: (e: AuditEvent) => events.push(e) };
-    const { logger } = await import('../../../ts-src/server/logger.js');
+    const { logger } = await import('../../../src/server/logger.js');
     logger.addSink(captureSink);
 
     await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
@@ -173,7 +173,7 @@ describe('Audit Logging Integration', () => {
   });
 
   it('writes events to file sink', async () => {
-    const { logger } = await import('../../../ts-src/server/logger.js');
+    const { logger } = await import('../../../src/server/logger.js');
     const fileSink = new FileSink(tmpFile);
     logger.addSink(fileSink);
 

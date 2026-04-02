@@ -17,8 +17,8 @@
  */
 
 import { config } from 'dotenv';
-import { AdtClient } from '../../ts-src/adt/client.js';
-import { unrestrictedSafetyConfig } from '../../ts-src/adt/safety.js';
+import { AdtClient } from '../../src/adt/client.js';
+import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 
 // Load .env before anything else
 config();

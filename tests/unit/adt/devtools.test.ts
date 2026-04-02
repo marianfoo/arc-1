@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../../../ts-src/adt/devtools.js';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
+import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../../../src/adt/devtools.js';
+import { AdtSafetyError } from '../../../src/adt/errors.js';
+import type { AdtHttpClient } from '../../../src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {

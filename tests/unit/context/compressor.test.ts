@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { AdtClient } from '../../../ts-src/adt/client.js';
-import { compressContext, inferObjectType } from '../../../ts-src/context/compressor.js';
+import type { AdtClient } from '../../../src/adt/client.js';
+import { compressContext, inferObjectType } from '../../../src/context/compressor.js';
 
 /** Create a mock AdtClient */
 function mockClient(sources: Record<string, string>): AdtClient {

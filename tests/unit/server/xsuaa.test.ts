@@ -7,7 +7,7 @@
 
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { describe, expect, it, vi } from 'vitest';
-import { createChainedTokenVerifier, InMemoryClientStore } from '../../../ts-src/server/xsuaa.js';
+import { createChainedTokenVerifier, InMemoryClientStore } from '../../../src/server/xsuaa.js';
 
 // ─── InMemoryClientStore ─────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ describe('createXsuaaOAuthProvider', () => {
 
   it('createXsuaaTokenVerifier returns a function', async () => {
     // We can at least verify the module exports are correct
-    const { createXsuaaTokenVerifier } = await import('../../../ts-src/server/xsuaa.js');
+    const { createXsuaaTokenVerifier } = await import('../../../src/server/xsuaa.js');
     expect(typeof createXsuaaTokenVerifier).toBe('function');
   });
 });
@@ -151,7 +151,7 @@ describe('createXsuaaOAuthProvider', () => {
 
 describe('getAppUrl', () => {
   it('extracts app URL from VCAP_APPLICATION', async () => {
-    const { getAppUrl } = await import('../../../ts-src/adt/btp.js');
+    const { getAppUrl } = await import('../../../src/adt/btp.js');
 
     const originalEnv = process.env.VCAP_APPLICATION;
     process.env.VCAP_APPLICATION = JSON.stringify({
@@ -164,7 +164,7 @@ describe('getAppUrl', () => {
   });
 
   it('returns undefined when VCAP_APPLICATION is not set', async () => {
-    const { getAppUrl } = await import('../../../ts-src/adt/btp.js');
+    const { getAppUrl } = await import('../../../src/adt/btp.js');
 
     const originalEnv = process.env.VCAP_APPLICATION;
     delete process.env.VCAP_APPLICATION;
@@ -175,7 +175,7 @@ describe('getAppUrl', () => {
   });
 
   it('returns undefined for invalid JSON', async () => {
-    const { getAppUrl } = await import('../../../ts-src/adt/btp.js');
+    const { getAppUrl } = await import('../../../src/adt/btp.js');
 
     const originalEnv = process.env.VCAP_APPLICATION;
     process.env.VCAP_APPLICATION = 'not-json';
@@ -186,7 +186,7 @@ describe('getAppUrl', () => {
   });
 
   it('falls back to uris field', async () => {
-    const { getAppUrl } = await import('../../../ts-src/adt/btp.js');
+    const { getAppUrl } = await import('../../../src/adt/btp.js');
 
     const originalEnv = process.env.VCAP_APPLICATION;
     process.env.VCAP_APPLICATION = JSON.stringify({

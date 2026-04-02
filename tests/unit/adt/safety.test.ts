@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
+import { AdtSafetyError } from '../../../src/adt/errors.js';
 import {
   checkOperation,
   checkPackage,
@@ -14,7 +14,7 @@ import {
   OperationType,
   type SafetyConfig,
   unrestrictedSafetyConfig,
-} from '../../../ts-src/adt/safety.js';
+} from '../../../src/adt/safety.js';
 
 /** Helper to create a config with overrides */
 function config(overrides: Partial<SafetyConfig> = {}): SafetyConfig {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCookieFileContent, parseCookieString } from '../../../ts-src/adt/cookies.js';
+import { parseCookieFileContent, parseCookieString } from '../../../src/adt/cookies.js';
 
 describe('parseCookieString', () => {
   it('parses simple cookie string', () => {

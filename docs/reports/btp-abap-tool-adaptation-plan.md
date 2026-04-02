@@ -47,7 +47,7 @@ This allows users to force the system type when auto-detection fails or for test
 
 ### 1.3 Where to Store
 
-Extend `ResolvedFeatures` in `ts-src/adt/types.ts`:
+Extend `ResolvedFeatures` in `src/adt/types.ts`:
 
 ```typescript
 export interface ResolvedFeatures {
@@ -228,7 +228,7 @@ ADT requires user context. Client Credentials grant produces a "technical" token
 
 ### 3.6 Existing: BTP Destination Service (On-Premise via Cloud Connector)
 
-**Status:** Already implemented in `ts-src/adt/btp.ts`. Works for on-premise SAP behind Cloud Connector.
+**Status:** Already implemented in `src/adt/btp.ts`. Works for on-premise SAP behind Cloud Connector.
 
 | Aspect | Detail |
 |--------|--------|
@@ -264,7 +264,7 @@ For non-interactive (CI/CD) access to BTP ABAP, you need:
 
 ### Phase 1: System Detection ✅ Completed
 
-**Files:** `ts-src/adt/types.ts`, `ts-src/adt/features.ts`, `ts-src/server/types.ts`, `ts-src/server/config.ts`
+**Files:** `src/adt/types.ts`, `src/adt/features.ts`, `src/server/types.ts`, `src/server/config.ts`
 
 1. Add `systemType?: 'btp' | 'onprem'` to `ResolvedFeatures`
 2. Extend `detectAbapRelease()` to also detect `systemType` from SAP_CLOUD component (same HTTP call)
@@ -276,7 +276,7 @@ For non-interactive (CI/CD) access to BTP ABAP, you need:
 
 ### Phase 2: Tool Description Adaptation ✅ Completed
 
-**Files:** `ts-src/handlers/tools.ts`
+**Files:** `src/handlers/tools.ts`
 
 1. `getToolDefinitions(config)` already receives `ServerConfig`
 2. Add `systemType` parameter (from cached features or config override)
@@ -302,7 +302,7 @@ For non-interactive (CI/CD) access to BTP ABAP, you need:
 
 ### Phase 3: Handler Behavior Adaptation ✅ Completed
 
-**Files:** `ts-src/handlers/intent.ts`
+**Files:** `src/handlers/intent.ts`
 
 1. Check `cachedFeatures.systemType` in handlers
 2. For blocked operations on BTP, return helpful error messages instead of cryptic 400/404:
@@ -314,7 +314,7 @@ For non-interactive (CI/CD) access to BTP ABAP, you need:
 
 ### Phase 4: JWT Bearer Exchange for Deployed Scenarios ⏭️ Deferred
 
-**Files:** `ts-src/adt/oauth.ts`, `ts-src/adt/btp.ts`, `ts-src/server/server.ts`
+**Files:** `src/adt/oauth.ts`, `src/adt/btp.ts`, `src/server/server.ts`
 
 1. When ARC-1 runs in HTTP transport mode with a BTP ABAP service key
 2. Extract user JWT from MCP request headers (already validated by XSUAA middleware)
@@ -451,29 +451,29 @@ For non-interactive (CI/CD) access to BTP ABAP, you need:
 ### Phase 1 (Detection)
 | File | Change |
 |------|--------|
-| `ts-src/adt/types.ts` | Add `systemType` to `ResolvedFeatures` |
-| `ts-src/adt/features.ts` | Extend `detectAbapRelease()` for systemType |
-| `ts-src/server/types.ts` | Add `systemType` to `ServerConfig` |
-| `ts-src/server/config.ts` | Parse `SAP_SYSTEM_TYPE` env var |
-| `ts-src/handlers/intent.ts` | Surface in SAPManage response |
+| `src/adt/types.ts` | Add `systemType` to `ResolvedFeatures` |
+| `src/adt/features.ts` | Extend `detectAbapRelease()` for systemType |
+| `src/server/types.ts` | Add `systemType` to `ServerConfig` |
+| `src/server/config.ts` | Parse `SAP_SYSTEM_TYPE` env var |
+| `src/handlers/intent.ts` | Surface in SAPManage response |
 | `tests/unit/adt/features.test.ts` | Detection unit tests |
 
 ### Phase 2 (Tool Descriptions)
 | File | Change |
 |------|--------|
-| `ts-src/handlers/tools.ts` | Dynamic tool definitions based on systemType |
+| `src/handlers/tools.ts` | Dynamic tool definitions based on systemType |
 | `tests/unit/handlers/tools.test.ts` | Verify BTP vs onprem tool sets |
 
 ### Phase 3 (Handler Behavior)
 | File | Change |
 |------|--------|
-| `ts-src/handlers/intent.ts` | BTP-aware error messages and context notes |
+| `src/handlers/intent.ts` | BTP-aware error messages and context notes |
 | `tests/unit/handlers/intent.test.ts` | Verify BTP error messages |
 | `tests/integration/btp-abap.integration.test.ts` | New handler behavior tests |
 
 ### Phase 4 (JWT Bearer Exchange — separate PR)
 | File | Change |
 |------|--------|
-| `ts-src/adt/oauth.ts` | Add `jwtBearerExchange()` function |
-| `ts-src/server/server.ts` | Wire up per-request token exchange |
-| `ts-src/server/http.ts` | Extract user JWT from MCP request |
+| `src/adt/oauth.ts` | Add `jwtBearerExchange()` function |
+| `src/server/server.ts` | Wire up per-request token exchange |
+| `src/server/http.ts` | Extract user JWT from MCP request |

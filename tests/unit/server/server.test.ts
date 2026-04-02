@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createServer, VERSION } from '../../../ts-src/server/server.js';
-import { DEFAULT_CONFIG } from '../../../ts-src/server/types.js';
+import { createServer, VERSION } from '../../../src/server/server.js';
+import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('MCP Server', () => {
   it('creates a server instance with correct name and version', () => {

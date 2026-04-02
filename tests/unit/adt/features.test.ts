@@ -1,11 +1,7 @@
 import { Version } from '@abaplint/core';
 import { describe, expect, it } from 'vitest';
-import type { FeatureConfig } from '../../../ts-src/adt/config.js';
-import {
-  detectSystemType,
-  mapSapReleaseToAbaplintVersion,
-  resolveWithoutProbing,
-} from '../../../ts-src/adt/features.js';
+import type { FeatureConfig } from '../../../src/adt/config.js';
+import { detectSystemType, mapSapReleaseToAbaplintVersion, resolveWithoutProbing } from '../../../src/adt/features.js';
 
 describe('Feature Detection', () => {
   describe('resolveWithoutProbing', () => {

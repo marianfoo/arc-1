@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AdtSafetyError } from '../../../ts-src/adt/errors.js';
-import type { AdtHttpClient } from '../../../ts-src/adt/http.js';
-import { unrestrictedSafetyConfig } from '../../../ts-src/adt/safety.js';
-import { createTransport, getTransport, listTransports, releaseTransport } from '../../../ts-src/adt/transport.js';
+import { AdtSafetyError } from '../../../src/adt/errors.js';
+import type { AdtHttpClient } from '../../../src/adt/http.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { createTransport, getTransport, listTransports, releaseTransport } from '../../../src/adt/transport.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
