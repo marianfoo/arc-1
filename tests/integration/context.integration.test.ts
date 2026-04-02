@@ -200,9 +200,11 @@ describeIf('SAPContext Integration Tests', () => {
       expect(extracted.success).toBe(true);
 
       // Splice back the same method source — should produce identical output
+      // Normalize line endings for comparison (SAP returns CRLF, our functions normalize to LF)
       const spliced = spliceMethod(source, '/DMO/CL_FLIGHT_LEGACY', firstMethod.name, extracted.methodSource);
       expect(spliced.success).toBe(true);
-      expect(spliced.newSource).toBe(source);
+      const normalize = (s: string) => s.replace(/\r\n/g, '\n');
+      expect(normalize(spliced.newSource)).toBe(normalize(source));
     }, 15000);
 
     it('achieves significant token reduction vs full source', async () => {

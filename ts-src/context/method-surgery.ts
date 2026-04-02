@@ -496,6 +496,8 @@ export function spliceMethod(
   newBody: string,
   abaplintVersion?: Version,
 ): MethodSpliceResult {
+  // Detect line ending style (preserve original)
+  const hasCRLF = source.includes('\r\n');
   const normalized = source.replace(/\r\n/g, '\n');
   const extracted = extractMethod(normalized, className, methodName, abaplintVersion);
 
@@ -516,10 +518,11 @@ export function spliceMethod(
   let newMethodBlock: string;
   if (isFullBlock) {
     // Use the body as-is (preserve original indentation)
-    newMethodBlock = newBody;
+    // Normalize to \n for consistent splicing, then re-apply line endings at the end
+    newMethodBlock = newBody.replace(/\r\n/g, '\n');
   } else {
     // Wrap with METHOD/ENDMETHOD using the original method name from the source
-    newMethodBlock = `  METHOD ${extracted.methodName}.\n${newBody}\n  ENDMETHOD.`;
+    newMethodBlock = `  METHOD ${extracted.methodName}.\n${newBody.replace(/\r\n/g, '\n')}\n  ENDMETHOD.`;
   }
 
   // Replace in source
@@ -527,7 +530,12 @@ export function spliceMethod(
   const before = lines.slice(0, extracted.startLine - 1);
   const after = lines.slice(extracted.endLine);
 
-  const newSource = [...before, newMethodBlock, ...after].join('\n');
+  let newSource = [...before, newMethodBlock, ...after].join('\n');
+
+  // Restore original line ending style
+  if (hasCRLF) {
+    newSource = newSource.replace(/\n/g, '\r\n');
+  }
 
   return {
     newSource,
