@@ -75,6 +75,7 @@ npm run dev
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
 | `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
+| `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (11 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
 | `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
@@ -94,7 +95,8 @@ ts-src/
 │   └── types.ts                # ServerConfig type, defaults
 ├── handlers/
 │   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
-│   └── tools.ts                # Tool definitions (names, descriptions, schemas)
+│   ├── tools.ts                # Tool definitions (names, descriptions, schemas)
+│   └── hyperfocused.ts         # Hyperfocused mode (single SAP tool, ~200 tokens)
 ├── adt/
 │   ├── client.ts               # ADT client facade (all read operations)
 │   ├── http.ts                 # HTTP transport (axios, CSRF, cookies, sessions)
@@ -116,7 +118,8 @@ ts-src/
 │   ├── types.ts                # Context compression types
 │   ├── deps.ts                 # AST-based dependency extraction (@abaplint/core)
 │   ├── contract.ts             # Public API contract extraction
-│   └── compressor.ts           # Orchestrator (fetch + compress + format)
+│   ├── compressor.ts           # Orchestrator (fetch + compress + format)
+│   └── method-surgery.ts       # Method-level extraction, listing, and surgical replacement
 ├── cache/
 │   ├── cache.ts                # Cache interface + types
 │   ├── memory.ts               # In-memory cache
@@ -147,6 +150,8 @@ tests/
 |------|-------|
 | Add new read operation | `ts-src/adt/client.ts`, `ts-src/handlers/intent.ts`, `ts-src/handlers/tools.ts` |
 | Add new tool type | `ts-src/handlers/tools.ts`, `ts-src/handlers/intent.ts` |
+| Add method-level surgery | `ts-src/context/method-surgery.ts` |
+| Modify hyperfocused mode | `ts-src/handlers/hyperfocused.ts`, `ts-src/handlers/tools.ts` |
 | Add XML response parser | `ts-src/adt/xml-parser.ts` |
 | Add safety check | `ts-src/adt/safety.ts` |
 | Add lint rule config | `ts-src/lint/lint.ts` |
