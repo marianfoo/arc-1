@@ -84,14 +84,9 @@ export async function activateBatch(
 ${refs}
 </adtcore:objectReferences>`;
 
-  const resp = await http.post(
-    '/sap/bc/adt/activation?method=activate&preauditRequested=true',
-    body,
-    'application/xml',
-    {
-      Accept: 'application/xml',
-    },
-  );
+  const resp = await http.post('/sap/bc/adt/activation', body, 'application/xml', {
+    Accept: 'application/xml',
+  });
 
   // Check if activation succeeded (no error messages)
   const hasErrors = resp.body.includes('severity="error"') || resp.body.includes('type="E"');

@@ -61,10 +61,10 @@ The 11 tools are designed from real LLM interaction feedback:
 
 | Tool | What it does |
 |------|-------------|
-| **SAPRead** | Read ABAP source, table data, CDS views, message classes, BOR objects |
+| **SAPRead** | Read ABAP source, table data, CDS views, metadata extensions (DDLX), service bindings (SRVB), message classes, BOR objects |
 | **SAPSearch** | Object search + full-text source code search across the system |
-| **SAPWrite** | Create/update/delete ABAP source with automatic lock/unlock |
-| **SAPActivate** | Activate ABAP objects with error reporting |
+| **SAPWrite** | Create/update/delete ABAP source with automatic lock/unlock (PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD) |
+| **SAPActivate** | Activate ABAP objects — single or batch (essential for RAP stacks) |
 | **SAPNavigate** | Go-to-definition, find references, code completion |
 | **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
 | **SAPTransport** | CTS transport management (list, create, release) |

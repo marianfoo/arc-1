@@ -32,8 +32,10 @@ Read any SAP ABAP object.
 | `FUGR` | Function group structure |
 | `INCL` | Include source |
 | `DDLS` | CDS view source |
+| `DDLX` | CDS metadata extension (UI annotations for Fiori Elements) |
 | `BDEF` | Behavior definition |
 | `SRVD` | Service definition |
+| `SRVB` | Service binding (structured JSON: OData version, binding type, publish status) |
 | `TABL` | Table definition (structure) |
 | `VIEW` | DDIC view |
 | `TABLE_CONTENTS` | Table data (rows) |
@@ -48,6 +50,8 @@ Read any SAP ABAP object.
 ```
 SAPRead(type="PROG", name="ZTEST_REPORT")
 SAPRead(type="CLAS", name="ZCL_ORDER", include="testclasses")
+SAPRead(type="DDLX", name="ZC_TRAVEL")          — metadata extension with UI annotations
+SAPRead(type="SRVB", name="ZUI_TRAVEL_O4")       — service binding metadata as JSON
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
 SAPRead(type="SYSTEM")
 ```
@@ -84,7 +88,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, or `delete` |
-| `type` | string | Yes | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL` |
+| `type` | string | Yes | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD` |
 | `name` | string | Yes | Object name |
 | `source` | string | No | ABAP source code (for create/update) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
@@ -96,14 +100,23 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 ## SAPActivate
 
-Activate (publish) ABAP objects. Reports any activation errors.
+Activate (publish) ABAP objects. Supports single object or batch activation.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `name` | string | Yes | Object name to activate |
-| `type` | string | Yes | Object type (`PROG`, `CLAS`, etc.) |
+| `name` | string | No | Object name (for single activation) |
+| `type` | string | No | Object type (`PROG`, `CLAS`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, etc.) |
+| `objects` | array | No | For batch: array of `{type, name}` objects to activate together |
+
+Use batch activation for RAP stacks where objects depend on each other (DDLS, BDEF, SRVD, DDLX, SRVB must be activated together).
+
+**Examples:**
+```
+SAPActivate(type="CLAS", name="ZCL_ORDER")
+SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}])
+```
 
 **Note:** Blocked when `--read-only` is active.
 
