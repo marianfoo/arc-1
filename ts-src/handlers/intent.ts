@@ -26,6 +26,7 @@ import {
 } from '../adt/diagnostics.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
 import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
+import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
 import { compressContext } from '../context/compressor.js';
@@ -339,15 +340,17 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
     }
     case 'TRAN': {
       const tran = await client.getTransaction(name);
-      // Enrich with program name via SQL if available (best-effort)
-      try {
-        const sql = `SELECT TCODE, PGMNA FROM TSTC WHERE TCODE = '${name.toUpperCase().replace(/[^A-Z0-9_/]/g, '')}'`;
-        const data = await client.runQuery(sql, 1);
-        if (data.rows.length > 0) {
-          tran.program = String(data.rows[0]!.PGMNA ?? '').trim();
+      // Enrich with program name via SQL — only if free SQL is allowed by safety config
+      if (isOperationAllowed(client.safety, OperationType.FreeSQL)) {
+        try {
+          const safeName = name.toUpperCase().replace(/[^A-Z0-9_/]/g, '');
+          const data = await client.runQuery(`SELECT TCODE, PGMNA FROM TSTC WHERE TCODE = '${safeName}'`, 1);
+          if (data.rows.length > 0) {
+            tran.program = String(data.rows[0]!.PGMNA ?? '').trim();
+          }
+        } catch {
+          // SQL failed (e.g., TSTC not found on BTP) — still return metadata
         }
-      } catch {
-        // SQL may be blocked (blockFreeSQL) — that's fine, we still have metadata
       }
       return textResult(JSON.stringify(tran, null, 2));
     }

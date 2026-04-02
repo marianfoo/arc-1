@@ -97,6 +97,43 @@ describe('E2E Smoke Tests', () => {
     expect(data.rows.length).toBeGreaterThan(0);
   });
 
+  // ── SAPRead: DDIC objects ───────────────────────────────────────
+
+  it('SAPRead STRU — reads BAPIRET2 structure definition', async () => {
+    const result = await callTool(client, 'SAPRead', { type: 'STRU', name: 'BAPIRET2' });
+    const text = expectToolSuccess(result);
+    expect(text).toContain('bapiret2');
+    expect(text).toContain('message');
+  });
+
+  it('SAPRead DOMA — reads BUKRS domain metadata', async () => {
+    const result = await callTool(client, 'SAPRead', { type: 'DOMA', name: 'BUKRS' });
+    const text = expectToolSuccess(result);
+    const domain = JSON.parse(text);
+    expect(domain.name).toBe('BUKRS');
+    expect(domain.dataType).toBe('CHAR');
+    expect(domain.length).toBeTruthy();
+  });
+
+  it('SAPRead DTEL — reads BUKRS data element metadata', async () => {
+    const result = await callTool(client, 'SAPRead', { type: 'DTEL', name: 'BUKRS' });
+    const text = expectToolSuccess(result);
+    const dtel = JSON.parse(text);
+    expect(dtel.name).toBe('BUKRS');
+    expect(dtel.typeKind).toBe('domain');
+    expect(dtel.typeName).toBe('BUKRS');
+    expect(dtel.mediumLabel).toBeTruthy();
+  });
+
+  it('SAPRead TRAN — reads SE38 transaction metadata', async () => {
+    const result = await callTool(client, 'SAPRead', { type: 'TRAN', name: 'SE38' });
+    const text = expectToolSuccess(result);
+    const tran = JSON.parse(text);
+    expect(tran.code).toBe('SE38');
+    expect(tran.description).toBeTruthy();
+    expect(tran.program).toBe('RSABAPPROGRAM');
+  });
+
   // ── SAPSearch ──────────────────────────────────────────────────
 
   it('SAPSearch — finds standard classes', async () => {
