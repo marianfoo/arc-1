@@ -684,6 +684,56 @@ ENDCLASS.`;
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Dependency context for zcl_standalone');
     });
+
+    it('dispatches DDLS type for CDS context', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        type: 'DDLS',
+        name: 'ZI_ORDER',
+      });
+      // Mock returns generic text which the CDS parser will process
+      // It should not error — it calls getDdls and runs CDS context pipeline
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('CDS dependency context for ZI_ORDER');
+    });
+  });
+
+  // ─── SAPRead DDLS include="elements" ──────────────────────────────
+
+  describe('SAPRead DDLS include="elements"', () => {
+    it('returns raw DDL source when no include param', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DDLS',
+        name: 'ZI_ORDER',
+      });
+      expect(result.isError).toBeUndefined();
+      // Mock returns generic text — just verify no error
+    });
+
+    it('returns structured elements when include="elements"', async () => {
+      // Override mock to return CDS DDL source
+      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
+      (mockAxiosInstance.request as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        status: 200,
+        data: `define view entity ZI_ORDER as select from zsalesorder {
+  key order_id as OrderId,
+  customer as Customer,
+  gross_amount - discount as NetAmount,
+  _Items
+}`,
+        headers: { 'x-csrf-token': 'mock' },
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DDLS',
+        name: 'ZI_ORDER',
+        include: 'elements',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('=== ZI_ORDER elements ===');
+      expect(result.content[0]?.text).toContain('OrderId');
+      expect(result.content[0]?.text).toContain('Customer');
+      expect(result.content[0]?.text).toContain('NetAmount');
+    });
   });
 
   // ─── SAPActivate ───────────────────────────────────────────────────

@@ -7,6 +7,14 @@
  * 3. compressor.ts — Orchestrate: fetch sources, compress, format output
  */
 
+/** A dependency found in CDS DDL source code */
+export interface CdsDependency {
+  /** Entity/table name (e.g., zsalesorder, ZI_CUSTOMER) */
+  name: string;
+  /** How the dependency is referenced in the CDS DDL */
+  kind: 'data_source' | 'association' | 'composition' | 'projection_base';
+}
+
 /** A dependency found in ABAP source code */
 export interface Dependency {
   /** Object name (e.g., ZCL_ITEM, ZIF_ORDER) */

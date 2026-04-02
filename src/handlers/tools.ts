@@ -107,11 +107,11 @@ const SAPWRITE_DESC_BTP =
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
-const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC'];
-const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF'];
+const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC', 'DDLS'];
+const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF', 'DDLS'];
 
 const SAPCONTEXT_DESC_ONPREM =
-  'Get compressed dependency context for an ABAP object. Returns only the public API contracts ' +
+  'Get compressed dependency context for an ABAP object or CDS entity. Returns only the public API contracts ' +
   '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
   'NOT the full source code. This is the most token-efficient way to understand dependencies. ' +
   'Instead of N separate SAPRead calls returning full source (~200 lines each), SAPContext returns ONE response ' +
@@ -119,19 +119,24 @@ const SAPCONTEXT_DESC_ONPREM =
   'What gets extracted per dependency:\n' +
   '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants). PROTECTED, PRIVATE and IMPLEMENTATION stripped.\n' +
   '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
-  '- Function modules: FUNCTION signature block only (IMPORTING/EXPORTING parameters).\n\n' +
+  '- Function modules: FUNCTION signature block only (IMPORTING/EXPORTING parameters).\n' +
+  '- CDS views (DDLS): All data sources (tables, other CDS views), association targets, and compositions. ' +
+  "Each dependency's full source is included (table definitions, CDS DDL). Essential for CDS unit test generation — " +
+  'provides the dependency graph and field catalogs needed for cl_cds_test_environment doubles.\n\n' +
   'Filtering: SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded — the LLM already knows standard SAP APIs. ' +
   'Custom objects (Z*, Y*) are prioritized.\n\n' +
   'Use SAPContext BEFORE writing code that modifies or extends existing objects. ' +
   'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.';
 
 const SAPCONTEXT_DESC_BTP =
-  'Get compressed dependency context for an ABAP object (BTP ABAP Environment). Returns only the public API contracts ' +
+  'Get compressed dependency context for an ABAP object or CDS entity (BTP ABAP Environment). Returns only the public API contracts ' +
   '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
   'NOT the full source code. This is the most token-efficient way to understand dependencies.\n\n' +
   'What gets extracted per dependency:\n' +
   '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants).\n' +
-  '- Interfaces: Full interface definition (interfaces are already public contracts).\n\n' +
+  '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
+  '- CDS views (DDLS): All data sources (tables, other CDS views), association targets, and compositions. ' +
+  "Each dependency's full source is included. Essential for CDS unit test generation.\n\n" +
   'On BTP: released SAP objects (CL_ABAP_*, IF_ABAP_*) are included since they form the primary development API surface. ' +
   'Custom objects (Z*, Y*) are also included.\n\n' +
   'Use SAPContext BEFORE writing code that modifies or extends existing objects.';
@@ -222,7 +227,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           include: {
             type: 'string',
             description:
-              'For CLAS only. DO NOT use this to read the main class — omit include entirely to get the full class source (CLASS DEFINITION + CLASS IMPLEMENTATION). This parameter reads class-LOCAL auxiliary files only: definitions (local type definitions, NOT the main class definition), implementations (local helper class implementations), macros, testclasses (ABAP Unit). Comma-separated. Not all classes have these sections — missing ones return a note instead of an error.',
+              'For CLAS: DO NOT use this to read the main class — omit include entirely to get the full class source (CLASS DEFINITION + CLASS IMPLEMENTATION). This parameter reads class-LOCAL auxiliary files only: definitions (local type definitions, NOT the main class definition), implementations (local helper class implementations), macros, testclasses (ABAP Unit). Comma-separated. Not all classes have these sections — missing ones return a note instead of an error. ' +
+              'For DDLS: use include="elements" to get a structured field list extracted from the CDS DDL source — shows key fields, aliases, associations, and expression types (calculated, case, cast). Useful for understanding CDS entity structure without parsing raw DDL.',
           },
           group: {
             type: 'string',

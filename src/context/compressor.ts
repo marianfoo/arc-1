@@ -14,9 +14,10 @@
 
 import type { Version } from '@abaplint/core';
 import type { AdtClient } from '../adt/client.js';
+import { extractCdsDependencies } from './cds-deps.js';
 import { extractContract } from './contract.js';
 import { extractDependencies } from './deps.js';
-import type { ContextResult, Contract, Dependency } from './types.js';
+import type { CdsDependency, ContextResult, Contract, Dependency } from './types.js';
 
 const DEFAULT_MAX_DEPS = 20;
 const DEFAULT_DEPTH = 1;
@@ -259,6 +260,166 @@ function formatResult(
     depsFound,
     depsResolved: successful.length,
     depsFiltered: depsFound - contracts.length,
+    depsFailed: failed.length,
+    totalLines,
+    output: lines.join('\n'),
+  };
+}
+
+// ─── CDS Context Compression ───────────────────────────────────────
+
+/** Resolved CDS dependency with fetched source */
+interface CdsResolvedDep {
+  name: string;
+  kind: CdsDependency['kind'];
+  resolvedType: 'ddls' | 'table' | 'structure';
+  source: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Compress dependency context for a CDS entity.
+ *
+ * Unlike ABAP context (AST-based), CDS context uses regex to extract
+ * dependencies from DDL source, then fetches each dependency's source
+ * with a type fallback chain: DDLS → TABL → STRU.
+ *
+ * @param client - ADT client for fetching dependency sources
+ * @param ddlSource - CDS DDL source code of the target entity
+ * @param objectName - CDS entity name
+ * @param maxDeps - Maximum dependencies to resolve (default 20)
+ * @param depth - Dependency depth 1-3 (default 1)
+ */
+export async function compressCdsContext(
+  client: AdtClient,
+  ddlSource: string,
+  objectName: string,
+  maxDeps = DEFAULT_MAX_DEPS,
+  depth = DEFAULT_DEPTH,
+): Promise<ContextResult> {
+  const effectiveDepth = Math.min(Math.max(depth, 1), MAX_DEPTH);
+  const seen = new Set<string>([objectName.toUpperCase()]);
+  const allResolved: CdsResolvedDep[] = [];
+
+  const deps = extractCdsDependencies(ddlSource);
+
+  await resolveCdsDepthLevel(client, deps, maxDeps, effectiveDepth, seen, allResolved);
+
+  return formatCdsResult(objectName, deps.length, allResolved);
+}
+
+/**
+ * Resolve one level of CDS dependencies and recurse if needed.
+ */
+async function resolveCdsDepthLevel(
+  client: AdtClient,
+  deps: CdsDependency[],
+  maxDeps: number,
+  depth: number,
+  seen: Set<string>,
+  resolved: CdsResolvedDep[],
+): Promise<void> {
+  const newDeps = deps.filter((d) => !seen.has(d.name.toUpperCase()));
+  for (const dep of newDeps) {
+    seen.add(dep.name.toUpperCase());
+  }
+  const limited = newDeps.slice(0, maxDeps);
+
+  // Fetch in bounded parallel batches
+  for (let i = 0; i < limited.length; i += MAX_CONCURRENT) {
+    const batch = limited.slice(i, i + MAX_CONCURRENT);
+    const results = await Promise.all(batch.map((dep) => fetchCdsDependency(client, dep)));
+    resolved.push(...results);
+  }
+
+  // Recurse into resolved DDLS sources if depth > 1
+  if (depth > 1) {
+    for (const r of resolved) {
+      if (r.success && r.resolvedType === 'ddls') {
+        const subDeps = extractCdsDependencies(r.source);
+        const unseenSubDeps = subDeps.filter((d) => !seen.has(d.name.toUpperCase()));
+        if (unseenSubDeps.length > 0) {
+          await resolveCdsDepthLevel(client, unseenSubDeps, maxDeps, depth - 1, seen, resolved);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Fetch a single CDS dependency's source with type fallback.
+ * Try DDLS first (another CDS view), then TABL, then STRU.
+ */
+async function fetchCdsDependency(client: AdtClient, dep: CdsDependency): Promise<CdsResolvedDep> {
+  // Try DDLS first
+  try {
+    const source = await client.getDdls(dep.name);
+    return { name: dep.name, kind: dep.kind, resolvedType: 'ddls', source, success: true };
+  } catch {
+    // Not a DDLS — try TABL
+  }
+
+  try {
+    const source = await client.getTable(dep.name);
+    return { name: dep.name, kind: dep.kind, resolvedType: 'table', source, success: true };
+  } catch {
+    // Not a TABL — try STRU
+  }
+
+  try {
+    const source = await client.getStructure(dep.name);
+    return { name: dep.name, kind: dep.kind, resolvedType: 'structure', source, success: true };
+  } catch (err) {
+    return {
+      name: dep.name,
+      kind: dep.kind,
+      resolvedType: 'ddls',
+      source: '',
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Format CDS context result with prologue.
+ */
+function formatCdsResult(objectName: string, depsFound: number, resolved: CdsResolvedDep[]): ContextResult {
+  const successful = resolved.filter((r) => r.success);
+  const failed = resolved.filter((r) => !r.success);
+
+  const lines: string[] = [];
+  lines.push(
+    `* === CDS dependency context for ${objectName} (${successful.length} deps resolved${failed.length > 0 ? `, ${failed.length} failed` : ''}) ===`,
+  );
+  lines.push('');
+
+  for (const r of successful) {
+    lines.push(`* --- ${r.name} (${r.resolvedType}, ${r.kind}) ---`);
+    lines.push(r.source.trim());
+    lines.push('');
+  }
+
+  if (failed.length > 0) {
+    lines.push('* --- Failed dependencies ---');
+    for (const f of failed) {
+      lines.push(`* ${f.name}: ${f.error}`);
+    }
+    lines.push('');
+  }
+
+  const totalLines = lines.length;
+  lines.push(
+    `* Stats: ${depsFound} deps found, ${successful.length} resolved, ${failed.length} failed, ${totalLines} lines`,
+  );
+
+  return {
+    objectName,
+    objectType: 'DDLS',
+    depsFound,
+    depsResolved: successful.length,
+    depsFiltered: depsFound - resolved.length,
     depsFailed: failed.length,
     totalLines,
     output: lines.join('\n'),

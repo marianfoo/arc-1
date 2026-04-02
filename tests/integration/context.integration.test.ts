@@ -14,7 +14,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
-import { compressContext } from '../../src/context/compressor.js';
+import { extractCdsDependencies, extractCdsElements } from '../../src/context/cds-deps.js';
+import { compressCdsContext, compressContext } from '../../src/context/compressor.js';
 import { extractContract } from '../../src/context/contract.js';
 import { extractDependencies } from '../../src/context/deps.js';
 import { extractMethod, listMethods, spliceMethod } from '../../src/context/method-surgery.js';
@@ -224,6 +225,61 @@ describeIf('SAPContext Integration Tests', () => {
       // Should achieve at least 50% reduction (typically 90%+)
       expect(reduction).toBeGreaterThan(0.5);
     }, 15000);
+  });
+
+  // ─── CDS Context Compression ───────────────────────────────────────
+
+  describe('CDS dependency extraction', () => {
+    it('extracts dependencies from /DMO/I_TRAVEL DDL source', async () => {
+      const source = await client.getDdls('/DMO/I_TRAVEL');
+      const deps = extractCdsDependencies(source);
+
+      // /DMO/I_TRAVEL selects from /dmo/travel (table) and has associations
+      expect(deps.length).toBeGreaterThan(0);
+
+      for (const dep of deps) {
+        expect(dep.name).toBeTruthy();
+        expect(dep.kind).toBeTruthy();
+      }
+    }, 15000);
+
+    it('extracts elements from /DMO/I_TRAVEL DDL source', async () => {
+      const source = await client.getDdls('/DMO/I_TRAVEL');
+      const elements = extractCdsElements(source, '/DMO/I_TRAVEL');
+
+      // Should produce a formatted element listing with header
+      expect(elements).toContain('=== /DMO/I_TRAVEL elements ===');
+      // Should contain at least one key field
+      expect(elements).toContain('key');
+    }, 15000);
+  });
+
+  describe('CDS full compression', () => {
+    it('compresses CDS context for /DMO/I_TRAVEL', async () => {
+      const source = await client.getDdls('/DMO/I_TRAVEL');
+      const result = await compressCdsContext(client, source, '/DMO/I_TRAVEL', 5, 1);
+
+      expect(result.depsResolved).toBeGreaterThan(0);
+      expect(result.output).toContain('CDS dependency context for /DMO/I_TRAVEL');
+      expect(result.output).toContain('Stats:');
+      expect(result.objectType).toBe('DDLS');
+    }, 30000);
+
+    it('respects maxDeps limit for CDS context', async () => {
+      const source = await client.getDdls('/DMO/I_TRAVEL');
+      const result = await compressCdsContext(client, source, '/DMO/I_TRAVEL', 2, 1);
+
+      expect(result.depsResolved).toBeLessThanOrEqual(2);
+    }, 30000);
+
+    it('compresses CDS context with depth=2', async () => {
+      const source = await client.getDdls('/DMO/I_TRAVEL');
+      const shallow = await compressCdsContext(client, source, '/DMO/I_TRAVEL', 5, 1);
+      const deep = await compressCdsContext(client, source, '/DMO/I_TRAVEL', 5, 2);
+
+      // Depth=2 should resolve at least as many as depth=1
+      expect(deep.depsResolved).toBeGreaterThanOrEqual(shallow.depsResolved);
+    }, 60000);
   });
 
   // ─── SAPManage Feature Probing ────────────────────────────────────

@@ -4,7 +4,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { AdtClient } from '../../../src/adt/client.js';
-import { compressContext, inferObjectType } from '../../../src/context/compressor.js';
+import { compressCdsContext, compressContext, inferObjectType } from '../../../src/context/compressor.js';
 
 /** Create a mock AdtClient */
 function mockClient(sources: Record<string, string>): AdtClient {
@@ -284,5 +284,157 @@ describe('inferObjectType', () => {
 
   it('defaults to CLAS for unknown names', () => {
     expect(inferObjectType({ name: 'SOME_OBJECT', kind: 'type_ref', line: 1 })).toBe('CLAS');
+  });
+});
+
+// ─── CDS Context ──────────────────────────────────────────────────
+
+/** Create a mock AdtClient for CDS context tests */
+function mockCdsClient(sources: {
+  ddls?: Record<string, string>;
+  tables?: Record<string, string>;
+  structures?: Record<string, string>;
+}): AdtClient {
+  return {
+    getDdls: vi.fn(async (name: string) => {
+      const src = sources.ddls?.[name.toUpperCase()];
+      if (!src) throw new Error(`DDLS ${name} not found`);
+      return src;
+    }),
+    getTable: vi.fn(async (name: string) => {
+      const src = sources.tables?.[name.toUpperCase()];
+      if (!src) throw new Error(`Table ${name} not found`);
+      return src;
+    }),
+    getStructure: vi.fn(async (name: string) => {
+      const src = sources.structures?.[name.toUpperCase()];
+      if (!src) throw new Error(`Structure ${name} not found`);
+      return src;
+    }),
+    http: {},
+    safety: {},
+  } as unknown as AdtClient;
+}
+
+describe('compressCdsContext', () => {
+  it('resolves table dependency from CDS view', async () => {
+    const ddlSource = `define view entity ZI_ORDER as select from zsalesorder { key order_id }`;
+    const client = mockCdsClient({
+      tables: {
+        ZSALESORDER: `@EndUserText.label : 'Sales Order'\ndefine table zsalesorder {\n  key order_id : numc10;\n  customer : char10;\n}`,
+      },
+    });
+
+    const result = await compressCdsContext(client, ddlSource, 'ZI_ORDER');
+
+    expect(result.depsResolved).toBe(1);
+    expect(result.output).toContain('zsalesorder');
+    expect(result.output).toContain('table');
+    expect(result.output).toContain('CDS dependency context for ZI_ORDER');
+  });
+
+  it('resolves CDS view dependency (tries getDdls first)', async () => {
+    const ddlSource = `
+define view entity ZC_ORDER as projection on ZI_ORDER { key OrderId }`;
+    const client = mockCdsClient({
+      ddls: {
+        ZI_ORDER: `define view entity ZI_ORDER as select from zsalesorder { key order_id as OrderId }`,
+      },
+    });
+
+    const result = await compressCdsContext(client, ddlSource, 'ZC_ORDER');
+
+    expect(result.depsResolved).toBe(1);
+    expect(result.output).toContain('ZI_ORDER');
+    expect(result.output).toContain('ddls');
+  });
+
+  it('handles failed dependencies gracefully', async () => {
+    const ddlSource = `
+define view entity ZI_TEST as select from ztable
+  association [0..*] to ZI_MISSING as _Missing on _Missing.Id = $projection.Id
+{ key field1, _Missing }`;
+    const client = mockCdsClient({
+      tables: { ZTABLE: 'define table ztable { key field1 : char10; }' },
+    });
+
+    const result = await compressCdsContext(client, ddlSource, 'ZI_TEST');
+
+    expect(result.depsResolved).toBeGreaterThanOrEqual(1);
+    expect(result.depsFailed).toBeGreaterThanOrEqual(1);
+    expect(result.output).toContain('Failed dependencies');
+    expect(result.output).toContain('ZI_MISSING');
+  });
+
+  it('respects maxDeps limit', async () => {
+    const ddlSource = `
+define view entity ZI_TEST as select from ztable1
+  inner join ztable2 on ztable1.id = ztable2.id
+  inner join ztable3 on ztable1.id = ztable3.id
+{ key ztable1.id }`;
+    const client = mockCdsClient({
+      tables: {
+        ZTABLE1: 'define table ztable1 { key id : char10; }',
+        ZTABLE2: 'define table ztable2 { key id : char10; }',
+        ZTABLE3: 'define table ztable3 { key id : char10; }',
+      },
+    });
+
+    const result = await compressCdsContext(client, ddlSource, 'ZI_TEST', 2);
+
+    expect(result.depsResolved).toBeLessThanOrEqual(2);
+  });
+
+  it('handles depth=2 resolving transitive CDS dependencies', async () => {
+    const ddlSourceA = `define view entity ZC_A as projection on ZI_B { key Id }`;
+    const ddlSourceB = `define view entity ZI_B as select from ztable { key id as Id }`;
+    const client = mockCdsClient({
+      ddls: {
+        ZI_B: ddlSourceB,
+      },
+      tables: {
+        ZTABLE: 'define table ztable { key id : char10; }',
+      },
+    });
+
+    // depth=1: only ZI_B resolved as a dependency (ztable not resolved as its own dep)
+    const shallow = await compressCdsContext(client, ddlSourceA, 'ZC_A', 20, 1);
+    expect(shallow.output).toContain('ZI_B');
+    expect(shallow.depsResolved).toBe(1);
+
+    // depth=2: ZI_B + ztable (transitive dep from ZI_B's DDL)
+    const deep = await compressCdsContext(client, ddlSourceA, 'ZC_A', 20, 2);
+    expect(deep.output).toContain('ZI_B');
+    expect(deep.output).toContain('* --- ztable');
+    expect(deep.depsResolved).toBe(2);
+  });
+
+  it('detects cycles and does not loop infinitely', async () => {
+    const ddlSourceA = `define view entity ZI_A as select from ZI_B { key id }`;
+    const ddlSourceB = `define view entity ZI_B as select from ZI_A { key id }`;
+    const client = mockCdsClient({
+      ddls: {
+        ZI_A: ddlSourceA,
+        ZI_B: ddlSourceB,
+      },
+    });
+
+    const result = await compressCdsContext(client, ddlSourceA, 'ZI_A', 20, 3);
+    expect(result.depsResolved).toBeGreaterThanOrEqual(1);
+    expect(result.output).toContain('ZI_B');
+  });
+
+  it('formats output with stats line', async () => {
+    const ddlSource = `define view entity ZI_TEST as select from ztable { key field1 }`;
+    const client = mockCdsClient({
+      tables: { ZTABLE: 'define table ztable { key field1 : char10; }' },
+    });
+
+    const result = await compressCdsContext(client, ddlSource, 'ZI_TEST');
+
+    expect(result.output).toContain('CDS dependency context for ZI_TEST');
+    expect(result.output).toContain('Stats:');
+    expect(result.output).toContain('resolved');
+    expect(result.objectType).toBe('DDLS');
   });
 });

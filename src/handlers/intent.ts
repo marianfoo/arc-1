@@ -29,7 +29,8 @@ import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.j
 import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
-import { compressContext } from '../context/compressor.js';
+import { extractCdsElements } from '../context/cds-deps.js';
+import { compressCdsContext, compressContext } from '../context/compressor.js';
 import { extractMethod, formatMethodListing, listMethods, spliceMethod } from '../context/method-surgery.js';
 import { detectFilename, lintAbapSource } from '../lint/lint.js';
 import { sanitizeArgs } from '../server/audit.js';
@@ -359,8 +360,13 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
     }
     case 'INCL':
       return textResult(await client.getInclude(name));
-    case 'DDLS':
-      return textResult(await client.getDdls(name));
+    case 'DDLS': {
+      const ddlSource = await client.getDdls(name);
+      if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
+        return textResult(extractCdsElements(ddlSource, name));
+      }
+      return textResult(ddlSource);
+    }
     case 'BDEF':
       return textResult(await client.getBdef(name));
     case 'SRVD':
@@ -904,8 +910,13 @@ async function handleSAPContext(client: AdtClient, args: Record<string, unknown>
         source = await client.getFunction(group, name);
         break;
       }
+      case 'DDLS': {
+        const ddlSource = await client.getDdls(name);
+        const cdsResult = await compressCdsContext(client, ddlSource, name, maxDeps, depth);
+        return textResult(cdsResult.output);
+      }
       default:
-        return errorResult(`SAPContext supports types: CLAS, INTF, PROG, FUNC. Got: ${type}`);
+        return errorResult(`SAPContext supports types: CLAS, INTF, PROG, FUNC, DDLS. Got: ${type}`);
     }
   }
 
