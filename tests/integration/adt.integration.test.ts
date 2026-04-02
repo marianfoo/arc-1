@@ -198,8 +198,12 @@ describeIf('ADT Integration Tests', () => {
       await expect(client.getDataElement('ZZZNOTEXIST999')).rejects.toThrow();
     });
 
-    it('returns 404 for non-existent transaction', async () => {
-      await expect(client.getTransaction('ZZZNOTEXIST999')).rejects.toThrow();
+    it('returns empty metadata for non-existent transaction', async () => {
+      // SAP's vit endpoint returns 200 with empty data for non-existent transactions
+      // (unlike other ADT endpoints that return 404)
+      const tran = await client.getTransaction('ZZZNOTEXIST999');
+      expect(tran.code).toBe('ZZZNOTEXIST999');
+      expect(tran.description).toBe('');
     });
   });
 
