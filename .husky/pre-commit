@@ -1,0 +1,5 @@
+# Load node version manager if present (nvm, fnm, volta all set PATH differently)
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+[ -s "$HOME/.local/share/fnm/fnm_multishells" ] && eval "$(fnm env)"
+
+npx lint-staged
