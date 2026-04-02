@@ -16,7 +16,7 @@ If the user provides just an entity name, use defaults and proceed.
 
 ## Step 1: Gather CDS Entity Context
 
-Read the CDS entity and its dependencies to understand the full picture.
+Read the CDS entity, its field structure, and all dependencies in just 3 tool calls.
 
 ### 1a. Read the CDS DDL source
 
@@ -24,38 +24,39 @@ Read the CDS entity and its dependencies to understand the full picture.
 SAPRead(type="DDLS", name="<entity_name>")
 ```
 
-### 1b. Read metadata extensions (if they exist)
+### 1b. Get structured field list
+
+```
+SAPRead(type="DDLS", name="<entity_name>", include="elements")
+```
+
+Returns a formatted listing of all fields with key markers, aliases, association references, and expression types (calculated, case, cast, coalesce). Use this to understand the entity's structure without parsing raw DDL.
+
+### 1c. Get dependency context (tables, views, associations)
+
+```
+SAPContext(type="DDLS", name="<entity_name>")
+```
+
+Automatically extracts all data sources (FROM, JOIN), associations, compositions, and projection bases from the CDS DDL. For each dependency, fetches the full source with type fallback (DDLS → TABL → STRU). This gives you:
+- Underlying table definitions with field types (needed for correctly-typed test data)
+- Other CDS view sources (needed to understand transitive logic)
+- Association targets
+
+For deeper dependency graphs (e.g., a consumption view → interface view → table), use `depth=2`:
+
+```
+SAPContext(type="DDLS", name="<entity_name>", depth=2)
+```
+
+### 1d. (Optional) Read metadata extensions and behavior definition
 
 ```
 SAPRead(type="DDLX", name="<entity_name>")
-```
-
-This may fail if no DDLX exists — that's fine, skip it.
-
-### 1c. Read the behavior definition (if it exists)
-
-```
 SAPRead(type="BDEF", name="<entity_name>")
 ```
 
-This may fail if no BDEF exists — that's fine, skip it.
-
-### 1d. Read underlying table/view structures
-
-Parse the CDS DDL source to identify all data sources in FROM clauses, JOINs, and associations. For each underlying table or CDS view, read its structure:
-
-- For DDIC tables: `SAPRead(type="TABL", name="<table_name>")`
-- For other CDS views: `SAPRead(type="DDLS", name="<view_name>")`
-
-This gives you the field catalog needed to create correctly-typed test data.
-
-### 1e. (On-premise only) Query field catalog for precise types
-
-If on an on-premise system, query DD03L for exact field types:
-
-```
-SAPQuery(sql="SELECT FIELDNAME, DATATYPE, LENG, DECIMALS, KEYFLAG FROM DD03L WHERE TABNAME = '<table>' ORDER BY POSITION", maxRows=100)
-```
+These may fail if no DDLX/BDEF exists — that's fine, skip them. Only needed if the entity has UI annotations or RAP behavior.
 
 ## Step 2: Analyze CDS Semantics and Propose Test Cases
 
