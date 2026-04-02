@@ -515,7 +515,8 @@ export function spliceMethod(
 
   let newMethodBlock: string;
   if (isFullBlock) {
-    newMethodBlock = trimmedBody;
+    // Use the body as-is (preserve original indentation)
+    newMethodBlock = newBody;
   } else {
     // Wrap with METHOD/ENDMETHOD using the original method name from the source
     newMethodBlock = `  METHOD ${extracted.methodName}.\n${newBody}\n  ENDMETHOD.`;
