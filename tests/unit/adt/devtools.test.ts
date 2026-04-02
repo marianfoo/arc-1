@@ -118,11 +118,11 @@ describe('DevTools', () => {
       expect(result.messages).toHaveLength(2);
     });
 
-    it('sends activation request to correct endpoint', async () => {
+    it('sends activation request to correct endpoint with method param', async () => {
       const http = mockHttp('<activation/>');
       await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/activation',
+        '/sap/bc/adt/activation?method=activate&preauditRequested=true',
         expect.stringContaining('objectReference'),
         'application/xml',
         expect.objectContaining({ Accept: 'application/xml' }),
@@ -161,13 +161,13 @@ describe('DevTools', () => {
       expect(body).toContain('adtcore:name="ZSD_TRAVEL"');
     });
 
-    it('sends to activation endpoint', async () => {
+    it('sends to activation endpoint with method param', async () => {
       const http = mockHttp('<activation/>');
       await activateBatch(http, unrestrictedSafetyConfig(), [
         { url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' },
       ]);
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/activation',
+        '/sap/bc/adt/activation?method=activate&preauditRequested=true',
         expect.any(String),
         'application/xml',
         expect.objectContaining({ Accept: 'application/xml' }),

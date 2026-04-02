@@ -121,25 +121,91 @@ describe('E2E RAP Completeness Tests', () => {
   // ── SAPActivate: Single + Batch ───────────────────────────────────
 
   describe('SAPActivate', () => {
-    it('single activation call returns a non-empty response', async () => {
+    it('activates a single object successfully', async () => {
+      // Activating an already-active standard program — re-activation is a no-op
       const result = await callTool(client, 'SAPActivate', {
         type: 'PROG',
         name: 'RSHOWTIM',
       });
-      // Must return something — either success message or error with details
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0]?.text.length).toBeGreaterThan(0);
+      const text = expectToolSuccess(result);
+      expect(text).toContain('RSHOWTIM');
     });
 
-    it('batch activation call returns a non-empty response', async () => {
+    it('batch activates multiple objects together', async () => {
       const result = await callTool(client, 'SAPActivate', {
         objects: [
           { type: 'PROG', name: 'RSHOWTIM' },
           { type: 'CLAS', name: 'CL_ABAP_CHAR_UTILITIES' },
         ],
       });
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0]?.text.length).toBeGreaterThan(0);
+      const text = expectToolSuccess(result);
+      expect(text).toContain('2 objects');
+      expect(text).toContain('RSHOWTIM');
+      expect(text).toContain('CL_ABAP_CHAR_UTILITIES');
+    });
+  });
+
+  // ── Write + Activate Lifecycle ────────────────────────────────────
+
+  describe('SAPWrite + SAPActivate lifecycle', () => {
+    const WRITE_NAME = 'ZARC1_E2E_WRITE';
+
+    it('creates a program, updates source, activates, reads back, deletes', async () => {
+      // Step 1: Create the transient program
+      const createResult = await callTool(client, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: WRITE_NAME,
+        source: "REPORT zarc1_e2e_write.\nWRITE: / 'original'.",
+        package: '$TMP',
+      });
+      expectToolSuccess(createResult);
+
+      try {
+        // Step 2: Activate the created program
+        const activateResult = await callTool(client, 'SAPActivate', {
+          type: 'PROG',
+          name: WRITE_NAME,
+        });
+        const activateText = activateResult.content[0]?.text ?? '';
+        expect(activateText).toContain(WRITE_NAME);
+
+        // Step 3: Update the source
+        const updatedSource = "REPORT zarc1_e2e_write.\nWRITE: / 'updated by E2E test'.";
+        const updateResult = await callTool(client, 'SAPWrite', {
+          action: 'update',
+          type: 'PROG',
+          name: WRITE_NAME,
+          source: updatedSource,
+        });
+        expectToolSuccess(updateResult);
+
+        // Step 4: Activate the updated program
+        const reactivateResult = await callTool(client, 'SAPActivate', {
+          type: 'PROG',
+          name: WRITE_NAME,
+        });
+        expect(reactivateResult.content[0]?.text).toContain(WRITE_NAME);
+
+        // Step 5: Read back and verify the update took effect
+        const readResult = await callTool(client, 'SAPRead', {
+          type: 'PROG',
+          name: WRITE_NAME,
+        });
+        const readText = expectToolSuccess(readResult);
+        expect(readText).toContain('updated by E2E test');
+      } finally {
+        // Always clean up — delete the transient object even if test fails
+        try {
+          await callTool(client, 'SAPWrite', {
+            action: 'delete',
+            type: 'PROG',
+            name: WRITE_NAME,
+          });
+        } catch {
+          // Best-effort cleanup
+        }
+      }
     });
   });
 });
