@@ -109,6 +109,7 @@ ts-src/
 │   ├── oauth.ts                # OAuth 2.0 for BTP ABAP Environment (browser login, token lifecycle)
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
 │   ├── devtools.ts             # Dev tools (syntax check, activate, unit tests)
+│   ├── diagnostics.ts          # Runtime diagnostics (short dumps ST22, ABAP profiler traces)
 │   ├── codeintel.ts            # Code intelligence (find def, refs, completion)
 │   └── transport.ts            # CTS transport management
 ├── context/
@@ -152,6 +153,7 @@ tests/
 | Add dependency pattern | `ts-src/context/deps.ts` |
 | Add contract extraction for new type | `ts-src/context/contract.ts` |
 | Modify context output format | `ts-src/context/compressor.ts` |
+| Add runtime diagnostic | `ts-src/adt/diagnostics.ts`, `ts-src/handlers/intent.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `ts-src/adt/oauth.ts`, `ts-src/server/server.ts` |

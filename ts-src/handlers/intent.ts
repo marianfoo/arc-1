@@ -16,6 +16,14 @@ import type { AdtClient } from '../adt/client.js';
 import { findDefinition, findReferences, getCompletion } from '../adt/codeintel.js';
 import { createObject, deleteObject, lockObject, safeUpdateSource, unlockObject } from '../adt/crud.js';
 import { activate, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
+import {
+  getDump,
+  getTraceDbAccesses,
+  getTraceHitlist,
+  getTraceStatements,
+  listDumps,
+  listTraces,
+} from '../adt/diagnostics.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
 import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
@@ -630,24 +638,65 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
   const action = String(args.action ?? '');
   const name = String(args.name ?? '');
   const type = String(args.type ?? '');
-  const objectUrl = objectUrlForType(type, name);
 
   switch (action) {
     case 'syntax': {
+      const objectUrl = objectUrlForType(type, name);
       const result = await syntaxCheck(client.http, client.safety, objectUrl);
       return textResult(JSON.stringify(result, null, 2));
     }
     case 'unittest': {
+      const objectUrl = objectUrlForType(type, name);
       const results = await runUnitTests(client.http, client.safety, objectUrl);
       return textResult(JSON.stringify(results, null, 2));
     }
     case 'atc': {
+      const objectUrl = objectUrlForType(type, name);
       const variant = args.variant as string | undefined;
       const result = await runAtcCheck(client.http, client.safety, objectUrl, variant);
       return textResult(JSON.stringify(result, null, 2));
     }
+    case 'dumps': {
+      const id = args.id as string | undefined;
+      if (id) {
+        // Get single dump detail
+        const detail = await getDump(client.http, client.safety, id);
+        return textResult(JSON.stringify(detail, null, 2));
+      }
+      // List dumps
+      const user = args.user as string | undefined;
+      const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
+      const dumps = await listDumps(client.http, client.safety, { user, maxResults });
+      return textResult(JSON.stringify(dumps, null, 2));
+    }
+    case 'traces': {
+      const id = args.id as string | undefined;
+      if (id) {
+        // Get trace analysis
+        const analysis = String(args.analysis ?? 'hitlist');
+        switch (analysis) {
+          case 'hitlist': {
+            const hitlist = await getTraceHitlist(client.http, client.safety, id);
+            return textResult(JSON.stringify(hitlist, null, 2));
+          }
+          case 'statements': {
+            const statements = await getTraceStatements(client.http, client.safety, id);
+            return textResult(JSON.stringify(statements, null, 2));
+          }
+          case 'dbAccesses': {
+            const dbAccesses = await getTraceDbAccesses(client.http, client.safety, id);
+            return textResult(JSON.stringify(dbAccesses, null, 2));
+          }
+          default:
+            return errorResult(`Unknown trace analysis type: ${analysis}. Supported: hitlist, statements, dbAccesses`);
+        }
+      }
+      // List traces
+      const traces = await listTraces(client.http, client.safety);
+      return textResult(JSON.stringify(traces, null, 2));
+    }
     default:
-      return errorResult(`Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc`);
+      return errorResult(`Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, dumps, traces`);
   }
 }
 

@@ -1,0 +1,29 @@
+----------------------------------------------------------------------------------------------------
+Category               ABAP programming error
+Runtime Errors         STRING_OFFSET_TOO_LARGE
+Except.                CX_SY_RANGE_OUT_OF_BOUNDS
+ABAP: Program          SAPLSUSR_CERTRULE
+Application Component  BC-SEC-LGN
+Date and Time          28.03.2026 20:19:14 (UTC)
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+|Short Text                                                                                        |
+|    Invalid access to a string (offset too large)                                                 |
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+|What happened?                                                                                    |
+|    Error in the ABAP application program.                                                        |
+|                                                                                                  |
+|    The current ABAP program "SAPLSUSR_CERTRULE" had to be terminated because it                  |
+|     found a                                                                                      |
+|    statement that could not be executed.                                                         |
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+|Error analysis                                                                                    |
+|    An exception has occurred in class "CX_SY_RANGE_OUT_OF_BOUNDS". This exception                |
+|     was not caught                                                                               |
+|    in procedure "PARSE_ENTRY" "(FORM)" or propagated by a RAISING clause.                        |
+----------------------------------------------------------------------------------------------------

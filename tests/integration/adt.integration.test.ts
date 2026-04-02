@@ -9,6 +9,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../ts-src/adt/client.js';
+import { getDump, listDumps, listTraces } from '../../ts-src/adt/diagnostics.js';
+import { unrestrictedSafetyConfig } from '../../ts-src/adt/safety.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 // Skip entire suite if no SAP credentials
@@ -370,6 +372,69 @@ describeIf('ADT Integration Tests', () => {
       } catch {
         // Some systems may reject 0 as invalid
       }
+    });
+  });
+
+  // ─── Runtime Diagnostics ──────────────────────────────────────────
+
+  describe('runtime diagnostics', () => {
+    describe('short dumps', () => {
+      it('lists dumps (may be empty)', async () => {
+        const dumps = await listDumps(client.http, unrestrictedSafetyConfig());
+        expect(Array.isArray(dumps)).toBe(true);
+        if (dumps.length > 0) {
+          // Verify structure
+          expect(dumps[0]).toHaveProperty('id');
+          expect(dumps[0]).toHaveProperty('timestamp');
+          expect(dumps[0]).toHaveProperty('user');
+          expect(dumps[0]).toHaveProperty('error');
+          expect(dumps[0]).toHaveProperty('program');
+        }
+      });
+
+      it('lists dumps with maxResults limit', async () => {
+        const dumps = await listDumps(client.http, unrestrictedSafetyConfig(), { maxResults: 2 });
+        expect(Array.isArray(dumps)).toBe(true);
+        expect(dumps.length).toBeLessThanOrEqual(2);
+      });
+
+      it('lists dumps filtered by current user', async () => {
+        const user = (process.env.TEST_SAP_USER || process.env.SAP_USER || '').toUpperCase();
+        if (!user) return;
+        const dumps = await listDumps(client.http, unrestrictedSafetyConfig(), { user, maxResults: 5 });
+        expect(Array.isArray(dumps)).toBe(true);
+        // All returned dumps should be for this user
+        for (const dump of dumps) {
+          expect(dump.user.toUpperCase()).toBe(user);
+        }
+      });
+
+      it('gets dump detail if dumps exist', async () => {
+        const dumps = await listDumps(client.http, unrestrictedSafetyConfig(), { maxResults: 1 });
+        if (dumps.length === 0) {
+          // No dumps on this system — skip
+          return;
+        }
+        const detail = await getDump(client.http, unrestrictedSafetyConfig(), dumps[0]!.id);
+        expect(detail.error).toBeTruthy();
+        expect(detail.exception).toBeTruthy();
+        expect(detail.program).toBeTruthy();
+        expect(detail.formattedText).toBeTruthy();
+        expect(detail.formattedText).toContain(detail.error);
+        expect(detail.chapters.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('ABAP traces', () => {
+      it('lists traces (may be empty)', async () => {
+        const traces = await listTraces(client.http, unrestrictedSafetyConfig());
+        expect(Array.isArray(traces)).toBe(true);
+        if (traces.length > 0) {
+          expect(traces[0]).toHaveProperty('id');
+          expect(traces[0]).toHaveProperty('title');
+          expect(traces[0]).toHaveProperty('timestamp');
+        }
+      });
     });
   });
 });

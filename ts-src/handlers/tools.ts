@@ -353,20 +353,38 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPDiagnose',
       description:
-        'Run diagnostics on ABAP objects: syntax check, ABAP unit tests, and ATC (ABAP Test Cockpit) code quality checks.',
+        'Run diagnostics on ABAP objects and analyze runtime errors.\n\n' +
+        'Actions:\n' +
+        '- "syntax": Syntax check an ABAP object. Requires name + type.\n' +
+        '- "unittest": Run ABAP unit tests. Requires name + type.\n' +
+        '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
+        '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns full dump detail including formatted text, error analysis, source code extract, and call stack.\n' +
+        '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['syntax', 'unittest', 'atc'],
+            enum: ['syntax', 'unittest', 'atc', 'dumps', 'traces'],
             description: 'Diagnostic action',
           },
-          name: { type: 'string', description: 'Object name' },
-          type: { type: 'string', description: 'Object type (PROG, CLAS, etc.)' },
+          name: { type: 'string', description: 'Object name (for syntax/unittest/atc)' },
+          type: { type: 'string', description: 'Object type (PROG, CLAS, etc.) (for syntax/unittest/atc)' },
           variant: { type: 'string', description: 'ATC check variant (for atc action)' },
+          id: {
+            type: 'string',
+            description: 'Dump or trace ID (for dumps/traces actions). Omit to list, provide to get details.',
+          },
+          user: { type: 'string', description: 'Filter dumps by SAP user (for dumps action)' },
+          maxResults: { type: 'number', description: 'Maximum results to return (for dumps action, default 50)' },
+          analysis: {
+            type: 'string',
+            enum: ['hitlist', 'statements', 'dbAccesses'],
+            description:
+              'Trace analysis type (for traces action with id). hitlist = execution hot spots, statements = call tree, dbAccesses = database access stats.',
+          },
         },
-        required: ['action', 'name', 'type'],
+        required: ['action'],
       },
     },
   );
