@@ -147,9 +147,7 @@ describe('E2E RAP Completeness Tests', () => {
 
     it('batch activation reports errors for non-existent objects', async () => {
       const result = await callTool(client, 'SAPActivate', {
-        objects: [
-          { type: 'PROG', name: 'ZZZNOTEXIST_BATCH_999' },
-        ],
+        objects: [{ type: 'PROG', name: 'ZZZNOTEXIST_BATCH_999' }],
       });
       // Should succeed (SAP ignores non-existent objects in activation) or fail gracefully
       const text = result.content[0]?.text ?? '';
