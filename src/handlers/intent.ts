@@ -320,7 +320,6 @@ async function handleSAPRead(
     return source;
   };
 
-
   switch (type) {
     case 'PROG':
       return textResult(await cachedGet('PROG', name, () => client.getProgram(name)));
