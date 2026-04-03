@@ -121,15 +121,16 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 ## Known Issues
 
-| Issue | Description | Relevant to ARC-1? |
-|-------|-------------|-------------------|
-| #79 | Session not found — needs stateless ADT sessions | Yes — handle session errors gracefully |
-| #78 | 423 lock handle errors on ECC 6.0 EHP7 | Yes — test lock handling on older systems |
-| #77 | No browser-based SSO authentication | ARC-1 already has OIDC |
-| #76 | Call graph fallback broken for namespaced objects | If implementing call graphs |
-| #75 | InstallZADTVSP not idempotent on ABAP 758 trial | N/A (ARC-1 doesn't deploy ABAP) |
-| #74 | Missing CDS metadata extension (DDLX/EX) | Yes — add DDLX support |
-| #56 | Unable to create new programs | Yes — verify create operations |
+| Issue | Description | Relevant to ARC-1? | Evaluation |
+|-------|-------------|-------------------|------------|
+| #79 | Session not found — needs stateless ADT sessions | Yes — handle session errors gracefully | Monitor |
+| #78 | 423 lock handle errors on ECC 6.0 EHP7 | Medium — ARC-1 targets 7.50+ | [Eval](vibing-steampunk/evaluations/issue-78-lock-handle-ecc.md) |
+| #77 | No browser-based SSO authentication | No — ARC-1 already has OIDC | — |
+| #76 | Call graph fallback broken for namespaced objects | No — ARC-1 doesn't have call graph | — |
+| #75 | InstallZADTVSP not idempotent on ABAP 758 trial | No — ARC-1 doesn't deploy ABAP | — |
+| #74 | Missing CDS metadata extension (DDLX/EX) | No — ARC-1 already has DDLX | — |
+| #56 | Unable to create new programs | Low — verify create operations | Monitor |
+| #9 | Transport API returns 406 — wrong Accept header | High — covered by 415 auto-retry | [Eval](vibing-steampunk/evaluations/issue-9-transport-accept-header.md) |
 
 ---
 
@@ -154,17 +155,12 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 | Feature | Priority | Effort | Notes |
 |---------|----------|--------|-------|
-| **Hyperfocused mode** (1 tool, ~200 tokens) | Medium | 2d | Token optimization for simple tasks |
-| **Method-level surgery** (EditSource) | High | 2d | 95% source reduction for single-method edits |
 | **Native ABAP parser/linter** (Go port, 8 rules) | Low | N/A | ARC-1 uses @abaplint/core (same source) |
 | **ABAP debugger** (8 tools) | Low | 5d | Requires ZADT_VSP deployment |
 | **AMDP/HANA debugger** (7 tools) | Low | 5d | Requires WebSocket + ZADT_VSP |
 | **Lua scripting engine** (50+ bindings) | Low | N/A | Not core MCP value |
 | **WASM-to-ABAP compiler** | Low | N/A | Experimental |
 | **Call graph analysis** (5 tools) | Medium | 3d | Useful for code understanding |
-| **Short dump analysis** (ST22) | Critical | 1d | Basic diagnostic capability |
-| **ABAP profiler traces** | Medium | 2d | Runtime performance diagnostics |
-| **SQL trace monitoring** | Medium | 1d | Performance diagnostics |
 | **Report execution** (RunReport, async) | Medium | 3d | Requires WebSocket |
 | **ExecuteABAP** | Low | 2d | Security risk, needs safety gating |
 | **UI5/Fiori BSP CRUD** (7 tools) | Medium | 3d | If UI5 feature detected |
@@ -174,23 +170,38 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 | **CloneObject** | Low | 1d | Copy object to new name |
 | **CLI mode** (28 commands, no MCP) | Low | N/A | Different distribution model |
 | **GetAbapHelp** (F1 documentation) | Medium | 0.5d | ABAP keyword help |
-| **Structures read** | High | 1d | Basic DDIC gap |
-| **Transactions read** | High | 0.5d | Navigation context |
 | **Type hierarchy** | Medium | 1d | OO navigation |
 | **CDS dependencies** | Medium | 1d | CDS navigation |
 | **Inactive objects list** | Medium | 0.5d | Development workflow |
+
+### Closed Gaps (ARC-1 now has these)
+
+| Feature | Implemented In |
+|---------|---------------|
+| ~~Hyperfocused mode~~ (1 tool, ~200 tokens) | `src/handlers/hyperfocused.ts` |
+| ~~Method-level surgery~~ (EditSource) | `src/context/method-surgery.ts` |
+| ~~Short dump analysis~~ (ST22) | `src/adt/diagnostics.ts` |
+| ~~ABAP profiler traces~~ | `src/adt/diagnostics.ts` |
+| ~~SQL trace monitoring~~ | `src/adt/diagnostics.ts` |
+| ~~Structures read~~ | `src/adt/client.ts` (getStructure) |
+| ~~Transactions read~~ | `src/adt/client.ts` (getTransaction) |
 
 ---
 
 ## Changelog & Relevance Tracker
 
-| Date | Upstream Change | Relevant? | Action for ARC-1 | Status |
-|------|----------------|-----------|-------------------|--------|
-| 2026-03-29 | LLVM-to-ABAP transpiler improvements | No | N/A | — |
-| 2026-03-22 | v2.32.0 — Native ABAP parser/linter, 28 CLI commands | Review | Parser: no (same abaplint). CLI: no. | — |
-| 2026-03-20 | v2.30.0 — WASM Compiler + TS Transpiler | No | N/A | — |
-| 2026-03-19 | v2.29.0 — Hyperfocused mode, method-level surgery | Yes | Review for token optimization | TODO |
-| 2026-03-01 | v2.27.0 — 8 AI agent configs | Maybe | Review agent config patterns | TODO |
+| Date | Upstream Change | Relevant? | Decision | Status |
+|------|----------------|-----------|----------|--------|
+| 2026-04-02 | Post-v2.32.0 — jseval LLVM improvements | No | N/A — experimental | — |
+| 2026-03-29 | LLVM-to-ABAP transpiler improvements | No | N/A — experimental | — |
+| 2026-03-22 | v2.32.0 — Native ABAP parser/linter, call graph, package deps | Review | Parser: no-action (same abaplint). Call graph: defer. | Done |
+| 2026-03-20 | v2.30.0 — WASM Compiler, parse/analyze MCP tools | Review | WASM: no. Parse tools: no-action (ARC-1 uses internally). | Done |
+| 2026-03-19 | v2.29.0 — Hyperfocused mode, method-level surgery, context compression | Yes | **Implemented** — hyperfocused + method surgery in ARC-1 | ✅ |
+| 2026-03-01 | v2.27.0 — 8 AI agent configs, doc overhaul | No | No action — agent configs are client-side | Done |
+| 2026-02-04 | v2.26.0 — Package validation fix ($TMP) | Yes | Verify — check ARC-1 safety.ts for local packages | [Verify](vibing-steampunk/evaluations/2ef8c3e-package-safety-check.md) |
 | 2026-02-03 | v2.24.0 — Transportable edits safety | No | ARC-1 already has this | — |
+| 2026-02-01 | v2.22.0 — Transport fixes, namespace URL encoding, 401 auto-retry | Yes | Verify — namespace encoding, transport compat, 401 retry | [Verify](vibing-steampunk/evaluations/59b4b90-namespace-url-encoding.md) |
 
-_Last updated: 2026-04-01_
+> **Detailed commit-level tracking**: See [`compare/vibing-steampunk/`](vibing-steampunk/) for per-commit and per-issue evaluations.
+
+_Last updated: 2026-04-02_

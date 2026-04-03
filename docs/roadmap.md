@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-03-27
+**Last Updated:** 2026-04-03
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -8,40 +8,55 @@
 
 ## Vision
 
-ARC-1 is a **TypeScript MCP server** that connects SAP ABAP systems to AI-powered clients. It serves as a secure bridge between:
+Every other SAP MCP server today runs on the developer's local machine — unmanaged, unaudited, with whatever permissions the developer happens to have. There is no admin oversight, no token budget control, no audit trail, and no way to restrict what an LLM can do to an SAP system.
 
-- **SAP Systems** (on-premise via direct connection or Cloud Connector, BTP Cloud Foundry)
-- **AI Clients** (Microsoft Copilot Studio, Claude Code/Desktop, VS Code, Gemini CLI, and any MCP-compatible client)
+**ARC-1 is different.** It is a **centralized, admin-controlled MCP gateway** deployed on BTP Cloud Foundry or a company server (Docker). One instance per SAP system, serving multiple users. The admin controls which tools are exposed, which packages can be touched, and whether writes are allowed — before any LLM request reaches SAP.
 
-The core design principles are:
-1. **Security first** — read-only by default, per-user SAP authorization, admin-controlled tool surface
-2. **npm package + Docker** — `npx arc-1` or `ghcr.io/marianfoo/arc-1`, Node.js 20+
-3. **Intent-based tools** — 11 tools with rich descriptions, optimized for mid-tier LLMs
-4. **Dual deployment** — local (stdio) for developers, HTTP Streamable for enterprise/cloud
+### Core Design Principles
+
+1. **Centralized admin control** — ARC-1 runs as a managed service, not on developer laptops. Admins configure safety gates (read-only, package allowlists, operation filters, SQL blocking, transport guards) per instance. Every tool call is audited with user identity. Developers and LLMs operate within guardrails set by the organization — not by individual choice.
+
+2. **Per-user SAP identity** — Principal propagation maps each MCP user to their own SAP user via BTP Destination Service + Cloud Connector. SAP's native authorization (S_DEVELOP, package checks) applies per user. No shared service accounts, no credential leakage. The LLM acts with exactly the permissions the SAP user has — nothing more.
+
+3. **Token-efficient tool design** — 11 intent-based tools (~5K schema tokens) instead of 200+ individual endpoints. This isn't just cleaner — it's the difference between working and not working on mid-tier LLMs (GPT-4o-mini, Gemini Flash, Copilot Studio). Hyperfocused mode reduces to 1 tool (~200 tokens). Method-level surgery and context compression (7-30x) keep responses within tight context windows.
+
+4. **BTP-native deployment** — Designed for SAP BTP Cloud Foundry with Destination Service, Cloud Connector, XSUAA OAuth, and BTP Audit Log Service. Also deployable as Docker on any server. Local stdio mode is supported for development and testing, but the production target is always a centralized instance.
+
+5. **Multi-client, vendor-neutral** — Works with any MCP-compatible client: Claude Code/Desktop, Microsoft Copilot Studio, VS Code (GitHub Copilot), Gemini CLI, Cursor, and others. The same ARC-1 instance serves all of them. Three auth modes coexist (XSUAA + OIDC/Entra ID + API key) so different client types connect through the same gateway.
+
+6. **Safe defaults, opt-in power** — Read-only by default. Free SQL blocked by default. No write operations until the admin explicitly enables them. This inverts the model of every other MCP server where everything is allowed until someone thinks to restrict it.
 
 ---
 
-## Current State (v3.0.0-alpha.1 — TypeScript)
+## Current State (v0.3.0 — TypeScript)
 
 | Area | Status |
 |------|--------|
 | TypeScript Migration | ✅ Complete — Go code removed, pure TypeScript |
-| Core MCP Server | ✅ 11 intent-based tools, HTTP Streamable + stdio |
-| Safety System | ✅ Read-only, package filter, operation filter, transport guard |
+| Core MCP Server | ✅ 11 intent-based tools + hyperfocused mode (1 tool), HTTP Streamable + stdio |
+| Safety System | ✅ Read-only, package filter, operation filter, transport guard, dry-run |
 | Phase 1: API Key Auth | ✅ `ARC1_API_KEY` Bearer token |
 | Phase 2: OAuth/OIDC (Entra ID) | ✅ JWT validation via `jose` library, tested with Copilot Studio |
 | Phase 4: BTP CF Deployment | ✅ Docker on CF with Destination Service + Cloud Connector |
 | BTP Destination Service | ✅ Auto-resolves SAP credentials from BTP Destination at startup |
 | BTP Connectivity Proxy | ✅ Routes through Cloud Connector with JWT Proxy-Authorization |
+| BTP ABAP Environment | ✅ OAuth 2.0 browser login, direct connectivity |
 | ABAP Linter | ✅ `@abaplint/core` integration (full abaplint rules) |
 | Docker Image | ✅ Multi-platform (amd64/arm64), GHCR `ghcr.io/marianfoo/arc-1` |
 | CI/CD | ✅ GitHub Actions: lint + typecheck + unit tests (Node 20/22) + integration tests |
 | XSUAA OAuth Proxy | ✅ MCP SDK ProxyOAuthServerProvider + @sap/xssec JWT validation |
 | Scope Enforcement | ✅ Per-tool scope checks (read/write/admin), ListTools filtered by scope |
-| Audit Logging | ✅ User identity (userName, email, clientId) in every tool call log |
+| Audit Logging | ✅ User identity in tool call logs, BTP Audit Log sink, file sink |
+| MCP Elicitation | ✅ Interactive parameter collection for destructive ops |
 | Dynamic Client Registration | ✅ /register endpoint for MCP clients (RFC 7591) |
 | Principal Propagation | ✅ Per-user ADT client via BTP Destination Service + Cloud Connector |
-| Test Coverage | ✅ 358 unit tests + 28 integration tests (vitest) |
+| Hyperfocused Mode | ✅ Single `SAP` tool (~200 tokens) — competitive parity with VSP |
+| Method-Level Surgery | ✅ `edit_method` in SAPWrite, `list_methods`/`get_method` in SAPContext (95% token reduction) |
+| Runtime Diagnostics | ✅ SAPDiagnose — short dumps (ST22), ABAP profiler traces |
+| DDIC Completeness | ✅ Structures, domains, data elements, DDLX, transactions, BOR objects, T100 messages |
+| RAP CRUD | ✅ DDLS, DDLX, BDEF, SRVD write + SRVB read |
+| Context Compression | ✅ SAPContext with AST-based dependency extraction (7-30x reduction) |
+| Test Coverage | ✅ 707+ unit tests + 28 BTP integration tests (vitest) |
 | Documentation | ✅ Architecture, auth guides, Docker guide, setup phases |
 
 ---
@@ -154,18 +169,16 @@ The core design principles are:
 | **Effort** | M (3–5 days) |
 | **Risk** | Low |
 | **Usefulness** | High — required for enterprise compliance |
-| **Status** | ✅ Mostly complete (2026-03-27) — user context in logs, remaining: correlation ID, log-to-file |
+| **Status** | ✅ Complete (2026-04-01) — multi-sink audit system with BTP Audit Log Service |
 
-**Implemented (2026-03-27):**
-- User identity (userName, email, clientId) logged with every tool call via `authInfo.extra`
-- Structured logger (`src/server/logger.ts`) with text/JSON output and sensitive field redaction
-- Tool call duration, success/error status in every log entry
-- Works for XSUAA (JWT claims), OIDC (sub), and API key auth
-
-**Remaining:**
-- Correlation ID from MCP session headers
-- SAP user identity (when principal propagation is implemented)
-- Log output to file or syslog (currently stderr only)
+**Implemented:**
+- `src/server/audit.ts` — central audit logger with pluggable sinks
+- `src/server/sinks/stderr.ts` — stderr sink (default)
+- `src/server/sinks/file.ts` — file sink for persistent audit trail
+- `src/server/sinks/btp-auditlog.ts` — BTP Audit Log Service sink (enterprise compliance)
+- User identity (userName, email, clientId) logged with every tool call
+- Elicitation events (confirmations, user choices) logged
+- Structured logger with text/JSON output and sensitive field redaction
 
 **References:**
 - [OWASP: MCP Server Security - Logging](https://genai.owasp.org/resource/a-practical-guide-for-secure-mcp-server-development/)
@@ -309,13 +322,13 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 ### FEAT-04: DDIC Object Support (Domains, Data Elements, DDLX)
 | Field | Value |
 |-------|-------|
-| **Priority** | 🟡 P2 |
-| **Effort** | M (3–5 days) |
-| **Risk** | Low |
-| **Usefulness** | Medium — needed for full data model management |
-| **Status** | Not started |
+| **Priority** | — |
+| **Effort** | — |
+| **Risk** | — |
+| **Usefulness** | — |
+| **Status** | ✅ Complete (2026-04-01) |
 
-**What:** CRUD operations for DDIC domains, data elements, and CDS metadata extensions (DDLX). Uses ADT endpoints `/sap/bc/adt/ddic/domains`, `/sap/bc/adt/ddic/dataelements`, `/sap/bc/adt/ddic/ddlx/sources`.
+**Implemented:** Read support for domains (DOMA), data elements (DTEL), structures (STRU), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite.
 
 ---
 
@@ -347,18 +360,105 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ---
 
+### FEAT-07: TLS/HTTPS for HTTP Streamable Transport
+| Field | Value |
+|-------|-------|
+| **Priority** | 🔴 P0 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — required for production enterprise deployments without reverse proxy |
+| **Status** | Not started |
+| **Source** | [fr0ster tracker: TLS evaluation](../compare/fr0ster/evaluations/tls-https-support.md) |
+
+**What:** Add native TLS support to the HTTP Streamable transport. fr0ster added this in v4.6.0 with `--tls-cert`/`--tls-key` flags. Currently ARC-1 requires a reverse proxy (nginx, CF router) for HTTPS.
+
+**Why:** Enterprise customers deploying outside BTP CF (e.g., on VMs, Kubernetes) need HTTPS without an external proxy. fr0ster's implementation shows the pattern: load cert/key files, create `https.Server` instead of `http.Server`.
+
+**Implementation:**
+- Add `SAP_TLS_CERT` / `SAP_TLS_KEY` env vars (and `--tls-cert` / `--tls-key` CLI flags)
+- In `src/server/http.ts`, conditionally create `https.createServer()` when cert/key are provided
+- Auto-detect port 443 vs 8080 based on TLS mode
+
+---
+
+### FEAT-08: Content-Type 415/406 Auto-Retry
+| Field | Value |
+|-------|-------|
+| **Priority** | 🔴 P0 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | High — robustness fix for SAP system variations |
+| **Status** | Not started |
+| **Source** | [fr0ster tracker: 415 evaluation](../compare/fr0ster/evaluations/415-content-type-retry.md), [VSP tracker: issue #9](../compare/vibing-steampunk/evaluations/issue-9-transport-accept-header.md) |
+
+**What:** SAP systems vary in Accept/Content-Type expectations across versions and endpoint types. When a request gets 415 (Unsupported Media Type) or 406 (Not Acceptable), automatically retry with alternative Content-Type headers.
+
+**Why:** Both fr0ster (issue #22/#23) and VSP (issue #9) hit this on transport endpoints. It's a common SAP ADT compatibility issue across system versions. A transparent retry in `src/adt/http.ts` would handle it for all endpoints.
+
+**Implementation:**
+- In `src/adt/http.ts`, intercept 415/406 responses
+- Retry with `Accept: application/xml` → `Accept: */*` (or vice versa)
+- Retry with `Content-Type: application/xml` → `text/plain` for transport endpoints
+- Max 1 retry, log the fallback
+
+---
+
+### FEAT-09: SQL Trace Monitoring
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — performance diagnostics |
+| **Status** | Not started |
+| **Source** | [Feature matrix #17](../compare/00-feature-matrix.md) |
+
+**What:** Read SQL trace state, list SQL traces, analyze trace results. Uses ADT endpoints `/sap/bc/adt/runtime/traces/sql/*`. VSP has `GetSQLTraceState`, `ListSQLTraces`.
+
+**Why:** Completes the diagnostics story alongside short dumps and profiler traces. Useful for AI-assisted performance analysis.
+
+---
+
+### FEAT-10: PrettyPrint (Code Formatting)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — code formatting via ADT API |
+| **Status** | Not started |
+| **Source** | [Feature matrix #14](../compare/00-feature-matrix.md) |
+
+**What:** Format ABAP source code via ADT's PrettyPrint API. VSP and mcp-abap-abap-adt-api have this. Also includes get/set PrettyPrinter settings.
+
+---
+
+### FEAT-11: Inactive Objects List
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — development workflow improvement |
+| **Status** | Not started |
+| **Source** | [Feature matrix #19](../compare/00-feature-matrix.md) |
+
+**What:** List inactive objects system-wide. VSP and fr0ster both have this. Uses `/sap/bc/adt/activation/inactive`.
+
+---
+
 ## 🏗️ Infrastructure & Operations
 
 ### OPS-01: Structured JSON Logging
 | Field | Value |
 |-------|-------|
-| **Priority** | 🟠 P1 |
-| **Effort** | XS (< 1 day) |
-| **Risk** | Low |
-| **Usefulness** | High — required for cloud-native operations |
-| **Status** | ✅ Mostly complete — `src/server/logger.ts` with text/JSON output, field redaction |
+| **Priority** | — |
+| **Effort** | — |
+| **Risk** | — |
+| **Usefulness** | — |
+| **Status** | ✅ Complete — `src/server/logger.ts` + `src/server/audit.ts` with multi-sink output |
 
-**What:** Structured logging is implemented (`src/server/logger.ts`). Remaining: add correlation IDs from MCP session, add user context from OIDC JWT, configure JSON vs text via env var.
+**Implemented:** Structured logger with text/JSON output, sensitive field redaction. Multi-sink audit system (stderr, file, BTP Audit Log Service). User identity from OIDC JWT in all log entries.
 
 ---
 
@@ -483,23 +583,29 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ## Prioritized Execution Order
 
-### Phase A: Enterprise Security (Next)
-1. **SEC-01** Principal Propagation — SAP-side setup (STRUST, CERTRULE, ICM) + end-to-end testing
-2. **DOC-02** Basis Admin Security Guide (P1, S)
+### Phase A: Robustness & Enterprise Security (Next)
+1. **FEAT-08** Content-Type 415/406 Auto-Retry (P0, XS) — both competitors hit this
+2. **FEAT-07** TLS/HTTPS for HTTP Streamable (P0, S) — fr0ster has it since v4.6.0
+3. **SEC-01** Principal Propagation — SAP-side setup (STRUST, CERTRULE, ICM) + end-to-end testing
 
 ### Phase B: Feature Completeness
-3. **FEAT-01** Where-Used Analysis (P1, XS)
-4. **FEAT-02** API Release Status (P1, S)
-5. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
+4. **FEAT-01** Where-Used Analysis (P1, XS)
+5. **FEAT-02** API Release Status / Clean Core (P1, S)
+6. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
+7. **DOC-02** Basis Admin Security Guide (P1, S)
 
 ### Phase C: Enterprise Hardening
-6. **SEC-05** Rate Limiting (P2, S)
-7. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
+8. **SEC-05** Rate Limiting (P2, S)
+9. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
 
-### Phase D: Advanced Features
-12. **FEAT-06** Cloud Readiness Assessment (P2, M)
-13. **FEAT-03** Enhancement Framework (P2, M)
-14. **FEAT-04** DDIC Object Support (P2, M)
+### Phase D: Diagnostics & Developer Experience
+10. **FEAT-09** SQL Trace Monitoring (P2, S) — completes diagnostics story
+11. **FEAT-10** PrettyPrint (P2, XS)
+12. **FEAT-11** Inactive Objects List (P2, XS)
+13. **FEAT-06** Cloud Readiness Assessment (P2, M)
+
+### Phase E: Advanced Features
+14. **FEAT-03** Enhancement Framework (P2, M)
 15. **OPS-03** Multi-System Routing (P3, L)
 16. **FEAT-05** Code Refactoring (P3, L)
 
@@ -507,24 +613,34 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ## Competitive Landscape
 
+> **Detailed tracking**: See [`compare/`](../compare/) for per-commit and per-issue evaluations of key competitors.
+
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, scope enforcement | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 386 tests |
+| **ARC-1** | TypeScript | 11 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, scope enforcement | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 707+ tests |
+| **vibing-steampunk** | Go 1.24 | 1-99 (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 242 stars, native ABAP parser, WASM compiler, Lua scripting |
+| **fr0ster/mcp-abap-adt** | TypeScript | 287 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
-| lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, SAP Cloud SDK, principal propagation via Destination Service |
-| mario-andreschak/mcp-abap-adt | TypeScript | ~20 | Basic | None | Node.js | Uses established abap-adt-api library |
-| AWS ABAP Accelerator | Python | ~15 | OAuth | Basic | AWS Lambda | Cloud readiness assessment, migration |
-| SAP Joule for Developers | SAP-internal | N/A | SAP | SAP | BAS/ADT | SAP's own AI, trained on ABAP LLM |
-| GitHub Copilot for ABAP | N/A | N/A | GitHub | N/A | Eclipse plugin | Inline completions, chat |
+| lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, principal propagation |
+| dassian-adt / abap-mcpb | JavaScript | 25 | Basic, Browser login | MCP elicitation | Node.js / MCPB | Error intelligence, type auto-mappings, 7 elicitation flows |
+| AWS ABAP Accelerator | Python | ~15 | OAuth, X.509 | Basic | AWS Lambda | Cloud readiness assessment, migration |
 
-**ARC-1 differentiators:**
-1. **Principal propagation** — per-user SAP authentication via BTP Destination Service + Cloud Connector
-2. **Scope-based tool filtering** — users only see tools they have permission for (read/write/admin via XSUAA roles)
-3. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
-4. Comprehensive safety system (read-only, package filter, operation filter, transport guard) — additive to scopes
-5. Audit logging with user identity (userName, email, clientId) in every tool call
-6. `@abaplint/core` integration for offline ABAP linting (no SAP round-trip needed)
-7. 386 automated tests (358 unit + 28 integration) with CI on Node 20/22
+**ARC-1 differentiators (no other project has all of these):**
+1. **Intent-based routing** — 11 tools vs 25-287, simplest LLM decision surface
+2. **Principal propagation** — per-user SAP authentication via BTP Destination Service + Cloud Connector
+3. **Scope-based tool filtering** — users only see tools they have permission for (read/write/admin via XSUAA roles)
+4. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
+5. **Comprehensive safety system** — read-only, package filter, operation filter, transport guard, dry-run — additive to scopes
+6. **Multi-sink audit logging** — stderr + file + BTP Audit Log Service
+7. **Context compression + method-level surgery** — AST-based 7-30x + 95% method-level reduction
+8. **MCP elicitation** — interactive confirmations for destructive operations
+9. **707+ automated tests** with CI on Node 20/22, BTP integration tests
+10. **npm + Docker + release-please** — most professional distribution pipeline
+
+**Key competitive threats** (tracked in [`compare/`](../compare/)):
+1. **vibing-steampunk** (242 stars) — community favorite, daily commits, expanding into compilers/scripting. Lacks enterprise auth but developer-loved.
+2. **fr0ster** (v4.8.1, 85+ releases in 5 months) — fastest-moving competitor. 9 auth providers, TLS, RFC, embeddable. Watch for convergence on enterprise features.
+3. **btp-odata-mcp** (119 stars) — different category (OData) but high adoption. Could expand into ADT territory.
 
 ---
 
@@ -584,14 +700,22 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | Auth Phase 1: API Key | `ARC1_API_KEY` Bearer token | ✅ Complete |
 | Auth Phase 2: OAuth/OIDC | Entra ID JWT validation via `jose` library | ✅ Complete |
 | Auth Phase 4: BTP CF | Docker on CF with Destination Service + Cloud Connector | ✅ Complete |
-| TypeScript Migration | Full Go → TypeScript port, 348 tests, Go code removed | ✅ Complete (2026-03-26) |
+| TypeScript Migration | Full Go → TypeScript port, Go code removed | ✅ Complete (2026-03-26) |
 | CI/CD Pipeline | GitHub Actions: lint, typecheck, tests (Node 20/22), Docker, npm publish | ✅ Complete |
 | Copilot Studio E2E | OAuth + MCP + BTP Destination + Cloud Connector → SAP data | ✅ Complete |
 | XSUAA OAuth Proxy | SEC-07: MCP SDK auth + @sap/xssec, Express 5, 3 auth modes coexist | ✅ Complete (2026-03-27) |
 | Scope Enforcement | SEC-06: Per-tool scope checks, ListTools filtering, 12 tests | ✅ Complete (2026-03-27) |
-| Audit Logging | SEC-04: User identity in tool call logs (userName, email, clientId) | ✅ Mostly complete (2026-03-27) |
+| Audit Logging | SEC-04: Multi-sink audit (stderr, file, BTP Audit Log Service) | ✅ Complete (2026-04-01) |
 | Dynamic Client Registration | RFC 7591 /register endpoint for MCP clients | ✅ Complete (2026-03-27) |
 | Principal Propagation | SEC-01+SEC-02: Per-user ADT client via BTP Dest Service + Cloud Connector | ✅ Code complete (2026-03-27) |
+| Hyperfocused Mode | Single `SAP` tool (~200 tokens) — competitive parity with VSP | ✅ Complete (2026-04-01) |
+| Method-Level Surgery | `edit_method`, `list_methods`, `get_method` — 95% token reduction | ✅ Complete (2026-04-01) |
+| Runtime Diagnostics | SAPDiagnose — short dumps (ST22), ABAP profiler traces | ✅ Complete (2026-04-01) |
+| DDIC Completeness | FEAT-04: DOMA, DTEL, STRU, DDLX, TRAN, BOR, T100, variants | ✅ Complete (2026-04-01) |
+| RAP CRUD | DDLS/DDLX/BDEF/SRVD write, SRVB read, batch activation | ✅ Complete (2026-04-01) |
+| Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | ✅ Complete (2026-04-01) |
+| MCP Elicitation | Interactive confirmations for destructive operations | ✅ Complete (2026-04-01) |
+| BTP ABAP Environment | OAuth 2.0 browser login, direct BTP connectivity | ✅ Complete (2026-04-01) |
 
 ---
 

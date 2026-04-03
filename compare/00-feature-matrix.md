@@ -22,8 +22,8 @@ _Last updated: 2026-04-02_
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Stars | — | 242 | 109 | 103 | 29 | 26 | 119 | 0 (new) |
-| Active development | ✅ | ✅ Very (v2.32.0) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v4.7.1) | ⚠️ Moderate | ✅ New (Mar 2026) |
-| Release count | — | 32+ | — | — | — | 83 (5 months) | — | 1 |
+| Active development | ✅ | ✅ Very (v2.32.0+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v4.8.1) | ⚠️ Moderate | ✅ New (Mar 2026) |
+| Release count | — | 32+ | — | — | — | 85+ (5 months) | — | 1 |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A |
 
 ## 2. MCP Transport
@@ -293,7 +293,7 @@ The following items were incorrectly marked in the previous version and have sin
 | ARC-1 Batch activation | — | ⚠️ | ✅ | Implemented in PR #22 |
 | ARC-1 RAP CRUD | — | ❌ | ✅ | DDLS/DDLX/BDEF/SRVD write in PR #22 |
 | VSP tool count | 1-122 | 1-99 (54 focused, 99 expert per README_TOOLS.md) | Updated from actual tool documentation |
-| fr0ster version | v4.5.2 | v4.7.1 | Updated to current release |
+| fr0ster version | v4.5.2 | v4.7.1 → v4.8.1 | Updated to current release (85+ releases) |
 | fr0ster TLS support | not listed | ✅ (v4.6.0) | New feature added Mar 31 |
 | fr0ster sap-rfc-lite | not listed | ✅ (v4.7.0) | Replaced archived node-rfc |
 | dassian column name | dassian-adt | dassian-adt / abap-mcpb | Successor repo albanleong/abap-mcpb created Mar 31 |
@@ -316,7 +316,7 @@ The following items were incorrectly marked in the previous version and have sin
 
 ### Biggest Competitive Threats
 1. **vibing-steampunk** (242 stars) — Community favorite. Hyperfocused mode, method-level surgery, native parser, WASM compiler. Lacks BTP/enterprise auth but developer-loved.
-2. **fr0ster** (v4.7.1, 83 releases) — Closest enterprise competitor. 287 tools, 9 auth providers, TLS, RFC, embeddable. Complex multi-repo but ambitious.
+2. **fr0ster** (v4.8.1, 85+ releases) — Closest enterprise competitor. 287 tools, 9 auth providers, TLS, RFC, embeddable. Complex multi-repo but ambitious.
 3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
 
 ### Key Gaps to Close
