@@ -122,60 +122,79 @@ export async function runWarmup(
 
 /**
  * Enumerate all custom CLAS/INTF/FUNC objects from TADIR.
+ *
+ * Runs separate queries per OBJ_NAME prefix (Z%, Y%, /%) to avoid
+ * parenthesized OR-LIKE clauses that some ADT systems reject.
+ * Package filtering is done in-memory after fetching.
  */
 async function enumerateObjects(client: AdtClient, packageFilter?: string): Promise<TadirEntry[]> {
-  const entries: TadirEntry[] = [];
-
-  // Build WHERE clause for custom objects
   // TADIR uses PGMID = 'R3TR' for main repository objects
   const objectTypes = "'CLAS','INTF','FUGR'"; // FUGR not FUNC — TADIR stores function groups
-  let where = `PGMID = 'R3TR' AND OBJECT IN (${objectTypes})`;
+  const baseWhere = `PGMID = 'R3TR' AND OBJECT IN (${objectTypes})`;
 
-  // Filter to custom objects by default (Z*, Y*, namespaced /XX/*)
-  where += ` AND (OBJ_NAME LIKE 'Z%' OR OBJ_NAME LIKE 'Y%' OR OBJ_NAME LIKE '/%')`;
+  // Custom object name prefixes: Z*, Y*, namespaced /XX/*
+  // We run one query per prefix to avoid OR-in-parens which some ADT systems reject
+  const namePrefixes = ['Z%', 'Y%', '/%'];
 
-  // Additional package filter
+  // Compile package filter patterns into regex for in-memory filtering
+  let packageRegexes: RegExp[] | null = null;
   if (packageFilter) {
     const patterns = packageFilter
       .split(',')
       .map((p) => p.trim())
       .filter(Boolean);
     if (patterns.length > 0) {
-      const conditions = patterns
-        .map((p) => {
-          // Escape single quotes to prevent SQL injection
-          const safe = p.replace(/'/g, "''").replace(/\*/g, '%');
-          return `DEVCLASS LIKE '${safe}'`;
-        })
-        .join(' OR ');
-      where += ` AND (${conditions})`;
+      packageRegexes = patterns.map((p) => {
+        // Convert glob-style wildcards to regex
+        const escaped = p
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*')
+          .replace(/\?/g, '.');
+        return new RegExp(`^${escaped}$`, 'i');
+      });
     }
   }
 
-  const sql = `SELECT OBJECT, OBJ_NAME, DEVCLASS FROM TADIR WHERE ${where} ORDER BY OBJECT, OBJ_NAME`;
+  const seen = new Set<string>();
+  const entries: TadirEntry[] = [];
 
-  try {
-    const data = await client.runQuery(sql, WARMUP_MAX_OBJECTS);
-    for (const row of data.rows) {
-      const objectType = String(row.OBJECT ?? '').trim();
-      const objectName = String(row.OBJ_NAME ?? '').trim();
-      const packageName = String(row.DEVCLASS ?? '').trim();
+  for (const prefix of namePrefixes) {
+    const sql = `SELECT OBJECT, OBJ_NAME, DEVCLASS FROM TADIR WHERE ${baseWhere} AND OBJ_NAME LIKE '${prefix}' ORDER BY OBJECT, OBJ_NAME`;
 
-      // Map TADIR types to our types
-      // TADIR stores CLAS, INTF, FUGR (not individual FUNCs)
-      if (objectType === 'CLAS' || objectType === 'INTF' || objectType === 'FUGR') {
-        entries.push({ objectType, objectName, packageName });
+    try {
+      const data = await client.runQuery(sql, WARMUP_MAX_OBJECTS);
+      for (const row of data.rows) {
+        const objectType = String(row.OBJECT ?? '').trim();
+        const objectName = String(row.OBJ_NAME ?? '').trim();
+        const packageName = String(row.DEVCLASS ?? '').trim();
+
+        if (!objectType || !objectName) continue;
+
+        // Deduplicate (shouldn't happen, but defensive)
+        const key = `${objectType}:${objectName}`;
+        if (seen.has(key)) continue;
+
+        // Apply package filter in memory
+        if (packageRegexes && !packageRegexes.some((r) => r.test(packageName))) continue;
+
+        // Map TADIR types to our types
+        if (objectType === 'CLAS' || objectType === 'INTF' || objectType === 'FUGR') {
+          seen.add(key);
+          entries.push({ objectType, objectName, packageName });
+        }
       }
+    } catch (err) {
+      logger.warn(`Cache warmup: TADIR query failed for prefix '${prefix}'`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-  } catch (err) {
-    logger.warn('Cache warmup: TADIR query failed — warmup cannot proceed', {
-      error: err instanceof Error ? err.message : String(err),
-    });
   }
 
-  if (entries.length >= WARMUP_MAX_OBJECTS) {
+  if (entries.length === 0) {
+    logger.warn('Cache warmup: no objects found in TADIR — check package filter or system content');
+  } else if (entries.length >= WARMUP_MAX_OBJECTS) {
     logger.warn(
-      `Cache warmup: TADIR query returned ${entries.length} objects (limit: ${WARMUP_MAX_OBJECTS}). ` +
+      `Cache warmup: found ${entries.length} objects (limit: ${WARMUP_MAX_OBJECTS}). ` +
         'Results may be truncated. Consider narrowing the package filter (--cache-warmup-packages).',
     );
   }

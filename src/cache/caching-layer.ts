@@ -23,6 +23,7 @@
  */
 
 import type { AdtClient } from '../adt/client.js';
+import { logger } from '../server/logger.js';
 import type { Cache, CachedDepGraph, CachedSource } from './cache.js';
 import { hashSource } from './cache.js';
 
@@ -65,11 +66,13 @@ export class CachingLayer {
   ): Promise<{ source: string; hit: boolean }> {
     const cached = this.cache.getSource(objectType, objectName);
     if (cached) {
+      logger.debug(`[cache] source HIT ${objectType}:${objectName}`);
       return { source: cached.source, hit: true };
     }
 
     const source = await fetcher();
     this.cache.putSource(objectType, objectName, source);
+    logger.debug(`[cache] source MISS ${objectType}:${objectName} (${source.length} chars stored)`);
     return { source, hit: false };
   }
 
@@ -88,7 +91,11 @@ export class CachingLayer {
    */
   getCachedDepGraph(source: string): CachedDepGraph | null {
     const hash = hashSource(source);
-    return this.cache.getDepGraph(hash);
+    const cached = this.cache.getDepGraph(hash);
+    if (cached) {
+      logger.debug(`[cache] depgraph HIT ${cached.objectType}:${cached.objectName} (hash ${hash.slice(0, 8)})`);
+    }
+    return cached;
   }
 
   /**
@@ -96,6 +103,9 @@ export class CachingLayer {
    */
   putDepGraph(source: string, objectName: string, objectType: string, contracts: CachedDepGraph['contracts']): void {
     const hash = hashSource(source);
+    logger.debug(
+      `[cache] depgraph STORE ${objectType}:${objectName} (${contracts.length} contracts, hash ${hash.slice(0, 8)})`,
+    );
     this.cache.putDepGraph({
       sourceHash: hash,
       objectName,
@@ -133,6 +143,7 @@ export class CachingLayer {
    * Called after SAPWrite to ensure stale source is not served.
    */
   invalidate(objectType: string, objectName: string): void {
+    logger.debug(`[cache] invalidate ${objectType}:${objectName}`);
     this.cache.invalidateSource(objectType, objectName);
   }
 
