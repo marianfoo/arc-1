@@ -1,17 +1,24 @@
 /**
  * In-memory cache implementation.
  *
- * Default cache backend — fast, ephemeral.
+ * Default cache backend for stdio transport — fast, ephemeral.
  * Data is lost when the process exits.
  * Thread-safe by default in Node.js (single-threaded event loop).
  */
 
-import type { Cache, CacheApi, CacheEdge, CacheNode, CacheStats } from './cache.js';
+import type { Cache, CacheApi, CachedDepGraph, CachedSource, CacheEdge, CacheNode, CacheStats } from './cache.js';
+import { hashSource, sourceKey } from './cache.js';
 
 export class MemoryCache implements Cache {
   private nodes = new Map<string, CacheNode>();
   private edges = new Map<string, CacheEdge[]>();
+  private reverseEdges = new Map<string, CacheEdge[]>();
   private apis = new Map<string, CacheApi>();
+  private sources = new Map<string, CachedSource>();
+  private depGraphs = new Map<string, CachedDepGraph>();
+  private funcGroups = new Map<string, string>();
+
+  // ─── Node Operations ──────────────────────────────────────────────
 
   putNode(node: CacheNode): void {
     this.nodes.set(node.id, { ...node });
@@ -39,16 +46,41 @@ export class MemoryCache implements Cache {
     }
   }
 
+  // ─── Edge Operations ──────────────────────────────────────────────
+
   putEdge(edge: CacheEdge): void {
-    const key = edge.fromId;
-    const existing = this.edges.get(key) ?? [];
-    existing.push({ ...edge });
-    this.edges.set(key, existing);
+    const edgeCopy = { ...edge };
+    // Forward index
+    const fwd = this.edges.get(edge.fromId) ?? [];
+    // Replace existing edge with same (from, to, type) or add new
+    const fwdIdx = fwd.findIndex((e) => e.toId === edge.toId && e.edgeType === edge.edgeType);
+    if (fwdIdx >= 0) {
+      fwd[fwdIdx] = edgeCopy;
+    } else {
+      fwd.push(edgeCopy);
+    }
+    this.edges.set(edge.fromId, fwd);
+
+    // Reverse index
+    const rev = this.reverseEdges.get(edge.toId) ?? [];
+    const revIdx = rev.findIndex((e) => e.fromId === edge.fromId && e.edgeType === edge.edgeType);
+    if (revIdx >= 0) {
+      rev[revIdx] = edgeCopy;
+    } else {
+      rev.push(edgeCopy);
+    }
+    this.reverseEdges.set(edge.toId, rev);
   }
 
   getEdgesFrom(fromId: string): CacheEdge[] {
     return this.edges.get(fromId) ?? [];
   }
+
+  getEdgesTo(toId: string): CacheEdge[] {
+    return this.reverseEdges.get(toId) ?? [];
+  }
+
+  // ─── API Operations ───────────────────────────────────────────────
 
   putApi(api: CacheApi): void {
     this.apis.set(`${api.type}:${api.name}`, { ...api });
@@ -58,10 +90,57 @@ export class MemoryCache implements Cache {
     return this.apis.get(`${type}:${name}`) ?? null;
   }
 
+  // ─── Source Code Cache ────────────────────────────────────────────
+
+  putSource(objectType: string, objectName: string, source: string): void {
+    const key = sourceKey(objectType, objectName);
+    this.sources.set(key, {
+      objectType: objectType.toUpperCase(),
+      objectName: objectName.toUpperCase(),
+      source,
+      hash: hashSource(source),
+      cachedAt: new Date().toISOString(),
+    });
+  }
+
+  getSource(objectType: string, objectName: string): CachedSource | null {
+    return this.sources.get(sourceKey(objectType, objectName)) ?? null;
+  }
+
+  invalidateSource(objectType: string, objectName: string): void {
+    this.sources.delete(sourceKey(objectType, objectName));
+  }
+
+  // ─── Dependency Graph Cache ───────────────────────────────────────
+
+  putDepGraph(graph: CachedDepGraph): void {
+    this.depGraphs.set(graph.sourceHash, { ...graph });
+  }
+
+  getDepGraph(sourceHash: string): CachedDepGraph | null {
+    return this.depGraphs.get(sourceHash) ?? null;
+  }
+
+  // ─── Function Group Resolution ────────────────────────────────────
+
+  putFuncGroup(funcName: string, groupName: string): void {
+    this.funcGroups.set(funcName.toUpperCase(), groupName.toUpperCase());
+  }
+
+  getFuncGroup(funcName: string): string | null {
+    return this.funcGroups.get(funcName.toUpperCase()) ?? null;
+  }
+
+  // ─── Management ───────────────────────────────────────────────────
+
   clear(): void {
     this.nodes.clear();
     this.edges.clear();
+    this.reverseEdges.clear();
     this.apis.clear();
+    this.sources.clear();
+    this.depGraphs.clear();
+    this.funcGroups.clear();
   }
 
   stats(): CacheStats {
@@ -73,6 +152,8 @@ export class MemoryCache implements Cache {
       nodeCount: this.nodes.size,
       edgeCount,
       apiCount: this.apis.size,
+      sourceCount: this.sources.size,
+      contractCount: this.depGraphs.size,
     };
   }
 

@@ -2,13 +2,15 @@
  * SQLite cache implementation using better-sqlite3.
  *
  * Persistent cache — survives process restarts.
+ * Default backend for http-streamable transport and Docker deployments.
  * Uses WAL mode for concurrent read performance.
  * better-sqlite3 is synchronous, which is actually faster than async
  * alternatives for single-process use (no Promise overhead).
  */
 
 import Database from 'better-sqlite3';
-import type { Cache, CacheApi, CacheEdge, CacheNode, CacheStats } from './cache.js';
+import type { Cache, CacheApi, CachedDepGraph, CachedSource, CacheEdge, CacheNode, CacheStats } from './cache.js';
+import { hashSource, sourceKey } from './cache.js';
 
 export class SqliteCache implements Cache {
   private db: Database.Database;
@@ -52,10 +54,36 @@ export class SqliteCache implements Cache {
         PRIMARY KEY (type, name)
       );
 
+      CREATE TABLE IF NOT EXISTS sources (
+        cache_key TEXT PRIMARY KEY,
+        object_type TEXT NOT NULL,
+        object_name TEXT NOT NULL,
+        source TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        cached_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS dep_graphs (
+        source_hash TEXT PRIMARY KEY,
+        object_name TEXT NOT NULL,
+        object_type TEXT NOT NULL,
+        contracts TEXT NOT NULL,
+        cached_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS func_groups (
+        func_name TEXT PRIMARY KEY,
+        group_name TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_nodes_package ON nodes(package_name);
       CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id);
+      CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id);
+      CREATE INDEX IF NOT EXISTS idx_sources_hash ON sources(hash);
     `);
   }
+
+  // ─── Node Operations ──────────────────────────────────────────────
 
   putNode(node: CacheNode): void {
     const stmt = this.db.prepare(
@@ -90,6 +118,8 @@ export class SqliteCache implements Cache {
     this.db.prepare('UPDATE nodes SET valid = 0 WHERE id = ?').run(id);
   }
 
+  // ─── Edge Operations ──────────────────────────────────────────────
+
   putEdge(edge: CacheEdge): void {
     const stmt = this.db.prepare(
       'INSERT OR REPLACE INTO edges (from_id, to_id, edge_type, source, discovered_at, valid) VALUES (?, ?, ?, ?, ?, ?)',
@@ -101,6 +131,13 @@ export class SqliteCache implements Cache {
     const rows = this.db.prepare('SELECT * FROM edges WHERE from_id = ?').all(fromId) as Array<Record<string, unknown>>;
     return rows.map(rowToEdge);
   }
+
+  getEdgesTo(toId: string): CacheEdge[] {
+    const rows = this.db.prepare('SELECT * FROM edges WHERE to_id = ?').all(toId) as Array<Record<string, unknown>>;
+    return rows.map(rowToEdge);
+  }
+
+  // ─── API Operations ───────────────────────────────────────────────
 
   putApi(api: CacheApi): void {
     const stmt = this.db.prepare(
@@ -123,15 +160,97 @@ export class SqliteCache implements Cache {
     };
   }
 
+  // ─── Source Code Cache ────────────────────────────────────────────
+
+  putSource(objectType: string, objectName: string, source: string): void {
+    const key = sourceKey(objectType, objectName);
+    const stmt = this.db.prepare(
+      'INSERT OR REPLACE INTO sources (cache_key, object_type, object_name, source, hash, cached_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    stmt.run(
+      key,
+      objectType.toUpperCase(),
+      objectName.toUpperCase(),
+      source,
+      hashSource(source),
+      new Date().toISOString(),
+    );
+  }
+
+  getSource(objectType: string, objectName: string): CachedSource | null {
+    const key = sourceKey(objectType, objectName);
+    const row = this.db.prepare('SELECT * FROM sources WHERE cache_key = ?').get(key) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return null;
+    return {
+      objectType: String(row.object_type),
+      objectName: String(row.object_name),
+      source: String(row.source),
+      hash: String(row.hash),
+      cachedAt: String(row.cached_at),
+    };
+  }
+
+  invalidateSource(objectType: string, objectName: string): void {
+    const key = sourceKey(objectType, objectName);
+    this.db.prepare('DELETE FROM sources WHERE cache_key = ?').run(key);
+  }
+
+  // ─── Dependency Graph Cache ───────────────────────────────────────
+
+  putDepGraph(graph: CachedDepGraph): void {
+    const stmt = this.db.prepare(
+      'INSERT OR REPLACE INTO dep_graphs (source_hash, object_name, object_type, contracts, cached_at) VALUES (?, ?, ?, ?, ?)',
+    );
+    stmt.run(graph.sourceHash, graph.objectName, graph.objectType, JSON.stringify(graph.contracts), graph.cachedAt);
+  }
+
+  getDepGraph(sourceHash: string): CachedDepGraph | null {
+    const row = this.db.prepare('SELECT * FROM dep_graphs WHERE source_hash = ?').get(sourceHash) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return null;
+    return {
+      sourceHash: String(row.source_hash),
+      objectName: String(row.object_name),
+      objectType: String(row.object_type),
+      contracts: JSON.parse(String(row.contracts)),
+      cachedAt: String(row.cached_at),
+    };
+  }
+
+  // ─── Function Group Resolution ────────────────────────────────────
+
+  putFuncGroup(funcName: string, groupName: string): void {
+    this.db
+      .prepare('INSERT OR REPLACE INTO func_groups (func_name, group_name) VALUES (?, ?)')
+      .run(funcName.toUpperCase(), groupName.toUpperCase());
+  }
+
+  getFuncGroup(funcName: string): string | null {
+    const row = this.db.prepare('SELECT group_name FROM func_groups WHERE func_name = ?').get(funcName.toUpperCase()) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return null;
+    return String(row.group_name);
+  }
+
+  // ─── Management ───────────────────────────────────────────────────
+
   clear(): void {
-    this.db.exec('DELETE FROM nodes; DELETE FROM edges; DELETE FROM apis;');
+    this.db.exec(
+      'DELETE FROM nodes; DELETE FROM edges; DELETE FROM apis; DELETE FROM sources; DELETE FROM dep_graphs; DELETE FROM func_groups;',
+    );
   }
 
   stats(): CacheStats {
     const nodeCount = (this.db.prepare('SELECT COUNT(*) as cnt FROM nodes').get() as { cnt: number }).cnt;
     const edgeCount = (this.db.prepare('SELECT COUNT(*) as cnt FROM edges').get() as { cnt: number }).cnt;
     const apiCount = (this.db.prepare('SELECT COUNT(*) as cnt FROM apis').get() as { cnt: number }).cnt;
-    return { nodeCount, edgeCount, apiCount };
+    const sourceCount = (this.db.prepare('SELECT COUNT(*) as cnt FROM sources').get() as { cnt: number }).cnt;
+    const contractCount = (this.db.prepare('SELECT COUNT(*) as cnt FROM dep_graphs').get() as { cnt: number }).cnt;
+    return { nodeCount, edgeCount, apiCount, sourceCount, contractCount };
   }
 
   close(): void {

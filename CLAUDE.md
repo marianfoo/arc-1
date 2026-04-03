@@ -76,6 +76,10 @@ npm run dev
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
 | `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
 | `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (11 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
+| `ARC1_CACHE` / `--cache` | Cache mode: `auto` (default), `memory`, `sqlite`, `none` |
+| `ARC1_CACHE_FILE` / `--cache-file` | SQLite cache file path (default: `.arc1-cache.db`) |
+| `ARC1_CACHE_WARMUP` / `--cache-warmup` | Pre-warm cache on startup via TADIR scan (default: false) |
+| `ARC1_CACHE_WARMUP_PACKAGES` / `--cache-warmup-packages` | Package filter for warmup (e.g., "Z*,Y*") |
 | `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
@@ -130,9 +134,11 @@ src/
 │   ├── compressor.ts           # Orchestrator (fetch + compress + format)
 │   └── method-surgery.ts       # Method-level extraction, listing, and surgical replacement
 ├── cache/
-│   ├── cache.ts                # Cache interface + types
-│   ├── memory.ts               # In-memory cache
-│   └── sqlite.ts               # SQLite cache (better-sqlite3)
+│   ├── cache.ts                # Cache interface + types (sources, dep graphs, edges, APIs)
+│   ├── memory.ts               # In-memory cache (default for stdio)
+│   ├── sqlite.ts               # SQLite cache (default for http-streamable)
+│   ├── caching-layer.ts        # Orchestration: source + dep caching, invalidation
+│   └── warmup.ts               # Pre-warmer: TADIR scan, bulk fetch, edge index
 └── lint/
     └── lint.ts                 # ABAP lint wrapper (@abaplint/core)
 
@@ -175,6 +181,8 @@ tests/
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
+| Modify object caching | `src/cache/caching-layer.ts`, `src/cache/cache.ts` |
+| Add cache warmup feature | `src/cache/warmup.ts`, `src/server/server.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |

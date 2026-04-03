@@ -455,10 +455,18 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     inputSchema: {
       type: 'object',
       properties: {
+        action: {
+          type: 'string',
+          enum: ['deps', 'usages'],
+          description:
+            'Action: "deps" (default, can be omitted) = get dependency context. ' +
+            '"usages" = reverse dependency lookup — find all objects that depend on the given name. ' +
+            'Requires cache warmup (--cache-warmup). Only "name" is needed for usages.',
+        },
         type: {
           type: 'string',
           enum: btp ? SAPCONTEXT_TYPES_BTP : SAPCONTEXT_TYPES_ONPREM,
-          description: 'Object type',
+          description: 'Object type (required for deps action)',
         },
         name: {
           type: 'string',
@@ -489,7 +497,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             'Higher depth = more context but more SAP calls.',
         },
       },
-      required: ['type', 'name'],
+      required: ['name'],
     },
   });
 
@@ -503,8 +511,9 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
         properties: {
           action: {
             type: 'string',
-            enum: ['features', 'probe'],
-            description: 'Action: "features" for cached status, "probe" to re-check SAP system',
+            enum: ['features', 'probe', 'cache_stats'],
+            description:
+              'Action: "features" for cached status, "probe" to re-check SAP system, "cache_stats" for object cache statistics',
           },
         },
         required: ['action'],
