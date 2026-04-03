@@ -29,12 +29,12 @@ describe('CachingLayer', () => {
     it('first call fetches via fetcher, second call returns cached', async () => {
       const fetcher = vi.fn().mockResolvedValue('CLASS zcl_test. ENDCLASS.');
 
-      const first = await layer.getSource(client, 'CLAS', 'ZCL_TEST', fetcher);
+      const first = await layer.getSource('CLAS', 'ZCL_TEST', fetcher);
       expect(first.source).toBe('CLASS zcl_test. ENDCLASS.');
       expect(first.hit).toBe(false);
       expect(fetcher).toHaveBeenCalledTimes(1);
 
-      const second = await layer.getSource(client, 'CLAS', 'ZCL_TEST', fetcher);
+      const second = await layer.getSource('CLAS', 'ZCL_TEST', fetcher);
       expect(second.source).toBe('CLASS zcl_test. ENDCLASS.');
       expect(second.hit).toBe(true);
       expect(fetcher).toHaveBeenCalledTimes(1); // not called again
@@ -43,13 +43,13 @@ describe('CachingLayer', () => {
     it('returns cache miss after invalidation', async () => {
       const fetcher = vi.fn().mockResolvedValue('REPORT zprog.');
 
-      await layer.getSource(client, 'PROG', 'ZPROG', fetcher);
+      await layer.getSource('PROG', 'ZPROG', fetcher);
       expect(fetcher).toHaveBeenCalledTimes(1);
 
       layer.invalidate('PROG', 'ZPROG');
 
       const fetcherV2 = vi.fn().mockResolvedValue('REPORT zprog. " updated');
-      const result = await layer.getSource(client, 'PROG', 'ZPROG', fetcherV2);
+      const result = await layer.getSource('PROG', 'ZPROG', fetcherV2);
       expect(result.hit).toBe(false);
       expect(result.source).toBe('REPORT zprog. " updated');
       expect(fetcherV2).toHaveBeenCalledTimes(1);
@@ -61,7 +61,7 @@ describe('CachingLayer', () => {
 
     it('getCachedSource returns entry after getSource populates cache', async () => {
       const fetcher = vi.fn().mockResolvedValue('source code');
-      await layer.getSource(client, 'CLAS', 'ZCL_HIT', fetcher);
+      await layer.getSource('CLAS', 'ZCL_HIT', fetcher);
 
       const cached = layer.getCachedSource('CLAS', 'ZCL_HIT');
       expect(cached).not.toBeNull();
@@ -167,7 +167,7 @@ describe('CachingLayer', () => {
   describe('write invalidation', () => {
     it('invalidate removes source from cache', async () => {
       const fetcher = vi.fn().mockResolvedValue('old source');
-      await layer.getSource(client, 'CLAS', 'ZCL_EDIT', fetcher);
+      await layer.getSource('CLAS', 'ZCL_EDIT', fetcher);
 
       expect(layer.getCachedSource('CLAS', 'ZCL_EDIT')).not.toBeNull();
 
@@ -248,8 +248,8 @@ describe('CachingLayer', () => {
     it('reports correct counts after populating cache', async () => {
       // Add a source via getSource
       const fetcher = vi.fn().mockResolvedValue('source');
-      await layer.getSource(client, 'CLAS', 'ZCL_A', fetcher);
-      await layer.getSource(client, 'PROG', 'ZPROG', vi.fn().mockResolvedValue('report'));
+      await layer.getSource('CLAS', 'ZCL_A', fetcher);
+      await layer.getSource('PROG', 'ZPROG', vi.fn().mockResolvedValue('report'));
 
       // Add a dep graph
       layer.putDepGraph('source', 'ZCL_A', 'CLAS', []);

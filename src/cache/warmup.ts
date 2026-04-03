@@ -141,7 +141,13 @@ async function enumerateObjects(client: AdtClient, packageFilter?: string): Prom
       .map((p) => p.trim())
       .filter(Boolean);
     if (patterns.length > 0) {
-      const conditions = patterns.map((p) => `DEVCLASS LIKE '${p.replace(/\*/g, '%')}'`).join(' OR ');
+      const conditions = patterns
+        .map((p) => {
+          // Escape single quotes to prevent SQL injection
+          const safe = p.replace(/'/g, "''").replace(/\*/g, '%');
+          return `DEVCLASS LIKE '${safe}'`;
+        })
+        .join(' OR ');
       where += ` AND (${conditions})`;
     }
   }
@@ -165,6 +171,13 @@ async function enumerateObjects(client: AdtClient, packageFilter?: string): Prom
     logger.warn('Cache warmup: TADIR query failed — warmup cannot proceed', {
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+
+  if (entries.length >= WARMUP_MAX_OBJECTS) {
+    logger.warn(
+      `Cache warmup: TADIR query returned ${entries.length} objects (limit: ${WARMUP_MAX_OBJECTS}). ` +
+        'Results may be truncated. Consider narrowing the package filter (--cache-warmup-packages).',
+    );
   }
 
   return entries;

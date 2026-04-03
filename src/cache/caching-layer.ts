@@ -59,7 +59,6 @@ export class CachingLayer {
    * Returns the source and whether it was a cache hit.
    */
   async getSource(
-    _client: AdtClient,
     objectType: string,
     objectName: string,
     fetcher: () => Promise<string>,

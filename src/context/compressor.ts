@@ -72,6 +72,7 @@ export async function compressContext(
         type: c.type,
         methodCount: c.methodCount,
         source: c.source,
+        fullSource: c.fullSource,
         success: c.success,
         error: c.error,
       })),
@@ -223,7 +224,7 @@ async function fetchSource(
   // Helper: get source with cache
   const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
     if (!cachingLayer) return fetcher();
-    const { source } = await cachingLayer.getSource(client, objType, objName, fetcher);
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
 
@@ -421,7 +422,7 @@ async function fetchCdsDependency(
   // Helper: get source with cache
   const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
     if (!cachingLayer) return fetcher();
-    const { source } = await cachingLayer.getSource(client, objType, objName, fetcher);
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
 

@@ -401,9 +401,12 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
   const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer);
 
-  // Shutdown hook for SQLite cache cleanup
+  // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals)
   if (cachingLayer) {
+    let cacheClosed = false;
     const cleanup = () => {
+      if (cacheClosed) return;
+      cacheClosed = true;
       try {
         cachingLayer.cache.close();
       } catch {

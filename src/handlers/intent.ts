@@ -316,7 +316,7 @@ async function handleSAPRead(
   // Helper: get source with cache support
   const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
     if (!cachingLayer) return fetcher();
-    const { source } = await cachingLayer.getSource(client, objType, objName, fetcher);
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
 
@@ -672,7 +672,7 @@ async function handleSAPWrite(
 
       // Fetch current full source (use cache if available)
       const currentSource = cachingLayer
-        ? (await cachingLayer.getSource(client, 'CLAS', name, () => client.getClass(name))).source
+        ? (await cachingLayer.getSource('CLAS', name, () => client.getClass(name))).source
         : await client.getClass(name);
 
       // Use detected ABAP version from probe if available
@@ -958,7 +958,7 @@ async function handleSAPContext(
   // Helper: get source with cache support
   const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
     if (!cachingLayer) return fetcher();
-    const { source } = await cachingLayer.getSource(client, objType, objName, fetcher);
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
 
@@ -1022,8 +1022,9 @@ async function handleSAPContext(
         }
         lines.push('');
       }
+      const totalLines = lines.length;
       lines.push(
-        `* Stats: ${cachedGraph.contracts.length} deps found, ${successful.length} resolved, ${failed.length} failed, ${lines.length} lines [from cache]`,
+        `* Stats: ${successful.length + failed.length} deps found, ${successful.length} resolved, ${failed.length} failed, ${totalLines} lines [from cache]`,
       );
       return textResult(lines.join('\n'));
     }
@@ -1035,14 +1036,6 @@ async function handleSAPContext(
     : undefined;
 
   const result = await compressContext(client, source, name, type, maxDeps, depth, abaplintVersion, cachingLayer);
-
-  // Cache the dep graph for future use
-  if (cachingLayer && result.depsResolved > 0) {
-    // Re-extract contracts from the result output for caching
-    // The compressor returns formatted text, but we need the structured contracts
-    // This is handled inside compressContext now via the cachingLayer parameter
-  }
-
   return textResult(result.output);
 }
 
