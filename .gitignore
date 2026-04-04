@@ -3,10 +3,10 @@ cookies
 cookie.txt
 cookie
 
-# Sub-repos
-mcp-abap-adt/
-abap-adt-api-lib/
-abap-adt-api/
+# Sub-repos (root-level clones only, not compare/ subdirs)
+/mcp-abap-adt/
+/abap-adt-api-lib/
+/abap-adt-api/
 
 # Infrastructure credentials (NEVER commit)
 INFRASTRUCTURE.md
@@ -69,7 +69,7 @@ arc1*.tmp.json
 
 # Session summaries (may contain credentials)
 *SESSION-SUMMARY*
-abap-adt-api/
+/abap-adt-api/
 
 # Session logs
 sessions/

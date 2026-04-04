@@ -1,17 +1,18 @@
 # Update Competitor Commit & Issue Trackers
 
-Fetch new commits and issues from both competitor repos, evaluate relevance to ARC-1, and update all tracking documents.
+Fetch new commits and issues from all tracked repos, evaluate relevance to ARC-1, and update all tracking documents.
 
 ## Repos to Track
 
-| Repo | Tracker Dir | Comparison Doc |
-|------|------------|----------------|
-| `fr0ster/mcp-abap-adt` | `compare/fr0ster/` | `compare/05-fr0ster-mcp-abap-adt.md` |
-| `oisee/vibing-steampunk` | `compare/vibing-steampunk/` | `compare/01-vibing-steampunk.md` |
+| Repo | Tracker Dir | Comparison Doc | Purpose |
+|------|------------|----------------|---------|
+| `fr0ster/mcp-abap-adt` | `compare/fr0ster/` | `compare/05-fr0ster-mcp-abap-adt.md` | Competitor analysis |
+| `oisee/vibing-steampunk` | `compare/vibing-steampunk/` | `compare/01-vibing-steampunk.md` | Competitor analysis |
+| `marcellourbani/abap-adt-api` | `compare/abap-adt-api/` | `compare/02-mcp-abap-abap-adt-api.md` | API implementation reference |
 
 ## Instructions
 
-**Run both repos in sequence.** For each repo, follow steps 1–4, then do step 5 (cross-repo updates) once at the end.
+**Run all repos in sequence.** For each repo, follow steps 1–4, then do step 5 (cross-repo updates) once at the end.
 
 ---
 
@@ -92,7 +93,7 @@ Add to `issues.json` with status, priority, relevance, and evaluationFile.
 
 ### 6. Summary Report
 
-Output a concise summary for **both repos**:
+Output a concise summary for **all repos**:
 
 ```
 ## Competitor Tracker Update — [DATE]
@@ -108,6 +109,11 @@ Output a concise summary for **both repos**:
 - New Issues: [count]
 - High priority: [list or "none"]
 - Medium priority: [list or "none"]
+
+### marcellourbani/abap-adt-api (API reference)
+- New Commits: [count] ([count] feat, [count] fix, [count] skipped)
+- New Issues: [count]
+- New ADT API patterns: [list or "none"]
 
 ### Cross-repo patterns
 - [Any shared issues, e.g. both repos hitting same SAP bug]

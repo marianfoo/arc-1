@@ -1,0 +1,312 @@
+{
+  "$schema": "Commit tracker for marcellourbani/abap-adt-api — API reference for ARC-1 ADT implementation",
+  "repo": "https://github.com/marcellourbani/abap-adt-api",
+  "lastUpdated": "2026-04-04",
+  "lastCheckedSha": "d116f62",
+  "stats": {
+    "totalTracked": 34,
+    "evaluated": 34,
+    "pending": 0,
+    "skipped": 14,
+    "evaluationFiles": 8
+  },
+  "releases": [
+    {
+      "version": "v8.0.0",
+      "date": "2026-04-04",
+      "commits": [
+        {
+          "sha": "d116f62",
+          "date": "2026-04-04",
+          "message": "8.0.0",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "cffc79a",
+          "date": "2026-04-04",
+          "message": "improve error handling",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Error handling improvements — check if ARC-1 handles ADT errors similarly.",
+          "evaluationFile": "evaluations/cffc79a-error-handling.md"
+        }
+      ]
+    },
+    {
+      "version": "v7.1.3",
+      "date": "2026-04-03",
+      "commits": [
+        {
+          "sha": "9bf32e9",
+          "date": "2026-04-03",
+          "message": "7.1.3",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "01c6607",
+          "date": "2026-04-03",
+          "message": "bump dependencies",
+          "status": "skipped",
+          "reason": "chore"
+        }
+      ]
+    },
+    {
+      "version": "v7.1.2",
+      "date": "2026-03-25",
+      "commits": [
+        {
+          "sha": "5d99459",
+          "date": "2026-03-25",
+          "message": "7.1.2",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "5432ed4",
+          "date": "2026-03-25",
+          "message": "fix request logger",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Logger fix. ARC-1 has its own logging in src/server/logger.ts."
+        }
+      ]
+    },
+    {
+      "version": "v7.1.1",
+      "date": "2026-03-03",
+      "commits": [
+        {
+          "sha": "23b8bd2",
+          "date": "2026-03-03",
+          "message": "7.1.1",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "646bb9b",
+          "date": "2026-03-03",
+          "message": "feat: add setDataElementProperties and fixValues support for DDIC",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "DDIC write operations — set data element properties and fixed values. ARC-1 reads DTEL but can't write properties.",
+          "evaluationFile": "evaluations/646bb9b-dtel-doma-write.md"
+        },
+        {
+          "sha": "561cb54",
+          "date": "2026-03-03",
+          "message": "feat(ddic): add support for structures and domains",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Structure and domain DDIC support. ARC-1 already has STRU/DOMA read — verify we cover what this adds.",
+          "evaluationFile": "evaluations/561cb54-stru-doma-support.md"
+        },
+        {
+          "sha": "ffa43d7",
+          "date": "2026-03-02",
+          "message": "feat: add language attributes support for object creation",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Language attributes on object creation — multi-language support. ARC-1 createObject doesn't pass language attributes.",
+          "evaluationFile": "evaluations/ffa43d7-language-attributes.md"
+        }
+      ]
+    },
+    {
+      "version": "v7.1.0",
+      "date": "2026-01-12",
+      "commits": [
+        {
+          "sha": "cded3d8",
+          "date": "2026-01-12",
+          "message": "7.1.0",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "a737e3f",
+          "date": "2026-01-12",
+          "message": "sync to backend",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Backend sync for tests. Not relevant."
+        },
+        {
+          "sha": "a995bbb",
+          "date": "2026-01-12",
+          "message": "package reassignment test",
+          "status": "skipped",
+          "reason": "test"
+        },
+        {
+          "sha": "a7746da",
+          "date": "2026-01-09",
+          "message": "minor header issue fixed in SAP Note Call",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "SAP Note call header fix. ARC-1 doesn't have SAP Note lookup."
+        },
+        {
+          "sha": "7d5c653",
+          "date": "2025-12-19",
+          "message": "added functionality to get documentation",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "ABAP documentation (F1 help) API. Maps to GetAbapHelp feature gap.",
+          "evaluationFile": "evaluations/7d5c653-abap-documentation.md"
+        }
+      ]
+    },
+    {
+      "version": "v7.0.0",
+      "date": "2025-10-31",
+      "commits": [
+        {
+          "sha": "73a56d3",
+          "date": "2025-10-31",
+          "message": "7.0.0",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "bc060f4",
+          "date": "2025-10-30",
+          "message": "bugfixes and refactor",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "General refactor. No specific feature to extract."
+        },
+        {
+          "sha": "a55c8f8",
+          "date": "2025-10-05",
+          "message": "Change Package Refactoring",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Change package refactoring (move object between packages). ARC-1 doesn't support this yet.",
+          "evaluationFile": "evaluations/a55c8f8-change-package.md"
+        }
+      ]
+    },
+    {
+      "version": "v6.2.0–v6.2.1",
+      "date": "2024-10-27",
+      "commits": [
+        {
+          "sha": "460200a",
+          "date": "2024-10-26",
+          "message": "extract method",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Extract method refactoring via ADT API. Maps to FEAT-05 in roadmap.",
+          "evaluationFile": "evaluations/460200a-extract-method.md"
+        },
+        {
+          "sha": "971d1d1",
+          "date": "2024-09-23",
+          "message": "improved logging",
+          "status": "skipped",
+          "reason": "infra"
+        },
+        {
+          "sha": "5050d50",
+          "date": "2024-09-22",
+          "message": "node contents with key",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Node contents key support. ARC-1 uses different approach for tree browsing."
+        }
+      ]
+    },
+    {
+      "version": "v6.0.0–v6.0.2",
+      "date": "2024-05-07",
+      "commits": [
+        {
+          "sha": "d3c6940",
+          "date": "2024-05-07",
+          "message": "support loading specific object source version",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Load specific version of object source (revisions). ARC-1 reads current version only.",
+          "evaluationFile": "evaluations/d3c6940-source-versions.md"
+        },
+        {
+          "sha": "20f4422",
+          "date": "2024-05-18",
+          "message": "fix bug in ATC support",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "ATC bug fix. ARC-1 has its own ATC implementation."
+        },
+        {
+          "sha": "e6fb347",
+          "date": "2024-04-20",
+          "message": "improved fm creation",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Function module creation improvements. ARC-1 createObject handles FMs."
+        }
+      ]
+    },
+    {
+      "version": "v5.2.0–v5.2.7",
+      "date": "2023-11-06",
+      "commits": [
+        {
+          "sha": "fc519df",
+          "date": "2023-11-06",
+          "message": "trace creation/deletion/list",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Full trace management API. ARC-1 SAPDiagnose has read-only traces — verify we cover list/hitlist/statements.",
+          "evaluationFile": null
+        },
+        {
+          "sha": "d21c65b",
+          "date": "2023-11-14",
+          "message": "fixed TLS support",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "TLS fix in their HTTP client. ARC-1 uses SAP_INSECURE flag."
+        },
+        {
+          "sha": "bde6e49",
+          "date": "2024-02-25",
+          "message": "unit test flags support",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "verify",
+          "relevance": "Unit test run flags (with coverage, risk level, etc). Verify ARC-1 passes these options."
+        },
+        {
+          "sha": "cee9a42",
+          "date": "2023-11-14",
+          "message": "add trace run deletion support",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Trace deletion. ARC-1 traces are read-only."
+        }
+      ]
+    }
+  ]
+}

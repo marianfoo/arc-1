@@ -1,0 +1,200 @@
+{
+  "$schema": "Issue tracker for marcellourbani/abap-adt-api — API reference for ARC-1",
+  "repo": "https://github.com/marcellourbani/abap-adt-api",
+  "lastUpdated": "2026-04-04",
+  "stats": {
+    "total": 18,
+    "open": 7,
+    "closed": 11,
+    "relevantToArc1": 8,
+    "evaluated": 18,
+    "pending": 0
+  },
+  "issues": [
+    {
+      "number": 42,
+      "state": "open",
+      "date": "2026-03-26",
+      "title": "Issue in API runQuery",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "runQuery API issue. ARC-1 has its own RunQuery — verify we don't have same problem.",
+      "evaluationFile": "evaluations/issue-42-runquery.md"
+    },
+    {
+      "number": 40,
+      "state": "closed",
+      "date": "2026-03-02",
+      "title": "add language attributes support for object creation",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Language attributes on object creation — PR merged as commit ffa43d7. See commit evaluation.",
+      "evaluationFile": "evaluations/ffa43d7-language-attributes.md"
+    },
+    {
+      "number": 37,
+      "state": "open",
+      "date": "2025-07-29",
+      "title": "Example for Quickfix",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Quick fix (fix proposals) API usage example. ARC-1 doesn't expose fix proposals yet — valuable for auto-fix from ATC findings.",
+      "evaluationFile": "evaluations/issue-37-quickfix.md"
+    },
+    {
+      "number": 36,
+      "state": "closed",
+      "date": "2025-06-23",
+      "title": "Resource INCLUDE is not locked (invalid lock handle)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Lock handle issues with includes. Verify ARC-1 lock handling for includes/class includes.",
+      "evaluationFile": "evaluations/issue-36-include-lock.md"
+    },
+    {
+      "number": 34,
+      "state": "closed",
+      "date": "2024-05-17",
+      "title": "ATC Worklist returning no entries?",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "ATC worklist parsing issue. ARC-1 has own ATC implementation — verify worklist parsing."
+    },
+    {
+      "number": 33,
+      "state": "closed",
+      "date": "2024-02-12",
+      "title": "SAML authorization",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "SAML auth request. ARC-1 uses OIDC/XSUAA, not SAML directly."
+    },
+    {
+      "number": 30,
+      "state": "closed",
+      "date": "2023-09-21",
+      "title": "This operation can only be performed in stateful mode",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Stateful session handling — some ADT operations require stateful mode. ARC-1 uses stateless by default. Verify lock/write operations set stateful correctly.",
+      "evaluationFile": "evaluations/issue-30-stateful-mode.md"
+    },
+    {
+      "number": 29,
+      "state": "closed",
+      "date": "2023-06-14",
+      "title": "Upgrade fast-xml-parser to version 4.24",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Dependency update. ARC-1 already uses fast-xml-parser v5."
+    },
+    {
+      "number": 28,
+      "state": "closed",
+      "date": "2022-06-21",
+      "title": "Unit tests support",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Unit test API was added. ARC-1 already has unit test support."
+    },
+    {
+      "number": 27,
+      "state": "open",
+      "date": "2021-12-17",
+      "title": "creating behavior",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "BDEF creation request. ARC-1 already supports BDEF write."
+    },
+    {
+      "number": 19,
+      "state": "closed",
+      "date": "2021-06-28",
+      "title": "dependency 'request' is deprecated",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Migrated to axios in v4.0.0. ARC-1 uses axios too."
+    },
+    {
+      "number": 18,
+      "state": "open",
+      "date": "2021-06-25",
+      "title": "VirtualFolders API support",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Virtual folders API for BSP/UI5. Low priority for ARC-1."
+    },
+    {
+      "number": 11,
+      "state": "open",
+      "date": "2020-06-01",
+      "title": "SSO Support?",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "SSO request. ARC-1 already has OIDC/XSUAA/PP."
+    },
+    {
+      "number": 9,
+      "state": "closed",
+      "date": "2019-11-19",
+      "title": "dummy for picture hosting",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Not relevant."
+    },
+    {
+      "number": 8,
+      "state": "closed",
+      "date": "2019-08-08",
+      "title": "Support request-debug",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Old logging request. Resolved by axios migration."
+    },
+    {
+      "number": 7,
+      "state": "closed",
+      "date": "2019-08-02",
+      "title": "Activate method does not work correctly",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Activation bug. Fixed. ARC-1 has own activation implementation."
+    },
+    {
+      "number": 3,
+      "state": "open",
+      "date": "2019-04-01",
+      "title": "API docs and sequences",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "API docs request — still open after 7 years. Shows the library's doc gap. ARC-1 can reference source code directly."
+    },
+    {
+      "number": 2,
+      "state": "open",
+      "date": "2019-02-04",
+      "title": "setup CI",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "CI request — still open. Shows project maintenance level."
+    }
+  ]
+}
