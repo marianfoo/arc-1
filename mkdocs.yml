@@ -54,6 +54,20 @@ nav:
       - Phase 5 – XSUAA Setup: phase5-xsuaa-setup.md
       - BTP Destination Setup: btp-destination-setup.md
       - Auth Test Process: auth-test-process.md
+  - Skills:
+      - Overview: skills/index.md
+      - Code Understanding:
+          - Explain ABAP Code: skills/explain-abap-code.md
+      - Code Quality:
+          - Fix ABAP Code: skills/fix-abap-code.md
+          - Refactor ABAP Code: skills/refactor-abap-code.md
+          - Prettify ABAP Code: skills/prettify-abap-code.md
+      - Code Generation:
+          - Generate ABAP Code: skills/generate-abap-code.md
+          - Document ABAP Code: skills/document-abap-code.md
+      - Testing:
+          - Generate ABAP Unit Test: skills/generate-abap-unit-test.md
+          - Generate CDS Unit Test: skills/generate-cds-unit-test.md
   - Reference:
       - Architecture: architecture.md
       - Roadmap: roadmap.md

@@ -8,9 +8,9 @@ This skill replicates SAP Joule's "CDS Unit Test Generation" capability by combi
 
 The user provides a CDS entity name (e.g., `ZI_SALESORDER`, `ZC_TRAVEL`). Ask the user for:
 - **CDS entity name** (required)
-- **Test class name** (optional — default: `ZCL_TEST_<entity_name>`)
-- **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+- **Test class name** (optional -- default: `ZCL_TEST_<entity_name>`)
+- **Package** (optional -- default: `$TMP`)
+- **Transport request** (optional -- only if package is transportable)
 
 If the user provides just an entity name, use defaults and proceed.
 
@@ -38,12 +38,12 @@ Returns a formatted listing of all fields with key markers, aliases, association
 SAPContext(type="DDLS", name="<entity_name>")
 ```
 
-Automatically extracts all data sources (FROM, JOIN), associations, compositions, and projection bases from the CDS DDL. For each dependency, fetches the full source with type fallback (DDLS → TABL → STRU). This gives you:
+Automatically extracts all data sources (FROM, JOIN), associations, compositions, and projection bases from the CDS DDL. For each dependency, fetches the full source with type fallback (DDLS -> TABL -> STRU). This gives you:
 - Underlying table definitions with field types (needed for correctly-typed test data)
 - Other CDS view sources (needed to understand transitive logic)
 - Association targets
 
-For deeper dependency graphs (e.g., a consumption view → interface view → table), use `depth=2`:
+For deeper dependency graphs (e.g., a consumption view -> interface view -> table), use `depth=2`:
 
 ```
 SAPContext(type="DDLS", name="<entity_name>", depth=2)
@@ -56,7 +56,7 @@ SAPRead(type="DDLX", name="<entity_name>")
 SAPRead(type="BDEF", name="<entity_name>")
 ```
 
-These may fail if no DDLX/BDEF exists — that's fine, skip them. Only needed if the entity has UI annotations or RAP behavior.
+These may fail if no DDLX/BDEF exists -- that's fine, skip them. Only needed if the entity has UI annotations or RAP behavior.
 
 ## Step 2: Analyze CDS Semantics and Propose Test Cases
 
@@ -86,12 +86,12 @@ Present the identified test cases as a numbered list:
 ```
 Identified test cases for ZI_SALESORDER:
 
-1. [CALCULATION] test_net_amount_calculation — Verify net_amount = gross_amount - discount
-2. [CASE] test_status_text_open — Verify status 'O' maps to 'Open'
-3. [CASE] test_status_text_closed — Verify status 'C' maps to 'Closed'
-4. [JOIN] test_customer_join — Verify customer data is correctly joined
-5. [WHERE] test_active_orders_filter — Verify only active orders are returned
-6. [NULL] test_description_coalesce — Verify null description gets default value
+1. [CALCULATION] test_net_amount_calculation -- Verify net_amount = gross_amount - discount
+2. [CASE] test_status_text_open -- Verify status 'O' maps to 'Open'
+3. [CASE] test_status_text_closed -- Verify status 'C' maps to 'Closed'
+4. [JOIN] test_customer_join -- Verify customer data is correctly joined
+5. [WHERE] test_active_orders_filter -- Verify only active orders are returned
+6. [NULL] test_description_coalesce -- Verify null description gets default value
 ```
 
 Ask the user: **"Which test cases should I generate? (all / specific numbers / skip any?)"**
@@ -161,17 +161,17 @@ CLASS <test_class_name> IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD <test_method_1>.
-    " Arrange — prepare test data for underlying tables
+    " Arrange -- prepare test data for underlying tables
     DATA lt_<table> TYPE STANDARD TABLE OF <underlying_table> WITH EMPTY KEY.
     lt_<table> = VALUE #(
       ( <field1> = '<value1>' <field2> = '<value2>' ... )
     ).
     environment->get_double( '<UNDERLYING_TABLE>' )->insert( lt_<table> ).
 
-    " Act — SELECT from the CDS entity under test
+    " Act -- SELECT from the CDS entity under test
     SELECT * FROM <cds_entity> INTO TABLE @DATA(lt_result).
 
-    " Assert — verify expected behavior
+    " Assert -- verify expected behavior
     cl_abap_unit_assert=>assert_equals(
       act = lines( lt_result )
       exp = <expected_count>
