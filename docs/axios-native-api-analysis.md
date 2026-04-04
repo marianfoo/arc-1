@@ -66,7 +66,7 @@ Axios is used in **exactly one file**: `src/adt/http.ts` (the ADT HTTP transport
 
 ## The Three Risk Areas
 
-### 1. HTTP Proxy Support (HIGH RISK)
+### 1. HTTP Proxy Support (LOW-MEDIUM RISK with Node 22)
 
 The BTP Cloud Connector requires routing requests through a connectivity proxy:
 
@@ -75,17 +75,33 @@ The BTP Cloud Connector requires routing requests through a connectivity proxy:
 axiosConfig.proxy = {
   host: config.btpProxy.host,
   port: config.btpProxy.port,
-  protocol: config.btpProxy.protocol,
+  protocol: config.btpProxy.protocol, // always "http"
 };
 ```
 
-Native `fetch()` has **no proxy support**. Options:
+**Key insight**: This is a simple **HTTP forward proxy**, not a CONNECT tunnel. The protocol is always `http` (see `src/adt/btp.ts:232`). Authentication is handled via a `Proxy-Authorization` header injected by application code — not by axios's proxy mechanism. This makes the replacement straightforward.
 
-- **Use `undici.ProxyAgent`** — undici is Node's built-in fetch engine, so `new undici.ProxyAgent()` works with fetch's `dispatcher` option. Zero new npm dependencies since undici ships with Node.
-- **Add `https-proxy-agent`** — popular package, but adds a dependency (partially defeating the purpose).
-- **Drop proxy support** — not viable, BTP Cloud Connector is a key feature.
+Native `fetch()` has no built-in proxy support, but `undici.ProxyAgent` (ships with Node, no npm install) handles this exact case:
 
-**Verdict**: Use `undici.ProxyAgent` (ships with Node, no npm install needed). With Node 20 dropped, undici's dispatcher API is stable in Node 22+.
+```typescript
+import { ProxyAgent } from 'undici';
+
+const dispatcher = new ProxyAgent({
+  uri: `http://${config.btpProxy.host}:${config.btpProxy.port}`,
+  keepAliveTimeout: 30_000,
+});
+
+const response = await fetch(url, {
+  method,
+  headers, // Proxy-Authorization header set by application code — unchanged
+  body,
+  dispatcher, // Node 22+ stable API
+});
+```
+
+`undici.ProxyAgent` sends the full absolute URL in the request line (standard forward-proxy behavior), same as axios's `proxy` config. The `Proxy-Authorization` and `SAP-Connectivity-Authentication` headers are just regular request headers — no axios-specific handling.
+
+**Verdict**: Low-medium risk with Node 22. `undici.ProxyAgent` is stable and handles HTTP forward proxies correctly. Only needs end-to-end validation with a real Cloud Connector instance.
 
 ### 2. TLS Certificate Verification Skip (MEDIUM RISK)
 
@@ -237,7 +253,7 @@ try {
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| BTP Cloud Connector proxy | Medium | `undici.ProxyAgent` is stable in Node 22; integration test required |
+| BTP Cloud Connector proxy | Low-Medium | Simple HTTP forward proxy; `undici.ProxyAgent` is stable in Node 22; `Proxy-Authorization` header is app-level code, unchanged |
 | Test rewrite effort | Medium | ~15 files, but mechanical — no logic changes |
 | `dispatcher` TypeScript types | Low | May need `// @ts-expect-error` or `@types/node` update |
 
