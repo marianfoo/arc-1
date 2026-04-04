@@ -1,0 +1,418 @@
+{
+  "$schema": "Commit tracker for oisee/vibing-steampunk — grouped by release, auto-triaged",
+  "repo": "https://github.com/oisee/vibing-steampunk",
+  "lastUpdated": "2026-04-02",
+  "lastCheckedSha": "24e0ff5",
+  "stats": {
+    "totalCommits": 377,
+    "trackedFrom": "v2.22.0 (2026-02-01)",
+    "totalTracked": 42,
+    "evaluated": 42,
+    "pending": 0,
+    "skipped": 30
+  },
+  "releases": [
+    {
+      "version": "post-v2.32.0 (unreleased)",
+      "date": "2026-03-23 to 2026-04-02",
+      "commits": [
+        {
+          "sha": "24e0ff5",
+          "date": "2026-03-31",
+          "message": "feat: jseval — constructor return value, transpiled ABAP runs!",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "JS evaluator in pure ABAP/Go — experimental compiler research, not MCP tooling"
+        },
+        {
+          "sha": "7664964",
+          "date": "2026-03-31",
+          "message": "feat: zcl_jseval — JavaScript evaluator in pure ABAP (2200 lines)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Experimental — JS eval in ABAP. Not relevant to MCP tools."
+        },
+        {
+          "sha": "f000c0b",
+          "date": "2026-03-30",
+          "message": "feat: pkg/jseval — minimal JavaScript evaluator in pure Go (500 lines)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Go-native JS evaluator for running abaplint. Not applicable to TS ARC-1."
+        },
+        {
+          "sha": "a2a6754",
+          "date": "2026-03-30",
+          "message": "feat: pure CLASS-METHODS — no FORMs in multi-class mode",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "WASM/LLVM compiler improvements. Not MCP tooling."
+        },
+        {
+          "sha": "01629d0",
+          "date": "2026-03-29",
+          "message": "feat: vsp compile llvm — C/LLVM IR to ABAP in one command",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "LLVM-to-ABAP compiler CLI. Experimental, not MCP."
+        },
+        {
+          "sha": "3536edb",
+          "date": "2026-03-29",
+          "message": "feat: LLVM IR → ABAP compiler — typed CLASS-METHODS from C/Rust",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "LLVM-to-ABAP compiler. Experimental."
+        },
+        {
+          "sha": "d613791",
+          "date": "2026-03-29",
+          "message": "feat: abapgit-pack CLI — create abapGit ZIP from ABAP sources",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "abapGit ZIP packaging from CLI. Could be useful for gCTS integration but niche.",
+          "evaluationFile": null
+        },
+        {
+          "sha": "649c0ef",
+          "date": "2026-03-29",
+          "message": "feat: make install-user — install vsp to ~/.local/bin",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Go binary install target. ARC-1 uses npm."
+        }
+      ]
+    },
+    {
+      "version": "v2.32.0",
+      "date": "2026-03-22",
+      "commits": [
+        {
+          "sha": "c67dfe6",
+          "date": "2026-03-22",
+          "message": "feat: Lua bindings for query/lint/parse/context + showcase scripts",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Lua scripting engine — Go-specific, not applicable to TS."
+        },
+        {
+          "sha": "ba83e22",
+          "date": "2026-03-22",
+          "message": "feat: vsp deps — package dependency analysis + transport readiness",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Package dependency analysis + transport readiness check. ARC-1 has context/deps.ts but not transport readiness.",
+          "evaluationFile": "evaluations/ba83e22-deps-transport-readiness.md"
+        },
+        {
+          "sha": "558a300",
+          "date": "2026-03-22",
+          "message": "feat: graph supports CLAS, PROG, FUGR, TRAN + dual CROSS/WBCROSSGT query",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Call graph with WBCROSSGT fallback. ARC-1 doesn't have call graph (#31 Low in matrix).",
+          "evaluationFile": "evaluations/call-graph-deps.md"
+        },
+        {
+          "sha": "2fdea48",
+          "date": "2026-03-22",
+          "message": "feat: graph CLI + context --depth + updated docs",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Context depth control — ARC-1 SAPContext already has depth parameter.",
+          "evaluationFile": "evaluations/call-graph-deps.md"
+        },
+        {
+          "sha": "474c90f",
+          "date": "2026-03-21",
+          "message": "feat: ABAP linter with 8 rules — 864 issues on real corpus, 795μs/file",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Native Go ABAP linter (port of abaplint). ARC-1 uses @abaplint/core directly — same source, better maintained.",
+          "evaluationFile": "evaluations/474c90f-native-abap-linter.md"
+        }
+      ]
+    },
+    {
+      "version": "v2.30.0",
+      "date": "2026-03-20",
+      "commits": [
+        {
+          "sha": "0756e94",
+          "date": "2026-03-20",
+          "message": "feat: parse_abap + analyze_deps MCP tools — ABAP parser as MCP service",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "ABAP parsing + dependency analysis as MCP tools. ARC-1 has deps.ts but doesn't expose parser as tool.",
+          "evaluationFile": "evaluations/0756e94-parse-analyze-tools.md"
+        },
+        {
+          "sha": "0c2bace",
+          "date": "2026-03-20",
+          "message": "feat: unified 5-layer code intelligence analyzer",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "5-layer analysis: regex → lexer → parser → cross-refs → type resolver. ARC-1 has layers 1-3 via abaplint.",
+          "evaluationFile": "evaluations/0756e94-parse-analyze-tools.md"
+        },
+        {
+          "sha": "5c875a5",
+          "date": "2026-03-20",
+          "message": "feat: native Go ABAP lexer (abaplint port) + context depth expansion",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Go port of abaplint lexer. ARC-1 uses the original @abaplint/core."
+        },
+        {
+          "sha": "149233c",
+          "date": "2026-03-19",
+          "message": "feat: WASM-to-ABAP AOT compiler prototype (pkg/wasmcomp)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "WASM compiler. Experimental, not MCP tooling."
+        }
+      ]
+    },
+    {
+      "version": "v2.29.0",
+      "date": "2026-03-19",
+      "commits": [
+        {
+          "sha": "5c942b9",
+          "date": "2026-03-19",
+          "message": "feat: unify SAP_MODE with hyperfocused (one-tool) mode",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has hyperfocused mode (implemented from this design)."
+        },
+        {
+          "sha": "9fde5d8",
+          "date": "2026-03-18",
+          "message": "feat: context compression — GetSource auto-appends dependency contracts (v2.28.0)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has SAPContext with context compression."
+        },
+        {
+          "sha": "6b801df",
+          "date": "2026-03-18",
+          "message": "feat: ABAP LSP server with online diagnostics and go-to-definition",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "ABAP Language Server Protocol integration. Interesting but niche — most users use Eclipse ADT or VS Code abaplint.",
+          "evaluationFile": null
+        },
+        {
+          "sha": "def027a",
+          "date": "2026-03-18",
+          "message": "feat: strategic decomposition, one-tool mode, and CLI DevOps surface",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Architecture refactoring. ARC-1 has different architecture."
+        }
+      ]
+    },
+    {
+      "version": "v2.27.0",
+      "date": "2026-03-01",
+      "commits": [
+        {
+          "sha": "ca02f47",
+          "date": "2026-03-18",
+          "message": "fix: CreateTransport uses S/4HANA 757 compatible endpoint and format (#70)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "S/4HANA transport endpoint compatibility. Verify ARC-1 transport.ts uses correct endpoint.",
+          "evaluationFile": "evaluations/ca02f47-transport-endpoint-compat.md"
+        },
+        {
+          "sha": "6d1f00a",
+          "date": "2026-03-18",
+          "message": "fix: SyntaxCheck uses shorter object URI for long namespaced classes (#52)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Namespaced class URI truncation in syntax check. Verify ARC-1 handles /namespace/ objects correctly.",
+          "evaluationFile": "evaluations/6d1f00a-namespace-syntax-check.md"
+        },
+        {
+          "sha": "512996c",
+          "date": "2026-03-18",
+          "message": "fix: install tools bypass SAP_ALLOWED_PACKAGES restrictions (#54)",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Install tools bypass. ARC-1 doesn't deploy ABAP to SAP."
+        },
+        {
+          "sha": "2ef8c3e",
+          "date": "2026-03-18",
+          "message": "fix: CreatePackage safety check uses package name being created (#71)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "verify",
+          "relevance": "Package safety check bug — was checking empty string instead of package name. Verify ARC-1 safety.ts.",
+          "evaluationFile": "evaluations/2ef8c3e-package-safety-check.md"
+        },
+        {
+          "sha": "d73460a",
+          "date": "2026-03-13",
+          "message": "fix: auto-retry on 401 Unauthorized after idle timeout (#35)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "401 auto-retry after session timeout. ARC-1 http.ts should handle this — verify.",
+          "evaluationFile": "evaluations/d73460a-401-auto-retry.md"
+        },
+        {
+          "sha": "5317105",
+          "date": "2026-03-12",
+          "message": "feat: add GetDependencyZIP function and tests for dependency retrieval (#60)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "Export dependencies as abapGit ZIP. Useful for offline analysis but niche.",
+          "evaluationFile": null
+        },
+        {
+          "sha": "7dc7a82",
+          "date": "2026-03-11",
+          "message": "fix: add --parent, --include, --method flags to CLI source command",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI-specific flags. ARC-1 is MCP-only."
+        }
+      ]
+    },
+    {
+      "version": "v2.24.0-v2.26.0",
+      "date": "2026-02-03 to 2026-02-04",
+      "commits": [
+        {
+          "sha": "8d2c343",
+          "date": "2026-02-19",
+          "message": "feat: iterative activation with package filtering + 100 stars article",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has batch activation."
+        },
+        {
+          "sha": "7fbfbba",
+          "date": "2026-02-23",
+          "message": "feat: add ignore_warnings parameter to EditSource",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "ignore_warnings for EditSource — syntax warnings block saves by default. ARC-1 edit_method may have same issue.",
+          "evaluationFile": "evaluations/7fbfbba-ignore-warnings.md"
+        },
+        {
+          "sha": "c18309b",
+          "date": "2026-02-03",
+          "message": "feat: CreatePackage software_component + viper env var fix",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Software component for packages. ARC-1 create already supports this."
+        },
+        {
+          "sha": "e483537",
+          "date": "2026-02-03",
+          "message": "feat: allow transportable package creation with --enable-transports",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already supports transportable package creation."
+        },
+        {
+          "sha": "59b4b90",
+          "date": "2026-02-03",
+          "message": "fix: namespace URL encoding for all ADT operations",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Namespace URL encoding (/namespace/ → %2fnamespace%2f). Verify ARC-1 encodeURIComponent handles this.",
+          "evaluationFile": "evaluations/59b4b90-namespace-url-encoding.md"
+        }
+      ]
+    },
+    {
+      "version": "v2.22.0-v2.23.0",
+      "date": "2026-02-01 to 2026-02-02",
+      "commits": [
+        {
+          "sha": "ddf5c22",
+          "date": "2026-02-02",
+          "message": "feat: v2.23.0 - GitExport to disk, GetAbapHelp via WebSocket",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "GetAbapHelp (F1 docs) via WebSocket ZADT_VSP. ARC-1 doesn't deploy ABAP — would need ADT-native approach.",
+          "evaluationFile": null
+        },
+        {
+          "sha": "b78803d",
+          "date": "2026-02-01",
+          "message": "feat: add Level 2 GetAbapHelp - real docs from SAP system via ZADT_VSP",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "ABAP F1 help. Requires ZADT_VSP deployment — not compatible with ARC-1 approach.",
+          "evaluationFile": null
+        },
+        {
+          "sha": "434ed5e",
+          "date": "2026-02-01",
+          "message": "feat: add GetAbapHelp tool for ABAP keyword documentation (#10)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "ABAP help. Low #38 in feature matrix.",
+          "evaluationFile": null
+        }
+      ]
+    }
+  ]
+}

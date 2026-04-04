@@ -1,0 +1,474 @@
+{
+  "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
+  "repo": "https://github.com/fr0ster/mcp-abap-adt",
+  "lastUpdated": "2026-04-02",
+  "lastCheckedSha": "7391962",
+  "stats": {
+    "totalCommits": 765,
+    "trackedFrom": "v2.4.0 (2026-02-15)",
+    "totalTracked": 48,
+    "evaluated": 26,
+    "pending": 0,
+    "skipped": 22
+  },
+  "releases": [
+    {
+      "version": "v4.8.0-v4.8.1",
+      "date": "2026-04-02",
+      "commits": [
+        {
+          "sha": "459f961",
+          "date": "2026-04-02",
+          "message": "feat: dump lookup by datetime+user, structured dump list, from/to filters",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "defer",
+          "relevance": "ARC-1 SAPDiagnose has dumps but lacks datetime+user lookup and structured response",
+          "evaluationFile": "evaluations/459f961-dump-datetime-lookup.md"
+        },
+        {
+          "sha": "f3b921e",
+          "date": "2026-04-02",
+          "message": "chore: add build step to pre-commit hook",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has biome pre-commit hook"
+        }
+      ]
+    },
+    {
+      "version": "v4.7.0-v4.7.1",
+      "date": "2026-04-01",
+      "commits": [
+        {
+          "sha": "c0b610e",
+          "date": "2026-04-01",
+          "message": "feat: replace node-rfc with @mcp-abap-adt/sap-rfc-lite",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 uses HTTP/ADT only — RFC not in scope"
+        }
+      ]
+    },
+    {
+      "version": "v4.6.0",
+      "date": "2026-03-31",
+      "commits": [
+        {
+          "sha": "0a962bc",
+          "date": "2026-03-31",
+          "message": "feat: pass TLS config from launcher to HTTP/SSE servers",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "TLS/HTTPS for HTTP Streamable — marked Critical in feature matrix.",
+          "evaluationFile": "evaluations/tls-https-support.md"
+        },
+        {
+          "sha": "54aa2bf",
+          "date": "2026-03-31",
+          "message": "feat: integrate TLS into StreamableHttpServer",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "Core TLS implementation — study their approach for ARC-1 http.ts",
+          "evaluationFile": "evaluations/tls-https-support.md"
+        },
+        {
+          "sha": "96eef32",
+          "date": "2026-03-31",
+          "message": "feat: add createServerListener TLS helper with tests",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "TLS helper pattern — could adopt similar design",
+          "evaluationFile": "evaluations/tls-https-support.md"
+        },
+        {
+          "sha": "cdf89b6",
+          "date": "2026-03-31",
+          "message": "feat: add TlsConfig interface to IServerConfig",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "TLS config interface design — reference for ARC-1 config.ts",
+          "evaluationFile": "evaluations/tls-https-support.md"
+        },
+        {
+          "sha": "7ce3b18",
+          "date": "2026-03-31",
+          "message": "feat: parse --tls-cert, --tls-key, --tls-ca CLI args",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "CLI arg design for TLS — reference for ARC-1 cli.ts",
+          "evaluationFile": "evaluations/tls-https-support.md"
+        },
+        {
+          "sha": "ab8da66",
+          "date": "2026-03-31",
+          "message": "feat: add TLS section to YAML config with validation",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 uses env vars not YAML config"
+        },
+        {
+          "sha": "e26dc30",
+          "date": "2026-03-31",
+          "message": "feat: integrate TLS into SseServer",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "SSE transport — ARC-1 doesn't have SSE"
+        },
+        {
+          "sha": "2da9761",
+          "date": "2026-03-31",
+          "message": "feat: wire TLS config from parsed args to IServerConfig",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "implement",
+          "relevance": "Config wiring pattern for TLS",
+          "evaluationFile": "evaluations/tls-https-support.md"
+        }
+      ]
+    },
+    {
+      "version": "v4.5.0-v4.5.2",
+      "date": "2026-03-26",
+      "commits": [
+        {
+          "sha": "3da3311",
+          "date": "2026-03-26",
+          "message": "feat: rewrite ListTransports to use AdtClient with Accept negotiation",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "covered-by-415-retry",
+          "relevance": "Content-Type negotiation pattern — covered by 415 auto-retry implementation",
+          "evaluationFile": "evaluations/3da3311-accept-negotiation.md"
+        },
+        {
+          "sha": "dce44ca",
+          "date": "2026-03-26",
+          "message": "fix: give SAP_AUTH_TYPE priority over SAP_JWT_TOKEN in getSapConfigFromEnv",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "ARC-1 infers auth type from credentials — doesn't have this bug class",
+          "evaluationFile": "evaluations/dce44ca-auth-type-priority.md"
+        },
+        {
+          "sha": "32ab9d4",
+          "date": "2026-03-26",
+          "message": "fix: guarantee unlock via try-finally in all update handlers (#22)",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already uses try-finally"
+        },
+        {
+          "sha": "cfe67d2",
+          "date": "2026-03-26",
+          "message": "feat: rewrite SearchObject description for operation-first RAG discoverability (#21)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "skip",
+          "relevance": "RAG tool descriptions — not relevant to intent-based architecture",
+          "evaluationFile": "evaluations/cfe67d2-rag-tool-descriptions.md"
+        }
+      ]
+    },
+    {
+      "version": "v4.4.0",
+      "date": "2026-03-22",
+      "commits": [
+        {
+          "sha": "e8ba563",
+          "date": "2026-03-22",
+          "message": "feat: enrich tool descriptions with domain keywords for vector RAG discoverability (#20)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "skip",
+          "relevance": "RAG description enrichment — not relevant for 11-tool intent system",
+          "evaluationFile": "evaluations/cfe67d2-rag-tool-descriptions.md"
+        }
+      ]
+    },
+    {
+      "version": "v4.2.0-v4.3.2",
+      "date": "2026-03-14",
+      "commits": [
+        {
+          "sha": "0c4ae64",
+          "date": "2026-03-19",
+          "message": "feat: add GET /mcp/health endpoint for HTTP and SSE transports (#18)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has /health endpoint"
+        },
+        {
+          "sha": "e5628dc",
+          "date": "2026-03-14",
+          "message": "feat: add readonly Read* handlers for all CRUD objects with source + metadata",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Read handlers returning source + metadata — nice UX improvement, not urgent",
+          "evaluationFile": "evaluations/e5628dc-read-source-plus-metadata.md"
+        },
+        {
+          "sha": "fedbf76",
+          "date": "2026-03-14",
+          "message": "fix: auto-detect JWT auth for --env-path, add SAP_CLIENT auto-resolve",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Config detection — ARC-1 has different config model"
+        }
+      ]
+    },
+    {
+      "version": "v4.0.0-v4.1.1",
+      "date": "2026-03-13",
+      "commits": [
+        {
+          "sha": "0390e7e",
+          "date": "2026-03-13",
+          "message": "feat: add SAP_SYSTEM_TYPE override and eager HTTP session init",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has SAP_SYSTEM_TYPE with auto-detection"
+        },
+        {
+          "sha": "c12e45a",
+          "date": "2026-03-11",
+          "message": "feat: add explicit connection config (env, system_type, connection_type) to test-config.yaml",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Test infra — not relevant"
+        },
+        {
+          "sha": "fb5f393",
+          "date": "2026-03-11",
+          "message": "feat: add --connection-type CLI flag, update legacy roadmap status",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "RFC connection type — ARC-1 is HTTP only"
+        },
+        {
+          "sha": "d6927a4",
+          "date": "2026-03-11",
+          "message": "feat: enable FunctionGroup/FunctionModule on cloud, add getSystemType() helper",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "FUGR on cloud/BTP — verify ARC-1 handles this correctly",
+          "evaluationFile": "evaluations/d6927a4-fugr-on-cloud.md"
+        },
+        {
+          "sha": "170a873",
+          "date": "2026-03-09",
+          "message": "feat: add available_in to all 128 remaining handlers",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "not-applicable",
+          "relevance": "ARC-1's 11 intent-based tools don't need per-tool hiding",
+          "evaluationFile": "evaluations/available-in-dynamic-tool-hiding.md"
+        },
+        {
+          "sha": "bc97793",
+          "date": "2026-03-06",
+          "message": "feat: hide unsupported tools on legacy systems",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "not-applicable",
+          "relevance": "Dynamic tool hiding — not needed with 11 intent-based tools",
+          "evaluationFile": "evaluations/available-in-dynamic-tool-hiding.md"
+        },
+        {
+          "sha": "670d70a",
+          "date": "2026-03-06",
+          "message": "feat: add RFC auth type support (SAP_AUTH_TYPE=rfc)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "RFC — not in ARC-1 scope"
+        },
+        {
+          "sha": "0a9eb36",
+          "date": "2026-03-06",
+          "message": "feat: detect legacy system and use AdtClientLegacy automatically",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Legacy SAP systems — ARC-1 targets 7.50+"
+        },
+        {
+          "sha": "72d828e",
+          "date": "2026-03-08",
+          "message": "feat: replace hardcoded tool filters with available_in mechanism",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "not-applicable",
+          "relevance": "Design pattern — ARC-1's runtime feature detection is sufficient",
+          "evaluationFile": "evaluations/available-in-dynamic-tool-hiding.md"
+        }
+      ]
+    },
+    {
+      "version": "v3.1.0-v3.2.1",
+      "date": "2026-03-04",
+      "commits": [
+        {
+          "sha": "12776cd",
+          "date": "2026-03-04",
+          "message": "feat: implement GetTableContents handler and add integration tests",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has RunQuery for table contents"
+        },
+        {
+          "sha": "9ef5843",
+          "date": "2026-03-03",
+          "message": "feat!: separate Create and Update — Create handlers no longer accept source code",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "keep-current",
+          "relevance": "ARC-1's combined create+write is a feature, not a bug",
+          "evaluationFile": "evaluations/9ef5843-create-update-separation.md"
+        },
+        {
+          "sha": "f51b286",
+          "date": "2026-03-03",
+          "message": "feat: support system context headers for HTTP/SSE transport",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "Multi-system via headers — relevant only for shared deployments",
+          "evaluationFile": "evaluations/f51b286-system-context-headers.md"
+        }
+      ]
+    },
+    {
+      "version": "v2.4.0-v2.7.5",
+      "date": "2026-02-15 to 2026-03-03",
+      "commits": [
+        {
+          "sha": "8adb1b5",
+          "date": "2026-02-15",
+          "message": "feat(runtime): add profiling and dumps handlers with JSON payloads",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already implemented SAPDiagnose with dumps + traces"
+        },
+        {
+          "sha": "0c8de1e",
+          "date": "2026-02-17",
+          "message": "feat(tools): add runtime profiling and dumps explorer",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has this"
+        },
+        {
+          "sha": "72de18b",
+          "date": "2026-02-20",
+          "message": "feat(service-binding): Implement CRUD operations for service bindings",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has SRVB read/write"
+        },
+        {
+          "sha": "740f75b",
+          "date": "2026-02-20",
+          "message": "feat(compact): add HandlerAction router and full object/action coverage matrix",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "skip",
+          "relevance": "ARC-1's intent-based + hyperfocused is already better",
+          "evaluationFile": "evaluations/740f75b-compact-mode.md"
+        },
+        {
+          "sha": "5545adf",
+          "date": "2026-02-27",
+          "message": "feat: replace ResolveTransport with ListTransports tool",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has transport listing"
+        },
+        {
+          "sha": "2396eed",
+          "date": "2026-02-28",
+          "message": "feat: integrate IAdtSystemContext into handler layer via createAdtClient factory",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "ARC-1's shared client + PP handles this",
+          "evaluationFile": "evaluations/2396eed-system-context-handler.md"
+        },
+        {
+          "sha": "5f975fe",
+          "date": "2026-02-09",
+          "message": "feat: add MCP registry metadata and configurator",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "implement-lightweight",
+          "relevance": "MCP client auto-configurator — implement as arc-1 config snippet printer",
+          "evaluationFile": "evaluations/5f975fe-mcp-client-configurator.md"
+        },
+        {
+          "sha": "c9bf640",
+          "date": "2026-02-09",
+          "message": "feat: refactor StreamableHttpServer to improve request handling and add per-request server functionality",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "skip",
+          "relevance": "ARC-1's principal propagation provides sufficient isolation",
+          "evaluationFile": "evaluations/c9bf640-per-request-server.md"
+        },
+        {
+          "sha": "1aacd76",
+          "date": "2025-12-30",
+          "message": "feat!: add EmbeddableMcpServer for external integration",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Embeddable server — niche use case, Low priority in matrix"
+        }
+      ]
+    }
+  ]
+}

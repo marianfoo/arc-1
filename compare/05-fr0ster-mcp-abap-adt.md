@@ -2,7 +2,7 @@
 
 > **Repository**: https://github.com/fr0ster/mcp-abap-adt
 > **Language**: TypeScript | **License**: MIT | **Stars**: 26
-> **Status**: Very Active (v4.7.1, 83 releases in 5 months, 765 commits)
+> **Status**: Very Active (v4.8.1, 85+ releases in 5 months, 770+ commits)
 > **NPM**: `@mcp-abap-adt/core` — 3,625 monthly downloads
 > **Relationship**: Independent TypeScript ADT MCP server with most advanced auth system
 
@@ -121,6 +121,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| v4.8.0-4.8.1 | Apr 2, 2026 | Structured dump list, dump lookup by datetime+user, from/to time filters |
 | v4.7.0-4.7.1 | Apr 1, 2026 | Replaced archived `node-rfc` with `@mcp-abap-adt/sap-rfc-lite` |
 | v4.6.0 | Mar 31, 2026 | HTTPS/TLS support for MCP server |
 | v4.5.0-4.5.2 | Mar 26-27, 2026 | try-finally lock fix, RAG-optimized descriptions, auth priority fix |
@@ -131,17 +132,20 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | v2.x | Dec 30, 2025 - Feb 23, 2026 | ~20 releases |
 | v1.1.0 | Nov 21, 2025 | First release |
 
-**Total: 83 releases in ~5 months. Average: ~4 releases/week.**
+**Total: 85+ releases in ~5 months. Average: ~4 releases/week.**
 
 ## Known Issues
 
 | Issue | Description | Relevant to ARC-1? |
 |-------|-------------|-------------------|
 | #22 | Lock leak — try-catch instead of try-finally for unlock | **Resolved** — ARC-1 already uses try-finally |
-| #22, #23, #25 | 415 Content-Type errors — SAP needs specific Accept/Content-Type | **Yes** — add 415 retry logic |
-| #24 | SAP_JWT_TOKEN overrides SAP_AUTH_TYPE | Yes — check env var priority |
-| #7 | 409 conflict not propagated to LLM | Yes — ensure conflict errors are clear |
-| #13 | Check runs fail with non-EN languages | Yes — verify language handling |
+| #22, #23, #25 | 415 Content-Type errors — SAP needs specific Accept/Content-Type | **Yes** — add 415 retry logic ([evaluation](fr0ster/evaluations/415-content-type-retry.md)) |
+| #24 | SAP_JWT_TOKEN overrides SAP_AUTH_TYPE | **No action** — ARC-1 infers auth type from credentials, no priority conflict ([evaluation](fr0ster/evaluations/dce44ca-auth-type-priority.md)) |
+| #7, #6 | 409 conflict details not propagated to LLM | **Verify** — check ARC-1 AdtApiError includes SAP error body ([evaluation](fr0ster/evaluations/issue-7-6-409-error-details.md)) |
+| #13 | Check runs fail with non-EN languages | **Verify** — check ARC-1 syntax check/ATC parsing uses language-independent attributes ([evaluation](fr0ster/evaluations/issue-13-i18n-check-handling.md)) |
+| #30 | Object history + transport contents | **Medium** — transport contents useful, object history lower priority ([evaluation](fr0ster/evaluations/issue-30-object-history-transport-contents.md)) |
+| #31 | RuntimeRunClassWithProfiling stale trace ID | **Not applicable** — ARC-1 doesn't have execute-with-profiling |
+| #33, #32 | Test infra: transport/lock conflicts | **Not relevant** — specific to their multi-system test setup |
 | BTP Cloud | Data preview may not work | Yes — document BTP limitations |
 
 ---
@@ -196,14 +200,21 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-02 | v4.8.0-4.8.1 — Structured dump list, datetime+user lookup, from/to filters | Medium | Defer — ARC-1 SAPDiagnose dumps work fine as-is | Evaluated |
 | 2026-04-01 | v4.7.0-4.7.1 — sap-rfc-lite replaces node-rfc | No | ARC-1 uses HTTP only | — |
 | 2026-03-31 | v4.6.0 — TLS/HTTPS support | **Critical** | Add TLS support for HTTP Streamable | TODO |
-| 2026-03-27 | v4.5.2 — Content-Type negotiation fixes | **Yes** | Add 415 retry logic to ARC-1 HTTP | TODO |
+| 2026-03-27 | v4.5.2 — Content-Type negotiation fixes | **Critical** | Add 415 retry logic to ARC-1 HTTP | TODO |
 | 2026-03-26 | v4.5.0 — Lock leak fix (try-finally) | Resolved | ARC-1 already uses try-finally | Done |
-| 2026-03-26 | RAG-optimized tool descriptions | Maybe | Review tool description quality | TODO |
-| 2026-03-25 | Auth priority fix | Yes | Verify env var priority in ARC-1 | TODO |
-| 2026-03-22 | v4.4.0 — Embedding-optimized descriptions | Maybe | Review for adoption | TODO |
+| 2026-03-26 | RAG-optimized tool descriptions | No | Not relevant — ARC-1 uses intent routing, not RAG discovery | Evaluated |
+| 2026-03-26 | Auth priority fix (#24) | No | ARC-1 infers auth from credentials — no priority conflict | Evaluated |
+| 2026-03-22 | v4.4.0 — Embedding-optimized descriptions | No | Same as above — RAG not applicable | Evaluated |
 | 2026-03-19 | v4.3.0 — /mcp/health endpoint | No | ARC-1 already has /health | — |
-| 2026-03-13 | v4.0.0 — Major version bump | Review | Check for breaking changes | TODO |
+| 2026-03-14 | v4.2.0 — Read handlers with source + metadata | Medium | Consider adding include_metadata to SAPRead | Evaluated |
+| 2026-03-13 | v4.0.0 — SAP_SYSTEM_TYPE, available_in, legacy support | Mixed | System type: done. available_in: not needed (11 tools). Legacy: out of scope. | Evaluated |
+| 2026-03-06 | v3.2.1 — Legacy system auto-detection, RFC auth | No | ARC-1 targets 7.50+, HTTP only | — |
+| 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
+| 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-01_
+_Last updated: 2026-04-02_
+
+> **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

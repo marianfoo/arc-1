@@ -1,0 +1,339 @@
+{
+  "$schema": "Issue tracker for fr0ster/mcp-abap-adt — relevance to ARC-1",
+  "repo": "https://github.com/fr0ster/mcp-abap-adt",
+  "lastUpdated": "2026-04-02",
+  "stats": {
+    "total": 33,
+    "open": 4,
+    "closed": 29,
+    "relevantToArc1": 10,
+    "evaluated": 10,
+    "pending": 0
+  },
+  "issues": [
+    {
+      "number": 33,
+      "state": "open",
+      "date": "2026-04-02",
+      "title": "test: TransportedObjectCrud fails — E77 transport configured for E19 system",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Test infrastructure issue specific to their multi-system setup. Not relevant."
+    },
+    {
+      "number": 32,
+      "state": "open",
+      "date": "2026-04-02",
+      "title": "test: FunctionLow/HighHandlers fail — FUGR locked in transport",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "FUGR lock conflict in tests. Not relevant to ARC-1."
+    },
+    {
+      "number": 31,
+      "state": "closed",
+      "date": "2026-04-02",
+      "title": "fix: RuntimeRunClassWithProfiling returns stale trace ID",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Profiler trace timing issue. ARC-1 SAPDiagnose traces action may have similar edge case — worth a mental note but low priority.",
+      "evaluationFile": "evaluations/issue-31-stale-trace-id.md"
+    },
+    {
+      "number": 30,
+      "state": "open",
+      "date": "2026-04-01",
+      "title": "Extend MCP tools for Object History and Transport Requests",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Object history (version list, diff) + transport contents (E071). ARC-1 lacks both. Transport contents is Medium priority in feature matrix (#20). Object history/CompareSource is #25 in matrix.",
+      "evaluationFile": "evaluations/issue-30-object-history-transport-contents.md"
+    },
+    {
+      "number": 29,
+      "state": "open",
+      "date": "2026-04-01",
+      "title": "Writing ABAP Program into SAP",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "User help request — not a feature or bug. ARC-1 already supports PROG write."
+    },
+    {
+      "number": 28,
+      "state": "closed",
+      "date": "2026-04-01",
+      "title": "Replace node-rfc with @mcp-abap-adt/sap-rfc-lite",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "RFC migration. ARC-1 is HTTP-only."
+    },
+    {
+      "number": 26,
+      "state": "closed",
+      "date": "2026-03-31",
+      "title": "feat: add HTTPS/TLS support for MCP server",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "TLS/HTTPS support — Critical gap in ARC-1 feature matrix. Study their implementation approach (--tls-cert, --tls-key, --tls-ca).",
+      "evaluationFile": "evaluations/tls-https-support.md"
+    },
+    {
+      "number": 25,
+      "state": "closed",
+      "date": "2026-03-26",
+      "title": "Verify enableAcceptCorrection is enabled for all ADT client instances",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Content-Type auto-correction — this is the enableAcceptCorrection pattern that fixes 415 errors. ARC-1 should implement similar 415 auto-retry (Critical #3 in matrix).",
+      "evaluationFile": "evaluations/415-content-type-retry.md"
+    },
+    {
+      "number": 24,
+      "state": "closed",
+      "date": "2026-03-26",
+      "title": "fix: give SAP_AUTH_TYPE priority over SAP_JWT_TOKEN in test helpers",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Auth env var priority — verify ARC-1 config.ts doesn't have same issue."
+    },
+    {
+      "number": 23,
+      "state": "closed",
+      "date": "2026-03-26",
+      "title": "ListTransports fails with ExceptionResourceNotAcceptable: wrong Accept content type",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "415 Content-Type issue with transports endpoint. ARC-1 may hit this on older SAP systems. Need Accept header negotiation. Critical #3 in matrix.",
+      "evaluationFile": "evaluations/415-content-type-retry.md"
+    },
+    {
+      "number": 22,
+      "state": "closed",
+      "date": "2026-03-26",
+      "title": "UpdateProgram: 415 on checkruns (auto-detect Content-Type) + guaranteed unlock on error",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "Two issues: (1) 415 auto-retry needed — Critical for ARC-1. (2) try-finally unlock — ARC-1 already has this. The 415 pattern is the key takeaway.",
+      "evaluationFile": "evaluations/415-content-type-retry.md"
+    },
+    {
+      "number": 21,
+      "state": "closed",
+      "date": "2026-03-26",
+      "title": "SearchObject tool description needs priority keywords for RAG discoverability",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "RAG tool descriptions — ARC-1 uses intent routing, not embedding discovery."
+    },
+    {
+      "number": 20,
+      "state": "closed",
+      "date": "2026-03-22",
+      "title": "Improve tool descriptions for better vector RAG discoverability",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Same as #21 — RAG descriptions not relevant to intent-based architecture."
+    },
+    {
+      "number": 19,
+      "state": "closed",
+      "date": "2026-03-19",
+      "title": "llm-agent: healthCheck() should not call listTools() on MCP clients",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Internal MCP client health check design. Not relevant."
+    },
+    {
+      "number": 18,
+      "state": "closed",
+      "date": "2026-03-19",
+      "title": "Add lightweight health check endpoint (GET /mcp/health)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already has /health endpoint."
+    },
+    {
+      "number": 17,
+      "state": "closed",
+      "date": "2026-03-14",
+      "title": "fix: BDEF test resilience — delay after delete, guarantee unlock, transport in BIMPL",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Test infrastructure fix. Not relevant."
+    },
+    {
+      "number": 16,
+      "state": "closed",
+      "date": "2026-03-14",
+      "title": "fix: propagate SAP_SYSTEM_TYPE and pass transport_request in update tests",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Test infrastructure. Not relevant."
+    },
+    {
+      "number": 15,
+      "state": "closed",
+      "date": "2026-03-13",
+      "title": "feat: add SAP_SYSTEM_TYPE override and eager HTTP session init",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already has SAP_SYSTEM_TYPE with auto/btp/onprem."
+    },
+    {
+      "number": 14,
+      "state": "closed",
+      "date": "2026-03-08",
+      "title": "A mistake in CLINE_CONFIGURATION.md",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Docs typo. Not relevant."
+    },
+    {
+      "number": 13,
+      "state": "closed",
+      "date": "2026-03-08",
+      "title": "MCP error -32603: Error: New code check failed when connecting with DE language",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "i18n check handling — non-EN languages cause check failures. ARC-1 should verify SAP_LANGUAGE handling in syntax check / ATC. Medium #13 in existing matrix.",
+      "evaluationFile": "evaluations/issue-13-i18n-check-handling.md"
+    },
+    {
+      "number": 12,
+      "state": "closed",
+      "date": "2026-03-08",
+      "title": "MCP error -32603: Error: SAP Error: Resource is not locked",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Lock sequencing issue. ARC-1 lock flow is different (explicit lock in crud.ts). Low risk.",
+      "evaluationFile": "evaluations/issue-12-lock-sequencing.md"
+    },
+    {
+      "number": 11,
+      "state": "closed",
+      "date": "2026-02-26",
+      "title": "Not able to create or update. Reads are working.",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Transport request UX issue — user didn't know they needed to provide transport. ARC-1 has elicitation for this. Good validation of ARC-1's approach.",
+      "evaluationFile": "evaluations/issue-11-transport-ux.md"
+    },
+    {
+      "number": 10,
+      "state": "closed",
+      "date": "2026-02-26",
+      "title": "Dump when changing with a wrong transport request number",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Error handling for bad transport numbers. ARC-1 should have clear error messages. Low — already good error handling in crud.ts.",
+      "evaluationFile": "evaluations/issue-10-bad-transport-error.md"
+    },
+    {
+      "number": 9,
+      "state": "closed",
+      "date": "2026-02-15",
+      "title": "PREA was here — discovered mcp-abap-adt",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Community interaction, not a bug/feature."
+    },
+    {
+      "number": 8,
+      "state": "closed",
+      "date": "2026-01-30",
+      "title": "The tool GetTypeInfo does not return data for structures",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Structure fallback in type info. ARC-1 already returns structured metadata for STRU type.",
+      "evaluationFile": "evaluations/issue-8-structure-typeinfo.md"
+    },
+    {
+      "number": 7,
+      "state": "closed",
+      "date": "2026-01-30",
+      "title": "Correct processing of 409 error for all updating tools",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "409 conflict handling — ensure ARC-1 crud.ts returns clear conflict messages to LLM. Check if conflict details (lock holder, transport) are surfaced.",
+      "evaluationFile": "evaluations/issue-7-6-409-error-details.md"
+    },
+    {
+      "number": 6,
+      "state": "closed",
+      "date": "2026-01-29",
+      "title": "Added error details from SAP for error 409 to improve LLM and human chance to solve the problem",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Same as #7 — 409 error detail extraction for LLM consumption. Verify ARC-1 AdtApiError includes full SAP error body.",
+      "evaluationFile": "evaluations/issue-7-6-409-error-details.md"
+    },
+    {
+      "number": 5,
+      "state": "closed",
+      "date": "2026-01-29",
+      "title": "UpdateLocalTestClass sometimes gives error 409 without any details",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Duplicate of #3/#6. Already covered."
+    },
+    {
+      "number": 4,
+      "state": "closed",
+      "date": "2026-01-20",
+      "title": "The whole error returned by SAP added for CreateLocalTestClass",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "PR for #3. Already covered in #6/#7."
+    },
+    {
+      "number": 3,
+      "state": "closed",
+      "date": "2026-01-20",
+      "title": "CreateLocalTestClass sometimes gives error 409 without any details",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Original 409 report. Covered by #6/#7."
+    },
+    {
+      "number": 2,
+      "state": "closed",
+      "date": "2025-12-09",
+      "title": "Comments in .env file are not supported",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Inline .env comment parsing. ARC-1 uses dotenv which handles this correctly. No action needed.",
+      "evaluationFile": "evaluations/issue-2-env-comments.md"
+    }
+  ]
+}

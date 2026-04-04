@@ -1,0 +1,458 @@
+{
+  "$schema": "Issue tracker for oisee/vibing-steampunk — relevance to ARC-1",
+  "repo": "https://github.com/oisee/vibing-steampunk",
+  "lastUpdated": "2026-04-02",
+  "stats": {
+    "total": 38,
+    "open": 16,
+    "closed": 22,
+    "relevantToArc1": 14,
+    "evaluated": 38,
+    "pending": 0
+  },
+  "issues": [
+    {
+      "number": 81,
+      "state": "open",
+      "date": "2026-04-02",
+      "title": "WRITE operation failed",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "User write issue — likely config/transport problem. Monitor for patterns."
+    },
+    {
+      "number": 78,
+      "state": "closed",
+      "date": "2026-03-28",
+      "title": "423 ExceptionResourceInvalidLockHandle when updating PROG/CLAS on ECC 6.0 EHP7",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Lock handle errors on older ECC systems. ARC-1 targets 7.50+ but should handle 423 gracefully.",
+      "evaluationFile": "evaluations/issue-78-lock-handle-ecc.md"
+    },
+    {
+      "number": 76,
+      "state": "open",
+      "date": "2026-03-27",
+      "title": "graph fallback broken for namespaced objects: uses filesystem paths instead of ABAP names",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Call graph bug for namespaces. ARC-1 doesn't have call graph."
+    },
+    {
+      "number": 75,
+      "state": "open",
+      "date": "2026-03-23",
+      "title": "InstallZADTVSP is not idempotent on ABAP 758 trial",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ZADT_VSP deployment issue. ARC-1 doesn't deploy ABAP."
+    },
+    {
+      "number": 74,
+      "state": "open",
+      "date": "2026-03-22",
+      "title": "Add MCP support for CDS metadata extensions (DDLX/EX)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already has DDLX read support."
+    },
+    {
+      "number": 73,
+      "state": "closed",
+      "date": "2026-03-21",
+      "title": "Debugger and other intrusive features",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Discussion about safety of debugger features. ARC-1 doesn't have debugger."
+    },
+    {
+      "number": 71,
+      "state": "closed",
+      "date": "2026-03-18",
+      "title": "CreatePackage safety check fails with 'operations on package empty string blocked'",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Safety check bug — checking empty string instead of actual package name. Verify ARC-1 safety.ts.",
+      "evaluationFile": "evaluations/2ef8c3e-package-safety-check.md"
+    },
+    {
+      "number": 70,
+      "state": "closed",
+      "date": "2026-03-18",
+      "title": "CreateTransport fails on S/4HANA 757: wrong endpoint and content-type",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Transport creation endpoint differs on S/4HANA. Verify ARC-1 transport.ts.",
+      "evaluationFile": "evaluations/ca02f47-transport-endpoint-compat.md"
+    },
+    {
+      "number": 69,
+      "state": "closed",
+      "date": "2026-03-16",
+      "title": "Quick question about the project license",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "License question. Not relevant."
+    },
+    {
+      "number": 58,
+      "state": "closed",
+      "date": "2026-03-11",
+      "title": "Local code behaviour",
+      "labels": ["wontfix"],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Local object behavior question. Not relevant."
+    },
+    {
+      "number": 57,
+      "state": "closed",
+      "date": "2026-03-10",
+      "title": "Failed to validate tool mcp_mcp-abap-adt_DebuggerGetVariables",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Schema validation bug for debugger tool. ARC-1 doesn't have debugger."
+    },
+    {
+      "number": 56,
+      "state": "open",
+      "date": "2026-03-06",
+      "title": "Unable to create new program",
+      "labels": ["bug", "question"],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Create program issue — likely namespace or transport related. Monitor for patterns."
+    },
+    {
+      "number": 55,
+      "state": "open",
+      "date": "2026-03-06",
+      "title": "[Bug] RunReport fails in APC context — all spool reading mechanisms blocked",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "RunReport spool issue. ARC-1 doesn't have RunReport."
+    },
+    {
+      "number": 54,
+      "state": "closed",
+      "date": "2026-03-06",
+      "title": "[Bug] SAP_ALLOWED_PACKAGES blocks InstallZADTVSP — bootstrap chicken-and-egg problem",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Package filter blocks install tools. ARC-1 has same safety system — verify bootstrap tools aren't blocked.",
+      "evaluationFile": "evaluations/2ef8c3e-package-safety-check.md"
+    },
+    {
+      "number": 52,
+      "state": "closed",
+      "date": "2026-03-06",
+      "title": "SyntaxCheck and UpdateClassInclude fail for long namespaced classes",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Namespace URI handling in syntax check. Verify ARC-1 handles /namespace/class correctly.",
+      "evaluationFile": "evaluations/6d1f00a-namespace-syntax-check.md"
+    },
+    {
+      "number": 51,
+      "state": "closed",
+      "date": "2026-03-05",
+      "title": "Problem installing ZADT_VSP and bug using SAP_ALLOWED_PACKAGES",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ZADT_VSP install issue. Not relevant to ARC-1."
+    },
+    {
+      "number": 50,
+      "state": "closed",
+      "date": "2026-03-05",
+      "title": "Please delete accidentally created PRs #48 and #49",
+      "labels": ["wontfix"],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Housekeeping. Not relevant."
+    },
+    {
+      "number": 47,
+      "state": "closed",
+      "date": "2026-03-03",
+      "title": "Error when using OpenAI / GPT models with active MCP-server in Eclipse GitHub Copilot",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "OpenAI compatibility issue with MCP. ARC-1 should work with any MCP client but worth noting."
+    },
+    {
+      "number": 46,
+      "state": "open",
+      "date": "2026-03-02",
+      "title": "Enhance sync script: fix oisee references in markdown files",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Repo sync script. Not relevant."
+    },
+    {
+      "number": 45,
+      "state": "open",
+      "date": "2026-03-02",
+      "title": "Enhance sync script: auto-resolve CLAUDE.md/README.md conflicts",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Repo sync script. Not relevant."
+    },
+    {
+      "number": 43,
+      "state": "open",
+      "date": "2026-03-01",
+      "title": "missing commands",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Missing CLI commands. ARC-1 is MCP-only."
+    },
+    {
+      "number": 40,
+      "state": "open",
+      "date": "2026-03-01",
+      "title": "[Feature Request] Add translation/i18n tools for multilingual ABAP development",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "i18n/translation tools — text elements, OTR texts, message classes. ARC-1 has T100 messages and text elements read. Translation management could be valuable.",
+      "evaluationFile": "evaluations/issue-40-i18n-tools.md"
+    },
+    {
+      "number": 39,
+      "state": "open",
+      "date": "2026-03-01",
+      "title": "[Feature Request] Add gCTS (git-enabled Change and Transport System) tools",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "gCTS integration — Medium #15 in feature matrix. Open in both VSP and ARC-1.",
+      "evaluationFile": "evaluations/issue-39-gcts-tools.md"
+    },
+    {
+      "number": 34,
+      "state": "open",
+      "date": "2026-02-23",
+      "title": "GetTableContents: add pagination and schema introspection",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Table contents pagination. ARC-1 RunQuery has maxRows but no cursor pagination or schema introspection.",
+      "evaluationFile": "evaluations/issue-34-table-pagination.md"
+    },
+    {
+      "number": 33,
+      "state": "closed",
+      "date": "2026-02-23",
+      "title": "EditSource treats syntax warnings as errors, blocking saves",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Syntax warnings blocking saves. ARC-1 edit_method may have same issue.",
+      "evaluationFile": "evaluations/7fbfbba-ignore-warnings.md"
+    },
+    {
+      "number": 32,
+      "state": "closed",
+      "date": "2026-02-23",
+      "title": "401 Unauthorized after idle should auto-retry transparently",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Session timeout auto-retry. Verify ARC-1 handles this.",
+      "evaluationFile": "evaluations/d73460a-401-auto-retry.md"
+    },
+    {
+      "number": 30,
+      "state": "open",
+      "date": "2026-02-23",
+      "title": "Cookie authentication",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already supports cookie-based auth."
+    },
+    {
+      "number": 28,
+      "state": "closed",
+      "date": "2026-02-20",
+      "title": "Build fails on macOS Apple Silicon",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Go build issue. Not relevant to TS ARC-1."
+    },
+    {
+      "number": 27,
+      "state": "open",
+      "date": "2026-02-20",
+      "title": "Supporting of object types",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Feature request for more ABAP object types. ARC-1 already supports more types than VSP."
+    },
+    {
+      "number": 26,
+      "state": "open",
+      "date": "2026-02-18",
+      "title": "GetTransport failed: transport not found in response",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Transport parsing bug. Verify ARC-1 transport.ts response parsing is robust."
+    },
+    {
+      "number": 24,
+      "state": "closed",
+      "date": "2026-02-12",
+      "title": "Tool Error DebuggerGetVariables",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Debugger tool error. ARC-1 doesn't have debugger."
+    },
+    {
+      "number": 21,
+      "state": "open",
+      "date": "2026-02-05",
+      "title": "Streaming HTTP support",
+      "labels": ["enhancement"],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already has HTTP Streamable transport."
+    },
+    {
+      "number": 19,
+      "state": "closed",
+      "date": "2026-02-03",
+      "title": "Packages not found when creating interfaces / classes",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Package resolution issue. Fixed in VSP. ARC-1 has different package handling."
+    },
+    {
+      "number": 18,
+      "state": "closed",
+      "date": "2026-02-03",
+      "title": "WriteSource fails for namespaced objects (URL encoding & truncation)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Namespace URL encoding — same pattern as #52. Verify ARC-1.",
+      "evaluationFile": "evaluations/59b4b90-namespace-url-encoding.md"
+    },
+    {
+      "number": 17,
+      "state": "closed",
+      "date": "2026-02-03",
+      "title": "EditSource fails with 'Object already locked' on sequential edits",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Lock cleanup between edits. ARC-1 try-finally unlock should prevent this.",
+      "evaluationFile": null
+    },
+    {
+      "number": 15,
+      "state": "closed",
+      "date": "2026-01-28",
+      "title": "Version for MacOS M1 is 2.20.0, not the latest",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Go binary distribution issue. ARC-1 uses npm."
+    },
+    {
+      "number": 13,
+      "state": "closed",
+      "date": "2026-01-26",
+      "title": "vsp does not honor HTTP(S)_PROXY in SAP Business Application Studio (BAS)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Proxy support. ARC-1 uses axios which respects HTTP_PROXY by default."
+    },
+    {
+      "number": 12,
+      "state": "closed",
+      "date": "2026-01-22",
+      "title": "Using the tools is not clear to me (or the agent)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "UX/documentation issue. ARC-1 has intent-based routing which is simpler."
+    },
+    {
+      "number": 11,
+      "state": "closed",
+      "date": "2026-01-22",
+      "title": "Can VSP now create OData services?",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "OData service creation question. ARC-1 has SRVB/SRVD support."
+    },
+    {
+      "number": 9,
+      "state": "closed",
+      "date": "2026-01-14",
+      "title": "Transport API returns 406 - Wrong Accept header for CTS endpoints",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "406 Accept header for transport endpoints — same class as fr0ster #22/#23. ARC-1 needs 415/406 auto-retry.",
+      "evaluationFile": "evaluations/issue-9-transport-accept-header.md"
+    },
+    {
+      "number": 7,
+      "state": "closed",
+      "date": "2026-01-07",
+      "title": "feat: Re-add ALV capture for RunReport",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "RunReport ALV capture. ARC-1 doesn't have RunReport."
+    },
+    {
+      "number": 2,
+      "state": "open",
+      "date": "2026-01-05",
+      "title": "gui debugger",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "GUI debugger feature request. Low priority #28 in matrix."
+    },
+    {
+      "number": 1,
+      "state": "closed",
+      "date": "2026-01-05",
+      "title": "self signed certificate",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Self-signed cert support. ARC-1 has SAP_INSECURE flag for this."
+    }
+  ]
+}
