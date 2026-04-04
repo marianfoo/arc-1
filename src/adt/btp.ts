@@ -9,7 +9,7 @@
  * The flow mirrors the Go implementation in pkg/adt/btp.go:
  * - Parse VCAP_SERVICES → get destination/connectivity/xsuaa credentials
  * - Call Destination Service API → get SAP URL, user, password
- * - Create axios proxy config → route through Cloud Connector
+ * - Create proxy config → route through Cloud Connector
  * - Inject Proxy-Authorization header → connectivity service JWT token
  *
  * Token caching: Both destination and connectivity tokens are cached
@@ -52,7 +52,7 @@ export interface Destination {
   'sap-client'?: string;
 }
 
-/** Proxy configuration for axios — used by AdtHttpClient */
+/** Proxy configuration for undici ProxyAgent — used by AdtHttpClient */
 export interface BTPProxyConfig {
   host: string;
   port: number;

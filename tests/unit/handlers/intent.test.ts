@@ -1,29 +1,22 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import axios from 'axios';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AdtClient } from '../../../src/adt/client.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError } from '../../../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 import type { ResolvedFeatures } from '../../../src/adt/types.js';
-import { handleToolCall, resetCachedFeatures, setCachedFeatures, TOOL_SCOPES } from '../../../src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
+import { mockResponse } from '../../helpers/mock-fetch.js';
 
-// Mock axios so AdtClient doesn't make real requests
-vi.mock('axios', async () => {
-  const mockAxiosInstance = {
-    request: vi.fn().mockResolvedValue({
-      status: 200,
-      data: "REPORT zhello.\nWRITE: / 'Hello'.",
-      headers: { 'x-csrf-token': 'mock-csrf-token' },
-    }),
-  };
-  return {
-    default: {
-      create: vi.fn(() => mockAxiosInstance),
-      isAxiosError: vi.fn(() => false),
-    },
-  };
+// Mock undici's fetch (used by AdtHttpClient.doFetch)
+const mockFetch = vi.fn();
+vi.mock('undici', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('undici')>();
+  return { ...actual, fetch: mockFetch };
 });
+
+const { AdtClient } = await import('../../../src/adt/client.js');
+const { handleToolCall, resetCachedFeatures, setCachedFeatures, TOOL_SCOPES } = await import(
+  '../../../src/handlers/intent.js'
+);
 
 function createClient(): AdtClient {
   return new AdtClient({
@@ -35,6 +28,14 @@ function createClient(): AdtClient {
 }
 
 describe('Intent Handler', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // Default: return ABAP source with CSRF token for any request
+    mockFetch.mockResolvedValue(
+      mockResponse(200, "REPORT zhello.\nWRITE: / 'Hello'.", { 'x-csrf-token': 'mock-csrf-token' }),
+    );
+  });
+
   // ─── SAPRead ───────────────────────────────────────────────────────
 
   describe('SAPRead', () => {
@@ -130,11 +131,11 @@ describe('Intent Handler', () => {
     });
 
     it('reads service binding (SRVB) and returns parsed JSON', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0"?><srvb:serviceBinding srvb:contract="C1" srvb:published="true" srvb:bindingCreated="true"
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0"?><srvb:serviceBinding srvb:contract="C1" srvb:published="true" srvb:bindingCreated="true"
           adtcore:name="ZUI_TRAVEL_O4" adtcore:type="SRVB/SVB" adtcore:description="Travel UI"
           adtcore:language="EN" xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
           xmlns:adtcore="http://www.sap.com/adt/core">
@@ -148,8 +149,8 @@ describe('Intent Handler', () => {
             <srvb:implementation adtcore:name="ZUI_TRAVEL_O4"/>
           </srvb:binding>
         </srvb:serviceBinding>`,
-        headers: {},
-      });
+        ),
+      );
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'SRVB',
@@ -225,11 +226,11 @@ describe('Intent Handler', () => {
 
     it('reads a domain (DOMA)', async () => {
       // Mock domain XML response
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <doma:domain adtcore:name="BUKRS" adtcore:description="Company code" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:name="BF"/>
   <doma:content>
@@ -238,8 +239,8 @@ describe('Intent Handler', () => {
     <doma:valueInformation><doma:valueTableRef adtcore:name="T001"/><doma:fixValues/></doma:valueInformation>
   </doma:content>
 </doma:domain>`,
-        headers: {},
-      });
+        ),
+      );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'DOMA',
         name: 'BUKRS',
@@ -252,11 +253,11 @@ describe('Intent Handler', () => {
     });
 
     it('reads a data element (DTEL)', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <blue:wbobj adtcore:name="BUKRS" adtcore:description="Company code" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:name="BF"/>
   <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
@@ -266,8 +267,8 @@ describe('Intent Handler', () => {
     <dtel:searchHelp>C_T001</dtel:searchHelp>
   </dtel:dataElement>
 </blue:wbobj>`,
-        headers: {},
-      });
+        ),
+      );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'DTEL',
         name: 'BUKRS',
@@ -280,28 +281,29 @@ describe('Intent Handler', () => {
     });
 
     it('reads a transaction (TRAN)', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // First call: transaction metadata
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <adtcore:mainObject adtcore:name="SE38" adtcore:description="ABAP Editor" xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:name="SEDT"/>
 </adtcore:mainObject>`,
-        headers: {},
-      });
+        ),
+      );
       // Second call: SQL query for program name (CSRF fetch first, then actual query)
-      requestSpy.mockResolvedValueOnce({ status: 200, data: '', headers: { 'x-csrf-token': 'token123' } });
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'token123' }));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values>
 <COLUMNS><COLUMN><METADATA name="TCODE"/><DATASET><DATA>SE38</DATA></DATASET></COLUMN>
 <COLUMN><METADATA name="PGMNA"/><DATASET><DATA>RSABAPPROGRAM</DATA></DATASET></COLUMN></COLUMNS>
 </asx:values></asx:abap>`,
-        headers: {},
-      });
+        ),
+      );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'TRAN',
         name: 'SE38',
@@ -711,17 +713,17 @@ ENDCLASS.`;
 
     it('returns structured elements when include="elements"', async () => {
       // Override mock to return CDS DDL source
-      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
-      (mockAxiosInstance.request as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        status: 200,
-        data: `define view entity ZI_ORDER as select from zsalesorder {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `define view entity ZI_ORDER as select from zsalesorder {
   key order_id as OrderId,
   customer as Customer,
   gross_amount - discount as NetAmount,
   _Items
 }`,
-        headers: { 'x-csrf-token': 'mock' },
-      });
+        ),
+      );
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'DDLS',
@@ -775,52 +777,40 @@ ENDCLASS.`;
     });
 
     it('activates DDIC types with correct object URLs in XML body', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-
       // Activate STRU — the object URL should appear in the activation XML body
       await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         type: 'STRU',
         name: 'ZTEST_STRUCT',
       });
-      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall.data).toContain('/sap/bc/adt/ddic/structures/ZTEST_STRUCT');
+      const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
+      expect(lastCallOpts.body).toContain('/sap/bc/adt/ddic/structures/ZTEST_STRUCT');
     });
 
     it('activates DOMA with correct object URL in XML body', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-
       await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         type: 'DOMA',
         name: 'ZBUKRS',
       });
-      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall.data).toContain('/sap/bc/adt/ddic/domains/ZBUKRS');
+      const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
+      expect(lastCallOpts.body).toContain('/sap/bc/adt/ddic/domains/ZBUKRS');
     });
 
     it('activates DTEL with correct object URL in XML body', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-
       await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         type: 'DTEL',
         name: 'ZBUKRS_DTEL',
       });
-      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall.data).toContain('/sap/bc/adt/ddic/dataelements/ZBUKRS_DTEL');
+      const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
+      expect(lastCallOpts.body).toContain('/sap/bc/adt/ddic/dataelements/ZBUKRS_DTEL');
     });
 
     it('activates TRAN with correct object URL in XML body', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-
       await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         type: 'TRAN',
         name: 'ZTRAN01',
       });
-      const lastCall = requestSpy.mock.calls[requestSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall.data).toContain('/sap/bc/adt/vit/wb/object_type/trant/object_name/ZTRAN01');
+      const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
+      expect(lastCallOpts.body).toContain('/sap/bc/adt/vit/wb/object_type/trant/object_name/ZTRAN01');
     });
   });
 
@@ -851,10 +841,9 @@ ENDCLASS.`;
 
   describe('error guidance', () => {
     it('404 error includes SAPSearch hint', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // Make the mock reject with a 404 AdtApiError
-      requestSpy.mockRejectedValueOnce(
+      mockFetch.mockRejectedValueOnce(
         new AdtApiError('Not found', 404, '/sap/bc/adt/programs/programs/ZNONEXIST/source/main'),
       );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
@@ -867,9 +856,8 @@ ENDCLASS.`;
     });
 
     it('401 error includes client hint', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockRejectedValueOnce(new AdtApiError('Auth failed', 401, '/sap/bc/adt/core/discovery'));
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(new AdtApiError('Auth failed', 401, '/sap/bc/adt/core/discovery'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'PROG',
         name: 'ZTEST',
@@ -883,20 +871,16 @@ ENDCLASS.`;
 
   describe('FUNC auto-resolve group', () => {
     it('reads FUNC without group by auto-resolving via search', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // First call: search for FM → returns result with URI containing group
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<objectReferences><objectReference type="FUGR/FF" name="Z_MY_FUNC" uri="/sap/bc/adt/functions/groups/zgroup/fmodules/z_my_func" packageName="ZTEST" description="Test FM"/></objectReferences>`,
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<objectReferences><objectReference type="FUGR/FF" name="Z_MY_FUNC" uri="/sap/bc/adt/functions/groups/zgroup/fmodules/z_my_func" packageName="ZTEST" description="Test FM"/></objectReferences>`,
+        ),
+      );
       // Second call: read the FM source
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: 'FUNCTION z_my_func.\nENDFUNCTION.',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'FUNCTION z_my_func.\nENDFUNCTION.'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'FUNC',
         name: 'Z_MY_FUNC',
@@ -906,14 +890,9 @@ ENDCLASS.`;
     });
 
     it('returns error when FUNC group cannot be resolved', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // Search returns empty results
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: '<objectReferences/>',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'FUNC',
         name: 'Z_NONEXIST_FM',
@@ -927,26 +906,13 @@ ENDCLASS.`;
 
   describe('FUGR include expansion', () => {
     it('reads FUGR with expand_includes=true', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // First call: read FUGR main source
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: 'INCLUDE LZ_TESTTOP.\nINCLUDE LZ_TESTI01.',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'INCLUDE LZ_TESTTOP.\nINCLUDE LZ_TESTI01.'));
       // Second call: read first include
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: 'DATA: gv_test TYPE string.',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'DATA: gv_test TYPE string.'));
       // Third call: read second include
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: 'MODULE user_command_0100 INPUT.\nENDMODULE.',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'MODULE user_command_0100 INPUT.\nENDMODULE.'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'FUGR',
         name: 'Z_TEST',
@@ -960,16 +926,11 @@ ENDCLASS.`;
     });
 
     it('handles failed includes gracefully', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // Main source
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: 'INCLUDE LZ_BADINCL.',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'INCLUDE LZ_BADINCL.'));
       // Include read fails
-      requestSpy.mockRejectedValueOnce(
+      mockFetch.mockRejectedValueOnce(
         new AdtApiError('Not found', 404, '/sap/bc/adt/programs/includes/LZ_BADINCL/source/main'),
       );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
@@ -986,13 +947,13 @@ ENDCLASS.`;
 
   describe('SAPSearch source code', () => {
     it('searches source code with searchType=source_code', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<objectReferences><objectReference type="CLAS/OC" name="ZCL_TEST" uri="/sap/bc/adt/oo/classes/zcl_test"/></objectReferences>`,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<objectReferences><objectReference type="CLAS/OC" name="ZCL_TEST" uri="/sap/bc/adt/oo/classes/zcl_test"/></objectReferences>`,
+        ),
+      );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
         query: 'cl_lsapi_manager',
         searchType: 'source_code',
@@ -1004,9 +965,8 @@ ENDCLASS.`;
     });
 
     it('returns helpful error when source search is not available', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockRejectedValueOnce(
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
         new AdtApiError('Not found', 404, '/sap/bc/adt/repository/informationsystem/textSearch'),
       );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
@@ -1022,25 +982,21 @@ ENDCLASS.`;
 
   describe('SAPRead SOBJ', () => {
     it('lists BOR methods when no method specified', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // CSRF HEAD request (POST triggers CSRF fetch)
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: '',
-        headers: { 'x-csrf-token': 'TOKEN123' },
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'TOKEN123' }));
       // runQuery POST returns SWOTLV data
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<abap><values><COLUMNS>
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<abap><values><COLUMNS>
           <COLUMN><METADATA name="VERB"/><DATASET><DATA>CREATE</DATA><DATA>DISPLAY</DATA></DATASET></COLUMN>
           <COLUMN><METADATA name="PROGNAME"/><DATASET><DATA>ZPROG1</DATA><DATA>ZPROG2</DATA></DATASET></COLUMN>
           <COLUMN><METADATA name="FORMNAME"/><DATASET><DATA>CREATE_OBJ</DATA><DATA>DISPLAY_OBJ</DATA></DATASET></COLUMN>
           <COLUMN><METADATA name="DESCRIPT"/><DATASET><DATA>Create</DATA><DATA>Display</DATA></DATASET></COLUMN>
         </COLUMNS></values></abap>`,
-        headers: {},
-      });
+        ),
+      );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'SOBJ',
         name: 'ZBUS_OBJ',
@@ -1052,29 +1008,21 @@ ENDCLASS.`;
     });
 
     it('reads specific BOR method implementation', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
+      mockFetch.mockReset();
       // CSRF HEAD request
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: '',
-        headers: { 'x-csrf-token': 'TOKEN123' },
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'TOKEN123' }));
       // SWOTLV query POST returns program+form
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<abap><values><COLUMNS>
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<abap><values><COLUMNS>
           <COLUMN><METADATA name="PROGNAME"/><DATASET><DATA>ZPROG1</DATA></DATASET></COLUMN>
           <COLUMN><METADATA name="FORMNAME"/><DATASET><DATA>CREATE_OBJ</DATA></DATASET></COLUMN>
         </COLUMNS></values></abap>`,
-        headers: {},
-      });
+        ),
+      );
       // Read program source (GET - no CSRF needed)
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: 'REPORT zprog1.\nFORM create_obj.\nENDFORM.',
-        headers: {},
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'REPORT zprog1.\nFORM create_obj.\nENDFORM.'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'SOBJ',
         name: 'ZBUS_OBJ',
@@ -1090,13 +1038,13 @@ ENDCLASS.`;
 
   describe('SAPNavigate symbolic references', () => {
     it('resolves type+name to URI for references action', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<usageReferences><objectReference uri="/sap/bc/adt/programs/programs/zcaller" type="PROG/P" name="ZCALLER"/></usageReferences>`,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<usageReferences><objectReference uri="/sap/bc/adt/programs/programs/zcaller" type="PROG/P" name="ZCALLER"/></usageReferences>`,
+        ),
+      );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
         action: 'references',
         type: 'CLAS',
@@ -1260,12 +1208,8 @@ CLASS zcl_test IMPLEMENTATION.
   ENDMETHOD.
 ENDCLASS.`;
 
-      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
-      mockAxiosInstance.request.mockResolvedValueOnce({
-        status: 200,
-        data: classSource,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, classSource));
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'CLAS',
@@ -1294,12 +1238,8 @@ CLASS zcl_test IMPLEMENTATION.
   ENDMETHOD.
 ENDCLASS.`;
 
-      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
-      mockAxiosInstance.request.mockResolvedValueOnce({
-        status: 200,
-        data: classSource,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, classSource));
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'CLAS',
@@ -1324,12 +1264,8 @@ CLASS zcl_test IMPLEMENTATION.
   ENDMETHOD.
 ENDCLASS.`;
 
-      const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)();
-      mockAxiosInstance.request.mockResolvedValueOnce({
-        status: 200,
-        data: classSource,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, classSource));
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'CLAS',

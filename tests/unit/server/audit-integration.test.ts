@@ -2,7 +2,7 @@
  * Integration tests for the audit logging system.
  *
  * Tests the full flow: tool call → audit events → sinks.
- * Uses mocked axios (no real SAP connection) but exercises
+ * Uses mocked fetch (no real SAP connection) but exercises
  * the real Logger, StderrSink, FileSink, and requestContext.
  */
 
@@ -10,29 +10,21 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AdtClient } from '../../../src/adt/client.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
-import { handleToolCall } from '../../../src/handlers/intent.js';
 import type { AuditEvent } from '../../../src/server/audit.js';
 import { FileSink } from '../../../src/server/sinks/file.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
+import { mockResponse } from '../../helpers/mock-fetch.js';
 
-// Mock axios
-vi.mock('axios', async () => {
-  const mockAxiosInstance = {
-    request: vi.fn().mockResolvedValue({
-      status: 200,
-      data: "REPORT zhello.\nWRITE: / 'Hello'.",
-      headers: {},
-    }),
-  };
-  return {
-    default: {
-      create: vi.fn(() => mockAxiosInstance),
-      isAxiosError: vi.fn(() => false),
-    },
-  };
+// Mock undici's fetch (used by AdtHttpClient.doFetch)
+const mockFetch = vi.fn();
+vi.mock('undici', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('undici')>();
+  return { ...actual, fetch: mockFetch };
 });
+
+const { AdtClient } = await import('../../../src/adt/client.js');
+const { handleToolCall } = await import('../../../src/handlers/intent.js');
 
 function createClient(): AdtClient {
   return new AdtClient({
@@ -48,6 +40,8 @@ describe('Audit Logging Integration', () => {
   const tmpFile = join(tmpdir(), `arc1-audit-integ-${Date.now()}.jsonl`);
 
   beforeEach(() => {
+    vi.resetAllMocks();
+    mockFetch.mockResolvedValue(mockResponse(200, "REPORT zhello.\nWRITE: / 'Hello'."));
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 

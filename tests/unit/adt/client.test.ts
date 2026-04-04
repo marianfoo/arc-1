@@ -1,25 +1,21 @@
-import axios from 'axios';
-import { describe, expect, it, vi } from 'vitest';
-import { AdtClient } from '../../../src/adt/client.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { mockResponse } from '../../helpers/mock-fetch.js';
 
-// Mock axios for all client tests
-vi.mock('axios', async () => {
-  const mockAxiosInstance = {
-    request: vi.fn().mockResolvedValue({
-      status: 200,
-      data: "REPORT zhello.\nWRITE: / 'Hello'.",
-      headers: {},
-    }),
-  };
-  return {
-    default: {
-      create: vi.fn(() => mockAxiosInstance),
-      isAxiosError: vi.fn(() => false),
-    },
-  };
+// Mock undici's fetch (used by AdtHttpClient.doFetch)
+const mockFetch = vi.fn();
+vi.mock('undici', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('undici')>();
+  return { ...actual, fetch: mockFetch };
 });
+
+const { AdtClient } = await import('../../../src/adt/client.js');
+
+/** Default mock: returns ABAP source code for any request */
+function setupDefaultMock() {
+  mockFetch.mockResolvedValue(mockResponse(200, "REPORT zhello.\nWRITE: / 'Hello'."));
+}
 
 function createClient(overrides: Record<string, unknown> = {}): AdtClient {
   return new AdtClient({
@@ -31,7 +27,17 @@ function createClient(overrides: Record<string, unknown> = {}): AdtClient {
   });
 }
 
+/** Get headers from a specific fetch call */
+function fetchHeaders(callIndex = 0): Record<string, string> {
+  return ((mockFetch.mock.calls[callIndex]?.[1] as RequestInit)?.headers as Record<string, string>) ?? {};
+}
+
 describe('AdtClient', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupDefaultMock();
+  });
+
   describe('source code read operations', () => {
     it('getProgram returns source code', async () => {
       const client = createClient();
@@ -52,52 +58,41 @@ describe('AdtClient', () => {
     });
 
     it('getClass with include uses correct URL path (no /source/main suffix)', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
       const client = createClient();
       await client.getClass('ZCL_TEST', 'definitions');
-      // Should call /includes/definitions, NOT /includes/definitions/source/main
-      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
-      const urlUsed = callArgs.find((a: any) => a.url?.includes('ZCL_TEST'));
-      expect(urlUsed?.url).toContain('/includes/definitions');
-      expect(urlUsed?.url).not.toContain('/source/main');
+      // Find the call that includes ZCL_TEST in the URL
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ZCL_TEST'));
+      expect(urlUsed).toContain('/includes/definitions');
+      expect(urlUsed).not.toContain('/source/main');
     });
 
     it('getClass with include=main uses /source/main path', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
       const client = createClient();
       await client.getClass('ZCL_TEST', 'main');
-      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
-      const urlUsed = callArgs.find((a: any) => a.url?.includes('ZCL_TEST'));
-      expect(urlUsed?.url).toContain('/source/main');
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ZCL_TEST'));
+      expect(urlUsed).toContain('/source/main');
     });
 
     it('getClass with multiple comma-separated includes', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
       const client = createClient();
       const source = await client.getClass('ZCL_TEST', 'definitions,implementations');
-      // Should make two HTTP calls
-      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
-      const classUrls = callArgs.filter((a: any) => a.url?.includes('ZCL_TEST'));
+      // Should make two HTTP calls for includes
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const classUrls = urls.filter((u) => u.includes('ZCL_TEST'));
       expect(classUrls).toHaveLength(2);
-      expect(classUrls[0]?.url).toContain('/includes/definitions');
-      expect(classUrls[1]?.url).toContain('/includes/implementations');
+      expect(classUrls[0]).toContain('/includes/definitions');
+      expect(classUrls[1]).toContain('/includes/implementations');
       // Result should contain both section headers
       expect(source).toContain('=== definitions ===');
       expect(source).toContain('=== implementations ===');
     });
 
     it('getClass gracefully handles 404 for non-existent includes', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
-      // Make the request reject with a 404 AdtApiError
-      requestSpy.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/testclasses'));
+      // Override default mock for the first call to reject with 404
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/testclasses'));
       const client = createClient();
       const source = await client.getClass('ZCL_TEST', 'testclasses');
       // Should not throw; should contain a helpful message
@@ -113,15 +108,12 @@ describe('AdtClient', () => {
     });
 
     it('getClass normalizes include to lowercase', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
       const client = createClient();
       await client.getClass('ZCL_TEST', 'DEFINITIONS');
-      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
-      const urlUsed = callArgs.find((a: any) => a.url?.includes('ZCL_TEST'));
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ZCL_TEST'));
       // Should use lowercase 'definitions' in the URL path
-      expect(urlUsed?.url).toContain('/includes/definitions');
+      expect(urlUsed).toContain('/includes/definitions');
     });
 
     it('getInterface returns source code', async () => {
@@ -167,25 +159,21 @@ describe('AdtClient', () => {
     });
 
     it('getDdlx uses correct ADT URL', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
       const client = createClient();
       await client.getDdlx('ZC_TRAVEL');
-      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
-      const urlUsed = callArgs.find((a: any) => a.url?.includes('ddlx'));
-      expect(urlUsed?.url).toContain('/sap/bc/adt/ddic/ddlx/sources/ZC_TRAVEL/source/main');
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ddlx'));
+      expect(urlUsed).toContain('/sap/bc/adt/ddic/ddlx/sources/ZC_TRAVEL/source/main');
     });
 
     it('getSrvb returns parsed service binding metadata', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?><srvb:serviceBinding srvb:contract="C1" srvb:published="true" srvb:bindingCreated="true" adtcore:name="ZUI_TRAVEL_O4" adtcore:type="SRVB/SVB" adtcore:description="Travel Service Binding" adtcore:language="EN" xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="ZTRAVEL"/><srvb:services srvb:name="ZUI_TRAVEL"><srvb:content srvb:version="0001" srvb:releaseState="NOT_RELEASED"><srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/></srvb:content></srvb:services><srvb:binding srvb:type="ODATA" srvb:version="V4" srvb:category="0"><srvb:implementation adtcore:name="ZUI_TRAVEL_O4"/></srvb:binding></srvb:serviceBinding>`,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?><srvb:serviceBinding srvb:contract="C1" srvb:published="true" srvb:bindingCreated="true" adtcore:name="ZUI_TRAVEL_O4" adtcore:type="SRVB/SVB" adtcore:description="Travel Service Binding" adtcore:language="EN" xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="ZTRAVEL"/><srvb:services srvb:name="ZUI_TRAVEL"><srvb:content srvb:version="0001" srvb:releaseState="NOT_RELEASED"><srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/></srvb:content></srvb:services><srvb:binding srvb:type="ODATA" srvb:version="V4" srvb:category="0"><srvb:implementation adtcore:name="ZUI_TRAVEL_O4"/></srvb:binding></srvb:serviceBinding>`,
+        ),
+      );
       const client = createClient();
       const result = await client.getSrvb('ZUI_TRAVEL_O4');
       const parsed = JSON.parse(result);
@@ -197,20 +185,19 @@ describe('AdtClient', () => {
     });
 
     it('getSrvb uses correct Accept header', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockClear();
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0"?><srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"><srvb:binding/></srvb:serviceBinding>`,
-        headers: {},
-      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0"?><srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"><srvb:binding/></srvb:serviceBinding>`,
+        ),
+      );
       const client = createClient();
       await client.getSrvb('ZUI_TRAVEL_O4');
-      const callArgs = requestSpy.mock.calls.map((c: any[]) => c[0]);
-      const urlUsed = callArgs.find((a: any) => a.url?.includes('businessservices'));
-      expect(urlUsed?.url).toContain('/sap/bc/adt/businessservices/bindings/ZUI_TRAVEL_O4');
-      expect(urlUsed?.headers?.Accept).toContain('application/vnd.sap.adt.businessservices.servicebinding.v2+xml');
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const callIdx = mockFetch.mock.calls.findIndex((_: any, i: number) => urls[i]?.includes('businessservices'));
+      expect(urls[callIdx]).toContain('/sap/bc/adt/businessservices/bindings/ZUI_TRAVEL_O4');
+      expect(fetchHeaders(callIdx).Accept).toContain('application/vnd.sap.adt.businessservices.servicebinding.v2+xml');
     });
 
     it('getTable returns table definition source', async () => {
@@ -263,12 +250,11 @@ describe('AdtClient', () => {
     });
 
     it('getDomain returns parsed metadata', async () => {
-      // Mock the response with domain XML
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <doma:domain adtcore:name="BUKRS" adtcore:description="Company code" xmlns:doma="http://www.sap.com/dictionary/domain" xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:name="BF"/>
   <doma:content>
@@ -277,8 +263,8 @@ describe('AdtClient', () => {
     <doma:valueInformation><doma:valueTableRef adtcore:name="T001"/><doma:fixValues/></doma:valueInformation>
   </doma:content>
 </doma:domain>`,
-        headers: {},
-      });
+        ),
+      );
       const client = createClient();
       const domain = await client.getDomain('BUKRS');
       expect(domain.name).toBe('BUKRS');
@@ -287,11 +273,11 @@ describe('AdtClient', () => {
     });
 
     it('getDataElement returns parsed metadata', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <blue:wbobj adtcore:name="BUKRS" adtcore:description="Company code" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:name="BF"/>
   <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
@@ -302,8 +288,8 @@ describe('AdtClient', () => {
     <dtel:searchHelp>C_T001</dtel:searchHelp><dtel:defaultComponentName>COMP_CODE</dtel:defaultComponentName>
   </dtel:dataElement>
 </blue:wbobj>`,
-        headers: {},
-      });
+        ),
+      );
       const client = createClient();
       const dtel = await client.getDataElement('BUKRS');
       expect(dtel.name).toBe('BUKRS');
@@ -312,16 +298,16 @@ describe('AdtClient', () => {
     });
 
     it('getTransaction returns parsed metadata', async () => {
-      const mockInstance = (axios.create as any)();
-      const requestSpy = mockInstance.request as ReturnType<typeof vi.fn>;
-      requestSpy.mockResolvedValueOnce({
-        status: 200,
-        data: `<?xml version="1.0" encoding="utf-8"?>
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
 <adtcore:mainObject adtcore:name="SE38" adtcore:type="TRAN/T" adtcore:description="ABAP Editor" xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:name="SEDT"/>
 </adtcore:mainObject>`,
-        headers: {},
-      });
+        ),
+      );
       const client = createClient();
       const tran = await client.getTransaction('SE38');
       expect(tran.code).toBe('SE38');
@@ -336,14 +322,11 @@ describe('AdtClient', () => {
     it('encodes namespaced program names in URL', async () => {
       const client = createClient();
       await client.getProgram('/NAMESPACE/ZPROGRAM');
-      // The HTTP layer should receive an encoded URL
-      // We can't easily inspect the URL here, but we verify it doesn't throw
     });
 
     it('encodes namespaced class names in URL', async () => {
       const client = createClient();
       await client.getClass('/USE/CL_MY_CLASS');
-      // Should not throw — URL encoding handles the slashes
     });
 
     it('encodes namespaced interface names', async () => {
@@ -363,7 +346,6 @@ describe('AdtClient', () => {
 
     it('encodes special characters in search query', async () => {
       const client = createClient();
-      // Should not throw for queries with special characters
       await client.searchObject('/NAMESPACE/*', 5);
     });
   });
@@ -400,7 +382,6 @@ describe('AdtClient', () => {
       const client = createClient({
         safety: { ...unrestrictedSafetyConfig(), allowedOps: 'RS' },
       });
-      // R is in allowedOps, so read should work
       const source = await client.getProgram('ZHELLO');
       expect(source).toBeDefined();
     });

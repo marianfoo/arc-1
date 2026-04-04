@@ -108,7 +108,7 @@ src/
 │   └── hyperfocused.ts         # Hyperfocused mode (single SAP tool, ~200 tokens)
 ├── adt/
 │   ├── client.ts               # ADT client facade (all read operations)
-│   ├── http.ts                 # HTTP transport (axios, CSRF, cookies, sessions)
+│   ├── http.ts                 # HTTP transport (undici/fetch, CSRF, cookies, sessions)
 │   ├── errors.ts               # Typed error classes (AdtApiError, AdtSafetyError)
 │   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
 │   ├── features.ts             # Feature detection (auto/on/off)
@@ -219,7 +219,7 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ### Unit Tests (707 tests)
 - No SAP system required — always run with `npm test`
-- Mock HTTP via `vi.mock('axios', ...)`
+- Mock HTTP via `vi.mock('undici', ...)`
 - XML fixtures in `tests/fixtures/xml/`
 
 ### Integration Tests (on-premise)
@@ -239,10 +239,10 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 | Technology | Purpose |
 |-----------|---------|
 | TypeScript 5.8 | Language |
-| Node.js 20+ | Runtime |
+| Node.js 22+ | Runtime |
 | `@modelcontextprotocol/sdk` | MCP protocol |
 | `@abaplint/core` | ABAP lexer/parser/linter |
-| `axios` | HTTP client (CSRF, cookies) |
+| `undici` | HTTP client (fetch, CSRF, cookies, proxy, TLS) |
 | `fast-xml-parser` v5 | ADT XML parsing |
 | `better-sqlite3` | SQLite cache |
 | `commander` | CLI framework |

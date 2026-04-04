@@ -19,16 +19,15 @@
  * 3. Stateful sessions use "X-sap-adt-sessiontype: stateful" header.
  *    Lock/modify/unlock must use the same session cookies.
  *    withStatefulSession() ensures session isolation.
- *    (fr0ster uses AsyncLocalStorage for this — we use a simpler approach
- *    with an isolated axios instance per session.)
  *
  * 4. sap-client and sap-language are added to every request as query params.
  *    This is an SAP convention, not ADT-specific.
+ *
+ * 5. Uses native fetch() with undici dispatchers for proxy and TLS configuration.
+ *    No external HTTP dependencies — undici ships with Node.js 22+.
  */
 
-import { Agent as HttpAgent } from 'node:http';
-import { Agent as HttpsAgent } from 'node:https';
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { Agent, type Dispatcher, ProxyAgent, fetch as undiciFetch } from 'undici';
 import { logger } from '../server/logger.js';
 import type { BTPProxyConfig } from './btp.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
@@ -81,7 +80,7 @@ export interface AdtResponse {
  */
 export class AdtHttpClient {
   private csrfToken = '';
-  private axios: AxiosInstance;
+  private dispatcher: Dispatcher | undefined;
   private config: AdtHttpConfig;
   /**
    * Cookie jar — stores Set-Cookie headers from responses and sends them back.
@@ -101,44 +100,18 @@ export class AdtHttpClient {
   constructor(config: AdtHttpConfig) {
     this.config = config;
 
-    const axiosConfig: AxiosRequestConfig = {
-      baseURL: config.baseUrl,
-      // SAP ADT can be slow — 60s timeout
-      timeout: 60000,
-      // Don't throw on non-2xx (we handle errors ourselves)
-      validateStatus: () => true,
-      headers: {
-        Accept: '*/*',
-      },
-    };
-
-    // Basic auth (skip when using Bearer token provider — token is injected per-request)
-    if (config.username && config.password && !config.bearerTokenProvider) {
-      axiosConfig.auth = {
-        username: config.username,
-        password: config.password,
-      };
-    }
-
-    // Skip TLS verification (for self-signed SAP certs)
-    if (config.insecure) {
-      axiosConfig.httpsAgent = new HttpsAgent({ rejectUnauthorized: false });
-    }
-
-    // BTP Connectivity proxy (Cloud Connector)
-    // Routes requests through the BTP connectivity service to reach on-premise SAP.
-    // The Proxy-Authorization header is injected per-request in the request() method.
+    // Set up undici dispatcher for proxy and/or TLS configuration.
+    // When neither proxy nor insecure mode is needed, we use the global fetch
+    // (no dispatcher), which is the default Node.js behavior.
     if (config.btpProxy) {
-      axiosConfig.proxy = {
-        host: config.btpProxy.host,
-        port: config.btpProxy.port,
-        protocol: config.btpProxy.protocol,
-      };
-      // Need an HTTP agent for the proxy connection (not HTTPS)
-      axiosConfig.httpAgent = new HttpAgent({ keepAlive: true });
+      const proxyUri = `${config.btpProxy.protocol}://${config.btpProxy.host}:${config.btpProxy.port}`;
+      this.dispatcher = new ProxyAgent({
+        uri: proxyUri,
+        ...(config.insecure ? { requestTls: { rejectUnauthorized: false } } : {}),
+      });
+    } else if (config.insecure) {
+      this.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
     }
-
-    this.axios = axios.create(axiosConfig);
   }
 
   /** GET request */
@@ -170,7 +143,7 @@ export class AdtHttpClient {
    * Execute a function within an isolated stateful session.
    * Ensures lock/modify/unlock share the same SAP session cookies.
    *
-   * Creates a new axios instance with stateful session header,
+   * Creates a new client instance with stateful session header,
    * shares CSRF token with the main client.
    */
   async withStatefulSession<T>(fn: (client: AdtHttpClient) => Promise<T>): Promise<T> {
@@ -199,6 +172,7 @@ export class AdtHttpClient {
     }
 
     const headers: Record<string, string> = {
+      Accept: '*/*',
       ...extraHeaders,
     };
 
@@ -214,7 +188,8 @@ export class AdtHttpClient {
       headers['Content-Type'] = contentType;
     }
 
-    // Bearer token auth for BTP ABAP Environment (replaces Basic Auth)
+    // Auth: Bearer token (BTP ABAP) or Basic Auth (on-premise)
+    this.applyAuthHeader(headers);
     if (this.config.bearerTokenProvider) {
       const token = await this.config.bearerTokenProvider();
       headers.Authorization = `Bearer ${token}`;
@@ -263,12 +238,8 @@ export class AdtHttpClient {
     const httpStart = Date.now();
 
     try {
-      const response = await this.axios.request({
-        method,
-        url,
-        data: body,
-        headers,
-      });
+      const response = await this.doFetch(url, method, headers, body);
+      const responseBody = await response.text();
 
       // Persist any Set-Cookie headers from the response
       this.storeCookies(response);
@@ -278,7 +249,6 @@ export class AdtHttpClient {
       // work process. If that WP has a broken HANA connection, every request fails
       // with "database connection is not open". Fix: clear the session to force
       // ICM to assign a different work process on retry.
-      const responseBody = typeof response.data === 'string' ? response.data : String(response.data ?? '');
       if (this.isDbConnectionError(responseBody) && !this.dbRetryInProgress) {
         this.dbRetryInProgress = true;
         try {
@@ -307,11 +277,16 @@ export class AdtHttpClient {
           for (const [k, v] of this.cookieJar) {
             freshCookieParts.push(`${k}=${v}`);
           }
-          headers.Cookie = freshCookieParts.length > 0 ? freshCookieParts.join('; ') : '';
+          if (freshCookieParts.length > 0) {
+            headers.Cookie = freshCookieParts.join('; ');
+          } else {
+            delete headers.Cookie;
+          }
 
-          const retryResp = await this.axios.request({ method, url, data: body, headers });
+          const retryResp = await this.doFetch(url, method, headers, body);
+          const retryBody = await retryResp.text();
           this.storeCookies(retryResp);
-          const retryResult = this.handleResponse(retryResp, path);
+          const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
 
           logger.emitAudit({
             timestamp: new Date().toISOString(),
@@ -342,14 +317,10 @@ export class AdtHttpClient {
         if (updatedCookieParts.length > 0) {
           headers.Cookie = updatedCookieParts.join('; ');
         }
-        const retryResponse = await this.axios.request({
-          method,
-          url,
-          data: body,
-          headers,
-        });
+        const retryResponse = await this.doFetch(url, method, headers, body);
+        const retryBody = await retryResponse.text();
         this.storeCookies(retryResponse);
-        const result = this.handleResponse(retryResponse, path);
+        const result = this.handleResponse(retryResponse.status, retryResponse.headers, retryBody, path);
 
         logger.emitAudit({
           timestamp: new Date().toISOString(),
@@ -365,12 +336,12 @@ export class AdtHttpClient {
       }
 
       // Store CSRF token from response
-      const responseToken = response.headers['x-csrf-token'];
+      const responseToken = response.headers.get('x-csrf-token');
       if (responseToken && responseToken !== 'Required') {
         this.csrfToken = responseToken;
       }
 
-      const result = this.handleResponse(response, path);
+      const result = this.handleResponse(response.status, response.headers, responseBody, path);
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
@@ -397,34 +368,29 @@ export class AdtHttpClient {
           durationMs,
           errorBody: err.responseBody?.slice(0, 200),
         });
+        throw err;
       }
 
-      if (axios.isAxiosError(err)) {
-        throw new AdtNetworkError(err.message, err);
-      }
-      throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      throw new AdtNetworkError(message, err instanceof Error ? err : undefined);
     }
   }
 
   /** Handle response: throw on error status, return normalized response */
-  private handleResponse(response: AxiosResponse, path: string): AdtResponse {
-    const body = typeof response.data === 'string' ? response.data : String(response.data ?? '');
-
-    if (response.status >= 400) {
-      throw new AdtApiError(body.slice(0, 500), response.status, path, body);
+  private handleResponse(status: number, headers: Headers, body: string, path: string): AdtResponse {
+    if (status >= 400) {
+      throw new AdtApiError(body.slice(0, 500), status, path, body);
     }
 
     // Flatten headers to Record<string, string>
-    const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(response.headers)) {
-      if (typeof value === 'string') {
-        headers[key] = value;
-      }
+    const flatHeaders: Record<string, string> = {};
+    for (const [key, value] of headers.entries()) {
+      flatHeaders[key] = value;
     }
 
     return {
-      statusCode: response.status,
-      headers,
+      statusCode: status,
+      headers: flatHeaders,
       body,
     };
   }
@@ -444,7 +410,8 @@ export class AdtHttpClient {
       headers['X-sap-adt-sessiontype'] = 'stateful';
     }
 
-    // Bearer token auth for BTP ABAP Environment
+    // Auth: Bearer token (BTP ABAP) or Basic Auth (on-premise)
+    this.applyAuthHeader(headers);
     if (this.config.bearerTokenProvider) {
       const token = await this.config.bearerTokenProvider();
       headers.Authorization = `Bearer ${token}`;
@@ -465,16 +432,12 @@ export class AdtHttpClient {
     }
 
     try {
-      const response = await this.axios.request({
-        method: 'HEAD',
-        url,
-        headers,
-      });
+      const response = await this.doFetch(url, 'HEAD', headers);
 
       // Store cookies from CSRF response — critical for session correlation
       this.storeCookies(response);
 
-      const token = response.headers['x-csrf-token'];
+      const token = response.headers.get('x-csrf-token');
       if (!token || token === 'Required') {
         if (response.status === 401) {
           throw new AdtApiError(
@@ -500,18 +463,11 @@ export class AdtHttpClient {
       this.csrfToken = token;
     } catch (err) {
       if (err instanceof AdtApiError) throw err;
-      if (axios.isAxiosError(err)) {
-        throw new AdtNetworkError(`CSRF token fetch failed: ${err.message}`, err);
-      }
-      throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      throw new AdtNetworkError(`CSRF token fetch failed: ${message}`, err instanceof Error ? err : undefined);
     }
   }
 
-  /**
-   * Extract and store cookies from a response's Set-Cookie headers.
-   * Only stores the name=value part; ignores path, domain, expiry
-   * since all requests go to the same SAP host.
-   */
   /**
    * Detect "database connection is not open" error from SAP.
    * This happens when a work process loses its HANA DB connection.
@@ -530,9 +486,9 @@ export class AdtHttpClient {
     this.csrfToken = '';
   }
 
-  private storeCookies(response: AxiosResponse): void {
-    const setCookieHeaders = response.headers['set-cookie'];
-    if (!setCookieHeaders || !Array.isArray(setCookieHeaders)) return;
+  private storeCookies(response: Response): void {
+    const setCookieHeaders = response.headers.getSetCookie();
+    if (!setCookieHeaders || setCookieHeaders.length === 0) return;
 
     for (const cookie of setCookieHeaders) {
       // Set-Cookie: name=value; Path=/; HttpOnly; ...
@@ -560,6 +516,35 @@ export class AdtHttpClient {
     }
 
     return url.toString();
+  }
+
+  /** Apply Basic Auth header if username/password are configured (and no bearer provider) */
+  private applyAuthHeader(headers: Record<string, string>): void {
+    if (this.config.username && this.config.password && !this.config.bearerTokenProvider) {
+      headers.Authorization = `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`;
+    }
+  }
+
+  /**
+   * Execute a fetch request with the configured dispatcher and timeout.
+   *
+   * Always uses undici's own fetch rather than the global fetch because
+   * Node 22's built-in fetch embeds an older undici version whose dispatcher
+   * interface is incompatible with npm undici@8 Agent/ProxyAgent instances.
+   */
+  private async doFetch(
+    url: string,
+    method: string,
+    headers: Record<string, string>,
+    body?: string,
+  ): Promise<Response> {
+    return undiciFetch(url, {
+      method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(60_000),
+      ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
+    }) as Promise<Response>;
   }
 }
 
