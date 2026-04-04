@@ -10,17 +10,18 @@
 
 | Source | Version |
 |--------|---------|
-| `package.json` engines | `>=20.0.0` |
-| CI test matrix (`.github/workflows/test.yml`) | 20, 22, 24 |
+| `package.json` engines | `>=20.0.0` (should be bumped to `>=22.0.0`) |
+| CI test matrix (`.github/workflows/test.yml`) | 20, 22, 24 (drop 20) |
 | Dockerfile | `node:22-alpine` |
 | npm publish CI | Node 22 |
 
-Native `fetch()` is stable since Node.js 21 (experimental in 18). With the >=20 minimum, `fetch()` is available but technically still experimental in Node 20. **Node 21+** marks it as stable. The project tests on 20, 22, and 24.
+**Node 20 reaches EOL in April 2026 (this month).** Once dropped, the minimum becomes Node 22 where all native APIs are fully stable — not experimental.
 
-**Key API availability (Node 20+):**
+**Key API availability (Node 22+):**
 
-- `fetch()` — available (no experimental flag needed since 18.0)
-- `Headers.getSetCookie()` — available since Node 19.7
+- `fetch()` — **stable** (no longer experimental)
+- `undici.ProxyAgent` / `undici.Agent` — **stable** dispatcher API
+- `Headers.getSetCookie()` — stable since Node 19.7
 - `AbortController` — stable since Node 15
 - `URL` / `URLSearchParams` — stable since Node 10
 
@@ -84,7 +85,7 @@ Native `fetch()` has **no proxy support**. Options:
 - **Add `https-proxy-agent`** — popular package, but adds a dependency (partially defeating the purpose).
 - **Drop proxy support** — not viable, BTP Cloud Connector is a key feature.
 
-**Verdict**: Use `undici.ProxyAgent` (ships with Node, no npm install needed). However, undici's public API stability varies across Node versions — needs testing on 20, 22, 24.
+**Verdict**: Use `undici.ProxyAgent` (ships with Node, no npm install needed). With Node 20 dropped, undici's dispatcher API is stable in Node 22+.
 
 ### 2. TLS Certificate Verification Skip (MEDIUM RISK)
 
@@ -216,16 +217,28 @@ try {
 
 ## Recommendation
 
-| Approach | Verdict |
-|----------|---------|
-| Full replacement now | **Possible but risky** — proxy/TLS via undici dispatcher needs cross-version validation on Node 20/22/24 |
-| Hybrid (keep axios for ADT only) | **Current state** — already done, fetch used elsewhere |
-| Replace after dropping Node 20 | **Safest** — undici dispatcher API is more stable in Node 22+ |
+**Drop Node 20 first, then replace axios.** Node 20 reaches EOL in April 2026 — this month. Once the minimum is bumped to Node 22:
 
-**Bottom line**: The replacement is technically feasible with zero new npm dependencies (using Node's built-in undici for proxy/TLS). The main risks are:
+- `fetch()` is fully stable (not experimental)
+- `undici` dispatcher API is stable and well-tested
+- `Headers.getSetCookie()` is mature
+- The CI test matrix simplifies to 22 + 24
 
-1. **undici dispatcher API stability across Node 20 vs 22 vs 24** — needs integration testing
-2. **Test rewrite effort** — ~15 files of mock changes
-3. **BTP Cloud Connector proxy** — must be validated end-to-end with a real SAP system
+### Suggested migration plan
 
-If the goal is to reduce dependencies, this is a good candidate — axios + transitive deps account for ~2MB of node_modules. But the safer path is to wait until Node 20 drops out of the test matrix (EOL: April 2026), then migrate using stable undici APIs.
+1. **Bump minimum Node.js to 22** — update `package.json` engines, CI matrix, Dockerfile (already on 22)
+2. **Replace `src/adt/http.ts`** — swap axios for `fetch()` + `undici.ProxyAgent`/`undici.Agent` (~200 LOC)
+3. **Remove `axios.isAxiosError()`** — replace with custom network error detection (~10 LOC)
+4. **Rewrite test mocks** — replace `vi.mock('axios')` with `vi.stubGlobal('fetch')` or `msw` (~200 LOC across ~15 files)
+5. **Remove axios from `package.json`** — removes ~2MB from node_modules (axios + follow-redirects + form-data + proxy-from-env)
+6. **Integration test with BTP Cloud Connector** — validate proxy routing end-to-end
+
+### Remaining risks after dropping Node 20
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| BTP Cloud Connector proxy | Medium | `undici.ProxyAgent` is stable in Node 22; integration test required |
+| Test rewrite effort | Medium | ~15 files, but mechanical — no logic changes |
+| `dispatcher` TypeScript types | Low | May need `// @ts-expect-error` or `@types/node` update |
+
+**Bottom line**: With Node 20 EOL this month, the main blocker (undici API stability) is removed. The migration becomes straightforward — medium effort (~440 LOC), zero new dependencies, and the project already uses `fetch()` for 3 out of 4 HTTP call sites.
