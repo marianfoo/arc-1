@@ -28,6 +28,9 @@ iptables -C INPUT -p tcp --dport "${MCP_PORT}" -j ACCEPT 2>/dev/null || \
 
 # Start MCP server
 cd "${DEPLOY_DIR}"
+# Close inherited fds (3-9) so the background process does NOT hold
+# the flock file descriptor — otherwise the lock persists until the
+# MCP server exits, blocking future CI runs.
 SAP_URL=http://localhost:50000 \
 SAP_USER="${SAP_USER:?SAP_USER must be set}" \
 SAP_PASSWORD=$(cat "${DEPLOY_DIR}/.sap_password") \
@@ -36,7 +39,7 @@ SAP_INSECURE=true \
 SAP_TRANSPORT=http-streamable \
 SAP_HTTP_ADDR="0.0.0.0:${MCP_PORT}" \
 SAP_VERBOSE=true \
-nohup node dist/index.js >> /tmp/arc1-e2e.log 2>&1 &
+nohup node dist/index.js >> /tmp/arc1-e2e.log 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
 echo $! > /tmp/arc1-e2e.pid
 
 # Wait for health check

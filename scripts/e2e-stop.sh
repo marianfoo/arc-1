@@ -29,7 +29,9 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "
   if [ -f /tmp/arc1-e2e.pid ]; then
     PID=\$(cat /tmp/arc1-e2e.pid)
     if kill -0 \$PID 2>/dev/null; then
-      kill \$PID
+      # Kill the entire process group to catch child processes that
+      # might hold inherited flock file descriptors
+      kill -- -\$PID 2>/dev/null || kill \$PID 2>/dev/null || true
       echo \"   Stopped MCP server (PID: \$PID)\"
     else
       echo \"   MCP server already stopped (PID: \$PID was not running)\"
@@ -38,8 +40,12 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "
   else
     echo \"   No PID file found\"
   fi
+  # Aggressive cleanup: kill any orphaned processes + remove flock file
   pkill -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
-  rm -f /tmp/arc1-e2e.lock.info
+  sleep 1
+  # Force-kill survivors
+  pkill -9 -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+  rm -f /tmp/arc1-e2e.lock /tmp/arc1-e2e.lock.info
 " 2>/dev/null || true
 
 echo ""

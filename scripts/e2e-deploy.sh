@@ -54,10 +54,49 @@ if [ "$SAP_STATUS" = "000" ]; then
 fi
 echo "   SAP: OK (HTTP ${SAP_STATUS})"
 
-# ── Pre-flight: Lock ────────────────────────────────────────────────
+# ── Pre-flight: Lock (stale detection) ─────────────────────────────
+MAX_LOCK_AGE="${E2E_MAX_LOCK_AGE:-900}"  # 15 minutes — e2e suite takes ~6 min
 echo "-- Checking lock status..."
 LOCK_INFO=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "cat ${LOCKFILE}.info 2>/dev/null || echo 'no active lock'")
 echo "   Lock: ${LOCK_INFO}"
+
+# Break stale locks: if the locking PID is dead or the lock is older than MAX_LOCK_AGE
+ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -s "${LOCKFILE}" "${MAX_LOCK_AGE}" <<'STALE_CHECK'
+  LOCKFILE="$1"
+  MAX_AGE="$2"
+  INFO_FILE="${LOCKFILE}.info"
+  [ ! -f "$INFO_FILE" ] && exit 0
+
+  # Extract PID from lock info
+  LOCK_PID=$(grep -oP 'PID: \K[0-9]+' "$INFO_FILE" 2>/dev/null || echo "")
+  if [ -z "$LOCK_PID" ]; then
+    exit 0
+  fi
+
+  # Check 1: Is the locking process still alive?
+  if ! kill -0 "$LOCK_PID" 2>/dev/null; then
+    echo "   STALE LOCK: PID $LOCK_PID is dead — breaking lock"
+    rm -f "$LOCKFILE" "$INFO_FILE"
+    # Also kill any orphaned MCP server
+    pkill -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+    exit 0
+  fi
+
+  # Check 2: Is the lock older than MAX_AGE?
+  if [ -f "$INFO_FILE" ]; then
+    LOCK_MTIME=$(stat -c %Y "$INFO_FILE" 2>/dev/null || echo 0)
+    NOW=$(date +%s)
+    AGE=$(( NOW - LOCK_MTIME ))
+    if [ "$AGE" -gt "$MAX_AGE" ]; then
+      echo "   STALE LOCK: age ${AGE}s exceeds max ${MAX_AGE}s — breaking lock"
+      kill "$LOCK_PID" 2>/dev/null || true
+      pkill -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+      sleep 2
+      rm -f "$LOCKFILE" "$INFO_FILE"
+      exit 0
+    fi
+  fi
+STALE_CHECK
 
 # ── Pre-flight: Node.js ─────────────────────────────────────────────
 echo "-- Checking Node.js on server..."
