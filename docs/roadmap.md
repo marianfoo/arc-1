@@ -142,23 +142,13 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### SEC-03: SAP Authorization Object Awareness (S_DEVELOP)
 | Field | Value |
 |-------|-------|
-| **Priority** | 🟡 P2 |
-| **Effort** | S (1–2 days) |
-| **Risk** | Low |
-| **Usefulness** | Medium — better error messages, admin guidance |
-| **Status** | Not started |
+| **Priority** | — |
+| **Effort** | — |
+| **Risk** | — |
+| **Usefulness** | — |
+| **Status** | ✅ Subsumed by FEAT-16 (Error Intelligence) |
 
-**What:** When SAP returns a 403/authorization error on an ADT call, ARC-1 should detect the S_DEVELOP authorization object failure and return a helpful message explaining which authorization is missing (e.g., "User DEVELOPER lacks S_DEVELOP authorization for ACTVT=02 (Change) on OBJTYPE=PROG in DEVCLASS=$TMP").
-
-**Why:** Currently ADT returns generic HTML 403 pages. A developer or admin troubleshooting "why can't the AI create a program?" gets no actionable guidance. This is especially important when principal propagation is active and different users have different SAP authorization profiles.
-
-**Implementation:**
-- Parse the ADT error response XML for authorization object details
-- Map SAP authorization error codes to human-readable messages
-- Include in tool error responses: what authorization is needed, which transaction to check (SU53, PFCG)
-
-**References:**
-- [SAP Help: S_DEVELOP Authorization Object](https://help.sap.com/docs/SAP_Solution_Manager/fd3c83ed48684640a18ac05c8ae4d016/4fa00d670cff44a5958237334a88af84.html)
+**Merged:** SEC-03's scope (parsing 403 authorization errors, mapping to S_DEVELOP objects, suggesting SU53/PFCG) is now part of FEAT-16 Error Intelligence, which covers all SAP error codes (403, 409, 423, 415) with actionable hints. See FEAT-16 for details.
 
 ---
 
@@ -557,6 +547,170 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ---
 
+### FEAT-19: Transport Contents (E071 List)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — show objects inside a transport request |
+| **Status** | Not started |
+| **Source** | Dassian pattern, abap-adt-api |
+
+**What:** List the objects (E071 entries) contained in a transport request. Both dassian and abap-adt-api support this. Useful for reviewing what an LLM has changed before release.
+
+---
+
+### FEAT-20: Source Version / Revision History
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — version comparison, rollback context |
+| **Status** | Not started |
+| **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/d3c6940-source-versions.md) |
+
+**What:** Load specific versions of ABAP source, compare active vs inactive, view revision history. The `abap-adt-api` library (v6.0.0) added `loadSourceVersion` and `sourceVersions`. Enables "show me what changed" and rollback workflows.
+
+---
+
+### FEAT-21: ABAP Documentation (F1 Help)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — LLM fetches real docs instead of hallucinating |
+| **Status** | Not started |
+| **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/7d5c653-abap-documentation.md), VSP |
+
+**What:** Fetch official ABAP keyword documentation (F1 help) via ADT API. The `abap-adt-api` library (v7.1.0) added `abapDocumentation`. Lets the LLM look up correct syntax instead of guessing.
+
+---
+
+### FEAT-22: gCTS/abapGit Integration
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | M (3–5 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — Git-based ABAP workflows |
+| **Status** | Not started |
+| **Source** | Dassian, VSP, abap-adt-api |
+
+**What:** List Git repositories, pull changes, check repo status. Multiple competitors have this (VSP, dassian, abap-adt-api). Enables Git-based ABAP development workflows.
+
+---
+
+### FEAT-23: GetProgFullCode (Include Traversal)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — reduces round trips for programs with includes |
+| **Status** | Not started |
+| **Source** | fr0ster |
+
+**What:** Fetch a program with all its includes resolved into a single response. fr0ster has `GetProgFullCode`. Reduces N+1 round trips when reading programs with many includes.
+
+---
+
+### FEAT-24: CompareSource (Diff)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — diff two versions of source |
+| **Status** | Not started |
+| **Source** | VSP |
+
+**What:** Diff two versions of ABAP source (active vs inactive, or across transports). VSP has `CompareSource`. Useful for code review workflows.
+
+---
+
+### FEAT-25: CDS Unit Tests
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — CDS test-driven development |
+| **Status** | Not started |
+| **Source** | fr0ster |
+
+**What:** Create, run, and check CDS unit tests. fr0ster is the only project with this capability. Enables AI-assisted CDS development with test coverage.
+
+---
+
+### FEAT-26: MCP Client Config Snippets
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — great onboarding UX |
+| **Status** | Not started |
+| **Source** | [fr0ster eval](../compare/fr0ster/evaluations/5f975fe-mcp-client-configurator.md) |
+
+**What:** `arc-1 config --client claude` prints ready-to-paste MCP client configuration. fr0ster supports 11 clients. Lowers the barrier to first connection.
+
+---
+
+### FEAT-27: Migration Analysis (ECC→S/4)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — custom code migration check |
+| **Status** | Not started |
+| **Source** | AWS ABAP Accelerator |
+
+**What:** Run custom code migration checks to identify ECC code that needs changes for S/4HANA. AWS ABAP Accelerator has this as a key feature. Complements FEAT-06 (Cloud Readiness Assessment).
+
+---
+
+### FEAT-28: SAP Compatibility Hardening
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days total) |
+| **Risk** | Low |
+| **Usefulness** | Medium — prevents edge-case failures across SAP versions |
+| **Status** | Not started |
+| **Source** | Multiple competitor trackers |
+
+**What:** A bundle of small compatibility fixes identified across all competitor trackers:
+1. **ATC ciCheckFlavour workaround** — older SAP systems don't support the `ciCheckFlavour` parameter (dassian pattern)
+2. **Stateful session header** — some ADT endpoints require `X-sap-adt-sessiontype: stateful` ([abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-30-stateful-mode.md))
+3. **Include lock parent resolution** — includes inherit parent's lock; verify FUGR/PROG includes lock correctly ([abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-36-include-lock.md))
+4. **Ignore syntax warnings on save** — syntax warnings should not block saves ([VSP eval](../compare/vibing-steampunk/evaluations/7fbfbba-ignore-warnings.md))
+5. **Transport endpoint S/4 compat** — transport creation endpoint differs on S/4HANA 757+ ([VSP eval](../compare/vibing-steampunk/evaluations/ca02f47-transport-endpoint-compat.md))
+
+---
+
+### FEAT-29: P3 Backlog (Future / Niche)
+
+The following features are tracked but not planned for near-term implementation. They are niche, complex, or not aligned with core principles.
+
+| ID | Feature | Why deferred | Source | Effort |
+|----|---------|-------------|--------|--------|
+| 29a | SSE transport | Most MCP clients use stdio or HTTP Streamable | fr0ster | M |
+| 29b | ABAP debugger (8+ tools) | Requires WebSocket + ZADT_VSP deployment | VSP | L |
+| 29c | Execute ABAP (IF_OO_ADT_CLASSRUN) | Security risk — needs careful safety gating | VSP, dassian | S |
+| 29d | Call graph analysis (5 tools) | Useful but niche, complex | VSP | M |
+| 29e | UI5/Fiori BSP CRUD (7 tools) | Only relevant if UI5 detected | VSP | M |
+| 29f | RFC connectivity (sap-rfc-lite) | Alternative to ADT HTTP, niche | fr0ster | M |
+| 29g | Embeddable server mode | Library mode for CAP/Express embedding | fr0ster | S |
+| 29h | Lock registry with recovery | Persist lock state to disk for crash recovery | fr0ster | M |
+| 29i | Language attributes on creation | Multi-language object creation | [abap-adt-api eval](../compare/abap-adt-api/evaluations/ffa43d7-language-attributes.md) | XS |
+| 29j | Lua scripting / WASM compiler | VSP-unique experimental, not core MCP value | VSP | N/A |
+
+---
+
 ## 🏗️ Infrastructure & Operations
 
 ### OPS-01: Structured JSON Logging
@@ -693,7 +847,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ## Prioritized Execution Order
 
-> Aligned with the [Priority Action Items](../compare/00-feature-matrix.md#priority-action-items-for-arc-1) in the cross-project feature matrix. Priorities are assigned based on which [core design principle](#core-design-principles) a feature serves.
+> Priorities are assigned based on which [core design principle](#core-design-principles) a feature serves. Sourced from 3 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
 
 ### Phase A: Production Blockers (P0)
 1. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
@@ -712,19 +866,32 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 12. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 13. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
-### Phase C: ADT Feature Parity (P2)
-14. **FEAT-10** PrettyPrint (XS) — quick win, VSP and abap-adt-api have it
-15. **FEAT-11** Inactive Objects List (XS) — quick win, development workflow
-16. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
-17. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
-18. **FEAT-06** Cloud Readiness Assessment (M) — ATC cloud checks + abaplint
-19. **FEAT-03** Enhancement Framework / BAdI (M) — customization scenarios
-20. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
+### Phase C: ADT Feature Parity (P2) — Quick Wins
+14. **FEAT-10** PrettyPrint (XS) — code formatting, VSP and abap-adt-api have it
+15. **FEAT-11** Inactive Objects List (XS) — development workflow
+16. **FEAT-19** Transport Contents (XS) — review objects before release
+17. **FEAT-21** ABAP Documentation / F1 Help (XS) — real docs instead of hallucination
+18. **FEAT-28** SAP Compatibility Hardening (S) — 5 compat fixes bundled
+19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
-### Phase D: Advanced / Future (P3)
-21. **OPS-03** Multi-System Routing (L) — one instance → multiple SAP systems
-22. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
-23. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
+### Phase D: ADT Feature Parity (P2) — Larger Items
+20. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
+21. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
+22. **FEAT-20** Source Version / Revision History (S) — version comparison, rollback
+23. **FEAT-24** CompareSource / Diff (S) — code review workflows
+24. **FEAT-26** MCP Client Config Snippets (S) — onboarding UX
+25. **FEAT-25** CDS Unit Tests (S) — CDS test-driven development
+26. **FEAT-23** GetProgFullCode / Include Traversal (S) — reduce round trips
+27. **FEAT-27** Migration Analysis ECC→S/4 (S) — custom code migration
+28. **FEAT-06** Cloud Readiness Assessment (M) — ATC cloud checks + abaplint
+29. **FEAT-03** Enhancement Framework / BAdI (M) — customization scenarios
+30. **FEAT-22** gCTS/abapGit Integration (M) — Git-based ABAP workflows
+31. **OPS-03** Multi-System Routing (L) — one instance → multiple SAP systems
+32. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
+
+### Phase E: Future / Niche (P3)
+33. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
+34. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
 
 ---
 
