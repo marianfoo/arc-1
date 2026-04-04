@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-04
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -447,6 +447,116 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ---
 
+### FEAT-12: Fix Proposals / Auto-Fix from ATC
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — safer than LLM-guessed fixes |
+| **Status** | Not started |
+| **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-37-quickfix.md) |
+
+**What:** When ATC or syntax check finds an issue, SAP's fix proposal API (`/sap/bc/adt/quickfixes`) suggests the exact correction. Expose this via SAPDiagnose or SAPWrite so the LLM can apply verified fixes instead of guessing.
+
+**Why:** Far safer than having the LLM guess the fix. Directly supports **safe defaults** and **token efficiency** — the LLM gets the exact fix without trial-and-error. The `abap-adt-api` library implements `fixProposals` and `fixEdits`.
+
+---
+
+### FEAT-13: DDIC Domain/Data Element Write
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — completes AI-assisted data modeling |
+| **Status** | Not started |
+| **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/646bb9b-dtel-doma-write.md) |
+
+**What:** ARC-1 reads DOMA/DTEL but can't write properties or fixed values. The `abap-adt-api` library (v7.1.1) added `createDomainDefinition`, `createDataElement`, and `createStructure` with full property support. Add write support for these in SAPWrite.
+
+**Why:** Blocks full AI-assisted data modeling workflows. A developer asking the LLM to "create a domain ZSTATUS with values A=Active, I=Inactive" currently can't be fulfilled end-to-end.
+
+---
+
+### FEAT-14: 401 Session Timeout Auto-Retry
+| Field | Value |
+|-------|-------|
+| **Priority** | 🔴 P0 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | High — prevents mid-conversation failures |
+| **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/d73460a-401-auto-retry.md) |
+
+**What:** After idle, SAP returns 401. ARC-1 handles CSRF 403 refresh but may not handle 401 session timeout. Add silent re-authentication and retry on 401 in `src/adt/http.ts`.
+
+**Why:** Mid-conversation failures are disruptive to LLM workflows. VSP (#32) and `abap-adt-api` both handle this. A centralized gateway that stays idle between user requests will hit this frequently.
+
+---
+
+### FEAT-15: Namespace URL Encoding Audit
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | High — prevents hard-to-debug failures |
+| **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/59b4b90-namespace-url-encoding.md), [VSP eval](../compare/vibing-steampunk/evaluations/6d1f00a-namespace-syntax-check.md) |
+
+**What:** Namespaced objects (`/NAMESPACE/CLASS`) fail if `/` is not correctly encoded in ADT URLs. VSP hit this in issues #18, #52. Audit all `encodeURIComponent` usage in `src/adt/client.ts` and `src/adt/http.ts`.
+
+---
+
+### FEAT-16: Error Intelligence (Actionable Hints)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — directly improves admin control and LLM UX |
+| **Status** | Not started |
+| **Source** | Dassian pattern, Roadmap SEC-03 |
+
+**What:** When SAP returns common errors (409 locked, 423 enqueued, 403 auth, 415 content type), return actionable hints: "Object locked by user X — check SM12", "Authorization failed — check SU53/PFCG", "Transport required — check SE09". Subsumes SEC-03 (S_DEVELOP awareness).
+
+**Why:** Supports **centralized admin control** — admins and LLMs get clear guidance instead of raw SAP error HTML. Dassian does this well with its error intelligence pattern.
+
+---
+
+### FEAT-17: Type Auto-Mappings for SAPWrite
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — reduces LLM confusion |
+| **Status** | Not started |
+| **Source** | Dassian pattern |
+
+**What:** Auto-map friendly type codes to ADT internal codes: `CLAS` → `CLAS/OC`, `INTF` → `INTF/OI`, `PROG` → `PROG/P`, etc. LLMs shouldn't need to know ADT's internal type code suffixes.
+
+**Why:** Supports **token efficiency** — reduces failed create attempts where the LLM guesses the wrong type code.
+
+---
+
+### FEAT-18: Function Group Bulk Fetch
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — significant token/round-trip savings |
+| **Status** | Not started |
+| **Source** | Dassian pattern |
+
+**What:** Fetch ALL includes and function modules of a function group in one call, instead of N sequential requests. Returns combined source with clear delimiters.
+
+**Why:** Supports **token efficiency** — a function group with 20 FMs currently requires 20+ round trips. One bulk call reduces latency and simplifies the LLM's context.
+
+---
+
 ## 🏗️ Infrastructure & Operations
 
 ### OPS-01: Structured JSON Logging
@@ -583,31 +693,38 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ## Prioritized Execution Order
 
-### Phase A: Robustness & Enterprise Security (Next)
-1. **FEAT-08** Content-Type 415/406 Auto-Retry (P0, XS) — both competitors hit this
-2. **FEAT-07** TLS/HTTPS for HTTP Streamable (P0, S) — fr0ster has it since v4.6.0
-3. **SEC-01** Principal Propagation — SAP-side setup (STRUST, CERTRULE, ICM) + end-to-end testing
+> Aligned with the [Priority Action Items](../compare/00-feature-matrix.md#priority-action-items-for-arc-1) in the cross-project feature matrix. Priorities are assigned based on which [core design principle](#core-design-principles) a feature serves.
 
-### Phase B: Feature Completeness
-4. **FEAT-01** Where-Used Analysis (P1, XS)
-5. **FEAT-02** API Release Status / Clean Core (P1, S)
-6. **DOC-01** End-to-End Copilot Studio Guide (P1, S)
-7. **DOC-02** Basis Admin Security Guide (P1, S)
+### Phase A: Production Blockers (P0)
+1. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
+2. **FEAT-14** 401 Session Timeout Auto-Retry (XS) — centralized gateway idles between requests
+3. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — enterprise deployments without reverse proxy
+4. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
 
-### Phase C: Enterprise Hardening
-8. **SEC-05** Rate Limiting (P2, S)
-9. **SEC-03** S_DEVELOP Authorization Awareness (P2, S)
+### Phase B: Core Value Features (P1)
+5. **FEAT-01** Where-Used Analysis (XS) — most requested, daily ABAP developer need
+6. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
+7. **FEAT-02** API Release Status / Clean Core (S) — must-have for S/4HANA Cloud
+8. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
+9. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
+10. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
+11. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
+12. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
+13. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
-### Phase D: Diagnostics & Developer Experience
-10. **FEAT-09** SQL Trace Monitoring (P2, S) — completes diagnostics story
-11. **FEAT-10** PrettyPrint (P2, XS)
-12. **FEAT-11** Inactive Objects List (P2, XS)
-13. **FEAT-06** Cloud Readiness Assessment (P2, M)
+### Phase C: ADT Feature Parity (P2)
+14. **FEAT-10** PrettyPrint (XS) — quick win, VSP and abap-adt-api have it
+15. **FEAT-11** Inactive Objects List (XS) — quick win, development workflow
+16. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
+17. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
+18. **FEAT-06** Cloud Readiness Assessment (M) — ATC cloud checks + abaplint
+19. **FEAT-03** Enhancement Framework / BAdI (M) — customization scenarios
+20. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
-### Phase E: Advanced Features
-14. **FEAT-03** Enhancement Framework (P2, M)
-15. **OPS-03** Multi-System Routing (P3, L)
-16. **FEAT-05** Code Refactoring (P3, L)
+### Phase D: Advanced / Future (P3)
+21. **OPS-03** Multi-System Routing (L) — one instance → multiple SAP systems
+22. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
+23. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
 
 ---
 
