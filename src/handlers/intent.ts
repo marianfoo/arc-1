@@ -305,6 +305,22 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
     return errorResult(BTP_HINTS[type]);
   }
 
+  // DEBUG: wrap entire switch in try-catch to get stack trace for TypeError
+  try {
+    return await handleSAPReadInner(client, type, name, args);
+  } catch (err) {
+    const stack = err instanceof Error ? err.stack : 'no-stack';
+    process.stderr.write(`[DEBUG-READ-ERROR] type=${type} name=${name} err=${err} stack=${stack}\n`);
+    throw err;
+  }
+}
+
+async function handleSAPReadInner(
+  client: AdtClient,
+  type: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
   switch (type) {
     case 'PROG':
       return textResult(await client.getProgram(name));
