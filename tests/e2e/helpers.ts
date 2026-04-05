@@ -19,12 +19,47 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/** Server identity from /health endpoint */
+export interface ServerHealth {
+  status: string;
+  version: string;
+  startedAt?: string;
+  pid?: number;
+}
+
+/**
+ * Check MCP server health and return identity info.
+ * Useful for verifying you're talking to the correct (freshly deployed) process.
+ */
+export async function checkServerHealth(): Promise<ServerHealth> {
+  const mcpUrl = process.env.E2E_MCP_URL ?? 'http://localhost:3000/mcp';
+  const healthUrl = mcpUrl.replace(/\/mcp$/, '/health');
+
+  const resp = await fetch(healthUrl);
+  if (!resp.ok) {
+    throw new Error(`Health check failed: HTTP ${resp.status} from ${healthUrl}`);
+  }
+  return (await resp.json()) as ServerHealth;
+}
+
 /**
  * Connect an MCP client to the E2E server.
  * Uses E2E_MCP_URL env var (default: http://localhost:3000/mcp).
+ *
+ * Performs a health check first to verify the server is the expected process
+ * (not a zombie from a previous deploy). Logs server identity for debugging.
  */
 export async function connectClient(): Promise<Client> {
   const url = process.env.E2E_MCP_URL ?? 'http://localhost:3000/mcp';
+
+  // Pre-flight: verify server identity
+  try {
+    const health = await checkServerHealth();
+    console.log(`    [server] version=${health.version} pid=${health.pid ?? '?'} startedAt=${health.startedAt ?? '?'}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`    [server] Health check failed (non-fatal): ${msg}`);
+  }
 
   const client = new Client({ name: 'arc1-e2e-test', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(url));

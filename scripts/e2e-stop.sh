@@ -41,10 +41,13 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "
     echo \"   No PID file found\"
   fi
   # Aggressive cleanup: kill any orphaned processes + remove flock file
-  pkill -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+  # Use glob pattern to match both absolute and relative paths (zombie fix)
+  pkill -f 'node.*dist/index.js' 2>/dev/null || true
   sleep 1
   # Force-kill survivors
-  pkill -9 -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+  pkill -9 -f 'node.*dist/index.js' 2>/dev/null || true
+  # Kill anything still holding the MCP port
+  fuser -k ${E2E_MCP_PORT:-3000}/tcp 2>/dev/null || true
   rm -f /tmp/arc1-e2e.lock /tmp/arc1-e2e.lock.info
 " 2>/dev/null || true
 

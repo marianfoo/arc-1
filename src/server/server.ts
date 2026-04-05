@@ -262,6 +262,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     transport: config.transport,
     readOnly: config.readOnly,
     url: config.url || '(not configured)',
+    pid: process.pid,
   });
 
   logger.info('ARC-1 starting', {

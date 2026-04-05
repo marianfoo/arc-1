@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    globalSetup: ['tests/e2e/global-setup.ts'],
     include: ['tests/e2e/**/*.e2e.test.ts'],
     // SAP can be slow — allow 60s per test
     testTimeout: 60_000,

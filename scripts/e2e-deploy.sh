@@ -169,8 +169,9 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -s "${LOCKFILE}" "${MAX_LOCK_AGE}"
   if ! kill -0 "$LOCK_PID" 2>/dev/null; then
     echo "   STALE LOCK: PID $LOCK_PID is dead — breaking lock"
     rm -f "$LOCKFILE" "$INFO_FILE"
-    # Also kill any orphaned MCP server
-    pkill -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+    # Also kill any orphaned MCP server (glob pattern matches both absolute/relative paths)
+    pkill -f 'node.*dist/index.js' 2>/dev/null || true
+    fuser -k 3000/tcp 2>/dev/null || true
     exit 0
   fi
 
@@ -182,7 +183,8 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -s "${LOCKFILE}" "${MAX_LOCK_AGE}"
     if [ "$AGE" -gt "$MAX_AGE" ]; then
       echo "   STALE LOCK: age ${AGE}s exceeds max ${MAX_AGE}s — breaking lock"
       kill "$LOCK_PID" 2>/dev/null || true
-      pkill -f 'node /opt/arc1-e2e/dist/index.js' 2>/dev/null || true
+      pkill -f 'node.*dist/index.js' 2>/dev/null || true
+      fuser -k 3000/tcp 2>/dev/null || true
       sleep 2
       rm -f "$LOCKFILE" "$INFO_FILE"
       exit 0
@@ -246,8 +248,28 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
   exit 1
 }
 
+# ── Post-deploy: Verify server identity ────────────────────────────
+echo ""
+echo "-- Verifying deployed server identity..."
+HEALTH_JSON=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
+  "curl -sf http://localhost:${MCP_PORT}/health 2>/dev/null || echo '{}'")
+HEALTH_PID=$(echo "${HEALTH_JSON}" | grep -oP '"pid":\s*\K[0-9]+' || echo "unknown")
+HEALTH_VERSION=$(echo "${HEALTH_JSON}" | grep -oP '"version":\s*"\K[^"]+' || echo "unknown")
+HEALTH_STARTED=$(echo "${HEALTH_JSON}" | grep -oP '"startedAt":\s*"\K[^"]+' || echo "unknown")
+EXPECTED_PID=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "cat /tmp/arc1-e2e.pid 2>/dev/null || echo 'unknown'")
+
+if [ "$HEALTH_PID" != "$EXPECTED_PID" ] && [ "$HEALTH_PID" != "unknown" ]; then
+  echo "   FATAL: Health endpoint reports PID ${HEALTH_PID} but we started PID ${EXPECTED_PID}"
+  echo "   A zombie process is serving on port ${MCP_PORT}!"
+  echo "   Health response: ${HEALTH_JSON}"
+  exit 1
+fi
+
 echo ""
 echo "======================================================================"
 echo "  MCP server running on port ${MCP_PORT}"
+echo "  PID:       ${HEALTH_PID}"
+echo "  Version:   ${HEALTH_VERSION}"
+echo "  Started:   ${HEALTH_STARTED}"
 echo "======================================================================"
 echo ""

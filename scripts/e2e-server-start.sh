@@ -63,13 +63,24 @@ nohup node dist/index.js >> /tmp/arc1-e2e.log 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&-
 echo $! > /tmp/arc1-e2e.pid
 
 # Wait for health check — verify it's OUR new process serving
+NEW_PID=$(cat /tmp/arc1-e2e.pid)
 for i in $(seq 1 30); do
-  if curl -sf "http://localhost:${MCP_PORT}/health" > /dev/null 2>&1; then
-    # Double-check the PID is still our process
-    NEW_PID=$(cat /tmp/arc1-e2e.pid)
+  HEALTH=$(curl -sf "http://localhost:${MCP_PORT}/health" 2>/dev/null || echo "")
+  if [ -n "$HEALTH" ]; then
+    # Verify the responding process is ours by checking PID in health response
+    HEALTH_PID=$(echo "$HEALTH" | grep -oP '"pid":\s*\K[0-9]+' || echo "")
+    if [ -n "$HEALTH_PID" ] && [ "$HEALTH_PID" != "$NEW_PID" ]; then
+      echo "   ZOMBIE DETECTED: /health reports PID $HEALTH_PID but we started PID $NEW_PID"
+      echo "   Killing zombie PID $HEALTH_PID..."
+      kill -9 "$HEALTH_PID" 2>/dev/null || true
+      fuser -k "${MCP_PORT}/tcp" 2>/dev/null || true
+      sleep 1
+      continue
+    fi
+
     if kill -0 "$NEW_PID" 2>/dev/null; then
       echo "   MCP server ready (PID: $NEW_PID)"
-      # Verify it's the correct version by checking the log
+      # Verify transport in log
       if grep -q "http-streamable" /tmp/arc1-e2e.log; then
         echo "   Transport: http-streamable (confirmed)"
       else
@@ -77,6 +88,9 @@ for i in $(seq 1 30); do
         echo "   Log contents:"
         cat /tmp/arc1-e2e.log
       fi
+      # Print startup fingerprint for traceability
+      HEALTH_STARTED=$(echo "$HEALTH" | grep -oP '"startedAt":\s*"\K[^"]+' || echo "unknown")
+      echo "   Started at: $HEALTH_STARTED"
       exit 0
     fi
   fi
@@ -85,6 +99,10 @@ done
 
 echo ""
 echo "ERROR: MCP server did not start within 30s"
+echo "-- Process status: --"
+echo "   Expected PID: $NEW_PID"
+echo "   PID alive: $(kill -0 $NEW_PID 2>/dev/null && echo 'yes' || echo 'NO')"
+echo "   Port ${MCP_PORT} held by: $(fuser ${MCP_PORT}/tcp 2>/dev/null || echo 'nothing')"
 echo "-- Server log (last 50 lines): --"
 tail -50 /tmp/arc1-e2e.log
 echo "-- End of server log --"

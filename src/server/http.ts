@@ -111,8 +111,11 @@ export async function startHttpServer(
   });
 
   // ─── Health Check (always unauthenticated) ───────────────
+  // Returns version + startedAt + pid so deploy scripts and tests can verify
+  // they're talking to the CORRECT process (not a zombie from a previous deploy).
+  const startedAt = new Date().toISOString();
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', version: VERSION });
+    res.json({ status: 'ok', version: VERSION, startedAt, pid: process.pid });
   });
 
   // ─── XSUAA OAuth Proxy Mode ──────────────────────────────

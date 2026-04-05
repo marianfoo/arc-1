@@ -87,6 +87,7 @@ export interface ServerStartEvent extends AuditEventBase {
   transport: string;
   readOnly: boolean;
   url: string;
+  pid?: number;
 }
 
 /** Elicitation sent to client */
