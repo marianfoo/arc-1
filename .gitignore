@@ -12,6 +12,9 @@ abap-adt-api/
 INFRASTRUCTURE.md
 .env.infrastructure
 
+# Session context files
+MEMORY.md
+
 # MCP config (contains credentials)
 .mcp.json
 .mcp*.json
