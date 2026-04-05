@@ -16,7 +16,6 @@ import type { AdtClientConfig } from '../adt/config.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
-import { SqliteCache } from '../cache/sqlite.js';
 import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
@@ -235,16 +234,29 @@ export function createServer(
 /**
  * Create a CachingLayer based on config.
  * Returns undefined if caching is disabled.
+ *
+ * SqliteCache is loaded dynamically so that better-sqlite3 (a native module)
+ * is only required when actually used. This allows the server to start in
+ * memory-cache or no-cache mode even when better-sqlite3 is not installed
+ * (e.g. cross-platform deploys where native binaries were compiled elsewhere).
  */
-function createCachingLayer(config: ServerConfig): CachingLayer | undefined {
+async function createCachingLayer(config: ServerConfig): Promise<CachingLayer | undefined> {
   const mode = config.cacheMode;
 
   if (mode === 'none') return undefined;
 
   let cache: Cache;
   if (mode === 'sqlite' || (mode === 'auto' && config.transport === 'http-streamable')) {
-    // Persistent cache for http-streamable / Docker
-    cache = new SqliteCache(config.cacheFile);
+    // Persistent cache for http-streamable / Docker — load dynamically
+    try {
+      const { SqliteCache } = await import('../cache/sqlite.js');
+      cache = new SqliteCache(config.cacheFile);
+    } catch (err) {
+      logger.warn('SQLite cache unavailable (better-sqlite3 not loaded) — falling back to memory cache', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      cache = new MemoryCache();
+    }
   } else {
     // Memory cache for stdio (default)
     cache = new MemoryCache();
@@ -362,7 +374,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
   }
 
   // ─── Cache Setup ───────────────────────────────────────────────────
-  const cachingLayer = createCachingLayer(config);
+  const cachingLayer = await createCachingLayer(config);
   if (cachingLayer) {
     const stats = cachingLayer.stats();
     logger.info('Object cache enabled', {
