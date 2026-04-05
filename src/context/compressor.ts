@@ -7,13 +7,16 @@
  * 3. Sort (custom objects first)
  * 4. Limit to maxDeps
  * 5. Fetch dependency sources (parallel, bounded to MAX_CONCURRENT)
+ *    → With caching layer: check cache first, only fetch on miss
  * 6. Extract contracts (public API only) (contract.ts)
  * 7. If depth > 1, recurse on each dependency's source
  * 8. Format output prologue
+ * 9. Cache the resolved dep graph (keyed by source hash)
  */
 
 import type { Version } from '@abaplint/core';
 import type { AdtClient } from '../adt/client.js';
+import type { CachingLayer } from '../cache/caching-layer.js';
 import { extractCdsDependencies } from './cds-deps.js';
 import { extractContract } from './contract.js';
 import { extractDependencies } from './deps.js';
@@ -34,6 +37,7 @@ const MAX_CONCURRENT = 5;
  * @param maxDeps - Maximum number of dependencies to resolve (default 20)
  * @param depth - Dependency expansion depth 1-3 (default 1)
  * @param abaplintVersion - abaplint parser version (detected from SAP system, defaults to Cloud)
+ * @param cachingLayer - Optional caching layer for source and contract caching
  */
 export async function compressContext(
   client: AdtClient,
@@ -43,6 +47,7 @@ export async function compressContext(
   maxDeps = DEFAULT_MAX_DEPS,
   depth = DEFAULT_DEPTH,
   abaplintVersion?: Version,
+  cachingLayer?: CachingLayer,
 ): Promise<ContextResult> {
   const effectiveDepth = Math.min(Math.max(depth, 1), MAX_DEPTH);
   const seen = new Set<string>([objectName.toUpperCase()]);
@@ -52,9 +57,31 @@ export async function compressContext(
   const deps = extractDependencies(source, objectName, true, abaplintVersion);
   totalFiltered = deps.length; // extractDependencies already filters, but we track the count
 
-  await resolveDepthLevel(client, deps, maxDeps, effectiveDepth, seen, allContracts, abaplintVersion);
+  await resolveDepthLevel(client, deps, maxDeps, effectiveDepth, seen, allContracts, abaplintVersion, cachingLayer);
 
-  return formatResult(objectName, objectType, deps.length, allContracts, totalFiltered);
+  const result = formatResult(objectName, objectType, deps.length, allContracts, totalFiltered);
+
+  // Cache the resolved dep graph keyed by source hash.
+  // Cache even when allContracts is empty — avoids re-resolving on every call
+  // for objects with no resolvable dependencies.
+  if (cachingLayer) {
+    cachingLayer.putDepGraph(
+      source,
+      objectName,
+      objectType,
+      allContracts.map((c) => ({
+        name: c.name,
+        type: c.type,
+        methodCount: c.methodCount,
+        source: c.source,
+        fullSource: c.fullSource,
+        success: c.success,
+        error: c.error,
+      })),
+    );
+  }
+
+  return result;
 }
 
 /**
@@ -68,6 +95,7 @@ async function resolveDepthLevel(
   seen: Set<string>,
   contracts: Contract[],
   abaplintVersion?: Version,
+  cachingLayer?: CachingLayer,
 ): Promise<void> {
   // Filter already-seen and limit
   const newDeps = deps.filter((d) => !seen.has(d.name.toUpperCase()));
@@ -81,7 +109,7 @@ async function resolveDepthLevel(
   const limited = newDeps.slice(0, maxDeps);
 
   // Fetch and extract contracts (bounded parallel)
-  const fetched = await fetchContractsParallel(client, limited, abaplintVersion);
+  const fetched = await fetchContractsParallel(client, limited, abaplintVersion, cachingLayer);
   contracts.push(...fetched);
 
   // Recurse if depth > 1
@@ -97,7 +125,16 @@ async function resolveDepthLevel(
         );
         const unseenSubDeps = subDeps.filter((d) => !seen.has(d.name.toUpperCase()));
         if (unseenSubDeps.length > 0) {
-          await resolveDepthLevel(client, unseenSubDeps, maxDeps, depth - 1, seen, contracts, abaplintVersion);
+          await resolveDepthLevel(
+            client,
+            unseenSubDeps,
+            maxDeps,
+            depth - 1,
+            seen,
+            contracts,
+            abaplintVersion,
+            cachingLayer,
+          );
         }
       }
     }
@@ -112,11 +149,14 @@ async function fetchContractsParallel(
   client: AdtClient,
   deps: Dependency[],
   abaplintVersion?: Version,
+  cachingLayer?: CachingLayer,
 ): Promise<Contract[]> {
   const results: Contract[] = [];
   for (let i = 0; i < deps.length; i += MAX_CONCURRENT) {
     const batch = deps.slice(i, i + MAX_CONCURRENT);
-    const batchResults = await Promise.all(batch.map((dep) => fetchSingleContract(client, dep, abaplintVersion)));
+    const batchResults = await Promise.all(
+      batch.map((dep) => fetchSingleContract(client, dep, abaplintVersion, cachingLayer)),
+    );
     results.push(...batchResults);
   }
   return results;
@@ -125,10 +165,15 @@ async function fetchContractsParallel(
 /**
  * Fetch source for a single dependency and extract its contract.
  */
-async function fetchSingleContract(client: AdtClient, dep: Dependency, abaplintVersion?: Version): Promise<Contract> {
+async function fetchSingleContract(
+  client: AdtClient,
+  dep: Dependency,
+  abaplintVersion?: Version,
+  cachingLayer?: CachingLayer,
+): Promise<Contract> {
   try {
     const objectType = inferObjectType(dep);
-    const source = await fetchSource(client, dep.name, objectType);
+    const source = await fetchSource(client, dep.name, objectType, cachingLayer);
     const contract = extractContract(source, dep.name, objectType, abaplintVersion);
     // Store full source for recursive dependency extraction
     contract.fullSource = source;
@@ -170,20 +215,36 @@ export function inferObjectType(dep: Dependency): 'CLAS' | 'INTF' | 'FUNC' | 'UN
 }
 
 /**
- * Fetch source code for a dependency from the SAP system.
+ * Fetch source code for a dependency from the SAP system (with cache support).
  */
 async function fetchSource(
   client: AdtClient,
   name: string,
   type: 'CLAS' | 'INTF' | 'FUNC' | 'UNKNOWN',
+  cachingLayer?: CachingLayer,
 ): Promise<string> {
+  // Helper: get source with cache
+  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
+    if (!cachingLayer) return fetcher();
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
+    return source;
+  };
+
   switch (type) {
     case 'CLAS':
-      return client.getClass(name);
+      return cachedGet('CLAS', name, () => client.getClass(name));
     case 'INTF':
-      return client.getInterface(name);
+      return cachedGet('INTF', name, () => client.getInterface(name));
     case 'FUNC': {
-      // Function modules need their group — search for it
+      // Use cached func group resolution if available
+      if (cachingLayer) {
+        const group = await cachingLayer.resolveFuncGroup(client, name);
+        if (group) {
+          return cachedGet('FUNC', name, () => client.getFunction(group, name));
+        }
+        throw new Error(`Cannot determine function group for ${name}`);
+      }
+      // Original fallback: search for function group
       const results = await client.searchObject(name, 5);
       const fmResult = results.find(
         (r) => r.objectName.toUpperCase() === name.toUpperCase() && r.objectType?.includes('FUNC'),
@@ -207,9 +268,9 @@ async function fetchSource(
     default:
       // Try as class first, then interface
       try {
-        return await client.getClass(name);
+        return await cachedGet('CLAS', name, () => client.getClass(name));
       } catch {
-        return client.getInterface(name);
+        return cachedGet('INTF', name, () => client.getInterface(name));
       }
   }
 }
@@ -290,6 +351,7 @@ interface CdsResolvedDep {
  * @param objectName - CDS entity name
  * @param maxDeps - Maximum dependencies to resolve (default 20)
  * @param depth - Dependency depth 1-3 (default 1)
+ * @param cachingLayer - Optional caching layer for source caching
  */
 export async function compressCdsContext(
   client: AdtClient,
@@ -297,6 +359,7 @@ export async function compressCdsContext(
   objectName: string,
   maxDeps = DEFAULT_MAX_DEPS,
   depth = DEFAULT_DEPTH,
+  cachingLayer?: CachingLayer,
 ): Promise<ContextResult> {
   const effectiveDepth = Math.min(Math.max(depth, 1), MAX_DEPTH);
   const seen = new Set<string>([objectName.toUpperCase()]);
@@ -304,7 +367,7 @@ export async function compressCdsContext(
 
   const deps = extractCdsDependencies(ddlSource);
 
-  await resolveCdsDepthLevel(client, deps, maxDeps, effectiveDepth, seen, allResolved);
+  await resolveCdsDepthLevel(client, deps, maxDeps, effectiveDepth, seen, allResolved, cachingLayer);
 
   return formatCdsResult(objectName, deps.length, allResolved);
 }
@@ -319,6 +382,7 @@ async function resolveCdsDepthLevel(
   depth: number,
   seen: Set<string>,
   resolved: CdsResolvedDep[],
+  cachingLayer?: CachingLayer,
 ): Promise<void> {
   const newDeps = deps.filter((d) => !seen.has(d.name.toUpperCase()));
   for (const dep of newDeps) {
@@ -329,7 +393,7 @@ async function resolveCdsDepthLevel(
   // Fetch in bounded parallel batches
   for (let i = 0; i < limited.length; i += MAX_CONCURRENT) {
     const batch = limited.slice(i, i + MAX_CONCURRENT);
-    const results = await Promise.all(batch.map((dep) => fetchCdsDependency(client, dep)));
+    const results = await Promise.all(batch.map((dep) => fetchCdsDependency(client, dep, cachingLayer)));
     resolved.push(...results);
   }
 
@@ -340,7 +404,7 @@ async function resolveCdsDepthLevel(
         const subDeps = extractCdsDependencies(r.source);
         const unseenSubDeps = subDeps.filter((d) => !seen.has(d.name.toUpperCase()));
         if (unseenSubDeps.length > 0) {
-          await resolveCdsDepthLevel(client, unseenSubDeps, maxDeps, depth - 1, seen, resolved);
+          await resolveCdsDepthLevel(client, unseenSubDeps, maxDeps, depth - 1, seen, resolved, cachingLayer);
         }
       }
     }
@@ -350,25 +414,37 @@ async function resolveCdsDepthLevel(
 /**
  * Fetch a single CDS dependency's source with type fallback.
  * Try DDLS first (another CDS view), then TABL, then STRU.
+ * With caching: also caches which type succeeded to avoid future fallback attempts.
  */
-async function fetchCdsDependency(client: AdtClient, dep: CdsDependency): Promise<CdsResolvedDep> {
+async function fetchCdsDependency(
+  client: AdtClient,
+  dep: CdsDependency,
+  cachingLayer?: CachingLayer,
+): Promise<CdsResolvedDep> {
+  // Helper: get source with cache
+  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
+    if (!cachingLayer) return fetcher();
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
+    return source;
+  };
+
   // Try DDLS first
   try {
-    const source = await client.getDdls(dep.name);
+    const source = await cachedGet('DDLS', dep.name, () => client.getDdls(dep.name));
     return { name: dep.name, kind: dep.kind, resolvedType: 'ddls', source, success: true };
   } catch {
     // Not a DDLS — try TABL
   }
 
   try {
-    const source = await client.getTable(dep.name);
+    const source = await cachedGet('TABL', dep.name, () => client.getTable(dep.name));
     return { name: dep.name, kind: dep.kind, resolvedType: 'table', source, success: true };
   } catch {
     // Not a TABL — try STRU
   }
 
   try {
-    const source = await client.getStructure(dep.name);
+    const source = await cachedGet('STRU', dep.name, () => client.getStructure(dep.name));
     return { name: dep.name, kind: dep.kind, resolvedType: 'structure', source, success: true };
   } catch (err) {
     return {

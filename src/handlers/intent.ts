@@ -29,6 +29,7 @@ import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.j
 import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
+import type { CachingLayer } from '../cache/caching-layer.js';
 import { extractCdsElements } from '../context/cds-deps.js';
 import { compressCdsContext, compressContext } from '../context/compressor.js';
 import { extractMethod, formatMethodListing, listMethods, spliceMethod } from '../context/method-surgery.js';
@@ -121,6 +122,7 @@ export async function handleToolCall(
   args: Record<string, unknown>,
   authInfo?: AuthInfo,
   _server?: Server,
+  cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const reqId = generateRequestId();
   const start = Date.now();
@@ -169,7 +171,7 @@ export async function handleToolCall(
 
       switch (toolName) {
         case 'SAPRead':
-          result = await handleSAPRead(client, args);
+          result = await handleSAPRead(client, args, cachingLayer);
           break;
         case 'SAPSearch':
           result = await handleSAPSearch(client, args);
@@ -178,7 +180,7 @@ export async function handleToolCall(
           result = await handleSAPQuery(client, args);
           break;
         case 'SAPWrite':
-          result = await handleSAPWrite(client, args);
+          result = await handleSAPWrite(client, args, cachingLayer);
           break;
         case 'SAPActivate':
           result = await handleSAPActivate(client, args);
@@ -196,10 +198,10 @@ export async function handleToolCall(
           result = await handleSAPTransport(client, args);
           break;
         case 'SAPContext':
-          result = await handleSAPContext(client, args);
+          result = await handleSAPContext(client, args, cachingLayer);
           break;
         case 'SAPManage':
-          result = await handleSAPManage(client, _config, args);
+          result = await handleSAPManage(client, _config, args, cachingLayer);
           break;
         case 'SAP': {
           // Hyperfocused mode: route to the appropriate handler
@@ -219,7 +221,15 @@ export async function handleToolCall(
             }
           }
           // Delegate to the real handler (recursive call, but with the mapped tool name)
-          result = await handleToolCall(client, _config, expanded.toolName, expanded.expandedArgs, authInfo, _server);
+          result = await handleToolCall(
+            client,
+            _config,
+            expanded.toolName,
+            expanded.expandedArgs,
+            authInfo,
+            _server,
+            cachingLayer,
+          );
           break;
         }
         default:
@@ -290,7 +300,11 @@ const BTP_HINTS: Record<string, string> = {
   TRAN: 'Transaction codes (TRAN) are not available on BTP ABAP Environment. Use SAPSearch to find apps and services instead.',
 };
 
-async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function handleSAPRead(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
+): Promise<ToolResult> {
   const type = String(args.type ?? '');
   const name = String(args.name ?? '');
 
@@ -298,14 +312,22 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
   if (isBtpSystem() && BTP_HINTS[type]) {
     return errorResult(BTP_HINTS[type]);
   }
+
+  // Helper: get source with cache support
+  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
+    if (!cachingLayer) return fetcher();
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
+    return source;
+  };
+
   switch (type) {
     case 'PROG':
-      return textResult(await client.getProgram(name));
+      return textResult(await cachedGet('PROG', name, () => client.getProgram(name)));
     case 'CLAS': {
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
         // Method-level read — fetch full source then extract
-        const fullSource = await client.getClass(name);
+        const fullSource = await cachedGet('CLAS', name, () => client.getClass(name));
         const abaplintVer = cachedFeatures?.abapRelease
           ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
           : undefined;
@@ -319,14 +341,21 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
         }
         return textResult(extracted.methodSource);
       }
+      // Only cache the full merged source (no include param), not individual includes
+      if (!args.include) {
+        return textResult(await cachedGet('CLAS', name, () => client.getClass(name)));
+      }
       return textResult(await client.getClass(name, args.include as string | undefined));
     }
     case 'INTF':
-      return textResult(await client.getInterface(name));
+      return textResult(await cachedGet('INTF', name, () => client.getInterface(name)));
     case 'FUNC': {
       let group = String(args.group ?? '');
       if (!group) {
-        const resolved = await client.resolveFunctionGroup(name);
+        // Use cached func group resolution if available
+        const resolved = cachingLayer
+          ? await cachingLayer.resolveFuncGroup(client, name)
+          : await client.resolveFunctionGroup(name);
         if (!resolved) {
           return errorResult(
             `Cannot resolve function group for "${name}". Provide the group parameter explicitly, or use SAPSearch("${name}") to find the function group.`,
@@ -334,7 +363,7 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
         }
         group = resolved;
       }
-      return textResult(await client.getFunction(group, name));
+      return textResult(await cachedGet('FUNC', name, () => client.getFunction(group, name)));
     }
     case 'FUGR': {
       const expand = Boolean(args.expand_includes);
@@ -359,28 +388,28 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
       return textResult(JSON.stringify(fg, null, 2));
     }
     case 'INCL':
-      return textResult(await client.getInclude(name));
+      return textResult(await cachedGet('INCL', name, () => client.getInclude(name)));
     case 'DDLS': {
-      const ddlSource = await client.getDdls(name);
+      const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
       if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
         return textResult(extractCdsElements(ddlSource, name));
       }
       return textResult(ddlSource);
     }
     case 'BDEF':
-      return textResult(await client.getBdef(name));
+      return textResult(await cachedGet('BDEF', name, () => client.getBdef(name)));
     case 'SRVD':
-      return textResult(await client.getSrvd(name));
+      return textResult(await cachedGet('SRVD', name, () => client.getSrvd(name)));
     case 'DDLX':
-      return textResult(await client.getDdlx(name));
+      return textResult(await cachedGet('DDLX', name, () => client.getDdlx(name)));
     case 'SRVB':
-      return textResult(await client.getSrvb(name));
+      return textResult(await cachedGet('SRVB', name, () => client.getSrvb(name)));
     case 'TABL':
-      return textResult(await client.getTable(name));
+      return textResult(await cachedGet('TABL', name, () => client.getTable(name)));
     case 'VIEW':
-      return textResult(await client.getView(name));
+      return textResult(await cachedGet('VIEW', name, () => client.getView(name)));
     case 'STRU':
-      return textResult(await client.getStructure(name));
+      return textResult(await cachedGet('STRU', name, () => client.getStructure(name)));
     case 'DOMA': {
       const domain = await client.getDomain(name);
       return textResult(JSON.stringify(domain, null, 2));
@@ -604,7 +633,11 @@ function sourceUrlForType(type: string, name: string): string {
 
 // ─── SAPWrite Handler ────────────────────────────────────────────────
 
-async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function handleSAPWrite(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
+): Promise<ToolResult> {
   const action = String(args.action ?? '');
   const type = String(args.type ?? '');
   const name = String(args.name ?? '');
@@ -617,6 +650,7 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
   switch (action) {
     case 'update': {
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
+      cachingLayer?.invalidate(type, name);
       return textResult(`Successfully updated ${type} ${name}.`);
     }
     case 'create': {
@@ -635,8 +669,10 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
       if (!source) return errorResult('"source" (new method body) is required for edit_method action.');
       if (type !== 'CLAS') return errorResult('edit_method is only supported for type=CLAS.');
 
-      // Fetch current full source
-      const currentSource = await client.getClass(name);
+      // Fetch current full source (use cache if available)
+      const currentSource = cachingLayer
+        ? (await cachingLayer.getSource('CLAS', name, () => client.getClass(name))).source
+        : await client.getClass(name);
 
       // Use detected ABAP version from probe if available
       const abaplintVer = cachedFeatures?.abapRelease
@@ -651,6 +687,7 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
 
       // Write the full source back (existing lock/modify/unlock flow)
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
+      cachingLayer?.invalidate(type, name);
       return textResult(`Successfully updated method "${method}" in ${type} ${name}.`);
     }
     case 'delete': {
@@ -667,6 +704,7 @@ async function handleSAPWrite(client: AdtClient, args: Record<string, unknown>):
           }
         }
       });
+      cachingLayer?.invalidate(type, name);
       return textResult(`Deleted ${type} ${name}.`);
     }
     default:
@@ -875,15 +913,53 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
 
 // ─── SAPContext Handler ───────────────────────────────────────────────
 
-async function handleSAPContext(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function handleSAPContext(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
+): Promise<ToolResult> {
+  const action = String(args.action ?? '');
   const type = String(args.type ?? '');
   const name = String(args.name ?? '');
   const maxDeps = Number(args.maxDeps ?? 20);
   const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);
 
+  // ─── Reverse dep lookup (pre-warmer only) ─────────────────────────
+  if (action === 'usages') {
+    if (!name) return errorResult('"name" is required for usages action.');
+    if (!cachingLayer) {
+      return errorResult(
+        'Reverse dependency lookup requires object caching. Cache is disabled (ARC1_CACHE=none). ' +
+          'Enable caching and run cache warmup to use this feature.',
+      );
+    }
+    const usages = cachingLayer.getUsages(name);
+    if (usages === null) {
+      return errorResult(
+        `Reverse dependency lookup requires a pre-warmed cache. The cache warmup has not been run yet.\n\n` +
+          `To enable this feature:\n` +
+          `1. Start ARC-1 with --cache-warmup (or set ARC1_CACHE_WARMUP=true)\n` +
+          `2. Wait for the warmup to complete (indexes all custom objects)\n` +
+          `3. Then retry SAPContext(action="usages", name="${name}")\n\n` +
+          `Alternative: Use SAPNavigate(action="references", type="CLAS", name="${name}") for a live ADT lookup (slower, but works without warmup).`,
+      );
+    }
+    if (usages.length === 0) {
+      return textResult(`No objects found that depend on "${name}" in the cached index.`);
+    }
+    return textResult(JSON.stringify({ name, usageCount: usages.length, usages }, null, 2));
+  }
+
   if (!type || !name) {
     return errorResult('Both "type" and "name" are required for SAPContext.');
   }
+
+  // Helper: get source with cache support
+  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
+    if (!cachingLayer) return fetcher();
+    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
+    return source;
+  };
 
   // Get source — either provided or fetched from SAP
   let source: string;
@@ -892,13 +968,13 @@ async function handleSAPContext(client: AdtClient, args: Record<string, unknown>
   } else {
     switch (type) {
       case 'CLAS':
-        source = await client.getClass(name);
+        source = await cachedGet('CLAS', name, () => client.getClass(name));
         break;
       case 'INTF':
-        source = await client.getInterface(name);
+        source = await cachedGet('INTF', name, () => client.getInterface(name));
         break;
       case 'PROG':
-        source = await client.getProgram(name);
+        source = await cachedGet('PROG', name, () => client.getProgram(name));
         break;
       case 'FUNC': {
         const group = String(args.group ?? '');
@@ -907,16 +983,49 @@ async function handleSAPContext(client: AdtClient, args: Record<string, unknown>
             'The "group" parameter is required for FUNC type. Use SAPSearch to find the function group.',
           );
         }
-        source = await client.getFunction(group, name);
+        source = await cachedGet('FUNC', name, () => client.getFunction(group, name));
         break;
       }
       case 'DDLS': {
-        const ddlSource = await client.getDdls(name);
-        const cdsResult = await compressCdsContext(client, ddlSource, name, maxDeps, depth);
+        const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
+        const cdsResult = await compressCdsContext(client, ddlSource, name, maxDeps, depth, cachingLayer);
         return textResult(cdsResult.output);
       }
       default:
         return errorResult(`SAPContext supports types: CLAS, INTF, PROG, FUNC, DDLS. Got: ${type}`);
+    }
+  }
+
+  // Check dep graph cache — if source hash matches, return cached contracts
+  if (cachingLayer) {
+    const cachedGraph = cachingLayer.getCachedDepGraph(source);
+    if (cachedGraph) {
+      const successful = cachedGraph.contracts.filter((c) => c.success);
+      const failed = cachedGraph.contracts.filter((c) => !c.success);
+      const lines: string[] = [];
+      lines.push(
+        `* === Dependency context for ${name} (${successful.length} deps resolved${failed.length > 0 ? `, ${failed.length} failed` : ''}) [cached] ===`,
+      );
+      lines.push('');
+      for (const contract of successful) {
+        const typeLabel = contract.type.toLowerCase();
+        const methodLabel = contract.methodCount > 0 ? `, ${contract.methodCount} methods` : '';
+        lines.push(`* --- ${contract.name} (${typeLabel}${methodLabel}) ---`);
+        lines.push(contract.source.trim());
+        lines.push('');
+      }
+      if (failed.length > 0) {
+        lines.push('* --- Failed dependencies ---');
+        for (const f of failed) {
+          lines.push(`* ${f.name}: ${f.error}`);
+        }
+        lines.push('');
+      }
+      const totalLines = lines.length;
+      lines.push(
+        `* Stats: ${successful.length + failed.length} deps found, ${successful.length} resolved, ${failed.length} failed, ${totalLines} lines [from cache]`,
+      );
+      return textResult(lines.join('\n'));
     }
   }
 
@@ -925,7 +1034,7 @@ async function handleSAPContext(client: AdtClient, args: Record<string, unknown>
     ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
     : undefined;
 
-  const result = await compressContext(client, source, name, type, maxDeps, depth, abaplintVersion);
+  const result = await compressContext(client, source, name, type, maxDeps, depth, abaplintVersion, cachingLayer);
   return textResult(result.output);
 }
 
@@ -938,6 +1047,7 @@ async function handleSAPManage(
   client: AdtClient,
   config: ServerConfig,
   args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
 
@@ -949,6 +1059,24 @@ async function handleSAPManage(
         );
       }
       return textResult(JSON.stringify(cachedFeatures, null, 2));
+    }
+
+    case 'cache_stats': {
+      if (!cachingLayer) {
+        return textResult(JSON.stringify({ enabled: false, message: 'Object cache is disabled (ARC1_CACHE=none).' }));
+      }
+      const stats = cachingLayer.stats();
+      return textResult(
+        JSON.stringify(
+          {
+            enabled: true,
+            warmupAvailable: cachingLayer.isWarmupAvailable,
+            ...stats,
+          },
+          null,
+          2,
+        ),
+      );
     }
 
     case 'probe': {
