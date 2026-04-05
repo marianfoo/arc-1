@@ -42,6 +42,13 @@ if ! ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "echo ok" > /dev/null 2>&1; then
 fi
 echo "   SSH: OK"
 
+# ── Pre-flight: Write SAP password to server ──────────────────────
+# Must happen before DB health check so curl can authenticate.
+echo "-- Writing SAP credentials to server..."
+ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
+  "echo -n '${SAP_PASSWORD:?SAP_PASSWORD must be set}' > ${DEPLOY_DIR}/.sap_password && chmod 600 ${DEPLOY_DIR}/.sap_password"
+echo "   .sap_password: written"
+
 # ── Pre-flight: SAP (ICM + DB health) ──────────────────────────────
 echo "-- Checking SAP system..."
 SAP_STATUS=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
@@ -58,9 +65,9 @@ echo "   ICM: OK (HTTP ${SAP_STATUS})"
 # ICM can return 401 while work processes have broken HANA connections.
 # If the DB check fails, attempt recovery via sapcontrol soft shutdown.
 echo "-- Checking ABAP work process DB connections..."
-SAP_DB_CHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
-  "curl -s -w '\n%{http_code}' -u '${SAP_USER}:$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)' \
-   'http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main' 2>/dev/null || echo '000'")
+SAP_DB_CHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -c \
+  "'curl -s -w \"\n%{http_code}\" -u \"${SAP_USER}:\$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)\" \
+   \"http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main\" 2>/dev/null || echo 000'")
 SAP_DB_HTTP=$(echo "${SAP_DB_CHECK}" | tail -1)
 SAP_DB_BODY=$(echo "${SAP_DB_CHECK}" | head -n -1)
 
@@ -83,9 +90,9 @@ if echo "${SAP_DB_BODY}" | grep -qi "database connection is not open"; then
 RECOVER
   # Re-check after recovery
   sleep 5
-  SAP_DB_RECHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} \
-    "curl -s -w '\n%{http_code}' -u '${SAP_USER}:$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)' \
-     'http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main' 2>/dev/null || echo '000'")
+  SAP_DB_RECHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -c \
+    "'curl -s -w \"\n%{http_code}\" -u \"${SAP_USER}:\$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)\" \
+     \"http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main\" 2>/dev/null || echo 000'")
   SAP_DB_RECHECK_BODY=$(echo "${SAP_DB_RECHECK}" | head -n -1)
   if echo "${SAP_DB_RECHECK_BODY}" | grep -qi "database connection is not open"; then
     echo "   ERROR: Recovery failed — DB connections still broken"
@@ -93,8 +100,11 @@ RECOVER
     exit 1
   fi
   echo "   DB: OK (recovered after sapcontrol restart)"
-elif [ "$SAP_DB_HTTP" = "200" ] || [ "$SAP_DB_HTTP" = "401" ]; then
-  echo "   DB: OK (HTTP ${SAP_DB_HTTP})"
+elif [ "$SAP_DB_HTTP" = "200" ]; then
+  echo "   DB: OK (HTTP 200)"
+elif [ "$SAP_DB_HTTP" = "401" ]; then
+  echo "   WARNING: DB check got HTTP 401 (auth failed) — cannot verify DB health"
+  echo "   Ensure SAP_PASSWORD matches the server password and .sap_password is up to date"
 else
   echo "   DB: OK (HTTP ${SAP_DB_HTTP}, no DB error detected)"
 fi

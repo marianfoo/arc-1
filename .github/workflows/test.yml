@@ -102,6 +102,7 @@ jobs:
           E2E_SERVER: ${{ secrets.E2E_SERVER }}
           E2E_SERVER_USER: ${{ secrets.E2E_SERVER_USER }}
           SAP_USER: ${{ secrets.SAP_USER }}
+          SAP_PASSWORD: ${{ secrets.SAP_PASSWORD }}
 
       - name: Run E2E tests
         run: npm run test:e2e
