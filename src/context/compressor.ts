@@ -61,8 +61,10 @@ export async function compressContext(
 
   const result = formatResult(objectName, objectType, deps.length, allContracts, totalFiltered);
 
-  // Cache the resolved dep graph keyed by source hash
-  if (cachingLayer && allContracts.length > 0) {
+  // Cache the resolved dep graph keyed by source hash.
+  // Cache even when allContracts is empty — avoids re-resolving on every call
+  // for objects with no resolvable dependencies.
+  if (cachingLayer) {
     cachingLayer.putDepGraph(
       source,
       objectName,

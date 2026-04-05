@@ -97,30 +97,32 @@ describe('E2E Cache Tests', () => {
   // ── SAPContext dep graph caching ──────────────────────────────
 
   it('SAPContext deps — second call returns [cached] output', async () => {
-    const args = { action: 'deps', type: 'CLAS', name: 'CL_ABAP_CHAR_UTILITIES', depth: 1 };
+    // Use RSHOWTIM (a standard program guaranteed to exist on any SAP system).
+    // The dep graph is cached after the first resolution regardless of how many
+    // deps are resolved (empty dep graphs are also cached to avoid re-fetching).
+    const args = { action: 'deps', type: 'PROG', name: 'RSHOWTIM', depth: 1 };
 
-    // First call — resolve deps live
+    // First call — resolve deps live; should NOT be marked [cached]
     const r1 = await callTool(client, 'SAPContext', args);
     const out1 = expectToolSuccess(r1);
     expect(out1).toContain('Dependency context for');
-    expect(out1).not.toContain('[cached]'); // first call is never cached
+    expect(out1).not.toContain('[cached]');
 
-    // Second call — should hit dep graph cache
+    // Second call — should hit dep graph cache and be marked [cached]
     const t0 = Date.now();
     const r2 = await callTool(client, 'SAPContext', args);
     const cachedMs = Date.now() - t0;
     const out2 = expectToolSuccess(r2);
 
     expect(out2).toContain('[cached]');
-
-    // Cached response should be very fast (< 200ms including HTTP round-trip)
+    // Cached response completes well within 500ms (just HTTP overhead, no SAP calls)
     expect(cachedMs).toBeLessThan(500);
 
     console.log(`    SAPContext cached in ${cachedMs}ms`);
   });
 
-  it('SAPContext deps — cached output contains same dependency info', async () => {
-    const args = { action: 'deps', type: 'PROG', name: 'RSHOWTIM', depth: 1 };
+  it('SAPContext deps — cached output refers to same object', async () => {
+    const args = { action: 'deps', type: 'CLAS', name: 'CL_ABAP_CHAR_UTILITIES', depth: 1 };
 
     const r1 = await callTool(client, 'SAPContext', args);
     const out1 = expectToolSuccess(r1);
@@ -128,9 +130,11 @@ describe('E2E Cache Tests', () => {
     const r2 = await callTool(client, 'SAPContext', args);
     const out2 = expectToolSuccess(r2);
 
-    // Both should refer to the same object
-    expect(out1).toContain('RSHOWTIM');
-    expect(out2).toContain('RSHOWTIM');
+    // Both should mention the object name
+    expect(out1).toContain('CL_ABAP_CHAR_UTILITIES');
+    expect(out2).toContain('CL_ABAP_CHAR_UTILITIES');
+    // Second call must be served from cache
+    expect(out2).toContain('[cached]');
   });
 
   // ── SAPContext usages — warmup required ───────────────────────
