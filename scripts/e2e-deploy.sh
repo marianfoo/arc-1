@@ -61,52 +61,86 @@ if [ "$SAP_STATUS" = "000" ]; then
 fi
 echo "   ICM: OK (HTTP ${SAP_STATUS})"
 
-# Deep health check: test a DB-dependent ADT call (reading a program source).
-# ICM can return 401 while work processes have broken HANA connections.
-# If the DB check fails, attempt recovery via sapcontrol soft shutdown.
-echo "-- Checking ABAP work process DB connections..."
-SAP_DB_CHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -c \
-  "'curl -s -w \"\n%{http_code}\" -u \"${SAP_USER}:\$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)\" \
-   \"http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main\" 2>/dev/null || echo 000'")
-SAP_DB_HTTP=$(echo "${SAP_DB_CHECK}" | tail -1)
-SAP_DB_BODY=$(echo "${SAP_DB_CHECK}" | head -n -1)
+# Deep health check: test DB-dependent ADT calls across multiple work processes.
+# SAP load-balances requests across work processes — a single request might hit a
+# healthy WP while others have broken HANA connections. We send multiple requests
+# to cover more work processes. If ANY fail, trigger recovery.
+echo "-- Checking ABAP work process DB connections (10 requests)..."
+DB_CHECK_RESULT=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -s "${SAP_USER}" <<'DB_CHECK'
+  SAP_USER="$1"
+  SAP_PASS=$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)
+  FAILURES=0
+  AUTH_FAIL=0
+  for i in $(seq 1 10); do
+    BODY=$(curl -s -u "${SAP_USER}:${SAP_PASS}" \
+      "http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main" 2>/dev/null)
+    if echo "$BODY" | grep -qi "database connection is not open"; then
+      FAILURES=$((FAILURES + 1))
+    elif echo "$BODY" | grep -qi "Anmeldung fehlgeschlagen\|401"; then
+      AUTH_FAIL=$((AUTH_FAIL + 1))
+    fi
+  done
+  echo "FAILURES=${FAILURES} AUTH_FAIL=${AUTH_FAIL}"
+DB_CHECK
+)
+DB_FAILURES=$(echo "${DB_CHECK_RESULT}" | grep -oP 'FAILURES=\K[0-9]+' || echo "0")
+DB_AUTH_FAIL=$(echo "${DB_CHECK_RESULT}" | grep -oP 'AUTH_FAIL=\K[0-9]+' || echo "0")
 
-if echo "${SAP_DB_BODY}" | grep -qi "database connection is not open"; then
-  echo "   WARNING: ABAP work processes have broken HANA DB connections"
-  echo "   Attempting recovery via sapcontrol soft shutdown + restart..."
+if [ "${DB_FAILURES}" -gt "0" ]; then
+  echo "   WARNING: ${DB_FAILURES}/10 requests hit broken HANA DB connections"
+  echo "   Attempting recovery: stopping + restarting ABAP instance..."
   ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash <<'RECOVER'
-    # Soft shutdown restarts all work processes, re-establishing DB connections.
-    # Unlike a full system restart, this preserves ICM and the dispatcher.
-    docker exec a4h su - a4hadm -c "sapcontrol -nr 00 -function RestartService" 2>/dev/null || true
-    echo "   sapcontrol RestartService issued — waiting for work processes..."
-    for i in $(seq 1 60); do
-      WP_STATUS=$(docker exec a4h su - a4hadm -c "sapcontrol -nr 00 -function GetProcessList" 2>/dev/null || echo "")
-      if echo "$WP_STATUS" | grep -q "GREEN"; then
-        echo "   Work processes recovered after ${i}s"
+    # Full instance Stop + Start restarts all work processes and re-establishes
+    # DB connections. RestartService alone doesn't always fix all WPs.
+    docker exec a4h su - a4hadm -c "sapcontrol -nr 00 -function Stop" 2>/dev/null || true
+    echo "   Waiting for ABAP to stop..."
+    for i in $(seq 1 30); do
+      sleep 5
+      STATUS=$(docker exec a4h su - a4hadm -c "sapcontrol -nr 00 -function GetProcessList" 2>&1 || echo "")
+      if echo "$STATUS" | grep -q "GRAY" && ! echo "$STATUS" | grep -q "GREEN"; then
+        echo "   ABAP stopped after $((i*5))s"
         break
       fi
-      sleep 2
+    done
+    docker exec a4h su - a4hadm -c "sapcontrol -nr 00 -function Start" 2>/dev/null || true
+    echo "   Waiting for ABAP to start..."
+    for i in $(seq 1 90); do
+      sleep 5
+      STATUS=$(docker exec a4h su - a4hadm -c "sapcontrol -nr 00 -function GetProcessList" 2>&1 || echo "")
+      GREEN_COUNT=$(echo "$STATUS" | grep -c "GREEN" || true)
+      if [ "$GREEN_COUNT" -ge 4 ]; then
+        echo "   All processes GREEN after $((i*5))s"
+        break
+      fi
     done
 RECOVER
   # Re-check after recovery
-  sleep 5
-  SAP_DB_RECHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -c \
-    "'curl -s -w \"\n%{http_code}\" -u \"${SAP_USER}:\$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)\" \
-     \"http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main\" 2>/dev/null || echo 000'")
-  SAP_DB_RECHECK_BODY=$(echo "${SAP_DB_RECHECK}" | head -n -1)
-  if echo "${SAP_DB_RECHECK_BODY}" | grep -qi "database connection is not open"; then
-    echo "   ERROR: Recovery failed — DB connections still broken"
+  sleep 10
+  RECHECK=$(ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} bash -s "${SAP_USER}" <<'RECHECK_SCRIPT'
+    SAP_USER="$1"
+    SAP_PASS=$(cat /opt/arc1-e2e/.sap_password 2>/dev/null)
+    FAILURES=0
+    for i in $(seq 1 10); do
+      BODY=$(curl -s -u "${SAP_USER}:${SAP_PASS}" \
+        "http://localhost:50000/sap/bc/adt/programs/programs/RSHOWTIM/source/main" 2>/dev/null)
+      if echo "$BODY" | grep -qi "database connection is not open"; then
+        FAILURES=$((FAILURES + 1))
+      fi
+    done
+    echo "$FAILURES"
+RECHECK_SCRIPT
+  )
+  if [ "${RECHECK}" -gt "0" ]; then
+    echo "   ERROR: Recovery failed — ${RECHECK}/10 requests still hit broken DB connections"
     echo "   Manual fix: ssh \$E2E_SERVER_USER@\$E2E_SERVER 'docker stop -t 7200 a4h && docker start a4h'"
     exit 1
   fi
-  echo "   DB: OK (recovered after sapcontrol restart)"
-elif [ "$SAP_DB_HTTP" = "200" ]; then
-  echo "   DB: OK (HTTP 200)"
-elif [ "$SAP_DB_HTTP" = "401" ]; then
-  echo "   WARNING: DB check got HTTP 401 (auth failed) — cannot verify DB health"
-  echo "   Ensure SAP_PASSWORD matches the server password and .sap_password is up to date"
+  echo "   DB: OK (recovered after ABAP instance restart)"
+elif [ "${DB_AUTH_FAIL}" -gt "0" ]; then
+  echo "   WARNING: DB check got ${DB_AUTH_FAIL}/10 auth failures — cannot verify DB health"
+  echo "   Ensure SAP_PASSWORD secret matches the DEVELOPER user password"
 else
-  echo "   DB: OK (HTTP ${SAP_DB_HTTP}, no DB error detected)"
+  echo "   DB: OK (10/10 requests successful)"
 fi
 
 # ── Pre-flight: Lock (stale detection) ─────────────────────────────
