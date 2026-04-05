@@ -233,7 +233,7 @@ export async function handleToolCall(
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
-        level: 'info',
+        level: result.isError ? 'error' : 'info',
         event: 'tool_call_end',
         requestId: reqId,
         user,
@@ -242,6 +242,7 @@ export async function handleToolCall(
         durationMs,
         status: result.isError ? 'error' : 'success',
         errorMessage: result.isError ? result.content[0]?.text : undefined,
+        errorClass: result.isError ? 'result-path' : undefined,
         resultSize,
         resultPreview,
       });
@@ -250,11 +251,9 @@ export async function handleToolCall(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const durationMs = Date.now() - start;
-
-      // DEBUG: dump full error to stderr for debugging "database connection" TypeError
-      if (err instanceof Error && err.message.includes('database connection')) {
-        process.stderr.write(`\n[DEBUG-STACK] ${err.constructor.name}: ${err.message}\n${err.stack}\n\n`);
-      }
+      // Include stack in errorMessage for debugging (temporary)
+      const stack = err instanceof Error ? err.stack : 'no-stack';
+      const debugMessage = `${message} [STACK: ${stack}]`;
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
@@ -267,8 +266,7 @@ export async function handleToolCall(
         durationMs,
         status: 'error',
         errorClass: classifyError(err),
-        errorMessage: message,
-        errorStack: err instanceof Error ? err.stack : undefined,
+        errorMessage: debugMessage,
       });
 
       return errorResult(formatErrorForLLM(err, message, toolName, args));
