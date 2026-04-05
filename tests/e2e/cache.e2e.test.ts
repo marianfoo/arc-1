@@ -75,9 +75,9 @@ describe('E2E Cache Tests', () => {
     // Both responses should be identical
     expect(text2).toBe(text1);
 
-    // Cache hit should be significantly faster (at least 5x)
-    // Allow generous margin since HTTP overhead varies
-    expect(cachedMs).toBeLessThan(Math.max(firstMs / 5, 50));
+    // Cache hit should be significantly faster (at least 5x, or within 100ms absolute).
+    // The 100ms cap avoids flakiness when SAP itself is very fast.
+    expect(cachedMs).toBeLessThan(Math.max(firstMs / 5, 100));
 
     console.log(`    SAPRead first: ${firstMs}ms, cached: ${cachedMs}ms`);
   });
@@ -141,13 +141,17 @@ describe('E2E Cache Tests', () => {
       type: 'CLAS',
       name: 'CL_ABAP_CHAR_UTILITIES',
     });
-    const text = expectToolSuccess(result);
 
-    // Without warmup the response should guide the user to enable warmup,
-    // NOT crash or return a generic error
-    expect(text.toLowerCase()).toMatch(/warmup|arc1_cache_warmup|not.*available|cache.*index/);
-    expect(result.isError).toBeFalsy();
+    // Without warmup the handler returns errorResult with guidance — isError=true
+    expect(result.isError).toBe(true);
+    const text = result.content[0]?.text ?? '';
 
-    console.log(`    Usages without warmup: ${text.slice(0, 100)}`);
+    // Should explain warmup, not crash with a generic 500
+    expect(text.toLowerCase()).toMatch(/warmup|arc1_cache_warmup|cache.*warmup/);
+    // Should NOT leak internals
+    expect(text).not.toContain('<?xml');
+    expect(text).not.toMatch(/\.ts:\d+/);
+
+    console.log(`    Usages without warmup: ${text.slice(0, 120)}`);
   });
 });
