@@ -95,6 +95,8 @@ export class AdtHttpClient {
    * (domain, path, expiry) because all requests go to the same SAP host.
    */
   private cookieJar: Map<string, string> = new Map();
+  /** Guard to prevent infinite retry loops for DB connection errors */
+  private dbRetryInProgress = false;
 
   constructor(config: AdtHttpConfig) {
     this.config = config;
@@ -270,6 +272,63 @@ export class AdtHttpClient {
 
       // Persist any Set-Cookie headers from the response
       this.storeCookies(response);
+
+      // Detect broken DB connection on the assigned work process.
+      // SAP's ICM routes all requests with the same session cookie to the same
+      // work process. If that WP has a broken HANA connection, every request fails
+      // with "database connection is not open". Fix: clear the session to force
+      // ICM to assign a different work process on retry.
+      const responseBody = typeof response.data === 'string' ? response.data : String(response.data ?? '');
+      if (this.isDbConnectionError(responseBody) && !this.dbRetryInProgress) {
+        this.dbRetryInProgress = true;
+        try {
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: response.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: 'DB connection broken — resetting session and retrying',
+          });
+
+          // Clear session to get a different work process
+          this.resetSession();
+
+          // Re-fetch CSRF token (needed for modifying requests, harmless for reads)
+          if (isModifyingMethod(method)) {
+            await this.fetchCsrfToken();
+            headers['X-CSRF-Token'] = this.csrfToken;
+          }
+
+          // Rebuild cookie header from fresh jar
+          const freshCookieParts: string[] = [];
+          for (const [k, v] of this.cookieJar) {
+            freshCookieParts.push(`${k}=${v}`);
+          }
+          headers.Cookie = freshCookieParts.length > 0 ? freshCookieParts.join('; ') : '';
+
+          const retryResp = await this.axios.request({ method, url, data: body, headers });
+          this.storeCookies(retryResp);
+          const retryResult = this.handleResponse(retryResp, path);
+
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: retryResp.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: 'DB connection retry succeeded',
+          });
+
+          return retryResult;
+        } finally {
+          this.dbRetryInProgress = false;
+        }
+      }
 
       // Handle CSRF token refresh on 403 (modifying requests only)
       if (response.status === 403 && isModifyingMethod(method)) {
@@ -453,6 +512,24 @@ export class AdtHttpClient {
    * Only stores the name=value part; ignores path, domain, expiry
    * since all requests go to the same SAP host.
    */
+  /**
+   * Detect "database connection is not open" error from SAP.
+   * This happens when a work process loses its HANA DB connection.
+   * SAP returns a 500 with this message in the body (plain text or XML).
+   */
+  private isDbConnectionError(body: string): boolean {
+    return body.toLowerCase().includes('database connection is not open');
+  }
+
+  /**
+   * Reset HTTP session state to force SAP's ICM to assign a new work process.
+   * Clears session cookies and CSRF token so the next request gets a fresh session.
+   */
+  private resetSession(): void {
+    this.cookieJar.clear();
+    this.csrfToken = '';
+  }
+
   private storeCookies(response: AxiosResponse): void {
     const setCookieHeaders = response.headers['set-cookie'];
     if (!setCookieHeaders || !Array.isArray(setCookieHeaders)) return;
