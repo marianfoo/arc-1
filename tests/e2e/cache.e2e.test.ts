@@ -75,9 +75,10 @@ describe('E2E Cache Tests', () => {
     // Both responses should be identical
     expect(text2).toBe(text1);
 
-    // Cache hit should be significantly faster (at least 5x, or within 100ms absolute).
-    // The 100ms cap avoids flakiness when SAP itself is very fast.
-    expect(cachedMs).toBeLessThan(Math.max(firstMs / 5, 100));
+    // Cache hit should be significantly faster (at least 5x, or within 300ms absolute).
+    // The 300ms cap accounts for network RTT to the remote e2e server (~50-150ms)
+    // even when there is no SAP call. We still verify the content is identical.
+    expect(cachedMs).toBeLessThan(Math.max(firstMs / 5, 300));
 
     console.log(`    SAPRead first: ${firstMs}ms, cached: ${cachedMs}ms`);
   });
