@@ -251,6 +251,11 @@ export async function handleToolCall(
       const message = err instanceof Error ? err.message : String(err);
       const durationMs = Date.now() - start;
 
+      // DEBUG: dump full error to stderr for debugging "database connection" TypeError
+      if (err instanceof Error && err.message.includes('database connection')) {
+        process.stderr.write(`\n[DEBUG-STACK] ${err.constructor.name}: ${err.message}\n${err.stack}\n\n`);
+      }
+
       logger.emitAudit({
         timestamp: new Date().toISOString(),
         level: 'error',
