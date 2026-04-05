@@ -9,10 +9,13 @@ LOCKFILE="/tmp/arc1-e2e.lock"
 
 echo "Lock acquired at $(date -Iseconds) (PID: $$)" > "${LOCKFILE}.info"
 
-# Remove stale SQLite cache files — better-sqlite3 throws
-# "The database connection is not open" if a stale .db file exists
-# from a previous session and the process tries to use it.
+# Remove stale SQLite cache files and the better-sqlite3 native module itself.
+# better-sqlite3 is only used by src/cache/sqlite.ts which is never imported
+# in production. Having the native binary present from a previous deploy can
+# cause TypeError: "The database connection is not open" if loaded accidentally.
 rm -f "${DEPLOY_DIR}/.arc1-cache.db" "${DEPLOY_DIR}/.arc1-cache.db-wal" "${DEPLOY_DIR}/.arc1-cache.db-shm"
+rm -rf "${DEPLOY_DIR}/node_modules/better-sqlite3"
+echo "   Cleaned: SQLite cache files + better-sqlite3 native module"
 
 # Kill any previous MCP server
 OLD_PID=$(cat /tmp/arc1-e2e.pid 2>/dev/null || echo "")
@@ -44,7 +47,8 @@ SAP_INSECURE=true \
 SAP_TRANSPORT=http-streamable \
 SAP_HTTP_ADDR="0.0.0.0:${MCP_PORT}" \
 SAP_VERBOSE=true \
-nohup node dist/index.js >> /tmp/arc1-e2e.log 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
+# Use --require to trace if better-sqlite3 gets loaded (debugging e2e TypeError)
+nohup node --require ./scripts/e2e-trace-sqlite.cjs dist/index.js >> /tmp/arc1-e2e.log 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
 echo $! > /tmp/arc1-e2e.pid
 
 # Wait for health check

@@ -222,6 +222,12 @@ scp -q ${SSH_OPTS} "${SCRIPT_DIR}/e2e-server-start.sh" ${SERVER_USER}@${SERVER}:
 ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "chmod +x ${DEPLOY_DIR}/start.sh"
 echo "   start.sh: uploaded"
 
+# Upload module load tracer (debugging better-sqlite3 TypeError)
+mkdir -p "${DEPLOY_DIR}/scripts" 2>/dev/null || true
+ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER} "mkdir -p ${DEPLOY_DIR}/scripts"
+scp -q ${SSH_OPTS} "${SCRIPT_DIR}/e2e-trace-sqlite.cjs" ${SERVER_USER}@${SERVER}:${DEPLOY_DIR}/scripts/
+echo "   e2e-trace-sqlite.cjs: uploaded"
+
 # ── Acquire lock + start server ─────────────────────────────────────
 echo ""
 echo "-- Acquiring lock (waiting up to ${LOCK_TIMEOUT}s if another run is active)..."
