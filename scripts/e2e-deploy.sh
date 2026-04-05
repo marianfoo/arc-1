@@ -207,8 +207,11 @@ rsync -az --delete -e "ssh ${SSH_OPTS}" dist/ ${SERVER_USER}@${SERVER}:${DEPLOY_
 echo "   dist/: synced"
 
 echo "-- Syncing node_modules/..."
-rsync -az --delete -e "ssh ${SSH_OPTS}" node_modules/ ${SERVER_USER}@${SERVER}:${DEPLOY_DIR}/node_modules/
-echo "   node_modules/: synced"
+# Exclude better-sqlite3 native addon: it's only used by src/cache/sqlite.ts
+# which is never imported in production. Rsyncing the native binary compiled
+# on CI (different Node ABI) to the server causes TypeError at runtime.
+rsync -az --delete --exclude='better-sqlite3' -e "ssh ${SSH_OPTS}" node_modules/ ${SERVER_USER}@${SERVER}:${DEPLOY_DIR}/node_modules/
+echo "   node_modules/: synced (excluding better-sqlite3)"
 
 scp -q ${SSH_OPTS} package.json ${SERVER_USER}@${SERVER}:${DEPLOY_DIR}/
 echo "   package.json: copied"

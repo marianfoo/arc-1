@@ -39,9 +39,6 @@ import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
 import { expandHyperfocusedArgs, getHyperfocusedScope } from './hyperfocused.js';
 
-// DEBUG: verify this module version is loaded on the server
-process.stderr.write('[DEBUG-MODULE-LOAD] intent.ts debug-7 loaded\n');
-
 /** MCP tool call result */
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;
@@ -254,9 +251,6 @@ export async function handleToolCall(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const durationMs = Date.now() - start;
-      // Include stack in errorMessage for debugging (temporary)
-      const stack = err instanceof Error ? err.stack : 'no-stack';
-      const debugMessage = `${message} [STACK: ${stack}]`;
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
@@ -269,7 +263,7 @@ export async function handleToolCall(
         durationMs,
         status: 'error',
         errorClass: classifyError(err),
-        errorMessage: debugMessage,
+        errorMessage: message,
       });
 
       return errorResult(formatErrorForLLM(err, message, toolName, args));
@@ -304,23 +298,6 @@ async function handleSAPRead(client: AdtClient, args: Record<string, unknown>): 
   if (isBtpSystem() && BTP_HINTS[type]) {
     return errorResult(BTP_HINTS[type]);
   }
-
-  // DEBUG: wrap entire switch in try-catch to get stack trace for TypeError
-  try {
-    return await handleSAPReadInner(client, type, name, args);
-  } catch (err) {
-    const stack = err instanceof Error ? err.stack : 'no-stack';
-    process.stderr.write(`[DEBUG-READ-ERROR] type=${type} name=${name} err=${err} stack=${stack}\n`);
-    throw err;
-  }
-}
-
-async function handleSAPReadInner(
-  client: AdtClient,
-  type: string,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<ToolResult> {
   switch (type) {
     case 'PROG':
       return textResult(await client.getProgram(name));
