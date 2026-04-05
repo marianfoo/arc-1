@@ -137,8 +137,11 @@ RECHECK_SCRIPT
   fi
   echo "   DB: OK (recovered after ABAP instance restart)"
 elif [ "${DB_AUTH_FAIL}" -gt "0" ]; then
-  echo "   WARNING: DB check got ${DB_AUTH_FAIL}/10 auth failures — cannot verify DB health"
-  echo "   Ensure SAP_PASSWORD secret matches the DEVELOPER user password"
+  echo "   ERROR: DB check got ${DB_AUTH_FAIL}/10 auth failures (HTTP 401)"
+  echo "   The SAP_USER + SAP_PASSWORD combination is rejected by the SAP system."
+  echo "   Verify that the SAP_USER secret matches the user whose password is in SAP_PASSWORD."
+  echo "   (e.g., if SAP_PASSWORD is for DEVELOPER, SAP_USER must also be DEVELOPER)"
+  exit 1
 else
   echo "   DB: OK (10/10 requests successful)"
 fi

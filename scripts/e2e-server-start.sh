@@ -9,6 +9,11 @@ LOCKFILE="/tmp/arc1-e2e.lock"
 
 echo "Lock acquired at $(date -Iseconds) (PID: $$)" > "${LOCKFILE}.info"
 
+# Remove stale SQLite cache files — better-sqlite3 throws
+# "The database connection is not open" if a stale .db file exists
+# from a previous session and the process tries to use it.
+rm -f "${DEPLOY_DIR}/.arc1-cache.db" "${DEPLOY_DIR}/.arc1-cache.db-wal" "${DEPLOY_DIR}/.arc1-cache.db-shm"
+
 # Kill any previous MCP server
 OLD_PID=$(cat /tmp/arc1-e2e.pid 2>/dev/null || echo "")
 if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
