@@ -252,17 +252,6 @@ export async function handleToolCall(
       const message = err instanceof Error ? err.message : String(err);
       const durationMs = Date.now() - start;
 
-      // Diagnostic: write raw error details to stderr (temporary — remove after fixing e2e)
-      if (message.includes('database connection')) {
-        const stack = err instanceof Error ? err.stack : 'not-an-error-object';
-        const proto = Object.getPrototypeOf(err)?.constructor?.name ?? 'unknown';
-        process.stderr.write(
-          `[DB-ERROR-TRACE] tool=${toolName} type=${String(
-            (args as Record<string, unknown>).type ?? '',
-          )} proto=${proto} msg=${message} stack=${stack}\n`,
-        );
-      }
-
       logger.emitAudit({
         timestamp: new Date().toISOString(),
         level: 'error',
