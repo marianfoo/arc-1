@@ -35,6 +35,7 @@ export interface ToolCallEndEvent extends AuditEventBase {
   status: 'success' | 'error';
   errorClass?: string;
   errorMessage?: string;
+  errorStack?: string;
   resultSize?: number;
   /** First 500 chars of the response text (for debugging in server logs) */
   resultPreview?: string;

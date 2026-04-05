@@ -263,6 +263,7 @@ export async function handleToolCall(
         status: 'error',
         errorClass: classifyError(err),
         errorMessage: message,
+        errorStack: err instanceof Error ? err.stack : undefined,
       });
 
       return errorResult(formatErrorForLLM(err, message, toolName, args));
