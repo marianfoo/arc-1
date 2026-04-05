@@ -39,6 +39,9 @@ import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
 import { expandHyperfocusedArgs, getHyperfocusedScope } from './hyperfocused.js';
 
+// DEBUG: verify this module version is loaded on the server
+process.stderr.write('[DEBUG-MODULE-LOAD] intent.ts debug-7 loaded\n');
+
 /** MCP tool call result */
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;
