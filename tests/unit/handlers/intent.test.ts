@@ -1037,8 +1037,11 @@ ENDCLASS.`;
   // ─── Issue 7: SAPNavigate symbolic references ──────────────────────
 
   describe('SAPNavigate symbolic references', () => {
-    it('resolves type+name to URI for references action', async () => {
+    it('resolves type+name to URI for references action (scope-based Where-Used fails, falls back to simple)', async () => {
       mockFetch.mockReset();
+      // First call: findWhereUsed POST fails (simulating older SAP system)
+      mockFetch.mockRejectedValueOnce(new Error('Not found'));
+      // Second call: findReferences GET succeeds (fallback)
       mockFetch.mockResolvedValueOnce(
         mockResponse(
           200,

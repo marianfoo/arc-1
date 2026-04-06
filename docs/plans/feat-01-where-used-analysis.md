@@ -48,10 +48,10 @@ Reference: `reports/2026-03-24-001-feature-parity-implementation.md` Phase 1 des
 
 Update the SAPNavigate handler and tool definition to expose the enhanced Where-Used:
 
-- [ ] Update `src/handlers/intent.ts` `handleSAPNavigate` case `'references'` to call `findWhereUsed` instead of `findReferences`, falling back to `findReferences` if the scope endpoint returns an error (older SAP systems)
-- [ ] Add optional `objectType` parameter to `SAPNavigate` tool schema in `src/handlers/tools.ts` — allows filtering where-used results by object type (e.g., only show CLAS references)
-- [ ] Update the `SAPNavigate` tool description to mention the enhanced where-used capability
-- [ ] Export new functions from `src/adt/codeintel.ts` and update import in `src/handlers/intent.ts`
+- [x] Update `src/handlers/intent.ts` `handleSAPNavigate` case `'references'` to call `findWhereUsed` instead of `findReferences`, falling back to `findReferences` if the scope endpoint returns an error (older SAP systems)
+- [x] Add optional `objectType` parameter to `SAPNavigate` tool schema in `src/handlers/tools.ts` — allows filtering where-used results by object type (e.g., only show CLAS references)
+- [x] Update the `SAPNavigate` tool description to mention the enhanced where-used capability
+- [x] Export new functions from `src/adt/codeintel.ts` and update import in `src/handlers/intent.ts`
 
 ### Task 3: Add unit tests
 

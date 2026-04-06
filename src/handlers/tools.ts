@@ -353,8 +353,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPNavigate',
       description: btp
-        ? 'Navigate code (BTP ABAP Environment): find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete. On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
-        : 'Navigate code: find definitions, references, and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: you can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific type (e.g., CLAS, PROG). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
+        : 'Navigate code: find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific type (e.g., CLAS, PROG). You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -372,6 +372,11 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
             description: 'Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to uri for references.',
           },
           name: { type: 'string', description: 'Object name — alternative to uri for references.' },
+          objectType: {
+            type: 'string',
+            description:
+              'For references action: filter where-used results by object type (e.g., CLAS, PROG, FUNC, INTF). Only returns references from objects of the specified type.',
+          },
           line: { type: 'number', description: 'Line number (1-based)' },
           column: { type: 'number', description: 'Column number (1-based)' },
           source: { type: 'string', description: 'Current source code (for definition/completion)' },
