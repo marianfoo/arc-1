@@ -260,6 +260,62 @@ The biggest savings come from dependency graph caching. A single `SAPContext` ca
 - **AST parsing** (`@abaplint/core`): approximately 10 ms per object. This only runs on cache misses or during warmup for changed objects.
 - **SQLite I/O**: single-digit milliseconds for reads; writes are batched during warmup.
 
+## Limitations and Caveats
+
+Understanding these limitations helps you avoid surprises in production.
+
+### External writes are not detected
+
+The cache is only invalidated when **ARC-1 itself** performs a write via `SAPWrite`. If someone modifies ABAP objects through other tools (ABAP Development Tools in Eclipse, SE38, transaction ABAP Workbench, or another ARC-1 instance), the cache will serve stale source until:
+
+- The server restarts (memory cache) or the SQLite file is deleted
+- ARC-1 performs its own write on the same object (triggers automatic invalidation)
+
+**Mitigation:** For collaborative development environments, use stdio mode (memory cache dies on process exit) or restart the http-streamable server after external changes.
+
+### No TTL — entries never expire automatically
+
+Cache entries have no expiry time. A source entry stored today will still be returned a week later unless explicitly invalidated by an ARC-1 write. This is intentional (SAP objects rarely change without a write) but means stale data is possible if the same object is modified externally.
+
+### Warmup covers CLAS, INTF, and FUGR only
+
+The pre-warmer enumerates TADIR and only indexes objects of type `CLAS` (classes), `INTF` (interfaces), and `FUGR` (function groups). Programs (`PROG`), includes (`INCL`), CDS views (`DDLS`), behavior definitions (`BDEF`), and other types are **not** pre-indexed.
+
+This means:
+- `SAPContext(action="usages")` only finds callers among indexed object types (classes, interfaces, function groups).
+- Programs that call a class won't appear in usages results.
+- On-demand caching (reading PROG/DDLS/etc.) still works — those types are cached the first time they're read, they just aren't in the edge index.
+
+### SQLite requires a native addon
+
+The SQLite backend uses `better-sqlite3`, a native Node.js addon compiled for the host platform. If the addon is missing or compiled for a different platform, ARC-1 automatically falls back to an in-memory cache and logs a warning:
+
+```
+WARN SQLite cache unavailable (better-sqlite3 not loaded) — falling back to memory cache
+```
+
+This happens automatically — the server still starts and caches in memory. To verify which backend is active, use `SAPManage(action="cache_stats")`.
+
+### Warmup does not block server startup
+
+The pre-warmer runs concurrently in the background. The server starts accepting MCP requests immediately, even if warmup is still running. During warmup:
+
+- Source reads are served normally (cache misses go to SAP, hits return immediately).
+- `SAPContext(action="usages")` returns a "warmup not complete" error until warmup finishes.
+- `SAPManage(action="cache_stats")` shows `warmupAvailable: false` while in progress.
+
+### The [cached] marker in SAPContext output
+
+When `SAPContext(action="deps")` resolves dependencies from the cache (zero ADT calls), the output header includes `[cached]`:
+
+```
+* === Dependency context for ZCL_ORDER (3 deps resolved) [cached] ===
+```
+
+Without the marker, some or all dependencies were freshly fetched from SAP. First call after server start will not show `[cached]`. Subsequent calls for unchanged objects will.
+
+---
+
 ## Monitoring
 
 Use `SAPManage(action="cache_stats")` to inspect the current state of the cache:

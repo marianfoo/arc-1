@@ -47,6 +47,15 @@ Deploy arc1 as a Cloud Foundry app on SAP BTP with full platform integration:
 - **Method-level read/edit** — read or update a single class method, not the whole source (up to 20x fewer tokens)
 - **Context compression** — `SAPContext` returns public API contracts of all dependencies in one call (7-30x compression)
 
+### Built-in Object Caching
+
+- **Automatic source caching** — every SAP object read is cached in memory (stdio) or SQLite (http-streamable). Repeated reads return instantly without calling SAP.
+- **Dependency graph caching** — `SAPContext` dep resolution keyed by source hash; unchanged objects skip all ADT calls on subsequent runs.
+- **Pre-warmer** — start with `ARC1_CACHE_WARMUP=true` to pre-index all custom objects at startup, enabling reverse dependency lookup (`SAPContext(action="usages")`).
+- **Write invalidation** — when `SAPWrite` modifies an object, its cache entry is automatically dropped; next read fetches fresh source.
+
+See **[docs/caching.md](docs/caching.md)** for full documentation.
+
 ### Testing
 
 - **700+ tests** across unit, integration, and E2E
