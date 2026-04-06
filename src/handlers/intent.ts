@@ -807,7 +807,13 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       } catch (err) {
         // Only fall back for HTTP errors indicating the endpoint is not available (older SAP systems)
         if (err instanceof AdtApiError && [404, 405, 501].includes(err.statusCode)) {
-          results = await findReferences(client.http, client.safety, uri);
+          const fallbackResults = await findReferences(client.http, client.safety, uri);
+          if (objectType && fallbackResults.length > 0) {
+            return textResult(
+              `Note: objectType filter not supported on this system. Showing all references.\n${JSON.stringify(fallbackResults, null, 2)}`,
+            );
+          }
+          results = fallbackResults;
         } else {
           throw err;
         }

@@ -1039,9 +1039,11 @@ ENDCLASS.`;
   describe('SAPNavigate symbolic references', () => {
     it('resolves type+name to URI for references action (scope-based Where-Used fails, falls back to simple)', async () => {
       mockFetch.mockReset();
-      // First call: findWhereUsed POST fails with 404 (simulating older SAP system without scope endpoint)
+      // First call: CSRF token fetch for the POST
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: findWhereUsed POST fails with 404 (simulating older SAP system without scope endpoint)
       mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/usageReferences'));
-      // Second call: findReferences GET succeeds (fallback)
+      // Third call: findReferences GET succeeds (fallback)
       mockFetch.mockResolvedValueOnce(
         mockResponse(
           200,
