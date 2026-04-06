@@ -35,12 +35,12 @@ This is the #1 most requested missing feature per the roadmap (P1, XS effort) an
 
 Add the full 2-step Where-Used API to `src/adt/codeintel.ts`:
 
-- [ ] Add `WhereUsedScope` interface (available object types/counts from scope response)
-- [ ] Add `WhereUsedResult` interface extending `ReferenceResult` with additional fields: `packageName`, `snippet`, `objectDescription`
-- [ ] Implement `getWhereUsedScope(http, safety, objectUrl)` — POST to `/sap/bc/adt/repository/informationsystem/usageReferences/scope` with the object URI in the request body, returns available scope/object types
-- [ ] Implement `findWhereUsed(http, safety, objectUrl, objectType?)` — POST to `/sap/bc/adt/repository/informationsystem/usageReferences` with scope filter in request body, returns detailed results
-- [ ] Use `fast-xml-parser` for XML parsing (consistent with `src/adt/xml-parser.ts` patterns) instead of regex
-- [ ] Add safety check using `checkOperation(safety, OperationType.Intelligence, 'FindWhereUsed')`
+- [x] Add `WhereUsedScope` interface (available object types/counts from scope response)
+- [x] Add `WhereUsedResult` interface extending `ReferenceResult` with additional fields: `packageName`, `snippet`, `objectDescription`
+- [x] Implement `getWhereUsedScope(http, safety, objectUrl)` — POST to `/sap/bc/adt/repository/informationsystem/usageReferences/scope` with the object URI in the request body, returns available scope/object types
+- [x] Implement `findWhereUsed(http, safety, objectUrl, objectType?)` — POST to `/sap/bc/adt/repository/informationsystem/usageReferences` with scope filter in request body, returns detailed results
+- [x] Use `fast-xml-parser` for XML parsing (consistent with `src/adt/xml-parser.ts` patterns) instead of regex
+- [x] Add safety check using `checkOperation(safety, OperationType.Intelligence, 'FindWhereUsed')`
 
 Reference: `reports/2026-03-24-001-feature-parity-implementation.md` Phase 1 describes the 2-step API. Current simple implementation is at `src/adt/codeintel.ts:69-97`.
 
