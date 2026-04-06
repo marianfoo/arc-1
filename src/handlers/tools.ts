@@ -394,19 +394,29 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPLint',
       description:
-        'Run local abaplint rules on ABAP source code. For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.',
+        'Run local abaplint rules on ABAP source code. System-aware: auto-selects cloud or on-prem rules based on detected system type.\n\n' +
+        'Actions:\n' +
+        '- "lint": Check ABAP source for issues. Returns errors and warnings.\n' +
+        '- "lint_and_fix": Lint + auto-fix all fixable issues (keyword case, obsolete statements, etc.). Returns fixed source.\n' +
+        '- "list_rules": List all available rules with current config. No source needed.\n\n' +
+        'For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['lint'],
-            description: 'Check type (only "lint" — for atc/syntax use SAPDiagnose)',
+            enum: ['lint', 'lint_and_fix', 'list_rules'],
+            description: 'Check type',
           },
-          source: { type: 'string', description: 'ABAP source code to lint' },
+          source: { type: 'string', description: 'ABAP source code to lint (not needed for list_rules)' },
           name: { type: 'string', description: 'Object name (used for filename detection)' },
+          rules: {
+            type: 'object',
+            description:
+              'Rule overrides: { "rule_name": false } to disable, { "rule_name": { "severity": "Warning" } } to configure. Overrides system defaults.',
+          },
         },
-        required: ['action', 'source'],
+        required: ['action'],
       },
     },
     {

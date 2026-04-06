@@ -1,0 +1,218 @@
+/**
+ * abaplint configuration builder for ARC-1.
+ *
+ * Builds an @abaplint/core Config by layering:
+ * 1. Base: Default config for the detected ABAP version
+ * 2. Preset: Cloud or on-prem rule overrides
+ * 3. User: Custom rule overrides from config file or tool args
+ *
+ * This replaces the hardcoded `Config.getDefault(Version.v702)` with
+ * a system-aware, customizable configuration.
+ */
+
+import { readFileSync } from 'node:fs';
+import { Config, Version } from '@abaplint/core';
+import { mapSapReleaseToAbaplintVersion } from '../adt/features.js';
+import type { SystemType } from '../adt/types.js';
+import { CLOUD_DISABLED_RULES, CLOUD_ERROR_RULES, CLOUD_WARNING_RULES } from './presets/cloud.js';
+import { ONPREM_DISABLED_RULES, ONPREM_ERROR_RULES, ONPREM_WARNING_RULES } from './presets/onprem.js';
+
+/** Rule override: true to enable with defaults, false to disable, or object with config */
+export type RuleOverrides = Record<string, boolean | Record<string, unknown>>;
+
+/** Options for building an abaplint config */
+export interface LintConfigOptions {
+  /** SAP system type: 'btp' or 'onprem' */
+  systemType?: SystemType;
+  /** SAP_BASIS release string (e.g., "757") */
+  abapRelease?: string;
+  /** Path to custom abaplint.jsonc config file */
+  configFile?: string;
+  /** Inline rule overrides (from tool call args) */
+  ruleOverrides?: RuleOverrides;
+}
+
+/**
+ * Build an abaplint Config from system metadata and user overrides.
+ *
+ * Resolution order (each layer overrides the previous):
+ * 1. Default config for the ABAP version
+ * 2. System preset (cloud or on-prem) — disables noisy rules, sets severities
+ * 3. User config file (if provided)
+ * 4. Inline rule overrides (if provided)
+ */
+export function buildLintConfig(options: LintConfigOptions = {}): Config {
+  const version = resolveVersion(options);
+  const base = Config.getDefault(version);
+  const raw = JSON.parse(JSON.stringify(base.get())) as Record<string, unknown>;
+
+  // Apply system preset
+  const preset = options.systemType === 'btp' ? 'cloud' : 'onprem';
+  applyPreset(raw, preset);
+
+  // Apply user config file (if provided)
+  if (options.configFile) {
+    applyConfigFile(raw, options.configFile);
+  }
+
+  // Apply inline rule overrides (from tool args)
+  if (options.ruleOverrides) {
+    applyRuleOverrides(raw, options.ruleOverrides);
+  }
+
+  return new Config(JSON.stringify(raw));
+}
+
+/**
+ * Build a "pre-write" config — a strict subset of rules that should
+ * block writes when they fail. Only includes correctness rules,
+ * not style/formatting.
+ */
+export function buildPreWriteConfig(options: LintConfigOptions = {}): Config {
+  const version = resolveVersion(options);
+  const base = Config.getDefault(version);
+  const raw = JSON.parse(JSON.stringify(base.get())) as Record<string, unknown>;
+  const rules = raw.rules as Record<string, unknown>;
+
+  // Disable ALL rules first
+  for (const key of Object.keys(rules)) {
+    rules[key] = false;
+  }
+
+  // Enable only pre-write blocking rules
+  const preWriteRules: RuleOverrides = {
+    parser_error: { severity: 'Error' },
+    parser_missing_space: { severity: 'Error' },
+    begin_end_names: { severity: 'Error' },
+    unreachable_code: { severity: 'Error' },
+    identical_conditions: { severity: 'Error' },
+  };
+
+  // Add cloud-specific blocking rules
+  if (options.systemType === 'btp') {
+    preWriteRules.cloud_types = { severity: 'Error' };
+    preWriteRules.strict_sql = { severity: 'Error' };
+    preWriteRules.sql_escape_host_variables = { severity: 'Error' };
+    preWriteRules.obsolete_statement = {
+      severity: 'Error',
+      refresh: true,
+      compute: true,
+      add: true,
+      subtract: true,
+      multiply: true,
+      divide: true,
+      move: true,
+      formDefinition: true,
+      formImplementation: true,
+    };
+  }
+
+  // Apply user overrides on top
+  if (options.configFile) {
+    applyConfigFile(raw, options.configFile);
+  }
+  if (options.ruleOverrides) {
+    applyRuleOverrides(raw, options.ruleOverrides);
+  }
+
+  applyRuleOverrides(raw, preWriteRules);
+
+  return new Config(JSON.stringify(raw));
+}
+
+/** Resolve the abaplint Version from options */
+function resolveVersion(options: LintConfigOptions): Version {
+  if (options.systemType === 'btp') return Version.Cloud;
+  if (options.abapRelease) return mapSapReleaseToAbaplintVersion(options.abapRelease);
+  return Version.v702; // Conservative default
+}
+
+/** Apply a preset (cloud or onprem) to the raw config */
+function applyPreset(raw: Record<string, unknown>, preset: 'cloud' | 'onprem'): void {
+  const rules = raw.rules as Record<string, unknown>;
+  const disabledRules = preset === 'cloud' ? CLOUD_DISABLED_RULES : ONPREM_DISABLED_RULES;
+  const errorRules = preset === 'cloud' ? CLOUD_ERROR_RULES : ONPREM_ERROR_RULES;
+  const warningRules = preset === 'cloud' ? CLOUD_WARNING_RULES : ONPREM_WARNING_RULES;
+
+  // Disable noisy rules
+  for (const rule of disabledRules) {
+    rules[rule] = false;
+  }
+
+  // Apply error rules
+  for (const [rule, config] of Object.entries(errorRules)) {
+    rules[rule] = config;
+  }
+
+  // Apply warning rules
+  for (const [rule, config] of Object.entries(warningRules)) {
+    rules[rule] = config;
+  }
+}
+
+/** Apply overrides from a user config file */
+function applyConfigFile(raw: Record<string, unknown>, configFile: string): void {
+  try {
+    const content = readFileSync(configFile, 'utf-8');
+    // Strip JSONC comments (// and /* */)
+    const stripped = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const userConfig = JSON.parse(stripped) as Record<string, unknown>;
+
+    // Merge rules
+    if (userConfig.rules && typeof userConfig.rules === 'object') {
+      applyRuleOverrides(raw, userConfig.rules as RuleOverrides);
+    }
+
+    // Merge syntax settings
+    if (userConfig.syntax && typeof userConfig.syntax === 'object') {
+      raw.syntax = { ...(raw.syntax as Record<string, unknown>), ...(userConfig.syntax as Record<string, unknown>) };
+    }
+  } catch {
+    // Config file not found or invalid — silently ignore
+  }
+}
+
+/** Apply rule overrides to the raw config */
+function applyRuleOverrides(raw: Record<string, unknown>, overrides: RuleOverrides): void {
+  const rules = raw.rules as Record<string, unknown>;
+  for (const [rule, config] of Object.entries(overrides)) {
+    if (config === false) {
+      rules[rule] = false;
+    } else if (config === true) {
+      // Enable with defaults (don't override existing config)
+      if (!rules[rule]) {
+        rules[rule] = { severity: 'Error' };
+      }
+    } else {
+      rules[rule] = config;
+    }
+  }
+}
+
+/**
+ * Load a user config file, returning the parsed rule overrides.
+ * Returns undefined if the file doesn't exist or is invalid.
+ */
+export function loadConfigFile(configFile: string): RuleOverrides | undefined {
+  try {
+    const content = readFileSync(configFile, 'utf-8');
+    const stripped = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const parsed = JSON.parse(stripped) as Record<string, unknown>;
+    return (parsed.rules as RuleOverrides) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** List all available rules with their current config from a Config object */
+export function listRulesFromConfig(config: Config): Array<{ rule: string; enabled: boolean; severity?: string }> {
+  const rules = config.get().rules as Record<string, unknown>;
+  return Object.entries(rules).map(([rule, cfg]) => {
+    if (cfg === false || cfg === undefined) {
+      return { rule, enabled: false };
+    }
+    const severity =
+      typeof cfg === 'object' && cfg !== null ? ((cfg as Record<string, unknown>).severity as string) : 'Error';
+    return { rule, enabled: true, severity: severity ?? 'Error' };
+  });
+}

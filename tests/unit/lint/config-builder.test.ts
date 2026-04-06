@@ -1,0 +1,158 @@
+import { Config } from '@abaplint/core';
+import { describe, expect, it } from 'vitest';
+import { buildLintConfig, buildPreWriteConfig, listRulesFromConfig } from '../../../src/lint/config-builder.js';
+
+describe('Config Builder', () => {
+  describe('buildLintConfig', () => {
+    it('returns a valid Config with no options', () => {
+      const config = buildLintConfig();
+      expect(config).toBeInstanceOf(Config);
+      expect(Object.keys(config.get().rules).length).toBeGreaterThan(0);
+    });
+
+    it('uses Cloud version for BTP system type', () => {
+      const config = buildLintConfig({ systemType: 'btp' });
+      expect(config.get().syntax.version).toBe('Cloud');
+    });
+
+    it('uses mapped version for on-prem with release', () => {
+      const config = buildLintConfig({ systemType: 'onprem', abapRelease: '757' });
+      expect(config.get().syntax.version).toBe('v757');
+    });
+
+    it('falls back to v702 for on-prem without release', () => {
+      const config = buildLintConfig({ systemType: 'onprem' });
+      expect(config.get().syntax.version).toBe('v702');
+    });
+
+    it('enables cloud_types for BTP', () => {
+      const config = buildLintConfig({ systemType: 'btp' });
+      const rules = config.get().rules as Record<string, unknown>;
+      expect(rules.cloud_types).toBeTruthy();
+      expect((rules.cloud_types as Record<string, unknown>).severity).toBe('Error');
+    });
+
+    it('disables cloud_types for on-prem', () => {
+      const config = buildLintConfig({ systemType: 'onprem' });
+      const rules = config.get().rules as Record<string, unknown>;
+      expect(rules.cloud_types).toBe(false);
+    });
+
+    it('enables strict_sql for BTP', () => {
+      const config = buildLintConfig({ systemType: 'btp' });
+      const rules = config.get().rules as Record<string, unknown>;
+      expect(rules.strict_sql).toBeTruthy();
+    });
+
+    it('disables strict_sql for on-prem', () => {
+      const config = buildLintConfig({ systemType: 'onprem' });
+      const rules = config.get().rules as Record<string, unknown>;
+      expect(rules.strict_sql).toBe(false);
+    });
+
+    it('disables noisy rules (abapdoc, description_empty, no_prefixes)', () => {
+      for (const systemType of ['btp', 'onprem'] as const) {
+        const config = buildLintConfig({ systemType });
+        const rules = config.get().rules as Record<string, unknown>;
+        expect(rules.abapdoc).toBe(false);
+        expect(rules.description_empty).toBe(false);
+        expect(rules.no_prefixes).toBe(false);
+      }
+    });
+
+    it('applies rule overrides on top of preset', () => {
+      const config = buildLintConfig({
+        systemType: 'btp',
+        ruleOverrides: {
+          line_length: { severity: 'Error', length: 200 },
+          abapdoc: true, // Re-enable a disabled rule
+        },
+      });
+      const rules = config.get().rules as Record<string, unknown>;
+      expect((rules.line_length as Record<string, unknown>).length).toBe(200);
+      expect(rules.abapdoc).toBeTruthy();
+    });
+
+    it('can disable rules via overrides', () => {
+      const config = buildLintConfig({
+        systemType: 'btp',
+        ruleOverrides: {
+          cloud_types: false,
+        },
+      });
+      const rules = config.get().rules as Record<string, unknown>;
+      expect(rules.cloud_types).toBe(false);
+    });
+  });
+
+  describe('buildPreWriteConfig', () => {
+    it('only enables correctness rules', () => {
+      const config = buildPreWriteConfig({ systemType: 'onprem' });
+      const rules = config.get().rules as Record<string, unknown>;
+
+      // Correctness rules should be enabled
+      expect(rules.parser_error).toBeTruthy();
+      expect(rules.begin_end_names).toBeTruthy();
+      expect(rules.unreachable_code).toBeTruthy();
+
+      // Style rules should be disabled
+      expect(rules.keyword_case).toBe(false);
+      expect(rules.line_length).toBe(false);
+      expect(rules.indentation).toBe(false);
+    });
+
+    it('adds cloud-specific rules for BTP', () => {
+      const config = buildPreWriteConfig({ systemType: 'btp' });
+      const rules = config.get().rules as Record<string, unknown>;
+
+      expect(rules.cloud_types).toBeTruthy();
+      expect(rules.strict_sql).toBeTruthy();
+      expect(rules.sql_escape_host_variables).toBeTruthy();
+      expect(rules.obsolete_statement).toBeTruthy();
+    });
+
+    it('does not include cloud rules for on-prem', () => {
+      const config = buildPreWriteConfig({ systemType: 'onprem' });
+      const rules = config.get().rules as Record<string, unknown>;
+
+      expect(rules.cloud_types).toBe(false);
+      expect(rules.strict_sql).toBe(false);
+    });
+  });
+
+  describe('listRulesFromConfig', () => {
+    it('lists all rules with enabled/disabled status', () => {
+      const config = buildLintConfig({ systemType: 'btp' });
+      const rules = listRulesFromConfig(config);
+
+      expect(rules.length).toBeGreaterThan(0);
+
+      const enabled = rules.filter((r) => r.enabled);
+      const disabled = rules.filter((r) => !r.enabled);
+      expect(enabled.length).toBeGreaterThan(0);
+      expect(disabled.length).toBeGreaterThan(0);
+
+      // Check structure
+      for (const r of rules) {
+        expect(r).toHaveProperty('rule');
+        expect(r).toHaveProperty('enabled');
+        if (r.enabled) {
+          expect(r).toHaveProperty('severity');
+        }
+      }
+    });
+
+    it('shows correct severity for configured rules', () => {
+      const config = buildLintConfig({ systemType: 'btp' });
+      const rules = listRulesFromConfig(config);
+
+      const cloudTypes = rules.find((r) => r.rule === 'cloud_types');
+      expect(cloudTypes?.enabled).toBe(true);
+      expect(cloudTypes?.severity).toBe('Error');
+
+      const lineLength = rules.find((r) => r.rule === 'line_length');
+      expect(lineLength?.enabled).toBe(true);
+      expect(lineLength?.severity).toBe('Warning');
+    });
+  });
+});

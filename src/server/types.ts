@@ -79,6 +79,12 @@ export interface ServerConfig {
   /** Tool mode: 'standard' (11 intent tools) or 'hyperfocused' (1 universal SAP tool, ~200 tokens) */
   toolMode: 'standard' | 'hyperfocused';
 
+  // --- Lint ---
+  /** Path to custom abaplint.jsonc config file for lint rules */
+  abaplintConfig?: string;
+  /** Enable pre-write lint validation (default: true) */
+  lintBeforeWrite: boolean;
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -112,6 +118,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   ppEnabled: false,
   ppStrict: false,
   toolMode: 'standard',
+  lintBeforeWrite: true,
   logLevel: 'info',
   logFormat: 'text',
   verbose: false,

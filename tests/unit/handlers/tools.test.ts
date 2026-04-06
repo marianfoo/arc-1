@@ -83,7 +83,9 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('lint');
     expect(actionEnum).not.toContain('atc');
     expect(actionEnum).not.toContain('syntax');
-    expect(actionEnum).toHaveLength(1);
+    expect(actionEnum).toContain('lint_and_fix');
+    expect(actionEnum).toContain('list_rules');
+    expect(actionEnum).toHaveLength(3);
   });
 
   it('SAPLint description mentions SAPDiagnose for server-side checks', () => {
