@@ -1,7 +1,7 @@
 import { Config } from '@abaplint/core';
 import { describe, expect, it } from 'vitest';
 import { buildLintConfig } from '../../../src/lint/config-builder.js';
-import { buildSystemAwareConfig, lintAbapSource, lintAndFix, validateBeforeWrite } from '../../../src/lint/lint.js';
+import { lintAbapSource, lintAndFix, validateBeforeWrite } from '../../../src/lint/lint.js';
 
 describe('Enhanced ABAP Lint', () => {
   describe('lintAbapSource with custom config', () => {
@@ -167,22 +167,23 @@ ENDCLASS.`;
     });
   });
 
-  describe('buildSystemAwareConfig', () => {
-    it('returns Config for BTP', () => {
-      const config = buildSystemAwareConfig({ systemType: 'btp' });
+  describe('buildLintConfig version resolution', () => {
+    it('returns Config with Cloud version for BTP', () => {
+      const config = buildLintConfig({ systemType: 'btp' });
       expect(config).toBeInstanceOf(Config);
       expect(config.get().syntax.version).toBe('Cloud');
     });
 
-    it('returns Config for on-prem with specific release', () => {
-      const config = buildSystemAwareConfig({ systemType: 'onprem', abapRelease: '756' });
+    it('returns Config with mapped version for on-prem release', () => {
+      const config = buildLintConfig({ systemType: 'onprem', abapRelease: '756' });
       expect(config).toBeInstanceOf(Config);
       expect(config.get().syntax.version).toBe('v756');
     });
 
-    it('returns Config with no options (fallback)', () => {
-      const config = buildSystemAwareConfig();
+    it('returns Config with v702 fallback when no options given', () => {
+      const config = buildLintConfig();
       expect(config).toBeInstanceOf(Config);
+      expect(config.get().syntax.version).toBe('v702');
     });
   });
 });

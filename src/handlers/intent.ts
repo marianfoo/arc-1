@@ -752,7 +752,17 @@ interface PreWriteLintResult {
 
 /**
  * Run pre-write lint validation on source code.
- * Returns lint errors (blocking) and warnings (advisory).
+ *
+ * This is a "lint-before-lock" optimization (pattern from vibing-steampunk):
+ * by validating locally before acquiring the SAP object lock, we avoid
+ * holding locks on objects that would fail validation anyway.
+ *
+ * Only runs a strict subset of correctness rules (parser_error, cloud_types, etc.)
+ * — not style/formatting rules. This prevents false rejections from opinionated
+ * style checks while catching genuine errors that would fail server-side anyway.
+ *
+ * If lint itself throws (e.g., abaplint bug on unusual syntax), we don't block
+ * the write — we let the SAP server-side syntax check handle it instead.
  */
 function runPreWriteLint(source: string, type: string, name: string, config: ServerConfig): PreWriteLintResult {
   if (!config.lintBeforeWrite || !source) {

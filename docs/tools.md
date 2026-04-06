@@ -236,20 +236,39 @@ ENDCLASS.
 
 ## SAPLint
 
-Check ABAP code quality. Runs abaplint rules locally and/or ATC checks on the SAP system.
+Run local abaplint rules on ABAP source code. System-aware: auto-selects cloud or on-prem rules based on detected system type. For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `lint`, `atc`, or `syntax` |
-| `source` | string | No | ABAP source code (for `lint`) |
-| `name` | string | No | Object name (for `atc`/`syntax`) |
-| `type` | string | No | Object type (for `atc`/`syntax`) |
+| `action` | string | Yes | `lint`, `lint_and_fix`, or `list_rules` |
+| `source` | string | No | ABAP source code (for `lint` and `lint_and_fix`) |
+| `name` | string | No | Object name (used for filename detection) |
+| `rules` | object | No | Rule overrides: `{ "rule_name": false }` to disable, `{ "rule_name": { "severity": "Warning" } }` to configure |
+
+**Actions:**
+
+- **`lint`** — Check ABAP source for issues. Returns errors and warnings with line/column positions.
+- **`lint_and_fix`** — Lint + auto-fix all fixable issues (keyword case, obsolete statements, etc.). Returns the fixed source code alongside remaining unfixable issues.
+- **`list_rules`** — List all available rules with current config (preset, enabled/disabled status, severity). No source needed.
+
+**System-Aware Presets:**
+
+The lint rules auto-configure based on the detected SAP system:
+- **BTP/Cloud**: `cloud_types` (Error), `strict_sql` (Error), `obsolete_statement` (Error) — enforces ABAP Cloud constraints
+- **On-premise**: `cloud_types` (disabled), `obsolete_statement` (Warning) — more relaxed, allows classic ABAP
+
+**Pre-Write Validation:**
+
+When `--lint-before-write` is enabled (default: true), SAPWrite automatically runs a strict subset of lint rules before writing to SAP. Parser errors and cloud violations block the write. Style issues (keyword case, indentation) never block writes.
 
 **Examples:**
 ```
 SAPLint(action="lint", source="DATA lv_test TYPE string.\nlv_test = 'hello'.")
+SAPLint(action="lint_and_fix", source="data lv_x type i.\nadd 1 to lv_x.", name="ZCL_TEST")
+SAPLint(action="list_rules")
+SAPLint(action="lint", source="...", rules={"line_length": {"severity": "Error", "length": 80}})
 ```
 
 ---

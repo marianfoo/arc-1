@@ -344,9 +344,17 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Usefulness** | High — unique differentiator for S/4HANA migration |
 | **Status** | Not started |
 
-**What:** Run ATC checks with ABAP Cloud check variant to assess whether code is cloud-ready. Combined with the ABAP linter (`@abaplint/core` integration in `src/lint/lint.ts`), provide a comprehensive clean core compliance report.
+**What:** Run ATC checks with ABAP Cloud check variant to assess whether code is cloud-ready. Combined with the enhanced abaplint integration (system-aware cloud/on-prem presets, pre-write validation, auto-fix), provide a comprehensive clean core compliance report.
 
 **Why:** AWS ABAP Accelerator has this as a key feature. ARC-1 combines ATC cloud checks with `@abaplint/core` for offline linting.
+
+**Current state (partially implemented):**
+- ✅ System-aware abaplint presets (BTP cloud vs on-prem) with auto-detection from SAP_BASIS release
+- ✅ Pre-write lint validation blocks cloud_types/strict_sql/obsolete_statement violations on BTP
+- ✅ Auto-fix via `lint_and_fix` action (keyword_case, obsolete_statement, etc.)
+- ✅ Custom rule overrides via `--abaplint-config` or per-call `rules` parameter
+- ⬜ ATC Cloud check variant integration (server-side, complements offline abaplint)
+- ⬜ Combined cloud readiness report (ATC + abaplint findings merged)
 
 ---
 
@@ -888,6 +896,37 @@ The following features are tracked but not planned for near-term implementation.
 30. **FEAT-22** gCTS/abapGit Integration (M) — Git-based ABAP workflows
 31. **OPS-03** Multi-System Routing (L) — one instance → multiple SAP systems
 32. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
+33. **FEAT-30** ABAP Cleaner Integration (M) — optional Java-based code cleanup (see below)
+
+### FEAT-30: ABAP Cleaner Integration (Future)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟢 P3 |
+| **Effort** | M (3–5 days) |
+| **Risk** | Medium — adds Java 21 dependency, ~200MB Docker image increase |
+| **Usefulness** | High for teams already using ABAP cleaner profiles |
+| **Status** | Research complete, not started |
+
+**What:** Optional integration with SAP's [ABAP cleaner](https://github.com/SAP/abap-cleaner) CLI (`abap-cleanerc`) for 100+ code cleanup rules with 469 configuration options. Runs as a pre-stage before abaplint in the lint/fix pipeline. Teams can mount their `.cfj` profile files to enforce company coding standards.
+
+**Why:** Many SAP teams already maintain ABAP cleaner profiles (`.cfj` files) as their shared coding standard. Integrating this means LLM-generated code automatically conforms to the team's existing rules — no new rule configuration needed. ABAP cleaner handles transformations abaplint can't: READ TABLE → table expressions, string concatenation → string templates, FINAL declarations, advanced alignment (21 DDL/CDS-specific rules).
+
+**Architecture:** Three-stage pipeline: ABAP cleaner (Java CLI, transforms) → abaplint (TypeScript, lint+fix) → pre-write gate (TypeScript, block/pass). ABAP cleaner is optional — if Java/JAR not found, skipped silently. CLI invoked via `child_process.execFile` with `--source` for inline processing (<128KB) or temp files for larger sources. Output captured from stdout.
+
+**Key details from research:**
+- CLI: `abap-cleaner --source "<ABAP>" --release "757" --profile "team.cfj"` → cleaned source on stdout
+- No stdin support — must use `--source` flag or `--sourcefile` with temp file
+- No reliable exit codes (always 0) — error detection via stderr content
+- Profile format: `.cfj` (JSON-like key-value with version header), `--profiledata` accepts inline content
+- Release flag (`--release "757"`) maps to our existing `cachedFeatures.abapRelease`
+- Docker: requires Java 21 + Eclipse RCP app (~200MB total). Suggest two image variants: `latest` (lean) and `with-cleaner` (full)
+- Reference implementation: `vscode_abap_remote_fs/abapCleanerService.ts` wraps CLI with temp files + 30s timeout
+
+**Config options (planned):**
+- `SAP_ABAP_CLEANER_PATH` / `--abap-cleaner-path` — path to CLI binary
+- `SAP_ABAP_CLEANER_PROFILE` / `--abap-cleaner-profile` — path to `.cfj` profile
+- `SAP_ABAP_CLEANER_ENABLED` / `--abap-cleaner-enabled` — `auto` (default), `true`, `false`
 
 ### Phase E: Future / Niche (P3)
 33. **FEAT-05** Code Refactoring (L) — rename, extract method, change package

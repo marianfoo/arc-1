@@ -15,7 +15,7 @@
  */
 
 import { Config, Edits, MemoryFile, Registry, Version } from '@abaplint/core';
-import { buildLintConfig, buildPreWriteConfig, type LintConfigOptions } from './config-builder.js';
+import { buildPreWriteConfig, type LintConfigOptions } from './config-builder.js';
 
 /** Lint result from @abaplint/core */
 export interface LintResult {
@@ -157,16 +157,6 @@ export function validateBeforeWrite(
     errors,
     warnings,
   };
-}
-
-/**
- * Build a system-aware abaplint Config.
- *
- * Uses the detected system type (BTP vs on-prem) and ABAP release
- * to select the appropriate preset and ABAP version.
- */
-export function buildSystemAwareConfig(configOptions?: LintConfigOptions): Config {
-  return buildLintConfig(configOptions ?? {});
 }
 
 /**

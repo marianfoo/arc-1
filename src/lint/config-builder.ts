@@ -3,11 +3,22 @@
  *
  * Builds an @abaplint/core Config by layering:
  * 1. Base: Default config for the detected ABAP version
- * 2. Preset: Cloud or on-prem rule overrides
+ * 2. Preset: Cloud or on-prem rule overrides (disable noisy rules, set severities)
  * 3. User: Custom rule overrides from config file or tool args
  *
  * This replaces the hardcoded `Config.getDefault(Version.v702)` with
  * a system-aware, customizable configuration.
+ *
+ * Architecture note: We start from abaplint's full default config (181 rules)
+ * and selectively disable/adjust rules rather than building from scratch.
+ * This ensures we benefit from new rules added in abaplint updates while
+ * keeping our curated severity levels and disabled-rule list.
+ *
+ * The cloud vs on-prem distinction is primarily about:
+ * - syntax.version: Cloud vs v702-v758 (controls which ABAP syntax is valid)
+ * - cloud_types rule: blocks PROG/FORM/etc. that don't exist in BTP
+ * - strict_sql rule: enforces strict Open SQL (cloud requirement)
+ * - obsolete_statement severity: Error on cloud (won't compile), Warning on-prem (advisory)
  */
 
 import { readFileSync } from 'node:fs';
@@ -186,21 +197,6 @@ function applyRuleOverrides(raw: Record<string, unknown>, overrides: RuleOverrid
     } else {
       rules[rule] = config;
     }
-  }
-}
-
-/**
- * Load a user config file, returning the parsed rule overrides.
- * Returns undefined if the file doesn't exist or is invalid.
- */
-export function loadConfigFile(configFile: string): RuleOverrides | undefined {
-  try {
-    const content = readFileSync(configFile, 'utf-8');
-    const stripped = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-    const parsed = JSON.parse(stripped) as Record<string, unknown>;
-    return (parsed.rules as RuleOverrides) ?? undefined;
-  } catch {
-    return undefined;
   }
 }
 

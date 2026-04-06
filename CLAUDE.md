@@ -76,6 +76,8 @@ npm run dev
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
 | `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
 | `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (11 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
+| `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
+| `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
 | `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
@@ -134,7 +136,11 @@ src/
 │   ├── memory.ts               # In-memory cache
 │   └── sqlite.ts               # SQLite cache (better-sqlite3)
 └── lint/
-    └── lint.ts                 # ABAP lint wrapper (@abaplint/core)
+    ├── lint.ts                 # ABAP lint wrapper (@abaplint/core)
+    ├── config-builder.ts       # System-aware abaplint config builder (cloud/onprem presets)
+    └── presets/
+        ├── cloud.ts            # BTP/Steampunk lint preset (strict cloud rules)
+        └── onprem.ts           # On-premise lint preset (relaxed rules)
 
 tests/
 ├── unit/                       # Unit tests (no SAP system needed)
@@ -167,7 +173,7 @@ tests/
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
 | Add XML response parser | `src/adt/xml-parser.ts` |
 | Add safety check | `src/adt/safety.ts` |
-| Add lint rule config | `src/lint/lint.ts` |
+| Add lint rule config | `src/lint/lint.ts`, `src/lint/config-builder.ts`, `src/lint/presets/` |
 | Add dependency pattern | `src/context/deps.ts` |
 | Add contract extraction for new type | `src/context/contract.ts` |
 | Modify context output format | `src/context/compressor.ts` |

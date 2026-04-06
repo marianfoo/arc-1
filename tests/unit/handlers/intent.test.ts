@@ -451,6 +451,156 @@ describe('Intent Handler', () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {});
       expect(result.isError).toBe(true);
     });
+
+    it('lint_and_fix returns fixed source and applied rules', async () => {
+      const source = `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS test.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD test.
+    data lv_x type i.
+    lv_x = 1.
+  ENDMETHOD.
+ENDCLASS.`;
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'lint_and_fix',
+        source,
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toHaveProperty('fixedSource');
+      expect(parsed).toHaveProperty('appliedFixes');
+      expect(parsed).toHaveProperty('fixedRules');
+      expect(parsed).toHaveProperty('remainingIssues');
+      expect(parsed.appliedFixes).toBeGreaterThan(0);
+    });
+
+    it('lint_and_fix requires source', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'lint_and_fix',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('source');
+    });
+
+    it('list_rules returns rule catalog with counts', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'list_rules',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toHaveProperty('preset');
+      expect(parsed).toHaveProperty('enabledRules');
+      expect(parsed).toHaveProperty('disabledRules');
+      expect(parsed).toHaveProperty('rules');
+      expect(parsed.enabledRules).toBeGreaterThan(0);
+      expect(parsed.disabledRules).toBeGreaterThan(0);
+    });
+
+    it('lint accepts custom rule overrides', async () => {
+      const source = `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS test.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD test.
+    DATA lv_x TYPE i.
+    lv_x = 1.
+  ENDMETHOD.
+ENDCLASS.`;
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'lint',
+        source,
+        name: 'ZCL_TEST',
+        rules: { line_length: { severity: 'Error', length: 10 } },
+      });
+      expect(result.isError).toBeUndefined();
+      const issues = JSON.parse(result.content[0]?.text);
+      // With length=10, many lines should trigger line_length
+      const lineIssues = issues.filter((i: { rule: string }) => i.rule === 'line_length');
+      expect(lineIssues.length).toBeGreaterThan(0);
+    });
+
+    it('lint requires source', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'lint',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('source');
+    });
+  });
+
+  // ─── SAPWrite Pre-Write Lint Gate ───────────────────────────────
+
+  describe('SAPWrite pre-write lint gate', () => {
+    it('blocks update with parser errors when lintBeforeWrite is enabled', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD nonexistent.
+    INVALID SYNTAX HERE.
+  ENDMETHOD.
+ENDCLASS.`,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Pre-write lint check failed');
+      expect(result.content[0]?.text).toContain('parser_error');
+    });
+
+    it('allows update when lintBeforeWrite is disabled', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      // With lint disabled, even broken code should attempt the write
+      // (it will succeed because our mock returns 200)
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD nonexistent.
+    INVALID SYNTAX HERE.
+  ENDMETHOD.
+ENDCLASS.`,
+      });
+      // Should not be a lint error (write is attempted)
+      if (result.isError) {
+        // May fail for SAP reasons, but not lint reasons
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
+
+    it('allows valid ABAP through the gate', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: `CLASS zcl_test DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    METHODS test.
+ENDCLASS.
+CLASS zcl_test IMPLEMENTATION.
+  METHOD test.
+    DATA lv_x TYPE i.
+    lv_x = 1.
+  ENDMETHOD.
+ENDCLASS.`,
+      });
+      // Should not be a lint error
+      if (result.content[0]?.text) {
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
   });
 
   // ─── Unknown Tool ──────────────────────────────────────────────────
