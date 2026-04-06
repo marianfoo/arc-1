@@ -12,7 +12,12 @@ import { findDeepNodes, parseXml } from './xml-parser.js';
 
 /** Escape XML special characters for safe interpolation into XML attributes */
 function escapeXmlAttr(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&apos;');
 }
 
 /** Definition navigation result */
