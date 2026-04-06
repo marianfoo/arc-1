@@ -1,5 +1,5 @@
 import { Config } from '@abaplint/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildLintConfig, buildPreWriteConfig, listRulesFromConfig } from '../../../src/lint/config-builder.js';
 
 describe('Config Builder', () => {
@@ -82,6 +82,34 @@ describe('Config Builder', () => {
       });
       const rules = config.get().rules as Record<string, unknown>;
       expect(rules.cloud_types).toBe(false);
+    });
+  });
+
+  describe('graceful degradation on bad config file', () => {
+    it('returns valid config when configFile does not exist', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const config = buildLintConfig({
+        systemType: 'onprem',
+        configFile: '/nonexistent/path/abaplint.jsonc',
+      });
+      // Should still return a usable config (falls back to preset)
+      expect(config).toBeInstanceOf(Config);
+      expect(Object.keys(config.get().rules).length).toBeGreaterThan(0);
+      // Should warn on stderr
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('Could not load abaplint config'));
+      spy.mockRestore();
+    });
+
+    it('returns valid config when configFile contains invalid JSON', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // Use a file that exists but isn't JSON (e.g., package.json's parent dir)
+      const config = buildLintConfig({
+        systemType: 'btp',
+        configFile: '/dev/null', // exists but empty → JSON.parse('') throws
+      });
+      expect(config).toBeInstanceOf(Config);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('Could not load abaplint config'));
+      spy.mockRestore();
     });
   });
 
