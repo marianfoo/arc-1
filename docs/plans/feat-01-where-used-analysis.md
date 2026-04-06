@@ -65,6 +65,6 @@ Add comprehensive unit tests for the new Where-Used functions:
 
 ### Task 4: Update hyperfocused mode and documentation
 
-- [ ] Check if `src/handlers/hyperfocused.ts` needs updates for the enhanced references capability
-- [ ] Update `docs/tools.md` SAPNavigate section to document the new `objectType` parameter and enhanced where-used behavior
-- [ ] Update the FEAT-01 status in `docs/roadmap.md` from "Not started" to "Done"
+- [x] Check if `src/handlers/hyperfocused.ts` needs updates for the enhanced references capability
+- [x] Update `docs/tools.md` SAPNavigate section to document the new `objectType` parameter and enhanced where-used behavior
+- [x] Update the FEAT-01 status in `docs/roadmap.md` from "Not started" to "Done"

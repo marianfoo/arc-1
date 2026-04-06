@@ -124,17 +124,31 @@ SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL
 
 ## SAPNavigate
 
-Navigate code: find definitions, references, and code completion.
+Navigate code: find definitions, references (where-used), and code completion.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `definition`, `references`, or `completion` |
-| `uri` | string | Yes | Source URI of the object |
+| `uri` | string | No | Source URI of the object. Optional for `references` if `type`+`name` are provided. |
+| `type` | string | No | Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to `uri` for `references`. |
+| `name` | string | No | Object name — alternative to `uri` for `references`. |
+| `objectType` | string | No | For `references`: filter where-used results by object type (e.g., CLAS, PROG, FUNC, INTF). Only returns references from objects of the specified type. |
 | `line` | number | No | Line number (1-based) |
 | `column` | number | No | Column number (1-based) |
 | `source` | string | No | Current source code |
+
+**References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
+
+**Examples:**
+```
+SAPNavigate(action="definition", uri="/sap/bc/adt/programs/programs/ztest", line=10, column=5)
+SAPNavigate(action="references", uri="/sap/bc/adt/oo/classes/zcl_order")
+SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER")
+SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER", objectType="PROG")
+SAPNavigate(action="completion", uri="/sap/bc/adt/programs/programs/ztest", line=10, column=15, source="...")
+```
 
 ---
 
