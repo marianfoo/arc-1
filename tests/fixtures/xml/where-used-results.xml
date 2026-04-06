@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<usageReferences:usageReferenceResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:objectReference uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" type="PROG/P" name="ZPROG1" line="15" column="5" packageName="$TMP" snippet="DATA: lo_obj TYPE REF TO zcl_test." description="Test Program 1"/>
+  <usageReferences:objectReference uri="/sap/bc/adt/oo/classes/ZCL_CALLER/source/main" type="CLAS/OC" name="ZCL_CALLER" line="42" column="10" packageName="ZPACKAGE" snippet="CREATE OBJECT lo_test TYPE zcl_test." description="Caller Class"/>
+</usageReferences:usageReferenceResponse>

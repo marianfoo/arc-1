@@ -1059,6 +1059,34 @@ ENDCLASS.`;
       expect(parsed).toHaveLength(1);
     });
 
+    it('uses scope-based Where-Used successfully with objectType filter', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: findWhereUsed POST succeeds
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="UTF-8"?>
+<usageReferences:usageReferenceResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:objectReference uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" type="PROG/P" name="ZPROG1" line="15" column="5" packageName="$TMP" snippet="DATA: lo TYPE REF TO zcl_test." description="Test Program"/>
+</usageReferences:usageReferenceResponse>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        objectType: 'PROG/P',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].name).toBe('ZPROG1');
+      expect(parsed[0].packageName).toBe('$TMP');
+      expect(parsed[0].line).toBe(15);
+    });
+
     it('returns error when neither uri nor type+name provided for references', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
         action: 'references',

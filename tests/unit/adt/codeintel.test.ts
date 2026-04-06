@@ -1,8 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { findDefinition, findReferences, getCompletion } from '../../../src/adt/codeintel.js';
+import {
+  findDefinition,
+  findReferences,
+  findWhereUsed,
+  getCompletion,
+  getWhereUsedScope,
+} from '../../../src/adt/codeintel.js';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+
+const fixturesDir = join(import.meta.dirname, '../../fixtures/xml');
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -98,6 +108,127 @@ describe('Code Intelligence', () => {
         expect.stringContaining('/sap/bc/adt/repository/informationsystem/usageReferences'),
         expect.objectContaining({ Accept: 'application/xml' }),
       );
+    });
+  });
+
+  // ─── getWhereUsedScope ─────────────────────────────────────────────
+
+  describe('getWhereUsedScope', () => {
+    it('returns scope entries from XML fixture', async () => {
+      const xml = readFileSync(join(fixturesDir, 'where-used-scope.xml'), 'utf-8');
+      const http = mockHttp(xml);
+      const scope = await getWhereUsedScope(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(scope.entries).toHaveLength(3);
+      expect(scope.entries[0]).toEqual({
+        objectType: 'PROG/P',
+        objectTypeDescription: 'Program',
+        count: 3,
+      });
+      expect(scope.entries[1]).toEqual({
+        objectType: 'CLAS/OC',
+        objectTypeDescription: 'Class',
+        count: 2,
+      });
+      expect(scope.entries[2]).toEqual({
+        objectType: 'FUNC/FM',
+        objectTypeDescription: 'Function Module',
+        count: 1,
+      });
+    });
+
+    it('returns empty entries when scope response has no object types', async () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?><usageReferences:scopeResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences"/>';
+      const http = mockHttp(xml);
+      const scope = await getWhereUsedScope(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_EMPTY');
+      expect(scope.entries).toEqual([]);
+    });
+
+    it('POSTs to the scope endpoint with correct content type', async () => {
+      const http = mockHttp('<scopeResponse/>');
+      await getWhereUsedScope(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/repository/informationsystem/usageReferences/scope',
+        expect.stringContaining('/sap/bc/adt/oo/classes/ZCL_TEST'),
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('is blocked when Intelligence ops are disallowed', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
+      await expect(getWhereUsedScope(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
+    });
+  });
+
+  // ─── findWhereUsed ────────────────────────────────────────────────
+
+  describe('findWhereUsed', () => {
+    it('returns detailed results from XML fixture', async () => {
+      const xml = readFileSync(join(fixturesDir, 'where-used-results.xml'), 'utf-8');
+      const http = mockHttp(xml);
+      const results = await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results).toHaveLength(2);
+      expect(results[0]).toEqual({
+        uri: '/sap/bc/adt/programs/programs/ZPROG1/source/main',
+        type: 'PROG/P',
+        name: 'ZPROG1',
+        line: 15,
+        column: 5,
+        packageName: '$TMP',
+        snippet: 'DATA: lo_obj TYPE REF TO zcl_test.',
+        objectDescription: 'Test Program 1',
+      });
+      expect(results[1]).toEqual({
+        uri: '/sap/bc/adt/oo/classes/ZCL_CALLER/source/main',
+        type: 'CLAS/OC',
+        name: 'ZCL_CALLER',
+        line: 42,
+        column: 10,
+        packageName: 'ZPACKAGE',
+        snippet: 'CREATE OBJECT lo_test TYPE zcl_test.',
+        objectDescription: 'Caller Class',
+      });
+    });
+
+    it('returns empty array when no references found', async () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?><usageReferences:usageReferenceResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences"/>';
+      const http = mockHttp(xml);
+      const results = await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_ORPHAN');
+      expect(results).toEqual([]);
+    });
+
+    it('sends objectType filter when provided', async () => {
+      const http = mockHttp('<usageReferenceResponse/>');
+      await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST', 'PROG/P');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('objectTypeFilter value="PROG/P"');
+    });
+
+    it('does not include objectType filter when not provided', async () => {
+      const http = mockHttp('<usageReferenceResponse/>');
+      await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).not.toContain('objectTypeFilter');
+    });
+
+    it('POSTs to the usageReferences endpoint', async () => {
+      const http = mockHttp('<usageReferenceResponse/>');
+      await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/repository/informationsystem/usageReferences',
+        expect.any(String),
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('is blocked when Intelligence ops are disallowed', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
+      await expect(findWhereUsed(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 

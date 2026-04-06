@@ -57,11 +57,11 @@ Update the SAPNavigate handler and tool definition to expose the enhanced Where-
 
 Add comprehensive unit tests for the new Where-Used functions:
 
-- [ ] Add XML fixture files in `tests/fixtures/xml/` for scope response and where-used response
-- [ ] Add unit tests in `tests/unit/adt/codeintel.test.ts` for `getWhereUsedScope` — happy path, empty scope, safety block
-- [ ] Add unit tests in `tests/unit/adt/codeintel.test.ts` for `findWhereUsed` — with/without objectType filter, multiple results, empty results, safety block
-- [ ] Add handler test in `tests/unit/handlers/intent.test.ts` for the enhanced references action with objectType parameter
-- [ ] Verify backward compatibility: existing `findReferences` tests still pass unchanged
+- [x] Add XML fixture files in `tests/fixtures/xml/` for scope response and where-used response
+- [x] Add unit tests in `tests/unit/adt/codeintel.test.ts` for `getWhereUsedScope` — happy path, empty scope, safety block
+- [x] Add unit tests in `tests/unit/adt/codeintel.test.ts` for `findWhereUsed` — with/without objectType filter, multiple results, empty results, safety block
+- [x] Add handler test in `tests/unit/handlers/intent.test.ts` for the enhanced references action with objectType parameter
+- [x] Verify backward compatibility: existing `findReferences` tests still pass unchanged
 
 ### Task 4: Update hyperfocused mode and documentation
 
