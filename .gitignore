@@ -86,6 +86,3 @@ dist/
 node_modules/
 *.tsbuildinfo
 .vitest/
-
-
-dedelulu.jsonl

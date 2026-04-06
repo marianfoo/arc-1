@@ -375,7 +375,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           objectType: {
             type: 'string',
             description:
-              'For references action: filter where-used results by object type (e.g., CLAS, PROG, FUNC, INTF). Only returns references from objects of the specified type.',
+              'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). Only returns references from objects of the specified type.',
           },
           line: { type: 'number', description: 'Line number (1-based)' },
           column: { type: 'number', description: 'Column number (1-based)' },

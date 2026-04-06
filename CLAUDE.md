@@ -125,7 +125,7 @@ src/
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
 │   ├── devtools.ts             # Dev tools (syntax check, activate, unit tests)
 │   ├── diagnostics.ts          # Runtime diagnostics (short dumps ST22, ABAP profiler traces)
-│   ├── codeintel.ts            # Code intelligence (find def, refs, completion)
+│   ├── codeintel.ts            # Code intelligence (find def, refs, where-used, completion)
 │   └── transport.ts            # CTS transport management
 ├── context/
 │   ├── types.ts                # Context compression types

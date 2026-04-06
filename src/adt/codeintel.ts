@@ -10,6 +10,11 @@ import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import { findDeepNodes, parseXml } from './xml-parser.js';
 
+/** Escape XML special characters for safe interpolation into XML attributes */
+function escapeXmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /** Definition navigation result */
 export interface DefinitionResult {
   uri: string;
@@ -47,7 +52,7 @@ export interface WhereUsedScope {
   entries: WhereUsedScopeEntry[];
 }
 
-/** Detailed Where-Used result (extends basic ReferenceResult with additional fields) */
+/** Detailed Where-Used result with additional fields (line, snippet, package) */
 export interface WhereUsedResult {
   uri: string;
   type: string;
@@ -135,7 +140,7 @@ export async function getWhereUsedScope(
 ): Promise<WhereUsedScope> {
   checkOperation(safety, OperationType.Intelligence, 'FindWhereUsed');
 
-  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<usageReferences:scopeRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">\n  <usageReferences:objectReference uri="${objectUrl}"/>\n</usageReferences:scopeRequest>`;
+  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<usageReferences:scopeRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">\n  <usageReferences:objectReference uri="${escapeXmlAttr(objectUrl)}"/>\n</usageReferences:scopeRequest>`;
 
   const resp = await http.post(
     '/sap/bc/adt/repository/informationsystem/usageReferences/scope',
@@ -177,9 +182,9 @@ export async function findWhereUsed(
 ): Promise<WhereUsedResult[]> {
   checkOperation(safety, OperationType.Intelligence, 'FindWhereUsed');
 
-  const typeFilter = objectType ? `\n  <usageReferences:objectTypeFilter value="${objectType}"/>` : '';
+  const typeFilter = objectType ? `\n  <usageReferences:objectTypeFilter value="${escapeXmlAttr(objectType)}"/>` : '';
 
-  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<usageReferences:usageReferenceRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">\n  <usageReferences:objectReference uri="${objectUrl}"/>${typeFilter}\n</usageReferences:usageReferenceRequest>`;
+  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<usageReferences:usageReferenceRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">\n  <usageReferences:objectReference uri="${escapeXmlAttr(objectUrl)}"/>${typeFilter}\n</usageReferences:usageReferenceRequest>`;
 
   const resp = await http.post('/sap/bc/adt/repository/informationsystem/usageReferences', body, 'application/xml', {
     Accept: 'application/xml',
