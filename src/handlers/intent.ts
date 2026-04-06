@@ -122,7 +122,7 @@ function classifyError(err: unknown): string {
  */
 export async function handleToolCall(
   client: AdtClient,
-  _config: ServerConfig,
+  config: ServerConfig,
   toolName: string,
   args: Record<string, unknown>,
   authInfo?: AuthInfo,
@@ -184,7 +184,7 @@ export async function handleToolCall(
           result = await handleSAPQuery(client, args);
           break;
         case 'SAPWrite':
-          result = await handleSAPWrite(client, args, _config);
+          result = await handleSAPWrite(client, args, config);
           break;
         case 'SAPActivate':
           result = await handleSAPActivate(client, args);
@@ -193,7 +193,7 @@ export async function handleToolCall(
           result = await handleSAPNavigate(client, args);
           break;
         case 'SAPLint':
-          result = await handleSAPLint(client, args, _config);
+          result = await handleSAPLint(client, args, config);
           break;
         case 'SAPDiagnose':
           result = await handleSAPDiagnose(client, args);
@@ -205,7 +205,7 @@ export async function handleToolCall(
           result = await handleSAPContext(client, args);
           break;
         case 'SAPManage':
-          result = await handleSAPManage(client, _config, args);
+          result = await handleSAPManage(client, config, args);
           break;
         case 'SAP': {
           // Hyperfocused mode: route to the appropriate handler
@@ -225,7 +225,7 @@ export async function handleToolCall(
             }
           }
           // Delegate to the real handler (recursive call, but with the mapped tool name)
-          result = await handleToolCall(client, _config, expanded.toolName, expanded.expandedArgs, authInfo, _server);
+          result = await handleToolCall(client, config, expanded.toolName, expanded.expandedArgs, authInfo, _server);
           break;
         }
         default:
@@ -542,6 +542,8 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
   }
 }
 
+// _client unused: SAPLint runs offline via @abaplint/core (no SAP round-trip).
+// Signature matches other handlers for consistency with handleToolCall dispatch.
 async function handleSAPLint(
   _client: AdtClient,
   args: Record<string, unknown>,

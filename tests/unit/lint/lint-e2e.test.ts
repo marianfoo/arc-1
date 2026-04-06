@@ -366,15 +366,21 @@ ENDCLASS.`;
     expect(lineIssues[0].severity).toBe('error');
   });
 
-  it('custom rules are applied in pre-write validation too', () => {
-    // By default, pre-write only uses correctness rules.
-    // User overrides should still be respected.
-    const source = VALID_CLOUD_CLASS;
-    const filename = detectFilename(source, 'ZCL_CALCULATOR');
+  it('user rule overrides are applied in pre-write validation', () => {
+    // Parser errors block writes by default
+    const filename = detectFilename(PARSER_ERROR_CLASS, 'ZCL_BROKEN');
+    const defaultResult = validateBeforeWrite(PARSER_ERROR_CLASS, filename, { systemType: 'onprem' });
+    expect(defaultResult.pass).toBe(false);
+    expect(defaultResult.errors.some((e) => e.rule === 'parser_error')).toBe(true);
 
-    // With default pre-write config, valid class passes
-    const defaultResult = validateBeforeWrite(source, filename, { systemType: 'btp' });
-    expect(defaultResult.pass).toBe(true);
+    // User can disable parser_error in pre-write (e.g., for generated code they trust)
+    const overrideResult = validateBeforeWrite(PARSER_ERROR_CLASS, filename, {
+      systemType: 'onprem',
+      ruleOverrides: { parser_error: false },
+    });
+    // With parser_error disabled, this specific code may pass (or fail on other rules)
+    const parserErrors = overrideResult.errors.filter((e) => e.rule === 'parser_error');
+    expect(parserErrors).toHaveLength(0);
   });
 });
 

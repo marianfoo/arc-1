@@ -263,6 +263,31 @@ The lint rules auto-configure based on the detected SAP system:
 
 When `--lint-before-write` is enabled (default: true), SAPWrite automatically runs a strict subset of lint rules before writing to SAP. Parser errors and cloud violations block the write. Style issues (keyword case, indentation) never block writes.
 
+**Custom Configuration:**
+
+Use `--abaplint-config /path/to/abaplint.jsonc` to load custom rules. The file uses the [abaplint config format](https://abaplint.org):
+
+```jsonc
+{
+  // Override specific rules
+  "rules": {
+    "line_length": { "severity": "Error", "length": 80 },
+    "abapdoc": true,           // re-enable a disabled rule
+    "obsolete_statement": false // disable a rule
+  },
+  // Optional: override syntax version
+  "syntax": { "version": "v757" }
+}
+```
+
+Rules from the config file are merged on top of the auto-detected preset (cloud/on-prem). Per-call overrides via the `rules` parameter take precedence over the config file.
+
+**Response shapes:**
+
+- **`lint`** returns: `[{ rule, message, line, column, endLine, endColumn, severity }]`
+- **`lint_and_fix`** returns: `{ fixedSource, appliedFixes, fixedRules, remainingIssues }` — use `fixedSource` as the corrected code
+- **`list_rules`** returns: `{ preset, abapVersion, enabledRules, disabledRules, rules }` — shows active config
+
 **Examples:**
 ```
 SAPLint(action="lint", source="DATA lv_test TYPE string.\nlv_test = 'hello'.")

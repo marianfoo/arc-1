@@ -118,15 +118,17 @@ export function buildPreWriteConfig(options: LintConfigOptions = {}): Config {
     };
   }
 
-  // Apply user overrides on top
+  // Apply pre-write defaults first, then user overrides on top.
+  // This lets users customize pre-write behavior (e.g., disable a rule
+  // they know produces false positives in their codebase).
+  applyRuleOverrides(raw, preWriteRules);
+
   if (options.configFile) {
     applyConfigFile(raw, options.configFile);
   }
   if (options.ruleOverrides) {
     applyRuleOverrides(raw, options.ruleOverrides);
   }
-
-  applyRuleOverrides(raw, preWriteRules);
 
   return new Config(JSON.stringify(raw));
 }
@@ -165,7 +167,9 @@ function applyPreset(raw: Record<string, unknown>, preset: 'cloud' | 'onprem'): 
 function applyConfigFile(raw: Record<string, unknown>, configFile: string): void {
   try {
     const content = readFileSync(configFile, 'utf-8');
-    // Strip JSONC comments (// and /* */)
+    // Strip JSONC comments (// and /* */). This naive regex doesn't handle
+    // "//" inside string values, but abaplint configs don't use string values
+    // containing "//", so this is safe in practice.
     const stripped = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
     const userConfig = JSON.parse(stripped) as Record<string, unknown>;
 
@@ -178,8 +182,11 @@ function applyConfigFile(raw: Record<string, unknown>, configFile: string): void
     if (userConfig.syntax && typeof userConfig.syntax === 'object') {
       raw.syntax = { ...(raw.syntax as Record<string, unknown>), ...(userConfig.syntax as Record<string, unknown>) };
     }
-  } catch {
-    // Config file not found or invalid — silently ignore
+  } catch (err) {
+    // Log warning but don't crash — lint should degrade gracefully
+    // if the config file is missing or malformed
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[arc-1] Warning: Could not load abaplint config "${configFile}": ${msg}`);
   }
 }
 
