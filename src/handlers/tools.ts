@@ -353,8 +353,8 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
     {
       name: 'SAPNavigate',
       description: btp
-        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific type (e.g., CLAS, PROG). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
-        : 'Navigate code: find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific type (e.g., CLAS, PROG). You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
+        : 'Navigate code: find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -375,7 +375,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
           objectType: {
             type: 'string',
             description:
-              'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). Only returns references from objects of the specified type.',
+              'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
           },
           line: { type: 'number', description: 'Line number (1-based)' },
           column: { type: 'number', description: 'Column number (1-based)' },

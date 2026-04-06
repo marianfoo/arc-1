@@ -134,7 +134,7 @@ Navigate code: find definitions, references (where-used), and code completion.
 | `uri` | string | No | Source URI of the object. Optional for `references` if `type`+`name` are provided. |
 | `type` | string | No | Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to `uri` for `references`. |
 | `name` | string | No | Object name — alternative to `uri` for `references`. |
-| `objectType` | string | No | For `references`: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). Only returns references from objects of the specified type. |
+| `objectType` | string | No | For `references`: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note. |
 | `line` | number | No | Line number (1-based) |
 | `column` | number | No | Column number (1-based) |
 | `source` | string | No | Current source code |
@@ -146,7 +146,7 @@ Navigate code: find definitions, references (where-used), and code completion.
 SAPNavigate(action="definition", uri="/sap/bc/adt/programs/programs/ztest", line=10, column=5)
 SAPNavigate(action="references", uri="/sap/bc/adt/oo/classes/zcl_order")
 SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER")
-SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER", objectType="PROG")
+SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER", objectType="PROG/P")
 SAPNavigate(action="completion", uri="/sap/bc/adt/programs/programs/ztest", line=10, column=15, source="...")
 ```
 

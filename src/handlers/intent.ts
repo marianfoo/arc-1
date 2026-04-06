@@ -807,13 +807,24 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       } catch (err) {
         // Only fall back for HTTP errors indicating the endpoint is not available (older SAP systems)
         if (err instanceof AdtApiError && [404, 405, 501].includes(err.statusCode)) {
-          const fallbackResults = await findReferences(client.http, client.safety, uri);
-          if (objectType && fallbackResults.length > 0) {
+          results = await findReferences(client.http, client.safety, uri);
+          if (results.length === 0) {
+            return textResult('No references found.');
+          }
+          const json = JSON.stringify(results, null, 2);
+          if (objectType) {
             return textResult(
-              `Note: objectType filter not supported on this system. Showing all references.\n${JSON.stringify(fallbackResults, null, 2)}`,
+              JSON.stringify(
+                {
+                  note: `This SAP system does not support scope-based Where-Used. The objectType filter "${objectType}" was ignored — results below are unfiltered.`,
+                  results,
+                },
+                null,
+                2,
+              ),
             );
           }
-          results = fallbackResults;
+          return textResult(json);
         } else {
           throw err;
         }
