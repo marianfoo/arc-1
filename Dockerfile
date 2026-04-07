@@ -7,9 +7,7 @@
 # =============================================================================
 
 # --- Build Stage -------------------------------------------------------------
-# Run on the build platform (amd64 in CI) to avoid QEMU emulation crashes
-# when compiling native addons (better-sqlite3 node-gyp + QEMU = signal 4)
-FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
+FROM node:22-alpine AS builder
 
 # better-sqlite3 requires build tools for native addon compilation
 RUN apk add --no-cache python3 make g++
@@ -25,18 +23,8 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build
 
-# --- Production Dependencies (target platform) ------------------------------
-# Separate stage that runs on the TARGET platform (arm64 via QEMU or amd64 native).
-# --ignore-scripts prevents node-gyp from compiling (crashes under QEMU on arm64).
-# prebuild-install then downloads the correct prebuilt .node binary — just HTTP,
-# no compilation, works fine under QEMU.
-FROM node:22-alpine AS deps
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && \
-    cd node_modules/better-sqlite3 && \
-    npx --yes prebuild-install -r napi || { echo "ERROR: No prebuilt binary found for better-sqlite3 on this platform"; exit 1; }
+# Remove dev dependencies for smaller image
+RUN npm prune --omit=dev
 
 # --- Runtime Stage -----------------------------------------------------------
 FROM node:22-alpine
@@ -50,7 +38,7 @@ RUN addgroup -S arc1 && adduser -S arc1 -G arc1
 WORKDIR /home/arc1
 
 COPY --from=builder /app/dist ./dist
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 
 USER arc1
