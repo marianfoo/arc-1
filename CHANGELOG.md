@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/marianfoo/arc-1/compare/v0.4.2...v0.4.3) (2026-04-07)
+
+
+### Bug Fixes
+
+* use separate deps stage to avoid QEMU arm64 crash in Docker build ([cab08fa](https://github.com/marianfoo/arc-1/commit/cab08fa2085fbafb63d61e1954ae88af136d87b7))
+
 ## [0.4.2](https://github.com/marianfoo/arc-1/compare/v0.4.1...v0.4.2) (2026-04-07)
 
 
