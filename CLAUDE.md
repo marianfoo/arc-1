@@ -64,7 +64,7 @@ npm run dev
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
 | `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: false) |
-| `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: true) |
+| `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: false) |
 | `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: false) |
 | `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
 | `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |

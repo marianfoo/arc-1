@@ -72,7 +72,7 @@ export interface ToolResult {
 export const TOOL_SCOPES: Record<string, string> = {
   SAPRead: 'read',
   SAPSearch: 'read',
-  SAPQuery: 'data',
+  SAPQuery: 'sql',
   SAPNavigate: 'read',
   SAPContext: 'read',
   SAPLint: 'read',
@@ -192,24 +192,6 @@ export async function handleToolCall(
         `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
       );
     }
-
-    // SAPQuery is freestyle SQL — requires 'sql' scope in addition to 'data'
-    if (toolName === 'SAPQuery' && !hasRequiredScope(authInfo, 'sql')) {
-      logger.emitAudit({
-        timestamp: new Date().toISOString(),
-        level: 'warn',
-        event: 'auth_scope_denied',
-        requestId: reqId,
-        user,
-        clientId,
-        tool: toolName,
-        requiredScope: 'sql',
-        availableScopes: authInfo.scopes,
-      });
-      return errorResult(
-        `Insufficient scope: 'sql' required for SAPQuery (freestyle SQL). Your scopes: [${authInfo.scopes.join(', ')}]. The 'data' scope only allows named table preview via SAPRead TABLE_CONTENTS.`,
-      );
-    }
   }
 
   // Run within request context so HTTP-level logs get the requestId
@@ -261,7 +243,7 @@ export async function handleToolCall(
           // Check scope for the delegated action
           if (authInfo) {
             const requiredScope = getHyperfocusedScope(String(args.action ?? ''));
-            if (!authInfo.scopes.includes(requiredScope)) {
+            if (!hasRequiredScope(authInfo, requiredScope)) {
               result = errorResult(
                 `Insufficient scope: '${requiredScope}' required for SAP(action="${args.action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
               );

@@ -828,7 +828,7 @@ ENDCLASS.`,
       expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
     });
 
-    it('blocks SAPQuery with read-only scope (requires data)', async () => {
+    it('blocks SAPQuery with read-only scope (requires sql)', async () => {
       const result = await handleToolCall(
         createClient(),
         DEFAULT_CONFIG,
@@ -837,10 +837,10 @@ ENDCLASS.`,
         readAuth,
       );
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain("Insufficient scope: 'data'");
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'sql'");
     });
 
-    it('blocks SAPQuery with data-only scope (requires sql for freestyle)', async () => {
+    it('blocks SAPQuery with data-only scope (requires sql)', async () => {
       const result = await handleToolCall(
         createClient(),
         DEFAULT_CONFIG,
@@ -850,7 +850,6 @@ ENDCLASS.`,
       );
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("Insufficient scope: 'sql'");
-      expect(result.content[0]?.text).toContain('freestyle SQL');
     });
 
     it('allows SAPQuery with sql scope (sql implies data)', async () => {
@@ -927,8 +926,8 @@ ENDCLASS.`,
       }
     });
 
-    it('maps SAPQuery to data scope', () => {
-      expect(TOOL_SCOPES.SAPQuery).toBe('data');
+    it('maps SAPQuery to sql scope', () => {
+      expect(TOOL_SCOPES.SAPQuery).toBe('sql');
     });
 
     it('covers all 11 tools', () => {
