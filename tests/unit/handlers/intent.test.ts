@@ -130,6 +130,19 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('returns soft informational message when DDLX is not found (404)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, 'Not Found', { 'x-csrf-token': 'mock-csrf-token' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DDLX',
+        name: 'ZC_TRAVEL',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('No metadata extension (DDLX) found for "ZC_TRAVEL"');
+      expect(result.content[0]?.text).toContain('inline annotations');
+      expect(result.content[0]?.text).toContain('manifest.json');
+    });
+
     it('reads service binding (SRVB) and returns parsed JSON', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValueOnce(

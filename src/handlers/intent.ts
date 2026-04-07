@@ -31,7 +31,7 @@ import {
   listDumps,
   listTraces,
 } from '../adt/diagnostics.js';
-import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
+import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
 import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
 import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
@@ -413,8 +413,18 @@ async function handleSAPRead(
       return textResult(await cachedGet('BDEF', name, () => client.getBdef(name)));
     case 'SRVD':
       return textResult(await cachedGet('SRVD', name, () => client.getSrvd(name)));
-    case 'DDLX':
-      return textResult(await cachedGet('DDLX', name, () => client.getDdlx(name)));
+    case 'DDLX': {
+      try {
+        return textResult(await cachedGet('DDLX', name, () => client.getDdlx(name)));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            `No metadata extension (DDLX) found for "${name}". This means no @UI annotations are defined via DDLX for this view. The view may use inline annotations in the DDLS source, or the Fiori app may configure columns via manifest.json / app descriptor.`,
+          );
+        }
+        throw err;
+      }
+    }
     case 'SRVB':
       return textResult(await cachedGet('SRVB', name, () => client.getSrvb(name)));
     case 'TABL':

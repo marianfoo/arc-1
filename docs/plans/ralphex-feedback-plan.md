@@ -62,8 +62,8 @@ When the LLM passes a `uri` field (from SAPSearch results) instead of `type`+`na
 
 Not every DDLS has a DDLX. Currently a DDLX 404 returns a generic error suggesting to "use SAPSearch to verify the name", which is misleading.
 
-- [ ] In `src/handlers/intent.ts`, wrap the `case 'DDLX'` handler in a try/catch. If `isNotFoundError(err)` is true, return a `textResult()` (NOT `errorResult()`) with message: `No metadata extension (DDLX) found for "${name}". This means no @UI annotations are defined via DDLX for this view. The view may use inline annotations in the DDLS source, or the Fiori app may configure columns via manifest.json / app descriptor.`
-- [ ] Add unit test in `tests/unit/handlers/intent.test.ts`: mock a 404 response for DDLX read, verify the result is NOT `isError` and contains the soft informational message
+- [x] In `src/handlers/intent.ts`, wrap the `case 'DDLX'` handler in a try/catch. If `isNotFoundError(err)` is true, return a `textResult()` (NOT `errorResult()`) with message: `No metadata extension (DDLX) found for "${name}". This means no @UI annotations are defined via DDLX for this view. The view may use inline annotations in the DDLS source, or the Fiori app may configure columns via manifest.json / app descriptor.`
+- [x] Add unit test in `tests/unit/handlers/intent.test.ts`: mock a 404 response for DDLX read, verify the result is NOT `isError` and contains the soft informational message
 
 ### Task 4: SAPQuery — JOIN-aware error handling + description warning
 
