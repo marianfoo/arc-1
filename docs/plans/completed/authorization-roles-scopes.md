@@ -248,9 +248,9 @@ Extend the existing feature probe mechanism to check basic SAP authorization at 
 
 ### Task 11: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass (existing + new)
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Verify the scope model is consistent: grep for old scope references (search for `'admin'` in TOOL_SCOPES context, hardcoded scopes in http.ts)
-- [ ] Verify implied scope logic is applied in ALL auth paths: XSUAA (xsuaa.ts), OIDC (http.ts), tool listing filter (server.ts), tool call scope check (intent.ts)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass (existing + new)
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Verify the scope model is consistent: grep for old scope references (search for `'admin'` in TOOL_SCOPES context, hardcoded scopes in http.ts)
+- [x] Verify implied scope logic is applied in ALL auth paths: XSUAA (xsuaa.ts), OIDC (http.ts), tool listing filter (server.ts), tool call scope check (intent.ts)
+- [x] Move this plan to `docs/plans/completed/`
