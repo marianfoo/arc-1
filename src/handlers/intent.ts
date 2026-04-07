@@ -32,7 +32,7 @@ import {
   listTraces,
 } from '../adt/diagnostics.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
-import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
+import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
 import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
@@ -546,10 +546,11 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
       const results = await client.searchSource(query, maxResults, objectType, packageName);
       return textResult(JSON.stringify(results, null, 2));
     } catch (err) {
-      if (err instanceof AdtApiError && (err.statusCode === 404 || err.statusCode === 501)) {
+      if (err instanceof AdtApiError) {
+        const classified = classifyTextSearchError(err.statusCode);
         return errorResult(
-          `Source code search is not available on this SAP system (requires SAP_BASIS ≥ 7.51). ` +
-            `Use SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+          `Source code search is not available on this SAP system. ${classified.reason ?? ''}` +
+            `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
         );
       }
       throw err;

@@ -209,15 +209,9 @@ export function detectSystemType(
  */
 export async function probeTextSearch(client: AdtHttpClient): Promise<{ available: boolean; reason?: string }> {
   try {
-    const resp = await client.get(
-      '/sap/bc/adt/repository/informationsystem/textSearch?searchString=SY-SUBRC&maxResults=1',
-    );
-    if (resp.statusCode < 400) {
-      return { available: true };
-    }
-    return classifyTextSearchError(resp.statusCode);
+    await client.get('/sap/bc/adt/repository/informationsystem/textSearch?searchString=SY-SUBRC&maxResults=1');
+    return { available: true };
   } catch (err: unknown) {
-    // The HTTP layer may throw for non-2xx responses
     if (err && typeof err === 'object' && 'statusCode' in err) {
       return classifyTextSearchError((err as { statusCode: number }).statusCode);
     }
@@ -225,7 +219,7 @@ export async function probeTextSearch(client: AdtHttpClient): Promise<{ availabl
   }
 }
 
-function classifyTextSearchError(statusCode: number): { available: boolean; reason?: string } {
+export function classifyTextSearchError(statusCode: number): { available: boolean; reason?: string } {
   switch (statusCode) {
     case 401:
     case 403:

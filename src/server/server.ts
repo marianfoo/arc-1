@@ -150,9 +150,7 @@ export function createServer(
   // Register tool listing — filtered by user's scopes when auth is active
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
     const features = getCachedFeatures();
-    let tools = getToolDefinitions(config, {
-      textSearchAvailable: features?.textSearch?.available,
-    });
+    let tools = getToolDefinitions(config, features?.textSearch?.available);
 
     // When authenticated, only show tools the user has scopes for
     if (extra.authInfo) {

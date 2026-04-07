@@ -188,9 +188,9 @@ const SAPMANAGE_DESC_ONPREM =
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
-  '- "probe": Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). ' +
+  '- "probe": Re-probe the SAP system now (makes 7 parallel requests, ~1-2s). ' +
   'Use this on first use or if you suspect feature availability has changed.\n\n' +
-  'Returns JSON with 6 features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
+  'Returns JSON with features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
   'Also returns systemType ("btp" or "onprem") for understanding available capabilities. ' +
   '"available: false" means do NOT attempt operations that depend on it.';
 
@@ -205,16 +205,29 @@ const SAPMANAGE_DESC_BTP =
 
 // ─── SAPSearch Builder ─────────────────────────────────────────────
 
+/** Strip source_code-specific lines from a SAPSearch description when textSearch is unavailable */
+function stripSourceCodeLines(desc: string): string {
+  return desc
+    .split('\n')
+    .filter(
+      (line) =>
+        !line.includes('source_code') &&
+        !line.includes('Source code search') &&
+        !line.startsWith('2. Source code search'),
+    )
+    .join('\n')
+    .replace(/ or search within source code[^.]*\. Two modes:\n1\. Object search \(default\): /i, '. ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDefinition {
   // When textSearch is explicitly unavailable (probed and failed), hide source_code
   const hideSourceCode = textSearchAvailable === false;
 
   const baseDesc = btp ? SAPSEARCH_DESC_BTP : SAPSEARCH_DESC_ONPREM;
-  const description = hideSourceCode
-    ? btp
-      ? "Search for ABAP objects by name (BTP ABAP Environment). Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects.\n\nTips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.\n\nNote: Searches object names only (classes, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views."
-      : "Search for ABAP objects by name. Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n\nTips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.\n\nNote: Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L."
-    : baseDesc;
+  // Strip source_code lines from base description when hiding
+  const description = hideSourceCode ? stripSourceCodeLines(baseDesc) : baseDesc;
 
   const properties: Record<string, unknown> = {
     query: {
@@ -258,13 +271,7 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
 
 // ─── Main Tool Definitions ──────────────────────────────────────────
 
-/** Options for adapting tool definitions based on runtime probe results */
-export interface ToolDefOptions {
-  /** Text search probe result — when false, source_code is hidden from SAPSearch */
-  textSearchAvailable?: boolean;
-}
-
-export function getToolDefinitions(config: ServerConfig, options?: ToolDefOptions): ToolDefinition[] {
+export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: boolean): ToolDefinition[] {
   // Hyperfocused mode: single universal SAP tool (~200 tokens)
   if (config.toolMode === 'hyperfocused') {
     return [getHyperfocusedToolDefinition(config)];
@@ -318,7 +325,7 @@ export function getToolDefinitions(config: ServerConfig, options?: ToolDefOption
         required: ['type'],
       },
     },
-    buildSAPSearchTool(btp, options?.textSearchAvailable),
+    buildSAPSearchTool(btp, textSearchAvailable),
   ];
 
   // Write tools — only registered when not in read-only mode

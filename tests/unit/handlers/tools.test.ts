@@ -111,7 +111,7 @@ describe('Tool Definitions', () => {
 
   describe('SAPSearch textSearch adaptation', () => {
     it('includes source_code in searchType when textSearch is available', () => {
-      const tools = getToolDefinitions(DEFAULT_CONFIG, { textSearchAvailable: true });
+      const tools = getToolDefinitions(DEFAULT_CONFIG, true);
       const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
       const schema = sapSearch.inputSchema as Record<string, any>;
       expect(schema.properties.searchType).toBeDefined();
@@ -121,7 +121,7 @@ describe('Tool Definitions', () => {
     });
 
     it('omits source_code from SAPSearch when textSearch is unavailable', () => {
-      const tools = getToolDefinitions(DEFAULT_CONFIG, { textSearchAvailable: false });
+      const tools = getToolDefinitions(DEFAULT_CONFIG, false);
       const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
       const schema = sapSearch.inputSchema as Record<string, any>;
       expect(schema.properties.searchType).toBeUndefined();
@@ -138,7 +138,7 @@ describe('Tool Definitions', () => {
     });
 
     it('SAPSearch description omits source_code mode when unavailable', () => {
-      const tools = getToolDefinitions(DEFAULT_CONFIG, { textSearchAvailable: false });
+      const tools = getToolDefinitions(DEFAULT_CONFIG, false);
       const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
       expect(sapSearch.description).not.toContain('source_code');
       expect(sapSearch.description).not.toContain('Source code search');

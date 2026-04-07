@@ -194,43 +194,43 @@ describe('Feature Detection', () => {
       expect(result.reason).toBeUndefined();
     });
 
-    it('returns auth error for 401', async () => {
-      const result = await probeTextSearch(mockClient(401));
+    it('returns auth error for thrown 401', async () => {
+      const result = await probeTextSearch(mockClientThrows(401));
       expect(result.available).toBe(false);
       expect(result.reason).toContain('authorization');
       expect(result.reason).toContain('S_ADT_RES');
     });
 
-    it('returns auth error for 403', async () => {
-      const result = await probeTextSearch(mockClient(403));
+    it('returns auth error for thrown 403', async () => {
+      const result = await probeTextSearch(mockClientThrows(403));
       expect(result.available).toBe(false);
       expect(result.reason).toContain('authorization');
     });
 
-    it('returns SICF activation hint for 404', async () => {
-      const result = await probeTextSearch(mockClient(404));
+    it('returns SICF activation hint for thrown 404', async () => {
+      const result = await probeTextSearch(mockClientThrows(404));
       expect(result.available).toBe(false);
       expect(result.reason).toContain('SICF');
       expect(result.reason).toContain('textSearch');
     });
 
-    it('returns framework error for 500', async () => {
-      const result = await probeTextSearch(mockClient(500));
+    it('returns framework error for thrown 500', async () => {
+      const result = await probeTextSearch(mockClientThrows(500));
       expect(result.available).toBe(false);
       expect(result.reason).toContain('BC-DWB-AIE');
     });
 
-    it('returns not-implemented for 501', async () => {
-      const result = await probeTextSearch(mockClient(501));
+    it('returns not-implemented for thrown 501', async () => {
+      const result = await probeTextSearch(mockClientThrows(501));
       expect(result.available).toBe(false);
       expect(result.reason).toContain('SAP_BASIS');
       expect(result.reason).toContain('7.51');
     });
 
-    it('classifies thrown errors with statusCode', async () => {
-      const result = await probeTextSearch(mockClientThrows(404));
+    it('returns generic message for unexpected thrown status codes', async () => {
+      const result = await probeTextSearch(mockClientThrows(502));
       expect(result.available).toBe(false);
-      expect(result.reason).toContain('SICF');
+      expect(result.reason).toContain('HTTP 502');
     });
 
     it('returns network error for generic errors', async () => {
