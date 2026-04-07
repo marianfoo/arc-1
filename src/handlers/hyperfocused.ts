@@ -28,15 +28,16 @@ const ACTION_TO_TOOL: Record<string, string> = {
 };
 
 /** Actions that require write scope */
-const WRITE_ACTIONS = new Set(['write', 'activate', 'manage']);
-/** Actions that require admin scope */
-const ADMIN_ACTIONS = new Set(['transport']);
+const WRITE_ACTIONS = new Set(['write', 'activate', 'manage', 'transport']);
+/** Actions that require sql scope */
+const SQL_ACTIONS = new Set(['query']);
 
 /**
  * Get the required scope for a hyperfocused action.
+ * Must stay consistent with TOOL_SCOPES in intent.ts.
  */
 export function getHyperfocusedScope(action: string): string {
-  if (ADMIN_ACTIONS.has(action)) return 'admin';
+  if (SQL_ACTIONS.has(action)) return 'sql';
   if (WRITE_ACTIONS.has(action)) return 'write';
   return 'read';
 }
