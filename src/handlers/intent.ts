@@ -31,8 +31,8 @@ import {
   listDumps,
   listTraces,
 } from '../adt/diagnostics.js';
-import { AdtApiError, AdtNetworkError, AdtSafetyError } from '../adt/errors.js';
-import { mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
+import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
+import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
 import { isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
@@ -136,6 +136,7 @@ export async function handleToolCall(
   authInfo?: AuthInfo,
   _server?: Server,
   cachingLayer?: CachingLayer,
+  isPerUserClient?: boolean,
 ): Promise<ToolResult> {
   const reqId = generateRequestId();
   const start = Date.now();
@@ -214,7 +215,7 @@ export async function handleToolCall(
           result = await handleSAPContext(client, args, cachingLayer);
           break;
         case 'SAPManage':
-          result = await handleSAPManage(client, config, args, cachingLayer);
+          result = await handleSAPManage(client, config, args, cachingLayer, isPerUserClient);
           break;
         case 'SAP': {
           // Hyperfocused mode: route to the appropriate handler
@@ -242,6 +243,7 @@ export async function handleToolCall(
             authInfo,
             _server,
             cachingLayer,
+            isPerUserClient,
           );
           break;
         }
@@ -413,8 +415,18 @@ async function handleSAPRead(
       return textResult(await cachedGet('BDEF', name, () => client.getBdef(name)));
     case 'SRVD':
       return textResult(await cachedGet('SRVD', name, () => client.getSrvd(name)));
-    case 'DDLX':
-      return textResult(await cachedGet('DDLX', name, () => client.getDdlx(name)));
+    case 'DDLX': {
+      try {
+        return textResult(await cachedGet('DDLX', name, () => client.getDdlx(name)));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            `No metadata extension (DDLX) found for "${name}". This means no @UI annotations are defined via DDLX for this view. The view may use inline annotations in the DDLS source, or the Fiori app may configure columns via manifest.json / app descriptor.`,
+          );
+        }
+        throw err;
+      }
+    }
     case 'SRVB':
       return textResult(await cachedGet('SRVB', name, () => client.getSrvb(name)));
     case 'TABL':
@@ -510,7 +522,9 @@ async function handleSAPRead(
       return textResult(await client.getVariants(name));
     default:
       return errorResult(
-        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. ` +
+          'Tip: Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type="DDLS", CLAS/OC → type="CLAS", PROG/P → type="PROG"). ' +
+          'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
   }
 }
@@ -521,17 +535,28 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   const searchType = String(args.searchType ?? 'object');
 
   if (searchType === 'source_code') {
+    // If probe already determined textSearch is unavailable, return the precise reason
+    if (cachedFeatures?.textSearch && !cachedFeatures.textSearch.available) {
+      return errorResult(
+        `Source code search is not available on this SAP system. ${cachedFeatures.textSearch.reason ?? ''}` +
+          `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+      );
+    }
     const objectType = args.objectType as string | undefined;
     const packageName = args.packageName as string | undefined;
     try {
       const results = await client.searchSource(query, maxResults, objectType, packageName);
       return textResult(JSON.stringify(results, null, 2));
     } catch (err) {
-      if (err instanceof AdtApiError && (err.statusCode === 404 || err.statusCode === 501)) {
-        return errorResult(
-          `Source code search is not available on this SAP system (requires SAP_BASIS ≥ 7.51). ` +
-            `Use SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
-        );
+      if (err instanceof AdtApiError) {
+        const permanentCodes = [401, 403, 404, 501];
+        if (permanentCodes.includes(err.statusCode)) {
+          const classified = classifyTextSearchError(err.statusCode);
+          return errorResult(
+            `Source code search is not available on this SAP system. ${classified.reason ?? ''}` +
+              `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+          );
+        }
       }
       throw err;
     }
@@ -573,6 +598,12 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
           // Search failed — fall through to original error
         }
       }
+    }
+    // JOIN-aware error: ADT freestyle SQL parser has known edge cases with JOINs (SAP Note 3605050)
+    if (err instanceof AdtApiError && err.statusCode === 400 && /\bJOIN\b/i.test(sql)) {
+      return errorResult(
+        `${err.message}\n\nMulti-table JOIN query failed. The ADT freestyle SQL endpoint has known parser edge cases with JOINs (SAP Note 3605050). Try splitting into separate single-table queries.`,
+      );
     }
     throw err;
   }
@@ -1317,6 +1348,7 @@ async function handleSAPManage(
   config: ServerConfig,
   args: Record<string, unknown>,
   cachingLayer?: CachingLayer,
+  isPerUserClient?: boolean,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
 
@@ -1359,12 +1391,32 @@ async function handleSAPManage(
       featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
       featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
 
-      cachedFeatures = await probeFeatures(client.http, featureConfig, config.systemType);
-      return textResult(JSON.stringify(cachedFeatures, null, 2));
+      const probed = await probeFeatures(client.http, featureConfig, config.systemType);
+
+      // In PP mode with a per-user client, auth-sensitive results (401/403 on any
+      // feature) must not poison the global cache — another user may have different
+      // authorizations.  Return the per-user result to the caller but keep the global
+      // cache unchanged.  However, when PP is enabled but the request fell back to the
+      // shared/default client (no JWT, missing btpConfig, or non-strict fallback), the
+      // probe ran with the same service-account credentials as the startup probe, so
+      // updating the cache is safe and allows a manual probe to repair a failed startup.
+      // Apply the same auth-failure sanitization as the startup probe: in PP mode,
+      // shared-client 401/403 on textSearch must not hide source_code from users who
+      // might have authorization via per-user clients.
+      if (!isPerUserClient) {
+        if (config.ppEnabled && probed.textSearch && !probed.textSearch.available) {
+          const reason = probed.textSearch.reason ?? '';
+          if (reason.includes('authorization') || reason.includes('401') || reason.includes('403')) {
+            probed.textSearch = undefined;
+          }
+        }
+        cachedFeatures = probed;
+      }
+      return textResult(JSON.stringify(probed, null, 2));
     }
 
     default:
-      return errorResult(`Unknown SAPManage action: ${action}. Supported: features, probe`);
+      return errorResult(`Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats`);
   }
 }
 
@@ -1376,4 +1428,9 @@ export function resetCachedFeatures(): void {
 /** Set cached features directly (for testing BTP mode, etc.) */
 export function setCachedFeatures(features: ResolvedFeatures | undefined): void {
   cachedFeatures = features;
+}
+
+/** Get cached features (for tool definition adaptation) */
+export function getCachedFeatures(): ResolvedFeatures | undefined {
+  return cachedFeatures;
 }

@@ -81,8 +81,8 @@ export async function probeFeatures(
   // Only probe features that are in "auto" mode
   const probesToRun = PROBES.filter((p) => modeMap[p.id] === 'auto');
 
-  // Run feature probes + system detection in parallel
-  const [probeResults, systemDetection] = await Promise.all([
+  // Run feature probes + system detection + text search probe in parallel
+  const [probeResults, systemDetection, textSearchResult] = await Promise.all([
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
@@ -94,6 +94,7 @@ export async function probeFeatures(
       }),
     ),
     detectSystemFromComponents(client),
+    probeTextSearch(client),
   ]);
 
   // Build result map
@@ -120,6 +121,7 @@ export async function probeFeatures(
   } else if (systemDetection.systemType) {
     resolved.systemType = systemDetection.systemType;
   }
+  resolved.textSearch = textSearchResult;
   return resolved;
 }
 
@@ -197,6 +199,47 @@ export function detectSystemType(
 ): SystemType {
   const hasSapCloud = components.some((c) => c.name.toUpperCase() === 'SAP_CLOUD');
   return hasSapCloud ? 'btp' : 'onprem';
+}
+
+/**
+ * Probe text search (source_code) availability with a real request.
+ *
+ * Unlike HEAD-based feature probes, this does a real GET with a query
+ * to detect auth, SICF, and framework errors that HEAD doesn't surface.
+ */
+export async function probeTextSearch(client: AdtHttpClient): Promise<{ available: boolean; reason?: string }> {
+  try {
+    await client.get('/sap/bc/adt/repository/informationsystem/textSearch?searchString=SY-SUBRC&maxResults=1');
+    return { available: true };
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'statusCode' in err) {
+      return classifyTextSearchError((err as { statusCode: number }).statusCode);
+    }
+    return { available: false, reason: 'Network error — cannot reach the textSearch endpoint.' };
+  }
+}
+
+export function classifyTextSearchError(statusCode: number): { available: boolean; reason?: string } {
+  switch (statusCode) {
+    case 401:
+    case 403:
+      return {
+        available: false,
+        reason: 'User lacks authorization for source code search (check S_ADT_RES authorization object).',
+      };
+    case 404:
+      return {
+        available: false,
+        reason:
+          'textSearch ICF service not activated — activate /sap/bc/adt/repository/informationsystem/textSearch in SICF.',
+      };
+    case 500:
+      return { available: false, reason: 'Search framework error (component BC-DWB-AIE) — check SAP Note 3605050.' };
+    case 501:
+      return { available: false, reason: 'Not implemented — source code search requires SAP_BASIS >= 7.51.' };
+    default:
+      return { available: false, reason: `textSearch returned HTTP ${statusCode}.` };
+  }
 }
 
 /** Get features without probing (for offline/test scenarios) */

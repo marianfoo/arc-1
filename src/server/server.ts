@@ -16,7 +16,7 @@ import type { AdtClientConfig } from '../adt/config.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
-import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
+import { getCachedFeatures, handleToolCall, setCachedFeatures, TOOL_SCOPES } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
@@ -129,11 +129,53 @@ async function createPerUserClient(
 }
 
 /**
+ * Run a one-time feature probe against the SAP system using the shared/default client.
+ * Returns a promise that resolves once probe results are stored in cachedFeatures.
+ * In PP mode (when btpConfig is available for per-user client creation), auth failures
+ * (401/403) on textSearch are treated as "unknown" so the tool schema doesn't hide
+ * source_code from users who might have authorization.  Without btpConfig, PP cannot
+ * create per-user clients, so shared-client auth failures are definitive.
+ */
+export function runStartupProbe(
+  config: ServerConfig,
+  btpProxy?: BTPProxyConfig,
+  bearerTokenProvider?: () => Promise<string>,
+  btpConfig?: BTPConfig,
+): Promise<void> {
+  const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+  return (async () => {
+    try {
+      const { defaultFeatureConfig } = await import('../adt/config.js');
+      const { probeFeatures } = await import('../adt/features.js');
+      const fc = defaultFeatureConfig();
+      fc.hana = config.featureHana as 'auto' | 'on' | 'off';
+      fc.abapGit = config.featureAbapGit as 'auto' | 'on' | 'off';
+      fc.rap = config.featureRap as 'auto' | 'on' | 'off';
+      fc.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
+      fc.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
+      fc.transport = config.featureTransport as 'auto' | 'on' | 'off';
+      const features = await probeFeatures(client.http, fc, config.systemType);
+      if (config.ppEnabled && btpConfig && features.textSearch && !features.textSearch.available) {
+        const reason = features.textSearch.reason ?? '';
+        if (reason.includes('authorization') || reason.includes('401') || reason.includes('403')) {
+          features.textSearch = undefined;
+        }
+      }
+      setCachedFeatures(features);
+    } catch {
+      // Probe failed (e.g., SAP system unreachable) — continue with default tool set
+    }
+  })();
+}
+
+/**
  * Create the MCP server with registered tool handlers.
  * @param config Server configuration
  * @param btpProxy Optional BTP connectivity proxy config (resolved at startup)
  * @param btpConfig Optional BTP service config (for per-user destination lookup)
  * @param bearerTokenProvider Optional OAuth bearer token provider (BTP ABAP Environment)
+ * @param cachingLayer Optional object cache layer
+ * @param startupProbePromise Promise from runStartupProbe() — ListTools waits on this
  */
 export function createServer(
   config: ServerConfig,
@@ -141,6 +183,7 @@ export function createServer(
   btpConfig?: BTPConfig,
   bearerTokenProvider?: () => Promise<string>,
   cachingLayer?: CachingLayer,
+  startupProbePromise?: Promise<void>,
 ): Server {
   const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
@@ -149,7 +192,14 @@ export function createServer(
 
   // Register tool listing — filtered by user's scopes when auth is active
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
-    let tools = getToolDefinitions(config);
+    // Wait for the startup probe (if provided), but with a timeout so a slow/unreachable
+    // SAP system doesn't stall the MCP connection setup. If the probe doesn't finish in
+    // time, fall back to the default tool set (textSearch unknown = show source_code).
+    if (startupProbePromise) {
+      await Promise.race([startupProbePromise, new Promise((resolve) => setTimeout(resolve, 10_000))]);
+    }
+    const features = getCachedFeatures();
+    let tools = getToolDefinitions(config, features?.textSearch?.available);
 
     // When authenticated, only show tools the user has scopes for
     if (extra.authInfo) {
@@ -170,6 +220,7 @@ export function createServer(
     // Principal propagation: create per-user ADT client if enabled and user JWT available.
     // Only attempt PP when the token is a JWT (3 dot-separated parts), not a plain API key.
     let client = defaultClient;
+    let isPerUserClient = false;
     const token = extra.authInfo?.token;
     const isJwt = token && token.split('.').length === 3;
     if (config.ppEnabled && btpConfig && isJwt) {
@@ -177,6 +228,7 @@ export function createServer(
       const ppDest = process.env.SAP_BTP_PP_DESTINATION ?? process.env.SAP_BTP_DESTINATION ?? '';
       try {
         client = await createPerUserClient(config, btpConfig, btpProxy, token);
+        isPerUserClient = true;
         logger.emitAudit({
           timestamp: new Date().toISOString(),
           level: 'info',
@@ -224,7 +276,16 @@ export function createServer(
       } as Record<string, unknown>;
     }
 
-    const result = await handleToolCall(client, config, toolName, args, extra.authInfo, server, cachingLayer);
+    const result = await handleToolCall(
+      client,
+      config,
+      toolName,
+      args,
+      extra.authInfo,
+      server,
+      cachingLayer,
+      isPerUserClient,
+    );
     return { ...result } as Record<string, unknown>;
   });
 
@@ -411,7 +472,11 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     }
   }
 
-  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer);
+  // Run feature probe once at startup — shared across all requests (stdio and HTTP).
+  // This must happen before createServer() so the HTTP factory can close over the same promise.
+  const startupProbePromise = runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig);
+
+  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise);
 
   // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals)
   if (cachingLayer) {
@@ -466,7 +531,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
     const { startHttpServer } = await import('./http.js');
     await startHttpServer(
-      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer),
+      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise),
       config,
       xsuaaCredentials,
     );

@@ -90,7 +90,7 @@ export async function findDefinition(
   const parsed = parseXml(resp.body);
   const nodes = findDeepNodes(parsed, 'navigation');
   const nav = nodes[0] ?? (parsed.navigation as Record<string, unknown> | undefined);
-  if (!nav || !nav['@_uri']) return null;
+  if (!nav?.['@_uri']) return null;
 
   return {
     uri: String(nav['@_uri']),

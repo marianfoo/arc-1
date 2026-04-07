@@ -1,7 +1,13 @@
 import { Version } from '@abaplint/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FeatureConfig } from '../../../src/adt/config.js';
-import { detectSystemType, mapSapReleaseToAbaplintVersion, resolveWithoutProbing } from '../../../src/adt/features.js';
+import {
+  detectSystemType,
+  mapSapReleaseToAbaplintVersion,
+  probeTextSearch,
+  resolveWithoutProbing,
+} from '../../../src/adt/features.js';
+import type { AdtHttpClient } from '../../../src/adt/http.js';
 
 describe('Feature Detection', () => {
   describe('resolveWithoutProbing', () => {
@@ -164,6 +170,73 @@ describe('Feature Detection', () => {
         { name: 'sap_cloud', release: '100', description: 'SAP Cloud' },
       ];
       expect(detectSystemType(components)).toBe('btp');
+    });
+  });
+
+  // ─── probeTextSearch ───────────────────────────────────────────────
+
+  describe('probeTextSearch', () => {
+    function mockClient(statusCode: number): AdtHttpClient {
+      return { get: vi.fn().mockResolvedValue({ statusCode, body: '' }) } as unknown as AdtHttpClient;
+    }
+
+    function mockClientThrows(statusCode: number): AdtHttpClient {
+      return { get: vi.fn().mockRejectedValue({ statusCode }) } as unknown as AdtHttpClient;
+    }
+
+    function mockClientNetworkError(): AdtHttpClient {
+      return { get: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) } as unknown as AdtHttpClient;
+    }
+
+    it('returns available=true for 200 response', async () => {
+      const result = await probeTextSearch(mockClient(200));
+      expect(result.available).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it('returns auth error for thrown 401', async () => {
+      const result = await probeTextSearch(mockClientThrows(401));
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('authorization');
+      expect(result.reason).toContain('S_ADT_RES');
+    });
+
+    it('returns auth error for thrown 403', async () => {
+      const result = await probeTextSearch(mockClientThrows(403));
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('authorization');
+    });
+
+    it('returns SICF activation hint for thrown 404', async () => {
+      const result = await probeTextSearch(mockClientThrows(404));
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('SICF');
+      expect(result.reason).toContain('textSearch');
+    });
+
+    it('returns framework error for thrown 500', async () => {
+      const result = await probeTextSearch(mockClientThrows(500));
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('BC-DWB-AIE');
+    });
+
+    it('returns not-implemented for thrown 501', async () => {
+      const result = await probeTextSearch(mockClientThrows(501));
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('SAP_BASIS');
+      expect(result.reason).toContain('7.51');
+    });
+
+    it('returns generic message for unexpected thrown status codes', async () => {
+      const result = await probeTextSearch(mockClientThrows(502));
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('HTTP 502');
+    });
+
+    it('returns network error for generic errors', async () => {
+      const result = await probeTextSearch(mockClientNetworkError());
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('Network error');
     });
   });
 });

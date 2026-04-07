@@ -130,6 +130,19 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('returns soft informational message when DDLX is not found (404)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, 'Not Found', { 'x-csrf-token': 'mock-csrf-token' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DDLX',
+        name: 'ZC_TRAVEL',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('No metadata extension (DDLX) found for "ZC_TRAVEL"');
+      expect(result.content[0]?.text).toContain('inline annotations');
+      expect(result.content[0]?.text).toContain('manifest.json');
+    });
+
     it('reads service binding (SRVB) and returns parsed JSON', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValueOnce(
@@ -315,7 +328,7 @@ describe('Intent Handler', () => {
       expect(parsed.package).toBe('SEDT');
     });
 
-    it('returns error for unknown type', async () => {
+    it('returns error for unknown type with supported types and mapping tip', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'UNKNOWN',
         name: 'TEST',
@@ -329,6 +342,21 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.text).toContain('DOMA');
       expect(result.content[0]?.text).toContain('DTEL');
       expect(result.content[0]?.text).toContain('TRAN');
+      // Should include objectType mapping tip
+      expect(result.content[0]?.text).toContain('DDLS/DF');
+      expect(result.content[0]?.text).toContain('CLAS/OC');
+      expect(result.content[0]?.text).toContain('drop');
+    });
+
+    it('returns error with mapping tip for empty/missing type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: '',
+        name: 'TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Unknown SAPRead type');
+      expect(result.content[0]?.text).toContain('Supported types');
+      expect(result.content[0]?.text).toContain('slash suffix');
     });
 
     it('handles missing type parameter', async () => {
@@ -385,6 +413,34 @@ describe('Intent Handler', () => {
       // Either succeeds (if XML parsed) or error is caught gracefully
       expect(result.content).toHaveLength(1);
       expect(result.content[0]?.type).toBe('text');
+    });
+
+    it('returns JOIN-specific hint when a JOIN query fails with 400', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch (200)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: POST returns 400 (parser error)
+      mockFetch.mockResolvedValueOnce(mockResponse(400, '"INTO" is invalid at this position'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: 'SELECT a~field1, b~field2 FROM ztable1 AS a INNER JOIN ztable2 AS b ON a~id = b~id INTO TABLE @DATA(lt_result)',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAP Note 3605050');
+      expect(result.content[0]?.text).toContain('splitting into separate single-table queries');
+    });
+
+    it('does NOT include JOIN hint when a non-JOIN query fails with 400', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch (200)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: POST returns 400 (some other error)
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Syntax error in SQL'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: 'SELECT * FROM ztable1 WHERE invalid_syntax',
+      });
+      // Should NOT have JOIN hint — error falls through to default handler
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('SAP Note 3605050');
     });
 
     it('is blocked when free SQL is disallowed', async () => {
@@ -1151,6 +1207,77 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('not available on this SAP system');
+    });
+
+    it('returns precise probe reason when textSearch probe says unavailable', async () => {
+      setCachedFeatures({
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        textSearch: {
+          available: false,
+          reason:
+            'textSearch ICF service not activated — activate /sap/bc/adt/repository/informationsystem/textSearch in SICF.',
+        },
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'test_pattern',
+        searchType: 'source_code',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SICF');
+      expect(result.content[0]?.text).toContain('not available');
+    });
+
+    it('searches normally when textSearch probe says available', async () => {
+      setCachedFeatures({
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        textSearch: { available: true },
+      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<objectReferences><objectReference type="CLAS/OC" name="ZCL_FOUND" uri="/sap/bc/adt/oo/classes/zcl_found"/></objectReferences>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'some_pattern',
+        searchType: 'source_code',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed[0].objectName).toBe('ZCL_FOUND');
+    });
+
+    it('re-throws transient errors (e.g. 503) instead of claiming unavailable', async () => {
+      setCachedFeatures({
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        textSearch: { available: true },
+      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'test_pattern',
+        searchType: 'source_code',
+      });
+      // Transient 503 should be caught by outer handleToolCall and reported as error,
+      // NOT classified as "source code search is not available"
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('not available');
     });
   });
 

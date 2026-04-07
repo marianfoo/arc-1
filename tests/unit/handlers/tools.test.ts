@@ -107,6 +107,44 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('traces');
   });
 
+  // ─── textSearch-based SAPSearch adaptation ───────────────────────
+
+  describe('SAPSearch textSearch adaptation', () => {
+    it('includes source_code in searchType when textSearch is available', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG, true);
+      const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
+      const schema = sapSearch.inputSchema as Record<string, any>;
+      expect(schema.properties.searchType).toBeDefined();
+      expect(schema.properties.searchType.enum).toContain('source_code');
+      expect(schema.properties.objectType).toBeDefined();
+      expect(schema.properties.packageName).toBeDefined();
+    });
+
+    it('omits source_code from SAPSearch when textSearch is unavailable', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG, false);
+      const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
+      const schema = sapSearch.inputSchema as Record<string, any>;
+      expect(schema.properties.searchType).toBeUndefined();
+      expect(schema.properties.objectType).toBeUndefined();
+      expect(schema.properties.packageName).toBeUndefined();
+    });
+
+    it('includes source_code when textSearch is undefined (not yet probed)', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
+      const schema = sapSearch.inputSchema as Record<string, any>;
+      expect(schema.properties.searchType).toBeDefined();
+      expect(schema.properties.searchType.enum).toContain('source_code');
+    });
+
+    it('SAPSearch description omits source_code mode when unavailable', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG, false);
+      const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
+      expect(sapSearch.description).not.toContain('source_code');
+      expect(sapSearch.description).not.toContain('Source code search');
+    });
+  });
+
   // ─── Schema Validation (Issue #47: OpenAI compatibility) ─────────
 
   it('every array property has an items definition (Issue #47)', () => {

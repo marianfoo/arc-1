@@ -147,7 +147,8 @@ const SAPQUERY_DESC_ONPREM =
   'Execute ABAP SQL queries against SAP tables. Returns structured data with column names and rows. ' +
   'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
   'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
-  'If a table is not found, similar table names will be suggested automatically.';
+  'If a table is not found, similar table names will be suggested automatically. ' +
+  'Note: Uses the ADT freestyle SQL endpoint (same as ADT SQL Console in Eclipse). Supports ABAP SQL syntax including JOINs, but the endpoint parser has known edge cases with complex queries on some system versions (SAP Note 3605050). If a complex query fails, try simplifying — split JOINs into separate single-table SELECTs.';
 
 const SAPQUERY_DESC_BTP =
   'Execute ABAP SQL queries (BTP ABAP Environment). Returns structured data with column names and rows. ' +
@@ -162,13 +163,13 @@ const SAPSEARCH_DESC_ONPREM =
   'Search for ABAP objects or search within source code. Two modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
   '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
-  'Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.';
+  "Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references. The objectType field in results maps to SAPRead's type parameter — drop the slash suffix (DDLS/DF → DDLS, CLAS/OC → CLAS, PROG/P → PROG).\n\nNote: Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L.";
 
 const SAPSEARCH_DESC_BTP =
   'Search for ABAP objects or search within source code (BTP ABAP Environment). Two modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects. Classic programs, includes, and DDIC views are not searchable on BTP.\n' +
   '2. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
-  'Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.';
+  "Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.\n\nNote: Searches object names only (classes, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views.";
 
 // ─── SAPTransport ───────────────────────────────────────────────────
 
@@ -187,9 +188,9 @@ const SAPMANAGE_DESC_ONPREM =
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
-  '- "probe": Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). ' +
+  '- "probe": Re-probe the SAP system now (makes 7 parallel requests, ~1-2s). ' +
   'Use this on first use or if you suspect feature availability has changed.\n\n' +
-  'Returns JSON with 6 features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
+  'Returns JSON with features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
   'Also returns systemType ("btp" or "onprem") for understanding available capabilities. ' +
   '"available: false" means do NOT attempt operations that depend on it.';
 
@@ -202,9 +203,75 @@ const SAPMANAGE_DESC_BTP =
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP may not be available depending on the BTP ABAP configuration.';
 
+// ─── SAPSearch Builder ─────────────────────────────────────────────
+
+/** Strip source_code-specific lines from a SAPSearch description when textSearch is unavailable */
+function stripSourceCodeLines(desc: string): string {
+  return desc
+    .split('\n')
+    .filter(
+      (line) =>
+        !line.includes('source_code') &&
+        !line.includes('Source code search') &&
+        !line.startsWith('2. Source code search'),
+    )
+    .join('\n')
+    .replace(/ or search within source code[^.]*\. Two modes:\n1\. Object search \(default\): /i, '. ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDefinition {
+  // When textSearch is explicitly unavailable (probed and failed), hide source_code
+  const hideSourceCode = textSearchAvailable === false;
+
+  const baseDesc = btp ? SAPSEARCH_DESC_BTP : SAPSEARCH_DESC_ONPREM;
+  // Strip source_code lines from base description when hiding
+  const description = hideSourceCode ? stripSourceCodeLines(baseDesc) : baseDesc;
+
+  const properties: Record<string, unknown> = {
+    query: {
+      type: 'string',
+      description: hideSourceCode
+        ? 'Search pattern: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*).'
+        : 'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
+    },
+    maxResults: {
+      type: 'number',
+      description: hideSourceCode
+        ? 'Maximum results (default 100)'
+        : 'Maximum results (default 100 for object, 50 for source_code)',
+    },
+  };
+
+  if (!hideSourceCode) {
+    properties.searchType = {
+      type: 'string',
+      enum: ['object', 'source_code'],
+      description:
+        'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code.',
+    };
+    properties.objectType = {
+      type: 'string',
+      description: 'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC)',
+    };
+    properties.packageName = { type: 'string', description: 'For source_code search: filter by package name' };
+  }
+
+  return {
+    name: 'SAPSearch',
+    description,
+    inputSchema: {
+      type: 'object',
+      properties,
+      required: ['query'],
+    },
+  };
+}
+
 // ─── Main Tool Definitions ──────────────────────────────────────────
 
-export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
+export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: boolean): ToolDefinition[] {
   // Hyperfocused mode: single universal SAP tool (~200 tokens)
   if (config.toolMode === 'hyperfocused') {
     return [getHyperfocusedToolDefinition(config)];
@@ -258,33 +325,7 @@ export function getToolDefinitions(config: ServerConfig): ToolDefinition[] {
         required: ['type'],
       },
     },
-    {
-      name: 'SAPSearch',
-      description: btp ? SAPSEARCH_DESC_BTP : SAPSEARCH_DESC_ONPREM,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description:
-              'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
-          },
-          searchType: {
-            type: 'string',
-            enum: ['object', 'source_code'],
-            description:
-              'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code.',
-          },
-          objectType: {
-            type: 'string',
-            description: 'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC)',
-          },
-          packageName: { type: 'string', description: 'For source_code search: filter by package name' },
-          maxResults: { type: 'number', description: 'Maximum results (default 100 for object, 50 for source_code)' },
-        },
-        required: ['query'],
-      },
-    },
+    buildSAPSearchTool(btp, textSearchAvailable),
   ];
 
   // Write tools — only registered when not in read-only mode
