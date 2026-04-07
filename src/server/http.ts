@@ -314,6 +314,7 @@ export function extractOidcScopes(payload: Record<string, unknown>): string[] {
 
   // If scopes were present but none are known, grant minimum read access
   if (filtered.length === 0) {
+    logger.warn('OIDC JWT has scope claims but none match known scopes — granting read-only', { rawScopes });
     return ['read'];
   }
 

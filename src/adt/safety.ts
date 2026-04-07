@@ -266,7 +266,11 @@ export function expandImpliedScopes(scopes: string[]): string[] {
  * Never loosen (true→false).
  */
 export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): SafetyConfig {
-  const effective = { ...serverConfig };
+  const effective = {
+    ...serverConfig,
+    allowedPackages: [...serverConfig.allowedPackages],
+    allowedTransports: [...serverConfig.allowedTransports],
+  };
   const expanded = expandImpliedScopes(scopes);
 
   // No write scope → force read-only and disable transports
