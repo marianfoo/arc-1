@@ -147,7 +147,8 @@ const SAPQUERY_DESC_ONPREM =
   'Execute ABAP SQL queries against SAP tables. Returns structured data with column names and rows. ' +
   'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
   'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
-  'If a table is not found, similar table names will be suggested automatically.';
+  'If a table is not found, similar table names will be suggested automatically. ' +
+  'Note: Uses the ADT freestyle SQL endpoint (same as ADT SQL Console in Eclipse). Supports ABAP SQL syntax including JOINs, but the endpoint parser has known edge cases with complex queries on some system versions (SAP Note 3605050). If a complex query fails, try simplifying — split JOINs into separate single-table SELECTs.';
 
 const SAPQUERY_DESC_BTP =
   'Execute ABAP SQL queries (BTP ABAP Environment). Returns structured data with column names and rows. ' +

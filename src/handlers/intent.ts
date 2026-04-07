@@ -593,6 +593,12 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
         }
       }
     }
+    // JOIN-aware error: ADT freestyle SQL parser has known edge cases with JOINs (SAP Note 3605050)
+    if (err instanceof AdtApiError && err.statusCode === 400 && /\bJOIN\b/i.test(sql)) {
+      return errorResult(
+        `${err.message}\n\nMulti-table JOIN query failed. The ADT freestyle SQL endpoint has known parser edge cases with JOINs (SAP Note 3605050). Try splitting into separate single-table queries.`,
+      );
+    }
     throw err;
   }
 }

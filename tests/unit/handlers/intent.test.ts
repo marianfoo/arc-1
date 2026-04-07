@@ -415,6 +415,34 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.type).toBe('text');
     });
 
+    it('returns JOIN-specific hint when a JOIN query fails with 400', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch (200)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: POST returns 400 (parser error)
+      mockFetch.mockResolvedValueOnce(mockResponse(400, '"INTO" is invalid at this position'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: 'SELECT a~field1, b~field2 FROM ztable1 AS a INNER JOIN ztable2 AS b ON a~id = b~id INTO TABLE @DATA(lt_result)',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAP Note 3605050');
+      expect(result.content[0]?.text).toContain('splitting into separate single-table queries');
+    });
+
+    it('does NOT include JOIN hint when a non-JOIN query fails with 400', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch (200)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: POST returns 400 (some other error)
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Syntax error in SQL'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: 'SELECT * FROM ztable1 WHERE invalid_syntax',
+      });
+      // Should NOT have JOIN hint — error falls through to default handler
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('SAP Note 3605050');
+    });
+
     it('is blocked when free SQL is disallowed', async () => {
       const client = new AdtClient({
         baseUrl: 'http://sap:8000',
