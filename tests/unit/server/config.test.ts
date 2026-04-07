@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../../../src/server/config.js';
+import { PROFILES, parseArgs } from '../../../src/server/config.js';
 
 describe('parseArgs', () => {
   // Save and restore env to avoid test pollution
@@ -199,5 +199,98 @@ describe('parseArgs', () => {
     process.env.SAP_SYSTEM_TYPE = 'onprem';
     const config = parseArgs(['--system-type', 'btp']);
     expect(config.systemType).toBe('btp');
+  });
+
+  // --- blockData ---
+
+  it('parses --block-data flag', () => {
+    const config = parseArgs(['--block-data', 'true']);
+    expect(config.blockData).toBe(true);
+  });
+
+  it('parses SAP_BLOCK_DATA env var', () => {
+    process.env.SAP_BLOCK_DATA = '1';
+    const config = parseArgs([]);
+    expect(config.blockData).toBe(true);
+  });
+
+  it('defaults blockData to false without profile', () => {
+    const config = parseArgs([]);
+    expect(config.blockData).toBe(false);
+  });
+
+  // --- Profile ---
+
+  it('--profile viewer sets readOnly, blockData, blockFreeSQL', () => {
+    const config = parseArgs(['--profile', 'viewer']);
+    expect(config.readOnly).toBe(true);
+    expect(config.blockData).toBe(true);
+    expect(config.blockFreeSQL).toBe(true);
+    expect(config.enableTransports).toBe(false);
+    expect(config.allowTransportableEdits).toBe(false);
+  });
+
+  it('--profile developer sets write-enabled defaults', () => {
+    const config = parseArgs(['--profile', 'developer']);
+    expect(config.readOnly).toBe(false);
+    expect(config.blockData).toBe(true);
+    expect(config.blockFreeSQL).toBe(true);
+    expect(config.enableTransports).toBe(true);
+    expect(config.allowTransportableEdits).toBe(true);
+  });
+
+  it('--profile developer-data allows data but blocks SQL', () => {
+    const config = parseArgs(['--profile', 'developer-data']);
+    expect(config.readOnly).toBe(false);
+    expect(config.blockData).toBe(false);
+    expect(config.blockFreeSQL).toBe(true);
+    expect(config.enableTransports).toBe(true);
+  });
+
+  it('--profile viewer-sql allows both data and SQL but stays read-only', () => {
+    const config = parseArgs(['--profile', 'viewer-sql']);
+    expect(config.readOnly).toBe(true);
+    expect(config.blockData).toBe(false);
+    expect(config.blockFreeSQL).toBe(false);
+  });
+
+  it('--profile developer-sql allows everything', () => {
+    const config = parseArgs(['--profile', 'developer-sql']);
+    expect(config.readOnly).toBe(false);
+    expect(config.blockData).toBe(false);
+    expect(config.blockFreeSQL).toBe(false);
+    expect(config.enableTransports).toBe(true);
+    expect(config.allowTransportableEdits).toBe(true);
+  });
+
+  it('explicit flag overrides profile default', () => {
+    const config = parseArgs(['--profile', 'viewer', '--read-only', 'false']);
+    expect(config.readOnly).toBe(false);
+    // Other profile defaults remain
+    expect(config.blockData).toBe(true);
+    expect(config.blockFreeSQL).toBe(true);
+  });
+
+  it('ARC1_PROFILE env var selects profile', () => {
+    process.env.ARC1_PROFILE = 'developer';
+    const config = parseArgs([]);
+    expect(config.readOnly).toBe(false);
+    expect(config.enableTransports).toBe(true);
+    expect(config.allowTransportableEdits).toBe(true);
+  });
+
+  it('unknown profile name throws error', () => {
+    expect(() => parseArgs(['--profile', 'nonexistent'])).toThrow(/Unknown profile 'nonexistent'/);
+  });
+
+  it('PROFILES constant contains all expected profiles', () => {
+    expect(Object.keys(PROFILES).sort()).toEqual([
+      'developer',
+      'developer-data',
+      'developer-sql',
+      'viewer',
+      'viewer-data',
+      'viewer-sql',
+    ]);
   });
 });

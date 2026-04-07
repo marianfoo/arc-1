@@ -135,15 +135,15 @@ Add a function that merges server-level safety config (ceiling) with user JWT sc
 - Modify: `src/server/types.ts`
 - Modify: `tests/unit/server/config.test.ts` (or `tests/unit/cli/` — check which exists)
 
-- [ ] Add `blockData: boolean` to `ServerConfig` type in `types.ts`
-- [ ] Add `config.blockData = resolveBool('block-data', 'SAP_BLOCK_DATA', true)` in `config.ts` (default true = safe)
-- [ ] Add `--block-data` CLI flag registration (follow pattern of `--block-free-sql`)
-- [ ] Add `--profile` CLI flag (string type) with allowed values: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
-- [ ] When `--profile` is set, apply profile defaults BEFORE individual flag overrides (so `--profile viewer --read-only=false` works — explicit flags win)
-- [ ] Profile mapping implementation: create a `const PROFILES: Record<string, Partial<ServerConfig>>` map
-- [ ] Wire `blockData` through to the safety config in `server.ts` where `adtConfig.safety` is built
-- [ ] Add unit tests (~8 tests): blockData parsed from env, blockData parsed from CLI flag, each profile sets correct defaults, explicit flag overrides profile, unknown profile name errors
-- [ ] Run `npm test` and `npm run typecheck`
+- [x] Add `blockData: boolean` to `ServerConfig` type in `types.ts`
+- [x] Add `config.blockData = resolveBool('block-data', 'SAP_BLOCK_DATA', true)` in `config.ts` (default true = safe)
+- [x] Add `--block-data` CLI flag registration (follow pattern of `--block-free-sql`)
+- [x] Add `--profile` CLI flag (string type) with allowed values: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
+- [x] When `--profile` is set, apply profile defaults BEFORE individual flag overrides (so `--profile viewer --read-only=false` works — explicit flags win)
+- [x] Profile mapping implementation: create a `const PROFILES: Record<string, Partial<ServerConfig>>` map
+- [x] Wire `blockData` through to the safety config in `server.ts` where `adtConfig.safety` is built
+- [x] Add unit tests (~8 tests): blockData parsed from env, blockData parsed from CLI flag, each profile sets correct defaults, explicit flag overrides profile, unknown profile name errors
+- [x] Run `npm test` and `npm run typecheck`
 
 ### Task 4: Update TOOL_SCOPES and add `hasRequiredScope()`
 
