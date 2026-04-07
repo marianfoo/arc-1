@@ -250,7 +250,7 @@ export function checkTransportableEdit(config: SafetyConfig, transport: string, 
  * Expand implied scopes: `write` implies `read`, `sql` implies `data`.
  * Returns a new array with implied scopes added.
  */
-function expandImpliedScopes(scopes: string[]): string[] {
+export function expandImpliedScopes(scopes: string[]): string[] {
   const expanded = new Set(scopes);
   if (expanded.has('write')) expanded.add('read');
   if (expanded.has('sql')) expanded.add('data');

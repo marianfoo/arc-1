@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import { extractOidcScopes } from '../../../src/server/http.js';
+
+describe('extractOidcScopes', () => {
+  it('extracts scopes from space-separated string claim (standard OIDC)', () => {
+    const scopes = extractOidcScopes({ scope: 'read write' });
+    expect(scopes).toContain('read');
+    expect(scopes).toContain('write');
+  });
+
+  it('extracts scopes from array claim (Azure AD style)', () => {
+    const scopes = extractOidcScopes({ scp: ['read', 'data'] });
+    expect(scopes).toContain('read');
+    expect(scopes).toContain('data');
+  });
+
+  it('filters out unknown scopes', () => {
+    const scopes = extractOidcScopes({ scope: 'read openid profile email write' });
+    expect(scopes).toContain('read');
+    expect(scopes).toContain('write');
+    expect(scopes).not.toContain('openid');
+    expect(scopes).not.toContain('profile');
+    expect(scopes).not.toContain('email');
+  });
+
+  it('returns full access when no scope claims present (backward compat)', () => {
+    const scopes = extractOidcScopes({ sub: 'user123' });
+    expect(scopes).toEqual(['read', 'write', 'data', 'sql', 'admin']);
+  });
+
+  it('applies implied scope expansion: sql adds data', () => {
+    const scopes = extractOidcScopes({ scope: 'sql' });
+    expect(scopes).toContain('sql');
+    expect(scopes).toContain('data');
+  });
+
+  it('applies implied scope expansion: write adds read', () => {
+    const scopes = extractOidcScopes({ scope: 'write' });
+    expect(scopes).toContain('write');
+    expect(scopes).toContain('read');
+  });
+
+  it('returns minimum read when scopes are present but none are known', () => {
+    const scopes = extractOidcScopes({ scope: 'openid profile email' });
+    expect(scopes).toEqual(['read']);
+  });
+
+  it('prefers scope claim over scp claim', () => {
+    const scopes = extractOidcScopes({ scope: 'read', scp: ['write', 'admin'] });
+    expect(scopes).toContain('read');
+    expect(scopes).not.toContain('admin');
+  });
+
+  it('handles empty scope string', () => {
+    const scopes = extractOidcScopes({ scope: '' });
+    expect(scopes).toEqual(['read']);
+  });
+
+  it('handles scp array with non-string values', () => {
+    const scopes = extractOidcScopes({ scp: ['read', 42, null, 'write'] as unknown[] });
+    expect(scopes).toContain('read');
+    expect(scopes).toContain('write');
+  });
+});

@@ -29,6 +29,7 @@ import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { NextFunction, Request, Response } from 'express';
 import express from 'express';
+import { expandImpliedScopes } from '../adt/safety.js';
 import { logger } from './logger.js';
 import { VERSION } from './server.js';
 import type { ServerConfig } from './types.js';
@@ -192,7 +193,7 @@ export async function startHttpServer(
         issuerUrl: new URL(appUrl),
         baseUrl: new URL(appUrl),
         resourceServerUrl: new URL(`${appUrl}/mcp`),
-        scopesSupported: ['read', 'write', 'admin'],
+        scopesSupported: ['read', 'write', 'data', 'sql', 'admin'],
         resourceName: 'ARC-1 SAP MCP Server',
       }),
     );
@@ -268,14 +269,55 @@ async function createOidcVerifier(
 
     logger.debug('OIDC JWT validated', { sub: payload.sub, iss: payload.iss });
 
+    const scopes = extractOidcScopes(payload);
+
     return {
       token,
       clientId: (payload.azp as string) ?? (payload.sub as string) ?? 'oidc-user',
-      scopes: ['read', 'write', 'admin'], // OIDC tokens get full access (scopes managed by OIDC provider)
+      scopes,
       expiresAt: payload.exp,
       extra: { sub: payload.sub, iss: payload.iss },
     };
   };
+}
+
+// ─── OIDC Scope Extraction ──────────────────────────────────────────
+
+const KNOWN_SCOPES = ['read', 'write', 'data', 'sql', 'admin'];
+
+/**
+ * Extract scopes from an OIDC JWT payload.
+ *
+ * Tries `scope` (space-separated string, standard OIDC) then `scp` (array, Azure AD style).
+ * Filters to known scopes, applies implied scope expansion, and falls back to full access
+ * when no scope claims are present (backward compat for providers that don't emit scopes).
+ */
+export function extractOidcScopes(payload: Record<string, unknown>): string[] {
+  let rawScopes: string[] | undefined;
+
+  // Standard OIDC: space-separated string
+  if (typeof payload.scope === 'string') {
+    rawScopes = payload.scope.split(' ').filter((s) => s.length > 0);
+  }
+  // Azure AD / some providers: array
+  else if (Array.isArray(payload.scp)) {
+    rawScopes = (payload.scp as string[]).filter((s) => typeof s === 'string' && s.length > 0);
+  }
+
+  // No scope claims at all → full access (backward compat)
+  if (rawScopes === undefined) {
+    return ['read', 'write', 'data', 'sql', 'admin'];
+  }
+
+  // Filter to known scopes
+  const filtered = rawScopes.filter((s) => KNOWN_SCOPES.includes(s));
+
+  // If scopes were present but none are known, grant minimum read access
+  if (filtered.length === 0) {
+    return ['read'];
+  }
+
+  return expandImpliedScopes(filtered);
 }
 
 // ─── Standard Auth (API Key + OIDC) ──────────────────────────────────

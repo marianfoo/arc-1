@@ -168,12 +168,12 @@ Add a function that merges server-level safety config (ceiling) with user JWT sc
 
 The OIDC token verifier at `http.ts:274` hardcodes `scopes: ['read', 'write', 'admin']` for all OIDC tokens. Fix it to extract scopes from the JWT.
 
-- [ ] In the OIDC token validation function (around line 274), replace the hardcoded scopes with extraction from JWT claims: try `payload.scope` (space-separated string, standard OIDC), then `payload.scp` (array, Azure AD style), fallback to `['read', 'write', 'data', 'sql', 'admin']` for backward compat
-- [ ] Filter to known scopes only: `['read', 'write', 'data', 'sql', 'admin']`
-- [ ] Apply implied scope expansion: if `sql` present but not `data`, add `data`; if `write` present but not `read`, add `read`
-- [ ] If no known scopes after filtering, default to `['read']` (minimum access)
-- [ ] Add unit tests (~7 tests): scope from space-separated string claim, scope from array claim, unknown scopes filtered out, no scope claims → full access fallback, implied scope expansion (sql adds data, write adds read), empty after filter → minimum read
-- [ ] Run `npm test`
+- [x] In the OIDC token validation function (around line 274), replace the hardcoded scopes with extraction from JWT claims: try `payload.scope` (space-separated string, standard OIDC), then `payload.scp` (array, Azure AD style), fallback to `['read', 'write', 'data', 'sql', 'admin']` for backward compat
+- [x] Filter to known scopes only: `['read', 'write', 'data', 'sql', 'admin']`
+- [x] Apply implied scope expansion: if `sql` present but not `data`, add `data`; if `write` present but not `read`, add `read`
+- [x] If no known scopes after filtering, default to `['read']` (minimum access)
+- [x] Add unit tests (~7 tests): scope from space-separated string claim, scope from array claim, unknown scopes filtered out, no scope claims → full access fallback, implied scope expansion (sql adds data, write adds read), empty after filter → minimum read
+- [x] Run `npm test`
 
 ### Task 6: Update XSUAA scope extraction
 
