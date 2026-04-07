@@ -208,15 +208,15 @@ Connect `deriveUserSafety()` to the tool call handler so per-request safety conf
 
 Update XSUAA configuration to match the new scope model. This is a config-only change.
 
-- [ ] Add `$XSAPPNAME.data` scope: `"description": "Preview named table contents"`
-- [ ] Add `$XSAPPNAME.sql` scope: `"description": "Execute freestyle SQL queries (implies data)"`
-- [ ] Rename role template `MCPReader` → `MCPViewer` with scope `[$XSAPPNAME.read]`
-- [ ] Rename role template `MCPEditor` → `MCPDeveloper` with scopes `[$XSAPPNAME.read, $XSAPPNAME.write]`
-- [ ] Keep `MCPAdmin` with scopes `[$XSAPPNAME.read, $XSAPPNAME.write, $XSAPPNAME.admin]`
-- [ ] Add `MCPDataViewer` role template with scope `[$XSAPPNAME.data]` (additive)
-- [ ] Add `MCPSqlUser` role template with scopes `[$XSAPPNAME.data, $XSAPPNAME.sql]` (additive)
-- [ ] Update role collections: "ARC-1 Viewer" → MCPViewer, "ARC-1 Developer" → MCPDeveloper, add "ARC-1 Data Viewer" (MCPViewer + MCPDataViewer), add "ARC-1 Developer + Data" (MCPDeveloper + MCPDataViewer), add "ARC-1 Developer + SQL" (MCPDeveloper + MCPSqlUser)
-- [ ] Run `npm test` (config change should not break any tests)
+- [x] Add `$XSAPPNAME.data` scope: `"description": "Preview named table contents"`
+- [x] Add `$XSAPPNAME.sql` scope: `"description": "Execute freestyle SQL queries (implies data)"`
+- [x] Rename role template `MCPReader` → `MCPViewer` with scope `[$XSAPPNAME.read]`
+- [x] Rename role template `MCPEditor` → `MCPDeveloper` with scopes `[$XSAPPNAME.read, $XSAPPNAME.write]`
+- [x] Keep `MCPAdmin` with scopes `[$XSAPPNAME.read, $XSAPPNAME.write, $XSAPPNAME.admin]`
+- [x] Add `MCPDataViewer` role template with scope `[$XSAPPNAME.data]` (additive)
+- [x] Add `MCPSqlUser` role template with scopes `[$XSAPPNAME.data, $XSAPPNAME.sql]` (additive)
+- [x] Update role collections: "ARC-1 Viewer" → MCPViewer, "ARC-1 Developer" → MCPDeveloper, add "ARC-1 Data Viewer" (MCPViewer + MCPDataViewer), add "ARC-1 Developer + Data" (MCPDeveloper + MCPDataViewer), add "ARC-1 Developer + SQL" (MCPDeveloper + MCPSqlUser)
+- [x] Run `npm test` (config change should not break any tests)
 
 ### Task 9: Add startup authorization probe
 
