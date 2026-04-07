@@ -370,6 +370,10 @@ export function extractOidcScopes(payload: Record<string, unknown>): string[] {
 
   // No scope claims at all → full access (backward compat)
   if (rawScopes === undefined) {
+    logger.warn(
+      'OIDC JWT has no scope/scp claims — granting full access for backward compatibility. ' +
+        'Configure scope claims in your OIDC provider to restrict access.',
+    );
     return ['read', 'write', 'data', 'sql', 'admin'];
   }
 
