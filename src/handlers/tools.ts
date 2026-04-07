@@ -163,13 +163,13 @@ const SAPSEARCH_DESC_ONPREM =
   'Search for ABAP objects or search within source code. Two modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
   '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
-  "Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references. The objectType field in results maps to SAPRead's type parameter — drop the slash suffix (DDLS/DF → DDLS, CLAS/OC → CLAS, PROG/P → PROG).";
+  "Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references. The objectType field in results maps to SAPRead's type parameter — drop the slash suffix (DDLS/DF → DDLS, CLAS/OC → CLAS, PROG/P → PROG).\n\nNote: Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L.";
 
 const SAPSEARCH_DESC_BTP =
   'Search for ABAP objects or search within source code (BTP ABAP Environment). Two modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects. Classic programs, includes, and DDIC views are not searchable on BTP.\n' +
   '2. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
-  'Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.';
+  "Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.\n\nNote: Searches object names only (classes, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views.";
 
 // ─── SAPTransport ───────────────────────────────────────────────────
 
@@ -212,8 +212,8 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
   const baseDesc = btp ? SAPSEARCH_DESC_BTP : SAPSEARCH_DESC_ONPREM;
   const description = hideSourceCode
     ? btp
-      ? 'Search for ABAP objects by name (BTP ABAP Environment). Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects.\n\nTips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.'
-      : 'Search for ABAP objects by name. Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n\nTips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.'
+      ? "Search for ABAP objects by name (BTP ABAP Environment). Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects.\n\nTips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.\n\nNote: Searches object names only (classes, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views."
+      : "Search for ABAP objects by name. Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n\nTips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.\n\nNote: Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L."
     : baseDesc;
 
   const properties: Record<string, unknown> = {

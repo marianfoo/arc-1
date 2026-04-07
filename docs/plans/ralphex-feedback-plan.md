@@ -29,11 +29,11 @@ ARC-1 is a TypeScript MCP server for SAP ADT with 11 intent-based tools. Tool de
 
 ## Success criteria
 
-- [ ] All 5 items implemented and tested
-- [ ] `npm test` passes (707+ tests)
-- [ ] `npm run build` succeeds
-- [ ] `npm run typecheck` succeeds
-- [ ] `npm run lint` succeeds
+- [x] All 5 items implemented and tested
+- [x] `npm test` passes (707+ tests)
+- [x] `npm run build` succeeds
+- [x] `npm run typecheck` succeeds
+- [x] `npm run lint` succeeds
 
 ### Task 1: textSearch smoketest at startup + dynamic tool hiding
 
@@ -77,5 +77,5 @@ Multi-table JOINs can fail on the ADT `datapreview/freestyle` endpoint with conf
 
 Searching for `ZZ_ABLESARTST*` (a field name) returned nothing because SAPSearch only searches object names. The description doesn't make this explicit.
 
-- [ ] In `src/handlers/tools.ts`, update `SAPSEARCH_DESC_ONPREM` object search description to include: "Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L."
-- [ ] Also update `SAPSEARCH_DESC_BTP` with similar wording adapted for BTP (mention that DD03L is not available on BTP, use SAPRead with include='elements' for CDS views instead)
+- [x] In `src/handlers/tools.ts`, update `SAPSEARCH_DESC_ONPREM` object search description to include: "Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L."
+- [x] Also update `SAPSEARCH_DESC_BTP` with similar wording adapted for BTP (mention that DD03L is not available on BTP, use SAPRead with include='elements' for CDS views instead)
