@@ -47,6 +47,8 @@ export interface ResolvedFeatures {
   abapRelease?: string;
   /** Detected system type: 'btp' (SAP_CLOUD component present) or 'onprem'. */
   systemType?: SystemType;
+  /** Text search (source_code) probe result — available, or reason it's unavailable */
+  textSearch?: { available: boolean; reason?: string };
 }
 
 /** System info from /sap/bc/adt/core/discovery */

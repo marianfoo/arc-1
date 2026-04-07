@@ -521,6 +521,13 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   const searchType = String(args.searchType ?? 'object');
 
   if (searchType === 'source_code') {
+    // If probe already determined textSearch is unavailable, return the precise reason
+    if (cachedFeatures?.textSearch && !cachedFeatures.textSearch.available) {
+      return errorResult(
+        `Source code search is not available on this SAP system. ${cachedFeatures.textSearch.reason ?? ''}` +
+          `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+      );
+    }
     const objectType = args.objectType as string | undefined;
     const packageName = args.packageName as string | undefined;
     try {
@@ -1282,4 +1289,9 @@ export function resetCachedFeatures(): void {
 /** Set cached features directly (for testing BTP mode, etc.) */
 export function setCachedFeatures(features: ResolvedFeatures | undefined): void {
   cachedFeatures = features;
+}
+
+/** Get cached features (for tool definition adaptation) */
+export function getCachedFeatures(): ResolvedFeatures | undefined {
+  return cachedFeatures;
 }

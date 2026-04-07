@@ -1152,6 +1152,55 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('not available on this SAP system');
     });
+
+    it('returns precise probe reason when textSearch probe says unavailable', async () => {
+      setCachedFeatures({
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        textSearch: {
+          available: false,
+          reason:
+            'textSearch ICF service not activated — activate /sap/bc/adt/repository/informationsystem/textSearch in SICF.',
+        },
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'test_pattern',
+        searchType: 'source_code',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SICF');
+      expect(result.content[0]?.text).toContain('not available');
+    });
+
+    it('searches normally when textSearch probe says available', async () => {
+      setCachedFeatures({
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        textSearch: { available: true },
+      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<objectReferences><objectReference type="CLAS/OC" name="ZCL_FOUND" uri="/sap/bc/adt/oo/classes/zcl_found"/></objectReferences>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'some_pattern',
+        searchType: 'source_code',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed[0].objectName).toBe('ZCL_FOUND');
+    });
   });
 
   // ─── Issue 5: SOBJ/BOR reading ──────────────────────────────────────

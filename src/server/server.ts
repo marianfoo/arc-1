@@ -16,7 +16,7 @@ import type { AdtClientConfig } from '../adt/config.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
-import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
+import { getCachedFeatures, handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
@@ -149,7 +149,10 @@ export function createServer(
 
   // Register tool listing — filtered by user's scopes when auth is active
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
-    let tools = getToolDefinitions(config);
+    const features = getCachedFeatures();
+    let tools = getToolDefinitions(config, {
+      textSearchAvailable: features?.textSearch?.available,
+    });
 
     // When authenticated, only show tools the user has scopes for
     if (extra.authInfo) {
