@@ -547,11 +547,14 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
       return textResult(JSON.stringify(results, null, 2));
     } catch (err) {
       if (err instanceof AdtApiError) {
-        const classified = classifyTextSearchError(err.statusCode);
-        return errorResult(
-          `Source code search is not available on this SAP system. ${classified.reason ?? ''}` +
-            `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
-        );
+        const permanentCodes = [401, 403, 404, 501];
+        if (permanentCodes.includes(err.statusCode)) {
+          const classified = classifyTextSearchError(err.statusCode);
+          return errorResult(
+            `Source code search is not available on this SAP system. ${classified.reason ?? ''}` +
+              `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
+          );
+        }
       }
       throw err;
     }

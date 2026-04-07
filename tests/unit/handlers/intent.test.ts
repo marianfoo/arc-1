@@ -1257,6 +1257,28 @@ ENDCLASS.`;
       const parsed = JSON.parse(result.content[0]?.text);
       expect(parsed[0].objectName).toBe('ZCL_FOUND');
     });
+
+    it('re-throws transient errors (e.g. 503) instead of claiming unavailable', async () => {
+      setCachedFeatures({
+        hana: { id: 'hana', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+        rap: { id: 'rap', available: true, mode: 'auto' },
+        amdp: { id: 'amdp', available: false, mode: 'auto' },
+        ui5: { id: 'ui5', available: false, mode: 'auto' },
+        transport: { id: 'transport', available: true, mode: 'auto' },
+        textSearch: { available: true },
+      });
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'test_pattern',
+        searchType: 'source_code',
+      });
+      // Transient 503 should be caught by outer handleToolCall and reported as error,
+      // NOT classified as "source code search is not available"
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('not available');
+    });
   });
 
   // ─── Issue 5: SOBJ/BOR reading ──────────────────────────────────────
