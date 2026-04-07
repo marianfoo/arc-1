@@ -52,12 +52,14 @@ describe('E2E RAP Completeness Tests', () => {
       expect(text).toContain('lineItem');
     });
 
-    it('returns 404 error for non-existent DDLX', async () => {
+    it('returns soft informational message for non-existent DDLX', async () => {
       const result = await callTool(client, 'SAPRead', {
         type: 'DDLX',
         name: 'ZZZNOTEXIST_DDLX_999',
       });
-      expectToolError(result, 'ZZZNOTEXIST_DDLX_999');
+      const text = expectToolSuccess(result);
+      expect(text).toContain('No metadata extension (DDLX) found');
+      expect(text).toContain('ZZZNOTEXIST_DDLX_999');
     });
   });
 
