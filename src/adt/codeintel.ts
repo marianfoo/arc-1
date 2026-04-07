@@ -87,17 +87,15 @@ export async function findDefinition(
     { Accept: 'application/xml' },
   );
 
-  // Parse navigation response
-  const uriMatch = resp.body.match(/uri="([^"]*)"/);
-  const typeMatch = resp.body.match(/type="([^"]*)"/);
-  const nameMatch = resp.body.match(/name="([^"]*)"/);
-
-  if (!uriMatch) return null;
+  const parsed = parseXml(resp.body);
+  const nodes = findDeepNodes(parsed, 'navigation');
+  const nav = nodes[0] ?? (parsed.navigation as Record<string, unknown> | undefined);
+  if (!nav || !nav['@_uri']) return null;
 
   return {
-    uri: uriMatch[1]!,
-    type: typeMatch?.[1] ?? '',
-    name: nameMatch?.[1] ?? '',
+    uri: String(nav['@_uri']),
+    type: String(nav['@_type'] ?? ''),
+    name: String(nav['@_name'] ?? ''),
   };
 }
 
@@ -114,21 +112,15 @@ export async function findReferences(
     { Accept: 'application/xml' },
   );
 
-  // Parse reference results
-  const results: ReferenceResult[] = [];
-  const refRegex = /uri="([^"]*)"[^>]*type="([^"]*)"[^>]*name="([^"]*)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = refRegex.exec(resp.body)) !== null) {
-    results.push({
-      uri: match[1]!,
-      type: match[2]!,
-      name: match[3]!,
-      line: 0,
-      column: 0,
-    });
-  }
-
-  return results;
+  const parsed = parseXml(resp.body);
+  const refs = findDeepNodes(parsed, 'objectReference');
+  return refs.map((ref) => ({
+    uri: String(ref['@_uri'] ?? ''),
+    type: String(ref['@_type'] ?? ''),
+    name: String(ref['@_name'] ?? ''),
+    line: 0,
+    column: 0,
+  }));
 }
 
 /**
@@ -145,7 +137,12 @@ export async function getWhereUsedScope(
 ): Promise<WhereUsedScope> {
   checkOperation(safety, OperationType.Intelligence, 'FindWhereUsed');
 
-  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<usageReferences:scopeRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">\n  <usageReferences:objectReference uri="${escapeXmlAttr(objectUrl)}"/>\n</usageReferences:scopeRequest>`;
+  const body = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<usageReferences:scopeRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">',
+    `  <usageReferences:objectReference uri="${escapeXmlAttr(objectUrl)}"/>`,
+    '</usageReferences:scopeRequest>',
+  ].join('\n');
 
   const resp = await http.post(
     '/sap/bc/adt/repository/informationsystem/usageReferences/scope',
@@ -189,7 +186,12 @@ export async function findWhereUsed(
 
   const typeFilter = objectType ? `\n  <usageReferences:objectTypeFilter value="${escapeXmlAttr(objectType)}"/>` : '';
 
-  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<usageReferences:usageReferenceRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">\n  <usageReferences:objectReference uri="${escapeXmlAttr(objectUrl)}"/>${typeFilter}\n</usageReferences:usageReferenceRequest>`;
+  const body = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<usageReferences:usageReferenceRequest xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">',
+    `  <usageReferences:objectReference uri="${escapeXmlAttr(objectUrl)}"/>${typeFilter}`,
+    '</usageReferences:usageReferenceRequest>',
+  ].join('\n');
 
   const resp = await http.post('/sap/bc/adt/repository/informationsystem/usageReferences', body, 'application/xml', {
     Accept: 'application/xml',
@@ -234,17 +236,11 @@ export async function getCompletion(
     { Accept: 'application/xml' },
   );
 
-  // Parse completion proposals
-  const proposals: CompletionProposal[] = [];
-  const propRegex = /<proposal[^>]*text="([^"]*)"[^>]*description="([^"]*)"[^>]*type="([^"]*)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = propRegex.exec(resp.body)) !== null) {
-    proposals.push({
-      text: match[1]!,
-      description: match[2]!,
-      type: match[3]!,
-    });
-  }
-
-  return proposals;
+  const parsed = parseXml(resp.body);
+  const nodes = findDeepNodes(parsed, 'proposal');
+  return nodes.map((node) => ({
+    text: String(node['@_text'] ?? ''),
+    description: String(node['@_description'] ?? ''),
+    type: String(node['@_type'] ?? ''),
+  }));
 }

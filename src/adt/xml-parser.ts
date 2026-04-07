@@ -40,6 +40,7 @@ const parser = new XMLParser({
       'objectStructureElement',
       'task',
       'objectType',
+      'proposal',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings

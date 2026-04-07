@@ -84,10 +84,10 @@ describe('Code Intelligence', () => {
 
   describe('findReferences', () => {
     it('returns reference list', async () => {
-      const xml = `<references>
-        <ref uri="/sap/bc/adt/programs/programs/ZPROG1" type="PROG/P" name="ZPROG1"/>
-        <ref uri="/sap/bc/adt/oo/classes/ZCL_USER" type="CLAS/OC" name="ZCL_USER"/>
-      </references>`;
+      const xml = `<usageReferences>
+        <objectReference uri="/sap/bc/adt/programs/programs/ZPROG1" type="PROG/P" name="ZPROG1"/>
+        <objectReference uri="/sap/bc/adt/oo/classes/ZCL_USER" type="CLAS/OC" name="ZCL_USER"/>
+      </usageReferences>`;
       const http = mockHttp(xml);
       const results = await findReferences(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_HELPER');
       expect(results).toHaveLength(2);
@@ -96,13 +96,13 @@ describe('Code Intelligence', () => {
     });
 
     it('returns empty array when no references found', async () => {
-      const http = mockHttp('<references/>');
+      const http = mockHttp('<usageReferences/>');
       const results = await findReferences(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_ORPHAN');
       expect(results).toEqual([]);
     });
 
     it('calls usageReferences endpoint with correct Accept header', async () => {
-      const http = mockHttp('<references/>');
+      const http = mockHttp('<usageReferences/>');
       await findReferences(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(http.get).toHaveBeenCalledWith(
         expect.stringContaining('/sap/bc/adt/repository/informationsystem/usageReferences'),
