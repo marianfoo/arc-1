@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/marianfoo/arc-1/compare/v0.4.1...v0.4.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* avoid QEMU emulation crash in arm64 Docker build ([7ea7883](https://github.com/marianfoo/arc-1/commit/7ea78838ea8bd121f6b823c0754f64ae2b69b673))
+
 ## [0.4.1](https://github.com/marianfoo/arc-1/compare/v0.4.0...v0.4.1) (2026-04-07)
 
 
