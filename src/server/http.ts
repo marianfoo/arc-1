@@ -27,7 +27,7 @@
 
 import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type { NextFunction, Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import express from 'express';
 import { expandImpliedScopes } from '../adt/safety.js';
 import { logger } from './logger.js';
@@ -211,17 +211,17 @@ export async function startHttpServer(
       await initJwks(config.oidcIssuer);
     }
 
-    // Auth middleware for standard mode
-    const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-      const authResult = await checkAuth(req, config);
-      if (!authResult.ok) {
-        res.status(authResult.status).json({ error: authResult.message });
-        return;
-      }
-      next();
-    };
-
-    app.all('/mcp', authMiddleware, mcpHandler);
+    if (config.apiKey || config.oidcIssuer) {
+      // Use requireBearerAuth so that authInfo is populated on the MCP request context.
+      // This enables scope enforcement, per-request safety, and principal propagation.
+      const { requireBearerAuth } = await import('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js');
+      const verifier = createStandardVerifier(config);
+      const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: verifier } });
+      app.all('/mcp', bearerAuth, mcpHandler);
+    } else {
+      // No auth configured — open access
+      app.all('/mcp', mcpHandler);
+    }
   }
 
   // ─── 404 for anything else ─────────────────────────────────
@@ -245,6 +245,68 @@ export async function startHttpServer(
       auth: authMode,
     });
   });
+}
+
+// ─── Standard Mode Verifier ─────────────────────────────────────────
+
+/**
+ * Create a token verifier for standard auth mode (API key + OIDC).
+ * Returns AuthInfo so the MCP SDK populates extra.authInfo on the request,
+ * enabling scope enforcement, per-request safety, and principal propagation.
+ */
+function createStandardVerifier(
+  config: ServerConfig,
+): (token: string) => Promise<import('@modelcontextprotocol/sdk/server/auth/types.js').AuthInfo> {
+  return async (token: string) => {
+    // Lazy-import SDK error classes so bearerAuth maps them to 401/403
+    const { InvalidTokenError } = await import('@modelcontextprotocol/sdk/server/auth/errors.js');
+
+    // API key: exact match → full access
+    if (config.apiKey && token === config.apiKey) {
+      // expiresAt is required by requireBearerAuth — use far-future expiry for static keys
+      const ONE_YEAR_SECS = 365 * 24 * 60 * 60;
+      return {
+        token,
+        clientId: 'api-key',
+        scopes: ['read', 'write', 'data', 'sql', 'admin'],
+        expiresAt: Math.floor(Date.now() / 1000) + ONE_YEAR_SECS,
+      };
+    }
+
+    // OIDC: validate JWT and extract scopes
+    if (config.oidcIssuer) {
+      try {
+        if (!joseModule || !jwksClient) {
+          await initJwks(config.oidcIssuer);
+        }
+        if (!joseModule || !jwksClient) {
+          throw new Error('OIDC not initialized — check SAP_OIDC_ISSUER configuration');
+        }
+        const { payload } = await joseModule.jwtVerify(token, jwksClient, {
+          issuer: config.oidcIssuer,
+          audience: config.oidcAudience,
+        });
+
+        logger.debug('Standard OIDC JWT validated', { sub: payload.sub, iss: payload.iss });
+
+        const scopes = extractOidcScopes(payload);
+
+        return {
+          token,
+          clientId: (payload.azp as string) ?? (payload.sub as string) ?? 'oidc-user',
+          scopes,
+          expiresAt: payload.exp,
+          extra: { sub: payload.sub, iss: payload.iss },
+        };
+      } catch (err) {
+        // Wrap JWT validation errors as InvalidTokenError so bearerAuth returns 401
+        if (err instanceof InvalidTokenError) throw err;
+        throw new InvalidTokenError((err as Error).message ?? 'Invalid token');
+      }
+    }
+
+    throw new InvalidTokenError('Authentication failed: invalid token');
+  };
 }
 
 // ─── OIDC Verifier Factory ───────────────────────────────────────────
@@ -299,8 +361,10 @@ export function extractOidcScopes(payload: Record<string, unknown>): string[] {
   if (typeof payload.scope === 'string') {
     rawScopes = payload.scope.split(' ').filter((s) => s.length > 0);
   }
-  // Azure AD / some providers: array
-  else if (Array.isArray(payload.scp)) {
+  // Azure AD / Entra: `scp` as space-delimited string (delegated tokens) or array (app tokens)
+  else if (typeof payload.scp === 'string') {
+    rawScopes = payload.scp.split(' ').filter((s) => s.length > 0);
+  } else if (Array.isArray(payload.scp)) {
     rawScopes = (payload.scp as string[]).filter((s) => typeof s === 'string' && s.length > 0);
   }
 
@@ -319,60 +383,6 @@ export function extractOidcScopes(payload: Record<string, unknown>): string[] {
   }
 
   return expandImpliedScopes(filtered);
-}
-
-// ─── Standard Auth (API Key + OIDC) ──────────────────────────────────
-
-interface AuthResult {
-  ok: boolean;
-  status: number;
-  message: string;
-}
-
-/**
- * Check authentication for standard mode (API key + OIDC).
- * Used when XSUAA auth is NOT enabled.
- */
-async function checkAuth(req: Request, config: ServerConfig): Promise<AuthResult> {
-  // No auth configured — allow all
-  if (!config.apiKey && !config.oidcIssuer) {
-    return { ok: true, status: 200, message: '' };
-  }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return {
-      ok: false,
-      status: 401,
-      message: 'Missing or invalid Authorization header. Expected: Bearer <token>',
-    };
-  }
-
-  const token = authHeader.slice(7);
-
-  // API Key check
-  if (config.apiKey) {
-    if (token === config.apiKey) {
-      return { ok: true, status: 200, message: '' };
-    }
-    if (!config.oidcIssuer) {
-      return { ok: false, status: 403, message: 'Invalid API key' };
-    }
-  }
-
-  // OIDC / JWT validation
-  if (config.oidcIssuer) {
-    try {
-      await validateJwt(token, config);
-      return { ok: true, status: 200, message: '' };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'JWT validation failed';
-      logger.debug('JWT validation failed', { error: msg });
-      return { ok: false, status: 403, message: `Authentication failed: ${msg}` };
-    }
-  }
-
-  return { ok: false, status: 403, message: 'Authentication failed' };
 }
 
 /**
@@ -401,29 +411,4 @@ async function initJwks(issuer: string): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
     });
   }
-}
-
-/**
- * Validate a JWT token against the configured OIDC issuer.
- */
-async function validateJwt(token: string, config: ServerConfig): Promise<void> {
-  if (!joseModule || !jwksClient) {
-    if (config.oidcIssuer) {
-      await initJwks(config.oidcIssuer);
-    }
-    if (!joseModule || !jwksClient) {
-      throw new Error('OIDC not initialized — check SAP_OIDC_ISSUER configuration');
-    }
-  }
-
-  const { payload } = await joseModule.jwtVerify(token, jwksClient, {
-    issuer: config.oidcIssuer,
-    audience: config.oidcAudience,
-  });
-
-  logger.debug('JWT validated', {
-    sub: payload.sub,
-    iss: payload.iss,
-    exp: payload.exp,
-  });
 }

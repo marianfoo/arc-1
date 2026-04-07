@@ -61,4 +61,23 @@ describe('extractOidcScopes', () => {
     expect(scopes).toContain('read');
     expect(scopes).toContain('write');
   });
+
+  it('extracts scopes from scp as space-delimited string (Entra delegated tokens)', () => {
+    const scopes = extractOidcScopes({ scp: 'read write data' });
+    expect(scopes).toContain('read');
+    expect(scopes).toContain('write');
+    expect(scopes).toContain('data');
+  });
+
+  it('filters unknown scopes from scp string (Entra delegated tokens)', () => {
+    const scopes = extractOidcScopes({ scp: 'User.Read read openid' });
+    expect(scopes).toContain('read');
+    expect(scopes).not.toContain('User.Read');
+    expect(scopes).not.toContain('openid');
+  });
+
+  it('does not overgrant when scp is a string with no known scopes', () => {
+    const scopes = extractOidcScopes({ scp: 'User.Read User.Write' });
+    expect(scopes).toEqual(['read']);
+  });
 });
