@@ -49,6 +49,16 @@ export interface ResolvedFeatures {
   systemType?: SystemType;
   /** Text search (source_code) probe result — available, or reason it's unavailable */
   textSearch?: { available: boolean; reason?: string };
+  /** Authorization probe results — search and transport access */
+  authProbe?: AuthProbeResult;
+}
+
+/** Authorization probe result from startup probing */
+export interface AuthProbeResult {
+  searchAccess: boolean;
+  searchReason?: string;
+  transportAccess: boolean;
+  transportReason?: string;
 }
 
 /** System info from /sap/bc/adt/core/discovery */

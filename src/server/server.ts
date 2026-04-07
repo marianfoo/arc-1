@@ -169,6 +169,22 @@ export function runStartupProbe(
           features.textSearch = undefined;
         }
       }
+      // Log authorization probe results
+      if (features.authProbe) {
+        const ap = features.authProbe;
+        if (ap.searchAccess) {
+          logger.info('Authorization probe: object search access is available');
+        } else {
+          logger.warn(`Authorization probe: object search access denied — ${ap.searchReason ?? 'unknown reason'}`);
+        }
+        if (ap.transportAccess) {
+          logger.info('Authorization probe: transport access is available');
+        } else {
+          logger.info(
+            `Authorization probe: transport access is not available — ${ap.transportReason ?? 'unknown reason'}`,
+          );
+        }
+      }
       setCachedFeatures(features);
     } catch {
       // Probe failed (e.g., SAP system unreachable) — continue with default tool set

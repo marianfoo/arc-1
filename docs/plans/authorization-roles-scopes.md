@@ -226,13 +226,13 @@ Update XSUAA configuration to match the new scope model. This is a config-only c
 
 Extend the existing feature probe mechanism to check basic SAP authorization at startup and log warnings.
 
-- [ ] Read the existing `probeFeatures()` function in `features.ts` to understand the pattern (HEAD requests, 2xx = available, 404/error = not available)
-- [ ] Add a lightweight authorization probe that runs after feature probing: try a search request (`GET /sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=CL_ABAP_*&maxResults=1`) — if 403, log warning about missing search authorization
-- [ ] Optionally probe transport access: `GET /sap/bc/adt/cts/transportrequests?user=__PROBE__` — if 403, log info that transport access is not available (not a warning since many setups don't need it)
-- [ ] Log results at info level (not error) — missing authorization is informational, not a server error
-- [ ] Do NOT probe write operations (too risky — would modify state)
-- [ ] Add unit tests if the feature probe tests exist, otherwise skip
-- [ ] Run `npm test`
+- [x] Read the existing `probeFeatures()` function in `features.ts` to understand the pattern (HEAD requests, 2xx = available, 404/error = not available)
+- [x] Add a lightweight authorization probe that runs after feature probing: try a search request (`GET /sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=CL_ABAP_*&maxResults=1`) — if 403, log warning about missing search authorization
+- [x] Optionally probe transport access: `GET /sap/bc/adt/cts/transportrequests?user=__PROBE__` — if 403, log info that transport access is not available (not a warning since many setups don't need it)
+- [x] Log results at info level (not error) — missing authorization is informational, not a server error
+- [x] Do NOT probe write operations (too risky — would modify state)
+- [x] Add unit tests if the feature probe tests exist, otherwise skip
+- [x] Run `npm test`
 
 ### Task 10: Update CLAUDE.md and documentation
 

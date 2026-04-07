@@ -20,7 +20,7 @@
 import { Version } from '@abaplint/core';
 import type { FeatureConfig, FeatureMode } from './config.js';
 import type { AdtHttpClient } from './http.js';
-import type { FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
+import type { AuthProbeResult, FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
 import { parseInstalledComponents } from './xml-parser.js';
 
 /** Probe definition: which URL to check for each feature */
@@ -81,8 +81,8 @@ export async function probeFeatures(
   // Only probe features that are in "auto" mode
   const probesToRun = PROBES.filter((p) => modeMap[p.id] === 'auto');
 
-  // Run feature probes + system detection + text search probe in parallel
-  const [probeResults, systemDetection, textSearchResult] = await Promise.all([
+  // Run feature probes + system detection + text search probe + auth probe in parallel
+  const [probeResults, systemDetection, textSearchResult, authProbeResult] = await Promise.all([
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
@@ -95,6 +95,7 @@ export async function probeFeatures(
     ),
     detectSystemFromComponents(client),
     probeTextSearch(client),
+    probeAuthorization(client),
   ]);
 
   // Build result map
@@ -122,6 +123,7 @@ export async function probeFeatures(
     resolved.systemType = systemDetection.systemType;
   }
   resolved.textSearch = textSearchResult;
+  resolved.authProbe = authProbeResult;
   return resolved;
 }
 
@@ -240,6 +242,83 @@ export function classifyTextSearchError(statusCode: number): { available: boolea
     default:
       return { available: false, reason: `textSearch returned HTTP ${statusCode}.` };
   }
+}
+
+/**
+ * Probe basic SAP authorization at startup.
+ *
+ * Lightweight read-only probes to check if the configured SAP user has
+ * search and transport access. Results are logged at info/warn level —
+ * missing authorization is informational, not a server error.
+ *
+ * Does NOT probe write operations (too risky — would modify state).
+ */
+export async function probeAuthorization(client: AdtHttpClient): Promise<AuthProbeResult> {
+  const [searchResult, transportResult] = await Promise.all([probeSearchAccess(client), probeTransportAccess(client)]);
+
+  return {
+    searchAccess: searchResult.available,
+    searchReason: searchResult.reason,
+    transportAccess: transportResult.available,
+    transportReason: transportResult.reason,
+  };
+}
+
+async function probeSearchAccess(client: AdtHttpClient): Promise<{ available: boolean; reason?: string }> {
+  try {
+    const resp = await client.get(
+      '/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=CL_ABAP_*&maxResults=1',
+    );
+    if (resp.statusCode < 400) {
+      return { available: true };
+    }
+    return classifyAuthProbeError(resp.statusCode, 'search');
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'statusCode' in err) {
+      return classifyAuthProbeError((err as { statusCode: number }).statusCode, 'search');
+    }
+    return { available: false, reason: 'Network error — cannot reach the search endpoint.' };
+  }
+}
+
+async function probeTransportAccess(client: AdtHttpClient): Promise<{ available: boolean; reason?: string }> {
+  try {
+    const resp = await client.get('/sap/bc/adt/cts/transportrequests?user=__PROBE__');
+    if (resp.statusCode < 400) {
+      return { available: true };
+    }
+    return classifyAuthProbeError(resp.statusCode, 'transport');
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'statusCode' in err) {
+      return classifyAuthProbeError((err as { statusCode: number }).statusCode, 'transport');
+    }
+    return { available: false, reason: 'Network error — cannot reach the transport endpoint.' };
+  }
+}
+
+export function classifyAuthProbeError(
+  statusCode: number,
+  probeType: 'search' | 'transport',
+): { available: boolean; reason?: string } {
+  if (statusCode === 401 || statusCode === 403) {
+    if (probeType === 'search') {
+      return {
+        available: false,
+        reason: 'User lacks authorization for object search (check S_ADT_RES authorization object).',
+      };
+    }
+    return {
+      available: false,
+      reason: 'User lacks authorization for transport management (check S_TRANSPRT authorization object).',
+    };
+  }
+  if (statusCode === 404) {
+    return {
+      available: false,
+      reason: `${probeType} ICF service not activated in SICF.`,
+    };
+  }
+  return { available: false, reason: `${probeType} probe returned HTTP ${statusCode}.` };
 }
 
 /** Get features without probing (for offline/test scenarios) */
