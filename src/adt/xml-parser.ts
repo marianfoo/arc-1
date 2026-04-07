@@ -39,6 +39,9 @@ const parser = new XMLParser({
       'component',
       'objectStructureElement',
       'task',
+      'objectType',
+      'proposal',
+      'referencedObject',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings

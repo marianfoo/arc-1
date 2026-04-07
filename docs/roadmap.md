@@ -270,7 +270,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Very High — most requested missing feature |
-| **Status** | Not started |
+| **Status** | Done |
 
 **What:** Find all references to an ABAP object across the system. Uses ADT endpoint `/sap/bc/adt/repository/informationsystem/usageReferences`.
 

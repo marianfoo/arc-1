@@ -1037,8 +1037,13 @@ ENDCLASS.`;
   // ─── Issue 7: SAPNavigate symbolic references ──────────────────────
 
   describe('SAPNavigate symbolic references', () => {
-    it('resolves type+name to URI for references action', async () => {
+    it('resolves type+name to URI for references action (scope-based Where-Used fails, falls back to simple)', async () => {
       mockFetch.mockReset();
+      // First call: CSRF token fetch for the POST
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: findWhereUsed POST fails with 404 (simulating older SAP system without scope endpoint)
+      mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/usageReferences'));
+      // Third call: findReferences GET succeeds (fallback)
       mockFetch.mockResolvedValueOnce(
         mockResponse(
           200,
@@ -1054,6 +1059,97 @@ ENDCLASS.`;
       // Should not get "No references found" since we have a match
       const parsed = JSON.parse(result.content[0]?.text);
       expect(parsed).toHaveLength(1);
+    });
+
+    it('falls back to simple references with objectType (returns warning note about dropped filter)', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch for the POST
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: findWhereUsed POST fails with 404 (older SAP system)
+      mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/usageReferences'));
+      // Third call: findReferences GET succeeds (fallback) — includes CLAS/OC to prove results are unfiltered
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<usageReferences><objectReference uri="/sap/bc/adt/programs/programs/zcaller" type="PROG/P" name="ZCALLER"/><objectReference uri="/sap/bc/adt/oo/classes/zcl_other" type="CLAS/OC" name="ZCL_OTHER"/></usageReferences>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        objectType: 'PROG/P',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toHaveLength(1);
+      const text = result.content[0]?.text;
+      // Response should be valid JSON with note and results
+      const parsed = JSON.parse(text);
+      expect(parsed.note).toContain('objectType filter');
+      expect(parsed.note).toContain('PROG/P');
+      expect(parsed.note).toContain('ignored');
+      expect(parsed.results).toHaveLength(2);
+    });
+
+    it('falls back to simple references without objectType (no warning note)', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch for the POST
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: findWhereUsed POST fails with 404 (older SAP system)
+      mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/usageReferences'));
+      // Third call: findReferences GET succeeds (fallback)
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<usageReferences><objectReference uri="/sap/bc/adt/programs/programs/zcaller" type="PROG/P" name="ZCALLER"/></usageReferences>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toHaveLength(1);
+      const text = result.content[0]?.text;
+      // No warning — objectType was not requested
+      expect(text).not.toContain('objectType filter');
+      const parsed = JSON.parse(text);
+      expect(parsed).toHaveLength(1);
+    });
+
+    it('uses scope-based Where-Used successfully with objectType filter', async () => {
+      mockFetch.mockReset();
+      // First call: CSRF token fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // Second call: findWhereUsed POST succeeds (real SAP response format)
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="1" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZPROG1" adtcore:type="PROG/P" adtcore:description="Test Program" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        objectType: 'PROG/P',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].name).toBe('ZPROG1');
+      expect(parsed[0].packageName).toBe('$TMP');
+      expect(parsed[0].objectDescription).toBe('Test Program');
     });
 
     it('returns error when neither uri nor type+name provided for references', async () => {

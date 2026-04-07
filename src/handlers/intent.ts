@@ -13,7 +13,14 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { AdtClient } from '../adt/client.js';
-import { findDefinition, findReferences, getCompletion } from '../adt/codeintel.js';
+import {
+  findDefinition,
+  findReferences,
+  findWhereUsed,
+  getCompletion,
+  type ReferenceResult,
+  type WhereUsedResult,
+} from '../adt/codeintel.js';
 import { createObject, deleteObject, lockObject, safeUpdateSource, unlockObject } from '../adt/crud.js';
 import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
 import {
@@ -793,7 +800,35 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       if (!uri) {
         return errorResult('Provide uri or type+name to find references.');
       }
-      const results = await findReferences(client.http, client.safety, uri);
+      const objectType = args.objectType ? String(args.objectType) : undefined;
+      let results: WhereUsedResult[] | ReferenceResult[];
+      try {
+        results = await findWhereUsed(client.http, client.safety, uri, objectType);
+      } catch (err) {
+        // Only fall back for HTTP errors indicating the endpoint is not available (older SAP systems)
+        if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+          results = await findReferences(client.http, client.safety, uri);
+          if (results.length === 0) {
+            return textResult('No references found.');
+          }
+          const json = JSON.stringify(results, null, 2);
+          if (objectType) {
+            return textResult(
+              JSON.stringify(
+                {
+                  note: `This SAP system does not support scope-based Where-Used. The objectType filter "${objectType}" was ignored — results below are unfiltered.`,
+                  results,
+                },
+                null,
+                2,
+              ),
+            );
+          }
+          return textResult(json);
+        } else {
+          throw err;
+        }
+      }
       if (results.length === 0) {
         return textResult('No references found.');
       }
