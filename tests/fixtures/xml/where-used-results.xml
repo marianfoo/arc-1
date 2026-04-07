@@ -1,5 +1,15 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<usageReferences:usageReferenceResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
-  <usageReferences:objectReference uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" type="PROG/P" name="ZPROG1" line="15" column="5" packageName="$TMP" snippet="DATA: lo_obj TYPE REF TO zcl_test." description="Test Program 1"/>
-  <usageReferences:objectReference uri="/sap/bc/adt/oo/classes/ZCL_CALLER/source/main" type="CLAS/OC" name="ZCL_CALLER" line="42" column="10" packageName="ZPACKAGE" snippet="CREATE OBJECT lo_test TYPE zcl_test." description="Caller Class"/>
-</usageReferences:usageReferenceResponse>
+<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="2" resultDescription="[A4H] Where-Used List: ZCL_TEST (Class)" referencedObjectIdentifier="" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" parentUri="/sap/bc/adt/packages/%24tmp" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="ZPROG1" adtcore:type="PROG/P" adtcore:description="Test Program 1" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/%24tmp" adtcore:type="DEVC/K" adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/classes/ZCL_CALLER/source/main" parentUri="/sap/bc/adt/packages/zpackage" isResult="true" canHaveChildren="true" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="ZCL_CALLER" adtcore:type="CLAS/OC" adtcore:description="Caller Class" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/zpackage" adtcore:type="DEVC/K" adtcore:name="ZPACKAGE"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>

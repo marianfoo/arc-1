@@ -1122,14 +1122,20 @@ ENDCLASS.`;
       mockFetch.mockReset();
       // First call: CSRF token fetch
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
-      // Second call: findWhereUsed POST succeeds
+      // Second call: findWhereUsed POST succeeds (real SAP response format)
       mockFetch.mockResolvedValueOnce(
         mockResponse(
           200,
-          `<?xml version="1.0" encoding="UTF-8"?>
-<usageReferences:usageReferenceResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
-  <usageReferences:objectReference uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" type="PROG/P" name="ZPROG1" line="15" column="5" packageName="$TMP" snippet="DATA: lo TYPE REF TO zcl_test." description="Test Program"/>
-</usageReferences:usageReferenceResponse>`,
+          `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="1" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/programs/programs/ZPROG1/source/main" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZPROG1" adtcore:type="PROG/P" adtcore:description="Test Program" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`,
         ),
       );
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
@@ -1143,7 +1149,7 @@ ENDCLASS.`;
       expect(parsed).toHaveLength(1);
       expect(parsed[0].name).toBe('ZPROG1');
       expect(parsed[0].packageName).toBe('$TMP');
-      expect(parsed[0].line).toBe(15);
+      expect(parsed[0].objectDescription).toBe('Test Program');
     });
 
     it('returns error when neither uri nor type+name provided for references', async () => {

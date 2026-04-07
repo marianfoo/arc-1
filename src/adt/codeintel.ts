@@ -168,13 +168,15 @@ export async function getWhereUsedScope(
 }
 
 /**
- * Find Where-Used references with the full scope-based API.
+ * Find Where-Used references via the ADT usageReferences endpoint.
  *
- * Step 2 of the 2-step scope-based Where-Used API:
- * POST to .../usageReferences with scope filter in the request body.
- * Returns detailed results including line numbers, snippets, and package info.
+ * POST to .../usageReferences with the object URI as both a query parameter
+ * and in the XML request body. SAP requires the SAP-specific content types:
+ * - Content-Type: application/vnd.sap.adt.repository.usagereferences.request.v1+xml
+ * - Accept: application/vnd.sap.adt.repository.usagereferences.result.v1+xml
  *
- * If objectType is provided, results are filtered to that type only.
+ * The response uses a tree structure with `referencedObject` > `adtObject` elements.
+ * If objectType is provided, it's included in the request body as a filter.
  */
 export async function findWhereUsed(
   http: AdtHttpClient,
@@ -193,25 +195,28 @@ export async function findWhereUsed(
     '</usageReferences:usageReferenceRequest>',
   ].join('\n');
 
-  const resp = await http.post('/sap/bc/adt/repository/informationsystem/usageReferences', body, 'application/xml', {
-    Accept: 'application/xml',
+  const url = `/sap/bc/adt/repository/informationsystem/usageReferences?uri=${encodeURIComponent(objectUrl)}`;
+  const resp = await http.post(url, body, 'application/vnd.sap.adt.repository.usagereferences.request.v1+xml', {
+    Accept: 'application/vnd.sap.adt.repository.usagereferences.result.v1+xml',
   });
 
   const parsed = parseXml(resp.body);
   const results: WhereUsedResult[] = [];
 
-  // Parse objectReference elements from the response
-  const refs = findDeepNodes(parsed, 'objectReference');
+  // Response uses referencedObject > adtObject tree structure
+  const refs = findDeepNodes(parsed, 'referencedObject');
   for (const ref of refs) {
+    const adtObj = (ref.adtObject ?? {}) as Record<string, unknown>;
+    const pkgRef = (adtObj.packageRef ?? {}) as Record<string, unknown>;
     results.push({
       uri: String(ref['@_uri'] ?? ''),
-      type: String(ref['@_type'] ?? ''),
-      name: String(ref['@_name'] ?? ''),
-      line: Number(ref['@_line'] ?? 0),
-      column: Number(ref['@_column'] ?? 0),
-      packageName: String(ref['@_packageName'] ?? ''),
-      snippet: String(ref['@_snippet'] ?? ref['#text'] ?? ''),
-      objectDescription: String(ref['@_description'] ?? ''),
+      type: String(adtObj['@_type'] ?? ''),
+      name: String(adtObj['@_name'] ?? ''),
+      line: 0,
+      column: 0,
+      packageName: String(pkgRef['@_name'] ?? ''),
+      snippet: '',
+      objectDescription: String(adtObj['@_description'] ?? ''),
     });
   }
 

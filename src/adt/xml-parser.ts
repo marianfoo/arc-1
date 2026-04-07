@@ -41,6 +41,7 @@ const parser = new XMLParser({
       'task',
       'objectType',
       'proposal',
+      'referencedObject',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings

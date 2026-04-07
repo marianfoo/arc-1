@@ -806,7 +806,7 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
         results = await findWhereUsed(client.http, client.safety, uri, objectType);
       } catch (err) {
         // Only fall back for HTTP errors indicating the endpoint is not available (older SAP systems)
-        if (err instanceof AdtApiError && [404, 405, 501].includes(err.statusCode)) {
+        if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
           results = await findReferences(client.http, client.safety, uri);
           if (results.length === 0) {
             return textResult('No references found.');

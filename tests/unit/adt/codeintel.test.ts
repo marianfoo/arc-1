@@ -174,54 +174,56 @@ describe('Code Intelligence', () => {
         uri: '/sap/bc/adt/programs/programs/ZPROG1/source/main',
         type: 'PROG/P',
         name: 'ZPROG1',
-        line: 15,
-        column: 5,
+        line: 0,
+        column: 0,
         packageName: '$TMP',
-        snippet: 'DATA: lo_obj TYPE REF TO zcl_test.',
+        snippet: '',
         objectDescription: 'Test Program 1',
       });
       expect(results[1]).toEqual({
         uri: '/sap/bc/adt/oo/classes/ZCL_CALLER/source/main',
         type: 'CLAS/OC',
         name: 'ZCL_CALLER',
-        line: 42,
-        column: 10,
+        line: 0,
+        column: 0,
         packageName: 'ZPACKAGE',
-        snippet: 'CREATE OBJECT lo_test TYPE zcl_test.',
+        snippet: '',
         objectDescription: 'Caller Class',
       });
     });
 
     it('returns empty array when no references found', async () => {
       const xml =
-        '<?xml version="1.0" encoding="UTF-8"?><usageReferences:usageReferenceResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences"/>';
+        '<?xml version="1.0" encoding="utf-8"?><usageReferences:usageReferenceResult numberOfResults="0" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences"><usageReferences:referencedObjects/></usageReferences:usageReferenceResult>';
       const http = mockHttp(xml);
       const results = await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_ORPHAN');
       expect(results).toEqual([]);
     });
 
     it('sends objectType filter when provided', async () => {
-      const http = mockHttp('<usageReferenceResponse/>');
+      const http = mockHttp('<usageReferenceResult><referencedObjects/></usageReferenceResult>');
       await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST', 'PROG/P');
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(body).toContain('objectTypeFilter value="PROG/P"');
     });
 
     it('does not include objectType filter when not provided', async () => {
-      const http = mockHttp('<usageReferenceResponse/>');
+      const http = mockHttp('<usageReferenceResult><referencedObjects/></usageReferenceResult>');
       await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(body).not.toContain('objectTypeFilter');
     });
 
-    it('POSTs to the usageReferences endpoint', async () => {
-      const http = mockHttp('<usageReferenceResponse/>');
+    it('POSTs to usageReferences with uri query param and SAP content types', async () => {
+      const http = mockHttp('<usageReferenceResult><referencedObjects/></usageReferenceResult>');
       await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/repository/informationsystem/usageReferences',
+        expect.stringContaining('/sap/bc/adt/repository/informationsystem/usageReferences?uri='),
         expect.any(String),
-        'application/xml',
-        expect.objectContaining({ Accept: 'application/xml' }),
+        'application/vnd.sap.adt.repository.usagereferences.request.v1+xml',
+        expect.objectContaining({
+          Accept: 'application/vnd.sap.adt.repository.usagereferences.result.v1+xml',
+        }),
       );
     });
 
