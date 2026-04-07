@@ -49,6 +49,25 @@ describe('Safety System', () => {
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
     });
 
+    it('blocks Query when blockData is true', () => {
+      const cfg = config({ blockData: true });
+      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
+      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(true);
+      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
+    });
+
+    it('blocks both Query and FreeSQL when blockData and blockFreeSQL are true', () => {
+      const cfg = config({ blockData: true, blockFreeSQL: true });
+      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
+      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
+      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
+    });
+
+    it('dryRun bypasses blockData', () => {
+      const cfg = config({ blockData: true, dryRun: true });
+      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
+    });
+
     it('enforces allowedOps whitelist', () => {
       const cfg = config({ allowedOps: 'RSQ' });
       expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
@@ -86,12 +105,18 @@ describe('Safety System', () => {
       expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(true);
     });
 
-    it('default config blocks writes and free SQL', () => {
+    it('default config blocks writes, free SQL, and data queries', () => {
       const cfg = defaultSafetyConfig();
       expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Search)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
+      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
+    });
+
+    it('unrestricted config allows Query', () => {
+      const cfg = unrestrictedSafetyConfig();
+      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
     });
   });
 
@@ -104,6 +129,11 @@ describe('Safety System', () => {
     it('does not throw when operation is allowed', () => {
       const cfg = config();
       expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).not.toThrow();
+    });
+
+    it('throws AdtSafetyError when Query is blocked by blockData', () => {
+      const cfg = config({ blockData: true });
+      expect(() => checkOperation(cfg, OperationType.Query, 'GetTableContents')).toThrow(AdtSafetyError);
     });
 
     it('error message includes operation name and type', () => {
@@ -283,6 +313,12 @@ describe('Safety System', () => {
       expect(desc).toContain('READ-ONLY');
       expect(desc).toContain('NO-FREE-SQL');
       expect(desc).toContain('AllowedPackages=');
+    });
+
+    it('includes NO-DATA when blockData is true', () => {
+      const cfg = config({ blockData: true });
+      const desc = describeSafety(cfg);
+      expect(desc).toContain('NO-DATA');
     });
   });
 });

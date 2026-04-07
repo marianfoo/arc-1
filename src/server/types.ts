@@ -37,6 +37,7 @@ export interface ServerConfig {
   // --- Safety (gates all write operations) ---
   readOnly: boolean;
   blockFreeSQL: boolean;
+  blockData: boolean;
   allowedOps: string;
   disallowedOps: string;
   allowedPackages: string[];
@@ -111,6 +112,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   httpAddr: '0.0.0.0:8080',
   readOnly: false,
   blockFreeSQL: false,
+  blockData: false,
   allowedOps: '',
   disallowedOps: '',
   allowedPackages: [],

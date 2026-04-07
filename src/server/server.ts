@@ -43,6 +43,7 @@ function buildAdtConfig(
     safety: {
       readOnly: config.readOnly,
       blockFreeSQL: config.blockFreeSQL,
+      blockData: config.blockData,
       allowedOps: config.allowedOps,
       disallowedOps: config.disallowedOps,
       allowedPackages: config.allowedPackages,

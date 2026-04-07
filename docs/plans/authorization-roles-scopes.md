@@ -4,7 +4,7 @@
 
 Implement a two-dimensional authorization model separating ABAP object access (read/write source code) from SAP data access (table preview, freestyle SQL). Add `data` and `sql` scopes, update XSUAA role templates, add per-request safety config derived from JWT scopes, and add `--profile` shortcuts for local usage.
 
-**Reference document:** `docs/plans/authorization-concept.md` contains the full research, SAP auth object mapping, endpoint inventory, and design rationale. Read it for context.
+**Reference document:** `docs/research/authorization-concept.md` contains the full research, SAP auth object mapping, endpoint inventory, and design rationale. Read it for context.
 
 ## Context
 
@@ -103,13 +103,13 @@ Note: SAPRead `TABLE_CONTENTS` sub-type calls `getTableContents()` which checks 
 
 Add a new `blockData` field to `SafetyConfig` that blocks the `Query` (Q) operation type, analogous to the existing `blockFreeSQL` for `FreeSQL` (F).
 
-- [ ] Add `blockData: boolean` field to `SafetyConfig` interface (after `blockFreeSQL`, line ~46)
-- [ ] Set `blockData: true` in `defaultSafetyConfig()` (safe by default)
-- [ ] Set `blockData: false` in `unrestrictedSafetyConfig()`
-- [ ] Add check in `isOperationAllowed()`: `if (config.blockData && op === OperationType.Query) return false;`
-- [ ] Update `describeSafety()` to include `'NO-DATA'` when `blockData` is true
-- [ ] Add unit tests (~8 tests): blockData blocks Q, allows F, both blockData+blockFreeSQL, default config blocks Q, unrestricted allows Q, checkOperation throws for Q when blocked, dryRun bypasses blockData
-- [ ] Run `npm test` — all 707+ existing tests must still pass plus new ones
+- [x] Add `blockData: boolean` field to `SafetyConfig` interface (after `blockFreeSQL`, line ~46)
+- [x] Set `blockData: true` in `defaultSafetyConfig()` (safe by default)
+- [x] Set `blockData: false` in `unrestrictedSafetyConfig()`
+- [x] Add check in `isOperationAllowed()`: `if (config.blockData && op === OperationType.Query) return false;`
+- [x] Update `describeSafety()` to include `'NO-DATA'` when `blockData` is true
+- [x] Add unit tests (~8 tests): blockData blocks Q, allows F, both blockData+blockFreeSQL, default config blocks Q, unrestricted allows Q, checkOperation throws for Q when blocked, dryRun bypasses blockData
+- [x] Run `npm test` — all 707+ existing tests must still pass plus new ones
 
 ### Task 2: Add `deriveUserSafety()` function
 

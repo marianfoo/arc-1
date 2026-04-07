@@ -72,6 +72,7 @@ export function parseArgs(args: string[]): ServerConfig {
   // --- Safety ---
   config.readOnly = resolveBool('read-only', 'SAP_READ_ONLY', false);
   config.blockFreeSQL = resolveBool('block-free-sql', 'SAP_BLOCK_FREE_SQL', false);
+  config.blockData = resolveBool('block-data', 'SAP_BLOCK_DATA', false);
   config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
   const pkgs = resolve('allowed-packages', 'SAP_ALLOWED_PACKAGES', '');

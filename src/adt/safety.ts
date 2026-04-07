@@ -44,6 +44,7 @@ const WRITE_OPS = 'CDUAW';
 export interface SafetyConfig {
   readOnly: boolean;
   blockFreeSQL: boolean;
+  blockData: boolean;
   allowedOps: string;
   disallowedOps: string;
   allowedPackages: string[];
@@ -59,6 +60,7 @@ export function defaultSafetyConfig(): SafetyConfig {
   return {
     readOnly: true,
     blockFreeSQL: true,
+    blockData: true,
     allowedOps: 'RSQTI',
     disallowedOps: '',
     allowedPackages: [],
@@ -75,6 +77,7 @@ export function unrestrictedSafetyConfig(): SafetyConfig {
   return {
     readOnly: false,
     blockFreeSQL: false,
+    blockData: false,
     allowedOps: '',
     disallowedOps: '',
     allowedPackages: [],
@@ -96,6 +99,9 @@ export function isOperationAllowed(config: SafetyConfig, op: OperationTypeCode):
 
   // BlockFreeSQL specifically blocks free SQL queries
   if (config.blockFreeSQL && op === OperationType.FreeSQL) return false;
+
+  // BlockData blocks named table preview queries
+  if (config.blockData && op === OperationType.Query) return false;
 
   // Transport operations require explicit opt-in
   if (op === OperationType.Transport && !config.enableTransports) return false;
@@ -246,6 +252,7 @@ export function describeSafety(config: SafetyConfig): string {
 
   if (config.readOnly) parts.push('READ-ONLY');
   if (config.blockFreeSQL) parts.push('NO-FREE-SQL');
+  if (config.blockData) parts.push('NO-DATA');
   if (config.dryRun) parts.push('DRY-RUN');
   if (config.allowedOps) parts.push(`AllowedOps=${config.allowedOps}`);
   if (config.disallowedOps) parts.push(`DisallowedOps=${config.disallowedOps}`);
