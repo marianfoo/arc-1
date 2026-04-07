@@ -273,7 +273,7 @@ Write ops blocked by `readOnly`: `CDUAW`. All 36+ ADT endpoints have `checkOpera
 const TOOL_SCOPES: Record<string, string> = {
   SAPRead: 'read',      SAPWrite: 'write',
   SAPSearch: 'read',    SAPActivate: 'write',
-  SAPQuery: 'data',     SAPManage: 'write',
+  SAPQuery: 'sql',      SAPManage: 'write',
   SAPNavigate: 'read',  SAPTransport: 'write',
   SAPContext: 'read',   SAPLint: 'read',
   SAPDiagnose: 'read',

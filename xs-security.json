@@ -50,6 +50,8 @@
       "scope-references": [
         "$XSAPPNAME.read",
         "$XSAPPNAME.write",
+        "$XSAPPNAME.data",
+        "$XSAPPNAME.sql",
         "$XSAPPNAME.admin"
       ]
     }
