@@ -30,6 +30,7 @@ import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { XsuaaService } from '@sap/xssec';
+import { expandImpliedScopes } from '../adt/safety.js';
 import { logger } from './logger.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -141,18 +142,20 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
     const grantedScopes: string[] = [];
     // The token contains scopes like "arc1-mcp!b12345.read"
     // checkLocalScope strips the prefix for us
-    for (const scope of ['read', 'write', 'admin']) {
+    for (const scope of ['read', 'write', 'data', 'sql', 'admin']) {
       if (securityContext.checkLocalScope(scope)) {
         grantedScopes.push(scope);
       }
     }
+    // Apply implied scope expansion: write→read, sql→data
+    const expandedScopes = expandImpliedScopes(grantedScopes);
 
     const expiresAt = securityContext.token?.payload?.exp;
 
     const authInfo = {
       token,
       clientId: securityContext.getClientId(),
-      scopes: grantedScopes,
+      scopes: expandedScopes,
       expiresAt: typeof expiresAt === 'number' ? expiresAt : undefined,
       extra: {
         userName: securityContext.getLogonName?.() ?? undefined,
@@ -161,7 +164,7 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
     };
     logger.debug('XSUAA token verified', {
       clientId: authInfo.clientId,
-      scopes: grantedScopes,
+      scopes: expandedScopes,
       userName: authInfo.extra.userName,
       email: authInfo.extra.email,
     });
@@ -227,7 +230,7 @@ export function createChainedTokenVerifier(
       return {
         token,
         clientId: 'api-key',
-        scopes: ['read', 'write', 'admin'],
+        scopes: ['read', 'write', 'data', 'sql', 'admin'],
         // MCP SDK's requireBearerAuth requires expiresAt — set to 1 year
         expiresAt: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
         extra: {},

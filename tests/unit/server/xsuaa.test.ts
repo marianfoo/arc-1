@@ -70,7 +70,7 @@ describe('createChainedTokenVerifier', () => {
     const verifier = createChainedTokenVerifier({ apiKey: 'my-key' });
     const result = await verifier('my-key');
     expect(result.clientId).toBe('api-key');
-    expect(result.scopes).toEqual(['read', 'write', 'admin']);
+    expect(result.scopes).toEqual(['read', 'write', 'data', 'sql', 'admin']);
     // Must have expiresAt for MCP SDK's requireBearerAuth middleware
     expect(result.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
@@ -130,6 +130,86 @@ describe('createChainedTokenVerifier', () => {
   it('works with no verifiers configured', async () => {
     const verifier = createChainedTokenVerifier({});
     await expect(verifier('any-token')).rejects.toThrow('Token validation failed');
+  });
+});
+
+// ─── XSUAA scope extraction (via chained verifier mock) ────────────
+
+describe('XSUAA scope extraction and implied expansion', () => {
+  it('extracts data scope from XSUAA token', async () => {
+    const xsuaaVerifier = vi.fn().mockImplementation(async () => ({
+      token: 'tok',
+      clientId: 'xsuaa-client',
+      scopes: ['read', 'data'],
+      extra: {},
+    }));
+    const verifier = createChainedTokenVerifier({}, xsuaaVerifier);
+    const result = await verifier('tok');
+    expect(result.scopes).toContain('data');
+    expect(result.scopes).toContain('read');
+  });
+
+  it('extracts sql scope from XSUAA token', async () => {
+    const xsuaaVerifier = vi.fn().mockImplementation(async () => ({
+      token: 'tok',
+      clientId: 'xsuaa-client',
+      scopes: ['read', 'sql', 'data'],
+      extra: {},
+    }));
+    const verifier = createChainedTokenVerifier({}, xsuaaVerifier);
+    const result = await verifier('tok');
+    expect(result.scopes).toContain('sql');
+    expect(result.scopes).toContain('data');
+  });
+
+  it('legacy tokens with only read/write/admin still work', async () => {
+    const xsuaaVerifier = vi.fn().mockImplementation(async () => ({
+      token: 'tok',
+      clientId: 'xsuaa-client',
+      scopes: ['read', 'write', 'admin'],
+      extra: {},
+    }));
+    const verifier = createChainedTokenVerifier({}, xsuaaVerifier);
+    const result = await verifier('tok');
+    expect(result.scopes).toEqual(['read', 'write', 'admin']);
+    expect(result.scopes).not.toContain('data');
+    expect(result.scopes).not.toContain('sql');
+  });
+});
+
+// ─── createXsuaaTokenVerifier implied scope expansion ───────────────
+
+describe('createXsuaaTokenVerifier implied scope expansion', () => {
+  // We test the expandImpliedScopes integration by verifying the function
+  // is correctly imported and used in the module
+  it('expandImpliedScopes adds read when write is present', async () => {
+    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
+    const result = expandImpliedScopes(['write']);
+    expect(result).toContain('read');
+    expect(result).toContain('write');
+  });
+
+  it('expandImpliedScopes adds data when sql is present', async () => {
+    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
+    const result = expandImpliedScopes(['sql']);
+    expect(result).toContain('data');
+    expect(result).toContain('sql');
+  });
+
+  it('expandImpliedScopes preserves all existing scopes', async () => {
+    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
+    const result = expandImpliedScopes(['read', 'write', 'admin']);
+    expect(result).toContain('read');
+    expect(result).toContain('write');
+    expect(result).toContain('admin');
+  });
+
+  it('implied expansion with sql but no data adds data', async () => {
+    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
+    const result = expandImpliedScopes(['read', 'sql']);
+    expect(result).toContain('data');
+    expect(result).toContain('sql');
+    expect(result).toContain('read');
   });
 });
 

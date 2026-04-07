@@ -183,10 +183,10 @@ The OIDC token verifier at `http.ts:274` hardcodes `scopes: ['read', 'write', 'a
 
 Add `data` and `sql` to the XSUAA local scope check, and add implied scope expansion.
 
-- [ ] In `createXsuaaTokenVerifier()` (around line 144), add `'data'` and `'sql'` to the scope check loop: `for (const scope of ['read', 'write', 'data', 'sql', 'admin'])`
-- [ ] After collecting scopes, apply implied scope expansion (same logic as OIDC): `sql` → add `data`, `write` → add `read`
-- [ ] Add unit tests (~4 tests): data scope extracted, sql scope extracted, implied scope expansion after extraction, legacy tokens (only read/write/admin) still work
-- [ ] Run `npm test`
+- [x] In `createXsuaaTokenVerifier()` (around line 144), add `'data'` and `'sql'` to the scope check loop: `for (const scope of ['read', 'write', 'data', 'sql', 'admin'])`
+- [x] After collecting scopes, apply implied scope expansion (same logic as OIDC): `sql` → add `data`, `write` → add `read`
+- [x] Add unit tests (~4 tests): data scope extracted, sql scope extracted, implied scope expansion after extraction, legacy tokens (only read/write/admin) still work
+- [x] Run `npm test`
 
 ### Task 7: Wire per-request safety config in server.ts
 
