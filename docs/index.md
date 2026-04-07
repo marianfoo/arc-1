@@ -142,6 +142,7 @@ arc1 --allowed-ops "RSQ"                      # whitelist operations
 | [setup-guide.md](setup-guide.md) | **Start here** — deployment options, auth methods, decision tree |
 | [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
 | [tools.md](tools.md) | Complete tool reference (11 intent-based tools) |
+| [caching.md](caching.md) | Object caching — memory, SQLite, pre-warmer, reverse dep lookup |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
 | [docker.md](docker.md) | Full Docker reference |
 | [btp-abap-environment.md](btp-abap-environment.md) | **BTP ABAP Environment** — direct connection via service key + OAuth |

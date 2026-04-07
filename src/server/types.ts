@@ -85,6 +85,16 @@ export interface ServerConfig {
   /** Enable pre-write lint validation (default: true) */
   lintBeforeWrite: boolean;
 
+  // --- Cache ---
+  /** Cache mode: 'auto' (memory for stdio, sqlite for http-streamable), 'memory', 'sqlite', 'none' */
+  cacheMode: 'auto' | 'memory' | 'sqlite' | 'none';
+  /** Path to SQLite cache file (default: .arc1-cache.db in working directory) */
+  cacheFile: string;
+  /** Enable cache warmup on startup (queries TADIR + fetches all custom objects) */
+  cacheWarmup: boolean;
+  /** Package filter for warmup (supports wildcards, e.g. "Z*,Y*,/COMPANY/*") */
+  cacheWarmupPackages: string;
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -119,6 +129,10 @@ export const DEFAULT_CONFIG: ServerConfig = {
   ppStrict: false,
   toolMode: 'standard',
   lintBeforeWrite: true,
+  cacheMode: 'auto',
+  cacheFile: '.arc1-cache.db',
+  cacheWarmup: false,
+  cacheWarmupPackages: '',
   logLevel: 'info',
   logFormat: 'text',
   verbose: false,

@@ -13,6 +13,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
+import type { Cache } from '../cache/cache.js';
+import { CachingLayer } from '../cache/caching-layer.js';
+import { MemoryCache } from '../cache/memory.js';
 import { handleToolCall, TOOL_SCOPES } from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
@@ -137,6 +140,7 @@ export function createServer(
   btpProxy?: BTPProxyConfig,
   btpConfig?: BTPConfig,
   bearerTokenProvider?: () => Promise<string>,
+  cachingLayer?: CachingLayer,
 ): Server {
   const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
@@ -220,11 +224,45 @@ export function createServer(
       } as Record<string, unknown>;
     }
 
-    const result = await handleToolCall(client, config, toolName, args, extra.authInfo, server);
+    const result = await handleToolCall(client, config, toolName, args, extra.authInfo, server, cachingLayer);
     return { ...result } as Record<string, unknown>;
   });
 
   return server;
+}
+
+/**
+ * Create a CachingLayer based on config.
+ * Returns undefined if caching is disabled.
+ *
+ * SqliteCache is loaded dynamically so that better-sqlite3 (a native module)
+ * is only required when actually used. This allows the server to start in
+ * memory-cache or no-cache mode even when better-sqlite3 is not installed
+ * (e.g. cross-platform deploys where native binaries were compiled elsewhere).
+ */
+async function createCachingLayer(config: ServerConfig): Promise<CachingLayer | undefined> {
+  const mode = config.cacheMode;
+
+  if (mode === 'none') return undefined;
+
+  let cache: Cache;
+  if (mode === 'sqlite' || (mode === 'auto' && config.transport === 'http-streamable')) {
+    // Persistent cache for http-streamable / Docker — load dynamically
+    try {
+      const { SqliteCache } = await import('../cache/sqlite.js');
+      cache = new SqliteCache(config.cacheFile);
+    } catch (err) {
+      logger.warn('SQLite cache unavailable (better-sqlite3 not loaded) — falling back to memory cache', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      cache = new MemoryCache();
+    }
+  } else {
+    // Memory cache for stdio (default)
+    cache = new MemoryCache();
+  }
+
+  return new CachingLayer(cache);
 }
 
 /**
@@ -335,7 +373,61 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     });
   }
 
-  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider);
+  // ─── Cache Setup ───────────────────────────────────────────────────
+  const cachingLayer = await createCachingLayer(config);
+  if (cachingLayer) {
+    const stats = cachingLayer.stats();
+    logger.info('Object cache enabled', {
+      mode: config.cacheMode,
+      sources: stats.sourceCount,
+      depGraphs: stats.contractCount,
+      edges: stats.edgeCount,
+    });
+  }
+
+  // Run warmup if configured (before starting transport so it completes before serving)
+  if (config.cacheWarmup && cachingLayer && config.url) {
+    try {
+      const { runWarmup } = await import('../cache/warmup.js');
+      const warmupClient = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+      const result = await runWarmup(
+        warmupClient,
+        cachingLayer,
+        config.cacheWarmupPackages || undefined,
+        config.systemType,
+      );
+      logger.info('Cache warmup completed', {
+        objects: result.totalObjects,
+        fetched: result.fetched,
+        skipped: result.skipped,
+        failed: result.failed,
+        edges: result.edgesCreated,
+        durationMs: result.durationMs,
+      });
+    } catch (err) {
+      logger.warn('Cache warmup failed — continuing without warm cache', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer);
+
+  // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals)
+  if (cachingLayer) {
+    let cacheClosed = false;
+    const cleanup = () => {
+      if (cacheClosed) return;
+      cacheClosed = true;
+      try {
+        cachingLayer.cache.close();
+      } catch {
+        // Ignore close errors during shutdown
+      }
+    };
+    process.on('SIGTERM', cleanup);
+    process.on('SIGINT', cleanup);
+  }
 
   if (config.transport === 'stdio') {
     const transport = new StdioServerTransport();
@@ -374,7 +466,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
     const { startHttpServer } = await import('./http.js');
     await startHttpServer(
-      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider),
+      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer),
       config,
       xsuaaCredentials,
     );

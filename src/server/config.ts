@@ -115,6 +115,15 @@ export function parseArgs(args: string[]): ServerConfig {
   config.abaplintConfig = getFlag('abaplint-config') ?? process.env.SAP_ABAPLINT_CONFIG;
   config.lintBeforeWrite = resolveBool('lint-before-write', 'SAP_LINT_BEFORE_WRITE', true);
 
+  // --- Cache ---
+  const cacheMode = resolve('cache', 'ARC1_CACHE', 'auto');
+  config.cacheMode = (
+    ['memory', 'sqlite', 'none'].includes(cacheMode) ? cacheMode : 'auto'
+  ) as ServerConfig['cacheMode'];
+  config.cacheFile = resolve('cache-file', 'ARC1_CACHE_FILE', '.arc1-cache.db');
+  config.cacheWarmup = resolveBool('cache-warmup', 'ARC1_CACHE_WARMUP', false);
+  config.cacheWarmupPackages = resolve('cache-warmup-packages', 'ARC1_CACHE_WARMUP_PACKAGES', '');
+
   // --- Logging ---
   config.logFile = getFlag('log-file') ?? process.env.ARC1_LOG_FILE;
   const logLevel = resolve('log-level', 'ARC1_LOG_LEVEL', 'info');
