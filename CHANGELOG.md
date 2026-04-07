@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/marianfoo/arc-1/compare/v0.4.0...v0.4.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* fix npm self-upgrade in release workflow (Node 22.22.x bug) ([17b6bf3](https://github.com/marianfoo/arc-1/commit/17b6bf3bb1ffcd83684d0c9d8f37b34bc0f37aa5))
+
 ## [0.4.0](https://github.com/marianfoo/arc-1/compare/v0.3.0...v0.4.0) (2026-04-07)
 
 
