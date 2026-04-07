@@ -136,6 +136,7 @@ export async function handleToolCall(
   authInfo?: AuthInfo,
   _server?: Server,
   cachingLayer?: CachingLayer,
+  isPerUserClient?: boolean,
 ): Promise<ToolResult> {
   const reqId = generateRequestId();
   const start = Date.now();
@@ -214,7 +215,7 @@ export async function handleToolCall(
           result = await handleSAPContext(client, args, cachingLayer);
           break;
         case 'SAPManage':
-          result = await handleSAPManage(client, config, args, cachingLayer);
+          result = await handleSAPManage(client, config, args, cachingLayer, isPerUserClient);
           break;
         case 'SAP': {
           // Hyperfocused mode: route to the appropriate handler
@@ -242,6 +243,7 @@ export async function handleToolCall(
             authInfo,
             _server,
             cachingLayer,
+            isPerUserClient,
           );
           break;
         }
@@ -547,7 +549,7 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
       return textResult(JSON.stringify(results, null, 2));
     } catch (err) {
       if (err instanceof AdtApiError) {
-        const permanentCodes = [401, 403, 404, 501];
+        const permanentCodes = [401, 403, 404, 500, 501];
         if (permanentCodes.includes(err.statusCode)) {
           const classified = classifyTextSearchError(err.statusCode);
           return errorResult(
@@ -1252,6 +1254,7 @@ async function handleSAPManage(
   config: ServerConfig,
   args: Record<string, unknown>,
   cachingLayer?: CachingLayer,
+  isPerUserClient?: boolean,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
 
@@ -1294,8 +1297,28 @@ async function handleSAPManage(
       featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
       featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
 
-      cachedFeatures = await probeFeatures(client.http, featureConfig, config.systemType);
-      return textResult(JSON.stringify(cachedFeatures, null, 2));
+      const probed = await probeFeatures(client.http, featureConfig, config.systemType);
+
+      // In PP mode with a per-user client, auth-sensitive results (401/403 on any
+      // feature) must not poison the global cache — another user may have different
+      // authorizations.  Return the per-user result to the caller but keep the global
+      // cache unchanged.  However, when PP is enabled but the request fell back to the
+      // shared/default client (no JWT, missing btpConfig, or non-strict fallback), the
+      // probe ran with the same service-account credentials as the startup probe, so
+      // updating the cache is safe and allows a manual probe to repair a failed startup.
+      // Apply the same auth-failure sanitization as the startup probe: in PP mode,
+      // shared-client 401/403 on textSearch must not hide source_code from users who
+      // might have authorization via per-user clients.
+      if (!isPerUserClient) {
+        if (config.ppEnabled && probed.textSearch && !probed.textSearch.available) {
+          const reason = probed.textSearch.reason ?? '';
+          if (reason.includes('authorization') || reason.includes('401') || reason.includes('403')) {
+            probed.textSearch = undefined;
+          }
+        }
+        cachedFeatures = probed;
+      }
+      return textResult(JSON.stringify(probed, null, 2));
     }
 
     default:
