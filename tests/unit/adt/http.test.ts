@@ -2,11 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError, AdtNetworkError } from '../../../src/adt/errors.js';
 import { mockResponse } from '../../helpers/mock-fetch.js';
 
-// Mock undici's fetch (used by AdtHttpClient.doFetch)
+// Mock undici's fetch and Client (used by AdtHttpClient.doFetch / doProxyRequest)
 const mockFetch = vi.fn();
+const mockClientRequest = vi.fn();
+const mockClientClose = vi.fn().mockResolvedValue(undefined);
+
+class MockClient {
+  request = mockClientRequest;
+  close = mockClientClose;
+}
+
 vi.mock('undici', async (importOriginal) => {
   const actual = await importOriginal<typeof import('undici')>();
-  return { ...actual, fetch: mockFetch };
+  return { ...actual, fetch: mockFetch, Client: MockClient };
 });
 
 // Import after mock setup
@@ -36,6 +44,25 @@ function fetchUrl(callIndex = 0): string {
 /** Helper to get headers from a fetch call */
 function fetchHeaders(callIndex = 0): Record<string, string> {
   return (fetchOptions(callIndex).headers as Record<string, string>) ?? {};
+}
+
+/** Helper to create a mock undici Client response (for proxy tests) */
+function mockClientResponse(statusCode: number, body: string, headers: Record<string, string> = {}) {
+  return {
+    statusCode,
+    headers,
+    body: { text: async () => body },
+  };
+}
+
+/** Helper to get headers from a Client.request call */
+function clientRequestHeaders(callIndex = 0): Record<string, string> {
+  return (mockClientRequest.mock.calls[callIndex]?.[0]?.headers as Record<string, string>) ?? {};
+}
+
+/** Helper to get the path from a Client.request call */
+function clientRequestPath(callIndex = 0): string {
+  return mockClientRequest.mock.calls[callIndex]?.[0]?.path ?? '';
 }
 
 describe('AdtHttpClient', () => {
@@ -555,7 +582,9 @@ describe('AdtHttpClient', () => {
   // ─── Proxy Configuration ──────────────────────────────────────────
 
   describe('proxy configuration', () => {
-    it('creates ProxyAgent dispatcher when btpProxy is configured', () => {
+    it('uses undici Client for proxy requests (standard HTTP proxy, not CONNECT)', async () => {
+      mockClientRequest.mockResolvedValueOnce(mockClientResponse(200, 'ok'));
+
       const client = new AdtHttpClient({
         ...getDefaultConfig(),
         btpProxy: {
@@ -565,11 +594,19 @@ describe('AdtHttpClient', () => {
           getProxyToken: async () => 'proxy-token',
         },
       });
-      expect((client as any).dispatcher).toBeDefined();
+
+      // No static dispatcher on the client — proxy uses Client directly
+      expect((client as any).dispatcher).toBeUndefined();
+
+      await client.get('/path');
+
+      // Should use Client.request (not fetch) for proxy requests
+      expect(mockClientRequest).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('sends Proxy-Authorization header when btpProxy is configured', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+    it('sends Proxy-Authorization and full URL via Client for standard HTTP proxy protocol', async () => {
+      mockClientRequest.mockResolvedValueOnce(mockClientResponse(200, 'ok'));
 
       const client = new AdtHttpClient({
         ...getDefaultConfig(),
@@ -582,7 +619,10 @@ describe('AdtHttpClient', () => {
       });
       await client.get('/path');
 
-      expect(fetchHeaders(0)['Proxy-Authorization']).toBe('Bearer proxy-token-xyz');
+      // Proxy-Authorization should be in the Client request headers
+      expect(clientRequestHeaders(0)['Proxy-Authorization']).toBe('Bearer proxy-token-xyz');
+      // The path should be the full URL (standard HTTP proxy protocol)
+      expect(clientRequestPath(0)).toBe('http://sap.example.com:8000/path?sap-client=001&sap-language=EN');
     });
   });
 });

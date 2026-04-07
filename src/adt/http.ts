@@ -27,7 +27,7 @@
  *    No external HTTP dependencies — undici ships with Node.js 22+.
  */
 
-import { Agent, type Dispatcher, ProxyAgent, fetch as undiciFetch } from 'undici';
+import { Agent, Client, type Dispatcher, fetch as undiciFetch } from 'undici';
 import { logger } from '../server/logger.js';
 import type { BTPProxyConfig } from './btp.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
@@ -100,16 +100,11 @@ export class AdtHttpClient {
   constructor(config: AdtHttpConfig) {
     this.config = config;
 
-    // Set up undici dispatcher for proxy and/or TLS configuration.
-    // When neither proxy nor insecure mode is needed, we use the global fetch
-    // (no dispatcher), which is the default Node.js behavior.
-    if (config.btpProxy) {
-      const proxyUri = `${config.btpProxy.protocol}://${config.btpProxy.host}:${config.btpProxy.port}`;
-      this.dispatcher = new ProxyAgent({
-        uri: proxyUri,
-        ...(config.insecure ? { requestTls: { rejectUnauthorized: false } } : {}),
-      });
-    } else if (config.insecure) {
+    // Set up undici dispatcher for TLS configuration (non-proxy mode only).
+    // Proxy requests use a dedicated Client connected to the connectivity proxy
+    // (see doProxyRequest()) — undici 8.x ProxyAgent always uses CONNECT tunneling,
+    // which BTP's connectivity proxy doesn't support (HTTP 405).
+    if (!config.btpProxy && config.insecure) {
       this.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
     }
   }
@@ -209,20 +204,8 @@ export class AdtHttpClient {
       headers.Cookie = cookieParts.join('; ');
     }
 
-    // BTP Connectivity proxy: inject Proxy-Authorization JWT for Cloud Connector tunnel
-    if (this.config.btpProxy) {
-      if (this.config.ppProxyAuth) {
-        // PP Option 1 (not currently used — kept for future compatibility):
-        // The jwt-bearer exchanged token replaces the regular proxy token.
-        headers['Proxy-Authorization'] = this.config.ppProxyAuth;
-      } else {
-        // Regular proxy auth — used for both non-PP and PP Option 2.
-        // For PP Option 2, this is the standard connectivity service token;
-        // the user identity is carried separately in SAP-Connectivity-Authentication.
-        const proxyToken = await this.config.btpProxy.getProxyToken();
-        headers['Proxy-Authorization'] = `Bearer ${proxyToken}`;
-      }
-    }
+    // BTP Connectivity proxy: Proxy-Authorization is handled in doProxyRequest().
+    // Not set here because the proxy uses standard HTTP proxy protocol (not CONNECT).
 
     // Principal Propagation via SAP-Connectivity-Authentication header (Option 2).
     // Contains the ORIGINAL user JWT (not exchanged). The Cloud Connector reads
@@ -528,7 +511,12 @@ export class AdtHttpClient {
   /**
    * Execute a fetch request with the configured dispatcher and timeout.
    *
-   * Always uses undici's own fetch rather than the global fetch because
+   * For BTP Connectivity proxy: uses doProxyRequest() which sends standard
+   * HTTP proxy requests via undici.Client. This is necessary because undici 8.x
+   * ProxyAgent always uses HTTP CONNECT tunneling, but the BTP connectivity
+   * proxy only supports standard HTTP proxy protocol (returns 405 on CONNECT).
+   *
+   * For non-proxy: uses undici's own fetch rather than the global fetch because
    * Node 22's built-in fetch embeds an older undici version whose dispatcher
    * interface is incompatible with npm undici@8 Agent/ProxyAgent instances.
    */
@@ -538,6 +526,11 @@ export class AdtHttpClient {
     headers: Record<string, string>,
     body?: string,
   ): Promise<Response> {
+    // BTP Connectivity proxy: use standard HTTP proxy protocol (not CONNECT)
+    if (this.config.btpProxy) {
+      return this.doProxyRequest(url, method, headers, body);
+    }
+
     return undiciFetch(url, {
       method,
       headers,
@@ -545,6 +538,85 @@ export class AdtHttpClient {
       signal: AbortSignal.timeout(60_000),
       ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
     }) as Promise<Response>;
+  }
+
+  /**
+   * Execute an HTTP request through the BTP connectivity proxy using standard
+   * HTTP proxy protocol (RFC 7230).
+   *
+   * Standard HTTP proxying sends the full URL as the request path:
+   *   GET http://target:port/path HTTP/1.1
+   *   Host: target:port
+   *   Proxy-Authorization: Bearer <token>
+   *
+   * This is different from CONNECT tunneling (which undici 8.x ProxyAgent uses).
+   * The BTP connectivity proxy (Cloud Connector) only supports standard proxying
+   * for HTTP targets, returning 405 Method Not Allowed for CONNECT requests.
+   *
+   * Uses undici.Client connected to the proxy host. The Client sends requests
+   * to the proxy, and by setting the `path` to the full target URL, the proxy
+   * forwards it to the Cloud Connector → on-premise SAP system.
+   */
+  private async doProxyRequest(
+    url: string,
+    method: string,
+    headers: Record<string, string>,
+    body?: string,
+  ): Promise<Response> {
+    const proxy = this.config.btpProxy!;
+    const proxyOrigin = `${proxy.protocol}://${proxy.host}:${proxy.port}`;
+
+    // Get proxy auth token
+    let proxyAuth: string;
+    if (this.config.ppProxyAuth) {
+      proxyAuth = this.config.ppProxyAuth;
+    } else {
+      const proxyToken = await proxy.getProxyToken();
+      proxyAuth = `Bearer ${proxyToken}`;
+    }
+
+    // Extract host from target URL for the Host header
+    const targetUrl = new URL(url);
+    const hostHeader = targetUrl.port ? `${targetUrl.hostname}:${targetUrl.port}` : targetUrl.hostname;
+
+    // Merge proxy headers with request headers
+    const proxyHeaders: Record<string, string> = {
+      ...headers,
+      Host: hostHeader,
+      'Proxy-Authorization': proxyAuth,
+    };
+
+    const client = new Client(proxyOrigin);
+    try {
+      const resp = await client.request({
+        method: method as Dispatcher.HttpMethod,
+        // Full URL as path — standard HTTP proxy protocol
+        path: url,
+        headers: proxyHeaders,
+        body: body ?? undefined,
+        signal: AbortSignal.timeout(60_000),
+      });
+
+      // Convert undici response to a Response-like object that matches
+      // what fetch() returns, so the rest of AdtHttpClient works unchanged.
+      const responseBody = await resp.body.text();
+      const responseHeaders = new Headers();
+      for (const [key, value] of Object.entries(resp.headers)) {
+        if (value !== undefined) {
+          const vals = Array.isArray(value) ? value : [String(value)];
+          for (const v of vals) {
+            responseHeaders.append(key, v);
+          }
+        }
+      }
+
+      return new Response(responseBody, {
+        status: resp.statusCode,
+        headers: responseHeaders,
+      });
+    } finally {
+      await client.close();
+    }
   }
 }
 
