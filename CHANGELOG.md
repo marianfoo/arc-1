@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/marianfoo/arc-1/compare/v0.3.0...v0.4.0) (2026-04-07)
+
+
+### Features
+
+* add DDIC completeness — structures, domains, data elements, transactions ([#21](https://github.com/marianfoo/arc-1/issues/21)) ([9e0fa2a](https://github.com/marianfoo/arc-1/commit/9e0fa2ad756a3a10f937531216707c8ac56c8aae))
+* add DDLS support to SAPContext and include=elements to SAPRead ([#30](https://github.com/marianfoo/arc-1/issues/30)) ([6a2883e](https://github.com/marianfoo/arc-1/commit/6a2883e086bd9c44d578245a61fad1a50693f60f))
+* add LLM eval harness for testing tool-call accuracy ([#33](https://github.com/marianfoo/arc-1/issues/33)) ([e8c8a65](https://github.com/marianfoo/arc-1/commit/e8c8a6511ad69bb9b95222450e0095fde391edda))
+* add object caching with on-demand + pre-warmer support ([#31](https://github.com/marianfoo/arc-1/issues/31)) ([8ba2f0d](https://github.com/marianfoo/arc-1/commit/8ba2f0d1624039be03cfb39d916ee11b53f94dc8))
+* add runtime diagnostics (short dumps + ABAP traces) to SAPDiagnose ([#24](https://github.com/marianfoo/arc-1/issues/24)) ([ab177fc](https://github.com/marianfoo/arc-1/commit/ab177fc0a77f34da5c3cd2c83fbf3de64b3ee928))
+* DDLX, SRVB read support and batch activation for RAP completeness ([#22](https://github.com/marianfoo/arc-1/issues/22)) ([402c57b](https://github.com/marianfoo/arc-1/commit/402c57bb3b43b908a3df4e9494e0cfbd08cc436f))
+* enhanced abaplint integration with system-aware presets and pre-write validation ([#37](https://github.com/marianfoo/arc-1/issues/37)) ([f17d4fa](https://github.com/marianfoo/arc-1/commit/f17d4fa03cf725dcc45918f050b2c1cd8fd2eff4))
+* method-level surgery and hyperfocused mode ([#23](https://github.com/marianfoo/arc-1/issues/23)) ([dbd27b9](https://github.com/marianfoo/arc-1/commit/dbd27b9be52ee32ed8de0691e033e73ffa7c2314))
+* scope-based Where-Used analysis for SAPNavigate ([#38](https://github.com/marianfoo/arc-1/issues/38)) ([f805441](https://github.com/marianfoo/arc-1/commit/f805441d03f2f1190b461d923e7e176e4f4af1bc))
+
+
+### Bug Fixes
+
+* post-merge consistency — SAPLint schema cleanup and objectUrlForType completeness ([#26](https://github.com/marianfoo/arc-1/issues/26)) ([214ebec](https://github.com/marianfoo/arc-1/commit/214ebec730b717acb483665e8af0f4bde5f0ed08))
+
 ## [0.3.0](https://github.com/marianfoo/arc-1/compare/v0.2.0...v0.3.0) (2026-04-01)
 
 
