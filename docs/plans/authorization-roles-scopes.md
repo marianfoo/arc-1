@@ -240,11 +240,11 @@ Extend the existing feature probe mechanism to check basic SAP authorization at 
 - Modify: `CLAUDE.md`
 - Modify: `README.md` (if scope model is documented there)
 
-- [ ] Update the configuration table in CLAUDE.md: add `SAP_BLOCK_DATA` / `--block-data`, add `ARC1_PROFILE` / `--profile`
-- [ ] Update the "Key Files for Common Tasks" table if needed
-- [ ] If README.md documents scopes or roles, update to reflect new 4-scope model
-- [ ] Do NOT create new documentation files unless they already exist — keep changes minimal
-- [ ] Run `npm test` and `npm run lint`
+- [x] Update the configuration table in CLAUDE.md: add `SAP_BLOCK_DATA` / `--block-data`, add `ARC1_PROFILE` / `--profile`
+- [x] Update the "Key Files for Common Tasks" table if needed
+- [x] If README.md documents scopes or roles, update to reflect new 4-scope model
+- [x] Do NOT create new documentation files unless they already exist — keep changes minimal
+- [x] Run `npm test` and `npm run lint`
 
 ### Task 11: Final verification
 

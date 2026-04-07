@@ -19,8 +19,9 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Read-only mode** — block all writes with a single flag (`--read-only`)
 - **Operation allowlists/denylists** — control exactly which operation types (read, write, search, query, activate, transport) are permitted
 - **Package restrictions** — limit AI access to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`)
-- **SQL execution control** — block free-form SQL queries (`--block-free-sql`)
+- **Data access control** — block table data preview (`--block-data`) or free-form SQL (`--block-free-sql`)
 - **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only
+- **Safety profiles** — preconfigured roles like `--profile viewer`, `developer-data`, or `developer-sql`
 - **All writes blocked by default** — safe defaults out of the box
 
 ### Authentication
