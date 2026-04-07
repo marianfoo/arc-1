@@ -151,14 +151,14 @@ Add a function that merges server-level safety config (ceiling) with user JWT sc
 - Modify: `src/handlers/intent.ts`
 - Modify: `tests/unit/handlers/intent.test.ts`
 
-- [ ] Change `SAPQuery: 'read'` to `SAPQuery: 'data'` in TOOL_SCOPES
-- [ ] Change `SAPTransport: 'admin'` to `SAPTransport: 'write'` in TOOL_SCOPES
-- [ ] Add `hasRequiredScope(authInfo: AuthInfo, requiredScope: string): boolean` function with implied scope logic: `write` implies `read`, `sql` implies `data`
-- [ ] Replace the inline scope check in `handleToolCall()` (line ~162) to use `hasRequiredScope()` instead of `authInfo.scopes.includes(requiredScope)`
-- [ ] Add SQL scope check: in the SAPQuery handler (or in handleToolCall before dispatching), if the args indicate freestyle SQL and authInfo exists, check that `authInfo.scopes.includes('sql')` — return clear error if missing
-- [ ] Update tool listing filter in `server.ts` (where tools are filtered by user scopes) to use the same `hasRequiredScope()` logic so implied scopes work for tool listing too
-- [ ] Add unit tests (~20 tests): hasRequiredScope direct match, implied write→read, implied sql→data, missing scopes, SAPQuery requires data scope, SAPQuery with sql scope works (implied data), SAPQuery blocked with only read scope, SAPTransport requires write, SAPTransport blocked with read only, SAPTransport allowed with write (no admin needed), freestyle SQL blocked without sql scope, freestyle SQL allowed with sql scope, all read tools still work with read scope
-- [ ] Run `npm test`
+- [x] Change `SAPQuery: 'read'` to `SAPQuery: 'data'` in TOOL_SCOPES
+- [x] Change `SAPTransport: 'admin'` to `SAPTransport: 'write'` in TOOL_SCOPES
+- [x] Add `hasRequiredScope(authInfo: AuthInfo, requiredScope: string): boolean` function with implied scope logic: `write` implies `read`, `sql` implies `data`
+- [x] Replace the inline scope check in `handleToolCall()` (line ~162) to use `hasRequiredScope()` instead of `authInfo.scopes.includes(requiredScope)`
+- [x] Add SQL scope check: in the SAPQuery handler (or in handleToolCall before dispatching), if the args indicate freestyle SQL and authInfo exists, check that `authInfo.scopes.includes('sql')` — return clear error if missing
+- [x] Update tool listing filter in `server.ts` (where tools are filtered by user scopes) to use the same `hasRequiredScope()` logic so implied scopes work for tool listing too
+- [x] Add unit tests (~20 tests): hasRequiredScope direct match, implied write→read, implied sql→data, missing scopes, SAPQuery requires data scope, SAPQuery with sql scope works (implied data), SAPQuery blocked with only read scope, SAPTransport requires write, SAPTransport blocked with read only, SAPTransport allowed with write (no admin needed), freestyle SQL blocked without sql scope, freestyle SQL allowed with sql scope, all read tools still work with read scope
+- [x] Run `npm test`
 
 ### Task 5: Fix OIDC scope extraction
 

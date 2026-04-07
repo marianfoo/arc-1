@@ -72,7 +72,7 @@ export interface ToolResult {
 export const TOOL_SCOPES: Record<string, string> = {
   SAPRead: 'read',
   SAPSearch: 'read',
-  SAPQuery: 'read',
+  SAPQuery: 'data',
   SAPNavigate: 'read',
   SAPContext: 'read',
   SAPLint: 'read',
@@ -80,8 +80,24 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPWrite: 'write',
   SAPActivate: 'write',
   SAPManage: 'write',
-  SAPTransport: 'admin',
+  SAPTransport: 'write',
 };
+
+/**
+ * Check if authInfo has the required scope, respecting implied scopes:
+ * - `write` implies `read`
+ * - `sql` implies `data`
+ */
+export function hasRequiredScope(authInfo: AuthInfo, requiredScope: string): boolean {
+  const scopes = authInfo.scopes;
+  if (scopes.includes(requiredScope)) return true;
+
+  // Implied scopes
+  if (requiredScope === 'read' && scopes.includes('write')) return true;
+  if (requiredScope === 'data' && scopes.includes('sql')) return true;
+
+  return false;
+}
 
 function textResult(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
@@ -160,7 +176,7 @@ export async function handleToolCall(
   // Scope enforcement — only when authInfo is present (XSUAA/OIDC mode)
   if (authInfo) {
     const requiredScope = TOOL_SCOPES[toolName];
-    if (requiredScope && !authInfo.scopes.includes(requiredScope)) {
+    if (requiredScope && !hasRequiredScope(authInfo, requiredScope)) {
       logger.emitAudit({
         timestamp: new Date().toISOString(),
         level: 'warn',
@@ -174,6 +190,24 @@ export async function handleToolCall(
       });
       return errorResult(
         `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
+      );
+    }
+
+    // SAPQuery is freestyle SQL — requires 'sql' scope in addition to 'data'
+    if (toolName === 'SAPQuery' && !hasRequiredScope(authInfo, 'sql')) {
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        event: 'auth_scope_denied',
+        requestId: reqId,
+        user,
+        clientId,
+        tool: toolName,
+        requiredScope: 'sql',
+        availableScopes: authInfo.scopes,
+      });
+      return errorResult(
+        `Insufficient scope: 'sql' required for SAPQuery (freestyle SQL). Your scopes: [${authInfo.scopes.join(', ')}]. The 'data' scope only allows named table preview via SAPRead TABLE_CONTENTS.`,
       );
     }
   }

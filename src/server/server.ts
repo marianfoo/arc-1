@@ -16,7 +16,13 @@ import type { AdtClientConfig } from '../adt/config.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
-import { getCachedFeatures, handleToolCall, setCachedFeatures, TOOL_SCOPES } from '../handlers/intent.js';
+import {
+  getCachedFeatures,
+  handleToolCall,
+  hasRequiredScope,
+  setCachedFeatures,
+  TOOL_SCOPES,
+} from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
@@ -206,7 +212,7 @@ export function createServer(
     if (extra.authInfo) {
       tools = tools.filter((tool) => {
         const requiredScope = TOOL_SCOPES[tool.name];
-        return !requiredScope || extra.authInfo!.scopes.includes(requiredScope);
+        return !requiredScope || hasRequiredScope(extra.authInfo!, requiredScope);
       });
     }
 
