@@ -54,9 +54,9 @@ Source code search (`searchType="source_code"`) failed on RalphEx's system with 
 
 When the LLM passes a `uri` field (from SAPSearch results) instead of `type`+`name`, SAPRead returns `"Unknown SAPRead type: ."` which is unclear. Also, the SAPSearch description doesn't explain how to map `objectType` from results (e.g., `DDLS/DF`) to SAPRead's `type` parameter.
 
-- [ ] In `src/handlers/intent.ts`, find the SAPRead handler's default case that returns `Unknown SAPRead type: "${type}"`. Improve the error message to include: the list of supported types, and a tip: "Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type='DDLS', CLAS/OC → type='CLAS')."
-- [ ] In `src/handlers/tools.ts`, append to the SAPSearch tips section in `SAPSEARCH_DESC_ONPREM`: "The objectType field in results maps to SAPRead's type parameter — drop the slash suffix (DDLS/DF → DDLS, CLAS/OC → CLAS)."
-- [ ] Add unit test in `tests/unit/handlers/intent.test.ts`: call SAPRead with empty/missing type, verify the improved error message contains supported types and the mapping tip
+- [x] In `src/handlers/intent.ts`, find the SAPRead handler's default case that returns `Unknown SAPRead type: "${type}"`. Improve the error message to include: the list of supported types, and a tip: "Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type='DDLS', CLAS/OC → type='CLAS')."
+- [x] In `src/handlers/tools.ts`, append to the SAPSearch tips section in `SAPSEARCH_DESC_ONPREM`: "The objectType field in results maps to SAPRead's type parameter — drop the slash suffix (DDLS/DF → DDLS, CLAS/OC → CLAS)."
+- [x] Add unit test in `tests/unit/handlers/intent.test.ts`: call SAPRead with empty/missing type, verify the improved error message contains supported types and the mapping tip
 
 ### Task 3: DDLX 404 — soft "no metadata extension exists" message
 

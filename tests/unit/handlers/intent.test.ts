@@ -315,7 +315,7 @@ describe('Intent Handler', () => {
       expect(parsed.package).toBe('SEDT');
     });
 
-    it('returns error for unknown type', async () => {
+    it('returns error for unknown type with supported types and mapping tip', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'UNKNOWN',
         name: 'TEST',
@@ -329,6 +329,21 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.text).toContain('DOMA');
       expect(result.content[0]?.text).toContain('DTEL');
       expect(result.content[0]?.text).toContain('TRAN');
+      // Should include objectType mapping tip
+      expect(result.content[0]?.text).toContain('DDLS/DF');
+      expect(result.content[0]?.text).toContain('CLAS/OC');
+      expect(result.content[0]?.text).toContain('drop');
+    });
+
+    it('returns error with mapping tip for empty/missing type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: '',
+        name: 'TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Unknown SAPRead type');
+      expect(result.content[0]?.text).toContain('Supported types');
+      expect(result.content[0]?.text).toContain('slash suffix');
     });
 
     it('handles missing type parameter', async () => {

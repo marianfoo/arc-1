@@ -162,7 +162,7 @@ const SAPSEARCH_DESC_ONPREM =
   'Search for ABAP objects or search within source code. Two modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
   '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
-  'Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references.';
+  "Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references. The objectType field in results maps to SAPRead's type parameter — drop the slash suffix (DDLS/DF → DDLS, CLAS/OC → CLAS, PROG/P → PROG).";
 
 const SAPSEARCH_DESC_BTP =
   'Search for ABAP objects or search within source code (BTP ABAP Environment). Two modes:\n' +

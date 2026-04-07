@@ -510,7 +510,9 @@ async function handleSAPRead(
       return textResult(await client.getVariants(name));
     default:
       return errorResult(
-        `Unknown SAPRead type: ${type}. Supported: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS`,
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. ` +
+          'Tip: Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type="DDLS", CLAS/OC → type="CLAS", PROG/P → type="PROG"). ' +
+          'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
   }
 }
