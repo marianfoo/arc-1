@@ -654,6 +654,79 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
   };
 }
 
+// ─── Object Creation XML ─────────────────────────────────────────────
+
+/**
+ * Build the type-specific XML body for ADT object creation.
+ *
+ * SAP ADT requires each object type to have its own root XML element.
+ * Using a generic body (e.g. adtcore:objectReferences) returns 400:
+ *   "System expected the element '{http://www.sap.com/adt/programs/programs}abapProgram'"
+ */
+function buildCreateXml(type: string, name: string, pkg: string, description: string): string {
+  switch (type) {
+    case 'PROG':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<program:abapProgram xmlns:program="http://www.sap.com/adt/programs/programs"
+                     xmlns:adtcore="http://www.sap.com/adt/core"
+                     adtcore:description="${escapeXml(description)}"
+                     adtcore:name="${escapeXml(name)}"
+                     adtcore:type="PROG/P"
+                     adtcore:masterLanguage="EN"
+                     adtcore:masterSystem="H00"
+                     adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</program:abapProgram>`;
+    case 'CLAS':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<class:abapClass xmlns:class="http://www.sap.com/adt/oo/classes"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="CLAS/OC"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</class:abapClass>`;
+    case 'INTF':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<intf:abapInterface xmlns:intf="http://www.sap.com/adt/oo/interfaces"
+                    xmlns:adtcore="http://www.sap.com/adt/core"
+                    adtcore:description="${escapeXml(description)}"
+                    adtcore:name="${escapeXml(name)}"
+                    adtcore:type="INTF/OI"
+                    adtcore:masterLanguage="EN"
+                    adtcore:masterSystem="H00"
+                    adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</intf:abapInterface>`;
+    case 'INCL':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<include:abapInclude xmlns:include="http://www.sap.com/adt/programs/includes"
+                     xmlns:adtcore="http://www.sap.com/adt/core"
+                     adtcore:description="${escapeXml(description)}"
+                     adtcore:name="${escapeXml(name)}"
+                     adtcore:type="PROG/I"
+                     adtcore:masterLanguage="EN"
+                     adtcore:masterSystem="H00"
+                     adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</include:abapInclude>`;
+    default:
+      // Fallback — generic objectReferences (may not work for all types)
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/${escapeXml(name)}" adtcore:type="${escapeXml(type)}" adtcore:name="${escapeXml(name)}" adtcore:packageName="${escapeXml(pkg)}"/>
+</adtcore:objectReferences>`;
+  }
+}
+
+/** Escape special characters for XML attribute values */
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 // ─── Object URL Mapping ──────────────────────────────────────────────
 
 /** Map object type + name to the ADT object URL used by CRUD/DevTools/etc. */
@@ -732,12 +805,33 @@ async function handleSAPWrite(
     }
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
-      // Build creation XML body
-      const body = `<?xml version="1.0" encoding="UTF-8"?>
-<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:objectReference adtcore:uri="${objectUrl}" adtcore:type="${type}" adtcore:name="${name}" adtcore:packageName="${pkg}"/>
-</adtcore:objectReferences>`;
-      const result = await createObject(client.http, client.safety, objectUrl, body, 'application/xml', transport);
+      const description = String(args.description ?? name);
+
+      // Build type-specific creation XML body.
+      // SAP ADT requires the root element to match the object type —
+      // a generic objectReferences body returns 400 "System expected the element ...".
+      const body = buildCreateXml(type, name, pkg, description);
+
+      // Step 1: Create the object (metadata only)
+      const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
+      const result = await createObject(client.http, client.safety, createUrl, body, 'application/xml', transport);
+
+      // Step 2: Write source code if provided
+      if (source) {
+        // Pre-write lint validation
+        const lintWarnings = runPreWriteLint(source, type, name, config);
+        if (lintWarnings.blocked) {
+          return textResult(
+            `Created ${type} ${name} in package ${pkg}, but source was rejected by lint:\n${lintWarnings.result!.content[0].text}`,
+          );
+        }
+
+        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
+        cachingLayer?.invalidate(type, name);
+        const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
+        return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+      }
+
       return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
     }
     case 'edit_method': {
