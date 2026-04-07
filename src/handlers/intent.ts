@@ -549,7 +549,7 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
       return textResult(JSON.stringify(results, null, 2));
     } catch (err) {
       if (err instanceof AdtApiError) {
-        const permanentCodes = [401, 403, 404, 500, 501];
+        const permanentCodes = [401, 403, 404, 501];
         if (permanentCodes.includes(err.statusCode)) {
           const classified = classifyTextSearchError(err.statusCode);
           return errorResult(
@@ -1322,7 +1322,7 @@ async function handleSAPManage(
     }
 
     default:
-      return errorResult(`Unknown SAPManage action: ${action}. Supported: features, probe`);
+      return errorResult(`Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats`);
   }
 }
 
