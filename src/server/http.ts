@@ -379,10 +379,12 @@ async function checkAuth(req: Request, config: ServerConfig): Promise<AuthResult
  * Initialize JWKS client from OIDC discovery.
  */
 async function initJwks(issuer: string): Promise<void> {
-  if (joseModule) return;
+  if (joseModule && jwksClient) return;
 
   try {
-    joseModule = await import('jose');
+    if (!joseModule) {
+      joseModule = await import('jose');
+    }
     const jwksUri = new URL('.well-known/openid-configuration', issuer.endsWith('/') ? issuer : `${issuer}/`);
     const discoveryResp = await fetch(jwksUri.toString());
     const discovery = (await discoveryResp.json()) as { jwks_uri: string };
