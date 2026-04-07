@@ -13,6 +13,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
+import { deriveUserSafety } from '../adt/safety.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
@@ -283,8 +284,16 @@ export function createServer(
       } as Record<string, unknown>;
     }
 
+    // Per-request safety: merge server ceiling with JWT scopes.
+    // Scopes can only restrict further, never expand beyond server config.
+    let effectiveClient = client;
+    if (extra.authInfo?.scopes) {
+      const effectiveSafety = deriveUserSafety(client.safety, extra.authInfo.scopes);
+      effectiveClient = client.withSafety(effectiveSafety);
+    }
+
     const result = await handleToolCall(
-      client,
+      effectiveClient,
       config,
       toolName,
       args,

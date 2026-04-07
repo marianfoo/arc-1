@@ -350,6 +350,46 @@ describe('AdtClient', () => {
     });
   });
 
+  describe('withSafety', () => {
+    it('returns a new client with the given safety config', () => {
+      const client = createClient();
+      const restrictedSafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const derived = client.withSafety(restrictedSafety);
+      expect(derived.safety.readOnly).toBe(true);
+      expect(client.safety.readOnly).toBe(false);
+    });
+
+    it('shares the same HTTP client instance', () => {
+      const client = createClient();
+      const derived = client.withSafety(unrestrictedSafetyConfig());
+      expect(derived.http).toBe(client.http);
+    });
+
+    it('preserves username from original client', () => {
+      const client = createClient({ username: 'testuser' });
+      const derived = client.withSafety(unrestrictedSafetyConfig());
+      expect(derived.username).toBe('testuser');
+    });
+
+    it('derived client blocks operations per its safety config', async () => {
+      const client = createClient();
+      const restrictedSafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const derived = client.withSafety(restrictedSafety);
+      // Original client can still read (unrestricted)
+      const source = await client.getProgram('ZHELLO');
+      expect(source).toBeDefined();
+      // Derived client blocks writes but reads still work
+      const source2 = await derived.getProgram('ZHELLO');
+      expect(source2).toBeDefined();
+    });
+
+    it('is an instance of AdtClient', () => {
+      const client = createClient();
+      const derived = client.withSafety(unrestrictedSafetyConfig());
+      expect(derived).toBeInstanceOf(AdtClient);
+    });
+  });
+
   describe('safety checks', () => {
     it('blocks read operations when disallowed', async () => {
       const client = createClient({

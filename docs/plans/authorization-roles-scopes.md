@@ -195,11 +195,11 @@ Add `data` and `sql` to the XSUAA local scope check, and add implied scope expan
 
 Connect `deriveUserSafety()` to the tool call handler so per-request safety config is applied based on JWT scopes.
 
-- [ ] Import `deriveUserSafety` from `src/adt/safety.ts`
-- [ ] In the tool call handler (where `handleToolCall` is called), before passing the config, derive per-request safety: `const effectiveSafety = authInfo?.scopes ? deriveUserSafety(config.safety, authInfo.scopes) : config.safety`
-- [ ] Pass the effective safety config to the AdtClient or handleToolCall (check how the safety config flows from server.ts → intent.ts → client operations and adjust accordingly)
-- [ ] Ensure the tool listing handler also uses `hasRequiredScope()` for filtering (may already be done in Task 4)
-- [ ] Run `npm test` and `npm run typecheck`
+- [x] Import `deriveUserSafety` from `src/adt/safety.ts`
+- [x] In the tool call handler (where `handleToolCall` is called), before passing the config, derive per-request safety: `const effectiveSafety = authInfo?.scopes ? deriveUserSafety(config.safety, authInfo.scopes) : config.safety`
+- [x] Pass the effective safety config to the AdtClient or handleToolCall (check how the safety config flows from server.ts → intent.ts → client operations and adjust accordingly)
+- [x] Ensure the tool listing handler also uses `hasRequiredScope()` for filtering (may already be done in Task 4)
+- [x] Run `npm test` and `npm run typecheck`
 
 ### Task 8: Update xs-security.json
 
