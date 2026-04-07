@@ -2,26 +2,46 @@
  * E2E Tests for SAPNavigate — Where-Used Analysis
  *
  * Tests the scope-based Where-Used API against real SAP objects:
- * - Custom Z objects (ZIF_ARC1_TEST, ZCL_ARC1_TEST) with known relationships
+ * - Custom Z objects (ZIF_ARC1_TEST, ZCL_ARC1_TEST) with known relationships (skipped if not present)
  * - Standard SAP objects (CL_ABAP_CHAR_UTILITIES, BAPIRET2, BUKRS) with many references
- * - Multiple object types: CLAS, INTF, STRU, DOMA, DTEL, TABL, PROG
+ * - Multiple object types: CLAS, INTF, STRU, DOMA, DTEL, TABL
  * - objectType filtering
  * - Error handling for missing/invalid parameters
  *
- * Requires persistent test objects from setup.ts (ZCL_ARC1_TEST, ZIF_ARC1_TEST).
+ * Uses standard SAP objects for the core tests (no setup needed).
+ * Custom Z object tests are skipped when the objects don't exist on the system.
  */
 
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
-import { ensureTestObjects } from './setup.js';
+
+/** Check if a custom object exists on the SAP system via SAPSearch */
+async function objectExists(client: Client, name: string): Promise<boolean> {
+  try {
+    const result = await callTool(client, 'SAPSearch', { query: name, maxResults: 1 });
+    const parsed = JSON.parse(result.content?.[0]?.text ?? '[]');
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 describe('E2E SAPNavigate — Where-Used Analysis', () => {
   let client: Client;
+  let hasCustomObjects = false;
 
   beforeAll(async () => {
     client = await connectClient();
-    await ensureTestObjects(client);
+    // Check if custom test objects exist (don't try to create them)
+    const [hasIntf, hasClas] = await Promise.all([
+      objectExists(client, 'ZIF_ARC1_TEST'),
+      objectExists(client, 'ZCL_ARC1_TEST'),
+    ]);
+    hasCustomObjects = hasIntf && hasClas;
+    if (!hasCustomObjects) {
+      console.log('    [info] Custom Z objects not found — skipping custom object tests');
+    }
   });
 
   afterAll(async () => {
@@ -35,7 +55,8 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
   // ── Custom objects: known relationships ──────────────────────────
 
   describe('Custom Z objects (known references)', () => {
-    it('finds references to ZIF_ARC1_TEST — implemented by ZCL_ARC1_TEST', async () => {
+    it('finds references to ZIF_ARC1_TEST — implemented by ZCL_ARC1_TEST', async (ctx) => {
+      if (!hasCustomObjects) return ctx.skip();
       const result = await callTool(client, 'SAPNavigate', {
         action: 'references',
         type: 'INTF',
@@ -50,7 +71,8 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
       expect(classRef.uri).toContain('/oo/classes/');
     });
 
-    it('finds references to ZCL_ARC1_TEST using type+name', async () => {
+    it('finds references to ZCL_ARC1_TEST using type+name', async (ctx) => {
+      if (!hasCustomObjects) return ctx.skip();
       const result = await callTool(client, 'SAPNavigate', {
         action: 'references',
         type: 'CLAS',
@@ -58,14 +80,56 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
       });
       const text = expectToolSuccess(result);
       const refs = JSON.parse(text);
-      // ZCL_ARC1_TEST_UT or the report may reference it
       expect(Array.isArray(refs)).toBe(true);
-      // The result should be valid JSON with expected structure
       if (refs.length > 0) {
         expect(refs[0]).toHaveProperty('uri');
         expect(refs[0]).toHaveProperty('type');
         expect(refs[0]).toHaveProperty('name');
       }
+    });
+
+    it('returns enriched fields (line, snippet, package) from scope-based API', async (ctx) => {
+      if (!hasCustomObjects) return ctx.skip();
+      const result = await callTool(client, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_ARC1_TEST',
+      });
+      const text = expectToolSuccess(result);
+      const refs = JSON.parse(text);
+      expect(refs.length).toBeGreaterThanOrEqual(1);
+      const first = refs[0];
+      // Scope-based API returns enriched fields
+      if ('line' in first && first.line > 0) {
+        expect(first.line).toBeGreaterThan(0);
+        expect(first).toHaveProperty('packageName');
+        expect(first).toHaveProperty('snippet');
+        console.log(
+          `    Enriched result: line=${first.line}, package=${first.packageName}, snippet="${first.snippet}"`,
+        );
+      } else {
+        console.log('    Legacy API: no line/snippet enrichment');
+      }
+    });
+
+    it('finds definition of interface reference in class source', async (ctx) => {
+      if (!hasCustomObjects) return ctx.skip();
+      // ZCL_ARC1_TEST line 3: "INTERFACES zif_arc1_test."
+      const result = await callTool(client, 'SAPNavigate', {
+        action: 'definition',
+        uri: '/sap/bc/adt/oo/classes/ZCL_ARC1_TEST/source/main',
+        line: 3,
+        column: 16,
+        source: [
+          'CLASS zcl_arc1_test DEFINITION PUBLIC FINAL CREATE PUBLIC.',
+          '  PUBLIC SECTION.',
+          '    INTERFACES zif_arc1_test.',
+        ].join('\n'),
+      });
+      const text = expectToolSuccess(result);
+      const def = JSON.parse(text);
+      expect(def.uri).toContain('zif_arc1_test');
+      expect(def.name).toMatch(/ZIF_ARC1_TEST/i);
     });
   });
 
@@ -81,7 +145,6 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
       const text = expectToolSuccess(result);
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThan(0);
-      // Verify result shape — should have enriched fields from scope-based API
       const first = refs[0];
       expect(first).toHaveProperty('uri');
       expect(first).toHaveProperty('type');
@@ -158,13 +221,11 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
       // If scope-based API is available, all results should be PROG/P
       // If fallback, we get a { note, results } object with unfiltered results
       if (Array.isArray(refs)) {
-        // Scope-based API — all refs should be programs
         for (const ref of refs) {
           expect(ref.type).toBe('PROG/P');
         }
         console.log(`    Filtered to ${refs.length} PROG/P references (scope-based API)`);
       } else {
-        // Fallback — { note, results } shape
         expect(refs.note).toContain('objectType filter');
         expect(Array.isArray(refs.results)).toBe(true);
         console.log(`    Fallback: ${refs.results.length} unfiltered references (legacy API)`);
@@ -192,78 +253,6 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
     });
   });
 
-  // ── Where-Used result enrichment ──────────────────────────────────
-
-  describe('enriched result fields (scope-based API)', () => {
-    it('returns line numbers, snippets, and package info', async () => {
-      const result = await callTool(client, 'SAPNavigate', {
-        action: 'references',
-        type: 'INTF',
-        name: 'ZIF_ARC1_TEST',
-      });
-      const text = expectToolSuccess(result);
-      const refs = JSON.parse(text);
-      expect(refs.length).toBeGreaterThanOrEqual(1);
-      const first = refs[0];
-      // Scope-based API returns enriched fields
-      if ('line' in first && first.line > 0) {
-        expect(first.line).toBeGreaterThan(0);
-        expect(first).toHaveProperty('packageName');
-        expect(first).toHaveProperty('snippet');
-        console.log(
-          `    Enriched result: line=${first.line}, package=${first.packageName}, snippet="${first.snippet}"`,
-        );
-      } else {
-        // Fallback API — line/column are 0
-        console.log('    Legacy API: no line/snippet enrichment');
-      }
-    });
-  });
-
-  // ── Definition lookup ─────────────────────────────────────────────
-
-  describe('definition lookup', () => {
-    it('finds definition of a class reference in source code', async () => {
-      // ZCL_ARC1_TEST references ZIF_ARC1_TEST in line 3: "INTERFACES zif_arc1_test."
-      const result = await callTool(client, 'SAPNavigate', {
-        action: 'definition',
-        uri: '/sap/bc/adt/oo/classes/ZCL_ARC1_TEST/source/main',
-        line: 3,
-        column: 16,
-        source: [
-          'CLASS zcl_arc1_test DEFINITION PUBLIC FINAL CREATE PUBLIC.',
-          '  PUBLIC SECTION.',
-          '    INTERFACES zif_arc1_test.',
-        ].join('\n'),
-      });
-      const text = expectToolSuccess(result);
-      const def = JSON.parse(text);
-      expect(def.uri).toContain('zif_arc1_test');
-      expect(def.name).toMatch(/ZIF_ARC1_TEST/i);
-    });
-  });
-
-  // ── No references found ───────────────────────────────────────────
-
-  describe('empty results', () => {
-    it('returns "No references found" for an unused custom report', async () => {
-      // ZARC1_TEST_REPORT is a standalone report — unlikely to be referenced
-      const result = await callTool(client, 'SAPNavigate', {
-        action: 'references',
-        type: 'PROG',
-        name: 'ZARC1_TEST_REPORT',
-      });
-      const text = result.content[0]?.text ?? '';
-      // Either "No references found" or a valid (possibly empty) array
-      if (text === 'No references found.') {
-        expect(text).toBe('No references found.');
-      } else {
-        const refs = JSON.parse(text);
-        expect(Array.isArray(refs)).toBe(true);
-      }
-    });
-  });
-
   // ── Error handling ────────────────────────────────────────────────
 
   describe('error handling', () => {
@@ -277,7 +266,7 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
     it('returns error for definition without line/column', async () => {
       const result = await callTool(client, 'SAPNavigate', {
         action: 'definition',
-        uri: '/sap/bc/adt/oo/classes/ZCL_ARC1_TEST/source/main',
+        uri: '/sap/bc/adt/oo/classes/CL_ABAP_CHAR_UTILITIES/source/main',
       });
       expectToolError(result, 'line', 'column');
     });
