@@ -580,11 +580,12 @@ async function handleSAPLint(
       return textResult(
         JSON.stringify(
           {
-            preset: cachedFeatures?.systemType === 'btp' ? 'cloud' : 'onprem',
+            preset: configOptions.systemType === 'btp' ? 'cloud' : 'onprem',
             abapVersion: cachedFeatures?.abapRelease ?? 'unknown',
             enabledRules: enabled.length,
             disabledRules: disabled.length,
             rules: enabled,
+            disabledRuleNames: disabled.map((r) => r.rule),
           },
           null,
           2,
@@ -598,10 +599,19 @@ async function handleSAPLint(
   }
 }
 
-/** Build LintConfigOptions from server config and cached features */
+/**
+ * Build LintConfigOptions from server config and cached features.
+ *
+ * Uses cachedFeatures (from SAPManage probe) when available, but falls back
+ * to config.systemType so that --system-type btp works even before the first
+ * probe. Without this fallback, cloud lint rules wouldn't apply until a probe
+ * populates cachedFeatures.
+ */
 function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverrides): LintConfigOptions {
+  // Probe-detected system type is most accurate; fall back to CLI config
+  const systemType = cachedFeatures?.systemType ?? (config.systemType !== 'auto' ? config.systemType : undefined);
   return {
-    systemType: cachedFeatures?.systemType,
+    systemType,
     abapRelease: cachedFeatures?.abapRelease,
     configFile: config.abaplintConfig,
     ruleOverrides,
@@ -773,8 +783,9 @@ function runPreWriteLint(source: string, type: string, name: string, config: Ser
 
   try {
     const filename = detectFilename(source, name);
+    const systemType = cachedFeatures?.systemType ?? (config.systemType !== 'auto' ? config.systemType : undefined);
     const configOptions: LintConfigOptions = {
-      systemType: cachedFeatures?.systemType,
+      systemType,
       abapRelease: cachedFeatures?.abapRelease,
       configFile: config.abaplintConfig,
     };

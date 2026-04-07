@@ -497,6 +497,32 @@ ENDCLASS.`;
       expect(parsed).toHaveProperty('rules');
       expect(parsed.enabledRules).toBeGreaterThan(0);
       expect(parsed.disabledRules).toBeGreaterThan(0);
+      expect(parsed.disabledRuleNames).toBeInstanceOf(Array);
+    });
+
+    it('uses config.systemType=btp even without cached features (no probe)', async () => {
+      // Ensure no cached features from a prior probe
+      resetCachedFeatures();
+      const btpConfig = { ...DEFAULT_CONFIG, systemType: 'btp' as const };
+      // Lint a REPORT — should get cloud_types error because config says btp
+      const result = await handleToolCall(createClient(), btpConfig, 'SAPLint', {
+        action: 'lint',
+        source: "REPORT ztest.\nWRITE: / 'Hello'.",
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBeUndefined();
+      const issues = JSON.parse(result.content[0]?.text);
+      expect(issues.some((i: { rule: string }) => i.rule === 'cloud_types')).toBe(true);
+    });
+
+    it('list_rules shows cloud preset when config.systemType=btp without probe', async () => {
+      resetCachedFeatures();
+      const btpConfig = { ...DEFAULT_CONFIG, systemType: 'btp' as const };
+      const result = await handleToolCall(createClient(), btpConfig, 'SAPLint', {
+        action: 'list_rules',
+      });
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed.preset).toBe('cloud');
     });
 
     it('lint accepts custom rule overrides', async () => {

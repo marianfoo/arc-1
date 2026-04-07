@@ -69,8 +69,8 @@ The 11 tools are designed from real LLM interaction feedback:
 | **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
 | **SAPTransport** | CTS transport management (list, create, release) |
 | **SAPContext** | Compressed dependency context — one call replaces N SAPRead calls |
-| **SAPLint** | ABAP lint (local) + ATC checks (remote) |
-| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality |
+| **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) |
+| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps |
 | **SAPManage** | Feature probing — detect what the system supports before acting |
 
 Tool definitions automatically adapt to the target system (BTP vs on-premise), removing unavailable types and adjusting descriptions so the LLM never attempts unsupported operations.

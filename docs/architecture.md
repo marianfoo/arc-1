@@ -132,11 +132,11 @@ flowchart LR
     end
 
     subgraph QualityTools["Quality (1)"]
-        SL[SAPLint<br/>Lint · ATC · Syntax]
+        SL[SAPLint<br/>Local lint · Auto-fix · Pre-write gate]
     end
 
     subgraph DiagTools["Diagnostics (1)"]
-        SD[SAPDiagnose<br/>Dumps · Traces · SQL Traces]
+        SD[SAPDiagnose<br/>Syntax · Unit tests · ATC · Dumps · Traces]
     end
 
     subgraph AdminTools["Admin (2)"]
