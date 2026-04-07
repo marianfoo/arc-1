@@ -6,6 +6,7 @@ import {
   checkTransport,
   checkTransportableEdit,
   defaultSafetyConfig,
+  deriveUserSafety,
   describeSafety,
   isOperationAllowed,
   isPackageAllowed,
@@ -299,6 +300,141 @@ describe('Safety System', () => {
       const cfg = config({ allowedPackages: ['ZPACKAGE'] });
       expect(isPackageAllowed(cfg, 'ZPACKAGE')).toBe(true);
       expect(isPackageAllowed(cfg, 'ZPACKAGE1')).toBe(false);
+    });
+  });
+
+  describe('deriveUserSafety', () => {
+    it('no write scope → readOnly=true, enableTransports=false', () => {
+      const server = config({ readOnly: false, enableTransports: true, allowTransportableEdits: true });
+      const result = deriveUserSafety(server, ['read', 'data']);
+      expect(result.readOnly).toBe(true);
+      expect(result.enableTransports).toBe(false);
+      expect(result.allowTransportableEdits).toBe(false);
+    });
+
+    it('no data and no sql scope → blockData=true', () => {
+      const server = config({ blockData: false });
+      const result = deriveUserSafety(server, ['read', 'write']);
+      expect(result.blockData).toBe(true);
+    });
+
+    it('no sql scope → blockFreeSQL=true', () => {
+      const server = config({ blockFreeSQL: false });
+      const result = deriveUserSafety(server, ['read', 'data']);
+      expect(result.blockFreeSQL).toBe(true);
+    });
+
+    it('write scope present → readOnly unchanged from server', () => {
+      const server = config({ readOnly: false });
+      const result = deriveUserSafety(server, ['read', 'write']);
+      expect(result.readOnly).toBe(false);
+    });
+
+    it('sql scope present → blockFreeSQL unchanged from server', () => {
+      const server = config({ blockFreeSQL: false });
+      const result = deriveUserSafety(server, ['read', 'sql']);
+      expect(result.blockFreeSQL).toBe(false);
+    });
+
+    it('data scope present → blockData unchanged from server', () => {
+      const server = config({ blockData: false });
+      const result = deriveUserSafety(server, ['read', 'data']);
+      expect(result.blockData).toBe(false);
+    });
+
+    it('server readOnly=true + write scope → still readOnly (server wins)', () => {
+      const server = config({ readOnly: true });
+      const result = deriveUserSafety(server, ['read', 'write']);
+      expect(result.readOnly).toBe(true);
+    });
+
+    it('server blockFreeSQL=true + sql scope → still blocked (server wins)', () => {
+      const server = config({ blockFreeSQL: true });
+      const result = deriveUserSafety(server, ['read', 'sql']);
+      expect(result.blockFreeSQL).toBe(true);
+    });
+
+    it('server blockData=true + data scope → still blocked (server wins)', () => {
+      const server = config({ blockData: true });
+      const result = deriveUserSafety(server, ['read', 'data']);
+      expect(result.blockData).toBe(true);
+    });
+
+    it('implied scopes: sql without data → blockData unchanged', () => {
+      const server = config({ blockData: false, blockFreeSQL: false });
+      const result = deriveUserSafety(server, ['read', 'sql']);
+      expect(result.blockData).toBe(false);
+      expect(result.blockFreeSQL).toBe(false);
+    });
+
+    it('implied scopes: write without read → readOnly unchanged', () => {
+      const server = config({ readOnly: false });
+      const result = deriveUserSafety(server, ['write']);
+      expect(result.readOnly).toBe(false);
+    });
+
+    it('empty scopes → most restrictive', () => {
+      const server = config({ readOnly: false, blockFreeSQL: false, blockData: false, enableTransports: true });
+      const result = deriveUserSafety(server, []);
+      expect(result.readOnly).toBe(true);
+      expect(result.blockFreeSQL).toBe(true);
+      expect(result.blockData).toBe(true);
+      expect(result.enableTransports).toBe(false);
+      expect(result.allowTransportableEdits).toBe(false);
+    });
+
+    it('all scopes → nothing restricted beyond server config', () => {
+      const server = config({ readOnly: false, blockFreeSQL: false, blockData: false, enableTransports: true });
+      const result = deriveUserSafety(server, ['read', 'write', 'data', 'sql', 'admin']);
+      expect(result.readOnly).toBe(false);
+      expect(result.blockFreeSQL).toBe(false);
+      expect(result.blockData).toBe(false);
+      expect(result.enableTransports).toBe(true);
+    });
+
+    it('preserves other server config fields unchanged', () => {
+      const server = config({ allowedOps: 'RSQ', disallowedOps: 'D', allowedPackages: ['Z*'], dryRun: true });
+      const result = deriveUserSafety(server, ['read', 'write', 'data', 'sql']);
+      expect(result.allowedOps).toBe('RSQ');
+      expect(result.disallowedOps).toBe('D');
+      expect(result.allowedPackages).toEqual(['Z*']);
+      expect(result.dryRun).toBe(true);
+    });
+
+    it('does not mutate the original server config', () => {
+      const server = config({ readOnly: false, blockData: false, blockFreeSQL: false });
+      deriveUserSafety(server, []);
+      expect(server.readOnly).toBe(false);
+      expect(server.blockData).toBe(false);
+      expect(server.blockFreeSQL).toBe(false);
+    });
+
+    it('write scope enables transports if server allows', () => {
+      const server = config({ enableTransports: true, allowTransportableEdits: true });
+      const result = deriveUserSafety(server, ['read', 'write']);
+      expect(result.enableTransports).toBe(true);
+      expect(result.allowTransportableEdits).toBe(true);
+    });
+
+    it('server enableTransports=false + write scope → still disabled (server wins)', () => {
+      const server = config({ enableTransports: false });
+      const result = deriveUserSafety(server, ['read', 'write']);
+      expect(result.enableTransports).toBe(false);
+    });
+
+    it('data scope without sql → blockFreeSQL=true', () => {
+      const server = config({ blockFreeSQL: false, blockData: false });
+      const result = deriveUserSafety(server, ['read', 'data']);
+      expect(result.blockData).toBe(false);
+      expect(result.blockFreeSQL).toBe(true);
+    });
+
+    it('only admin scope → most restrictive (admin does not imply read/write/data)', () => {
+      const server = config({ readOnly: false, blockData: false, blockFreeSQL: false });
+      const result = deriveUserSafety(server, ['admin']);
+      expect(result.readOnly).toBe(true);
+      expect(result.blockData).toBe(true);
+      expect(result.blockFreeSQL).toBe(true);
     });
   });
 

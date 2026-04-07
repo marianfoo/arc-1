@@ -119,14 +119,14 @@ Add a new `blockData` field to `SafetyConfig` that blocks the `Query` (Q) operat
 
 Add a function that merges server-level safety config (ceiling) with user JWT scopes. Scopes can only RESTRICT, never expand.
 
-- [ ] Add `deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): SafetyConfig` function (export it)
-- [ ] Logic: no `write` scope → `readOnly=true`, `enableTransports=false`
-- [ ] Logic: no `data` and no `sql` scope → `blockData=true`
-- [ ] Logic: no `sql` scope → `blockFreeSQL=true`
-- [ ] Handle implied scopes inside the function: if `sql` in scopes, treat as having `data`; if `write` in scopes, treat as having `read`
-- [ ] Key principle: start with `{ ...serverConfig }`, only tighten — never set a boolean from true to false
-- [ ] Add unit tests (~20 tests): no write → readOnly, no data/sql → blockData, no sql → blockFreeSQL, write scope present → readOnly unchanged, sql scope → blockFreeSQL unchanged, data scope → blockData unchanged, server readOnly=true + write scope → still true (server wins), server blockFreeSQL=true + sql scope → still blocked, server blockData=true + data scope → still blocked, implied scopes (sql but no data → blockData unchanged), empty scopes → most restrictive, scopes with write but no read → readOnly unchanged (write implies read)
-- [ ] Run `npm test`
+- [x] Add `deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): SafetyConfig` function (export it)
+- [x] Logic: no `write` scope → `readOnly=true`, `enableTransports=false`
+- [x] Logic: no `data` and no `sql` scope → `blockData=true`
+- [x] Logic: no `sql` scope → `blockFreeSQL=true`
+- [x] Handle implied scopes inside the function: if `sql` in scopes, treat as having `data`; if `write` in scopes, treat as having `read`
+- [x] Key principle: start with `{ ...serverConfig }`, only tighten — never set a boolean from true to false
+- [x] Add unit tests (~20 tests): no write → readOnly, no data/sql → blockData, no sql → blockFreeSQL, write scope present → readOnly unchanged, sql scope → blockFreeSQL unchanged, data scope → blockData unchanged, server readOnly=true + write scope → still true (server wins), server blockFreeSQL=true + sql scope → still blocked, server blockData=true + data scope → still blocked, implied scopes (sql but no data → blockData unchanged), empty scopes → most restrictive, scopes with write but no read → readOnly unchanged (write implies read)
+- [x] Run `npm test`
 
 ### Task 3: Parse `--block-data` and `--profile` in config
 

@@ -246,6 +246,49 @@ export function checkTransportableEdit(config: SafetyConfig, transport: string, 
   }
 }
 
+/**
+ * Expand implied scopes: `write` implies `read`, `sql` implies `data`.
+ * Returns a new array with implied scopes added.
+ */
+function expandImpliedScopes(scopes: string[]): string[] {
+  const expanded = new Set(scopes);
+  if (expanded.has('write')) expanded.add('read');
+  if (expanded.has('sql')) expanded.add('data');
+  return [...expanded];
+}
+
+/**
+ * Derive a per-user safety config by merging server-level config (ceiling)
+ * with JWT scopes. Scopes can only RESTRICT further, never expand beyond
+ * what the server config allows.
+ *
+ * Key principle: start with server config, only tighten booleans (false→true).
+ * Never loosen (true→false).
+ */
+export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): SafetyConfig {
+  const effective = { ...serverConfig };
+  const expanded = expandImpliedScopes(scopes);
+
+  // No write scope → force read-only and disable transports
+  if (!expanded.includes('write')) {
+    effective.readOnly = true;
+    effective.enableTransports = false;
+    effective.allowTransportableEdits = false;
+  }
+
+  // No data scope (and no sql, which implies data) → block table preview
+  if (!expanded.includes('data')) {
+    effective.blockData = true;
+  }
+
+  // No sql scope → block free SQL
+  if (!expanded.includes('sql')) {
+    effective.blockFreeSQL = true;
+  }
+
+  return effective;
+}
+
 /** Human-readable description of the safety configuration */
 export function describeSafety(config: SafetyConfig): string {
   const parts: string[] = [];
