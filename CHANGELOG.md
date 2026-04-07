@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/marianfoo/arc-1/compare/v0.4.3...v0.4.4) (2026-04-07)
+
+
+### Bug Fixes
+
+* use native arm64 runners instead of QEMU for Docker builds ([b65fba4](https://github.com/marianfoo/arc-1/commit/b65fba41851b0d5ae1f2d15601c4afc78b0608ae))
+
 ## [0.4.3](https://github.com/marianfoo/arc-1/compare/v0.4.2...v0.4.3) (2026-04-07)
 
 
