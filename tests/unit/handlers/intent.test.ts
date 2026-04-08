@@ -2064,8 +2064,9 @@ ENDCLASS.`;
 
       expect(result.isError).toBe(true);
       const text = result.content[0]?.text ?? '';
-      // Third object should NOT appear (stopped after second fails)
-      expect(text).not.toContain('ZPROG3');
+      // Third object should appear as skipped
+      expect(text).toContain('ZPROG3');
+      expect(text).toContain('skipped');
     });
 
     it('returns error for empty objects array', async () => {
@@ -2239,8 +2240,9 @@ ENDCLASS.`;
       expect(text).toContain('ZPROG1');
       expect(text).toContain('ZCL_BAD');
       expect(text).toContain('AFF metadata validation failed');
-      // Third object should NOT appear (stopped after second fails)
-      expect(text).not.toContain('ZPROG2');
+      // Third object should appear as skipped
+      expect(text).toContain('ZPROG2');
+      expect(text).toContain('skipped');
     });
 
     it('AFF validation errors include field path and details', async () => {

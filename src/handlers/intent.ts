@@ -1111,6 +1111,17 @@ async function handleSAPWrite(
         }
       }
 
+      // Add 'skipped' entries for objects that were never attempted due to early break
+      for (let i = results.length; i < objects.length; i++) {
+        const skipped = objects[i];
+        results.push({
+          type: String(skipped.type ?? ''),
+          name: String(skipped.name ?? ''),
+          status: 'failed',
+          error: 'skipped — stopped after previous failure',
+        });
+      }
+
       const summary = results
         .map((r) => `${r.name} (${r.type}) ${r.status === 'success' ? '✓' : `✗ — ${r.error}`}`)
         .join(', ');
