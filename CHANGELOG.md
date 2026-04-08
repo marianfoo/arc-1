@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.5.0](https://github.com/marianfoo/arc-1/compare/arc-1-v0.4.4...arc-1-v0.5.0) (2026-04-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* SAPQuery now requires 'data' scope (was 'read'), SAPTransport requires 'write' (was 'admin')
+
+### Features
+
+* add DDIC completeness — structures, domains, data elements, transactions ([#21](https://github.com/marianfoo/arc-1/issues/21)) ([9e0fa2a](https://github.com/marianfoo/arc-1/commit/9e0fa2ad756a3a10f937531216707c8ac56c8aae))
+* add DDLS support to SAPContext and include=elements to SAPRead ([#30](https://github.com/marianfoo/arc-1/issues/30)) ([6a2883e](https://github.com/marianfoo/arc-1/commit/6a2883e086bd9c44d578245a61fad1a50693f60f))
+* add J4D skills parity plan ([#47](https://github.com/marianfoo/arc-1/issues/47)) ([df7ef1f](https://github.com/marianfoo/arc-1/commit/df7ef1f98e8bcf4fa51f40af53b75d9fdd8e9672))
+* add LLM eval harness for testing tool-call accuracy ([#33](https://github.com/marianfoo/arc-1/issues/33)) ([e8c8a65](https://github.com/marianfoo/arc-1/commit/e8c8a6511ad69bb9b95222450e0095fde391edda))
+* add object caching with on-demand + pre-warmer support ([#31](https://github.com/marianfoo/arc-1/issues/31)) ([8ba2f0d](https://github.com/marianfoo/arc-1/commit/8ba2f0d1624039be03cfb39d916ee11b53f94dc8))
+* add runtime diagnostics (short dumps + ABAP traces) to SAPDiagnose ([#24](https://github.com/marianfoo/arc-1/issues/24)) ([ab177fc](https://github.com/marianfoo/arc-1/commit/ab177fc0a77f34da5c3cd2c83fbf3de64b3ee928))
+* add textSearch smoketest at startup and other improvments ([#45](https://github.com/marianfoo/arc-1/issues/45)) ([792ff5b](https://github.com/marianfoo/arc-1/commit/792ff5ba605ba00e1dce869768903eeb99adcc94))
+* add Zod v4 runtime input validation for all MCP tools ([#52](https://github.com/marianfoo/arc-1/issues/52)) ([9eea32a](https://github.com/marianfoo/arc-1/commit/9eea32a3eec4d6a7e1276483c4aa73cc215efe52))
+* DDLX, SRVB read support and batch activation for RAP completeness ([#22](https://github.com/marianfoo/arc-1/issues/22)) ([402c57b](https://github.com/marianfoo/arc-1/commit/402c57bb3b43b908a3df4e9494e0cfbd08cc436f))
+* direct BTP ABAP Environment connectivity via OAuth 2.0 ([#18](https://github.com/marianfoo/arc-1/issues/18)) ([b1cf86c](https://github.com/marianfoo/arc-1/commit/b1cf86c3755294f1873be80f67e480d54b1427b3))
+* E2E testing infrastructure, XML error cleanup, and CI hardening ([#13](https://github.com/marianfoo/arc-1/issues/13)) ([3830ff9](https://github.com/marianfoo/arc-1/commit/3830ff95919adcdeaefaff612f617cfabda6f57d))
+* enhanced abaplint integration with system-aware presets and pre-write validation ([#37](https://github.com/marianfoo/arc-1/issues/37)) ([f17d4fa](https://github.com/marianfoo/arc-1/commit/f17d4fa03cf725dcc45918f050b2c1cd8fd2eff4))
+* improve tooling based on real-world LLM feedback ([#14](https://github.com/marianfoo/arc-1/issues/14)) ([3bcb59e](https://github.com/marianfoo/arc-1/commit/3bcb59e627cfdb8e84f282521f8b6a0c2089bd4a))
+* initial release — ARC-1 MCP server for SAP ADT ([3b5fe6d](https://github.com/marianfoo/arc-1/commit/3b5fe6d5ebb0372f5769f7c5ca3fc6cdc9c8987a))
+* method-level surgery and hyperfocused mode ([#23](https://github.com/marianfoo/arc-1/issues/23)) ([dbd27b9](https://github.com/marianfoo/arc-1/commit/dbd27b9be52ee32ed8de0691e033e73ffa7c2314))
+* scope-based Where-Used analysis for SAPNavigate ([#38](https://github.com/marianfoo/arc-1/issues/38)) ([f805441](https://github.com/marianfoo/arc-1/commit/f805441d03f2f1190b461d923e7e176e4f4af1bc))
+* two-dimensional authorization model (scopes, roles, safety) ([#48](https://github.com/marianfoo/arc-1/issues/48)) ([8ce07d1](https://github.com/marianfoo/arc-1/commit/8ce07d11389928709de01da5073d0165cbc605b7))
+
+
+### Bug Fixes
+
+* add repository field for npm OIDC provenance verification ([b3a55aa](https://github.com/marianfoo/arc-1/commit/b3a55aa22d3ed90be94c3db599e9daaf6dd6b2ab))
+* avoid QEMU emulation crash in arm64 Docker build ([7ea7883](https://github.com/marianfoo/arc-1/commit/7ea78838ea8bd121f6b823c0754f64ae2b69b673))
+* correct Docker image name to arc-1 and fix GHCR link ([ae58467](https://github.com/marianfoo/arc-1/commit/ae58467933949cf866d793e46d499b3be1eeb79c))
+* fix npm self-upgrade in release workflow (Node 22.22.x bug) ([17b6bf3](https://github.com/marianfoo/arc-1/commit/17b6bf3bb1ffcd83684d0c9d8f37b34bc0f37aa5))
+* implement OAuth security review verification report(RFC 9700) ([#51](https://github.com/marianfoo/arc-1/issues/51)) ([3ef81e1](https://github.com/marianfoo/arc-1/commit/3ef81e1cd3b094a4f6645add6c866dbe2c71bf1e))
+* install npm 11.5+ for OIDC trusted publishing support ([300f846](https://github.com/marianfoo/arc-1/commit/300f846745824780122bb1e8be4c97c4dde64e56))
+* post-merge consistency — SAPLint schema cleanup and objectUrlForType completeness ([#26](https://github.com/marianfoo/arc-1/issues/26)) ([214ebec](https://github.com/marianfoo/arc-1/commit/214ebec730b717acb483665e8af0f4bde5f0ed08))
+* restore NPM_TOKEN for publish and reorganize docs navigation ([6d76b4b](https://github.com/marianfoo/arc-1/commit/6d76b4b2689e116aec7bbe4ccb9deb0bdfcce11c))
+* use native arm64 runners instead of QEMU for Docker builds ([b65fba4](https://github.com/marianfoo/arc-1/commit/b65fba41851b0d5ae1f2d15601c4afc78b0608ae))
+* use npm OIDC trusted publishing instead of NPM_TOKEN ([ab9f50c](https://github.com/marianfoo/arc-1/commit/ab9f50c216449eaabbfca460f72e29ad4b37a8f1))
+* use separate deps stage to avoid QEMU arm64 crash in Docker build ([cab08fa](https://github.com/marianfoo/arc-1/commit/cab08fa2085fbafb63d61e1954ae88af136d87b7))
+* use standard HTTP proxy for BTP connectivity ([#43](https://github.com/marianfoo/arc-1/issues/43)) ([a60dd1b](https://github.com/marianfoo/arc-1/commit/a60dd1b60145c40c02fb1be93b33c39aa3d9af54))
+
 ## [0.4.4](https://github.com/marianfoo/arc-1/compare/v0.4.3...v0.4.4) (2026-04-07)
 
 
