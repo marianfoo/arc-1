@@ -171,6 +171,7 @@ tests/
 │   ├── handlers/               # Handler tests
 │   ├── server/                 # Server tests
 │   ├── lint/                   # Lint tests
+│   ├── aff/                    # AFF validator tests
 │   └── cli/                    # CLI tests
 ├── integration/                # Integration tests (need SAP credentials)
 │   ├── helpers.ts              # Test client factory, skip logic

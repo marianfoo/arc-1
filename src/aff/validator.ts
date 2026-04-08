@@ -17,7 +17,7 @@ const TYPE_MAP: Record<string, string> = {
   PROG: 'prog',
 };
 
-type ValidateFunction = (data: unknown) => boolean & { errors?: ErrorObject[] | null };
+type ValidateFunction = ((data: unknown) => boolean) & { errors?: ErrorObject[] | null };
 
 let ajv = new Ajv2020({ strict: false, allErrors: true });
 const validatorCache = new Map<string, ValidateFunction>();
