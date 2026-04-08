@@ -1,4 +1,4 @@
-# Phase 2: OAuth / JWT Authentication Setup
+# OAuth / JWT Setup Setup
 
 Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (EntraID, Cognito, Okta, Keycloak). ARC-1 validates JWT Bearer tokens and extracts user identity.
 
@@ -279,4 +279,4 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ## Next Steps
 
-→ [Phase 3: Principal Propagation](phase3-principal-propagation-setup.md) — Per-user SAP authentication
+→ [Principal Propagation Setup](principal-propagation-setup.md) — Per-user SAP authentication

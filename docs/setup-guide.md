@@ -364,7 +364,7 @@ Clients connect with a Bearer token:
 }
 ```
 
-Full guide: **[phase1-api-key-setup.md](phase1-api-key-setup.md)**
+Full guide: **[api-key-setup.md](api-key-setup.md)**
 
 ### Docker with OIDC
 
@@ -381,7 +381,7 @@ docker run -d --name arc1 \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
-Full guide: **[phase2-oauth-setup.md](phase2-oauth-setup.md)**
+Full guide: **[oauth-jwt-setup.md](oauth-jwt-setup.md)**
 
 ### Docker with OAuth2/XSUAA
 
@@ -650,10 +650,10 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | [docker.md](docker.md) | Full Docker reference (build, config, troubleshooting) |
 | [cli-guide.md](cli-guide.md) | CLI commands (search, source, lint) |
 | [enterprise-auth.md](enterprise-auth.md) | All auth methods in detail |
-| [phase1-api-key-setup.md](phase1-api-key-setup.md) | API Key setup (step-by-step) |
-| [phase2-oauth-setup.md](phase2-oauth-setup.md) | OAuth/OIDC setup with EntraID |
-| [phase3-principal-propagation-setup.md](phase3-principal-propagation-setup.md) | Per-user SAP identity |
+| [api-key-setup.md](api-key-setup.md) | API Key setup (step-by-step) |
+| [oauth-jwt-setup.md](oauth-jwt-setup.md) | OAuth/OIDC setup with EntraID |
+| [principal-propagation-setup.md](principal-propagation-setup.md) | Per-user SAP identity |
 | [phase4-btp-deployment.md](phase4-btp-deployment.md) | BTP Cloud Foundry deployment |
-| [phase5-xsuaa-setup.md](phase5-xsuaa-setup.md) | XSUAA OAuth for MCP clients |
+| [xsuaa-setup.md](xsuaa-setup.md) | XSUAA OAuth for MCP clients |
 | [tools.md](tools.md) | Complete tool reference (11 tools) |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial account setup |

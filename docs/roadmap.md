@@ -255,7 +255,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - `src/server/xsuaa.ts` — OAuth provider, client store, chained verifier
 - `src/server/http.ts` — Express-based HTTP server with auth routing
 - `xs-security.json` — XSUAA service instance config
-- `docs/phase5-xsuaa-setup.md` — Setup guide
+- `docs/xsuaa-setup.md` — Setup guide
 
 **Reference:** Inspired by [lemaiwo/btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server).
 
@@ -785,7 +785,7 @@ The following features are tracked but not planned for near-term implementation.
 | **Effort** | S (1–2 days) |
 | **Risk** | Low |
 | **Usefulness** | Very High — critical for adoption |
-| **Status** | Partially done (phase2-oauth-setup.md updated with Copilot Studio section) |
+| **Status** | Partially done (oauth-jwt-setup.md updated with Copilot Studio section) |
 
 **What:** Complete guide with screenshots covering:
 1. Entra ID app registration (step-by-step)

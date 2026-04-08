@@ -234,7 +234,7 @@ cf set-env arc1-mcp-server SAP_OIDC_AUDIENCE "{client-id}"
 cf restart arc1-mcp-server
 ```
 
-Then configure your MCP client (Copilot Studio, VS Code) to use OAuth authentication as described in [Phase 2](phase2-oauth-setup.md).
+Then configure your MCP client (Copilot Studio, VS Code) to use OAuth authentication as described in [OAuth / JWT Setup](oauth-jwt-setup.md).
 
 ## Troubleshooting
 

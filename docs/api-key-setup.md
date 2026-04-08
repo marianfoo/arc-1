@@ -1,4 +1,4 @@
-# Phase 1: API Key Authentication Setup
+# API Key Setup Setup
 
 Protect your centralized arc1 MCP server with a shared API key. This is the simplest way to secure a remote arc1 instance.
 
@@ -185,5 +185,5 @@ server {
 
 ## Next Steps
 
-→ [Phase 2: OAuth / JWT Authentication](phase2-oauth-setup.md) — Add user identity
-→ [Phase 3: Principal Propagation](phase3-principal-propagation-setup.md) — Per-user SAP auth
+→ [OAuth / JWT Setup](oauth-jwt-setup.md) — Add user identity
+→ [Principal Propagation Setup](principal-propagation-setup.md) — Per-user SAP auth
