@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   findDeepNodes,
+  parseClassMetadata,
   parseDataElementMetadata,
   parseDomainMetadata,
   parseFunctionGroup,
@@ -535,6 +536,82 @@ describe('XML Parser', () => {
       const result = JSON.parse(parseServiceBinding(xml));
       expect(result.name).toBe('');
       expect(result.odataVersion).toBe('');
+    });
+  });
+
+  // ─── parseClassMetadata ─────────────────────────────────────────────
+
+  describe('parseClassMetadata', () => {
+    it('parses class metadata from fixture', () => {
+      const xml = loadFixture('class-metadata.xml');
+      const result = parseClassMetadata(xml);
+
+      expect(result.name).toBe('ZCL_EXAMPLE');
+      expect(result.description).toBe('Example test class');
+      expect(result.language).toBe('EN');
+      expect(result.abapLanguageVersion).toBe('standard');
+      expect(result.category).toBe('generalObjectType');
+      expect(result.fixPointArithmetic).toBe(true);
+      expect(result.package).toBe('$TMP');
+    });
+
+    it('handles missing optional fields', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass adtcore:name="ZCL_MINIMAL" adtcore:description="Minimal" adtcore:language="EN"
+    class:fixPointArithmetic="false"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="ZTEST"/>
+</class:abapClass>`;
+      const result = parseClassMetadata(xml);
+
+      expect(result.name).toBe('ZCL_MINIMAL');
+      expect(result.abapLanguageVersion).toBeUndefined();
+      expect(result.category).toBe('');
+      expect(result.fixPointArithmetic).toBe(false);
+    });
+
+    it('extracts package from nested packageRef', () => {
+      const xml = `<?xml version="1.0"?>
+<class:abapClass adtcore:name="ZCL_PKG" adtcore:description="Pkg test" adtcore:language="EN"
+    class:fixPointArithmetic="true"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="ZFLIGHT" adtcore:description="Flight demo"/>
+</class:abapClass>`;
+      const result = parseClassMetadata(xml);
+      expect(result.package).toBe('ZFLIGHT');
+    });
+
+    it('maps category codes to human-readable strings', () => {
+      const makeXml = (cat: string) => `<?xml version="1.0"?>
+<class:abapClass adtcore:name="ZCL_CAT" adtcore:description="Cat" adtcore:language="EN"
+    class:category="${cat}" class:fixPointArithmetic="true"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+</class:abapClass>`;
+
+      expect(parseClassMetadata(makeXml('00')).category).toBe('generalObjectType');
+      expect(parseClassMetadata(makeXml('01')).category).toBe('exception');
+      expect(parseClassMetadata(makeXml('40')).category).toBe('exitClass');
+      expect(parseClassMetadata(makeXml('41')).category).toBe('testClass');
+    });
+
+    it('passes through unknown category codes as-is', () => {
+      const xml = `<?xml version="1.0"?>
+<class:abapClass adtcore:name="ZCL_UNK" adtcore:description="Unknown" adtcore:language="EN"
+    class:category="99" class:fixPointArithmetic="true"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+</class:abapClass>`;
+      expect(parseClassMetadata(xml).category).toBe('99');
+    });
+
+    it('handles empty/minimal XML gracefully', () => {
+      const xml = `<?xml version="1.0"?>
+<class:abapClass xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core"/>`;
+      const result = parseClassMetadata(xml);
+      expect(result.name).toBe('');
+      expect(result.description).toBe('');
+      expect(result.language).toBe('');
+      expect(result.fixPointArithmetic).toBe(false);
+      expect(result.package).toBe('');
     });
   });
 });

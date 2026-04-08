@@ -15,7 +15,14 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
-import type { AdtSearchResult, DataElementInfo, DomainInfo, SourceSearchResult, TransactionInfo } from './types.js';
+import type {
+  AdtSearchResult,
+  ClassMetadata,
+  DataElementInfo,
+  DomainInfo,
+  SourceSearchResult,
+  TransactionInfo,
+} from './types.js';
 
 /** Shared parser instance — configured for ADT XML conventions */
 const parser = new XMLParser({
@@ -499,6 +506,48 @@ export function findDeepNodes(obj: unknown, key: string): Array<Record<string, u
     if (found.length > 0) return found;
   }
   return [];
+}
+
+/**
+ * Map ADT class category numeric codes to human-readable AFF enum strings.
+ *
+ * Category codes from SAP ADT `class:category` attribute:
+ * "00" = general, "40" = exit class, "01" = exception, etc.
+ */
+const CLASS_CATEGORY_MAP: Record<string, string> = {
+  '00': 'generalObjectType',
+  '01': 'exception',
+  '02': 'persistentClass',
+  '04': 'businessObjectType',
+  '05': 'factoryCalendarClass',
+  '40': 'exitClass',
+  '41': 'testClass',
+};
+
+/**
+ * Parse class metadata XML from /sap/bc/adt/oo/classes/{name}.
+ *
+ * Classes without /source/main return structured XML with description,
+ * language version, category, fixPointArithmetic, and package info.
+ *
+ * Expected root: <class:abapClass> (after NS strip: abapClass).
+ */
+export function parseClassMetadata(xml: string): ClassMetadata {
+  const parsed = parseXml(xml);
+  const cls = (parsed.abapClass ?? {}) as Record<string, unknown>;
+  const pkgRef = (cls.packageRef ?? {}) as Record<string, unknown>;
+
+  const rawCategory = String(cls['@_category'] ?? '');
+
+  return {
+    name: String(cls['@_name'] ?? ''),
+    description: String(cls['@_description'] ?? ''),
+    language: String(cls['@_language'] ?? ''),
+    ...(cls['@_abapLanguageVersion'] != null ? { abapLanguageVersion: String(cls['@_abapLanguageVersion']) } : {}),
+    category: CLASS_CATEGORY_MAP[rawCategory] ?? rawCategory,
+    fixPointArithmetic: String(cls['@_fixPointArithmetic'] ?? 'false') === 'true',
+    package: String(pkgRef['@_name'] ?? ''),
+  };
 }
 
 /** Safely traverse a deep path and return an array at the end */

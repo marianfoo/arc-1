@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:final="true" class:visibility="public" class:category="00" class:sharedMemoryEnabled="false" class:fixPointArithmetic="true"
+    adtcore:responsible="DEVELOPER" adtcore:masterLanguage="EN" adtcore:masterSystem="NPL" adtcore:abapLanguageVersion="standard"
+    adtcore:name="ZCL_EXAMPLE" adtcore:type="CLAS/OC" adtcore:changedAt="2025-03-15T10:30:00Z" adtcore:version="active"
+    adtcore:changedBy="DEVELOPER" adtcore:createdBy="DEVELOPER" adtcore:description="Example test class" adtcore:language="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atom:link href="source/main" rel="http://www.sap.com/adt/relations/source" type="text/plain" title="Source" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <atom:link href="source/main/versions" rel="http://www.sap.com/adt/relations/versions" title="Historic versions" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/%24tmp" adtcore:type="DEVC/K" adtcore:name="$TMP" adtcore:description="Local Objects"/>
+</class:abapClass>

@@ -269,6 +269,29 @@ export interface DataElementInfo {
   package: string;
 }
 
+// ─── Class Metadata Types ───────────────────────────────────────────
+
+/** Class metadata from /sap/bc/adt/oo/classes/{name} (object endpoint, no /source/main) */
+export interface ClassMetadata {
+  name: string;
+  description: string;
+  language: string;
+  abapLanguageVersion?: string;
+  category: string;
+  fixPointArithmetic: boolean;
+  package: string;
+}
+
+/** Structured class response with metadata + decomposed includes (AFF-style) */
+export interface StructuredClassResponse {
+  metadata: ClassMetadata;
+  main: string;
+  testclasses: string | null;
+  definitions: string | null;
+  implementations: string | null;
+  macros: string | null;
+}
+
 /** Transaction code metadata */
 export interface TransactionInfo {
   code: string;
