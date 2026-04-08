@@ -25,7 +25,7 @@ const validatorCache = new Map<string, ValidateFunction>();
 /**
  * Returns the raw AFF JSON schema for a given ARC-1 type code, or null if not bundled.
  */
-export function getAffSchema(type: string): object | null {
+function getAffSchema(type: string): object | null {
   const affType = TYPE_MAP[type.toUpperCase()];
   if (!affType) return null;
   try {
@@ -35,34 +35,6 @@ export function getAffSchema(type: string): object | null {
   } catch {
     return null;
   }
-}
-
-/**
- * Validates metadata against the AFF JSON schema for the given ARC-1 type code.
- * Returns `{ valid: true }` if validation passes or no schema is available.
- * Returns `{ valid: false, errors: [...] }` with human-readable error messages on failure.
- */
-export function validateAffMetadata(
-  type: string,
-  metadata: Record<string, unknown>,
-): { valid: boolean; errors?: string[] } {
-  const affType = TYPE_MAP[type.toUpperCase()];
-  if (!affType) return { valid: true };
-
-  let validate = validatorCache.get(affType);
-  if (!validate) {
-    const schema = getAffSchema(type);
-    if (!schema) return { valid: true };
-    validate = ajv.compile(schema);
-    validatorCache.set(affType, validate);
-  }
-
-  const valid = validate(metadata);
-  if (valid) return { valid: true };
-
-  const errors = ((validate as unknown as { errors?: ErrorObject[] | null }).errors ?? []).map(formatError);
-
-  return { valid: false, errors };
 }
 
 /**

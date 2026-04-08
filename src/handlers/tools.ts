@@ -373,7 +373,11 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             items: {
               type: 'object',
               properties: {
-                type: { type: 'string', description: 'Object type (PROG, CLAS, INTF, DDLS, BDEF, SRVD, etc.)' },
+                type: {
+                  type: 'string',
+                  enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
+                  description: 'Object type',
+                },
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
                 description: { type: 'string', description: 'Object description (defaults to name if omitted)' },

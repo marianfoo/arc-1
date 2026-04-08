@@ -949,11 +949,6 @@ async function handleSAPWrite(
       const pkg = String(args.package ?? '$TMP');
       const description = String(args.description ?? name);
 
-      // Build type-specific creation XML body.
-      // SAP ADT requires the root element to match the object type —
-      // a generic objectReferences body returns 400 "System expected the element ...".
-      const body = buildCreateXml(type, name, pkg, description);
-
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
       if (!affResult.valid) {
@@ -961,6 +956,11 @@ async function handleSAPWrite(
           `AFF metadata validation failed for ${type} ${name}:\n- ${affResult.errors!.join('\n- ')}\n\nFix the metadata and retry.`,
         );
       }
+
+      // Build type-specific creation XML body.
+      // SAP ADT requires the root element to match the object type —
+      // a generic objectReferences body returns 400 "System expected the element ...".
+      const body = buildCreateXml(type, name, pkg, description);
 
       // Step 1: Create the object (metadata only)
       const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
