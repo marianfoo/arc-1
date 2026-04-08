@@ -1,0 +1,625 @@
+# Generate RAP OData UI Service
+
+Generate a complete RAP OData UI service from a natural language description of a business object. Creates the full artifact stack: database table, CDS views, behavior definitions, metadata extension, service definition, and behavior pool class.
+
+This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
+
+**v1 Guardrails** (matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
+
+## Input
+
+The user provides a natural language description of the business object (e.g., "a travel booking app with fields for agency, customer, destination, begin/end date, total price, currency, status"). Ask the user for:
+
+- **Business object description** (required) — what the entity represents and its key business fields
+- **Entity name prefix** (optional — default: auto-generate Z namespace, e.g., `ZTRAVEL`)
+- **Package** (optional — default: `$TMP`)
+- **Transport request** (optional — only if package is transportable)
+- **Draft enabled** (optional — default: yes on BTP, no on-prem)
+- **OData version** (optional — default: V4)
+
+If the user provides just a description, use defaults and proceed.
+
+## Step 1: Check System Capabilities
+
+Verify the SAP system supports RAP/CDS and detect the system type.
+
+```
+SAPManage(action="features")
+```
+
+Check for RAP/CDS availability. Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
+
+### BTP vs On-Prem Differences
+
+| Aspect | BTP (ABAP Cloud) | On-Prem (ABAP Platform) |
+|---|---|---|
+| Namespace | Z*/Y* only | Z*/Y* or customer namespace |
+| Language version | ABAP for Cloud Development (strict) | Standard ABAP or ABAP for Cloud |
+| Draft tables | Managed automatically by framework | Must be explicitly created |
+| OData version | V4 preferred | V2 or V4 |
+| Behavior pool | `ABSTRACT` class, ABAP Cloud only | `ABSTRACT` class, classic ABAP allowed |
+| Table entity | `DEFINE TABLE ENTITY` DDL syntax | Classic DDIC table (SE11) or table entity |
+
+## Step 2: Design the Data Model
+
+Based on the user's description, design the complete artifact stack. Follow SAP naming conventions:
+
+### Naming Conventions
+
+| Artifact | Pattern | Example |
+|---|---|---|
+| Database table (table entity) | `Z<ENTITY>_D` | `ZTRAVEL_D` |
+| Interface CDS view | `ZI_<Entity>` | `ZI_TRAVEL` |
+| Projection CDS view | `ZC_<Entity>` | `ZC_TRAVEL` |
+| Metadata extension | `ZC_<Entity>` | `ZC_TRAVEL` |
+| Interface behavior definition | `ZI_<Entity>` | `ZI_TRAVEL` |
+| Projection behavior definition | `ZC_<Entity>` | `ZC_TRAVEL` |
+| Service definition | `ZSD_<Entity>` | `ZSD_TRAVEL` |
+| Service binding | `ZSB_<Entity>_V4` | `ZSB_TRAVEL_V4` |
+| Behavior pool class | `ZBP_I_<Entity>` | `ZBP_I_TRAVEL` |
+| Draft table (if draft) | `Z<ENTITY>_DD` | `ZTRAVEL_DD` |
+
+### Field Design Rules
+
+Every entity gets these standard fields:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `key_uuid` | `sysuuid_x16` | UUID primary key (internal early numbering) |
+| `created_by` | `syuname` / `abp_creation_user` | Admin: created by |
+| `created_at` | `timestampl` / `abp_creation_tstmpl` | Admin: created at |
+| `last_changed_by` | `syuname` / `abp_locinst_lastchange_user` | Admin: last changed by |
+| `last_changed_at` | `timestampl` / `abp_locinst_lastchange_tstmpl` | Admin: last changed at (local instance) |
+| `local_last_changed_at` | `timestampl` / `abp_lastchange_tstmpl` | Admin: total ETag field |
+
+Add business fields based on user description. Choose appropriate ABAP types:
+- Text: `abap.char(N)` or `abap.sstring(N)`
+- Amount: `abap.curr(15,2)` with a currency code field (`abap.cuky(5)`)
+- Date: `abap.dats`
+- Status: `abap.char(1)` with fixed values
+- Quantity: `abap.quan(13,3)` with a unit field (`abap.unit(3)`)
+- Integer: `abap.int4`
+
+### Output to User
+
+Present the complete design as a table:
+
+```
+Proposed artifact stack for "Travel Booking":
+
+| # | Type | Name | Description |
+|---|------|------|-------------|
+| 1 | TABL | ZTRAVEL_D | Database table entity |
+| 2 | DDLS | ZI_TRAVEL | Interface CDS view entity |
+| 3 | BDEF | ZI_TRAVEL | Interface behavior definition |
+| 4 | DDLS | ZC_TRAVEL | Projection CDS view entity |
+| 5 | BDEF | ZC_TRAVEL | Projection behavior definition |
+| 6 | DDLX | ZC_TRAVEL | Metadata extension (UI annotations) |
+| 7 | SRVD | ZSD_TRAVEL | Service definition |
+| 8 | CLAS | ZBP_I_TRAVEL | Behavior pool class |
+| 9 | SRVB | ZSB_TRAVEL_V4 | Service binding (manual) |
+
+Fields: key_uuid, agency_id, customer_id, destination, begin_date, end_date,
+        total_price, currency_code, status, created_by, created_at,
+        last_changed_by, last_changed_at, local_last_changed_at
+```
+
+Ask the user: **"Should I proceed with this design? (yes / modify fields / change names)"**
+
+## Step 3: (Optional) Research RAP Patterns
+
+If mcp-sap-docs is available, fetch current RAP best practices:
+
+```
+search("RAP managed business object CDS behavior definition")
+```
+
+```
+search("RAP draft handling total ETag")
+```
+
+```
+search("CDS annotation Fiori Elements list report")
+```
+
+Use the returned documentation to inform correct annotation patterns, draft handling, and behavior definition syntax.
+
+## Step 4: Create Database Table
+
+Create the table entity via CDS DDL.
+
+```
+SAPWrite(action="create", type="DDLS", name="<table_name>", package="<package>", transport="<transport>", source="<ddl_source>")
+```
+
+### Table Entity DDL Template
+
+```cds
+@EndUserText.label : '<Entity description>'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table <table_name> {
+  key client            : abap.clnt not null;
+  key key_uuid          : sysuuid_x16 not null;
+  <business_field_1>    : <type>;
+  <business_field_2>    : <type>;
+  // ... more business fields
+  created_by            : syuname;
+  created_at            : timestampl;
+  last_changed_by       : syuname;
+  last_changed_at       : timestampl;
+  local_last_changed_at : timestampl;
+}
+```
+
+Activate the table:
+
+```
+SAPActivate(type="DDLS", name="<table_name>")
+```
+
+**Fallback**: If table entity creation fails (e.g., on older on-prem systems), instruct the user to create the table manually via SE11 or ADT, providing the field list and types.
+
+## Step 5: Create Interface CDS View
+
+```
+SAPWrite(action="create", type="DDLS", name="ZI_<entity>", package="<package>", transport="<transport>", source="<ddl_source>")
+```
+
+### Interface View DDL Template
+
+```cds
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: '<Entity description>'
+define root view entity ZI_<Entity>
+  as select from <table_name>
+{
+  key key_uuid              as KeyUuid,
+      <business_field_1>    as <CamelCaseAlias1>,
+      <business_field_2>    as <CamelCaseAlias2>,
+      // ... more business fields
+
+      @Semantics.amount.currencyCode: 'CurrencyCode'
+      total_price            as TotalPrice,
+      currency_code          as CurrencyCode,
+
+      @Semantics.user.createdBy: true
+      created_by             as CreatedBy,
+      @Semantics.systemDateTime.createdAt: true
+      created_at             as CreatedAt,
+      @Semantics.user.localInstanceLastChangedBy: true
+      last_changed_by        as LastChangedBy,
+      @Semantics.systemDateTime.localInstanceLastChangedAt: true
+      local_last_changed_at  as LocalLastChangedAt,
+      @Semantics.systemDateTime.lastChangedAt: true
+      last_changed_at        as LastChangedAt
+}
+```
+
+Activate:
+
+```
+SAPActivate(type="DDLS", name="ZI_<entity>")
+```
+
+## Step 6: Create Interface Behavior Definition
+
+```
+SAPWrite(action="create", type="BDEF", name="ZI_<entity>", package="<package>", transport="<transport>", source="<bdef_source>")
+```
+
+### With Draft
+
+```
+managed implementation in class ZBP_I_<Entity> unique;
+strict ( 2 );
+with draft;
+
+define behavior for ZI_<Entity> alias <Entity>
+persistent table <table_name>
+draft table <draft_table>
+etag master LocalLastChangedAt
+lock master total etag LastChangedAt
+authorization master ( instance )
+{
+  field ( readonly )
+    KeyUuid,
+    CreatedBy,
+    CreatedAt,
+    LastChangedBy,
+    LastChangedAt,
+    LocalLastChangedAt;
+
+  field ( numbering : managed )
+    KeyUuid;
+
+  create;
+  update;
+  delete;
+
+  draft action Resume;
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft determine action Prepare;
+}
+```
+
+### Without Draft
+
+```
+managed implementation in class ZBP_I_<Entity> unique;
+strict ( 2 );
+
+define behavior for ZI_<Entity> alias <Entity>
+persistent table <table_name>
+etag master LocalLastChangedAt
+lock master
+authorization master ( instance )
+{
+  field ( readonly )
+    KeyUuid,
+    CreatedBy,
+    CreatedAt,
+    LastChangedBy,
+    LastChangedAt,
+    LocalLastChangedAt;
+
+  field ( numbering : managed )
+    KeyUuid;
+
+  create;
+  update;
+  delete;
+}
+```
+
+Activate:
+
+```
+SAPActivate(type="BDEF", name="ZI_<entity>")
+```
+
+## Step 7: Create Projection CDS View
+
+```
+SAPWrite(action="create", type="DDLS", name="ZC_<entity>", package="<package>", transport="<transport>", source="<ddl_source>")
+```
+
+### Projection View DDL Template
+
+```cds
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: '<Entity description> - Projection'
+@Metadata.allowExtensions: true
+@Search.searchable: true
+define root view entity ZC_<Entity>
+  provider contract transactional_query
+  as projection on ZI_<Entity>
+{
+  key KeyUuid,
+
+      @Search.defaultSearchElement: true
+      <BusinessField1>,
+      @Search.defaultSearchElement: true
+      <BusinessField2>,
+      // ... more business fields
+
+      TotalPrice,
+      CurrencyCode,
+
+      CreatedBy,
+      CreatedAt,
+      LastChangedBy,
+      LastChangedAt,
+      LocalLastChangedAt
+}
+```
+
+Mark the most important business fields (typically name, ID, description) with `@Search.defaultSearchElement: true`.
+
+Activate:
+
+```
+SAPActivate(type="DDLS", name="ZC_<entity>")
+```
+
+## Step 8: Create Projection Behavior Definition
+
+```
+SAPWrite(action="create", type="BDEF", name="ZC_<entity>", package="<package>", transport="<transport>", source="<bdef_source>")
+```
+
+### With Draft
+
+```
+projection;
+strict ( 2 );
+use draft;
+
+define behavior for ZC_<Entity> alias <Entity>
+{
+  use create;
+  use update;
+  use delete;
+
+  use action Resume;
+  use action Edit;
+  use action Activate;
+  use action Discard;
+  use action Prepare;
+}
+```
+
+### Without Draft
+
+```
+projection;
+strict ( 2 );
+
+define behavior for ZC_<Entity> alias <Entity>
+{
+  use create;
+  use update;
+  use delete;
+}
+```
+
+Activate:
+
+```
+SAPActivate(type="BDEF", name="ZC_<entity>")
+```
+
+## Step 9: Create Metadata Extension (DDLX)
+
+```
+SAPWrite(action="create", type="DDLX", name="ZC_<entity>", package="<package>", transport="<transport>", source="<ddlx_source>")
+```
+
+### Metadata Extension Template
+
+```cds
+@Metadata.layer: #CUSTOMER
+@UI: {
+  headerInfo: {
+    typeName: '<Entity Name>',
+    typeNamePlural: '<Entity Name Plural>',
+    title: { type: #STANDARD, value: '<MainBusinessField>' },
+    description: { type: #STANDARD, value: '<SecondaryField>' }
+  }
+}
+annotate view ZC_<Entity> with
+{
+  @UI.facet: [
+    {
+      id: 'idIdentification',
+      type: #IDENTIFICATION_REFERENCE,
+      label: 'General Information',
+      position: 10
+    }
+  ]
+
+  @UI.hidden: true
+  KeyUuid;
+
+  @UI: {
+    lineItem: [{ position: 10, importance: #HIGH }],
+    identification: [{ position: 10 }],
+    selectionField: [{ position: 10 }]
+  }
+  <BusinessField1>;
+
+  @UI: {
+    lineItem: [{ position: 20, importance: #HIGH }],
+    identification: [{ position: 20 }],
+    selectionField: [{ position: 20 }]
+  }
+  <BusinessField2>;
+
+  // ... more business fields with incrementing positions
+
+  @UI: {
+    lineItem: [{ position: 50, importance: #MEDIUM }],
+    identification: [{ position: 50 }]
+  }
+  TotalPrice;
+
+  @UI.hidden: true
+  CreatedBy;
+
+  @UI.hidden: true
+  CreatedAt;
+
+  @UI.hidden: true
+  LastChangedBy;
+
+  @UI.hidden: true
+  LastChangedAt;
+
+  @UI.hidden: true
+  LocalLastChangedAt;
+}
+```
+
+Position numbering: increment by 10. Assign `importance: #HIGH` to the most relevant business fields (shown in narrow screens), `#MEDIUM` for secondary fields. Add `@UI.selectionField` to fields the user would filter by.
+
+Activate:
+
+```
+SAPActivate(type="DDLX", name="ZC_<entity>")
+```
+
+## Step 10: Create Service Definition
+
+```
+SAPWrite(action="create", type="SRVD", name="ZSD_<entity>", package="<package>", transport="<transport>", source="<srvd_source>")
+```
+
+### Service Definition Template
+
+```cds
+@EndUserText.label: '<Entity description> Service'
+define service ZSD_<Entity> {
+  expose ZC_<Entity> as <Entity>;
+}
+```
+
+Activate:
+
+```
+SAPActivate(type="SRVD", name="ZSD_<entity>")
+```
+
+## Step 11: Batch Activate All Artifacts
+
+Activate all artifacts together to resolve cross-dependencies:
+
+```
+SAPActivate(objects=[
+  {type:"DDLS", name:"<table_name>"},
+  {type:"DDLS", name:"ZI_<entity>"},
+  {type:"BDEF", name:"ZI_<entity>"},
+  {type:"DDLS", name:"ZC_<entity>"},
+  {type:"BDEF", name:"ZC_<entity>"},
+  {type:"DDLX", name:"ZC_<entity>"},
+  {type:"SRVD", name:"ZSD_<entity>"}
+])
+```
+
+If batch activation fails, activate sequentially in dependency order:
+1. Table entity
+2. Interface CDS view
+3. Interface behavior definition
+4. Projection CDS view
+5. Projection behavior definition
+6. Metadata extension
+7. Service definition
+
+For any failing object, run syntax check to identify the issue:
+
+```
+SAPDiagnose(action="syntax", type="<type>", name="<name>")
+```
+
+## Step 12: Create Behavior Pool Class
+
+```
+SAPWrite(action="create", type="CLAS", name="ZBP_I_<entity>", package="<package>", transport="<transport>", source="<class_source>")
+```
+
+### Behavior Pool Class Template
+
+```abap
+CLASS zbp_i_<entity> DEFINITION
+  PUBLIC ABSTRACT FINAL
+  FOR BEHAVIOR OF zi_<entity>.
+ENDCLASS.
+
+CLASS zbp_i_<entity> IMPLEMENTATION.
+ENDCLASS.
+```
+
+Activate:
+
+```
+SAPActivate(type="CLAS", name="ZBP_I_<entity>")
+```
+
+## Step 13: Service Binding
+
+ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
+
+**"The service binding must be created manually. In ADT:**
+
+1. **Right-click on the package** > New > Other ABAP Repository Object
+2. **Search for "Service Binding"** > Next
+3. **Name**: `ZSB_<ENTITY>_V4`
+4. **Description**: `<Entity> OData V4 Service`
+5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
+6. **Service Definition**: `ZSD_<ENTITY>`
+7. **Finish** and **Activate**
+8. Click **Publish** to register the service
+
+After publishing, verify with:
+```
+SAPRead(type="SRVB", name="ZSB_<entity>_V4")
+```
+
+## Step 14: Verify Complete Service
+
+Read back key artifacts and run final checks:
+
+```
+SAPRead(type="DDLS", name="ZI_<entity>")
+SAPRead(type="BDEF", name="ZI_<entity>")
+SAPRead(type="DDLS", name="ZC_<entity>")
+SAPDiagnose(action="syntax", type="CLAS", name="ZBP_I_<entity>")
+```
+
+Present a summary checklist:
+
+```
+RAP Service Generation Complete!
+
+Created artifacts:
+  [x] Database table entity: <table_name>
+  [x] Interface CDS view: ZI_<Entity>
+  [x] Interface behavior definition: ZI_<Entity>
+  [x] Projection CDS view: ZC_<Entity>
+  [x] Projection behavior definition: ZC_<Entity>
+  [x] Metadata extension: ZC_<Entity>
+  [x] Service definition: ZSD_<Entity>
+  [x] Behavior pool class: ZBP_I_<Entity>
+  [ ] Service binding: ZSB_<Entity>_V4 (create manually — see Step 13)
+
+Next steps:
+  - Create the service binding and publish it
+  - Add validations and determinations (use generate-rap-logic skill)
+  - Add value helps for business fields
+  - Add access control (DCLS)
+  - Add custom actions if needed
+  - Generate unit tests (use generate-abap-unit-test skill)
+```
+
+## Error Handling
+
+### Common Issues and Fixes
+
+| Error | Cause | Fix |
+|---|---|---|
+| Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
+| Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 11 fallback) |
+| Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
+| Field mapping incomplete | BDEF field names don't match CDS aliases | Verify CDS field aliases match BDEF field references exactly |
+| ETag field not found | `LocalLastChangedAt` missing or misnamed | Verify admin fields exist in CDS view with correct aliases |
+| Behavior pool not found | Class name doesn't match BDEF `implementation in class` | Ensure class name in BDEF matches the created class exactly |
+| BDEF creation fails | Generic XML template issue | Try creating with minimal source, then update with full source |
+| Lint blocks write | Generated code has lint warnings | Review lint findings, adjust code patterns to pass lint rules |
+| Table entity creation not supported | Older on-prem system | Create table via SE11 manually, provide field list |
+
+## Notes
+
+### BTP vs On-Prem Summary
+
+- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables auto-managed by framework, V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax.
+- **On-Prem**: More namespace flexibility, classic ABAP allowed in behavior pool (not recommended), explicit draft table creation may be needed, V2 or V4, `strict` level depends on release.
+
+### What This Skill Does NOT Do (v1)
+
+- **Compositions / child entities**: No parent-child relationships. Use this skill for the root entity, then manually add compositions.
+- **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
+- **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
+- **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
+- **Access control (DCLS)**: No authorization objects. Add manually.
+- **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
+
+### When to Use This Skill
+
+- When starting a new RAP application from scratch
+- When the user describes a business object in natural language
+- When prototyping a Fiori Elements app quickly
+- NOT for adding to an existing RAP service (use manual editing or generate-rap-logic)
+- NOT for complex data models with multiple entities (v1 is single root entity only)

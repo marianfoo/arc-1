@@ -149,7 +149,7 @@ Create the "Generate RAP OData UI Service from Scratch" skill. This skill orches
 
 Key constraints (v1 guardrails matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
 
-- [ ] Write the skill file `skills/generate-rap-service.md` with this structure:
+- [x] Write the skill file `skills/generate-rap-service.md` with this structure:
   - **Input**: Natural language description of the business object (required). Optional: entity name prefix (default: auto-generate Z namespace), package (default: `$TMP`), transport, draft enabled (default: yes on BTP), OData version (default: V4).
   - **Step 1: Check system capabilities** — `SAPManage(action="features")` to verify RAP/CDS is available and detect BTP vs on-prem. Include a BTP vs on-prem differences table (namespace, language version, draft tables, OData version).
   - **Step 2: Design the data model** — Based on user description, design the complete artifact stack with naming conventions: `Z<ENTITY>_D` (table), `ZI_<Entity>` (interface view), `ZC_<Entity>` (projection view), `ZC_<Entity>` (DDLX), `ZI_<Entity>` (interface BDEF), `ZC_<Entity>` (projection BDEF), `ZSD_<Entity>` (SRVD), `ZSB_<Entity>_V4` (SRVB), `ZBP_I_<Entity>` (behavior pool). Field design rules: UUID primary key (`sysuuid_x16`), admin fields (created_by/at, last_changed_by/at, local_last_changed_at), business fields from description. Present design to user for confirmation before proceeding.
@@ -168,8 +168,8 @@ Key constraints (v1 guardrails matching SAP Joule): managed scenario only, UUID 
   - **Error handling table**: Object already exists, activation error (dependency order), draft table not found, field mapping incomplete, ETag field not found, behavior pool not found, BDEF creation fails (generic XML body), lint blocks write.
   - **BTP vs on-prem notes**: BTP — Z*/Y* only, ABAP Cloud, V4, draft auto-managed. On-prem — more flexibility, V2 option, explicit draft tables.
   - **What this skill does NOT do** (v1): No compositions/child entities, no custom actions, no determinations/validations (use generate-rap-logic), no value helps, no access control (DCLS), no unmanaged/abstract BOs.
-- [ ] Copy `skills/generate-rap-service.md` to `.claude/commands/generate-rap-service.md`
-- [ ] Run `npm test` — all tests must pass
+- [x] Copy `skills/generate-rap-service.md` to `.claude/commands/generate-rap-service.md`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 5: Create generate-rap-logic.md skill
 
