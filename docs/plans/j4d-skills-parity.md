@@ -124,7 +124,7 @@ Key differences from CDS unit test skill:
 
 Create the "Custom Code Migration Assistant" skill. This skill runs ATC readiness checks, groups findings, explains them using mcp-sap-docs, and generates fix proposals. Read `skills/generate-cds-unit-test.md` for format reference.
 
-- [ ] Write the skill file `skills/migrate-custom-code.md` with this structure:
+- [x] Write the skill file `skills/migrate-custom-code.md` with this structure:
   - **Input**: Object name and type (PROG, CLAS, FUNC, FUGR), OR package name (to check multiple objects). Optional: target release variant (e.g., "S4HANA_2023"), scope ("explain only" vs "explain and fix").
   - **Step 1: Run ATC readiness check** — `SAPDiagnose(action="atc", type="<type>", name="<name>", variant="<variant>")`. If no variant specified, run default ATC first, then suggest readiness variant if available. If checking a package: use `SAPSearch(query="<package>*")` to find all objects, then run ATC on each.
   - **Step 2: Group and prioritize findings** — Group by: (a) priority (1=error, 2=warning, 3=info), (b) check category (deprecated API, syntax change, semantic change, performance), (c) affected object. Deduplicate findings with same checkTitle. Present summary table: `| Priority | Check | Count | Affected Objects |`
@@ -136,8 +136,8 @@ Create the "Custom Code Migration Assistant" skill. This skill runs ATC readines
   - **BTP vs on-prem notes**: BTP has limited ATC variants (cloud readiness only), on-prem has full S/4HANA readiness variants (2020-2023+). BTP objects already use ABAP Cloud — migration focus is different (deprecated released APIs vs classic ABAP).
   - **Common migration patterns table**: `CALL FUNCTION → class method`, `SELECT...ENDSELECT → SELECT INTO TABLE`, `MOVE-CORRESPONDING → CORRESPONDING #()`, `READ TABLE WITH KEY → line_exists() / VALUE #()`, `FORM/PERFORM → method`, `DB view → CDS view`
   - **What this skill does NOT do**: No transport management (user handles), no mass migration (one object/package at a time), no custom ATC variant creation
-- [ ] Copy `skills/migrate-custom-code.md` to `.claude/commands/migrate-custom-code.md`
-- [ ] Run `npm test` — all tests must pass
+- [x] Copy `skills/migrate-custom-code.md` to `.claude/commands/migrate-custom-code.md`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 4: Create generate-rap-service.md skill
 
