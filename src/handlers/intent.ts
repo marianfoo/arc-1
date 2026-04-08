@@ -1060,13 +1060,7 @@ async function handleSAPWrite(
         }
 
         try {
-          // Step 1: Create the object
-          const objUrl = objectUrlForType(objType, objName);
-          const createUrl = objUrl.replace(/\/[^/]+$/, '');
-          const body = buildCreateXml(objType, objName, pkg, objDescription);
-          await createObject(client.http, client.safety, createUrl, body, 'application/xml', transport);
-
-          // Step 2: Write source if provided
+          // Pre-validate source with lint BEFORE creating the object to avoid orphaned objects
           if (objSource) {
             const lintWarnings = runPreWriteLint(objSource, objType, objName, config);
             if (lintWarnings.blocked) {
@@ -1078,6 +1072,16 @@ async function handleSAPWrite(
               });
               break;
             }
+          }
+
+          // Step 1: Create the object
+          const objUrl = objectUrlForType(objType, objName);
+          const createUrl = objUrl.replace(/\/[^/]+$/, '');
+          const body = buildCreateXml(objType, objName, pkg, objDescription);
+          await createObject(client.http, client.safety, createUrl, body, 'application/xml', transport);
+
+          // Step 2: Write source if provided
+          if (objSource) {
             const srcUrl = sourceUrlForType(objType, objName);
             await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, transport);
           }

@@ -101,10 +101,12 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `create`, `update`, `delete`, or `batch_create` |
+| `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
 | `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
-| `source` | string | No | ABAP source code (for create/update) |
+| `source` | string | No | ABAP source code (for create/update/edit_method) |
+| `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
+| `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
