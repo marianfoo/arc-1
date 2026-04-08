@@ -375,7 +375,7 @@ NODE_EXTRA_CA_CERTS=/path/to/internal-ca.crt arc1 --url https://sap-host:443 ...
 | `--api-key` | `ARC1_API_KEY` | Single API key (full scopes) |
 | `--api-keys` | `ARC1_API_KEYS` | Multiple API keys with profiles (`key:profile,...`) |
 | `--oidc-issuer` | `SAP_OIDC_ISSUER` | OIDC issuer URL |
-| `--oidc-audience` | `SAP_OIDC_AUDIENCE` | Expected token audience |
+| `--oidc-audience` | `SAP_OIDC_AUDIENCE` | Expected token audience (**required** when `--oidc-issuer` is set) |
 | `--xsuaa-auth` | `SAP_XSUAA_AUTH` | Enable XSUAA OAuth proxy (`true`/`false`) |
 | `--profile` | `ARC1_PROFILE` | Safety profile shortcut (`viewer`, `developer`, etc.) |
 | **SAP Auth** | | |
@@ -411,6 +411,9 @@ These flags from older documentation do **not** exist in the current ARC-1 codeb
 - `--oidc-username-claim` / `--oidc-user-mapping` (username mapping)
 - `--pp-ca-key` / `--pp-ca-cert` / `--pp-cert-ttl` (local ephemeral cert generation)
 
+!!! warning "Audience is required"
+    When `--oidc-issuer` is set, `--oidc-audience` must also be set. ARC-1 will refuse to start without an explicit audience to prevent token confusion attacks.
+
 ---
 
 ## Troubleshooting
@@ -421,7 +424,8 @@ These flags from older documentation do **not** exist in the current ARC-1 codeb
 - The token was signed with a key that rotated. JWKS cache refreshes every hour.
 - Verify the `--oidc-issuer` URL is correct (must match the `iss` claim)
 
-**"JWT audience mismatch"**
+**"JWT audience mismatch"** or **"OIDC audience is required"**
+- `SAP_OIDC_AUDIENCE` is mandatory when `SAP_OIDC_ISSUER` is set — ARC-1 will not start without it
 - For Entra ID v2.0 tokens (`requestedAccessTokenVersion: 2`), the `aud` claim is the raw client ID GUID
 - For Entra ID v1.0 tokens (default), the `aud` claim is `api://{client-id}`
 - Set `SAP_OIDC_AUDIENCE` to match what your tokens actually contain

@@ -268,12 +268,14 @@ Without this flag, ARC-1 auto-detects the system type on the first `SAPManage pr
    - `uaa.url` — The XSUAA token endpoint
    - `uaa.clientid` / `uaa.clientsecret` — OAuth client credentials
 
-2. **OAuth Authorization Code flow**:
-   - ARC-1 starts a local callback server on localhost
-   - Opens the browser to `{uaa.url}/oauth/authorize?client_id=...&redirect_uri=...`
+2. **OAuth Authorization Code flow with PKCE**:
+   - ARC-1 starts a local callback server bound to `localhost` only (not `0.0.0.0`)
+   - Generates a PKCE code verifier/challenge and a random `state` parameter for CSRF protection
+   - Opens the browser to `{uaa.url}/oauth/authorize?client_id=...&redirect_uri=...&code_challenge=...&state=...`
    - User authenticates in the browser
-   - Browser redirects to callback with authorization code
-   - ARC-1 exchanges code for JWT access token + refresh token
+   - Browser redirects to callback with authorization code; ARC-1 verifies the `state` parameter matches
+   - ARC-1 exchanges code + PKCE code verifier for JWT access token + refresh token
+   - No user action is required for these security enhancements — they are applied automatically
 
 3. **Bearer token auth**: All ADT API requests use `Authorization: Bearer <token>` instead of Basic Auth. CSRF token handling and cookie management work identically to on-premise.
 

@@ -204,6 +204,14 @@ applications:
 
 ---
 
+## Security Hardening
+
+For a comprehensive security hardening checklist covering TLS, header validation, token handling, and production lockdown, see the [Security Guide](security-guide.md).
+
+If you deploy ARC-1 behind a reverse proxy (nginx, Envoy, etc.) outside of Cloud Foundry, ensure the proxy strips or sanitizes inbound `X-Forwarded-*` and `Forwarded` headers before forwarding to ARC-1. Unsanitized forwarded headers can lead to SSRF or authentication bypass if ARC-1 or downstream services trust them for request routing.
+
+---
+
 ## Key Files Reference
 
 | File | Purpose | Customize? |

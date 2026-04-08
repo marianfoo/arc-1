@@ -261,6 +261,38 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ---
 
+### SEC-08: OAuth Security Hardening (RFC 9700 Compliance)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🔴 P0 |
+| **Effort** | M (3–5 days) |
+| **Risk** | Low — security improvements only, no breaking changes |
+| **Usefulness** | Critical — closes RFC 9700 compliance gaps in OAuth flows |
+| **Status** | ✅ Complete (2026-04-08) |
+
+**Implemented (2026-04-08):**
+
+Based on independent security review against RFC 9700 (reports/2026-04-08-001-oauth-security-review-verification.md):
+
+- **F-01 (High):** Added `state` + PKCE (S256) to BTP browser OAuth flow — prevents authorization code injection and login CSRF
+- **F-02 (High):** Bound OAuth callback server to `127.0.0.1` — prevents network-adjacent callback interception
+- **F-04 (High):** Made `SAP_OIDC_AUDIENCE` mandatory when `SAP_OIDC_ISSUER` is set — prevents cross-service token confusion
+- **F-10 (Medium):** HTML-escaped `error_description` in callback + added `Content-Security-Policy: default-src 'none'` headers
+- **F-07 (Medium):** Replaced `exec()` with `execFile()` in browser opener — eliminates shell injection surface
+- **F-05 (Medium):** Added `revokeToken` override to `XsuaaProxyOAuthProvider` — uses correct XSUAA credentials
+- **F-06 (Medium):** Added redirect URI policy, 100-client cap, and 24h TTL to DCR `InMemoryClientStore`
+- **F-08 (Low):** Added `requiredClaims: ['exp']` and configurable `SAP_OIDC_CLOCK_TOLERANCE` for JWT validation
+- **Config validation:** `ppStrict=true` without `ppEnabled=true` now fails at startup
+
+**Files:**
+- `src/adt/oauth.ts` — state, PKCE, loopback binding, HTML escaping, execFile
+- `src/server/http.ts` — requiredClaims, clockTolerance
+- `src/server/xsuaa.ts` — revokeToken, DCR validation
+- `src/server/config.ts` — startup validation (OIDC audience, PP strict)
+- `docs/security-guide.md` — NEW consolidated security guide for operators
+
+---
+
 ## 🔧 Features & Tools
 
 ### FEAT-01: Where-Used Analysis (Usage References)

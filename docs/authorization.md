@@ -59,7 +59,7 @@ Some scopes automatically include others:
 - **`write`** implies **`read`** — a developer who can write can also read
 - **`sql`** implies **`data`** — a user who can run freestyle SQL can also preview tables
 
-This means you never need to assign both `write` and `read` to the same user. Assigning `write` is sufficient.
+This means you never need to assign both `write` and `read` to the same user. Assigning `write` is sufficient. These implications are enforced at the scope-check layer — a user with only `write` can call read tools without an explicit `read` scope, and a user with only `sql` can preview named tables without an explicit `data` scope. For production hardening guidance on scope assignment and safety config, see the [Security Guide](security-guide.md).
 
 ### Two Dimensions: Objects vs Data
 

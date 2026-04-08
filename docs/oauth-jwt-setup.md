@@ -97,6 +97,8 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
 
 ### Start arc1 with OIDC Validation
 
+> **`SAP_OIDC_AUDIENCE` is mandatory.** When `--oidc-issuer` is set, `--oidc-audience` must also be provided. ARC-1 will refuse to start without an explicit audience to prevent token confusion attacks.
+
 ```bash
 arc1 --url https://sap.example.com:44300 \
     --user SAP_SERVICE_USER \
@@ -117,6 +119,7 @@ export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
 export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
 export SAP_OIDC_AUDIENCE='{client-id-guid}'
+export SAP_OIDC_CLOCK_TOLERANCE='5'                  # seconds, optional (default: jose library 60s)
 ```
 
 > **Note:** `SAP_OIDC_AUDIENCE` must match the exact `aud` claim in your tokens. For Entra ID v2 access tokens, this is typically the raw client ID GUID. Validate with a real token from your tenant.
@@ -251,9 +254,10 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 - JWT signatures are cryptographically verified via JWKS
 - JWKS keys are cached for 1 hour (auto-refresh)
-- Tokens must have correct issuer AND audience
+- Tokens must have correct issuer AND audience (`SAP_OIDC_AUDIENCE` is mandatory)
 - ARC-1 never sees user passwords (IdP handles login)
 - SAP still uses a shared service account (for per-user SAP auth, add Phase 3)
+- If your environment has clock drift between the IdP and ARC-1 server, set `SAP_OIDC_CLOCK_TOLERANCE` (in seconds) to allow a grace period on token `exp`/`nbf` checks
 
 ## References
 

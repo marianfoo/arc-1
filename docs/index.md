@@ -147,6 +147,7 @@ arc1 --allowed-ops "RSQ"                      # whitelist operations
 | [docker.md](docker.md) | Full Docker reference |
 | [btp-abap-environment.md](btp-abap-environment.md) | **BTP ABAP Environment** — direct connection via service key + OAuth |
 | [enterprise-auth.md](enterprise-auth.md) | Enterprise authentication (all methods) |
+| [security-guide.md](security-guide.md) | Security hardening checklist for production deployments |
 | [cli-guide.md](cli-guide.md) | CLI commands and configuration |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial setup |
 | [roadmap.md](roadmap.md) | Planned features |

@@ -67,6 +67,9 @@ _Last updated: 2026-04-04_
 | MCP elicitation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (7 flows) |
 | Try-finally lock safety | ✅ | ✅ | ❌ | N/A | ✅ | ✅ (v4.5.0) | N/A | ⚠️ (abap-adt-api) |
 | MCP scope system (OAuth) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| PKCE (RFC 7636) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| OAuth RFC 9700 hardening | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| DCR policy (URI validation, caps) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ## 5. ABAP Read Operations
 
