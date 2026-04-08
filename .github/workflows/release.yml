@@ -16,8 +16,9 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
-        with:
-          release-type: node
+        # No release-type here — the action reads release-please-config.json,
+        # which sets bump-minor-pre-major: true so breaking changes only bump
+        # the minor version while the package is pre-1.0.0.
 
   publish-npm:
     needs: release-please
