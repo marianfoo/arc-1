@@ -80,13 +80,25 @@ How users receive scopes depends on the authentication method:
 
 | Auth Method | How Scopes Are Determined | Can Restrict Per User? |
 |-------------|--------------------------|----------------------|
-| **No auth** (stdio, local) | No scopes — safety config only | No |
-| **API Key** | Full access (`read`, `write`, `data`, `sql`, `admin`) | No |
+| **No auth** (stdio, local) | No scopes — [safety config](#safety-config-the-server-level-ceiling) is the only control | No |
+| **API Key** | All scopes granted. Use safety config or profiles to restrict. | No (single shared key) |
 | **OIDC / JWT** | Extracted from JWT `scope` or `scp` claims | Yes (configure in IdP) |
 | **XSUAA** | Extracted from XSUAA token local scopes | Yes (via BTP role collections) |
+| **XSUAA + PP** | Scopes from XSUAA token, SAP identity from PP | Yes (scopes + SAP auth) |
 
-!!! warning "API keys grant full access"
-    API keys cannot be scoped. Every valid API key grants all permissions. For per-user access control, use OIDC or XSUAA authentication instead.
+### API Keys and Safety Config
+
+API keys grant all scopes, but the **server's safety config still applies as a hard ceiling**. This means you can effectively create restricted access by combining API keys with safety controls:
+
+```bash
+# Read-only server — API key users can only read, regardless of full scopes
+arc1 --transport http-streamable --api-key "$KEY" --profile viewer
+
+# Development server with no data access
+arc1 --transport http-streamable --api-key "$KEY" --profile developer
+```
+
+Currently ARC-1 supports a single API key. All users sharing that key get the same access level, determined by the server's safety config. For per-user access control, use OIDC or XSUAA instead.
 
 !!! note "OIDC tokens without scope claims"
     If an OIDC JWT contains no `scope` or `scp` claims, ARC-1 defaults to **read-only access** and logs a warning. Configure your OIDC provider to include ARC-1 scopes in tokens. See [OAuth / JWT Setup](oauth-jwt-setup.md) for provider-specific instructions.
@@ -217,6 +229,21 @@ Assign the appropriate combination to your shared SAP user. With Principal Propa
 
 ---
 
+## Auth Method Coexistence
+
+ARC-1 supports running multiple MCP client auth methods simultaneously. When XSUAA is enabled, all three methods are active with a fallback chain:
+
+1. **XSUAA** — tried first (BTP OAuth tokens)
+2. **OIDC** — tried second (external IdP tokens, e.g. Entra ID)
+3. **API Key** — tried last (shared secret)
+
+This means you can deploy on BTP with XSUAA for most users, while still accepting API keys for service accounts or CI/CD pipelines, and OIDC tokens from external identity providers. Each method extracts scopes differently, but all are subject to the same safety config ceiling.
+
+!!! note "Principal Propagation requires JWT tokens"
+    PP only works with XSUAA or OIDC tokens (JWTs), not API keys. API key requests always use the shared SAP user. If `SAP_PP_STRICT=true`, API key requests are rejected when PP is enabled — use XSUAA or OIDC instead.
+
+---
+
 ## Common Scenarios
 
 ### Scenario 1: Local Development
@@ -237,7 +264,15 @@ npx arc-1 --url http://sap:50000 --user SHARED_USER --password secret \
   --profile viewer
 ```
 
-All users share the same API key and get read-only access.
+All users share the same API key. The `--profile viewer` ensures everyone gets read-only access regardless of the full scopes the API key grants. You can run multiple instances with different profiles for different access levels:
+
+```bash
+# Read-only instance for reviewers (port 8080)
+arc1 --transport http-streamable --api-key "$KEY_VIEWERS" --profile viewer --http-addr 0.0.0.0:8080
+
+# Developer instance (port 8081)
+arc1 --transport http-streamable --api-key "$KEY_DEVS" --profile developer --http-addr 0.0.0.0:8081
+```
 
 ### Scenario 3: Multi-User with Per-User Scopes (XSUAA)
 
@@ -250,12 +285,42 @@ Each user's JWT carries their scopes. ARC-1 enforces them per-request.
 
 ### Scenario 4: Multi-User with SAP Identity (Principal Propagation)
 
-Deploy with PP enabled. Each MCP user maps to their SAP user:
-- ARC-1 scopes control tool-level access
-- SAP authorization controls object-level access
-- Audit trail shows the real SAP user, not a shared account
+PP gives each MCP user their own SAP identity, which is essential for audit trails and SAP-level authorization. But SAP developers typically have broad authorization in their SAP system (they need it for Eclipse/ADT). This creates a question: **how do you restrict what they can do through ARC-1 specifically?**
 
-See [Principal Propagation Setup](principal-propagation-setup.md) for configuration.
+The answer is that PP and XSUAA scopes work together — they are not alternatives:
+
+```
+XSUAA Token (with scopes: read, write)
+        │
+        ▼
+┌──────────────────────┐
+│  ARC-1 Scope Check   │  "Does this user have the 'write' scope?"
+│  (from XSUAA roles)  │  ← controlled by BTP role collections
+└──────┬───────────────┘
+       │  ✓ scope OK
+       ▼
+┌──────────────────────┐
+│  ARC-1 Safety Config │  "Is the server configured to allow writes?"
+│  (from server flags) │  ← controlled by admin
+└──────┬───────────────┘
+       │  ✓ safety OK
+       ▼
+┌──────────────────────┐
+│  SAP Authorization   │  "Does this SAP user have S_DEVELOP?"
+│  (per-user via PP)   │  ← controlled by SAP role admin
+└──────┬───────────────┘
+       │  ✓ SAP auth OK
+       ▼
+    Operation executes
+```
+
+This means you can:
+
+- Assign "ARC-1 Viewer" in BTP to a developer who has full SAP authorization — they can only read through ARC-1 even though they could write through Eclipse
+- Assign "ARC-1 Developer" but withhold `data`/`sql` scopes — the developer can modify code but cannot query production tables through ARC-1
+- Use the safety config as an additional server-wide ceiling on top of both
+
+PP is enabled alongside XSUAA — they are part of the same BTP deployment. See [Principal Propagation Setup](principal-propagation-setup.md) and [XSUAA Setup](xsuaa-setup.md) for configuration.
 
 ---
 
