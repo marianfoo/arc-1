@@ -30,7 +30,7 @@ npm test
 ```bash
 npx arc-1 --url http://your-sap:8000 \
   --user DEVELOPER --password secret --client 001 \
-  --transport http-streamable --port 8080 \
+  --transport http-streamable --http-addr 0.0.0.0:8080 \
   --api-key 'test-key-12345'
 ```
 
@@ -105,7 +105,7 @@ npm test
 ```bash
 npx arc-1 --url http://your-sap:8000 \
   --user DEVELOPER --password secret --client 001 \
-  --transport http-streamable --port 8080 \
+  --transport http-streamable --http-addr 0.0.0.0:8080 \
   --oidc-issuer 'https://your-idp.example.com' \
   --oidc-audience 'your-audience'
 ```
@@ -183,60 +183,37 @@ npm test
 ### Manual Integration Test
 
 **Prerequisites:**
-- Phase 2 (OIDC) configured and working
-- SAP system configured with STRUST, CERTRULE, ICM (see [Principal Propagation Setup](principal-propagation-setup.md))
+- Phase 2 (OIDC or XSUAA) configured and working
+- ARC-1 deployed on BTP CF with Destination + Connectivity services
+- Cloud Connector connected and configured for principal propagation
+- SAP system configured with CERTRULE / VUSREXTID (see [Principal Propagation Setup](principal-propagation-setup.md))
 
-**1. Generate test CA:**
-
-```bash
-openssl genrsa -out /tmp/test-ca.key 2048
-openssl req -new -x509 -key /tmp/test-ca.key -out /tmp/test-ca.crt -days 365 \
-  -subj "/CN=arc1-test-ca/O=Test/C=DE"
-```
-
-**2. Import CA cert into SAP STRUST** (see Phase 3 docs)
-
-**3. Configure CERTRULE** to map `CN=<username>` → SAP user
-
-**4. Start arc1 with PP:**
+**1. Configure ARC-1 with PP:**
 
 ```bash
-npx arc-1 --url https://your-sap:44300 \
-  --transport http-streamable --port 8080 \
-  --oidc-issuer 'https://your-idp.example.com' \
-  --oidc-audience 'your-audience' \
-  --pp-ca-key /tmp/test-ca.key \
-  --pp-ca-cert /tmp/test-ca.crt \
-  --pp-cert-ttl 5m \
-  --insecure
+SAP_BTP_DESTINATION=SAP_TRIAL \
+SAP_BTP_PP_DESTINATION=SAP_TRIAL_PP \
+SAP_PP_ENABLED=true
 ```
 
-**Note:** No `--user` or `--password` needed when PP is active.
+**2. Verify per-user identity in SAP:**
 
-**5. Authenticate and make a request:**
+Check in SAP transaction `SM20` (security audit log) or `SM04` (user sessions) that the request was executed as the mapped SAP user, not a technical account.
+
+**3. Check ARC-1 logs:**
 
 ```bash
-TOKEN=$(az account get-access-token --resource your-audience --query accessToken -o tsv)
-
-curl -s -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  http://localhost:8080/mcp \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"SAPRead","arguments":{"type":"SYSTEM"}},"id":1}'
-# Expected: Response showing SAP system info
+cf logs arc1-mcp-server --recent | grep -E "Principal propagation|per-user|BTP destination"
 ```
-
-**6. Verify per-user identity in SAP:**
-
-Check in SAP transaction `/nSM21` (system log) or `/nSM04` (user sessions) that the request was executed as the mapped SAP user, not a service account.
 
 ### Checklist
 
-- [ ] CA cert imported into SAP STRUST
-- [ ] CERTRULE mapping configured (CN → SAP User)
-- [ ] ICM parameter `icm/HTTPS/verify_client = 1` set
-- [ ] arc1 starts without errors with `--pp-ca-key` and `--pp-ca-cert`
-- [ ] Request with OIDC token uses ephemeral cert (check logs)
-- [ ] SAP logs show per-user identity (not service account)
+- [ ] BTP Destination with `PrincipalPropagation` authentication type configured
+- [ ] Cloud Connector principal propagation enabled
+- [ ] SAP certificate mapping (CERTRULE / VUSREXTID) configured
+- [ ] JWT-authenticated requests use per-user destination
+- [ ] SAP logs show per-user identity (not technical account)
+- [ ] Fallback behavior matches `SAP_PP_STRICT` setting
 
 ---
 

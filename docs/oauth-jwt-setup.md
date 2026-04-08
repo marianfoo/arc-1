@@ -104,7 +104,7 @@ arc1 --url https://sap.example.com:44300 \
     --transport http-streamable \
     --http-addr 0.0.0.0:8080 \
     --oidc-issuer 'https://login.microsoftonline.com/{tenant-id}/v2.0' \
-    --oidc-audience 'api://arc1-sap-connector'
+    --oidc-audience '{client-id-guid}'
 ```
 
 ### Environment Variables
@@ -116,24 +116,10 @@ export SAP_PASSWORD=ServicePassword123
 export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
 export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
-export SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
-export SAP_OIDC_USERNAME_CLAIM='preferred_username'  # default
+export SAP_OIDC_AUDIENCE='{client-id-guid}'
 ```
 
-### Username Mapping (Optional)
-
-If OIDC usernames don't match SAP usernames, create a mapping file:
-
-```yaml
-# oidc-user-mapping.yaml
-alice: ALICE_DEV
-bob: BOB_ADMIN
-carol@company.com: CAROL
-```
-
-```bash
-arc1 ... --oidc-user-mapping oidc-user-mapping.yaml
-```
+> **Note:** `SAP_OIDC_AUDIENCE` must match the exact `aud` claim in your tokens. For Entra ID v2 access tokens, this is typically the raw client ID GUID. Validate with a real token from your tenant.
 
 ## Client Configuration
 

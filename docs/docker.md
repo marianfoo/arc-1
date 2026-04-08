@@ -269,8 +269,6 @@ prefix. CLI flags map 1:1 to env vars:
 | `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | |
 | `--allow-transportable-edits` | `SAP_ALLOW_TRANSPORTABLE_EDITS` | `false` |
 | `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` |
-| `--transport-read-only` | `SAP_TRANSPORT_READ_ONLY` | `false` |
-| `--allowed-transports` | `SAP_ALLOWED_TRANSPORTS` | |
 | `--feature-abapgit` | `SAP_FEATURE_ABAPGIT` | `auto` |
 | `--feature-rap` | `SAP_FEATURE_RAP` | `auto` |
 | `--feature-amdp` | `SAP_FEATURE_AMDP` | `auto` |
@@ -279,17 +277,18 @@ prefix. CLI flags map 1:1 to env vars:
 | `--feature-hana` | `SAP_FEATURE_HANA` | `auto` |
 | `--transport` | `SAP_TRANSPORT` | `http-streamable` *(image default)* |
 | `--http-addr` | `SAP_HTTP_ADDR` | `0.0.0.0:8080` *(image default)* |
-| `--terminal-id` | `SAP_TERMINAL_ID` | |
 | `--verbose` | `SAP_VERBOSE` | `false` |
 | **MCP Client Auth** | | |
 | `--api-key` | `ARC1_API_KEY` | |
+| `--api-keys` | `ARC1_API_KEYS` | |
 | `--oidc-issuer` | `SAP_OIDC_ISSUER` | |
 | `--oidc-audience` | `SAP_OIDC_AUDIENCE` | |
-| `--oidc-username-claim` | `SAP_OIDC_USERNAME_CLAIM` | `preferred_username` |
-| `--oidc-user-mapping` | `SAP_OIDC_USER_MAPPING` | |
-| `--pp-ca-key` | `SAP_PP_CA_KEY` | |
-| `--pp-ca-cert` | `SAP_PP_CA_CERT` | |
-| `--pp-cert-ttl` | `SAP_PP_CERT_TTL` | `5m` |
+| `--xsuaa-auth` | `SAP_XSUAA_AUTH` | `false` |
+| `--pp-enabled` | `SAP_PP_ENABLED` | `false` |
+| `--pp-strict` | `SAP_PP_STRICT` | `false` |
+| `--profile` | `ARC1_PROFILE` | |
+| *(BTP destination)* | `SAP_BTP_DESTINATION` | |
+| *(BTP PP destination)* | `SAP_BTP_PP_DESTINATION` | |
 
 ---
 
@@ -317,12 +316,12 @@ When running arc1 as a shared server, protect it with API key or OAuth:
 
 # OAuth/OIDC JWT validation (enterprise)
 -e SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant}/v2.0' \
--e SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
+-e SAP_OIDC_AUDIENCE='<expected-aud-claim>'
 
-# Principal Propagation (per-user SAP auth, requires OIDC)
--e SAP_PP_CA_KEY=/secrets/ca.key \
--e SAP_PP_CA_CERT=/secrets/ca.crt \
--v /path/to/secrets:/secrets:ro
+# Principal Propagation (BTP Destination + Cloud Connector path)
+-e SAP_BTP_DESTINATION=SAP_TRIAL \
+-e SAP_BTP_PP_DESTINATION=SAP_TRIAL_PP \
+-e SAP_PP_ENABLED=true
 ```
 
 See the [Authentication guides](enterprise-auth.md) for detailed setup.
@@ -479,14 +478,6 @@ CTS transport tools are **disabled by default** to prevent accidental releases.
 ```bash
 # Enable transport tools
 -e SAP_ENABLE_TRANSPORTS=true
-
-# Enable but restrict to read-only (list, view — no create/release/delete)
--e SAP_ENABLE_TRANSPORTS=true
--e SAP_TRANSPORT_READ_ONLY=true
-
-# Enable and restrict to specific transports (wildcards OK)
--e SAP_ENABLE_TRANSPORTS=true
--e SAP_ALLOWED_TRANSPORTS="A4HK*"
 ```
 
 ---
@@ -522,21 +513,6 @@ Use `on` or `off` to skip the probe and force the behavior:
 
 Setting features to `off` reduces the number of registered MCP tools, which
 keeps the AI's tool list shorter and lowers token usage.
-
----
-
-### Debugger
-
-To share breakpoints with SAP GUI (cross-tool debugging), configure the same
-terminal ID that SAP GUI uses:
-
-```bash
--e SAP_TERMINAL_ID=D0C586D015974B75BFB2A306A4A13AEA
-```
-
-SAP GUI stores its terminal ID at:
-- **Windows:** Registry `HKCU\Software\SAP\ABAP Debugging\TerminalID`
-- **Linux/Mac:** `~/.SAP/ABAPDebugging/terminalId`
 
 ---
 

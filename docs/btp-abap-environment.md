@@ -16,7 +16,7 @@ If you don't have a BTP ABAP Environment instance yet, you can create one on the
 
 ### Prerequisites for Free Tier
 
-- A SAP BTP trial or pay-as-you-go account
+- A SAP BTP global account with free-tier eligible entitlements (trial or pay-as-you-go)
 - Cloud Foundry enabled in your subaccount (with an org and space)
 - The `abap` / `free` entitlement assigned to your subaccount
 
@@ -64,11 +64,11 @@ cf create-service abap free my-abap-instance -c params.json
 **Important notes:**
 - `admin_email` must be a valid email address (the one you use to log into BTP)
 - `sap_system_name` is a 3-character SID (e.g., `H01`, `DEV`, `Z01`)
-- Free tier is only available in certain regions (`eu10`, `us10`, `ap10`)
+- Free tier availability depends on your region and commercial model; check SAP Discovery Center and your subaccount entitlements for current region support
 - Only **one** free instance per global account
 - Provisioning takes **30-60 minutes** — check status with `cf service my-abap-instance`
-- Free tier instances are **stopped each night** — restart via Landscape Portal or BTP Cockpit
-- Free tier has a **90-day time limit**
+- Free tier instances may be **stopped periodically** — restart via Landscape Portal or BTP Cockpit
+- Check current free-tier limits (system sizing, expiry) in SAP Help before planning capacity
 
 ### Common Error: admin_email Validation
 
@@ -417,7 +417,7 @@ When `SAP_SYSTEM_TYPE=btp` is set (or auto-detected), tool definitions and behav
 ### Free tier provisioning fails
 
 - **Entitlement missing**: Assign `abap` / `free` in Global Account > Entitlements
-- **Region not supported**: Free tier is only in `eu10`, `us10`, `ap10`
+- **Region not supported**: Free plan may not be available in your region/commercial model
 - **Already have an instance**: Only one free instance per global account
 - **CF not enabled**: Enable Cloud Foundry in your subaccount first
 
