@@ -2174,6 +2174,92 @@ ENDCLASS.`;
     });
   });
 
+  // ─── AFF validation in SAPWrite ─────────────────────────────────────
+
+  describe('SAPWrite AFF validation', () => {
+    it('create with valid metadata proceeds normally', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        package: '$TMP',
+        description: 'Test class',
+        source: 'CLASS zcl_test DEFINITION PUBLIC.\nENDCLASS.\nCLASS zcl_test IMPLEMENTATION.\nENDCLASS.',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Created CLAS ZCL_TEST');
+    });
+
+    it('create with description > 60 chars fails AFF validation', async () => {
+      const longDesc = 'A'.repeat(61);
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        package: '$TMP',
+        description: longDesc,
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('AFF metadata validation failed');
+      expect(text).toContain('CLAS ZCL_TEST');
+    });
+
+    it('create for type without AFF schema skips validation', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'create',
+        type: 'INCL',
+        name: 'Z_TEST_INCL',
+        package: '$TMP',
+        description: 'A'.repeat(100), // Long description, but no AFF schema for INCL
+      });
+      // Should not fail due to AFF validation (INCL has no schema)
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('batch_create stops on first AFF validation failure', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const longDesc = 'A'.repeat(61);
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', description: 'Valid desc', source: 'REPORT zprog1.' },
+          { type: 'CLAS', name: 'ZCL_BAD', description: longDesc },
+          { type: 'PROG', name: 'ZPROG2', source: 'REPORT zprog2.' },
+        ],
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('ZPROG1');
+      expect(text).toContain('ZCL_BAD');
+      expect(text).toContain('AFF metadata validation failed');
+      // Third object should NOT appear (stopped after second fails)
+      expect(text).not.toContain('ZPROG2');
+    });
+
+    it('AFF validation errors include field path and details', async () => {
+      const longDesc = 'A'.repeat(71); // PROG maxLength is 70
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZPROG1',
+        package: '$TMP',
+        description: longDesc,
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      // Should mention the field path and constraint
+      expect(text).toContain('/header/description');
+      expect(text).toContain('Fix the metadata and retry');
+    });
+  });
+
   // ─── buildCreateXml ─────────────────────────────────────────────────
 
   describe('buildCreateXml', () => {

@@ -36,6 +36,7 @@ import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures 
 import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
+import { getAffSchema, validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
 import { extractCdsElements } from '../context/cds-deps.js';
 import { compressCdsContext, compressContext } from '../context/compressor.js';
@@ -948,6 +949,16 @@ async function handleSAPWrite(
       // a generic objectReferences body returns 400 "System expected the element ...".
       const body = buildCreateXml(type, name, pkg, description);
 
+      // AFF header validation (if schema available for this type)
+      if (getAffSchema(type)) {
+        const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
+        if (!affResult.valid) {
+          return errorResult(
+            `AFF metadata validation failed for ${type} ${name}:\n- ${affResult.errors!.join('\n- ')}\n\nFix the metadata and retry.`,
+          );
+        }
+      }
+
       // Step 1: Create the object (metadata only)
       const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
       const result = await createObject(client.http, client.safety, createUrl, body, 'application/xml', transport);
@@ -1037,6 +1048,20 @@ async function handleSAPWrite(
         const objName = String(obj.name ?? '');
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
+
+        // AFF header validation per object (if schema available)
+        if (getAffSchema(objType)) {
+          const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });
+          if (!affResult.valid) {
+            results.push({
+              type: objType,
+              name: objName,
+              status: 'failed',
+              error: `AFF metadata validation failed:\n- ${affResult.errors!.join('\n- ')}`,
+            });
+            break;
+          }
+        }
 
         try {
           // Step 1: Create the object

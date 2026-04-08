@@ -60,19 +60,56 @@ export function validateAffMetadata(
   const valid = validate(metadata);
   if (valid) return { valid: true };
 
+  const errors = ((validate as unknown as { errors?: ErrorObject[] | null }).errors ?? []).map(formatError);
+
+  return { valid: false, errors };
+}
+
+/**
+ * Validates only the header portion of AFF metadata for a given type.
+ * This is useful at create time when we only have description/language, not the full object metadata.
+ * Returns `{ valid: true }` if validation passes, no schema exists, or no header sub-schema is defined.
+ */
+export function validateAffHeader(
+  type: string,
+  header: Record<string, unknown>,
+): { valid: boolean; errors?: string[] } {
+  const affType = TYPE_MAP[type.toUpperCase()];
+  if (!affType) return { valid: true };
+
+  const cacheKey = `${affType}:header`;
+  let validate = validatorCache.get(cacheKey);
+  if (!validate) {
+    const schema = getAffSchema(type) as Record<string, unknown> | null;
+    if (!schema) return { valid: true };
+    const headerSchema = (schema.properties as Record<string, unknown> | undefined)?.header as object | undefined;
+    if (!headerSchema) return { valid: true };
+    validate = ajv.compile(headerSchema);
+    validatorCache.set(cacheKey, validate);
+  }
+
+  const valid = validate(header);
+  if (valid) return { valid: true };
+
   const errors = ((validate as unknown as { errors?: ErrorObject[] | null }).errors ?? []).map((err: ErrorObject) => {
-    const path = err.instancePath || '/';
-    const msg = err.message ?? 'validation error';
-    if (err.keyword === 'enum' && err.params && 'allowedValues' in err.params) {
-      return `${path}: ${msg}. Allowed values: ${(err.params.allowedValues as string[]).join(', ')}`;
-    }
-    if (err.keyword === 'additionalProperties' && err.params && 'additionalProperty' in err.params) {
-      return `${path}: unknown property "${err.params.additionalProperty}"`;
-    }
-    return `${path}: ${msg}`;
+    // Prefix with /header to match full-schema paths
+    const path = `/header${err.instancePath || ''}`;
+    return formatError({ ...err, instancePath: path });
   });
 
   return { valid: false, errors };
+}
+
+function formatError(err: ErrorObject): string {
+  const path = err.instancePath || '/';
+  const msg = err.message ?? 'validation error';
+  if (err.keyword === 'enum' && err.params && 'allowedValues' in err.params) {
+    return `${path}: ${msg}. Allowed values: ${(err.params.allowedValues as string[]).join(', ')}`;
+  }
+  if (err.keyword === 'additionalProperties' && err.params && 'additionalProperty' in err.params) {
+    return `${path}: unknown property "${err.params.additionalProperty}"`;
+  }
+  return `${path}: ${msg}`;
 }
 
 /**

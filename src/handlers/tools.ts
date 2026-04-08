@@ -361,6 +361,11 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             type: 'string',
             description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',
           },
+          description: {
+            type: 'string',
+            description:
+              'Object description for create action (defaults to name if omitted). Max 60 chars for most types.',
+          },
           package: { type: 'string', description: 'Package for new objects (default $TMP)' },
           transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
           objects: {
