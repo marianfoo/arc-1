@@ -179,7 +179,7 @@ Key constraints (v1 guardrails matching SAP Joule): managed scenario only, UUID 
 
 Create the "RAP Business Logic Prediction" skill. This skill reads a behavior definition, identifies empty determination/validation method stubs, and generates implementation code. Read `skills/generate-cds-unit-test.md` for format reference.
 
-- [ ] Write the skill file `skills/generate-rap-logic.md` with this structure:
+- [x] Write the skill file `skills/generate-rap-logic.md` with this structure:
   - **Input**: Behavior definition name (required, e.g., "ZI_TRAVEL"), specific determination/validation name (optional — if omitted, list all and let user choose). Optional: natural language description of desired behavior.
   - **Step 1: Read the RAP stack** — (a) `SAPRead(type="BDEF", name="<bdef>")` to get behavior definition source — parse to find: managed/unmanaged, determinations, validations, actions, draft status, entity aliases, persistent table name; (b) `SAPRead(type="DDLS", name="<interface_view>")` to understand data model and field types; (c) `SAPContext(type="DDLS", name="<interface_view>")` to get dependency context (underlying tables, associations); (d) Find the behavior pool class name from BDEF source (`implementation in class <name>`), then `SAPRead(type="CLAS", name="<bp_class>", method="*")` to list all methods and identify empty stubs.
   - **Step 2: Identify target methods** — Parse BDEF for determination/validation declarations. For each: extract trigger conditions (`on modify`, `on save`), trigger fields, and the method name. Check which methods in the behavior pool are empty stubs (body is just comments or blank). Present list: `| # | Type | Name | Trigger | Status |` where Status is "empty" or "implemented". Ask user which to implement.
@@ -191,8 +191,8 @@ Create the "RAP Business Logic Prediction" skill. This skill reads a behavior de
   - **Error handling table**: Method not found in behavior pool (check class name in BDEF), syntax error in generated code (common: wrong entity name in READ ENTITIES), activation fails (BDEF and class must be compatible), `FAILED`/`REPORTED` structure mismatch.
   - **BTP vs on-prem notes**: BTP requires ABAP Cloud only (`READ ENTITIES` not `SELECT`), strict mode enforced. On-prem: more flexible, can use classic ABAP in behavior pool (not recommended).
   - **What this skill does NOT do**: No custom actions (only determinations/validations), no side effects, no feature control, no authorization implementation. These can be added manually after generation.
-- [ ] Copy `skills/generate-rap-logic.md` to `.claude/commands/generate-rap-logic.md`
-- [ ] Run `npm test` — all tests must pass
+- [x] Copy `skills/generate-rap-logic.md` to `.claude/commands/generate-rap-logic.md`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 6: Update skills README with all new skills
 
