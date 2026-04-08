@@ -426,4 +426,134 @@ describe('AdtClient', () => {
       expect(source).toBeDefined();
     });
   });
+
+  describe('class metadata and structured read', () => {
+    const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:final="true" class:visibility="public" class:category="00" class:sharedMemoryEnabled="false" class:fixPointArithmetic="true"
+    adtcore:responsible="DEVELOPER" adtcore:masterLanguage="EN" adtcore:masterSystem="NPL" adtcore:abapLanguageVersion="standard"
+    adtcore:name="ZCL_EXAMPLE" adtcore:type="CLAS/OC" adtcore:changedAt="2025-03-15T10:30:00Z" adtcore:version="active"
+    adtcore:changedBy="DEVELOPER" adtcore:createdBy="DEVELOPER" adtcore:description="Example test class" adtcore:language="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atom:link href="source/main" rel="http://www.sap.com/adt/relations/source" type="text/plain" title="Source" xmlns:atom="http://www.w3.org/2005/Atom"/>
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/%24tmp" adtcore:type="DEVC/K" adtcore:name="$TMP" adtcore:description="Local Objects"/>
+</class:abapClass>`;
+
+    it('getClassMetadata makes GET request without /source/main', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, classMetadataXml));
+      const client = createClient();
+      await client.getClassMetadata('ZCL_EXAMPLE');
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ZCL_EXAMPLE'));
+      expect(urlUsed).toContain('/sap/bc/adt/oo/classes/ZCL_EXAMPLE');
+      expect(urlUsed).not.toContain('/source/main');
+    });
+
+    it('getClassMetadata passes through parsed metadata', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, classMetadataXml));
+      const client = createClient();
+      const metadata = await client.getClassMetadata('ZCL_EXAMPLE');
+      expect(metadata.name).toBe('ZCL_EXAMPLE');
+      expect(metadata.description).toBe('Example test class');
+      expect(metadata.language).toBe('EN');
+      expect(metadata.abapLanguageVersion).toBe('standard');
+      expect(metadata.category).toBe('generalObjectType');
+      expect(metadata.fixPointArithmetic).toBe(true);
+      expect(metadata.package).toBe('$TMP');
+    });
+
+    it('getClassMetadata sends Accept: application/xml header', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, classMetadataXml));
+      const client = createClient();
+      await client.getClassMetadata('ZCL_EXAMPLE');
+      const callIdx = mockFetch.mock.calls.findIndex((_: any, i: number) => {
+        const url = mockFetch.mock.calls[i]?.[0] as string;
+        return url.includes('ZCL_EXAMPLE') && !url.includes('/source/main');
+      });
+      expect(fetchHeaders(callIdx).Accept).toBe('application/xml');
+    });
+
+    it('getClassStructured fetches metadata + main + all includes', async () => {
+      mockFetch.mockReset();
+      // Each call returns a different response — metadata XML, then source for main + 4 includes
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, classMetadataXml)) // metadata
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS zcl_example DEFINITION.')) // main
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS zcl_example DEFINITION FOR TESTING.')) // testclasses
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS lcl_helper DEFINITION.')) // definitions
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS lcl_helper IMPLEMENTATION.')) // implementations
+        .mockResolvedValueOnce(mockResponse(200, 'DEFINE my_macro.')); // macros
+      const client = createClient();
+      const result = await client.getClassStructured('ZCL_EXAMPLE');
+      expect(result.metadata.name).toBe('ZCL_EXAMPLE');
+      expect(result.main).toBe('CLASS zcl_example DEFINITION.');
+      expect(result.testclasses).toBe('CLASS zcl_example DEFINITION FOR TESTING.');
+      expect(result.definitions).toBe('CLASS lcl_helper DEFINITION.');
+      expect(result.implementations).toBe('CLASS lcl_helper IMPLEMENTATION.');
+      expect(result.macros).toBe('DEFINE my_macro.');
+    });
+
+    it('getClassStructured sets null for 404 includes', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, classMetadataXml)) // metadata
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS zcl_example DEFINITION.')) // main
+        .mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/testclasses')) // testclasses 404
+        .mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/definitions')) // definitions 404
+        .mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/implementations')) // implementations 404
+        .mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/macros')); // macros 404
+      const client = createClient();
+      const result = await client.getClassStructured('ZCL_EXAMPLE');
+      expect(result.metadata.name).toBe('ZCL_EXAMPLE');
+      expect(result.main).toBe('CLASS zcl_example DEFINITION.');
+      expect(result.testclasses).toBeNull();
+      expect(result.definitions).toBeNull();
+      expect(result.implementations).toBeNull();
+      expect(result.macros).toBeNull();
+    });
+
+    it('getClassStructured re-throws non-404 errors', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, classMetadataXml)) // metadata
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS zcl_example DEFINITION.')) // main
+        .mockRejectedValueOnce(new AdtApiError('Server error', 500, '/includes/testclasses')) // 500 error
+        .mockResolvedValueOnce(mockResponse(200, '')) // definitions
+        .mockResolvedValueOnce(mockResponse(200, '')) // implementations
+        .mockResolvedValueOnce(mockResponse(200, '')); // macros
+      const client = createClient();
+      await expect(client.getClassStructured('ZCL_EXAMPLE')).rejects.toThrow(AdtApiError);
+    });
+
+    it('getClassStructured blocked when operation filter blocks Read', async () => {
+      const client = createClient({
+        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'S' }, // only Search allowed
+      });
+      await expect(client.getClassStructured('ZCL_EXAMPLE')).rejects.toThrow(AdtSafetyError);
+    });
+
+    it('getClassStructured makes parallel requests for includes', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, classMetadataXml))
+        .mockResolvedValueOnce(mockResponse(200, 'main source'))
+        .mockResolvedValueOnce(mockResponse(200, 'test source'))
+        .mockResolvedValueOnce(mockResponse(200, 'def source'))
+        .mockResolvedValueOnce(mockResponse(200, 'impl source'))
+        .mockResolvedValueOnce(mockResponse(200, 'macro source'));
+      const client = createClient();
+      await client.getClassStructured('ZCL_EXAMPLE');
+      // All 6 requests should be made (metadata + main + 4 includes)
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const classUrls = urls.filter((u) => u.includes('ZCL_EXAMPLE'));
+      expect(classUrls).toHaveLength(6);
+      // Check include URLs
+      expect(classUrls.some((u) => u.includes('/includes/testclasses'))).toBe(true);
+      expect(classUrls.some((u) => u.includes('/includes/definitions'))).toBe(true);
+      expect(classUrls.some((u) => u.includes('/includes/implementations'))).toBe(true);
+      expect(classUrls.some((u) => u.includes('/includes/macros'))).toBe(true);
+    });
+  });
 });

@@ -21,8 +21,17 @@ import { defaultAdtClientConfig } from './config.js';
 import { isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import type { AdtSearchResult, DataElementInfo, DomainInfo, SourceSearchResult, TransactionInfo } from './types.js';
+import type {
+  AdtSearchResult,
+  ClassMetadata,
+  DataElementInfo,
+  DomainInfo,
+  SourceSearchResult,
+  StructuredClassResponse,
+  TransactionInfo,
+} from './types.js';
 import {
+  parseClassMetadata,
   parseDataElementMetadata,
   parseDomainMetadata,
   parseFunctionGroup,
@@ -131,6 +140,49 @@ export class AdtClient {
       }
     }
     return parts.join('\n\n');
+  }
+
+  /** Get class metadata (description, language, category, etc.) from the object endpoint */
+  async getClassMetadata(name: string): Promise<ClassMetadata> {
+    checkOperation(this.safety, OperationType.Read, 'GetClassMetadata');
+    const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodeURIComponent(name)}`, {
+      Accept: 'application/xml',
+    });
+    return parseClassMetadata(resp.body);
+  }
+
+  /** Get structured class response with metadata + decomposed includes */
+  async getClassStructured(name: string): Promise<StructuredClassResponse> {
+    checkOperation(this.safety, OperationType.Read, 'GetClassStructured');
+    const encodedName = encodeURIComponent(name);
+
+    const fetchInclude = async (include: string): Promise<string | null> => {
+      try {
+        const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/includes/${include}`);
+        return resp.body;
+      } catch (err) {
+        if (isNotFoundError(err)) return null;
+        throw err;
+      }
+    };
+
+    const [metadata, mainResp, testclasses, definitions, implementations, macros] = await Promise.all([
+      this.getClassMetadata(name),
+      this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/source/main`),
+      fetchInclude('testclasses'),
+      fetchInclude('definitions'),
+      fetchInclude('implementations'),
+      fetchInclude('macros'),
+    ]);
+
+    return {
+      metadata,
+      main: mainResp.body,
+      testclasses,
+      definitions,
+      implementations,
+      macros,
+    };
   }
 
   /** Get interface source code */
