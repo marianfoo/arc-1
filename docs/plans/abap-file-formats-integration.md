@@ -212,10 +212,10 @@ This task updates all documentation artifacts to reflect the new AFF integration
 
 This task updates existing Claude Code skills to take advantage of the new AFF integration features.
 
-- [ ] Update `.claude/commands/explain-abap-code.md`: In Step 1 (Read target object), add guidance that for classes, the agent should use `SAPRead(type="CLAS", name="...", format="structured")` to get both metadata and decomposed source. This provides class description, category, and separates test code from production code automatically. Update the example to show the structured format call.
-- [ ] Update `.claude/commands/generate-abap-unit-test.md`: In Step 1d (Read existing tests), note that `SAPRead(type="CLAS", format="structured")` returns testclasses as a separate field, making it easier to analyze existing tests without parsing the full class source. The agent should prefer structured format for the initial class read.
-- [ ] Update `.claude/commands/generate-rap-service.md`: Add a note at the top of the creation section (Steps 4-13) that batch creation is available: `SAPWrite(action="batch_create", objects=[...], package="...", transport="...")` can create all RAP artifacts in a single call. Update the workflow to show the batch approach as the preferred method, with the sequential approach as a fallback. Include an example `objects` array for a typical RAP service (CDS view → projection → BDEF → service definition → metadata extension → behavior pool).
-- [ ] Run `npm test` — all tests must pass
+- [x] Update `.claude/commands/explain-abap-code.md`: In Step 1 (Read target object), add guidance that for classes, the agent should use `SAPRead(type="CLAS", name="...", format="structured")` to get both metadata and decomposed source. This provides class description, category, and separates test code from production code automatically. Update the example to show the structured format call.
+- [x] Update `.claude/commands/generate-abap-unit-test.md`: In Step 1d (Read existing tests), note that `SAPRead(type="CLAS", format="structured")` returns testclasses as a separate field, making it easier to analyze existing tests without parsing the full class source. The agent should prefer structured format for the initial class read.
+- [x] Update `.claude/commands/generate-rap-service.md`: Add a note at the top of the creation section (Steps 4-13) that batch creation is available: `SAPWrite(action="batch_create", objects=[...], package="...", transport="...")` can create all RAP artifacts in a single call. Update the workflow to show the batch approach as the preferred method, with the sequential approach as a fallback. Include an example `objects` array for a typical RAP service (CDS view → projection → BDEF → service definition → metadata extension → behavior pool).
+- [x] Run `npm test` — all tests must pass
 
 ### Task 10: Final verification
 

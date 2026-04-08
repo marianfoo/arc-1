@@ -21,6 +21,16 @@ Read the class, its methods, dependencies, and any existing tests.
 
 ### 1a. Read the full class source
 
+Prefer the structured format to get metadata and all includes (including existing tests) in one call:
+
+```
+SAPRead(type="CLAS", name="<class_name>", format="structured")
+```
+
+This returns JSON with metadata (description, category, package) and decomposed source (main, testclasses, definitions, implementations, macros). The `testclasses` field contains existing test code if any — useful for analyzing what's already covered without a separate fetch.
+
+Alternatively, for just the main source:
+
 ```
 SAPRead(type="CLAS", name="<class_name>")
 ```
@@ -53,6 +63,10 @@ SAPContext(type="CLAS", name="<class_name>", depth=2)
 ```
 
 ### 1d. (Optional) Read existing test classes
+
+If you used `format="structured"` in Step 1a, the `testclasses` field already contains existing test code (or null if none) — skip this step.
+
+Otherwise, fetch test classes separately:
 
 ```
 SAPRead(type="CLAS", name="<class_name>", include="testclasses")

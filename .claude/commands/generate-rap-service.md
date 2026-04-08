@@ -124,7 +124,28 @@ search("CDS annotation Fiori Elements list report")
 
 Use the returned documentation to inform correct annotation patterns, draft handling, and behavior definition syntax.
 
-## Step 4: Create Database Table
+## Batch Creation (Preferred)
+
+Instead of creating each artifact individually in Steps 4-13, you can use batch creation to create all RAP artifacts in a single tool call:
+
+```
+SAPWrite(action="batch_create", objects=[
+  {type: "DDLS", name: "<table_name>", description: "<Entity> Table", source: "<table_ddl>"},
+  {type: "DDLS", name: "ZI_<entity>", description: "<Entity> Interface View", source: "<interface_view_ddl>"},
+  {type: "DDLS", name: "ZC_<entity>", description: "<Entity> Projection View", source: "<projection_view_ddl>"},
+  {type: "BDEF", name: "ZI_<entity>", description: "<Entity> Interface Behavior", source: "<interface_bdef>"},
+  {type: "BDEF", name: "ZC_<entity>", description: "<Entity> Projection Behavior", source: "<projection_bdef>"},
+  {type: "DDLX", name: "ZC_<entity>", description: "<Entity> Metadata Extension", source: "<ddlx_source>"},
+  {type: "SRVD", name: "ZSD_<entity>", description: "<Entity> Service Definition", source: "<srvd_source>"},
+  {type: "CLAS", name: "ZBP_I_<entity>", description: "<Entity> Behavior Pool", source: "<class_source>"}
+], package="<package>", transport="<transport>")
+```
+
+Objects are created and activated in array order — put dependencies first (table before CDS views, CDS views before BDEFs, behavior pool before interface BDEF). The batch stops on the first failure and reports which objects succeeded and which failed.
+
+If batch creation fails, fall back to the sequential approach below (Steps 4-13).
+
+## Step 4: Create Database Table (Sequential Fallback)
 
 Create the table entity via CDS DDL.
 
