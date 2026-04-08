@@ -39,7 +39,7 @@ Start the MCP server. This is the default command when no subcommand is given.
 arc1
 
 # HTTP Streamable transport (for VS Code, Copilot Studio)
-arc1 --transport http-streamable --port 3000
+arc1 --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
 ### search
@@ -111,7 +111,7 @@ arc1 --transport http-streamable --api-key "my-secret-key"
 # OIDC authentication
 arc1 --transport http-streamable \
   --oidc-issuer "https://login.microsoftonline.com/..." \
-  --oidc-audience "api://arc1"
+  --oidc-audience "<expected-aud-claim>"
 
 # BTP Destination
 SAP_BTP_DESTINATION=SAP_TRIAL arc1

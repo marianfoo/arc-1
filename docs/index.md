@@ -99,7 +99,7 @@ Start arc1 as an HTTP server, then point your MCP client to it:
 
 ```bash
 SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \
-  npx arc-1 --transport http-streamable --port 3000
+  npx arc-1 --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
 Add to VS Code / Copilot MCP config:
