@@ -1,9 +1,9 @@
 /**
  * Zod v4 input schemas for all 11 MCP tools.
  *
- * These schemas serve as the single source of truth:
- * - Runtime validation via safeParse() in handleToolCall()
- * - JSON Schema generation via z.toJSONSchema() for MCP tool listings
+ * These schemas provide runtime validation via safeParse() in handleToolCall().
+ * JSON Schema generation via z.toJSONSchema() is planned for a future PR
+ * (currently, JSON Schema is still hand-written in tools.ts).
  *
  * BTP variants exclude types not available on BTP ABAP Environment.
  * Numeric fields use z.coerce.number() for MCP client compatibility

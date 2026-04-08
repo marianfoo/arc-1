@@ -237,8 +237,8 @@ handleToolCall (handlers/intent.ts)
   ▼
 ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
   │
-  ├─ 3. Safety check: checkOperation(safety, OperationType.Read, 'GetProgram')
-  ├─ 4. Package check: checkPackage(safety, packageName) (for writes)
+  ├─ 4. Safety check: checkOperation(safety, OperationType.Read, 'GetProgram')
+  ├─ 5. Package check: checkPackage(safety, packageName) (for writes)
   │
   ▼
 HTTP Request (adt/http.ts)
