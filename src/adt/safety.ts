@@ -168,19 +168,6 @@ function isTransportInWhitelist(config: SafetyConfig, transport: string): boolea
   return false;
 }
 
-/** Check if operations on a given transport are allowed */
-export function isTransportAllowed(config: SafetyConfig, transport: string): boolean {
-  if (!config.enableTransports) return false;
-  if (config.allowedTransports.length === 0) return true;
-  return isTransportInWhitelist(config, transport);
-}
-
-/** Check if transport write operations are allowed */
-export function isTransportWriteAllowed(config: SafetyConfig): boolean {
-  if (!config.enableTransports) return false;
-  return !config.transportReadOnly;
-}
-
 /** Check transport operation and throw AdtSafetyError if blocked */
 export function checkTransport(config: SafetyConfig, transport: string, opName: string, isWrite: boolean): void {
   // Require enableTransports for all transport operations
@@ -190,24 +177,12 @@ export function checkTransport(config: SafetyConfig, transport: string, opName: 
     );
   }
 
-  // For read operations, check transport whitelist
-  if (!isWrite) {
-    if (transport && transport !== '*' && config.allowedTransports.length > 0) {
-      if (!isTransportInWhitelist(config, transport)) {
-        throw new AdtSafetyError(
-          `Operation '${opName}' on transport '${transport}' is blocked by safety configuration (allowed: ${JSON.stringify(config.allowedTransports)})`,
-        );
-      }
-    }
-    return;
-  }
-
   // Check write permissions
-  if (config.transportReadOnly) {
+  if (isWrite && config.transportReadOnly) {
     throw new AdtSafetyError(`Transport write operation '${opName}' is blocked: transport read-only mode enabled`);
   }
 
-  // Check transport whitelist
+  // Check transport whitelist (applies to both read and write)
   if (transport && transport !== '*' && config.allowedTransports.length > 0) {
     if (!isTransportInWhitelist(config, transport)) {
       throw new AdtSafetyError(

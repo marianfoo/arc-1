@@ -9,8 +9,6 @@ import {
   describeSafety,
   isOperationAllowed,
   isPackageAllowed,
-  isTransportAllowed,
-  isTransportWriteAllowed,
   OperationType,
   type SafetyConfig,
   unrestrictedSafetyConfig,
@@ -186,42 +184,6 @@ describe('Safety System', () => {
     it('does not throw when package is allowed', () => {
       const cfg = config({ allowedPackages: ['$TMP'] });
       expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
-    });
-  });
-
-  describe('isTransportAllowed', () => {
-    it('returns false when transports are not enabled', () => {
-      const cfg = config({ enableTransports: false });
-      expect(isTransportAllowed(cfg, 'A4HK900110')).toBe(false);
-    });
-
-    it('allows all transports when enabled with empty whitelist', () => {
-      const cfg = config({ enableTransports: true });
-      expect(isTransportAllowed(cfg, 'A4HK900110')).toBe(true);
-    });
-
-    it('enforces transport whitelist', () => {
-      const cfg = config({ enableTransports: true, allowedTransports: ['A4HK*', 'DEV*'] });
-      expect(isTransportAllowed(cfg, 'A4HK900110')).toBe(true);
-      expect(isTransportAllowed(cfg, 'DEVK900001')).toBe(true);
-      expect(isTransportAllowed(cfg, 'PROD900001')).toBe(false);
-    });
-  });
-
-  describe('isTransportWriteAllowed', () => {
-    it('returns false when transports are not enabled', () => {
-      const cfg = config({ enableTransports: false });
-      expect(isTransportWriteAllowed(cfg)).toBe(false);
-    });
-
-    it('returns false when transport read-only', () => {
-      const cfg = config({ enableTransports: true, transportReadOnly: true });
-      expect(isTransportWriteAllowed(cfg)).toBe(false);
-    });
-
-    it('returns true when enabled and not read-only', () => {
-      const cfg = config({ enableTransports: true, transportReadOnly: false });
-      expect(isTransportWriteAllowed(cfg)).toBe(true);
     });
   });
 
