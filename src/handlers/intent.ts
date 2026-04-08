@@ -33,7 +33,7 @@ import {
 } from '../adt/diagnostics.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
 import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
-import { isOperationAllowed, OperationType } from '../adt/safety.js';
+import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
@@ -1019,8 +1019,88 @@ async function handleSAPWrite(
       cachingLayer?.invalidate(type, name);
       return textResult(`Deleted ${type} ${name}.`);
     }
+    case 'batch_create': {
+      const objects = args.objects as Array<Record<string, unknown>> | undefined;
+      if (!objects || !Array.isArray(objects) || objects.length === 0) {
+        return errorResult('"objects" array is required and must be non-empty for batch_create action.');
+      }
+
+      const pkg = String(args.package ?? '$TMP');
+
+      // Check package is allowed before starting any creates
+      checkPackage(client.safety, pkg);
+
+      const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
+
+      for (const obj of objects) {
+        const objType = String(obj.type ?? '');
+        const objName = String(obj.name ?? '');
+        const objSource = obj.source ? String(obj.source) : undefined;
+        const objDescription = String(obj.description ?? objName);
+
+        try {
+          // Step 1: Create the object
+          const objUrl = objectUrlForType(objType, objName);
+          const createUrl = objUrl.replace(/\/[^/]+$/, '');
+          const body = buildCreateXml(objType, objName, pkg, objDescription);
+          await createObject(client.http, client.safety, createUrl, body, 'application/xml', transport);
+
+          // Step 2: Write source if provided
+          if (objSource) {
+            const lintWarnings = runPreWriteLint(objSource, objType, objName, config);
+            if (lintWarnings.blocked) {
+              results.push({
+                type: objType,
+                name: objName,
+                status: 'failed',
+                error: `source rejected by lint: ${lintWarnings.result!.content[0].text}`,
+              });
+              break;
+            }
+            const srcUrl = sourceUrlForType(objType, objName);
+            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, transport);
+          }
+
+          // Step 3: Activate the object
+          const activationResult = await activate(client.http, client.safety, objectUrlForType(objType, objName));
+          if (!activationResult.success) {
+            results.push({
+              type: objType,
+              name: objName,
+              status: 'failed',
+              error: `activation failed: ${activationResult.messages.join('; ')}`,
+            });
+            break;
+          }
+
+          cachingLayer?.invalidate(objType, objName);
+          results.push({ type: objType, name: objName, status: 'success' });
+        } catch (err) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: err instanceof Error ? err.message : String(err),
+          });
+          break;
+        }
+      }
+
+      const summary = results
+        .map((r) => `${r.name} (${r.type}) ${r.status === 'success' ? '✓' : `✗ — ${r.error}`}`)
+        .join(', ');
+      const successCount = results.filter((r) => r.status === 'success').length;
+      const hasFailure = results.some((r) => r.status === 'failed');
+
+      if (hasFailure) {
+        return errorResult(`Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}`);
+      }
+      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}`);
+    }
     default:
-      return errorResult(`Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method`);
+      return errorResult(
+        `Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method, batch_create`,
+      );
   }
 }
 

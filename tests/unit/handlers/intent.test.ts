@@ -2010,6 +2010,170 @@ ENDCLASS.`;
     });
   });
 
+  // ─── SAPWrite batch_create ──────────────────────────────────────────
+
+  describe('SAPWrite batch_create', () => {
+    it('creates all objects in order', async () => {
+      // Mock: CSRF fetch, create POST, lock GET (for safeUpdateSource), update PUT, unlock POST, activation POST
+      // Use a simple mock that returns 200 for everything
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'mock-csrf-token' }));
+
+      // Disable lint to avoid CDS source being rejected by ABAP parser
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'DDLS', name: 'ZI_TEST', source: 'define root view entity ZI_TEST {}' },
+          { type: 'BDEF', name: 'ZI_TEST', source: 'managed implementation in class zbp_i_test;' },
+          { type: 'SRVD', name: 'ZSD_TEST', source: 'define service ZSD_TEST {}' },
+        ],
+      });
+
+      // Should mention all 3 objects in the summary
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('ZI_TEST (DDLS)');
+      expect(text).toContain('ZI_TEST (BDEF)');
+      expect(text).toContain('ZSD_TEST (SRVD)');
+      expect(text).toContain('3 objects');
+    });
+
+    it('stops on first failure and reports partial results', async () => {
+      let callCount = 0;
+      mockFetch.mockImplementation(() => {
+        callCount++;
+        // First few calls succeed (CSRF, create #1, lock, update, unlock, activate)
+        // Then fail on second object create
+        if (callCount <= 7) {
+          return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+        }
+        // Fail on subsequent calls (second object)
+        return Promise.resolve(mockResponse(500, 'Internal Server Error', { 'x-csrf-token': 'T' }));
+      });
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', source: "REPORT zprog1.\nWRITE: / 'hi'." },
+          { type: 'PROG', name: 'ZPROG2', source: "REPORT zprog2.\nWRITE: / 'hi'." },
+          { type: 'PROG', name: 'ZPROG3', source: "REPORT zprog3.\nWRITE: / 'hi'." },
+        ],
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      // Third object should NOT appear (stopped after second fails)
+      expect(text).not.toContain('ZPROG3');
+    });
+
+    it('returns error for empty objects array', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [],
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('non-empty');
+    });
+
+    it('respects read-only safety mode', async () => {
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' }],
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('blocked');
+    });
+
+    it('applies package filter', async () => {
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['ZALLOWED*'] },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'ZBLOCKED',
+        objects: [{ type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' }],
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('blocked');
+    });
+
+    it('activates each object after creation', async () => {
+      const fetchCalls: string[] = [];
+      mockFetch.mockImplementation((_url: string | URL, options?: { method?: string }) => {
+        const urlStr = typeof _url === 'string' ? _url : _url.toString();
+        fetchCalls.push(`${options?.method ?? 'GET'} ${urlStr}`);
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'PROG', name: 'ZPROG1' }],
+      });
+
+      // Should have an activation POST call
+      const activationCalls = fetchCalls.filter((c) => c.includes('activation'));
+      expect(activationCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('skips source update when no source provided', async () => {
+      const fetchCalls: string[] = [];
+      mockFetch.mockImplementation((_url: string | URL, options?: { method?: string }) => {
+        const urlStr = typeof _url === 'string' ? _url : _url.toString();
+        fetchCalls.push(`${options?.method ?? 'GET'} ${urlStr}`);
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'SRVD', name: 'ZSD_TEST' }],
+      });
+
+      // No PUT call for source update (only POST for create + POST for activation)
+      const putCalls = fetchCalls.filter((c) => c.startsWith('PUT'));
+      expect(putCalls.length).toBe(0);
+    });
+
+    it('invalidates cache for all created objects', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      // We can't directly test cache invalidation without a real caching layer,
+      // but we verify the batch completes successfully (invalidation is called per-object)
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', source: 'REPORT zprog2.' },
+        ],
+      });
+
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('2 objects');
+      expect(result.isError).toBeUndefined();
+    });
+  });
+
   // ─── buildCreateXml ─────────────────────────────────────────────────
 
   describe('buildCreateXml', () => {

@@ -186,13 +186,51 @@ describe('SAPWriteSchema', () => {
   });
 
   it('rejects missing required fields', () => {
-    expect(SAPWriteSchema.safeParse({ action: 'create' }).success).toBe(false);
+    // action is always required
     expect(SAPWriteSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST' }).success).toBe(false);
   });
 
   it('rejects invalid action', () => {
     const result = SAPWriteSchema.safeParse({ action: 'invalid', type: 'CLAS', name: 'ZCL_TEST' });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts batch_create action', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'batch_create',
+      package: '$TMP',
+      objects: [
+        { type: 'DDLS', name: 'ZI_TRAVEL', source: 'define view entity ZI_TRAVEL {}' },
+        { type: 'BDEF', name: 'ZI_TRAVEL' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('validates objects array structure', () => {
+    // Valid: objects with type and name
+    expect(
+      SAPWriteSchema.safeParse({
+        action: 'batch_create',
+        objects: [{ type: 'CLAS', name: 'ZCL_NEW', source: 'CLASS zcl_new.', description: 'New class' }],
+      }).success,
+    ).toBe(true);
+
+    // Invalid: object missing type
+    expect(
+      SAPWriteSchema.safeParse({
+        action: 'batch_create',
+        objects: [{ name: 'ZCL_NEW' }],
+      }).success,
+    ).toBe(false);
+
+    // Invalid: object missing name
+    expect(
+      SAPWriteSchema.safeParse({
+        action: 'batch_create',
+        objects: [{ type: 'CLAS' }],
+      }).success,
+    ).toBe(false);
   });
 });
 
