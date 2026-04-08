@@ -227,14 +227,14 @@ The ADT API requires type-specific XML root elements. All follow the same patter
 </type:element>
 ```
 
-- [ ] In `src/handlers/intent.ts`, find `buildCreateXml()` (starts at line ~697). Add `case 'DDLS':` before the `default:` returning XML with root element `<ddl:ddlSource xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources">` and `adtcore:type="DDLS/DF"`. Follow the exact pattern of `case 'CLAS':`.
-- [ ] Add `case 'BDEF':` returning XML with root element using namespace `http://www.sap.com/adt/bo/behaviordefinitions` and `adtcore:type="BDEF/BDO"`.
-- [ ] Add `case 'SRVD':` returning XML with namespace `http://www.sap.com/adt/ddic/srvd/sources` and `adtcore:type="SRVD/SRV"`.
-- [ ] Add `case 'DDLX':` returning XML with namespace `http://www.sap.com/adt/ddic/ddlx/sources` and `adtcore:type="DDLX/EX"`.
-- [ ] Fix the `default:` case's generic fallback to use `objectUrlForType(type, name)` instead of the hardcoded `/sap/bc/adt/programs/programs/` URI, so any future type gets the correct URL.
-- [ ] Add unit tests (~8 tests): Test `buildCreateXml` returns correct XML for each new type (DDLS, BDEF, SRVD, DDLX) — verify root element name, namespace, `adtcore:type` attribute, name attribute, package reference. Test the default fallback uses correct URL. Test existing PROG/CLAS/INTF templates still work unchanged.
-- [ ] Run `npm test` — all tests must pass
-- [ ] Run `npm run typecheck` — no errors
+- [x] In `src/handlers/intent.ts`, find `buildCreateXml()` (starts at line ~697). Add `case 'DDLS':` before the `default:` returning XML with root element `<ddl:ddlSource xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources">` and `adtcore:type="DDLS/DF"`. Follow the exact pattern of `case 'CLAS':`.
+- [x] Add `case 'BDEF':` returning XML with root element using namespace `http://www.sap.com/adt/bo/behaviordefinitions` and `adtcore:type="BDEF/BDO"`.
+- [x] Add `case 'SRVD':` returning XML with namespace `http://www.sap.com/adt/ddic/srvd/sources` and `adtcore:type="SRVD/SRV"`.
+- [x] Add `case 'DDLX':` returning XML with namespace `http://www.sap.com/adt/ddic/ddlx/sources` and `adtcore:type="DDLX/EX"`.
+- [x] Fix the `default:` case's generic fallback to use `objectUrlForType(type, name)` instead of the hardcoded `/sap/bc/adt/programs/programs/` URI, so any future type gets the correct URL.
+- [x] Add unit tests (~8 tests): Test `buildCreateXml` returns correct XML for each new type (DDLS, BDEF, SRVD, DDLX) — verify root element name, namespace, `adtcore:type` attribute, name attribute, package reference. Test the default fallback uses correct URL. Test existing PROG/CLAS/INTF templates still work unchanged.
+- [x] Run `npm test` — all tests must pass
+- [x] Run `npm run typecheck` — no errors
 
 ### Task 8: Improve SAPActivate batch description for RAP stack workflow
 

@@ -694,7 +694,7 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
  * Using a generic body (e.g. adtcore:objectReferences) returns 400:
  *   "System expected the element '{http://www.sap.com/adt/programs/programs}abapProgram'"
  */
-function buildCreateXml(type: string, name: string, pkg: string, description: string): string {
+export function buildCreateXml(type: string, name: string, pkg: string, description: string): string {
   switch (type) {
     case 'PROG':
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -744,11 +744,59 @@ function buildCreateXml(type: string, name: string, pkg: string, description: st
                      adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </include:abapInclude>`;
+    case 'DDLS':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<ddl:ddlSource xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources"
+               xmlns:adtcore="http://www.sap.com/adt/core"
+               adtcore:description="${escapeXml(description)}"
+               adtcore:name="${escapeXml(name)}"
+               adtcore:type="DDLS/DF"
+               adtcore:masterLanguage="EN"
+               adtcore:masterSystem="H00"
+               adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</ddl:ddlSource>`;
+    case 'BDEF':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<bdef:behaviorDefinition xmlns:bdef="http://www.sap.com/adt/bo/behaviordefinitions"
+                         xmlns:adtcore="http://www.sap.com/adt/core"
+                         adtcore:description="${escapeXml(description)}"
+                         adtcore:name="${escapeXml(name)}"
+                         adtcore:type="BDEF/BDO"
+                         adtcore:masterLanguage="EN"
+                         adtcore:masterSystem="H00"
+                         adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</bdef:behaviorDefinition>`;
+    case 'SRVD':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<srvd:srvdSource xmlns:srvd="http://www.sap.com/adt/ddic/srvd/sources"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="SRVD/SRV"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</srvd:srvdSource>`;
+    case 'DDLX':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<ddlx:ddlxSource xmlns:ddlx="http://www.sap.com/adt/ddic/ddlx/sources"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="DDLX/EX"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</ddlx:ddlxSource>`;
     default:
-      // Fallback — generic objectReferences (may not work for all types)
+      // Fallback — generic objectReferences using the correct URL for the type
       return `<?xml version="1.0" encoding="UTF-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/${escapeXml(name)}" adtcore:type="${escapeXml(type)}" adtcore:name="${escapeXml(name)}" adtcore:packageName="${escapeXml(pkg)}"/>
+  <adtcore:objectReference adtcore:uri="${objectUrlForType(type, name)}" adtcore:type="${escapeXml(type)}" adtcore:name="${escapeXml(name)}" adtcore:packageName="${escapeXml(pkg)}"/>
 </adtcore:objectReferences>`;
   }
 }
