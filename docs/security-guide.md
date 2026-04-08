@@ -11,9 +11,10 @@ ARC-1 enforces authorization at two independent layers. Both must allow an opera
 | Layer | What it checks | Controlled by |
 |-------|---------------|---------------|
 | **ARC-1 (Layer 1)** | Scopes from JWT + server safety config | ARC-1 administrator |
-| **SAP (Layer 2)** | SAP authorization objects (S_DEVELOP, S_ADT_RES, etc.) | SAP Basis / role admin |
+| **BTP / IAS (Layer 2)** | XSUAA scopes and role collections (or IAS groups) assigned to users | BTP administrator via BTP Cockpit |
+| **SAP (Layer 3)** | SAP authorization objects (S_DEVELOP, S_ADT_RES, etc.) | SAP Basis / role admin |
 
-Checks are additive: scope check AND safety check AND SAP authorization must all pass. If any layer blocks, the operation fails. The server safety config acts as a hard ceiling that per-user scopes can only restrict further, never expand.
+Checks are additive: scope check AND safety check AND SAP authorization must all pass. If any layer blocks, the operation fails. The server safety config acts as a hard ceiling — BTP role collections (XSUAA) or IAS group mappings determine which scopes a user receives, and per-user scopes can only restrict further, never expand beyond the server config. Layer 2 only applies when running on BTP with XSUAA or IAS authentication; for self-hosted OIDC deployments, scopes come directly from the JWT claims.
 
 For the full two-layer model, scope definitions, and role assignment details, see [Authorization & Roles](authorization.md).
 
