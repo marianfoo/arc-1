@@ -334,10 +334,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
     // Append package restriction info so the LLM knows its boundaries
     if (config.allowedPackages.length > 0) {
       const pkgList = config.allowedPackages.join(', ');
-      sapWriteDesc +=
-        config.allowedPackages.length === 1
-          ? ` Write access is restricted to package: ${pkgList}. Objects in other packages cannot be created.`
-          : ` Write access is restricted to packages: ${pkgList}.`;
+      sapWriteDesc += ` Write access is restricted to packages: ${pkgList}.`;
     }
     tools.push({
       name: 'SAPWrite',

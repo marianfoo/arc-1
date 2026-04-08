@@ -266,7 +266,7 @@ prefix. CLI flags map 1:1 to env vars:
 | `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `false` |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | |
 | `--disallowed-ops` | `SAP_DISALLOWED_OPS` | |
-| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | |
+| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` |
 | `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` |
 | `--feature-abapgit` | `SAP_FEATURE_ABAPGIT` | `auto` |
 | `--feature-rap` | `SAP_FEATURE_RAP` | `auto` |

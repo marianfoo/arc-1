@@ -209,7 +209,7 @@ export function checkTransport(config: SafetyConfig, transport: string, opName: 
 
   // Check transport whitelist
   if (transport && transport !== '*' && config.allowedTransports.length > 0) {
-    if (!isTransportAllowed(config, transport)) {
+    if (!isTransportInWhitelist(config, transport)) {
       throw new AdtSafetyError(
         `Operation '${opName}' on transport '${transport}' is blocked by safety configuration (allowed: ${JSON.stringify(config.allowedTransports)})`,
       );
