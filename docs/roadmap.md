@@ -24,7 +24,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 5. **Multi-client, vendor-neutral** — Works with any MCP-compatible client: Claude Code/Desktop, Microsoft Copilot Studio, VS Code (GitHub Copilot), Gemini CLI, Cursor, and others. The same ARC-1 instance serves all of them. Three auth modes coexist (XSUAA + OIDC/Entra ID + API key) so different client types connect through the same gateway.
 
-6. **Safe defaults, opt-in power** — Read-only by default. Free SQL blocked by default. No write operations until the admin explicitly enables them. This inverts the model of every other MCP server where everything is allowed until someone thinks to restrict it.
+6. **Safe defaults, opt-in power** — Read-only by default. Free SQL blocked by default. When writes are enabled, the package allowlist defaults to `$TMP` (local objects only) — writing to transportable packages requires explicit `--allowed-packages` configuration. This inverts the model of every other MCP server where everything is allowed until someone thinks to restrict it.
 
 ---
 
@@ -34,7 +34,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 |------|--------|
 | TypeScript Migration | ✅ Complete — Go code removed, pure TypeScript |
 | Core MCP Server | ✅ 11 intent-based tools + hyperfocused mode (1 tool), HTTP Streamable + stdio |
-| Safety System | ✅ Read-only, package filter, operation filter, transport guard, dry-run |
+| Safety System | ✅ Read-only, package filter (default: `$TMP`), operation filter, transport guard, dry-run |
 | Phase 1: API Key Auth | ✅ `ARC1_API_KEY` Bearer token |
 | Phase 2: OAuth/OIDC (Entra ID) | ✅ JWT validation via `jose` library, tested with Copilot Studio |
 | Phase 4: BTP CF Deployment | ✅ Docker on CF with Destination Service + Cloud Connector |

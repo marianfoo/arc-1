@@ -210,10 +210,10 @@ Update all documentation to reflect the simplified safety model, new defaults, a
 
 Update peripheral documentation artifacts.
 
-- [ ] In `docs/roadmap.md`: check for any items about `allowTransportableEdits` or transport gating simplification. Mark as completed or update wording. Add a note under the safety section that package allowlist defaults to `$TMP`.
-- [ ] In `compare/00-feature-matrix.md`: update the "Transport gating" row if its description mentions `allowTransportableEdits`. The feature still exists (via `enableTransports`), just simplified. Update "Last Updated" date.
-- [ ] Check `.claude/commands/*.md` skill files for any references to `--allow-transportable-edits`, `allowTransportableEdits`, or outdated transport flags. Update any found references to use `--allowed-packages` and `--enable-transports` instead.
-- [ ] Run `npm test` — all tests pass.
+- [x] In `docs/roadmap.md`: check for any items about `allowTransportableEdits` or transport gating simplification. Mark as completed or update wording. Add a note under the safety section that package allowlist defaults to `$TMP`.
+- [x] In `compare/00-feature-matrix.md`: update the "Transport gating" row if its description mentions `allowTransportableEdits`. The feature still exists (via `enableTransports`), just simplified. Update "Last Updated" date.
+- [x] Check `.claude/commands/*.md` skill files for any references to `--allow-transportable-edits`, `allowTransportableEdits`, or outdated transport flags. Update any found references to use `--allowed-packages` and `--enable-transports` instead.
+- [x] Run `npm test` — all tests pass.
 
 ### Task 8: Final verification
 

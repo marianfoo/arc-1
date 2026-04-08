@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-04_
+_Last updated: 2026-04-08_
 
 ## Legend
 - ✅ = Supported

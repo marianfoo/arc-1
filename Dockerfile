@@ -57,7 +57,6 @@ ENV SAP_BLOCK_FREE_SQL="false"
 ENV SAP_ALLOWED_OPS=""
 ENV SAP_DISALLOWED_OPS=""
 ENV SAP_ALLOWED_PACKAGES=""
-ENV SAP_ALLOW_TRANSPORTABLE_EDITS="false"
 
 # ─── MCP Transport ──────────────────────────────────────────────────────────
 # http-streamable is the default for Docker (not stdio)
