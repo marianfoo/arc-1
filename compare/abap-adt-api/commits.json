@@ -1,16 +1,38 @@
 {
   "$schema": "Commit tracker for marcellourbani/abap-adt-api — API reference for ARC-1 ADT implementation",
   "repo": "https://github.com/marcellourbani/abap-adt-api",
-  "lastUpdated": "2026-04-04",
-  "lastCheckedSha": "d116f62",
+  "lastUpdated": "2026-04-08",
+  "lastCheckedSha": "9ec2038",
   "stats": {
-    "totalTracked": 34,
-    "evaluated": 34,
+    "totalTracked": 36,
+    "evaluated": 36,
     "pending": 0,
-    "skipped": 14,
+    "skipped": 16,
     "evaluationFiles": 8
   },
   "releases": [
+    {
+      "version": "v8.0.1",
+      "date": "2026-04-05",
+      "commits": [
+        {
+          "sha": "9ec2038",
+          "date": "2026-04-05",
+          "message": "8.0.1",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "8488381",
+          "date": "2026-04-05",
+          "message": "improve error handling",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Continued error handling improvements from v8.0.0. ARC-1 has its own error handling in adt/errors.ts."
+        }
+      ]
+    },
     {
       "version": "v8.0.0",
       "date": "2026-04-04",

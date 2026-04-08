@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) as an **API reference** for ARC-1's ADT implementation. This library is the most complete TypeScript ADT client and shows which endpoints/patterns exist.
 
-_Last updated: 2026-04-04_
+_Last updated: 2026-04-08_
 
 ## Approach
 
@@ -16,10 +16,10 @@ _Last updated: 2026-04-04_
 | Metric | Commits | Issues |
 |--------|---------|--------|
 | Total | ~100 | 18 |
-| Tracked | 34 | 18 |
-| Evaluated | 34 | 18 |
+| Tracked | 36 | 18 |
+| Evaluated | 36 | 18 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 14 | 7 |
+| Skipped (not relevant) | 16 | 7 |
 | Evaluation files | 8 | 4 |
 
 ## API Surface Comparison

@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-04_
+_Last updated: 2026-04-08_
 
 ## Legend
 - ✅ = Supported
@@ -22,7 +22,7 @@ _Last updated: 2026-04-04_
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Stars | — | 242 | 109 | 103 | 29 | 26 | 119 | 0 (new) |
-| Active development | ✅ | ✅ Very (v2.32.0+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v4.8.1) | ⚠️ Moderate | ✅ New (Mar 2026) |
+| Active development | ✅ | ✅ Very (v2.39.0+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v4.8.7) | ⚠️ Moderate | ✅ New (Mar 2026) |
 | Release count | — | 32+ | — | — | — | 85+ (5 months) | — | 1 |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A |
 
@@ -31,7 +31,7 @@ _Last updated: 2026-04-04_
 | Transport | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb |
 |-----------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
 | stdio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
-| HTTP Streamable | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| HTTP Streamable | ✅ | ✅ (v2.38.0) | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | SSE | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ⚠️ | ❌ |
 | TLS/HTTPS | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ (v4.6.0) | ❌ | ❌ |
 
@@ -66,7 +66,7 @@ _Last updated: 2026-04-04_
 | Input sanitization | ✅ (Zod) | ✅ | ❌ | ⚠️ | ✅ (defusedxml) | ✅ (Zod) | ✅ (Zod) | ⚠️ |
 | MCP elicitation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (7 flows) |
 | Try-finally lock safety | ✅ | ✅ | ❌ | N/A | ✅ | ✅ (v4.5.0) | N/A | ⚠️ (abap-adt-api) |
-| MCP scope system (OAuth) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| MCP scope system (OAuth) | ✅ (2D: scopes+roles+safety) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ## 5. ABAP Read Operations
 
@@ -107,9 +107,9 @@ _Last updated: 2026-04-04_
 | Update source | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
 | Delete objects | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
 | Activate | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
-| Batch activate | ✅ | ✅ | ✅ | ❌ | ✅ (with dep resolution) | ✅ | N/A | ❌ |
+| Batch activate | ✅ | ✅ | ✅ | ❌ | ✅ (with dep resolution) | ✅ | N/A | ✅ (v2.0, Apr 2026) |
 | Lock/unlock | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ |
-| EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
+| EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ (edit_method, Apr 2026) |
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ |
 | RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ |
@@ -120,7 +120,7 @@ _Last updated: 2026-04-04_
 
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
-| Find definition | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
+| Find definition | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ (Apr 2026) |
 | Find references | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
 | Code completion | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Context compression | ✅ (SAPContext, 7-30x) | ✅ (auto, 7-30x) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
@@ -239,6 +239,9 @@ The following items were incorrectly marked in the previous version and have sin
 | fr0ster sap-rfc-lite | not listed | ✅ (v4.7.0) | Replaced archived node-rfc |
 | dassian column name | dassian-adt | dassian-adt / abap-mcpb | Successor repo albanleong/abap-mcpb created Mar 31 |
 | VSP abaplint | ❌ (Go lexer) | ✅ (native Go port, 8 rules) | v2.32.0 added native linter |
+| VSP HTTP Streamable | ❌ | ✅ (v2.38.0, mcp-go v0.47.0) | ARC-1 no longer unique on HTTP transport |
+| VSP version | v2.32.0 | v2.39.0+ | Massive feature sprint Apr 2-8 (40+ commits) |
+| fr0ster version | v4.8.1 | v4.8.7 | Continued iteration |
 
 ---
 
@@ -256,8 +259,8 @@ The following items were incorrectly marked in the previous version and have sin
 9. **npm + Docker + release-please** — Most professional distribution pipeline.
 
 ### Biggest Competitive Threats
-1. **vibing-steampunk** (242 stars) — Community favorite. Hyperfocused mode, method-level surgery, native parser, WASM compiler. Lacks BTP/enterprise auth but developer-loved.
-2. **fr0ster** (v4.8.1, 85+ releases) — Closest enterprise competitor. 287 tools, 9 auth providers, TLS, RFC, embeddable. Complex multi-repo but ambitious.
+1. **vibing-steampunk** (242 stars) — Community favorite. Now has Streamable HTTP (v2.38.0). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis. Still lacks BTP/enterprise auth but rapidly closing feature gaps.
+2. **fr0ster** (v4.8.7, 85+ releases) — Closest enterprise competitor. 287 tools, 9 auth providers, TLS, RFC, embeddable. Search TSV format optimization. Complex multi-repo but ambitious.
 3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
 
 ### Key Gaps to Close

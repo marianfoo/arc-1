@@ -1,17 +1,192 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-02",
-  "lastCheckedSha": "7391962",
+  "lastUpdated": "2026-04-08",
+  "lastCheckedSha": "783e596",
   "stats": {
-    "totalCommits": 765,
+    "totalCommits": 783,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 48,
-    "evaluated": 26,
+    "totalTracked": 66,
+    "evaluated": 30,
     "pending": 0,
-    "skipped": 22
+    "skipped": 36
   },
   "releases": [
+    {
+      "version": "v4.8.2-v4.8.7",
+      "date": "2026-04-04 to 2026-04-08",
+      "commits": [
+        {
+          "sha": "783e596",
+          "date": "2026-04-08",
+          "message": "refactor: merge RuntimeAnalyzeDump into RuntimeGetDumpById with response_mode parameter",
+          "type": "refactor",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal refactor of dump tools. ARC-1 SAPDiagnose has single dump action."
+        },
+        {
+          "sha": "8a22669",
+          "date": "2026-04-07",
+          "message": "fix: SearchObject returns compact TSV instead of JSON to reduce payload size",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Search result payload optimization — TSV reduces tokens vs JSON/XML. ARC-1 SAPSearch returns text format already but could benefit from structured compact format.",
+          "evaluationFile": "evaluations/8a22669-search-tsv-format.md"
+        },
+        {
+          "sha": "04d03ed",
+          "date": "2026-04-06",
+          "message": "fix: SearchObject returns compact JSON instead of raw XML (#39)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Intermediate step before TSV — reducing raw XML to compact JSON. Same optimization direction as 8a22669.",
+          "evaluationFile": "evaluations/8a22669-search-tsv-format.md"
+        },
+        {
+          "sha": "9000357",
+          "date": "2026-04-05",
+          "message": "fix: GetPackageTree returns error for non-existent packages (#38)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "verify",
+          "relevance": "Error handling for non-existent packages. Verify ARC-1 getPackageContents handles this gracefully."
+        },
+        {
+          "sha": "1519017",
+          "date": "2026-04-05",
+          "message": "fix: skip auth for ping, serialize OAuth, disable destination header by default",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Auth edge cases specific to their multi-destination setup."
+        },
+        {
+          "sha": "4c165ea",
+          "date": "2026-04-05",
+          "message": "fix: pass logger to createAdtClient in all handlers",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Logging infra fix. ARC-1 passes logger via server context."
+        },
+        {
+          "sha": "a0c770b",
+          "date": "2026-04-05",
+          "message": "fix: retry on transient SAP errors in HighTester, add create delay",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Test infrastructure fix."
+        },
+        {
+          "sha": "c1bb512",
+          "date": "2026-04-05",
+          "message": "fix: BDEF unlock error handling, retry group activation in shared:setup",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "verify",
+          "relevance": "BDEF unlock error handling. Verify ARC-1 BDEF unlock in crud.ts handles errors."
+        },
+        {
+          "sha": "f61c6e9",
+          "date": "2026-04-04",
+          "message": "fix: simplify Domain/DataElement create handlers, update adt-clients to 3.14.3",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "DDIC handler simplification. ARC-1 has different DDIC create approach."
+        },
+        {
+          "sha": "d29b9e7",
+          "date": "2026-04-04",
+          "message": "chore: update dependencies, migrate to TypeScript 6",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Notable: fr0ster migrated to TS6. ARC-1 uses TS5.8 — consider upgrading when stable."
+        },
+        {
+          "sha": "eaef587",
+          "date": "2026-04-05",
+          "message": "chore: bump version to 4.8.7",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "f9a9b47",
+          "date": "2026-04-05",
+          "message": "chore: bump version to 4.8.6",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "2e16b28",
+          "date": "2026-04-05",
+          "message": "chore: bump version to 4.8.5",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "b2761e1",
+          "date": "2026-04-05",
+          "message": "chore: bump version to 4.8.4",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "e4fb6e0",
+          "date": "2026-04-05",
+          "message": "chore: bump version to 4.8.3",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "dab683d",
+          "date": "2026-04-05",
+          "message": "chore: update @mcp-abap-adt/adt-clients to 3.14.4",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Dependency bump"
+        },
+        {
+          "sha": "b4369ea",
+          "date": "2026-04-04",
+          "message": "chore: bump version to 4.8.2",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "27e6353",
+          "date": "2026-04-05",
+          "message": "docs: update documentation for --allow-destination-header flag",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Docs update"
+        }
+      ]
+    },
     {
       "version": "v4.8.0-v4.8.1",
       "date": "2026-04-02",
