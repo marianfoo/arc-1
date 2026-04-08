@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PROFILES, parseArgs } from '../../../src/server/config.js';
+import { PROFILE_SCOPES, PROFILES, parseApiKeys, parseArgs } from '../../../src/server/config.js';
 
 describe('parseArgs', () => {
   // Save and restore env to avoid test pollution
   const savedEnv = { ...process.env };
 
   beforeEach(() => {
-    // Clear SAP_* env vars for clean test state
+    // Clear SAP_* and ARC1_* env vars for clean test state
     for (const key of Object.keys(process.env)) {
-      if (key.startsWith('SAP_') || key.startsWith('TEST_SAP_')) {
+      if (key.startsWith('SAP_') || key.startsWith('TEST_SAP_') || key.startsWith('ARC1_')) {
         delete process.env[key];
       }
     }
@@ -292,5 +292,105 @@ describe('parseArgs', () => {
       'viewer-data',
       'viewer-sql',
     ]);
+  });
+
+  it('PROFILE_SCOPES has an entry for every profile', () => {
+    for (const name of Object.keys(PROFILES)) {
+      expect(PROFILE_SCOPES[name]).toBeDefined();
+      expect(PROFILE_SCOPES[name].length).toBeGreaterThan(0);
+    }
+  });
+
+  // --- Multi-key API keys ---
+
+  it('parses ARC1_API_KEYS env var', () => {
+    process.env.ARC1_API_KEYS = 'key1:viewer,key2:developer';
+    const config = parseArgs([]);
+    expect(config.apiKeys).toEqual([
+      { key: 'key1', profile: 'viewer' },
+      { key: 'key2', profile: 'developer' },
+    ]);
+  });
+
+  it('parses --api-keys flag', () => {
+    const config = parseArgs(['--api-keys', 'abc:viewer-data,def:developer-sql']);
+    expect(config.apiKeys).toEqual([
+      { key: 'abc', profile: 'viewer-data' },
+      { key: 'def', profile: 'developer-sql' },
+    ]);
+  });
+
+  it('--api-keys flag takes precedence over ARC1_API_KEYS env', () => {
+    process.env.ARC1_API_KEYS = 'env-key:viewer';
+    const config = parseArgs(['--api-keys', 'cli-key:developer']);
+    expect(config.apiKeys).toEqual([{ key: 'cli-key', profile: 'developer' }]);
+  });
+
+  it('apiKeys is undefined when not configured', () => {
+    const config = parseArgs([]);
+    expect(config.apiKeys).toBeUndefined();
+  });
+
+  it('both apiKey and apiKeys can coexist', () => {
+    process.env.ARC1_API_KEY = 'legacy-key';
+    process.env.ARC1_API_KEYS = 'new-key:viewer';
+    const config = parseArgs([]);
+    expect(config.apiKey).toBe('legacy-key');
+    expect(config.apiKeys).toEqual([{ key: 'new-key', profile: 'viewer' }]);
+  });
+});
+
+// ─── parseApiKeys ───────────────────────────────────────────────────
+
+describe('parseApiKeys', () => {
+  it('parses single key:profile pair', () => {
+    expect(parseApiKeys('mykey:viewer')).toEqual([{ key: 'mykey', profile: 'viewer' }]);
+  });
+
+  it('parses multiple key:profile pairs', () => {
+    expect(parseApiKeys('k1:viewer,k2:developer,k3:viewer-sql')).toEqual([
+      { key: 'k1', profile: 'viewer' },
+      { key: 'k2', profile: 'developer' },
+      { key: 'k3', profile: 'viewer-sql' },
+    ]);
+  });
+
+  it('trims whitespace', () => {
+    expect(parseApiKeys(' k1:viewer , k2:developer ')).toEqual([
+      { key: 'k1', profile: 'viewer' },
+      { key: 'k2', profile: 'developer' },
+    ]);
+  });
+
+  it('handles key with colons (e.g. base64)', () => {
+    // Last colon splits key from profile — keys may contain colons
+    expect(parseApiKeys('abc:def:ghi:viewer')).toEqual([{ key: 'abc:def:ghi', profile: 'viewer' }]);
+  });
+
+  it('throws on missing colon separator', () => {
+    expect(() => parseApiKeys('keyonly')).toThrow(/expected 'key:profile' format/);
+  });
+
+  it('throws on empty key', () => {
+    expect(() => parseApiKeys(':viewer')).toThrow(/key cannot be empty/);
+  });
+
+  it('throws on invalid profile name', () => {
+    expect(() => parseApiKeys('mykey:nonexistent')).toThrow(/Invalid profile 'nonexistent'/);
+  });
+
+  it('throws on empty string', () => {
+    expect(() => parseApiKeys('')).toThrow(/no valid entries/);
+  });
+
+  it('skips empty segments from trailing comma', () => {
+    expect(parseApiKeys('k1:viewer,')).toEqual([{ key: 'k1', profile: 'viewer' }]);
+  });
+
+  it('accepts all valid profile names', () => {
+    const profiles = ['viewer', 'viewer-data', 'viewer-sql', 'developer', 'developer-data', 'developer-sql'];
+    for (const p of profiles) {
+      expect(parseApiKeys(`testkey:${p}`)).toEqual([{ key: 'testkey', profile: p }]);
+    }
   });
 });

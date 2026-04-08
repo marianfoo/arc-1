@@ -131,6 +131,69 @@ describe('createChainedTokenVerifier', () => {
     const verifier = createChainedTokenVerifier({});
     await expect(verifier('any-token')).rejects.toThrow('Token validation failed');
   });
+
+  // --- Multi-key API key support ---
+
+  it('matches multi-key with viewer profile', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKeys: [{ key: 'viewer-key', profile: 'viewer' }],
+    });
+    const result = await verifier('viewer-key');
+    expect(result.clientId).toBe('api-key:viewer');
+    expect(result.scopes).toEqual(['read']);
+    expect(result.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
+  });
+
+  it('matches multi-key with developer-sql profile', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKeys: [{ key: 'dev-key', profile: 'developer-sql' }],
+    });
+    const result = await verifier('dev-key');
+    expect(result.clientId).toBe('api-key:developer-sql');
+    expect(result.scopes).toEqual(['read', 'write', 'data', 'sql']);
+  });
+
+  it('matches correct key from multiple apiKeys', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKeys: [
+        { key: 'viewer-key', profile: 'viewer' },
+        { key: 'dev-key', profile: 'developer' },
+      ],
+    });
+    const viewerResult = await verifier('viewer-key');
+    expect(viewerResult.scopes).toEqual(['read']);
+
+    const devResult = await verifier('dev-key');
+    expect(devResult.scopes).toEqual(['read', 'write']);
+  });
+
+  it('apiKeys takes precedence over single apiKey', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKey: 'shared-key',
+      apiKeys: [{ key: 'shared-key', profile: 'viewer' }],
+    });
+    const result = await verifier('shared-key');
+    // Should match apiKeys entry (viewer) not legacy (full access)
+    expect(result.clientId).toBe('api-key:viewer');
+    expect(result.scopes).toEqual(['read']);
+  });
+
+  it('falls back to legacy apiKey when apiKeys has no match', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKey: 'legacy-key',
+      apiKeys: [{ key: 'new-key', profile: 'viewer' }],
+    });
+    const result = await verifier('legacy-key');
+    expect(result.clientId).toBe('api-key');
+    expect(result.scopes).toEqual(['read', 'write', 'data', 'sql', 'admin']);
+  });
+
+  it('rejects unknown key when only apiKeys is configured', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKeys: [{ key: 'known-key', profile: 'viewer' }],
+    });
+    await expect(verifier('unknown-key')).rejects.toThrow('Token validation failed');
+  });
 });
 
 // ─── XSUAA scope extraction (via chained verifier mock) ────────────

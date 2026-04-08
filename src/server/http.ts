@@ -30,10 +30,37 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { Request, Response } from 'express';
 import express from 'express';
 import { expandImpliedScopes } from '../adt/safety.js';
+import { PROFILE_SCOPES } from './config.js';
 import { logger } from './logger.js';
 import { VERSION } from './server.js';
 import type { ServerConfig } from './types.js';
 import type { XsuaaCredentials } from './xsuaa.js';
+
+// ─── API Key Matching Helper ─────────────────────────────────────────
+
+/**
+ * Match a token against configured API keys (multi-key with profiles).
+ * Returns the matched entry's profile and scopes, or undefined if no match.
+ */
+function matchApiKey(
+  token: string,
+  config: ServerConfig,
+): { profile: string; scopes: string[]; clientId: string } | undefined {
+  // Multi-key: check apiKeys array first
+  if (config.apiKeys) {
+    for (const entry of config.apiKeys) {
+      if (token === entry.key) {
+        const scopes = PROFILE_SCOPES[entry.profile] ?? ['read'];
+        return { profile: entry.profile, scopes, clientId: `api-key:${entry.profile}` };
+      }
+    }
+  }
+  // Single key: legacy behavior (full scopes)
+  if (config.apiKey && token === config.apiKey) {
+    return { profile: 'full', scopes: ['read', 'write', 'data', 'sql', 'admin'], clientId: 'api-key' };
+  }
+  return undefined;
+}
 
 // ─── JWKS / JWT types (lazy-loaded from jose) ────────────────────────
 
@@ -211,7 +238,7 @@ export async function startHttpServer(
       await initJwks(config.oidcIssuer);
     }
 
-    if (config.apiKey || config.oidcIssuer) {
+    if (config.apiKey || config.apiKeys || config.oidcIssuer) {
       // Use requireBearerAuth so that authInfo is populated on the MCP request context.
       // This enables scope enforcement, per-request safety, and principal propagation.
       const { requireBearerAuth } = await import('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js');
@@ -234,7 +261,8 @@ export async function startHttpServer(
   app.listen(port, bindHost, () => {
     let authMode = 'NONE (open)';
     if (config.xsuaaAuth && xsuaaCredentials) authMode = 'XSUAA OAuth proxy';
-    else if (config.apiKey && config.oidcIssuer) authMode = 'API key + OIDC';
+    else if ((config.apiKey || config.apiKeys) && config.oidcIssuer) authMode = 'API key + OIDC';
+    else if (config.apiKeys) authMode = `API keys (${config.apiKeys.length} keys)`;
     else if (config.apiKey) authMode = 'API key';
     else if (config.oidcIssuer) authMode = 'OIDC';
 
@@ -261,14 +289,15 @@ function createStandardVerifier(
     // Lazy-import SDK error classes so bearerAuth maps them to 401/403
     const { InvalidTokenError } = await import('@modelcontextprotocol/sdk/server/auth/errors.js');
 
-    // API key: exact match → full access
-    if (config.apiKey && token === config.apiKey) {
+    // API key: match against multi-key map or single key
+    const apiKeyMatch = matchApiKey(token, config);
+    if (apiKeyMatch) {
       // expiresAt is required by requireBearerAuth — use far-future expiry for static keys
       const ONE_YEAR_SECS = 365 * 24 * 60 * 60;
       return {
         token,
-        clientId: 'api-key',
-        scopes: ['read', 'write', 'data', 'sql', 'admin'],
+        clientId: apiKeyMatch.clientId,
+        scopes: apiKeyMatch.scopes,
         expiresAt: Math.floor(Date.now() / 1000) + ONE_YEAR_SECS,
       };
     }

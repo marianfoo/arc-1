@@ -27,6 +27,7 @@ For **what users can do** after authenticating (scopes, roles, safety controls),
 |----------------|-------------------|-------------|-------------|
 | **Local dev** (single user, `npx`) | None needed | Basic Auth | [Setup Guide](setup-guide.md) |
 | **Shared server** (team, quick start) | API Key | Basic Auth | [API Key Setup](api-key-setup.md) |
+| **Team server** (role-based access) | API Keys (multi) | Basic Auth | [API Key Setup](api-key-setup.md) |
 | **Enterprise** (per-user identity) | OIDC / JWT | Basic Auth (shared user) | [OAuth / JWT Setup](oauth-jwt-setup.md) |
 | **Enterprise + SAP audit trail** | OIDC / JWT | Principal Propagation | [OAuth / JWT](oauth-jwt-setup.md) + [PP Setup](principal-propagation-setup.md) |
 | **BTP Cloud Foundry** | XSUAA OAuth | Destination Service | [XSUAA Setup](xsuaa-setup.md) + [Destination Setup](btp-destination-setup.md) |
@@ -37,7 +38,7 @@ For **what users can do** after authenticating (scopes, roles, safety controls),
 **How many users?**
 
 - **Single user** (local dev): No MCP client auth needed. Use Basic Auth to SAP.
-- **Small team** (shared server): API Key is the simplest. Everyone shares one token. No per-user authorization.
+- **Small team** (shared server): API Key is the simplest. For role differentiation, use [multiple API keys](api-key-setup.md#multi-key-setup-role-based-access) with per-key profiles.
 - **Enterprise** (many users, compliance): Use OIDC or XSUAA. Per-user tokens enable per-user [scopes and roles](authorization.md).
 
 **Do you need per-user SAP identity?**
@@ -67,12 +68,12 @@ When using ARC-1 locally via `npx` or `npm`, the MCP client connects through std
 
 ### API Key
 
-A shared secret token. Simple to set up, but everyone shares the same key.
+A shared secret token. Simple to set up, no external IdP needed. Supports **multiple keys with per-key profiles** for role-based access control.
 
-**Upsides:** Simplest server auth. Works with any MCP client. No IdP needed.
-**Downsides:** No per-user identity. All API key users get full access (all scopes). Key rotation requires updating all clients.
-**When to use:** Small teams, POCs, internal servers behind a VPN.
-**Prerequisites:** Generate a random key, configure server and clients.
+**Upsides:** Simplest server auth. Works with any MCP client. No IdP needed. Per-key profiles enable role-based access without an external auth provider.
+**Downsides:** Keys identify roles, not individual users. No per-user SAP audit trail. Key rotation requires updating clients.
+**When to use:** Small-to-medium teams, POCs, internal servers behind a VPN. Multi-key mode works well for team servers with 2–3 access levels.
+**Prerequisites:** Generate random keys, configure server and clients.
 
 **Setup:** [API Key Setup](api-key-setup.md)
 
@@ -196,13 +197,13 @@ stdio (no MCP auth) → Basic Auth to SAP
 
 Simplest setup. Single user. Use `--profile developer` for write access or `--profile viewer` for read-only.
 
-### Team Server with Shared Access
+### Team Server with Role-Based Access
 
 ```
-API Key (MCP auth) → Basic Auth to SAP
+API Keys with profiles (MCP auth) → Basic Auth to SAP
 ```
 
-Quick to set up. All users share one token and one SAP user. Use safety config to restrict operations.
+Quick to set up. Different keys for different roles (e.g., viewer key for reviewers, developer key for developers). All users share one SAP user. Each key enforces its profile's scopes and safety restrictions.
 
 ### Enterprise with Per-User Control
 
@@ -641,6 +642,8 @@ entirely (only for testing, never in production).
 
 | Flag | Env Var | Description |
 |------|---------|-------------|
+| `--api-key` | `ARC1_API_KEY` | Single API key (full scopes) |
+| `--api-keys` | `ARC1_API_KEYS` | Multiple API keys with profiles (`key:profile,...`) |
 | `--user` | `SAP_USER` | SAP username (basic auth) |
 | `--password` | `SAP_PASSWORD` | SAP password (basic auth) |
 | `--cookie-file` | `SAP_COOKIE_FILE` | Path to cookie file |

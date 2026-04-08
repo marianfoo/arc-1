@@ -31,6 +31,7 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { XsuaaService } from '@sap/xssec';
 import { expandImpliedScopes } from '../adt/safety.js';
+import { PROFILE_SCOPES } from './config.js';
 import { logger } from './logger.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -172,6 +173,32 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
   };
 }
 
+// ─── API Key Matching Helper ─────────────────────────────────────────
+
+/**
+ * Match a token against configured API keys (multi-key or single).
+ * Used by both the chained verifier (XSUAA mode) and standard verifier.
+ */
+function matchApiKeyFromConfig(
+  config: { apiKey?: string; apiKeys?: Array<{ key: string; profile: string }> },
+  token: string,
+): { scopes: string[]; clientId: string } | undefined {
+  // Multi-key: check apiKeys array first
+  if (config.apiKeys) {
+    for (const entry of config.apiKeys) {
+      if (token === entry.key) {
+        const scopes = PROFILE_SCOPES[entry.profile] ?? ['read'];
+        return { scopes, clientId: `api-key:${entry.profile}` };
+      }
+    }
+  }
+  // Single key: legacy behavior (full scopes)
+  if (config.apiKey && token === config.apiKey) {
+    return { scopes: ['read', 'write', 'data', 'sql', 'admin'], clientId: 'api-key' };
+  }
+  return undefined;
+}
+
 // ─── Chained Token Verifier ──────────────────────────────────────────
 
 /**
@@ -180,10 +207,15 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
  * Tries in order:
  * 1. XSUAA (@sap/xssec) — if XSUAA credentials are available
  * 2. Entra ID OIDC (jose) — if SAP_OIDC_ISSUER is configured
- * 3. API Key — if ARC1_API_KEY is configured
+ * 3. API Key — if ARC1_API_KEY / ARC1_API_KEYS is configured
  */
 export function createChainedTokenVerifier(
-  config: { apiKey?: string; oidcIssuer?: string; oidcAudience?: string },
+  config: {
+    apiKey?: string;
+    apiKeys?: Array<{ key: string; profile: string }>;
+    oidcIssuer?: string;
+    oidcAudience?: string;
+  },
   xsuaaVerifier?: (token: string) => Promise<AuthInfo>,
   oidcVerifier?: (token: string) => Promise<AuthInfo>,
 ): (token: string) => Promise<AuthInfo> {
@@ -224,13 +256,14 @@ export function createChainedTokenVerifier(
       }
     }
 
-    // 3. Try API key
-    if (config.apiKey && token === config.apiKey) {
-      logger.debug('Chained token verifier: API key matched');
+    // 3. Try API key (multi-key with profiles, then single legacy key)
+    const apiKeyMatch = matchApiKeyFromConfig(config, token);
+    if (apiKeyMatch) {
+      logger.debug('Chained token verifier: API key matched', { clientId: apiKeyMatch.clientId });
       return {
         token,
-        clientId: 'api-key',
-        scopes: ['read', 'write', 'data', 'sql', 'admin'],
+        clientId: apiKeyMatch.clientId,
+        scopes: apiKeyMatch.scopes,
         // MCP SDK's requireBearerAuth requires expiresAt — set to 1 year
         expiresAt: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
         extra: {},

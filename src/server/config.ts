@@ -12,6 +12,57 @@ import type { FeatureToggle, ServerConfig, TransportType } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
 
 /**
+ * Parse API keys string into structured array.
+ * Format: "key1:profile1,key2:profile2"
+ * Each entry maps an API key to a named profile.
+ */
+export function parseApiKeys(raw: string): Array<{ key: string; profile: string }> {
+  const entries: Array<{ key: string; profile: string }> = [];
+  for (const pair of raw.split(',')) {
+    const trimmed = pair.trim();
+    if (!trimmed) continue;
+    // Use LAST colon as separator — keys may contain colons (e.g. base64)
+    // but profile names never do
+    const colonIdx = trimmed.lastIndexOf(':');
+    if (colonIdx === -1) {
+      throw new Error(
+        `Invalid API key entry '${trimmed}': expected 'key:profile' format. ` +
+          `Valid profiles: ${Object.keys(PROFILES).join(', ')}`,
+      );
+    }
+    const key = trimmed.slice(0, colonIdx);
+    const profile = trimmed.slice(colonIdx + 1);
+    if (!key) {
+      throw new Error('Invalid API key entry: key cannot be empty');
+    }
+    if (!PROFILES[profile]) {
+      throw new Error(
+        `Invalid profile '${profile}' in API key entry. Valid profiles: ${Object.keys(PROFILES).join(', ')}`,
+      );
+    }
+    entries.push({ key, profile });
+  }
+  if (entries.length === 0) {
+    throw new Error('ARC1_API_KEYS is set but contains no valid entries. Format: "key1:profile1,key2:profile2"');
+  }
+  return entries;
+}
+
+/**
+ * Maps profile names to the scopes they grant.
+ * Used when API keys are assigned to profiles — the key inherits these scopes.
+ * Kept in sync with PROFILES: each profile's safety flags determine its scopes.
+ */
+export const PROFILE_SCOPES: Record<string, string[]> = {
+  viewer: ['read'],
+  'viewer-data': ['read', 'data'],
+  'viewer-sql': ['read', 'data', 'sql'],
+  developer: ['read', 'write'],
+  'developer-data': ['read', 'write', 'data'],
+  'developer-sql': ['read', 'write', 'data', 'sql'],
+};
+
+/**
  * Named profiles — convenience presets for common safety configurations.
  * Each profile sets a combination of safety flags. Individual CLI flags
  * applied after the profile can override any profile default.
@@ -173,6 +224,13 @@ export function parseArgs(args: string[]): ServerConfig {
 
   // --- Authentication (MCP client → ARC-1) ---
   config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY;
+
+  // Multiple API keys with per-key profiles: "key1:viewer,key2:developer"
+  const apiKeysRaw = getFlag('api-keys') ?? process.env.ARC1_API_KEYS;
+  if (apiKeysRaw) {
+    config.apiKeys = parseApiKeys(apiKeysRaw);
+  }
+
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);

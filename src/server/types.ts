@@ -58,6 +58,8 @@ export interface ServerConfig {
 
   // --- Authentication (MCP client → ARC-1) ---
   apiKey?: string;
+  /** Multiple API keys with per-key profile assignment (key:profile pairs) */
+  apiKeys?: Array<{ key: string; profile: string }>;
   oidcIssuer?: string;
   oidcAudience?: string;
   xsuaaAuth: boolean;

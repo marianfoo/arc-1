@@ -81,14 +81,19 @@ How users receive scopes depends on the authentication method:
 | Auth Method | How Scopes Are Determined | Can Restrict Per User? |
 |-------------|--------------------------|----------------------|
 | **No auth** (stdio, local, or HTTP without auth) | No scopes — [safety config](#safety-config-the-server-level-ceiling) is the only control | No |
-| **API Key** | All scopes granted. Use safety config or profiles to restrict. | No (single shared key) |
+| **API Key** (single) | All scopes granted. Use safety config or profiles to restrict. | No (single shared key) |
+| **API Keys** (multi) | Scopes derived from the profile assigned to each key | Yes (different key per user/team) |
 | **OIDC / JWT** | Extracted from JWT `scope` or `scp` claims | Yes (configure in IdP) |
 | **XSUAA** | Extracted from XSUAA token local scopes | Yes (via BTP role collections) |
 | **XSUAA + PP** | Scopes from XSUAA token, SAP identity from PP | Yes (scopes + SAP auth) |
 
-### API Keys and Safety Config
+### API Keys
 
-API keys grant all scopes, but the **server's safety config still applies as a hard ceiling**. This means you can effectively create restricted access by combining API keys with safety controls:
+ARC-1 supports two API key modes:
+
+#### Single API Key (`--api-key` / `ARC1_API_KEY`)
+
+A single shared key that grants all scopes. The **server's safety config still applies as a hard ceiling**, so you can restrict what the key allows:
 
 ```bash
 # Read-only server — API key users can only read, regardless of full scopes
@@ -98,7 +103,39 @@ arc1 --transport http-streamable --api-key "$KEY" --profile viewer
 arc1 --transport http-streamable --api-key "$KEY" --profile developer
 ```
 
-Currently ARC-1 supports a single API key. All users sharing that key get the same access level, determined by the server's safety config. For per-user access control, use OIDC or XSUAA instead.
+All users sharing this key get the same access level.
+
+#### Multiple API Keys with Profiles (`--api-keys` / `ARC1_API_KEYS`)
+
+Assign different API keys to different [profiles](#profiles-safety-presets), giving each key its own scope and safety restrictions. Format: `key:profile` pairs, comma-separated.
+
+```bash
+# Generate keys
+VIEWER_KEY=$(openssl rand -hex 32)
+DEV_KEY=$(openssl rand -hex 32)
+ADMIN_KEY=$(openssl rand -hex 32)
+
+# Start with per-key profiles
+arc1 --transport http-streamable \
+  --api-keys "$VIEWER_KEY:viewer,$DEV_KEY:developer,$ADMIN_KEY:developer-sql"
+```
+
+Each key gets **both** the profile's scopes (for tool-level access control) **and** the profile's safety config (for operation-level enforcement):
+
+| Key | Profile | Scopes | Effect |
+|-----|---------|--------|--------|
+| `$VIEWER_KEY` | `viewer` | `read` | Read source code only |
+| `$DEV_KEY` | `developer` | `read`, `write` | Full development, no data access |
+| `$ADMIN_KEY` | `developer-sql` | `read`, `write`, `data`, `sql` | Full access including SQL |
+
+Distribute different keys to different teams or users. Each key enforces its profile independently — no IdP or external auth infrastructure required.
+
+!!! tip "Combining single and multi-key"
+    Both `--api-key` and `--api-keys` can be set simultaneously. Multi-key entries are checked first. The single key acts as a fallback with full scopes (subject to safety config). This is useful for migration: add `--api-keys` for new users while keeping the existing `--api-key` for backward compatibility.
+
+!!! note "Environment variable format"
+    `ARC1_API_KEYS="key1:viewer,key2:developer,key3:developer-sql"`  
+    Keys may contain colons (e.g. base64-encoded values) — the **last** colon in each entry separates the key from the profile name.
 
 !!! note "OIDC tokens without scope claims"
     If an OIDC JWT contains no `scope` or `scp` claims, ARC-1 defaults to **read-only access** and logs a warning. Configure your OIDC provider to include ARC-1 scopes in tokens. See [OAuth / JWT Setup](oauth-jwt-setup.md) for provider-specific instructions.
@@ -255,49 +292,60 @@ npx arc-1 --url http://sap:50000 --user DEV --password secret
 
 No scopes are enforced. Use `--read-only` or `--profile viewer` to restrict.
 
-### Scenario 2: Shared Server for a Team
+### Scenario 2: Shared Server with Role-Based API Keys
+
+The recommended approach for team deployments without an external IdP. Each team or role gets its own API key with a specific profile:
 
 ```bash
-# API key auth, read-only for safety
-npx arc-1 --url http://sap:50000 --user SHARED_USER --password secret \
-  --transport http-streamable --api-key "$(openssl rand -hex 32)" \
-  --profile viewer
-```
+# Generate keys for each role
+VIEWER_KEY=$(openssl rand -hex 32)
+DEV_KEY=$(openssl rand -hex 32)
+SQL_KEY=$(openssl rand -hex 32)
 
-All users share the same API key. The `--profile viewer` ensures everyone gets read-only access regardless of the full scopes the API key grants. You can run multiple instances with different profiles for different access levels:
-
-```bash
-# Read-only instance for reviewers (port 8080)
-arc1 --transport http-streamable --api-key "$KEY_VIEWERS" --profile viewer --http-addr 0.0.0.0:8080
-
-# Developer instance (port 8081)
-arc1 --transport http-streamable --api-key "$KEY_DEVS" --profile developer --http-addr 0.0.0.0:8081
-```
-
-### Scenario 3: Internal Network Without MCP Client Auth
-
-When ARC-1 is deployed on an internal network without API key or OIDC configured, the HTTP endpoint is open — any client on the network can connect without presenting a token. In this setup:
-
-- **No scopes are enforced** — there is no JWT, so no per-user scope check
-- **No per-user differentiation** — all users get the same access level
-- **No audit identity** — ARC-1 cannot tell who is calling
-
-The **safety config is your only control**:
-
-```bash
-# Internal read-only server — no auth required, everyone gets read access only
+# Single server with per-key access control
 arc1 --url http://sap:50000 --user SHARED_USER --password secret \
   --transport http-streamable \
-  --profile viewer
+  --api-keys "$VIEWER_KEY:viewer,$DEV_KEY:developer,$SQL_KEY:developer-sql"
 ```
 
-For per-user differentiation on an internal network, add at minimum:
+Distribute keys to teams:
+- **Reviewers** get `$VIEWER_KEY` → can only read source code
+- **Developers** get `$DEV_KEY` → can read/write code, no data access
+- **DBAs** get `$SQL_KEY` → full access including SQL queries
 
-- **Multiple instances** with different profiles and API keys (simple but static)
-- **An OIDC provider** like Keycloak or Entra ID — most organizations already have one. User tokens carry scopes, enabling real per-user access control without BTP
+This runs as a **single server instance** — no need for multiple ports or deployments.
+
+!!! tip "Single key fallback"
+    For simpler setups where everyone gets the same access, a single API key with a server-wide profile still works:
+    ```bash
+    arc1 --transport http-streamable --api-key "$KEY" --profile viewer
+    ```
+
+### Scenario 3: Internal Network
+
+When ARC-1 is deployed on an internal network, the simplest secure approach is using **multi-key API keys** — no external IdP needed:
+
+```bash
+# Internal server with role-based keys
+arc1 --url http://sap:50000 --user SHARED_USER --password secret \
+  --transport http-streamable \
+  --api-keys "$VIEWER_KEY:viewer,$DEV_KEY:developer"
+```
+
+Each user configures their MCP client with the key matching their role. The keys enforce both scopes (tool visibility) and safety config (operation restrictions) per request.
+
+If the server runs **without any auth** (`--api-key` and `--api-keys` both unset), the HTTP endpoint is open and safety config is the only control — all users get the same access:
+
+```bash
+# Open endpoint — everyone gets read-only via safety config
+arc1 --url http://sap:50000 --user SHARED_USER --password secret \
+  --transport http-streamable --profile viewer
+```
+
+For per-user differentiation on an open endpoint, add `--api-keys` as shown above, or an OIDC provider (Keycloak, Entra ID) if your organization already has one.
 
 !!! warning "Open endpoints"
-    Without `--api-key` or `--oidc-issuer`, anyone who can reach the server's port can use it. Combine with network-level controls (firewall rules, VPN, reverse proxy with auth) for defense in depth.
+    Without `--api-key`, `--api-keys`, or `--oidc-issuer`, anyone who can reach the server's port can use it. Combine with network-level controls (firewall rules, VPN, reverse proxy) for defense in depth.
 
 ### Scenario 4: Multi-User with Per-User Scopes (XSUAA)
 
