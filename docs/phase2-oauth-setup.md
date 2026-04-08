@@ -1,6 +1,6 @@
 # Phase 2: OAuth / JWT Authentication Setup
 
-Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (EntraID, Cognito, Okta, Keycloak). ARC-1 validates JWT Bearer tokens and extracts user identity.
+Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Entra ID, Cognito, Okta, Keycloak). ARC-1 validates JWT Bearer tokens.
 
 ## When to Use
 
@@ -29,7 +29,7 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
 
 ## Identity Provider Setup
 
-### Microsoft Entra ID (Azure AD)
+### Microsoft Entra ID
 
 1. **Create App Registration:**
    - Azure Portal → Microsoft Entra ID → App registrations → New registration
@@ -52,7 +52,7 @@ Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (Ent
        --url "https://graph.microsoft.com/v1.0/applications/{object-id}" \
        --body '{"api":{"requestedAccessTokenVersion":2}}'
      ```
-   - **Why:** v2.0 tokens use the raw client ID as `aud` claim, while v1.0 uses `api://...` URI. The OIDC validator needs a consistent audience value.
+   - **Why:** ARC-1 validates the token `aud` claim exactly. Use one stable audience value and test with a real token from your tenant.
 
 4. **Add Microsoft Graph User.Read permission:**
    - App registration → API permissions → Add a permission → Microsoft Graph → Delegated → `User.Read`
@@ -104,7 +104,7 @@ arc1 --url https://sap.example.com:44300 \
     --transport http-streamable \
     --http-addr 0.0.0.0:8080 \
     --oidc-issuer 'https://login.microsoftonline.com/{tenant-id}/v2.0' \
-    --oidc-audience 'api://arc1-sap-connector'
+    --oidc-audience '{client-id-guid}'
 ```
 
 ### Environment Variables
@@ -116,47 +116,36 @@ export SAP_PASSWORD=ServicePassword123
 export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
 export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
-export SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
-export SAP_OIDC_USERNAME_CLAIM='preferred_username'  # default
-```
-
-### Username Mapping (Optional)
-
-If OIDC usernames don't match SAP usernames, create a mapping file:
-
-```yaml
-# oidc-user-mapping.yaml
-alice: ALICE_DEV
-bob: BOB_ADMIN
-carol@company.com: CAROL
-```
-
-```bash
-arc1 ... --oidc-user-mapping oidc-user-mapping.yaml
+export SAP_OIDC_AUDIENCE='{client-id-guid}'
 ```
 
 ## Client Configuration
 
-### VS Code (with OAuth)
+### Important behavior in Phase 2
 
-VS Code supports MCP OAuth natively. Configure in `.vscode/mcp.json`:
+Phase 2 enables **JWT validation** on `/mcp`, but it does **not** provide OAuth discovery endpoints by itself.
+
+This means:
+
+- Clients that can attach Bearer tokens directly work immediately.
+- For MCP-native OAuth discovery, use [Phase 5 XSUAA](phase5-xsuaa-setup.md) on BTP.
+
+### VS Code / other clients with static headers
+
+If your client supports custom HTTP headers, provide a Bearer token:
 
 ```json
 {
-  "servers": {
+  "mcpServers": {
     "arc1": {
-      "type": "http",
-      "url": "https://arc1.company.com/mcp"
+      "url": "https://arc1.company.com/mcp",
+      "headers": {
+        "Authorization": "Bearer <access-token>"
+      }
     }
   }
 }
 ```
-
-VS Code will:
-1. Discover the Protected Resource Metadata at `/.well-known/oauth-protected-resource`
-2. Find the Authorization Server (your IdP)
-3. Open browser for OAuth login
-4. Send Bearer tokens automatically
 
 ### Microsoft Copilot Studio / Power Automate
 
@@ -173,18 +162,18 @@ Copilot Studio uses Power Automate custom connectors to connect to MCP servers. 
 #### Step 2: Configure Security Tab
 
 3. **Security tab** → Authentication type: **OAuth 2.0**
-   - Identity Provider: **Azure Active Directory**
+   - Identity Provider: **Microsoft Entra ID** (or **Azure Active Directory**, depending on UI label)
    - Enable **Dienstprinzipal-Unterstützung** (Service Principal support)
    - **Client ID:** `{client-id}` (from Entra ID app registration)
    - **Client secret:** `{client-secret}` (from Entra ID app registration)
    - **Authorization URL:** `https://login.microsoftonline.com`
    - **Tenant ID:** `{tenant-id}` (your actual tenant ID — **NOT** `common`)
-   - **Resource URL:** `{client-id}` (the raw GUID, **NOT** `api://...`)
+   - **Resource URL:** `{client-id}` (raw GUID)
    - **Scope:** `api://{client-id}/access_as_user offline_access`
 
 > **⚠️ Critical:** The **Tenant ID** must be your actual tenant GUID, not `common`. Using `common` fails for single-tenant apps.
 >
-> **⚠️ Critical:** The **Resource URL** must be the raw client ID GUID (e.g., `aa34a3d1-...`), not the `api://` URI. When an app requests a token for itself, Entra ID requires the GUID format.
+> **⚠️ Critical:** Validate with a real token from your connector flow and set `SAP_OIDC_AUDIENCE` to the exact token `aud` claim.
 
 #### Step 3: Create Definition
 
@@ -231,15 +220,19 @@ Copilot Studio uses Power Automate custom connectors to connect to MCP servers. 
 ### Manual Token Testing
 
 ```bash
-# Get a token from your IdP (example with Azure CLI)
-# First, authorize Azure CLI for your app:
-az ad app update --id {client-id} --set "api.preAuthorizedApplications=[{\"appId\":\"04b07795-8ddb-461a-bbee-02f9e1bf7b46\",\"delegatedPermissionIds\":[\"your-scope-id\"]}]"
-
-# Login with the scope
+# Get a token from Entra ID (example with Azure CLI)
 az login --scope "api://{client-id}/access_as_user"
 
-# Get a token
+# Get access token
 TOKEN=$(az account get-access-token --scope "api://{client-id}/access_as_user" --query accessToken -o tsv)
+
+# Optional: inspect the aud claim and use that value in SAP_OIDC_AUDIENCE
+python3 - "$TOKEN" <<'PY'
+import base64, json, sys
+tok=sys.argv[1].split(".")[1]
+tok += "=" * ((4-len(tok)%4)%4)
+print(json.loads(base64.urlsafe_b64decode(tok))["aud"])
+PY
 
 # Test against arc1
 curl -X POST -H "Authorization: Bearer $TOKEN" \
@@ -250,16 +243,11 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ## How It Works
 
-1. MCP client sends request without token
-2. ARC-1 returns `401` with `WWW-Authenticate: Bearer resource_metadata="..."`
-3. Client fetches Protected Resource Metadata
-4. Client discovers IdP authorization server
-5. Client performs OAuth 2.1 Authorization Code + PKCE flow
-6. Client sends `Authorization: Bearer <jwt>` on every request
-7. ARC-1 validates JWT signature via JWKS (cached 1 hour)
-8. arc1 checks issuer, audience, expiry
-9. ARC-1 extracts username from configured claim
-10. Request proceeds (SAP auth still via service account)
+1. Client obtains access token from your IdP (Entra, Cognito, Keycloak, ...)
+2. Client sends `Authorization: Bearer <jwt>` on `/mcp`
+3. ARC-1 validates JWT signature via JWKS
+4. ARC-1 validates issuer, audience, and expiration
+5. Request proceeds (SAP auth still via shared SAP connection unless Phase 3 PP is enabled)
 
 ## Security Notes
 
@@ -273,7 +261,9 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 - [MCP Specification - Authorization](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization) — OAuth 2.1 auth for MCP servers
 - [RFC 9728 - OAuth Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728) — Auto-discovery of authorization servers
-- [Microsoft Entra ID - App Registrations](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) — Azure AD app setup
+- [Microsoft Entra ID - App Registrations](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) — app registration setup
+- [Authenticate your API and connector with Microsoft Entra ID](https://learn.microsoft.com/en-us/connectors/custom-connectors/azure-active-directory-authentication) — Power Automate/Copilot Studio connector flow
+- [Access token claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference) — `aud` claim behavior
 - [AWS Cognito User Pools](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools.html) — AWS IdP setup
 - [Keycloak - Creating a Realm](https://www.keycloak.org/docs/latest/server_admin/#configuring-realms) — Open-source IdP setup
 

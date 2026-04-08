@@ -16,7 +16,7 @@ If you don't have a BTP ABAP Environment instance yet, you can create one on the
 
 ### Prerequisites for Free Tier
 
-- A SAP BTP trial or pay-as-you-go account
+- A SAP BTP global account with free-tier eligible entitlements (trial is optional)
 - Cloud Foundry enabled in your subaccount (with an org and space)
 - The `abap` / `free` entitlement assigned to your subaccount
 
@@ -61,14 +61,13 @@ EOF
 cf create-service abap free my-abap-instance -c params.json
 ```
 
-**Important notes:**
+**Important notes (verified April 7, 2026):**
 - `admin_email` must be a valid email address (the one you use to log into BTP)
 - `sap_system_name` is a 3-character SID (e.g., `H01`, `DEV`, `Z01`)
-- Free tier is only available in certain regions (`eu10`, `us10`, `ap10`)
+- Free tier availability depends on your region and commercial model; check SAP Discovery Center and your subaccount entitlements for current region support
 - Only **one** free instance per global account
 - Provisioning takes **30-60 minutes** — check status with `cf service my-abap-instance`
-- Free tier instances are **stopped each night** — restart via Landscape Portal or BTP Cockpit
-- Free tier has a **90-day time limit**
+- Recent SAP ABAP environment updates changed free-tier system sizing (for example, 0.5 ACU provisioning); verify current limits in SAP Help before planning capacity
 
 ### Common Error: admin_email Validation
 
@@ -417,10 +416,16 @@ When `SAP_SYSTEM_TYPE=btp` is set (or auto-detected), tool definitions and behav
 ### Free tier provisioning fails
 
 - **Entitlement missing**: Assign `abap` / `free` in Global Account > Entitlements
-- **Region not supported**: Free tier is only in `eu10`, `us10`, `ap10`
+- **Region not supported**: Free plan might not be available in your region/commercial model
 - **Already have an instance**: Only one free instance per global account
 - **CF not enabled**: Enable Cloud Foundry in your subaccount first
 
 ## Architecture Details
 
 For the research report covering authentication options, competitor analysis, and design decisions, see [docs/reports/btp-abap-environment-connectivity.md](reports/btp-abap-environment-connectivity.md).
+
+## External References
+
+- [Using Free Service Plans (SAP BTP)](https://help.sap.com/docs/BTP/65de2977205c403bbc107264b8eccf4b/524e1081d8dc4b0f9d055a6bec383ec3.html) — commercial model and entitlement requirements
+- [Lifecycle Management (SAP BTP ABAP Environment)](https://help.sap.com/docs/ABAP_ENVIRONMENT/36609a00dcea4e6fa7c4ca2f2868e972/3b19c2bc43854d7cb49a6522d5f9442a.html) — recent free-tier and region updates
+- [Selecting a Service Plan for the Web Access for ABAP](https://help.sap.com/docs/BTP/65de2977205c403bbc107264b8eccf4b/2859cc59f9ba4976a6d613475d07c9ed.html) — booster note and entitlement flow

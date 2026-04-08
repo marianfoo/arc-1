@@ -1,212 +1,157 @@
 # Phase 3: Principal Propagation Setup
 
-Authenticate each MCP user to SAP with their own identity using ephemeral X.509 certificates. No shared SAP passwords. Full per-user audit trail.
+Use this phase when each authenticated MCP user must run in SAP with their own identity.
+
+This guide covers the principal propagation path that ARC-1 currently supports:
+
+- ARC-1 on BTP Cloud Foundry
+- BTP Destination Service
+- Cloud Connector
+- SAP certificate mapping (CERTRULE / VUSREXTID)
+
+---
 
 ## When to Use
 
-- Enterprise environments requiring per-user SAP authorization
-- Compliance/audit requirements (who did what in SAP)
-- When different users should have different SAP permissions
-- Zero shared credentials architecture
+- You need per-user SAP authorization checks (`S_DEVELOP`, etc.)
+- You need user-level SAP auditability (no shared technical user)
+- You already use JWT-based MCP auth (XSUAA or OIDC)
+
+---
 
 ## Architecture
 
 ```
-┌──────────────────┐     OAuth JWT        ┌──────────────────────────────┐     mTLS (ephemeral cert)   ┌────────────┐
-│  MCP Client      │ ──────────────────► │  arc1 Server                  │ ────────────────────────► │  SAP ABAP  │
-│  (IDE / Copilot) │                     │                              │   CN=<sap-username>      │  System    │
-└──────────────────┘                     │  1. Validate JWT (Phase 2)   │   Signed by trusted CA   │            │
-                                         │  2. Extract username          │                          │  STRUST:   │
-                                         │  3. Generate ephemeral cert   │                          │   CA cert  │
-                                         │  4. mTLS to SAP with cert    │                          │  CERTRULE: │
-                                         └──────────────────────────────┘                          │   CN→User  │
-                                                                                                    └────────────┘
+MCP Client (JWT)
+  -> ARC-1 (/mcp)
+  -> Destination Service lookup with X-User-Token
+  -> Connectivity Proxy
+  -> Cloud Connector (Principal Propagation)
+  -> SAP ICM (client cert)
+  -> CERTRULE / VUSREXTID mapping
+  -> SAP user session (per user)
 ```
+
+---
 
 ## Prerequisites
 
-- Phase 2 (OAuth/JWT) must be configured first
-- SAP admin access for STRUST, CERTRULE, ICM configuration
-- OpenSSL for CA certificate generation
+- [Phase 2 OAuth setup](phase2-oauth-setup.md) working (or [Phase 5 XSUAA](phase5-xsuaa-setup.md))
+- ARC-1 deployed on BTP CF
+- Destination + Connectivity service instances bound
+- Cloud Connector connected to your subaccount
 
-## Step 1: Generate CA Key Pair
+---
 
-This CA signs the ephemeral certificates. SAP must trust this CA.
+## Step 1: Create Two Destinations
 
-```bash
-# Generate CA private key (RSA 2048)
-openssl genrsa -out ca.key 2048
+Use a dual-destination setup:
 
-# Generate CA certificate (valid 10 years)
-openssl req -new -x509 -key ca.key -out ca.crt -days 3650 \
-  -subj "/CN=arc1-principal-propagation-ca/O=YourCompany/C=DE"
+1. `SAP_TRIAL` (or your name): `BasicAuthentication` for shared fallback
+2. `SAP_TRIAL_PP` (or your name): `PrincipalPropagation` for per-user requests
 
-# Verify
-openssl x509 -in ca.crt -text -noout
-```
-
-**Security:** Store `ca.key` in a secrets manager (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault). Never commit to version control.
-
-## Step 2: Configure SAP System
-
-### 2a. Import CA Certificate into STRUST
-
-1. Open transaction **`/nSTRUST`**
-2. Double-click **SSL server Standard** PSE
-3. Switch to Edit mode (pencil icon)
-4. Click **Import certificate** (at bottom of screen)
-5. Paste the contents of `ca.crt` (PEM format)
-6. Click **Add to Certificate List**
-7. **Save**
-
-### 2b. Configure ICM Profile Parameters
-
-1. Open transaction **`/nRZ10`**
-2. Select the **DEFAULT** profile → Extended Maintenance → Change
-3. Add/verify these parameters:
-
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| `icm/HTTPS/verify_client` | `1` | Request client certificate (accept) |
-| `login/certificate_mapping_rulebased` | `1` | Enable CERTRULE mapping |
-
-4. **Save** the profile
-
-### 2c. Configure Certificate-to-User Mapping (CERTRULE)
-
-1. Open transaction **`/nCERTRULE`**
-2. Switch to Change mode
-3. Click **Upload Certificate** → import a sample ephemeral cert:
+Set in ARC-1:
 
 ```bash
-# Generate a sample cert to import into CERTRULE
-openssl req -new -x509 -key ca.key -out sample.crt -days 1 \
-  -subj "/CN=DEVELOPER"
-# Upload sample.crt into CERTRULE
+cf set-env arc1-mcp-server SAP_BTP_DESTINATION SAP_TRIAL
+cf set-env arc1-mcp-server SAP_BTP_PP_DESTINATION SAP_TRIAL_PP
 ```
 
-4. Click **Rule** to create a mapping:
-   - **Certificate Entry:** `Subject`
-   - **Certificate Attr:** `CN` (Common Name)
-   - **Login As:** `ID` (SAP User ID)
-5. **Save**
+Why dual destinations:
+- PP destination has no user/password
+- health checks and non-JWT clients still need a shared path
 
-This rule means: any certificate with Subject CN = `DEVELOPER` → log in as SAP user `DEVELOPER`.
+---
 
-### 2d. Restart ICM
+## Step 2: Configure Cloud Connector
 
-1. Open transaction **`/nSMICM`**
-2. Go to **Administration** → **ICM** → **Exit Soft** (or **Exit Hard**)
-3. Wait for ICM to restart (green status)
+In Cloud Connector:
 
-### 2e. For Cloud Connector Deployments (Optional)
+1. Add an HTTPS on-prem system mapping for SAP HTTPS port (typically `50001`)
+2. Set auth mode to principal propagation (`X509_GENERAL`)
+3. Configure subject pattern rule (for example `CN=${name}`)
+4. Add required ADT resources (at least `/sap/bc/adt/*`)
 
-If SAP is on-premise behind BTP Cloud Connector:
+Use your corporate policy for certificate trust and allowlist settings.
 
-1. **Install system certificate** in Cloud Connector:
-   - Cloud Connector Admin UI → Configuration → ON PREMISE → System Certificate
-   - Import the CA certificate (`ca.crt`)
+Detailed walkthrough: [btp-destination-setup.md](btp-destination-setup.md).
 
-2. **Configure trusted reverse proxy** in SAP:
-   ```
-   icm/trusted_reverse_proxy_0 = SUBJECT="CN=SCC, O=SAP, C=DE", ISSUER="CN=arc1-principal-propagation-ca, O=YourCompany, C=DE"
-   ```
+---
 
-3. **Enable principal propagation** in Cloud Connector:
-   - Cloud to On-Premises → system mapping → Allow Principal Propagation
-   - Principal type: X.509 Certificate
+## Step 3: Configure SAP Backend Mapping
 
-## Step 3: Start arc1 with Principal Propagation
+In SAP backend:
+
+1. Import Cloud Connector CA certificate into STRUST (`SSL Server Standard`)
+2. Ensure profile parameters for certificate mapping are enabled
+3. Create user mapping entries (`CERTRULE` or `SM30` view `VUSREXTID`)
+4. Restart ICM
+
+Mapping must match the certificate subject generated by Cloud Connector.
+
+---
+
+## Step 4: Enable Principal Propagation in ARC-1
 
 ```bash
-arc1 --url https://sap.example.com:44300 \
-    --transport http-streamable \
-    --http-addr 0.0.0.0:8080 \
-    --oidc-issuer 'https://login.microsoftonline.com/{tenant-id}/v2.0' \
-    --oidc-audience 'api://arc1-sap-connector' \
-    --pp-ca-key ca.key \
-    --pp-ca-cert ca.crt \
-    --pp-cert-ttl 5m \
-    --insecure  # Only for testing with self-signed SAP certs
+cf set-env arc1-mcp-server SAP_PP_ENABLED true
+cf set-env arc1-mcp-server SAP_XSUAA_AUTH true   # if using XSUAA for MCP auth
+cf restage arc1-mcp-server
 ```
 
-### Environment Variables
+Optional strict mode:
 
 ```bash
-export SAP_URL=https://sap.example.com:44300
-export SAP_TRANSPORT=http-streamable
-export SAP_HTTP_ADDR=0.0.0.0:8080
-export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
-export SAP_OIDC_AUDIENCE='api://arc1-sap-connector'
-export SAP_PP_CA_KEY=/secrets/ca.key
-export SAP_PP_CA_CERT=/secrets/ca.crt
-export SAP_PP_CERT_TTL=5m
+cf set-env arc1-mcp-server SAP_PP_STRICT true
+cf restage arc1-mcp-server
 ```
 
-**Note:** No `SAP_USER` or `SAP_PASSWORD` needed! Authentication is entirely via certificates.
+With `SAP_PP_STRICT=true`, PP failures are returned as errors (no fallback).
 
-## Step 4: Test
+---
+
+## Runtime Behavior
+
+When `SAP_PP_ENABLED=true`:
+
+- JWT token present -> ARC-1 attempts per-user destination
+- If per-user auth fails:
+  - `SAP_PP_STRICT=false` -> fallback to shared destination/client
+  - `SAP_PP_STRICT=true` -> return error
+- No JWT (for example API key token) -> shared destination/client
+
+---
+
+## Verification
+
+### ARC-1 logs
 
 ```bash
-# Get an OAuth token
-TOKEN=$(az account get-access-token --resource api://arc1-sap-connector --query accessToken -o tsv)
-
-# Call arc1 — it will generate an ephemeral cert for your user and authenticate to SAP
-curl -H "Authorization: Bearer $TOKEN" https://arc1.company.com/mcp \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+cf logs arc1-mcp-server --recent | grep -E "Principal propagation|per-user|BTP destination"
 ```
 
-## How It Works (Per Request)
+### SAP audit and user mapping
 
-1. MCP client sends request with `Authorization: Bearer <jwt>`
-2. ARC-1 validates JWT signature, issuer, audience, expiry
-3. ARC-1 extracts SAP username from JWT claim (e.g., `preferred_username`)
-4. ARC-1 generates ephemeral X.509 certificate:
-   - Subject CN = SAP username (e.g., `DEVELOPER`)
-   - Valid for 5 minutes
-   - Signed by the CA key
-5. ARC-1 creates a per-request HTTPS client with the ephemeral cert
-6. SAP receives the mTLS connection, verifies the cert against STRUST
-7. SAP maps Subject CN to SAP user via CERTRULE
-8. SAP processes the ADT request as that user
-9. Ephemeral cert is discarded (never stored)
+- `SM20`: verify the individual SAP user appears
+- `SM30` / `VUSREXTID`: verify subject-to-user mapping
+- `SU01`: verify mapped user exists and has required roles
+
+---
 
 ## Troubleshooting
 
-### SAP Returns 401
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| PP always falls back to shared user | PP destination not configured or not `PrincipalPropagation` | Check `SAP_BTP_PP_DESTINATION` and destination auth type |
+| `User token validation failed` from Destination Service | JWT issuer not trusted by BTP | Configure BTP trust for your IdP |
+| SAP `401/403` with PP path | Missing cert trust or mapping | Recheck STRUST + CERTRULE/VUSREXTID |
+| Strict mode errors for API key calls | API key is not JWT | Use JWT auth or disable `SAP_PP_STRICT` |
 
-1. **Check STRUST:** Is the CA cert in the SSL Server Standard certificate list?
-2. **Check ICM:** Is `icm/HTTPS/verify_client = 1`? (check via `/nSMICM` → Goto → Parameters → Display)
-3. **Check CERTRULE:** Does a rule mapping CN → User exist?
-4. **Check ICM trace:** Set trace level 2 in SMICM, reproduce the error, check dev_icm trace file
-5. **Check user exists:** Does the SAP user matching the CN exist and is unlocked?
+---
 
-### Certificate Mapping Not Working
+## Related Docs
 
-1. Open transaction **`/nCERTRULE`**
-2. Upload the actual ephemeral cert (from arc1 verbose logs) to test the mapping
-3. Verify the rule matches
-
-### Cloud Connector Issues
-
-1. Check Cloud Connector logs (All/Payload trace)
-2. Verify `icm/trusted_reverse_proxy` parameter matches CC system certificate
-3. Ensure principal propagation is enabled in CC access control
-
-## Security Notes
-
-- **CA key is the crown jewel** — protect it like a root password
-- Ephemeral certs are valid for only 5 minutes (configurable via `--pp-cert-ttl`)
-- RSA-2048 key pair generated per request (~2ms overhead)
-- No SAP passwords stored anywhere
-- Full audit trail: SAP logs show which user performed each action
-- CERTRULE can restrict which usernames are allowed (not just wildcard CN mapping)
-
-## SAP Documentation References
-
-- [Authenticating Users Against On-Premise Systems](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/authenticating-users-against-on-premise-systems) — Principal Propagation via Cloud Connector
-- [Setting Up Trust Between Identity Provider and SAP](https://help.sap.com/docs/btp/sap-business-technology-platform/principal-propagation) — BTP principal propagation overview
-- [STRUST - Trust Manager (SAP Help)](https://help.sap.com/doc/saphelp_nw75/7.5.25/en-us/4c/61a6c6364e11d3963800a0c9e1edf3/frameset.htm) — Importing trusted CA certificates
-- [CERTRULE - Rule-Based Certificate Mapping (SAP Note 2275087)](https://me.sap.com/notes/2275087) — Rule-based certificate-to-user mapping
-- [ICM Profile Parameters](https://help.sap.com/doc/saphelp_nw75/7.5.25/en-us/48/21f839a44c3d65e10000000a42189c/frameset.htm) — ICM HTTPS client cert parameters
-- [Cloud Connector - Principal Propagation](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/configuring-principal-propagation) — Cloud Connector principal propagation setup
+- [BTP destination setup](btp-destination-setup.md)
+- [Phase 2 OAuth/JWT setup](phase2-oauth-setup.md)
+- [Phase 4 BTP deployment](phase4-btp-deployment.md)
+- [Enterprise auth guide](enterprise-auth.md)

@@ -176,14 +176,14 @@ VS Code and Copilot use HTTP Streamable transport, not stdio. Start arc1 as an H
 
 ```bash
 npx arc-1 --url https://host:44300 --user dev --password secret \
-  --transport http-streamable --port 3000
+  --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
 With safety controls:
 
 ```bash
 npx arc-1 --url https://host:44300 --user dev --password secret \
-  --transport http-streamable --port 3000 \
+  --transport http-streamable --http-addr 0.0.0.0:3000 \
   --read-only --block-free-sql
 ```
 
@@ -233,7 +233,7 @@ For clients that support **HTTP Streamable**, start the server and connect to th
 
 ```bash
 npx arc-1 --url https://host:44300 --user dev --password secret \
-  --transport http-streamable --port 3000
+  --transport http-streamable --http-addr 0.0.0.0:3000
 # Connect your client to http://localhost:3000/mcp
 ```
 
@@ -383,17 +383,15 @@ docker run -d --name arc1 \
 
 Full guide: **[phase2-oauth-setup.md](phase2-oauth-setup.md)**
 
-### Docker with OAuth2/XSUAA
+### Docker with BTP ABAP service key
 
-For SAP BTP ABAP Environment systems that use XSUAA for authentication:
+For SAP BTP ABAP Environment systems, use a BTP service key (ARC-1 performs browser OAuth):
 
 ```bash
 docker run -d --name arc1 \
   -p 8080:8080 \
-  -e SAP_URL=https://your-abap-env.abap.us10.hana.ondemand.com \
-  -e SAP_XSUAA_URL=https://your-subdomain.authentication.us10.hana.ondemand.com \
-  -e SAP_XSUAA_CLIENT_ID=your-client-id \
-  -e SAP_XSUAA_CLIENT_SECRET=your-client-secret \
+  -e SAP_BTP_SERVICE_KEY='{"uaa":{"url":"...","clientid":"...","clientsecret":"..."},"url":"https://your-system.abap.eu10.hana.ondemand.com"}' \
+  -e SAP_SYSTEM_TYPE=btp \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
@@ -417,9 +415,9 @@ How arc1 authenticates when calling SAP ADT APIs.
 |--------|--------|------------|
 | **Basic Auth** | `--user` + `--password` | Local dev, simple setups |
 | **Cookie** | `--cookie-file` or `--cookie-string` | Reuse browser session (temporary) |
-| **OAuth2/XSUAA** | XSUAA env vars | BTP ABAP Environment |
-| **X.509 mTLS** | `--client-cert` + `--client-key` | Enterprise cert-based auth |
-| **Principal Propagation** | `--pp-enabled` + BTP Destination | Per-user SAP identity via ephemeral X.509 certs |
+| **BTP Service Key OAuth** | `SAP_BTP_SERVICE_KEY` / `SAP_BTP_SERVICE_KEY_FILE` | Direct BTP ABAP Environment |
+| **BTP Destination** | `SAP_BTP_DESTINATION` | BTP CF to on-prem SAP via Destination/Connectivity |
+| **Principal Propagation** | `--pp-enabled` + BTP Destinations | Per-user SAP identity via Cloud Connector |
 
 Only one SAP auth method can be active at a time.
 
@@ -628,7 +626,7 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | `--client` | `SAP_CLIENT` | 001 | SAP client number |
 | `--language` | `SAP_LANGUAGE` | EN | SAP logon language |
 | `--transport` | `SAP_TRANSPORT` | stdio | `stdio` or `http-streamable` |
-| `--port` | `SAP_PORT` | 8080 | HTTP server port |
+| `--http-addr` | `SAP_HTTP_ADDR` | 0.0.0.0:8080 | HTTP listen address |
 | `--insecure` | `SAP_INSECURE` | false | Skip TLS certificate verification |
 | `--read-only` | `SAP_READ_ONLY` | false | Block all write operations |
 | `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | false | Block SQL query execution |
@@ -638,6 +636,9 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | `--api-key` | `ARC1_API_KEY` | — | API key for HTTP auth |
 | `--oidc-issuer` | `SAP_OIDC_ISSUER` | — | OIDC issuer URL |
 | `--oidc-audience` | `SAP_OIDC_AUDIENCE` | — | OIDC audience |
+| `--btp-service-key` | `SAP_BTP_SERVICE_KEY` | — | Inline BTP service key JSON |
+| `--btp-service-key-file` | `SAP_BTP_SERVICE_KEY_FILE` | — | BTP service key file path |
+| `--btp-oauth-callback-port` | `SAP_BTP_OAUTH_CALLBACK_PORT` | 0 | Local OAuth callback port (0=auto) |
 | `--pp-enabled` | `SAP_PP_ENABLED` | false | Enable principal propagation |
 | `--pp-strict` | `SAP_PP_STRICT` | false | Fail on PP errors (no fallback) |
 

@@ -99,7 +99,7 @@ Start arc1 as an HTTP server, then point your MCP client to it:
 
 ```bash
 SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \
-  npx arc-1 --transport http-streamable --port 3000
+  npx arc-1 --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
 Add to VS Code / Copilot MCP config:
@@ -149,6 +149,7 @@ arc1 --allowed-ops "RSQ"                      # whitelist operations
 | [enterprise-auth.md](enterprise-auth.md) | Enterprise authentication (all methods) |
 | [cli-guide.md](cli-guide.md) | CLI commands and configuration |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial setup |
+| [reports/documentation-audit-2026-04-07.md](reports/documentation-audit-2026-04-07.md) | Dated docs audit and drift fixes |
 | [roadmap.md](roadmap.md) | Planned features |
 
 ## License
