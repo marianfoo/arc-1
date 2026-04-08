@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-08
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -28,36 +28,41 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ---
 
-## Current State (v0.3.0 — TypeScript)
+## Current State (v0.5.0 — TypeScript)
 
 | Area | Status |
 |------|--------|
 | TypeScript Migration | ✅ Complete — Go code removed, pure TypeScript |
 | Core MCP Server | ✅ 11 intent-based tools + hyperfocused mode (1 tool), HTTP Streamable + stdio |
 | Safety System | ✅ Read-only, package filter, operation filter, transport guard, dry-run |
-| Phase 1: API Key Auth | ✅ `ARC1_API_KEY` Bearer token |
+| Input Validation | ✅ Zod v4 runtime validation for all MCP tool inputs (v0.5.0) |
+| Phase 1: API Key Auth | ✅ `ARC1_API_KEY` Bearer token + multi-key profiles |
 | Phase 2: OAuth/OIDC (Entra ID) | ✅ JWT validation via `jose` library, tested with Copilot Studio |
 | Phase 4: BTP CF Deployment | ✅ Docker on CF with Destination Service + Cloud Connector |
 | BTP Destination Service | ✅ Auto-resolves SAP credentials from BTP Destination at startup |
 | BTP Connectivity Proxy | ✅ Routes through Cloud Connector with JWT Proxy-Authorization |
 | BTP ABAP Environment | ✅ OAuth 2.0 browser login, direct connectivity |
-| ABAP Linter | ✅ `@abaplint/core` integration (full abaplint rules) |
+| ABAP Linter | ✅ `@abaplint/core` with system-aware cloud/on-prem presets + pre-write validation |
 | Docker Image | ✅ Multi-platform (amd64/arm64), GHCR `ghcr.io/marianfoo/arc-1` |
 | CI/CD | ✅ GitHub Actions: lint + typecheck + unit tests (Node 20/22) + integration tests |
 | XSUAA OAuth Proxy | ✅ MCP SDK ProxyOAuthServerProvider + @sap/xssec JWT validation |
-| Scope Enforcement | ✅ Per-tool scope checks (read/write/admin), ListTools filtered by scope |
+| Authorization Model | ✅ Two-dimensional: scopes (read/write/admin) × roles (viewer/developer) × safety config |
 | Audit Logging | ✅ User identity in tool call logs, BTP Audit Log sink, file sink |
 | MCP Elicitation | ✅ Interactive parameter collection for destructive ops |
 | Dynamic Client Registration | ✅ /register endpoint for MCP clients (RFC 7591) |
 | Principal Propagation | ✅ Per-user ADT client via BTP Destination Service + Cloud Connector |
+| OAuth Security | ✅ RFC 9700 compliance: state+PKCE, loopback binding, audience validation (v0.5.0) |
 | Hyperfocused Mode | ✅ Single `SAP` tool (~200 tokens) — competitive parity with VSP |
 | Method-Level Surgery | ✅ `edit_method` in SAPWrite, `list_methods`/`get_method` in SAPContext (95% token reduction) |
 | Runtime Diagnostics | ✅ SAPDiagnose — short dumps (ST22), ABAP profiler traces |
 | DDIC Completeness | ✅ Structures, domains, data elements, DDLX, transactions, BOR objects, T100 messages |
 | RAP CRUD | ✅ DDLS, DDLX, BDEF, SRVD write + SRVB read |
 | Context Compression | ✅ SAPContext with AST-based dependency extraction (7-30x reduction) |
-| Test Coverage | ✅ 707+ unit tests + 28 BTP integration tests (vitest) |
-| Documentation | ✅ Architecture, auth guides, Docker guide, setup phases |
+| Where-Used Analysis | ✅ Scope-based where-used in SAPNavigate (#38) |
+| Object Caching | ✅ SQLite + memory cache with on-demand + pre-warmer support (#31) |
+| HTTP Client | ✅ Native fetch + undici (replaced axios) (#35) |
+| Test Coverage | ✅ 1,104 unit tests + 28 BTP integration tests (vitest) |
+| Documentation | ✅ Architecture, auth guides, Docker guide, setup phases, security guide |
 
 ---
 
@@ -298,15 +303,13 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 ### FEAT-01: Where-Used Analysis (Usage References)
 | Field | Value |
 |-------|-------|
-| **Priority** | 🟠 P1 |
-| **Effort** | XS (< 1 day) |
-| **Risk** | Low |
-| **Usefulness** | Very High — most requested missing feature |
-| **Status** | Done |
+| **Priority** | — |
+| **Effort** | — |
+| **Risk** | — |
+| **Usefulness** | — |
+| **Status** | ✅ Complete (2026-04-04, PR #38) |
 
-**What:** Find all references to an ABAP object across the system. Uses ADT endpoint `/sap/bc/adt/repository/informationsystem/usageReferences`.
-
-**Why:** Currently ARC-1 has `FindReferences` (code intelligence, position-based), but not the repository-wide "Where-Used" analysis that every ABAP developer uses daily.
+**Implemented:** Scope-based where-used analysis in SAPNavigate. Uses ADT endpoint `/sap/bc/adt/repository/informationsystem/usageReferences`. Supports filtering by scope (local, package, system-wide).
 
 **References:**
 - [Report 001: Feature Parity](../reports/2026-03-24-001-feature-parity-implementation.md) — Item #1
@@ -316,15 +319,18 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 ### FEAT-02: API Release Status Tool (Clean Core)
 | Field | Value |
 |-------|-------|
-| **Priority** | 🟠 P1 |
+| **Priority** | 🔴 P0 |
 | **Effort** | S (1–2 days) |
 | **Risk** | Low |
 | **Usefulness** | Very High — critical for S/4HANA Cloud and clean core compliance |
 | **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/7270ad7-api-release-state.md) |
 
 **What:** Check whether an SAP object (class, function module, table, CDS view) is released, deprecated, or internal. Returns the API release state (C1 Released, C2 Deprecated, Not Released) and the recommended successor.
 
-**Why:** Every S/4HANA Cloud / BTP ABAP customer needs to check if their code uses only released APIs. This is a "must have" for any AI copilot helping with ABAP Cloud development. The buettnerjulian/abap-adt-mcp competitor already has this.
+**Why:** Every S/4HANA Cloud / BTP ABAP customer needs to check if their code uses only released APIs. This is a "must have" for any AI copilot helping with ABAP Cloud development.
+
+**Competitive urgency (2026-04-08):** VSP added `GetAPIReleaseState` (commit 7270ad7, Apr 5). ARC-1 is now the only major project without this. **Upgraded from P1 to P0.**
 
 ---
 
@@ -365,6 +371,8 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 **What:** ADT supports code refactoring operations (rename symbol, extract method, change package). The marcellourbani/abap-adt-api TypeScript library implements these.
 
+**Competitive update (2026-04-08):** VSP added rename preview analysis (commit dcaa358, Apr 6). Shows what would change without performing the rename. abap-adt-api has full rename (3 methods).
+
 ---
 
 ### FEAT-06: Cloud Readiness Assessment
@@ -387,6 +395,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 - ✅ Custom rule overrides via `--abaplint-config` or per-call `rules` parameter
 - ⬜ ATC Cloud check variant integration (server-side, complements offline abaplint)
 - ⬜ Combined cloud readiness report (ATC + abaplint findings merged)
+- ⬜ API release state check (see FEAT-02, **now P0** — VSP has this since Apr 5)
 
 ---
 
@@ -609,9 +618,11 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | **Risk** | Low |
 | **Usefulness** | Medium — version comparison, rollback context |
 | **Status** | Not started |
-| **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/d3c6940-source-versions.md) |
+| **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/d3c6940-source-versions.md), [VSP eval](../compare/vibing-steampunk/evaluations/dd06202-version-history.md) |
 
 **What:** Load specific versions of ABAP source, compare active vs inactive, view revision history. The `abap-adt-api` library (v6.0.0) added `loadSourceVersion` and `sourceVersions`. Enables "show me what changed" and rollback workflows.
+
+**Competitive update (2026-04-08):** VSP added 3 version history tools (commit dd06202, Apr 2): list versions, compare versions, get specific version. Both VSP and abap-adt-api now have this.
 
 ---
 
@@ -637,9 +648,11 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | **Risk** | Low |
 | **Usefulness** | Medium — Git-based ABAP workflows |
 | **Status** | Not started |
-| **Source** | Dassian, VSP, abap-adt-api |
+| **Source** | Dassian, [VSP eval](../compare/vibing-steampunk/evaluations/81cce41-gcts-tools.md), abap-adt-api |
 
 **What:** List Git repositories, pull changes, check repo status. Multiple competitors have this (VSP, dassian, abap-adt-api). Enables Git-based ABAP development workflows.
+
+**Competitive update (2026-04-08):** VSP added 10 gCTS tools (commit 81cce41, Apr 5): repo management, branch operations, commit history, pull/push. Closes VSP issue #39. Three competitors now have gCTS (VSP, dassian, abap-adt-api).
 
 ---
 
@@ -729,6 +742,8 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 3. **Include lock parent resolution** — includes inherit parent's lock; verify FUGR/PROG includes lock correctly ([abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-36-include-lock.md))
 4. **Ignore syntax warnings on save** — syntax warnings should not block saves ([VSP eval](../compare/vibing-steampunk/evaluations/7fbfbba-ignore-warnings.md))
 5. **Transport endpoint S/4 compat** — transport creation endpoint differs on S/4HANA 757+ ([VSP eval](../compare/vibing-steampunk/evaluations/ca02f47-transport-endpoint-compat.md))
+6. **Auth headers on redirect** — SAP may redirect, and auth headers get stripped on cross-origin redirects. Verify undici/fetch behavior. ([VSP eval](../compare/vibing-steampunk/evaluations/27d4d7c-auth-redirect-stateful.md), added 2026-04-08)
+7. **Lock handle 423 errors** — recurring issue in VSP (#91, #88, #78). Verify ARC-1 crud.ts handles 423 gracefully. ([VSP eval](../compare/vibing-steampunk/evaluations/issue-91-lock-handle-423.md), added 2026-04-08)
 
 ---
 
@@ -748,6 +763,66 @@ The following features are tracked but not planned for near-term implementation.
 | 29h | Lock registry with recovery | Persist lock state to disk for crash recovery | fr0ster | M |
 | 29i | Language attributes on creation | Multi-language object creation | [abap-adt-api eval](../compare/abap-adt-api/evaluations/ffa43d7-language-attributes.md) | XS |
 | 29j | Lua scripting / WASM compiler | VSP-unique experimental, not core MCP value | VSP | N/A |
+| 29k | Dead code analysis | Method-level dead code via where-used | [VSP eval](../compare/vibing-steampunk/evaluations/1ecafe7-dead-code-analysis.md) | S |
+| 29l | Package health analysis | Aggregated test coverage + staleness + complexity | [VSP eval](../compare/vibing-steampunk/evaluations/74efe5e-health-analysis.md) | M |
+| 29m | Side effect / LUW classification | Classify methods by mutation profile | [VSP eval](../compare/vibing-steampunk/evaluations/11c2253-side-effects-luw.md) | M |
+| 29n | Package boundary crossing | Architecture governance: cross-package call analysis | [VSP eval](../compare/vibing-steampunk/evaluations/53fb790-boundary-crossing.md) | M |
+
+---
+
+### FEAT-31: Code Coverage from Unit Tests
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — test quality assessment |
+| **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/333f462-code-coverage.md) |
+
+**What:** Return line-level code coverage metrics from ABAP unit test runs. VSP added `GetCodeCoverage` (commit 333f462, Apr 4). ARC-1's SAPDiagnose runs unit tests but returns pass/fail only, not coverage data.
+
+---
+
+### FEAT-32: Table Pagination / Offset
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — practical query improvement |
+| **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/9fb6c8a-table-pagination.md) |
+
+**What:** Add `offset` parameter for cursor-style pagination and `columns_only` for schema-only queries to SAPQuery table preview. VSP added these (commit 9fb6c8a, Apr 4), closing their issue #34. ARC-1 has `maxRows` but no offset.
+
+---
+
+### FEAT-33: CDS Impact Analysis
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — increasingly important as S/4 moves logic into CDS |
+| **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/6c67140-cds-impact.md) |
+
+**What:** CDS-specific impact analysis: trace downstream consumers of a CDS view, get column-level metadata. VSP added CDS impact analysis and element info tools (commit 6c67140, Apr 4). Could extend SAPNavigate or SAPContext.
+
+---
+
+### FEAT-34: i18n Translation Management
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | M (3–5 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — multilingual ABAP development |
+| **Status** | Not started |
+| **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/566f1f7-i18n-tools.md) |
+
+**What:** Translation management tools: text elements, OTR texts, message class management, translation status, per-request language override. VSP added 7 translation tools (commit 566f1f7, Apr 5), closing their issue #40. ARC-1 has T100 message read and text elements read but not full management.
 
 ---
 
@@ -890,45 +965,48 @@ The following features are tracked but not planned for near-term implementation.
 > Priorities are assigned based on which [core design principle](#core-design-principles) a feature serves. Sourced from 3 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
 
 ### Phase A: Production Blockers (P0)
-1. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
-2. **FEAT-14** 401 Session Timeout Auto-Retry (XS) — centralized gateway idles between requests
-3. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — enterprise deployments without reverse proxy
-4. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
+1. **FEAT-02** API Release Status / Clean Core (S) — **upgraded from P1**: VSP now has this (Apr 5), ARC-1 is the only major project without it
+2. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
+3. **FEAT-14** 401 Session Timeout Auto-Retry (XS) — centralized gateway idles between requests
+4. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — enterprise deployments without reverse proxy
+5. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
 
 ### Phase B: Core Value Features (P1)
-5. **FEAT-01** Where-Used Analysis (XS) — most requested, daily ABAP developer need
 6. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
-7. **FEAT-02** API Release Status / Clean Core (S) — must-have for S/4HANA Cloud
-8. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
-9. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
-10. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
-11. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
-12. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
-13. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
+7. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
+8. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
+9. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
+10. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
+11. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
+12. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
+13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
 14. **FEAT-10** PrettyPrint (XS) — code formatting, VSP and abap-adt-api have it
 15. **FEAT-11** Inactive Objects List (XS) — development workflow
 16. **FEAT-19** Transport Contents (XS) — review objects before release
 17. **FEAT-21** ABAP Documentation / F1 Help (XS) — real docs instead of hallucination
-18. **FEAT-28** SAP Compatibility Hardening (S) — 5 compat fixes bundled
+18. **FEAT-28** SAP Compatibility Hardening (S) — 7 compat fixes bundled (expanded Apr 8)
 19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
 ### Phase D: ADT Feature Parity (P2) — Larger Items
 20. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
 21. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
-22. **FEAT-20** Source Version / Revision History (S) — version comparison, rollback
-23. **FEAT-24** CompareSource / Diff (S) — code review workflows
-24. **FEAT-26** MCP Client Config Snippets (S) — onboarding UX
-25. **FEAT-25** CDS Unit Tests (S) — CDS test-driven development
-26. **FEAT-23** GetProgFullCode / Include Traversal (S) — reduce round trips
-27. **FEAT-27** Migration Analysis ECC→S/4 (S) — custom code migration
-28. **FEAT-06** Cloud Readiness Assessment (M) — ATC cloud checks + abaplint
-29. **FEAT-03** Enhancement Framework / BAdI (M) — customization scenarios
-30. **FEAT-22** gCTS/abapGit Integration (M) — Git-based ABAP workflows
-31. **OPS-03** Multi-System Routing (L) — one instance → multiple SAP systems
-32. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
-33. **FEAT-30** ABAP Cleaner Integration (M) — optional Java-based code cleanup (see below)
+22. **FEAT-20** Source Version / Revision History (S) — version comparison, rollback (VSP + abap-adt-api have it)
+23. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4)
+24. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
+25. **FEAT-24** CompareSource / Diff (S) — code review workflows
+26. **FEAT-26** MCP Client Config Snippets (S) — onboarding UX
+27. **FEAT-25** CDS Unit Tests (S) — CDS test-driven development
+28. **FEAT-23** GetProgFullCode / Include Traversal (S) — reduce round trips
+29. **FEAT-27** Migration Analysis ECC→S/4 (S) — custom code migration
+30. **FEAT-06** Cloud Readiness Assessment (M) — ATC cloud checks + abaplint
+31. **FEAT-03** Enhancement Framework / BAdI (M) — customization scenarios
+32. **FEAT-22** gCTS/abapGit Integration (M) — Git-based ABAP workflows (VSP has 10 tools now)
+33. **FEAT-34** i18n Translation Management (M) — VSP has 7 tools (Apr 5)
+34. **OPS-03** Multi-System Routing (L) — one instance → multiple SAP systems
+35. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
+36. **FEAT-30** ABAP Cleaner Integration (M) — optional Java-based code cleanup (see below)
 
 ### FEAT-30: ABAP Cleaner Integration (Future)
 
@@ -960,9 +1038,15 @@ The following features are tracked but not planned for near-term implementation.
 - `SAP_ABAP_CLEANER_PROFILE` / `--abap-cleaner-profile` — path to `.cfj` profile
 - `SAP_ABAP_CLEANER_ENABLED` / `--abap-cleaner-enabled` — `auto` (default), `true`, `false`
 
-### Phase E: Future / Niche (P3)
-33. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
-34. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
+### Phase E: New Capabilities from Competitor Sprint (P2–P3)
+33. **FEAT-31** Code Coverage from Unit Tests (S) — VSP added line-level coverage metrics
+34. **FEAT-32** Table Pagination / Offset (XS) — VSP added offset + columns_only to table contents
+35. **FEAT-33** CDS Impact Analysis (S) — VSP added downstream consumer tracing for CDS views
+36. **FEAT-34** i18n Translation Management (M) — VSP added 7 translation tools
+
+### Phase F: Future / Niche (P3)
+37. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
+38. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
 
 ---
 
@@ -972,30 +1056,32 @@ The following features are tracked but not planned for near-term implementation.
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, scope enforcement | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 707+ tests |
-| **vibing-steampunk** | Go 1.24 | 1-99 (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 242 stars, native ABAP parser, WASM compiler, Lua scripting |
+| **ARC-1** | TypeScript | 11 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,104 tests |
+| **vibing-steampunk** | Go 1.24 | 1-99+ (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 242 stars, **Streamable HTTP (v2.38.0)**, native parser, massive feature sprint (i18n, gCTS, API release state, version history, code coverage) |
 | **fr0ster/mcp-abap-adt** | TypeScript | 287 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
 | lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, principal propagation |
-| dassian-adt / abap-mcpb | JavaScript | 25 | Basic, Browser login | MCP elicitation | Node.js / MCPB | Error intelligence, type auto-mappings, 7 elicitation flows |
+| dassian-adt / abap-mcpb | JavaScript | 25+ | Basic, Browser login | MCP elicitation | Node.js / MCPB | Error intelligence, batch activation, find_definition, edit_method (Apr sprint) |
 | AWS ABAP Accelerator | Python | ~15 | OAuth, X.509 | Basic | AWS Lambda | Cloud readiness assessment, migration |
 
 **ARC-1 differentiators (no other project has all of these):**
 1. **Intent-based routing** — 11 tools vs 25-287, simplest LLM decision surface
 2. **Principal propagation** — per-user SAP authentication via BTP Destination Service + Cloud Connector
-3. **Scope-based tool filtering** — users only see tools they have permission for (read/write/admin via XSUAA roles)
+3. **Two-dimensional authorization** — scopes (read/write/admin) × roles × safety config, with per-tool filtering
 4. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
 5. **Comprehensive safety system** — read-only, package filter, operation filter, transport guard, dry-run — additive to scopes
 6. **Multi-sink audit logging** — stderr + file + BTP Audit Log Service
 7. **Context compression + method-level surgery** — AST-based 7-30x + 95% method-level reduction
 8. **MCP elicitation** — interactive confirmations for destructive operations
-9. **707+ automated tests** with CI on Node 20/22, BTP integration tests
+9. **1,104 automated tests** with CI on Node 20/22, BTP integration tests
 10. **npm + Docker + release-please** — most professional distribution pipeline
+11. **RFC 9700 OAuth security** — state + PKCE, loopback binding, audience validation
 
 **Key competitive threats** (tracked in [`compare/`](../compare/)):
-1. **vibing-steampunk** (242 stars) — community favorite, daily commits, expanding into compilers/scripting. Lacks enterprise auth but developer-loved.
-2. **fr0ster** (v4.8.1, 85+ releases in 5 months) — fastest-moving competitor. 9 auth providers, TLS, RFC, embeddable. Watch for convergence on enterprise features.
-3. **btp-odata-mcp** (119 stars) — different category (OData) but high adoption. Could expand into ADT territory.
+1. **vibing-steampunk** (242 stars) — community favorite. **Major threat escalation (Apr 2026)**: massive sprint added Streamable HTTP, API release state, i18n (7 tools), gCTS (10 tools), version history, code coverage, dead code analysis, rename preview, health analysis, CDS impact. Still lacks enterprise auth/safety but rapidly closing feature gaps. ~40 commits in 6 days.
+2. **fr0ster** (v4.8.7, 85+ releases in 5 months) — closest enterprise competitor. 9 auth providers, TLS, RFC, embeddable. Search TSV format optimization. Watch for convergence on enterprise features.
+3. **dassian-adt** — newly active (Apr 2026): batch activation, find_definition, edit_method, BDEF creation. No safety system is a concern but rapid iteration.
+4. **btp-odata-mcp** (119 stars) — different category (OData) but high adoption. Could expand into ADT territory.
 
 ---
 
@@ -1071,6 +1157,13 @@ The following features are tracked but not planned for near-term implementation.
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | ✅ Complete (2026-04-01) |
 | MCP Elicitation | Interactive confirmations for destructive operations | ✅ Complete (2026-04-01) |
 | BTP ABAP Environment | OAuth 2.0 browser login, direct BTP connectivity | ✅ Complete (2026-04-01) |
+| Where-Used Analysis | FEAT-01: Scope-based where-used in SAPNavigate | ✅ Complete (2026-04-04, PR #38) |
+| Enhanced Abaplint | System-aware cloud/on-prem presets, pre-write validation, auto-fix | ✅ Complete (2026-04-04, PR #37) |
+| Object Caching | SQLite + memory cache with on-demand + pre-warmer support | ✅ Complete (2026-04-04, PR #31) |
+| HTTP Client Migration | Replaced axios with native fetch + undici | ✅ Complete (2026-04-04, PR #35) |
+| Two-Dimensional Auth | Scopes × roles × safety config, SEC-06 expanded | ✅ Complete (2026-04-07, PR #48) |
+| Zod v4 Validation | Runtime input validation for all MCP tool inputs | ✅ Complete (2026-04-08, PR #52) |
+| OAuth Security (RFC 9700) | SEC-08: state+PKCE, loopback binding, audience validation | ✅ Complete (2026-04-08, PR #51) |
 
 ---
 
