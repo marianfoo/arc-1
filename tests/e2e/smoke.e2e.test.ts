@@ -195,23 +195,23 @@ describe('E2E Smoke Tests', () => {
     expect(text).toContain('SAPSearch'); // LLM remediation hint
   });
 
-  it('SAPRead — unknown type returns clear error', async () => {
+  it('SAPRead — unknown type returns Zod validation error', async () => {
     const result = await callTool(client, 'SAPRead', { type: 'FOOBAR' });
-    expectToolError(result, 'Unknown SAPRead type');
+    expectToolError(result, 'Invalid arguments for SAPRead');
   });
 
-  it('SAPLint — unknown action returns clear error with SAPDiagnose hint', async () => {
+  it('SAPLint — unknown action returns Zod validation error', async () => {
     const result = await callTool(client, 'SAPLint', { action: 'foobar' });
-    expectToolError(result, 'SAPDiagnose');
+    expectToolError(result, 'Invalid arguments for SAPLint');
   });
 
-  it('SAPLint — atc action redirects to SAPDiagnose', async () => {
+  it('SAPLint — atc action returns Zod validation error', async () => {
     const result = await callTool(client, 'SAPLint', { action: 'atc' });
-    expectToolError(result, 'SAPDiagnose');
+    expectToolError(result, 'Invalid arguments for SAPLint');
   });
 
-  it('SAPLint — syntax action redirects to SAPDiagnose', async () => {
+  it('SAPLint — syntax action returns Zod validation error', async () => {
     const result = await callTool(client, 'SAPLint', { action: 'syntax' });
-    expectToolError(result, 'SAPDiagnose');
+    expectToolError(result, 'Invalid arguments for SAPLint');
   });
 });

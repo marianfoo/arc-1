@@ -300,7 +300,7 @@ describe('E2E Diagnostics Tests', () => {
         name: 'ZTEST',
         type: 'PROG',
       });
-      expectToolError(result, 'Unknown SAPDiagnose action');
+      expectToolError(result, 'Invalid arguments for SAPDiagnose');
     });
 
     it('returns error for unknown trace analysis type', async () => {
@@ -309,7 +309,7 @@ describe('E2E Diagnostics Tests', () => {
         id: 'FAKE_TRACE_ID',
         analysis: 'foobar',
       });
-      expectToolError(result, 'Unknown trace analysis type');
+      expectToolError(result, 'Invalid arguments for SAPDiagnose');
     });
   });
 });
