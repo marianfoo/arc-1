@@ -80,7 +80,7 @@ How users receive scopes depends on the authentication method:
 
 | Auth Method | How Scopes Are Determined | Can Restrict Per User? |
 |-------------|--------------------------|----------------------|
-| **No auth** (stdio, local) | No scopes — [safety config](#safety-config-the-server-level-ceiling) is the only control | No |
+| **No auth** (stdio, local, or HTTP without auth) | No scopes — [safety config](#safety-config-the-server-level-ceiling) is the only control | No |
 | **API Key** | All scopes granted. Use safety config or profiles to restrict. | No (single shared key) |
 | **OIDC / JWT** | Extracted from JWT `scope` or `scp` claims | Yes (configure in IdP) |
 | **XSUAA** | Extracted from XSUAA token local scopes | Yes (via BTP role collections) |
@@ -274,7 +274,32 @@ arc1 --transport http-streamable --api-key "$KEY_VIEWERS" --profile viewer --htt
 arc1 --transport http-streamable --api-key "$KEY_DEVS" --profile developer --http-addr 0.0.0.0:8081
 ```
 
-### Scenario 3: Multi-User with Per-User Scopes (XSUAA)
+### Scenario 3: Internal Network Without MCP Client Auth
+
+When ARC-1 is deployed on an internal network without API key or OIDC configured, the HTTP endpoint is open — any client on the network can connect without presenting a token. In this setup:
+
+- **No scopes are enforced** — there is no JWT, so no per-user scope check
+- **No per-user differentiation** — all users get the same access level
+- **No audit identity** — ARC-1 cannot tell who is calling
+
+The **safety config is your only control**:
+
+```bash
+# Internal read-only server — no auth required, everyone gets read access only
+arc1 --url http://sap:50000 --user SHARED_USER --password secret \
+  --transport http-streamable \
+  --profile viewer
+```
+
+For per-user differentiation on an internal network, add at minimum:
+
+- **Multiple instances** with different profiles and API keys (simple but static)
+- **An OIDC provider** like Keycloak or Entra ID — most organizations already have one. User tokens carry scopes, enabling real per-user access control without BTP
+
+!!! warning "Open endpoints"
+    Without `--api-key` or `--oidc-issuer`, anyone who can reach the server's port can use it. Combine with network-level controls (firewall rules, VPN, reverse proxy with auth) for defense in depth.
+
+### Scenario 4: Multi-User with Per-User Scopes (XSUAA)
 
 Deploy on BTP CF with XSUAA. Assign role collections per user:
 - Junior developers get "ARC-1 Viewer"
@@ -283,7 +308,7 @@ Deploy on BTP CF with XSUAA. Assign role collections per user:
 
 Each user's JWT carries their scopes. ARC-1 enforces them per-request.
 
-### Scenario 4: Multi-User with SAP Identity (Principal Propagation)
+### Scenario 5: Multi-User with SAP Identity (Principal Propagation)
 
 PP gives each MCP user their own SAP identity, which is essential for audit trails and SAP-level authorization. But SAP developers typically have broad authorization in their SAP system (they need it for Eclipse/ADT). This creates a question: **how do you restrict what they can do through ARC-1 specifically?**
 
