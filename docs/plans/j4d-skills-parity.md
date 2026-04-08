@@ -74,7 +74,7 @@ Create the "Explain ABAP Code" skill. This is the simplest skill — it reads co
 
 The skill should follow the format of `skills/generate-cds-unit-test.md` (read it for reference). Structure:
 
-- [ ] Write the skill file `skills/explain-abap-code.md` with this structure:
+- [x] Write the skill file `skills/explain-abap-code.md` with this structure:
   - **Input**: User provides an object name and type (CLAS, PROG, DDLS, BDEF, etc.) or just a name (auto-detect type via SAPSearch). Optional: "explain ATC findings" mode.
   - **Step 1: Read the object** — `SAPRead(type, name)` to get source code. For CLAS: also read `method="*"` to get method listing. For DDLS: also read `include="elements"` for structured field list.
   - **Step 2: Get dependency context** — `SAPContext(type, name)` to get compressed public API contracts of all dependencies. This is richer than J4D's IDE context. Use `depth=1` by default, `depth=2` for complex objects.
@@ -84,8 +84,8 @@ The skill should follow the format of `skills/generate-cds-unit-test.md` (read i
   - **Error handling table**: Object not found, SAPContext fails (fallback to manual reads), ATC unavailable
   - **BTP vs on-prem notes**: BTP has fewer object types, released APIs only, no PROG/INCL
   - **What this skill does NOT do**: No code modification, no refactoring suggestions (use other skills for that)
-- [ ] Copy `skills/explain-abap-code.md` to `.claude/commands/explain-abap-code.md`
-- [ ] Run `npm test` — all tests must pass (no code changes, just verifying no breakage from file additions)
+- [x] Copy `skills/explain-abap-code.md` to `.claude/commands/explain-abap-code.md`
+- [x] Run `npm test` — all tests must pass (no code changes, just verifying no breakage from file additions)
 
 ### Task 2: Create generate-abap-unit-test.md skill
 
