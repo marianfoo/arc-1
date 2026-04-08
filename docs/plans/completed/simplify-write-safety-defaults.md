@@ -217,13 +217,13 @@ Update peripheral documentation artifacts.
 
 ### Task 8: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Grep the entire codebase for `allowTransportableEdits`, `allow-transportable-edits`, `SAP_ALLOW_TRANSPORTABLE_EDITS`, `checkTransportableEdit` — zero results (fully removed)
-- [ ] Grep for `TRANSPORTABLE-EDITS` — zero results
-- [ ] Verify default config: read `src/server/types.ts` and confirm `allowedPackages: ['$TMP']`
-- [ ] Verify `checkPackage` is called in `handleSAPWrite` create action
-- [ ] Verify SAPWrite tool description includes package restriction info
-- [ ] Verify npx examples in `docs/index.md` use `arc-1@latest` and include `SAP_CLIENT`
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass (1108 tests)
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Grep the entire codebase for `allowTransportableEdits`, `allow-transportable-edits`, `SAP_ALLOW_TRANSPORTABLE_EDITS`, `checkTransportableEdit` — zero results in production/active docs (only in plan file and historical research docs)
+- [x] Grep for `TRANSPORTABLE-EDITS` — zero results in production code
+- [x] Verify default config: read `src/server/types.ts` and confirm `allowedPackages: ['$TMP']`
+- [x] Verify `checkPackage` is called in `handleSAPWrite` create action
+- [x] Verify SAPWrite tool description includes package restriction info
+- [x] Verify npx examples in `docs/index.md` use `arc-1@latest` and include `SAP_CLIENT`
+- [x] Move this plan to `docs/plans/completed/`
