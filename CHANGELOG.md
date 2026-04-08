@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/marianfoo/arc-1/compare/v0.4.4...v0.5.0) (2026-04-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* SAPQuery now requires 'data' scope (was 'read'), SAPTransport requires 'write' (was 'admin')
+
+### Features
+
+* add J4D skills parity plan ([#47](https://github.com/marianfoo/arc-1/issues/47)) ([df7ef1f](https://github.com/marianfoo/arc-1/commit/df7ef1f98e8bcf4fa51f40af53b75d9fdd8e9672))
+* add textSearch smoketest at startup and other improvments ([#45](https://github.com/marianfoo/arc-1/issues/45)) ([792ff5b](https://github.com/marianfoo/arc-1/commit/792ff5ba605ba00e1dce869768903eeb99adcc94))
+* add Zod v4 runtime input validation for all MCP tools ([#52](https://github.com/marianfoo/arc-1/issues/52)) ([9eea32a](https://github.com/marianfoo/arc-1/commit/9eea32a3eec4d6a7e1276483c4aa73cc215efe52))
+* two-dimensional authorization model (scopes, roles, safety) ([#48](https://github.com/marianfoo/arc-1/issues/48)) ([8ce07d1](https://github.com/marianfoo/arc-1/commit/8ce07d11389928709de01da5073d0165cbc605b7))
+
+
+### Bug Fixes
+
+* implement OAuth security review verification report(RFC 9700) ([#51](https://github.com/marianfoo/arc-1/issues/51)) ([3ef81e1](https://github.com/marianfoo/arc-1/commit/3ef81e1cd3b094a4f6645add6c866dbe2c71bf1e))
+* use standard HTTP proxy for BTP connectivity ([#43](https://github.com/marianfoo/arc-1/issues/43)) ([a60dd1b](https://github.com/marianfoo/arc-1/commit/a60dd1b60145c40c02fb1be93b33c39aa3d9af54))
+
 ## [0.4.4](https://github.com/marianfoo/arc-1/compare/v0.4.3...v0.4.4) (2026-04-07)
 
 
