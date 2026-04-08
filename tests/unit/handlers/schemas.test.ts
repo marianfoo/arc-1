@@ -185,8 +185,7 @@ describe('SAPWriteSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects missing required fields', () => {
-    // action is always required
+  it('rejects missing action', () => {
     expect(SAPWriteSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST' }).success).toBe(false);
   });
 

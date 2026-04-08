@@ -954,7 +954,7 @@ async function handleSAPWrite(
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
       if (!affResult.valid) {
         return errorResult(
-          `AFF metadata validation failed for ${type} ${name}:\n- ${affResult.errors!.join('\n- ')}\n\nFix the metadata and retry.`,
+          `AFF metadata validation failed for ${type} ${name}:\n- ${(affResult.errors ?? []).join('\n- ')}\n\nFix the metadata and retry.`,
         );
       }
 
@@ -1060,7 +1060,7 @@ async function handleSAPWrite(
             type: objType,
             name: objName,
             status: 'failed',
-            error: `AFF metadata validation failed:\n- ${affResult.errors!.join('\n- ')}`,
+            error: `AFF metadata validation failed:\n- ${(affResult.errors ?? []).join('\n- ')}`,
           });
           break;
         }
@@ -1093,7 +1093,7 @@ async function handleSAPWrite(
           }
 
           // Step 3: Activate the object
-          const activationResult = await activate(client.http, client.safety, objectUrlForType(objType, objName));
+          const activationResult = await activate(client.http, client.safety, objUrl);
           if (!activationResult.success) {
             results.push({
               type: objType,

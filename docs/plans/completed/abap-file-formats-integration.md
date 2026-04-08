@@ -227,6 +227,6 @@ This task updates existing Claude Code skills to take advantage of the new AFF i
 - [x] Run lint: `npm run lint` — no errors
 - [x] Verify structured class read works: grep for `getClassStructured` in source and tests, confirm it's wired end-to-end from tool definition through handler to client
 - [x] Verify batch create works: grep for `batch_create` in source and tests, confirm it's wired end-to-end
-- [x] Verify AFF validator works: grep for `validateAffMetadata` in source and tests, confirm it's called in both create and batch_create paths
+- [x] Verify AFF validator works: grep for `validateAffHeader` in source and tests, confirm it's called in both create and batch_create paths
 - [x] Verify documentation is consistent: check that `CLAUDE.md` codebase tree includes `src/aff/`, `docs/tools.md` documents all new parameters, `docs/roadmap.md` has AFF entries
 - [x] Move this plan to `docs/plans/completed/`

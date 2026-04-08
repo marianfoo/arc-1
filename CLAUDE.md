@@ -364,7 +364,7 @@ await http.withStatefulSession(async (session) => {
 
 | Level | Command | SAP Required | Count | Config |
 |-------|---------|--------------|-------|--------|
-| Unit | `npm test` | No | 707+ | `vitest.config.ts` |
+| Unit | `npm test` | No | 1148+ | `vitest.config.ts` |
 | Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | ~50 | `vitest.integration.config.ts` |
 | BTP Integration | `npm run test:integration:btp` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 28 | same |
 | E2E | `npm run test:e2e` | Yes (MCP server running) | ~30 | `tests/e2e/vitest.e2e.config.ts` |

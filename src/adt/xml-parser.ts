@@ -516,12 +516,21 @@ export function findDeepNodes(obj: unknown, key: string): Array<Record<string, u
  */
 const CLASS_CATEGORY_MAP: Record<string, string> = {
   '00': 'generalObjectType',
-  '01': 'exception',
+  '01': 'exceptionClass',
   '02': 'persistentClass',
-  '04': 'businessObjectType',
-  '05': 'factoryCalendarClass',
+  '03': 'behaviorClass',
+  '04': 'businessClass',
+  '05': 'factoryForPersistentClass',
+  '06': 'statusClassForPersistClass',
+  '11': 'rfcProxyClass',
+  '12': 'communicationConnectionClass',
+  '14': 'areaClassSharedObjects',
+  '30': 'bspApplicationClass',
+  '31': 'basisClassBspElementHdlr',
+  '32': 'webDynproRuntimeObject',
+  '33': 'entityEventHandler',
   '40': 'exitClass',
-  '41': 'testClass',
+  '41': 'testclassAbapUnit',
 };
 
 /**

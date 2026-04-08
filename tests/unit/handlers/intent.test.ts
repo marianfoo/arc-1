@@ -2155,11 +2155,8 @@ ENDCLASS.`;
       expect(putCalls.length).toBe(0);
     });
 
-    it('invalidates cache for all created objects', async () => {
+    it('batch_create succeeds with multiple objects', async () => {
       mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
-
-      // We can't directly test cache invalidation without a real caching layer,
-      // but we verify the batch completes successfully (invalidation is called per-object)
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
         action: 'batch_create',
         package: '$TMP',

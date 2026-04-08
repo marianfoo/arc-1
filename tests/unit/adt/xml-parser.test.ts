@@ -589,9 +589,9 @@ describe('XML Parser', () => {
 </class:abapClass>`;
 
       expect(parseClassMetadata(makeXml('00')).category).toBe('generalObjectType');
-      expect(parseClassMetadata(makeXml('01')).category).toBe('exception');
+      expect(parseClassMetadata(makeXml('01')).category).toBe('exceptionClass');
       expect(parseClassMetadata(makeXml('40')).category).toBe('exitClass');
-      expect(parseClassMetadata(makeXml('41')).category).toBe('testClass');
+      expect(parseClassMetadata(makeXml('41')).category).toBe('testclassAbapUnit');
     });
 
     it('passes through unknown category codes as-is', () => {
