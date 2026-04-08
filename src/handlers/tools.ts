@@ -330,9 +330,18 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
 
   // Write tools — only registered when not in read-only mode
   if (!config.readOnly) {
+    let sapWriteDesc = btp ? SAPWRITE_DESC_BTP : SAPWRITE_DESC_ONPREM;
+    // Append package restriction info so the LLM knows its boundaries
+    if (config.allowedPackages.length > 0) {
+      const pkgList = config.allowedPackages.join(', ');
+      sapWriteDesc +=
+        config.allowedPackages.length === 1
+          ? ` Write access is restricted to package: ${pkgList}. Objects in other packages cannot be created or modified.`
+          : ` Write access is restricted to packages: ${pkgList}.`;
+    }
     tools.push({
       name: 'SAPWrite',
-      description: btp ? SAPWRITE_DESC_BTP : SAPWRITE_DESC_ONPREM,
+      description: sapWriteDesc,
       inputSchema: {
         type: 'object',
         properties: {
@@ -577,8 +586,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
     });
   }
 
-  // Transport tools — registered when transports are enabled or not in read-only mode
-  if (config.enableTransports || !config.readOnly) {
+  // Transport tools — registered when transports are explicitly enabled
+  if (config.enableTransports) {
     tools.push({
       name: 'SAPTransport',
       description: btp ? SAPTRANSPORT_DESC_BTP : SAPTRANSPORT_DESC_ONPREM,

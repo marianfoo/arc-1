@@ -132,10 +132,10 @@ Remove `allowTransportableEdits` from profiles and config parsing. Update the `a
 
 Update SAPWrite tool description to tell the LLM which packages are allowed. Simplify SAPTransport registration. This is critical for LLM awareness — the LLM needs to know it can only write to `$TMP` (or whatever packages are configured).
 
-- [ ] In `src/handlers/tools.ts`: update `buildToolDefinitions()` to accept `allowedPackages` from config (it already receives `config: ServerConfig`). Append package restriction info to the SAPWrite description. For example, if `allowedPackages` is `['$TMP']`, append: `' Write access is restricted to package: $TMP. Objects in other packages cannot be created or modified.'`. If `allowedPackages` is `['Z*', '$TMP']`, append: `' Write access is restricted to packages: Z*, $TMP.'`. If `allowedPackages` is empty (unrestricted), append nothing.
-- [ ] In `src/handlers/tools.ts`: update SAPTransport tool registration condition at line 581. Change from `if (config.enableTransports || !config.readOnly)` to `if (config.enableTransports)`. The SAPTransport tool should only appear when transports are explicitly enabled. Without `allowTransportableEdits`, the `!config.readOnly` fallback is no longer meaningful — users writing to `$TMP` don't need transport management.
-- [ ] In `src/handlers/hyperfocused.ts`: update the admin actions condition at line 93. Change from `config.enableTransports || !config.readOnly` to just `config.enableTransports`.
-- [ ] Run `npm test` — tool visibility tests will need updating in Task 5.
+- [x] In `src/handlers/tools.ts`: update `buildToolDefinitions()` to accept `allowedPackages` from config (it already receives `config: ServerConfig`). Append package restriction info to the SAPWrite description. For example, if `allowedPackages` is `['$TMP']`, append: `' Write access is restricted to package: $TMP. Objects in other packages cannot be created or modified.'`. If `allowedPackages` is `['Z*', '$TMP']`, append: `' Write access is restricted to packages: Z*, $TMP.'`. If `allowedPackages` is empty (unrestricted), append nothing.
+- [x] In `src/handlers/tools.ts`: update SAPTransport tool registration condition at line 581. Change from `if (config.enableTransports || !config.readOnly)` to `if (config.enableTransports)`. The SAPTransport tool should only appear when transports are explicitly enabled. Without `allowTransportableEdits`, the `!config.readOnly` fallback is no longer meaningful — users writing to `$TMP` don't need transport management.
+- [x] In `src/handlers/hyperfocused.ts`: update the admin actions condition at line 93. Change from `config.enableTransports || !config.readOnly` to just `config.enableTransports`.
+- [x] Run `npm test` — tool visibility tests will need updating in Task 5.
 
 ### Task 5: Update all unit tests
 
