@@ -2,12 +2,12 @@
 
 > Tracking commits and issues from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (ARC-1's upstream) for features and bug fixes worth adopting.
 
-_Last updated: 2026-04-02_
+_Last updated: 2026-04-08_
 
 ## Approach
 
 - **Commits**: Grouped by release in `commits.json`. Auto-triaged by commit prefix.
-- **Issues**: All 38 issues evaluated in `issues.json`
+- **Issues**: All 42 issues evaluated in `issues.json`
 - **Evaluations**: Detailed write-ups for high/medium priority items in `evaluations/`
 - **Scope**: Tracking from v2.22.0 (2026-02-01) onwards
 - **Key difference from fr0ster**: VSP is ARC-1's upstream — same safety system design, shared heritage. ~70% of commits are experimental (WASM/LLVM compilers, Lua, JS evaluator) and not relevant.
@@ -16,12 +16,12 @@ _Last updated: 2026-04-02_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 377 | 38 |
-| Tracked | 42 | 38 |
-| Evaluated | 42 | 38 |
+| Total | 470 | 42 |
+| Tracked | 82 | 42 |
+| Evaluated | 82 | 42 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 30 | 20 |
-| Evaluation files | 12 | 7 |
+| Skipped (not relevant) | 55 | 22 |
+| Evaluation files | 28 | 9 |
 
 ## Priority Summary
 
@@ -29,12 +29,27 @@ _Last updated: 2026-04-02_
 
 | Source | ID | Description | ARC-1 Matrix Ref |
 |--------|----|-------------|-------------------|
+| commit | 7270ad7 | API release state for S/4HANA Clean Core | New — critical for BTP/cloud |
 | issue | #9 | Transport 406 Accept header (same class as fr0ster 415) | Critical #3 |
 
 ### Medium Priority (evaluate/verify)
 
 | Source | ID | Description | ARC-1 Matrix Ref |
 |--------|----|-------------|-------------------|
+| commit | daedc99 | VSP now has Streamable HTTP transport | No action — landscape update |
+| commit | 27d4d7c | Auth headers on redirects + stateful lock sessions | Verify http.ts |
+| commit | dcaa358 | Rename refactoring preview | Medium #18 in matrix |
+| commit | dd06202 | Version history tools (3 tools) | Medium #25 in matrix |
+| commit | 566f1f7 | 7 i18n/translation tools | Closes VSP #40 |
+| commit | 81cce41 | 10 gCTS tools | Medium #15 in matrix |
+| commit | 333f462 | Code coverage + check run results | Enhance SAPDiagnose |
+| commit | 6c67140 | CDS impact analysis + element info | Enhance SAPNavigate |
+| commit | 9fb6c8a | Table pagination (offset + columns_only) | Enhance SAPQuery |
+| commit | 11c2253 | Side effect extraction + LUW classification | Novel — SAPContext enhancement |
+| commit | 53fb790 | Package boundary crossing analysis | Novel — architecture governance |
+| commit | 1ecafe7 | Dead code analysis (method-level) | Novel — SAPDiagnose extension |
+| commit | 74efe5e | Package health analysis | Novel — aggregation tool |
+| commit | aa5aa5b | API surface inventory | Covered by contract.ts |
 | commit | ca02f47 | S/4HANA 757 transport endpoint compat | Verify transport.ts |
 | commit | 6d1f00a | Namespaced class URI in syntax check | Verify devtools.ts |
 | commit | d73460a | 401 auto-retry after idle timeout | Verify http.ts |
@@ -42,10 +57,11 @@ _Last updated: 2026-04-02_
 | commit | 7fbfbba | ignore_warnings for EditSource | Consider for edit_method |
 | commit | ba83e22 + 558a300 | Package deps + call graph analysis | Medium #31 in matrix |
 | commit | 0756e94 | ABAP parser + deps as MCP tools | Consider for SAPContext |
+| issue | #91, #88 | 423 lock handle errors (recurring) | Verify crud.ts |
 | issue | #78 | 423 lock handle on ECC 6.0 | Verify crud.ts |
-| issue | #40 | i18n/translation tools | New feature consideration |
-| issue | #39 | gCTS tools | Medium #15 in matrix |
-| issue | #34 | Table contents pagination | Enhance RunQuery |
+| issue | #40 | i18n/translation tools | Closed by commit 566f1f7 |
+| issue | #39 | gCTS tools | Closed by commit 81cce41 |
+| issue | #34 | Table contents pagination | Closed by commit 9fb6c8a |
 | issue | #33 | Syntax warnings blocking saves | Verify edit_method |
 
 ### Low / Skip (no action needed)
@@ -56,6 +72,7 @@ _Last updated: 2026-04-02_
 - CLI mode — ARC-1 is MCP-only
 - Debugger — requires ZADT_VSP deployment
 - GetAbapHelp — requires ZADT_VSP WebSocket
+- BTP Basic Auth issue (#90) — ARC-1 correctly uses OAuth
 
 ## How to Update
 

@@ -128,6 +128,7 @@ HTTP Streamable, OIDC/JWT auth, BTP support, principal propagation, API key auth
 
 | Date | Library Change | Relevant? | Decision | Status |
 |------|---------------|-----------|----------|--------|
+| 2026-04-05 | v8.0.1 — continued error handling improvements | Low | ARC-1 has own error handling in adt/errors.ts | -- |
 | 2026-04-04 | v8.0.0 — improved error handling | Yes | [Verify](abap-adt-api/evaluations/cffc79a-error-handling.md) | Verify |
 | 2026-03-03 | v7.1.1 — DDIC domain/data element write, structure/domain support, language attributes | Yes | [Implement DDIC write](abap-adt-api/evaluations/646bb9b-dtel-doma-write.md) | Open |
 | 2025-12-19 | v7.1.0 — ABAP documentation API | Yes | [Consider](abap-adt-api/evaluations/7d5c653-abap-documentation.md) | Open |
@@ -137,4 +138,4 @@ HTTP Streamable, OIDC/JWT auth, BTP support, principal propagation, API key auth
 
 > **Detailed tracking**: See [`compare/abap-adt-api/`](abap-adt-api/) for per-commit and per-issue evaluations of the underlying library.
 
-_Last updated: 2026-04-04_
+_Last updated: 2026-04-08_
