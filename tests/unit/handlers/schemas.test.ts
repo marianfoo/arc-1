@@ -68,6 +68,16 @@ describe('SAPReadSchema', () => {
     const result = SAPReadSchema.safeParse({ type: 'SYSTEM' });
     expect(result.success).toBe(true);
   });
+
+  it('accepts format field with valid values', () => {
+    expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'text' }).success).toBe(true);
+    expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'structured' }).success).toBe(true);
+  });
+
+  it('rejects invalid format values', () => {
+    expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'xml' }).success).toBe(false);
+    expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'json' }).success).toBe(false);
+  });
 });
 
 describe('SAPReadSchemaBtp', () => {

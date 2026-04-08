@@ -319,6 +319,12 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                     'For FUGR type only. When true, expands all INCLUDE statements and returns the full source of each include inline.',
                 },
               }),
+          format: {
+            type: 'string',
+            enum: ['text', 'structured'],
+            description:
+              'Output format. "text" (default): raw source code. "structured" (CLAS only): JSON with metadata (description, language, category) + decomposed source (main, testclasses, definitions, implementations, macros). Useful when you need to understand class structure or separate test code from production code.',
+          },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
         },

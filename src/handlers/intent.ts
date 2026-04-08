@@ -377,10 +377,20 @@ async function handleSAPRead(
     return source;
   };
 
+  // Structured format is only supported for CLAS type
+  if (args.format === 'structured' && type !== 'CLAS') {
+    return errorResult('The "structured" format is only supported for CLAS type. Other types return text format.');
+  }
+
   switch (type) {
     case 'PROG':
       return textResult(await cachedGet('PROG', name, () => client.getProgram(name)));
     case 'CLAS': {
+      // Structured format: return JSON with metadata + decomposed source
+      if (args.format === 'structured') {
+        const structured = await client.getClassStructured(name);
+        return textResult(JSON.stringify(structured, null, 2));
+      }
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
         // Method-level read — fetch full source then extract

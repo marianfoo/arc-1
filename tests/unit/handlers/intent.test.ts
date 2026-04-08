@@ -366,6 +366,160 @@ describe('Intent Handler', () => {
       // Should still attempt with empty name (SAP will return error)
       expect(result.isError).toBeUndefined();
     });
+
+    it('reads class with format="structured" returns JSON with metadata and source fields', async () => {
+      const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:final="true" class:visibility="public" class:category="00" class:fixPointArithmetic="true"
+    adtcore:name="ZCL_TEST" adtcore:type="CLAS/OC" adtcore:description="Test class" adtcore:language="EN"
+    adtcore:masterLanguage="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+</class:abapClass>`;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oo/classes/ZCL_TEST') && !urlStr.includes('/source/') && !urlStr.includes('/includes/')) {
+          return mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/source/main')) {
+          return mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.\nCLASS zcl_test IMPLEMENTATION.\nENDCLASS.', {
+            'x-csrf-token': 'T',
+          });
+        }
+        if (urlStr.includes('/includes/')) {
+          return mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'structured',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(parsed.metadata).toBeDefined();
+      expect(parsed.metadata.name).toBe('ZCL_TEST');
+      expect(parsed.metadata.description).toBe('Test class');
+      expect(parsed.main).toContain('CLASS zcl_test');
+      expect(parsed.testclasses).toBeNull();
+      expect(parsed.definitions).toBeNull();
+      expect(parsed.implementations).toBeNull();
+      expect(parsed.macros).toBeNull();
+    });
+
+    it('reads class with format="text" returns plain source (default behavior)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'text',
+      });
+      expect(result.isError).toBeUndefined();
+      // Plain text, not JSON
+      expect(() => JSON.parse(result.content[0]?.text ?? '')).toThrow();
+    });
+
+    it('reads class without format returns plain source (backwards compatible)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      // Plain text, not JSON — backwards compatible
+      expect(result.content[0]?.text).toContain('REPORT');
+    });
+
+    it('returns error when format="structured" used with non-CLAS type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+        format: 'structured',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('structured');
+      expect(result.content[0]?.text).toContain('CLAS');
+    });
+
+    it('reads class with format="structured" and method param — format takes precedence', async () => {
+      const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:category="00" class:fixPointArithmetic="true"
+    adtcore:name="ZCL_TEST" adtcore:description="Test class" adtcore:language="EN"
+    adtcore:masterLanguage="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+</class:abapClass>`;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oo/classes/ZCL_TEST') && !urlStr.includes('/source/') && !urlStr.includes('/includes/')) {
+          return mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/source/main')) {
+          return mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.\nCLASS zcl_test IMPLEMENTATION.\nENDCLASS.', {
+            'x-csrf-token': 'T',
+          });
+        }
+        if (urlStr.includes('/includes/')) {
+          return mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'structured',
+        method: 'get_name',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(parsed.metadata).toBeDefined();
+      expect(parsed.main).toBeDefined();
+    });
+
+    it('structured response is valid JSON with expected keys', async () => {
+      const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:category="00" class:fixPointArithmetic="true"
+    adtcore:name="ZCL_TEST" adtcore:description="Structured test" adtcore:language="EN"
+    adtcore:masterLanguage="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="ZDEV"/>
+</class:abapClass>`;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oo/classes/ZCL_TEST') && !urlStr.includes('/source/') && !urlStr.includes('/includes/')) {
+          return mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/source/main')) {
+          return mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.', { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/includes/testclasses')) {
+          return mockResponse(200, 'CLASS ltcl_test DEFINITION.\nENDCLASS.', { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/includes/')) {
+          return mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'structured',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(Object.keys(parsed)).toEqual(
+        expect.arrayContaining(['metadata', 'main', 'testclasses', 'definitions', 'implementations', 'macros']),
+      );
+      expect(parsed.metadata.package).toBe('ZDEV');
+      expect(parsed.testclasses).toContain('ltcl_test');
+    });
   });
 
   // ─── SAPSearch ─────────────────────────────────────────────────────

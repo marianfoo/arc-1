@@ -70,6 +70,7 @@ export const SAPReadSchema = z.object({
   group: z.string().optional(),
   method: z.string().optional(),
   expand_includes: z.coerce.boolean().optional(),
+  format: z.enum(['text', 'structured']).optional(),
   maxRows: z.coerce.number().optional(),
   sqlFilter: z.string().optional(),
 });
@@ -80,6 +81,7 @@ export const SAPReadSchemaBtp = z.object({
   include: z.string().optional(),
   group: z.string().optional(),
   method: z.string().optional(),
+  format: z.enum(['text', 'structured']).optional(),
   maxRows: z.coerce.number().optional(),
   sqlFilter: z.string().optional(),
 });
