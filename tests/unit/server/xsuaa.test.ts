@@ -341,3 +341,112 @@ describe('getAppUrl', () => {
     process.env.VCAP_APPLICATION = originalEnv;
   });
 });
+
+// ─── InMemoryClientStore — DCR Validation ───────────────────────────
+
+describe('InMemoryClientStore DCR validation', () => {
+  it('rejects redirect URI with javascript: scheme', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    await expect(
+      store.registerClient({
+        redirect_uris: ['javascript:alert(1)'],
+        client_name: 'evil',
+      } as any),
+    ).rejects.toThrow("'javascript:' scheme is not allowed");
+  });
+
+  it('rejects redirect URI with data: scheme', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    await expect(
+      store.registerClient({
+        redirect_uris: ['data:text/html,<script>alert(1)</script>'],
+        client_name: 'evil',
+      } as any),
+    ).rejects.toThrow("'data:' scheme is not allowed");
+  });
+
+  it('accepts redirect URI with https: scheme', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['https://example.com/callback'],
+      client_name: 'legit',
+    } as any);
+    expect(client.client_id).toMatch(/^arc1-/);
+  });
+
+  it('accepts redirect URI with http://localhost', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['http://localhost:6274/oauth/callback'],
+      client_name: 'inspector',
+    } as any);
+    expect(client.client_id).toMatch(/^arc1-/);
+  });
+
+  it('accepts redirect URI with claude: custom scheme', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['claude://callback'],
+      client_name: 'claude',
+    } as any);
+    expect(client.client_id).toMatch(/^arc1-/);
+  });
+
+  it('rejects http: redirect URI to non-loopback host', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    await expect(
+      store.registerClient({
+        redirect_uris: ['http://evil.com/callback'],
+        client_name: 'evil',
+      } as any),
+    ).rejects.toThrow('http:// is only allowed for localhost');
+  });
+
+  it('rejects registration after 100 dynamic clients', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    // Register 100 clients
+    for (let i = 0; i < 100; i++) {
+      await store.registerClient({
+        redirect_uris: ['https://example.com/cb'],
+        client_name: `client-${i}`,
+      } as any);
+    }
+    // 101st should fail
+    await expect(
+      store.registerClient({
+        redirect_uris: ['https://example.com/cb'],
+        client_name: 'overflow',
+      } as any),
+    ).rejects.toThrow('Client registration limit reached');
+  });
+
+  it('expires dynamic clients after 24 hours', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['https://example.com/cb'],
+      client_name: 'temp',
+    } as any);
+
+    // Verify client exists
+    expect(await store.getClient(client.client_id)).toBeDefined();
+
+    // Manually set client_id_issued_at to 25 hours ago to simulate expiry
+    const storedClient = await store.getClient(client.client_id);
+    if (storedClient) {
+      (storedClient as any).client_id_issued_at = Math.floor(Date.now() / 1000) - 90000;
+    }
+
+    // Client should now be expired
+    expect(await store.getClient(client.client_id)).toBeUndefined();
+  });
+
+  it('rejects registration with mixed valid/invalid redirect URIs', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    await expect(
+      store.registerClient({
+        redirect_uris: ['https://good.com/callback', 'javascript:alert(1)'],
+        client_name: 'mixed',
+      } as any),
+    ).rejects.toThrow("'javascript:' scheme is not allowed");
+  });
+});

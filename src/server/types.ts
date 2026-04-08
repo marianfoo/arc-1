@@ -62,6 +62,8 @@ export interface ServerConfig {
   apiKeys?: Array<{ key: string; profile: string }>;
   oidcIssuer?: string;
   oidcAudience?: string;
+  /** Clock tolerance in seconds for JWT exp validation (default: jose library default of 60s) */
+  oidcClockTolerance?: number;
   xsuaaAuth: boolean;
 
   // --- BTP ABAP Environment (direct connection via service key) ---

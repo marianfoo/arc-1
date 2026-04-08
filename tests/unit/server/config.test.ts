@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PROFILE_SCOPES, PROFILES, parseApiKeys, parseArgs } from '../../../src/server/config.js';
+import { PROFILE_SCOPES, PROFILES, parseApiKeys, parseArgs, validateConfig } from '../../../src/server/config.js';
+import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('parseArgs', () => {
   // Save and restore env to avoid test pollution
@@ -392,5 +393,66 @@ describe('parseApiKeys', () => {
     for (const p of profiles) {
       expect(parseApiKeys(`testkey:${p}`)).toEqual([{ key: 'testkey', profile: p }]);
     }
+  });
+});
+
+// ─── validateConfig ─────────────────────────────────────────────────
+
+describe('validateConfig', () => {
+  it('throws when oidcIssuer is set without oidcAudience', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        oidcIssuer: 'https://login.microsoftonline.com/tenant/v2.0',
+      }),
+    ).toThrow('SAP_OIDC_AUDIENCE is required when SAP_OIDC_ISSUER is set');
+  });
+
+  it('throws when oidcAudience is set without oidcIssuer', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        oidcAudience: 'api://arc-1',
+      }),
+    ).toThrow('SAP_OIDC_ISSUER is required when SAP_OIDC_AUDIENCE is set');
+  });
+
+  it('accepts config with both oidcIssuer and oidcAudience', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        oidcIssuer: 'https://login.microsoftonline.com/tenant/v2.0',
+        oidcAudience: 'api://arc-1',
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts config with neither oidcIssuer nor oidcAudience', () => {
+    expect(() => validateConfig({ ...DEFAULT_CONFIG })).not.toThrow();
+  });
+
+  it('throws when ppStrict is true without ppEnabled', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppStrict: true,
+        ppEnabled: false,
+      }),
+    ).toThrow('SAP_PP_STRICT=true requires SAP_PP_ENABLED=true');
+  });
+
+  it('accepts ppStrict with ppEnabled', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppStrict: true,
+        ppEnabled: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it('parseArgs fails with oidcIssuer but no oidcAudience', () => {
+    process.env.SAP_OIDC_ISSUER = 'https://example.com';
+    expect(() => parseArgs([])).toThrow('SAP_OIDC_AUDIENCE is required');
   });
 });

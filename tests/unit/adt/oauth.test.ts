@@ -27,6 +27,7 @@ vi.mock('node:fs', () => ({
 // Mock child_process for browser opening
 vi.mock('node:child_process', () => ({
   exec: vi.fn((_cmd: string, cb: (err: Error | null) => void) => cb(null)),
+  execFile: vi.fn((_file: string, _args: string[], cb: (err: Error | null) => void) => cb(null)),
 }));
 
 // Mock os for platform detection
@@ -50,6 +51,8 @@ import {
   type BTPServiceKey,
   createBearerTokenProvider,
   exchangeCodeForToken,
+  generatePkce,
+  generateState,
   loadServiceKeyFile,
   openBrowser,
   parseServiceKey,
@@ -360,39 +363,239 @@ describe('startCallbackServer', () => {
     const { promise } = startCallbackServer(0, 100); // 100ms timeout
     await expect(promise).rejects.toThrow('OAuth callback timed out');
   });
+
+  it('binds to 127.0.0.1 (loopback only)', async () => {
+    const { server } = startCallbackServer(0, 5000);
+
+    await new Promise<void>((resolve) => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+
+    const addr = server.address();
+    expect(addr).toBeDefined();
+    expect(typeof addr).toBe('object');
+    expect((addr as { address: string }).address).toBe('127.0.0.1');
+
+    server.close();
+  });
+
+  it('rejects callback with mismatched state parameter', async () => {
+    const { server } = startCallbackServer(0, 5000, 'expected-state-abc');
+
+    await new Promise<void>((resolve) => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+
+    const port = (server.address() as { port: number }).port;
+    const response = await httpGet(`http://localhost:${port}/callback?code=test_code&state=wrong-state`);
+    expect(response.statusCode).toBe(400);
+
+    server.close();
+  });
+
+  it('accepts callback with correct state parameter', async () => {
+    const state = 'correct-state-123';
+    const { promise, server } = startCallbackServer(0, 5000, state);
+
+    await new Promise<void>((resolve) => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+
+    const port = (server.address() as { port: number }).port;
+    const response = await httpGet(`http://localhost:${port}/callback?code=test_code&state=${state}`);
+    expect(response.statusCode).toBe(200);
+
+    const code = await promise;
+    expect(code).toBe('test_code');
+  });
+
+  it('escapes HTML in error_description to prevent XSS', async () => {
+    const { promise, server } = startCallbackServer(0, 10000);
+
+    await new Promise<void>((resolve) => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+
+    const port = (server.address() as { port: number }).port;
+    const xssPayload = encodeURIComponent('<script>alert("xss")</script>');
+
+    // Set up the rejection expectation BEFORE the HTTP call to avoid unhandled rejection
+    const expectation = expect(promise).rejects.toThrow('OAuth authorization failed');
+
+    const responseBody = await new Promise<string>((resolve, reject) => {
+      http
+        .get(`http://localhost:${port}/callback?error=test&error_description=${xssPayload}`, (res) => {
+          let data = '';
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => resolve(data));
+        })
+        .on('error', reject);
+    });
+
+    // Verify the script tag is escaped, not raw HTML
+    expect(responseBody).toContain('&lt;script&gt;');
+    expect(responseBody).not.toContain('<script>');
+
+    // Consume the rejection
+    await expectation;
+  });
+
+  it('includes Content-Security-Policy header in responses', async () => {
+    const { server } = startCallbackServer(0, 5000);
+
+    await new Promise<void>((resolve) => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+
+    const port = (server.address() as { port: number }).port;
+
+    const cspHeader = await new Promise<string | undefined>((resolve, reject) => {
+      http
+        .get(`http://localhost:${port}/callback?code=test`, (res) => {
+          res.resume();
+          resolve(res.headers['content-security-policy'] as string | undefined);
+        })
+        .on('error', reject);
+    });
+
+    expect(cspHeader).toBe("default-src 'none'");
+  });
+});
+
+// ─── PKCE and State Generation ────────────────────────────────────
+
+describe('generatePkce', () => {
+  it('generates unique code verifier and challenge', () => {
+    const pkce1 = generatePkce();
+    const pkce2 = generatePkce();
+
+    expect(pkce1.codeVerifier).toBeTruthy();
+    expect(pkce1.codeChallenge).toBeTruthy();
+    expect(pkce1.codeVerifier).not.toBe(pkce2.codeVerifier);
+    expect(pkce1.codeChallenge).not.toBe(pkce2.codeChallenge);
+  });
+
+  it('generates base64url-safe verifier (43+ chars)', () => {
+    const { codeVerifier } = generatePkce();
+    expect(codeVerifier.length).toBeGreaterThanOrEqual(43);
+    // base64url: only alphanumeric, -, _
+    expect(codeVerifier).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('generates S256 challenge matching RFC 7636 spec', () => {
+    const { codeVerifier, codeChallenge } = generatePkce();
+    // Manually compute expected challenge
+    const { createHash } = require('node:crypto');
+    const expected = createHash('sha256').update(codeVerifier).digest('base64url');
+    expect(codeChallenge).toBe(expected);
+  });
+});
+
+describe('generateState', () => {
+  it('generates unique state values', () => {
+    const s1 = generateState();
+    const s2 = generateState();
+    expect(s1).not.toBe(s2);
+  });
+
+  it('generates base64url-safe string', () => {
+    const state = generateState();
+    expect(state.length).toBeGreaterThanOrEqual(32);
+    expect(state).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+});
+
+// ─── Token Exchange with PKCE ─────────────────────────────────────
+
+describe('exchangeCodeForToken with PKCE', () => {
+  const serviceKey: BTPServiceKey = JSON.parse(VALID_SERVICE_KEY_JSON);
+
+  it('includes code_verifier in token exchange when provided', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => MOCK_TOKEN_RESPONSE,
+    });
+
+    // Reset mock to ensure we capture only this call
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => MOCK_TOKEN_RESPONSE,
+    });
+
+    await exchangeCodeForToken(serviceKey, 'auth_code', 'http://localhost:3001/callback', 'test_verifier_123');
+
+    const fetchCall = mockFetch.mock.calls[0];
+    const body = fetchCall[1].body as string;
+    expect(body).toContain('code_verifier=test_verifier_123');
+  });
+
+  it('omits code_verifier when not provided', async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => MOCK_TOKEN_RESPONSE,
+    });
+
+    await exchangeCodeForToken(serviceKey, 'auth_code', 'http://localhost:3001/callback');
+
+    const fetchCall = mockFetch.mock.calls[0];
+    const body = fetchCall[1].body as string;
+    expect(body).not.toContain('code_verifier');
+  });
 });
 
 // ─── Browser Opening ───────────────────────────────────────────────
 
 describe('openBrowser', () => {
-  it('opens browser on macOS', async () => {
-    const { exec } = await import('node:child_process');
+  it('opens browser on macOS using execFile', async () => {
+    const { execFile } = await import('node:child_process');
     const { platform } = await import('node:os');
     vi.mocked(platform).mockReturnValue('darwin');
 
     await openBrowser('https://example.com');
 
-    expect(exec).toHaveBeenCalledWith('open "https://example.com"', expect.any(Function));
+    expect(execFile).toHaveBeenCalledWith('open', ['https://example.com'], expect.any(Function));
   });
 
-  it('opens browser on Windows', async () => {
-    const { exec } = await import('node:child_process');
+  it('opens browser on Windows using execFile', async () => {
+    const { execFile } = await import('node:child_process');
     const { platform } = await import('node:os');
     vi.mocked(platform).mockReturnValue('win32');
 
     await openBrowser('https://example.com');
 
-    expect(exec).toHaveBeenCalledWith('start "" "https://example.com"', expect.any(Function));
+    expect(execFile).toHaveBeenCalledWith('cmd', ['/c', 'start', '', 'https://example.com'], expect.any(Function));
   });
 
-  it('opens browser on Linux', async () => {
-    const { exec } = await import('node:child_process');
+  it('opens browser on Linux using execFile', async () => {
+    const { execFile } = await import('node:child_process');
     const { platform } = await import('node:os');
     vi.mocked(platform).mockReturnValue('linux');
 
     await openBrowser('https://example.com');
 
-    expect(exec).toHaveBeenCalledWith('xdg-open "https://example.com"', expect.any(Function));
+    expect(execFile).toHaveBeenCalledWith('xdg-open', ['https://example.com'], expect.any(Function));
+  });
+
+  it('passes URL with shell metacharacters safely as array argument', async () => {
+    const { execFile } = await import('node:child_process');
+    const { platform } = await import('node:os');
+    vi.mocked(platform).mockReturnValue('linux');
+
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional shell metacharacter test
+    const maliciousUrl = 'https://example.com/$(whoami)`id`${PATH}';
+    await openBrowser(maliciousUrl);
+
+    // URL is passed as a separate array element, never interpolated into a shell command string
+    expect(execFile).toHaveBeenCalledWith('xdg-open', [maliciousUrl], expect.any(Function));
   });
 });
 

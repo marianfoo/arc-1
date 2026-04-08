@@ -233,6 +233,10 @@ export function parseArgs(args: string[]): ServerConfig {
 
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
+  const clockTolerance = getFlag('oidc-clock-tolerance') ?? process.env.SAP_OIDC_CLOCK_TOLERANCE;
+  if (clockTolerance) {
+    config.oidcClockTolerance = Number.parseInt(clockTolerance, 10) || undefined;
+  }
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
 
   // --- BTP ABAP Environment (direct connection via service key) ---
@@ -278,5 +282,32 @@ export function parseArgs(args: string[]): ServerConfig {
     config.logLevel = 'debug';
   }
 
+  // --- Startup Validation ---
+  validateConfig(config);
+
   return config;
+}
+
+/**
+ * Validate configuration for internally consistent auth settings.
+ * Fails fast at startup for invalid or dangerous config combinations.
+ */
+export function validateConfig(config: ServerConfig): void {
+  // OIDC: audience is required when issuer is set (RFC 9700 §2.3 audience restriction)
+  if (config.oidcIssuer && !config.oidcAudience) {
+    throw new Error(
+      'SAP_OIDC_AUDIENCE is required when SAP_OIDC_ISSUER is set — ' +
+        'audience validation prevents token confusion across services (RFC 9700 §2.3)',
+    );
+  }
+  if (config.oidcAudience && !config.oidcIssuer) {
+    throw new Error('SAP_OIDC_ISSUER is required when SAP_OIDC_AUDIENCE is set');
+  }
+
+  // PP: ppStrict requires ppEnabled
+  if (config.ppStrict && !config.ppEnabled) {
+    throw new Error(
+      'SAP_PP_STRICT=true requires SAP_PP_ENABLED=true — strict mode has no effect without principal propagation enabled',
+    );
+  }
 }

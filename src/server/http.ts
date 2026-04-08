@@ -314,6 +314,8 @@ function createStandardVerifier(
         const { payload } = await joseModule.jwtVerify(token, jwksClient, {
           issuer: config.oidcIssuer,
           audience: config.oidcAudience,
+          requiredClaims: ['exp'],
+          ...(config.oidcClockTolerance != null ? { clockTolerance: config.oidcClockTolerance } : {}),
         });
 
         logger.debug('Standard OIDC JWT validated', { sub: payload.sub, iss: payload.iss });
@@ -356,6 +358,8 @@ async function createOidcVerifier(
     const { payload } = await joseModule.jwtVerify(token, jwksClient, {
       issuer: config.oidcIssuer,
       audience: config.oidcAudience,
+      requiredClaims: ['exp'],
+      ...(config.oidcClockTolerance != null ? { clockTolerance: config.oidcClockTolerance } : {}),
     });
 
     logger.debug('OIDC JWT validated', { sub: payload.sub, iss: payload.iss });

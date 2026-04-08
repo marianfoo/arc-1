@@ -14,6 +14,7 @@
  * Cross-platform: uses `open` (macOS), `xdg-open` (Linux), `start` (Windows).
  */
 
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer, type Server as HttpServer } from 'node:http';
 import { logger } from '../server/logger.js';
@@ -139,11 +140,13 @@ export function resolveServiceKey(): BTPServiceKey | undefined {
 
 /**
  * Exchange an authorization code for OAuth tokens.
+ * @param codeVerifier PKCE code verifier (if PKCE was used in the authorize request)
  */
 export async function exchangeCodeForToken(
   serviceKey: BTPServiceKey,
   code: string,
   redirectUri: string,
+  codeVerifier?: string,
 ): Promise<OAuthTokenResponse> {
   const tokenUrl = `${serviceKey.uaa.url}/oauth/token`;
 
@@ -153,6 +156,10 @@ export async function exchangeCodeForToken(
     redirect_uri: redirectUri,
     client_id: serviceKey.uaa.clientid,
   });
+
+  if (codeVerifier) {
+    params.set('code_verifier', codeVerifier);
+  }
 
   const response = await fetch(tokenUrl, {
     method: 'POST',
@@ -199,54 +206,90 @@ export async function refreshAccessToken(serviceKey: BTPServiceKey, refreshToken
   return (await response.json()) as OAuthTokenResponse;
 }
 
+// ─── Security Helpers ─────────────────────────────────────────────
+
+/**
+ * Generate a cryptographically random PKCE code verifier and S256 challenge.
+ * Per RFC 7636: verifier is 43-128 chars, URL-safe; challenge is base64url(SHA-256(verifier)).
+ */
+export function generatePkce(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier = randomBytes(32).toString('base64url');
+  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+  return { codeVerifier, codeChallenge };
+}
+
+/**
+ * Generate a cryptographically random state parameter for OAuth CSRF protection.
+ * Returns a 32-byte base64url-encoded string.
+ */
+export function generateState(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+/**
+ * Escape HTML special characters to prevent XSS in callback responses.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** CSP header that blocks all active content in callback HTML responses. */
+const CSP_HEADER = "default-src 'none'";
+
 // ─── Browser Authorization Code Flow ───────────────────────────────
 
 /**
  * Open a URL in the user's default browser.
  * Cross-platform: macOS (open), Linux (xdg-open), Windows (start).
+ * Uses execFile() with argument arrays to prevent shell injection.
  */
 export async function openBrowser(url: string): Promise<void> {
-  const { exec } = await import('node:child_process');
+  const { execFile } = await import('node:child_process');
   const { platform } = await import('node:os');
 
   const os = platform();
-  let cmd: string;
-
-  switch (os) {
-    case 'darwin':
-      cmd = `open "${url}"`;
-      break;
-    case 'win32':
-      // Windows: 'start' needs empty title and URL in quotes
-      cmd = `start "" "${url}"`;
-      break;
-    default:
-      // Linux and other Unix-like systems
-      cmd = `xdg-open "${url}"`;
-      break;
-  }
 
   return new Promise((resolve, reject) => {
-    exec(cmd, (err) => {
+    const cb = (err: Error | null) => {
       if (err) {
         reject(new Error(`Failed to open browser (${os}): ${err.message}`));
       } else {
         resolve();
       }
-    });
+    };
+
+    switch (os) {
+      case 'darwin':
+        execFile('open', [url], cb);
+        break;
+      case 'win32':
+        execFile('cmd', ['/c', 'start', '', url], cb);
+        break;
+      default:
+        execFile('xdg-open', [url], cb);
+        break;
+    }
   });
 }
 
 /**
  * Start a local HTTP server to receive the OAuth callback.
+ * Binds to 127.0.0.1 only (loopback) per RFC 8252 Section 8.3.
  * Returns a promise that resolves with the authorization code.
  *
  * @param port Port to listen on (0 = auto-assign)
  * @param timeoutMs Maximum wait time for callback (default: 120s)
+ * @param expectedState Expected state parameter for CSRF validation (required)
  */
 export function startCallbackServer(
   port: number,
   timeoutMs = 120000,
+  expectedState?: string,
 ): { promise: Promise<string>; server: HttpServer; getPort: () => number } {
   let resolvePromise: (code: string) => void;
   let rejectPromise: (err: Error) => void;
@@ -255,6 +298,8 @@ export function startCallbackServer(
     resolvePromise = resolve;
     rejectPromise = reject;
   });
+
+  const cspHeaders = { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP_HEADER };
 
   const server = createServer((req, res) => {
     if (!req.url?.startsWith('/callback')) {
@@ -266,12 +311,20 @@ export function startCallbackServer(
     const url = new URL(req.url, `http://localhost:${port}`);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
+    const callbackState = url.searchParams.get('state');
+
+    // Validate state parameter (CSRF protection per RFC 9700 §4.7.1)
+    if (expectedState && callbackState !== expectedState) {
+      res.writeHead(400, cspHeaders);
+      res.end('<html><body><h1>Error</h1><p>Invalid state parameter — possible CSRF attack.</p></body></html>');
+      return;
+    }
 
     if (error) {
       const errorDescription = url.searchParams.get('error_description') ?? error;
-      res.writeHead(400, { 'Content-Type': 'text/html' });
+      res.writeHead(400, cspHeaders);
       res.end(
-        `<html><body><h1>Authentication Failed</h1><p>${errorDescription}</p><p>You can close this window.</p></body></html>`,
+        `<html><body><h1>Authentication Failed</h1><p>${escapeHtml(errorDescription)}</p><p>You can close this window.</p></body></html>`,
       );
       rejectPromise(new Error(`OAuth authorization failed: ${errorDescription}`));
       server.close();
@@ -279,12 +332,12 @@ export function startCallbackServer(
     }
 
     if (!code) {
-      res.writeHead(400, { 'Content-Type': 'text/html' });
+      res.writeHead(400, cspHeaders);
       res.end('<html><body><h1>Error</h1><p>No authorization code received.</p></body></html>');
       return;
     }
 
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.writeHead(200, cspHeaders);
     res.end(
       '<html><body><h1>Authentication Successful</h1><p>You can close this window and return to your MCP client.</p></body></html>',
     );
@@ -292,7 +345,8 @@ export function startCallbackServer(
     server.close();
   });
 
-  server.listen(port);
+  // Bind to loopback only — prevents network-adjacent attackers from reaching the callback
+  server.listen(port, '127.0.0.1');
 
   // Timeout handling
   const timer = setTimeout(() => {
@@ -327,7 +381,11 @@ export function startCallbackServer(
  * @returns OAuth token response
  */
 export async function performBrowserLogin(serviceKey: BTPServiceKey, callbackPort = 0): Promise<OAuthTokenResponse> {
-  const { promise, server, getPort } = startCallbackServer(callbackPort);
+  // Generate PKCE and state before starting the flow
+  const { codeVerifier, codeChallenge } = generatePkce();
+  const state = generateState();
+
+  const { promise, server, getPort } = startCallbackServer(callbackPort, 120000, state);
 
   // Wait for server to be listening to get the actual port
   await new Promise<void>((resolve) => {
@@ -345,7 +403,10 @@ export async function performBrowserLogin(serviceKey: BTPServiceKey, callbackPor
     `${serviceKey.uaa.url}/oauth/authorize` +
     `?response_type=code` +
     `&client_id=${encodeURIComponent(serviceKey.uaa.clientid)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&state=${encodeURIComponent(state)}` +
+    `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+    `&code_challenge_method=S256`;
 
   logger.info('Opening browser for SAP BTP authentication...', { port: actualPort });
   logger.info(`If browser doesn't open, visit: ${authorizeUrl}`);
@@ -362,8 +423,8 @@ export async function performBrowserLogin(serviceKey: BTPServiceKey, callbackPor
   // Wait for callback
   const code = await promise;
 
-  // Exchange code for tokens
-  const tokens = await exchangeCodeForToken(serviceKey, code, redirectUri);
+  // Exchange code for tokens (include PKCE verifier)
+  const tokens = await exchangeCodeForToken(serviceKey, code, redirectUri, codeVerifier);
 
   logger.info('BTP ABAP authentication successful', {
     expiresIn: tokens.expires_in,

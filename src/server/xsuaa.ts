@@ -91,6 +91,15 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
 
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
     const client = this.clients.get(clientId);
+    // Lazy TTL eviction: expire dynamically registered clients after 24 hours
+    if (client?.client_id_issued_at) {
+      const ageSeconds = Math.floor(Date.now() / 1000) - client.client_id_issued_at;
+      if (ageSeconds > 86400 && client.client_id.startsWith('arc1-')) {
+        this.clients.delete(clientId);
+        logger.debug('OAuth client expired (24h TTL)', { clientId });
+        return undefined;
+      }
+    }
     logger.debug('OAuth client lookup', {
       clientId,
       found: !!client,
@@ -103,6 +112,19 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
   async registerClient(
     client: Omit<OAuthClientInformationFull, 'client_id' | 'client_id_issued_at'>,
   ): Promise<OAuthClientInformationFull> {
+    // Registration cap: prevent memory exhaustion from unbounded DCR
+    const dynamicClients = [...this.clients.keys()].filter((k) => k.startsWith('arc1-'));
+    if (dynamicClients.length >= 100) {
+      throw new Error('Client registration limit reached (100). Restart the server to clear expired registrations.');
+    }
+
+    // Validate redirect URIs against allowlist policy
+    if (client.redirect_uris) {
+      for (const uri of client.redirect_uris) {
+        this.validateRedirectUri(uri);
+      }
+    }
+
     const clientId = `arc1-${crypto.randomUUID().slice(0, 8)}`;
     const clientSecret = crypto.randomUUID();
 
@@ -115,6 +137,44 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
     this.clients.set(clientId, fullClient);
     logger.debug('OAuth client registered', { clientId, clientName: client.client_name });
     return fullClient;
+  }
+
+  /**
+   * Validate a redirect URI against allowed scheme/host policy.
+   * Allowed: https://* , http://localhost or 127.0.0.1 or [::1], custom MCP client schemes.
+   * Rejected: javascript:, data:, file:, ftp:, and any http:// to non-loopback hosts.
+   */
+  private validateRedirectUri(uri: string): void {
+    const ALLOWED_CUSTOM_SCHEMES = ['claude:', 'cursor:', 'vscode:', 'vscode-insiders:'];
+    const BLOCKED_SCHEMES = ['javascript:', 'data:', 'file:', 'ftp:'];
+
+    for (const scheme of BLOCKED_SCHEMES) {
+      if (uri.toLowerCase().startsWith(scheme)) {
+        throw new Error(
+          `Redirect URI rejected: '${scheme}' scheme is not allowed. Use https:// or a registered custom scheme.`,
+        );
+      }
+    }
+
+    // Allow known custom MCP client schemes
+    for (const scheme of ALLOWED_CUSTOM_SCHEMES) {
+      if (uri.toLowerCase().startsWith(scheme)) return;
+    }
+
+    try {
+      const parsed = new URL(uri);
+      if (parsed.protocol === 'https:') return;
+      if (parsed.protocol === 'http:') {
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1') return;
+        throw new Error(`Redirect URI rejected: http:// is only allowed for localhost/127.0.0.1. Got: '${uri}'`);
+      }
+      // Unknown protocol — allow if it looks like a custom scheme (no dots in protocol)
+      return;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('Redirect URI rejected')) throw err;
+      // URL parsing failed — likely a custom scheme; allow it
+    }
   }
 }
 
@@ -466,6 +526,46 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
       scope: data.scope,
     };
   }
+
+  /**
+   * Override revokeToken to use XSUAA service credentials consistently.
+   * Without this override, the base class would attempt revocation with
+   * the local client credentials, which don't match the XSUAA binding.
+   *
+   * Declared as a property (arrow function) to match the base class declaration.
+   */
+  override revokeToken = async (
+    _client: OAuthClientInformationFull,
+    request: { token: string; token_type_hint?: string },
+  ): Promise<void> => {
+    const revokeUrl = this.xsuaaTokenUrl.replace('/oauth/token', '/oauth/revoke');
+
+    const params = new URLSearchParams({ token: request.token });
+    if (request.token_type_hint) {
+      params.set('token_type_hint', request.token_type_hint);
+    }
+
+    try {
+      const response = await fetch(revokeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${Buffer.from(`${this.xsuaaClientId}:${this.xsuaaClientSecret}`).toString('base64')}`,
+        },
+        body: params.toString(),
+      });
+
+      if (!response.ok) {
+        logger.warn('XSUAA token revocation failed', { status: response.status, url: revokeUrl });
+      } else {
+        logger.debug('XSUAA token revoked successfully');
+      }
+    } catch (err) {
+      logger.warn('XSUAA token revocation error', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
 }
 
 export function createXsuaaOAuthProvider(
