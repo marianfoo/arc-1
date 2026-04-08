@@ -33,10 +33,10 @@ Then suggest a readiness variant if available (e.g., `S4HANA_READINESS`, `ABAP_C
 ### 1b. For package-level checks — find all objects first
 
 ```
-SAPSearch(query="<package_name>*")
+SAPRead(type="DEVC", name="<package_name>")
 ```
 
-Then run ATC on each object individually. For large packages, prioritize PROG, CLAS, FUGR, FUNC types first as they typically contain the most migration-relevant findings.
+This returns all objects in the package. Then run ATC on each object individually. For large packages, prioritize PROG, CLAS, FUGR, FUNC types first as they typically contain the most migration-relevant findings.
 
 ## Step 2: Group and Prioritize Findings
 

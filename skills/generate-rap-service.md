@@ -35,7 +35,7 @@ Check for RAP/CDS availability. Determine BTP vs on-prem — this affects naming
 |---|---|---|
 | Namespace | Z*/Y* only | Z*/Y* or customer namespace |
 | Language version | ABAP for Cloud Development (strict) | Standard ABAP or ABAP for Cloud |
-| Draft tables | Managed automatically by framework | Must be explicitly created |
+| Draft tables | Must be explicitly created (framework manages data, not table) | Must be explicitly created |
 | OData version | V4 preferred | V2 or V4 |
 | Behavior pool | `ABSTRACT` class, ABAP Cloud only | `ABSTRACT` class, classic ABAP allowed |
 | Table entity | `DEFINE TABLE ENTITY` DDL syntax | Classic DDIC table (SE11) or table entity |
@@ -204,6 +204,44 @@ Activate:
 SAPActivate(type="DDLS", name="ZI_<entity>")
 ```
 
+## Step 5b: Create Draft Table (if draft enabled)
+
+If draft is enabled, create the draft table entity before creating the behavior definition that references it. The RAP framework manages runtime persistence of draft data to this table, but the table itself must be created explicitly.
+
+```
+SAPWrite(action="create", type="DDLS", name="<draft_table>", package="<package>", transport="<transport>", source="<ddl_source>")
+```
+
+### Draft Table Entity DDL Template
+
+```cds
+@EndUserText.label : '<Entity description> - Draft'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table <draft_table> {
+  key client            : abap.clnt not null;
+  key key_uuid          : sysuuid_x16 not null;
+  <business_field_1>    : <type>;
+  <business_field_2>    : <type>;
+  // ... same business fields as the main table
+  created_by            : syuname;
+  created_at            : timestampl;
+  last_changed_by       : syuname;
+  last_changed_at       : timestampl;
+  local_last_changed_at : timestampl;
+}
+```
+
+Activate the draft table:
+
+```
+SAPActivate(type="DDLS", name="<draft_table>")
+```
+
+**Note**: On BTP ABAP Environment, the draft table must still be explicitly created — the framework manages draft data persistence at runtime, not the table's existence.
+
 ## Step 6: Create Interface Behavior Definition
 
 ```
@@ -276,11 +314,7 @@ authorization master ( instance )
 }
 ```
 
-Activate:
-
-```
-SAPActivate(type="BDEF", name="ZI_<entity>")
-```
+Do NOT activate the interface BDEF individually — it references the behavior pool class (ZBP_I_<Entity>) which does not exist yet. It will be activated in the batch activation step after the class is created.
 
 ## Step 7: Create Projection CDS View
 
@@ -367,11 +401,7 @@ define behavior for ZC_<Entity> alias <Entity>
 }
 ```
 
-Activate:
-
-```
-SAPActivate(type="BDEF", name="ZC_<entity>")
-```
+Do NOT activate the projection BDEF individually — it uses `use create`, `use update`, `use delete` which reference the interface BDEF (ZI_<Entity>), and that BDEF is not yet activated. It will be activated in the batch activation step after all artifacts are created.
 
 ## Step 9: Create Metadata Extension (DDLX)
 
@@ -473,38 +503,9 @@ Activate:
 SAPActivate(type="SRVD", name="ZSD_<entity>")
 ```
 
-## Step 11: Batch Activate All Artifacts
+## Step 11: Create Behavior Pool Class
 
-Activate all artifacts together to resolve cross-dependencies:
-
-```
-SAPActivate(objects=[
-  {type:"DDLS", name:"<table_name>"},
-  {type:"DDLS", name:"ZI_<entity>"},
-  {type:"BDEF", name:"ZI_<entity>"},
-  {type:"DDLS", name:"ZC_<entity>"},
-  {type:"BDEF", name:"ZC_<entity>"},
-  {type:"DDLX", name:"ZC_<entity>"},
-  {type:"SRVD", name:"ZSD_<entity>"}
-])
-```
-
-If batch activation fails, activate sequentially in dependency order:
-1. Table entity
-2. Interface CDS view
-3. Interface behavior definition
-4. Projection CDS view
-5. Projection behavior definition
-6. Metadata extension
-7. Service definition
-
-For any failing object, run syntax check to identify the issue:
-
-```
-SAPDiagnose(action="syntax", type="<type>", name="<name>")
-```
-
-## Step 12: Create Behavior Pool Class
+Create the behavior pool class BEFORE batch activation — the interface BDEF references this class via `implementation in class ZBP_I_<Entity>`.
 
 ```
 SAPWrite(action="create", type="CLAS", name="ZBP_I_<entity>", package="<package>", transport="<transport>", source="<class_source>")
@@ -526,6 +527,39 @@ Activate:
 
 ```
 SAPActivate(type="CLAS", name="ZBP_I_<entity>")
+```
+
+## Step 12: Batch Activate All Artifacts
+
+Activate all artifacts together to resolve cross-dependencies:
+
+```
+SAPActivate(objects=[
+  {type:"DDLS", name:"<table_name>"},
+  {type:"DDLS", name:"ZI_<entity>"},
+  {type:"CLAS", name:"ZBP_I_<entity>"},
+  {type:"BDEF", name:"ZI_<entity>"},
+  {type:"DDLS", name:"ZC_<entity>"},
+  {type:"BDEF", name:"ZC_<entity>"},
+  {type:"DDLX", name:"ZC_<entity>"},
+  {type:"SRVD", name:"ZSD_<entity>"}
+])
+```
+
+If batch activation fails, activate sequentially in dependency order:
+1. Table entity
+2. Interface CDS view
+3. Behavior pool class
+4. Interface behavior definition
+5. Projection CDS view
+6. Projection behavior definition
+7. Metadata extension
+8. Service definition
+
+For any failing object, run syntax check to identify the issue:
+
+```
+SAPDiagnose(action="syntax", type="<type>", name="<name>")
 ```
 
 ## Step 13: Service Binding
@@ -591,7 +625,7 @@ Next steps:
 | Error | Cause | Fix |
 |---|---|---|
 | Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
-| Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 11 fallback) |
+| Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
 | Field mapping incomplete | BDEF field names don't match CDS aliases | Verify CDS field aliases match BDEF field references exactly |
 | ETag field not found | `LocalLastChangedAt` missing or misnamed | Verify admin fields exist in CDS view with correct aliases |
@@ -604,7 +638,7 @@ Next steps:
 
 ### BTP vs On-Prem Summary
 
-- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables auto-managed by framework, V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax.
+- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables must be explicitly created (framework manages draft data at runtime), V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax.
 - **On-Prem**: More namespace flexibility, classic ABAP allowed in behavior pool (not recommended), explicit draft table creation may be needed, V2 or V4, `strict` level depends on release.
 
 ### What This Skill Does NOT Do (v1)
