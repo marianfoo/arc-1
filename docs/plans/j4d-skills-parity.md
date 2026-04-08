@@ -102,7 +102,7 @@ Key differences from CDS unit test skill:
 - Dependency analysis via SAPContext identifies test-unfriendly deps (DB calls, external APIs)
 - Method surgery enables surgical test method updates
 
-- [ ] Write the skill file `skills/generate-abap-unit-test.md` with this structure:
+- [x] Write the skill file `skills/generate-abap-unit-test.md` with this structure:
   - **Input**: Class name (required), test class name (optional, default: `ZCL_TEST_<CLASS>`), methods to test (optional, default: all public), package, transport.
   - **Step 1: Gather class context** — (a) `SAPRead(type="CLAS", name="<class>")` for full source; (b) `SAPRead(type="CLAS", name="<class>", method="*")` to list all methods with signatures and visibility; (c) `SAPContext(type="CLAS", name="<class>")` to get dependency contracts; (d) Optionally read existing test class: `SAPRead(type="CLAS", name="<class>", include="testclasses")`.
   - **Step 2: Analyze methods and propose test cases** — For each public method: identify branches (IF/CASE), error paths (RAISE/TRY-CATCH), return values, state changes. Classify dependencies as: mockable (interfaces → create test double), stubbable (DB tables → fixture data in SETUP), or transparent (internal helpers). Present numbered test case list grouped by method, ask user to select (same pattern as CDS skill Step 2).
@@ -113,8 +113,8 @@ Key differences from CDS unit test skill:
   - **Error handling table**: class_setup fails (wrong CUT instantiation), mock injection fails (constructor mismatch), assertion fails (wrong expected value), activation error (syntax in generated code)
   - **BTP vs on-prem notes**: BTP requires ABAP Cloud syntax, only Z*/Y* test classes, released APIs only for mocking
   - **What this skill does NOT do**: No CDS unit tests (use generate-cds-unit-test), no integration tests, no performance tests
-- [ ] Copy `skills/generate-abap-unit-test.md` to `.claude/commands/generate-abap-unit-test.md`
-- [ ] Run `npm test` — all tests must pass
+- [x] Copy `skills/generate-abap-unit-test.md` to `.claude/commands/generate-abap-unit-test.md`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 3: Create migrate-custom-code.md skill
 
