@@ -1751,7 +1751,8 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:program="http://www.sap.com/adt/programs/programs"');
       expect(xml).toContain('adtcore:type="PROG/P"');
       expect(xml).toContain('adtcore:name="ZHELLO"');
-      expect(xml).toContain('adtcore:name="ZPACKAGE"');
+      expect(xml).toContain('adtcore:description="Hello Program"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for CLAS', () => {
@@ -1760,6 +1761,8 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:class="http://www.sap.com/adt/oo/classes"');
       expect(xml).toContain('adtcore:type="CLAS/OC"');
       expect(xml).toContain('adtcore:name="ZCL_TEST"');
+      expect(xml).toContain('adtcore:description="Test Class"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for INTF', () => {
@@ -1768,6 +1771,18 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:intf="http://www.sap.com/adt/oo/interfaces"');
       expect(xml).toContain('adtcore:type="INTF/OI"');
       expect(xml).toContain('adtcore:name="ZIF_TEST"');
+      expect(xml).toContain('adtcore:description="Test Interface"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
+    });
+
+    it('returns correct XML for INCL', () => {
+      const xml = buildCreateXml('INCL', 'ZHELLO_TOP', 'ZPACKAGE', 'Include Program');
+      expect(xml).toContain('<include:abapInclude');
+      expect(xml).toContain('xmlns:include="http://www.sap.com/adt/programs/includes"');
+      expect(xml).toContain('adtcore:type="PROG/I"');
+      expect(xml).toContain('adtcore:name="ZHELLO_TOP"');
+      expect(xml).toContain('adtcore:description="Include Program"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for DDLS', () => {
@@ -1776,7 +1791,8 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources"');
       expect(xml).toContain('adtcore:type="DDLS/DF"');
       expect(xml).toContain('adtcore:name="ZI_TRAVEL"');
-      expect(xml).toContain('adtcore:name="ZPACKAGE"');
+      expect(xml).toContain('adtcore:description="Travel CDS View"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for BDEF', () => {
@@ -1785,7 +1801,8 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:bdef="http://www.sap.com/adt/bo/behaviordefinitions"');
       expect(xml).toContain('adtcore:type="BDEF/BDO"');
       expect(xml).toContain('adtcore:name="ZI_TRAVEL"');
-      expect(xml).toContain('adtcore:name="ZPACKAGE"');
+      expect(xml).toContain('adtcore:description="Travel Behavior"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for SRVD', () => {
@@ -1794,7 +1811,8 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:srvd="http://www.sap.com/adt/ddic/srvd/sources"');
       expect(xml).toContain('adtcore:type="SRVD/SRV"');
       expect(xml).toContain('adtcore:name="ZSD_TRAVEL"');
-      expect(xml).toContain('adtcore:name="ZPACKAGE"');
+      expect(xml).toContain('adtcore:description="Travel Service Def"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for DDLX', () => {
@@ -1803,7 +1821,8 @@ ENDCLASS.`;
       expect(xml).toContain('xmlns:ddlx="http://www.sap.com/adt/ddic/ddlx/sources"');
       expect(xml).toContain('adtcore:type="DDLX/EX"');
       expect(xml).toContain('adtcore:name="ZC_TRAVEL"');
-      expect(xml).toContain('adtcore:name="ZPACKAGE"');
+      expect(xml).toContain('adtcore:description="Travel Metadata Ext"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('default fallback uses objectUrlForType instead of hardcoded path', () => {
@@ -1816,6 +1835,11 @@ ENDCLASS.`;
     it('escapes XML special characters in attributes', () => {
       const xml = buildCreateXml('DDLS', 'ZTEST', 'ZPKG', 'Desc with "quotes" & <angle>');
       expect(xml).toContain('adtcore:description="Desc with &quot;quotes&quot; &amp; &lt;angle&gt;"');
+    });
+
+    it('escapes apostrophes in XML attributes', () => {
+      const xml = buildCreateXml('PROG', 'ZTEST', 'ZPKG', "It's a test");
+      expect(xml).toContain('adtcore:description="It&apos;s a test"');
     });
   });
 });

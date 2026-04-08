@@ -89,7 +89,7 @@ Proposed artifact stack for "Travel Booking":
 
 | # | Type | Name | Description |
 |---|------|------|-------------|
-| 1 | TABL | ZTRAVEL_D | Database table entity |
+| 1 | DDLS | ZTRAVEL_D | Database table entity |
 | 2 | DDLS | ZI_TRAVEL | Interface CDS view entity |
 | 3 | BDEF | ZI_TRAVEL | Interface behavior definition |
 | 4 | DDLS | ZC_TRAVEL | Projection CDS view entity |

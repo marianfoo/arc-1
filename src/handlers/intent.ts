@@ -803,7 +803,12 @@ export function buildCreateXml(type: string, name: string, pkg: string, descript
 
 /** Escape special characters for XML attribute values */
 function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 // ─── Object URL Mapping ──────────────────────────────────────────────
