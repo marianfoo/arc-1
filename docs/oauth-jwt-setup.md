@@ -119,7 +119,7 @@ export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
 export SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant-id}/v2.0'
 export SAP_OIDC_AUDIENCE='{client-id-guid}'
-export SAP_OIDC_CLOCK_TOLERANCE='5'                  # seconds, optional (default: jose library 60s)
+export SAP_OIDC_CLOCK_TOLERANCE='5'                  # seconds, optional (default: 0 — no tolerance)
 ```
 
 > **Note:** `SAP_OIDC_AUDIENCE` must match the exact `aud` claim in your tokens. For Entra ID v2 access tokens, this is typically the raw client ID GUID. Validate with a real token from your tenant.

@@ -235,7 +235,8 @@ export function parseArgs(args: string[]): ServerConfig {
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   const clockTolerance = getFlag('oidc-clock-tolerance') ?? process.env.SAP_OIDC_CLOCK_TOLERANCE;
   if (clockTolerance) {
-    config.oidcClockTolerance = Number.parseInt(clockTolerance, 10) || undefined;
+    const parsed = Number.parseInt(clockTolerance, 10);
+    config.oidcClockTolerance = Number.isNaN(parsed) ? undefined : parsed;
   }
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
 

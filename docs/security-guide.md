@@ -190,7 +190,7 @@ ARC-1 emits structured audit events to all registered sinks. Three sink types ar
 | Sink | Activation | Output |
 |------|-----------|--------|
 | **Stderr** | Always active | JSON lines to stderr |
-| **File** | Set `--log-file` / `SAP_LOG_FILE` | JSON lines appended to a file |
+| **File** | Set `--log-file` / `ARC1_LOG_FILE` | JSON lines appended to a file |
 | **BTP Audit Log** | Auto-detected from `VCAP_SERVICES` (requires `auditlog` premium plan) | Events sent to BTP Audit Log Service v2 API |
 
 ### What Gets Logged
