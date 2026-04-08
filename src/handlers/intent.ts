@@ -1118,7 +1118,13 @@ async function handleSAPWrite(
       const hasFailure = results.some((r) => r.status === 'failed');
 
       if (hasFailure) {
-        return errorResult(`Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}`);
+        const cleanupHint =
+          successCount > 0
+            ? ` Note: ${successCount} already-created object(s) remain on the SAP system and may need manual cleanup.`
+            : '';
+        return errorResult(
+          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}`,
+        );
       }
       return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}`);
     }
