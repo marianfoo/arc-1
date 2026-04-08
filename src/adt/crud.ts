@@ -11,7 +11,7 @@
  */
 
 import type { AdtHttpClient } from './http.js';
-import { checkOperation, checkTransportableEdit, OperationType, type SafetyConfig } from './safety.js';
+import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 /** Lock result from SAP */
 export interface LockResult {
   lockHandle: string;
@@ -57,9 +57,6 @@ export async function createObject(
   transport?: string,
 ): Promise<string> {
   checkOperation(safety, OperationType.Create, 'CreateObject');
-  if (transport) {
-    checkTransportableEdit(safety, transport, 'CreateObject');
-  }
 
   const url = transport ? `${objectUrl}?corrNr=${encodeURIComponent(transport)}` : objectUrl;
 
@@ -77,9 +74,6 @@ export async function updateSource(
   transport?: string,
 ): Promise<void> {
   checkOperation(safety, OperationType.Update, 'UpdateSource');
-  if (transport) {
-    checkTransportableEdit(safety, transport, 'UpdateSource');
-  }
 
   let url = sourceUrl;
   const params: string[] = [`lockHandle=${encodeURIComponent(lockHandle)}`];
