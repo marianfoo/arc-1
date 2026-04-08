@@ -113,8 +113,15 @@ export const SAPQuerySchema = z.object({
 const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD'] as const;
 const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'] as const;
 
-const batchObjectSchema = z.object({
-  type: z.string(),
+const batchObjectSchemaOnprem = z.object({
+  type: z.enum(SAPWRITE_TYPES_ONPREM),
+  name: z.string(),
+  source: z.string().optional(),
+  description: z.string().optional(),
+});
+
+const batchObjectSchemaBtp = z.object({
+  type: z.enum(SAPWRITE_TYPES_BTP),
   name: z.string(),
   source: z.string().optional(),
   description: z.string().optional(),
@@ -129,7 +136,7 @@ export const SAPWriteSchema = z.object({
   description: z.string().optional(),
   package: z.string().optional(),
   transport: z.string().optional(),
-  objects: z.array(batchObjectSchema).optional(),
+  objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
 export const SAPWriteSchemaBtp = z.object({
@@ -141,7 +148,7 @@ export const SAPWriteSchemaBtp = z.object({
   description: z.string().optional(),
   package: z.string().optional(),
   transport: z.string().optional(),
-  objects: z.array(batchObjectSchema).optional(),
+  objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
 // ─── SAPActivate ────────────────────────────────────────────────────
