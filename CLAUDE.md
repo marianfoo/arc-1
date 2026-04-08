@@ -147,6 +147,16 @@ src/
 │   ├── sqlite.ts               # SQLite cache (default for http-streamable)
 │   ├── caching-layer.ts        # Orchestration: source + dep caching, invalidation
 │   └── warmup.ts               # Pre-warmer: TADIR scan, bulk fetch, edge index
+├── aff/
+│   ├── validator.ts            # AFF JSON schema validator (Ajv 2020-12)
+│   └── schemas/                # Bundled AFF JSON schemas (from SAP/abap-file-formats)
+│       ├── clas-v1.json        # Class schema
+│       ├── intf-v1.json        # Interface schema
+│       ├── prog-v1.json        # Program schema
+│       ├── ddls-v1.json        # CDS view schema
+│       ├── bdef-v1.json        # Behavior definition schema
+│       ├── srvd-v1.json        # Service definition schema
+│       └── srvb-v1.json        # Service binding schema
 └── lint/
     ├── lint.ts                 # ABAP lint wrapper (@abaplint/core)
     ├── config-builder.ts       # System-aware abaplint config builder (cloud/onprem presets)
@@ -162,6 +172,7 @@ tests/
 │   ├── handlers/               # Handler tests
 │   ├── server/                 # Server tests
 │   ├── lint/                   # Lint tests
+│   ├── aff/                    # AFF validator tests
 │   └── cli/                    # CLI tests
 ├── integration/                # Integration tests (need SAP credentials)
 │   ├── helpers.ts              # Test client factory, skip logic
@@ -179,7 +190,7 @@ tests/
 
 | Task | Files |
 |------|-------|
-| Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` |
+| Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` (for structured format, also `src/adt/xml-parser.ts`, `src/adt/types.ts`) |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add method-level surgery | `src/context/method-surgery.ts` |
@@ -205,6 +216,8 @@ tests/
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |
+| Add AFF schema | `src/aff/schemas/` (add `{type}-v1.json`), `src/aff/validator.ts` (add type mapping) |
+| Modify AFF validation | `src/aff/validator.ts`, `src/handlers/intent.ts` (create/batch_create paths) |
 
 ## Architecture: Request Flow
 
@@ -352,7 +365,7 @@ await http.withStatefulSession(async (session) => {
 
 | Level | Command | SAP Required | Count | Config |
 |-------|---------|--------------|-------|--------|
-| Unit | `npm test` | No | 707+ | `vitest.config.ts` |
+| Unit | `npm test` | No | 1148+ | `vitest.config.ts` |
 | Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | ~50 | `vitest.integration.config.ts` |
 | BTP Integration | `npm run test:integration:btp` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 28 | same |
 | E2E | `npm run test:e2e` | Yes (MCP server running) | ~30 | `tests/e2e/vitest.e2e.config.ts` |
@@ -410,6 +423,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 | `fast-xml-parser` v5 | ADT XML parsing |
 | `better-sqlite3` | SQLite cache |
 | `commander` | CLI framework |
+| `ajv` v8 (2020-12) | AFF JSON schema validation |
 | `zod` v4 | Tool input validation & error formatting |
 | `vitest` | Testing |
 | `biome` | Linting + formatting |

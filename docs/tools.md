@@ -16,6 +16,7 @@ Read any SAP ABAP object.
 |-----------|------|----------|-------------|
 | `type` | string | Yes | Object type (see below) |
 | `name` | string | No | Object name (e.g., `ZTEST_PROGRAM`, `ZCL_ORDER`, `MARA`) |
+| `format` | string | No | Output format: `"text"` (default) or `"structured"` (CLAS only, see below) |
 | `include` | string | No | For CLAS: `testclasses`, `definitions`, `implementations`, `macros` |
 | `group` | string | No | For FUNC: function group name |
 | `maxRows` | number | No | For TABLE_CONTENTS: max rows (default 100) |
@@ -46,10 +47,23 @@ Read any SAP ABAP object.
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
 
+**Structured format (CLAS only):**
+
+When `format="structured"` is used with CLAS type, the response is a JSON object with:
+- `metadata` — class metadata (description, language, category, package, fixPointArithmetic, abapLanguageVersion)
+- `main` — main class source code
+- `testclasses` — test class source (or null if none)
+- `definitions` — local definitions (or null)
+- `implementations` — local implementations (or null)
+- `macros` — macros (or null)
+
+This is useful when you need to understand class structure or separate test code from production code.
+
 **Examples:**
 ```
 SAPRead(type="PROG", name="ZTEST_REPORT")
 SAPRead(type="CLAS", name="ZCL_ORDER", include="testclasses")
+SAPRead(type="CLAS", name="ZCL_ORDER", format="structured")  — JSON with metadata + decomposed source
 SAPRead(type="DDLX", name="ZC_TRAVEL")          — metadata extension with UI annotations
 SAPRead(type="SRVB", name="ZUI_TRAVEL_O4")       — service binding metadata as JSON
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
@@ -87,12 +101,30 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `create`, `update`, or `delete` |
-| `type` | string | Yes | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD` |
-| `name` | string | Yes | Object name |
-| `source` | string | No | ABAP source code (for create/update) |
+| `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD` (for single object actions) |
+| `name` | string | No | Object name (for single object actions) |
+| `source` | string | No | ABAP source code (for create/update/edit_method) |
+| `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
+| `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number |
+| `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
+
+**Batch creation:**
+
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional).
+
+If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
+
+```
+SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
+  {type:"DDLS", name:"ZI_TRAVEL", source:"define root view..."},
+  {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
+  {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
+])
+```
 
 **Note:** Blocked when `--read-only` is active. By default, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 

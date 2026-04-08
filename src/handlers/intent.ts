@@ -36,6 +36,7 @@ import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures 
 import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
+import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
 import { extractCdsElements } from '../context/cds-deps.js';
 import { compressCdsContext, compressContext } from '../context/compressor.js';
@@ -377,10 +378,20 @@ async function handleSAPRead(
     return source;
   };
 
+  // Structured format is only supported for CLAS type
+  if (args.format === 'structured' && type !== 'CLAS') {
+    return errorResult('The "structured" format is only supported for CLAS type. Other types return text format.');
+  }
+
   switch (type) {
     case 'PROG':
       return textResult(await cachedGet('PROG', name, () => client.getProgram(name)));
     case 'CLAS': {
+      // Structured format: return JSON with metadata + decomposed source
+      if (args.format === 'structured') {
+        const structured = await client.getClassStructured(name);
+        return textResult(JSON.stringify(structured, null, 2));
+      }
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
         // Method-level read — fetch full source then extract
@@ -915,6 +926,11 @@ async function handleSAPWrite(
   const source = String(args.source ?? '');
   const transport = args.transport as string | undefined;
 
+  // type and name are required for all actions except batch_create
+  if (action !== 'batch_create' && (!type || !name)) {
+    return errorResult('"type" and "name" are required for this action.');
+  }
+
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
@@ -933,6 +949,15 @@ async function handleSAPWrite(
       const pkg = String(args.package ?? '$TMP');
       checkPackage(client.safety, pkg);
       const description = String(args.description ?? name);
+      checkPackage(client.safety, pkg);
+
+      // AFF header validation (if schema available for this type)
+      const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
+      if (!affResult.valid) {
+        return errorResult(
+          `AFF metadata validation failed for ${type} ${name}:\n- ${(affResult.errors ?? []).join('\n- ')}\n\nFix the metadata and retry.`,
+        );
+      }
 
       // Build type-specific creation XML body.
       // SAP ADT requires the root element to match the object type —
@@ -1010,8 +1035,121 @@ async function handleSAPWrite(
       cachingLayer?.invalidate(type, name);
       return textResult(`Deleted ${type} ${name}.`);
     }
+    case 'batch_create': {
+      const objects = args.objects as Array<Record<string, unknown>> | undefined;
+      if (!objects || !Array.isArray(objects) || objects.length === 0) {
+        return errorResult('"objects" array is required and must be non-empty for batch_create action.');
+      }
+
+      const pkg = String(args.package ?? '$TMP');
+
+      // Check package is allowed before starting any creates
+      checkPackage(client.safety, pkg);
+
+      const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
+
+      for (const obj of objects) {
+        const objType = String(obj.type ?? '');
+        const objName = String(obj.name ?? '');
+        const objSource = obj.source ? String(obj.source) : undefined;
+        const objDescription = String(obj.description ?? objName);
+
+        // AFF header validation per object (if schema available)
+        const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });
+        if (!affResult.valid) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: `AFF metadata validation failed:\n- ${(affResult.errors ?? []).join('\n- ')}`,
+          });
+          break;
+        }
+
+        try {
+          // Pre-validate source with lint BEFORE creating the object to avoid orphaned objects
+          if (objSource) {
+            const lintWarnings = runPreWriteLint(objSource, objType, objName, config);
+            if (lintWarnings.blocked) {
+              results.push({
+                type: objType,
+                name: objName,
+                status: 'failed',
+                error: `source rejected by lint: ${lintWarnings.result!.content[0].text}`,
+              });
+              break;
+            }
+          }
+
+          // Step 1: Create the object
+          const objUrl = objectUrlForType(objType, objName);
+          const createUrl = objUrl.replace(/\/[^/]+$/, '');
+          const body = buildCreateXml(objType, objName, pkg, objDescription);
+          await createObject(client.http, client.safety, createUrl, body, 'application/xml', transport);
+
+          // Step 2: Write source if provided
+          if (objSource) {
+            const srcUrl = sourceUrlForType(objType, objName);
+            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, transport);
+          }
+
+          // Step 3: Activate the object
+          const activationResult = await activate(client.http, client.safety, objUrl);
+          if (!activationResult.success) {
+            results.push({
+              type: objType,
+              name: objName,
+              status: 'failed',
+              error: `activation failed: ${activationResult.messages.join('; ')}`,
+            });
+            break;
+          }
+
+          cachingLayer?.invalidate(objType, objName);
+          results.push({ type: objType, name: objName, status: 'success' });
+        } catch (err) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: err instanceof Error ? err.message : String(err),
+          });
+          break;
+        }
+      }
+
+      // Add 'skipped' entries for objects that were never attempted due to early break
+      for (let i = results.length; i < objects.length; i++) {
+        const skipped = objects[i];
+        results.push({
+          type: String(skipped.type ?? ''),
+          name: String(skipped.name ?? ''),
+          status: 'failed',
+          error: 'skipped — stopped after previous failure',
+        });
+      }
+
+      const summary = results
+        .map((r) => `${r.name} (${r.type}) ${r.status === 'success' ? '✓' : `✗ — ${r.error}`}`)
+        .join(', ');
+      const successCount = results.filter((r) => r.status === 'success').length;
+      const hasFailure = results.some((r) => r.status === 'failed');
+
+      if (hasFailure) {
+        const cleanupHint =
+          successCount > 0
+            ? ` Note: ${successCount} already-created object(s) remain on the SAP system and may need manual cleanup.`
+            : '';
+        return errorResult(
+          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}`,
+        );
+      }
+      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}`);
+    }
     default:
-      return errorResult(`Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method`);
+      return errorResult(
+        `Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method, batch_create`,
+      );
   }
 }
 

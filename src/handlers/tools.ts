@@ -98,12 +98,14 @@ const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
 const SAPWRITE_DESC_ONPREM =
   'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
-  'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates.';
+  'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks. Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
   'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
-  'For edit_method: surgically replace a single method body in a CLAS without sending the full class source.';
+  'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks.';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -319,6 +321,12 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                     'For FUGR type only. When true, expands all INCLUDE statements and returns the full source of each include inline.',
                 },
               }),
+          format: {
+            type: 'string',
+            enum: ['text', 'structured'],
+            description:
+              'Output format. "text" (default): raw source code. "structured" (CLAS only): JSON with metadata (description, language, category) + decomposed source (main, testclasses, definitions, implementations, macros). Useful when you need to understand class structure or separate test code from production code.',
+          },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
           sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
         },
@@ -344,25 +352,51 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['create', 'update', 'delete', 'edit_method'],
+            enum: ['create', 'update', 'delete', 'edit_method', 'batch_create'],
             description:
-              'Write action. edit_method: surgically replace a single method body (requires type=CLAS, method, and source params)',
+              'Write action. edit_method: surgically replace a single method body (requires type=CLAS, method, and source params). batch_create: create and activate multiple objects in sequence (requires objects array)',
           },
           type: {
             type: 'string',
             enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
-            description: 'Object type',
+            description: 'Object type (for create/update/delete/edit_method)',
           },
-          name: { type: 'string', description: 'Object name' },
+          name: { type: 'string', description: 'Object name (for create/update/delete/edit_method)' },
           source: { type: 'string', description: 'ABAP source code (for create/update/edit_method)' },
           method: {
             type: 'string',
             description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',
           },
+          description: {
+            type: 'string',
+            description:
+              'Object description for create action (defaults to name if omitted). Max 60 chars for most types.',
+          },
           package: { type: 'string', description: 'Package for new objects (default $TMP)' },
           transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
+          objects: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
+                  description: 'Object type',
+                },
+                name: { type: 'string', description: 'Object name' },
+                source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
+                description: { type: 'string', description: 'Object description (defaults to name if omitted)' },
+              },
+              required: ['type', 'name'],
+            },
+            description:
+              'For batch_create: ordered list of objects to create and activate. Each object needs type, name, and source (if applicable). ' +
+              'Objects are created and activated in array order — put dependencies first (e.g., CDS view before projection, BDEF after CDS views). ' +
+              'Example: [{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
+          },
         },
-        required: ['action', 'type', 'name'],
+        required: ['action'],
       },
     });
 

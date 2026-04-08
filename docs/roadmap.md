@@ -1164,6 +1164,9 @@ The following features are tracked but not planned for near-term implementation.
 | Two-Dimensional Auth | Scopes × roles × safety config, SEC-06 expanded | ✅ Complete (2026-04-07, PR #48) |
 | Zod v4 Validation | Runtime input validation for all MCP tool inputs | ✅ Complete (2026-04-08, PR #52) |
 | OAuth Security (RFC 9700) | SEC-08: state+PKCE, loopback binding, audience validation | ✅ Complete (2026-04-08, PR #51) |
+| AFF Structured Class Read | `SAPRead(format="structured")` — JSON with metadata + decomposed includes | ✅ Complete (2026-04-08) |
+| AFF Batch Object Creation | `SAPWrite(action="batch_create")` — multi-object create+activate in one call | ✅ Complete (2026-04-08) |
+| AFF Schema Validation | Bundled AFF JSON schemas, pre-create metadata validation | ✅ Complete (2026-04-08) |
 
 ---
 

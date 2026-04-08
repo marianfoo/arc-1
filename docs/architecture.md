@@ -56,6 +56,7 @@ flowchart TB
         subgraph Packages["Supporting Packages"]
             Cache[src/cache/<br/>Memory · SQLite]
             Lint[src/lint/<br/>abaplint]
+            AFF[src/aff/<br/>AFF Schema Validation]
         end
     end
 
@@ -95,6 +96,7 @@ sequenceDiagram
         Safety-->>Server: Denied (read-only / package / operation)
         Server-->>Client: Error result
     else Allowed
+        Note over Safety,ADT: For SAPWrite create/batch_create:<br/>AFF metadata validation runs here<br/>(bundled JSON schemas from SAP/abap-file-formats)
         Safety->>ADT: Execute operation
         ADT->>HTTP: HTTP request
         HTTP->>HTTP: Add CSRF token + cookies
@@ -184,6 +186,9 @@ arc-1/
 │   │   ├── cache.ts                # Cache interface + types
 │   │   ├── memory.ts               # In-memory cache
 │   │   └── sqlite.ts               # SQLite cache (better-sqlite3)
+│   ├── aff/
+│   │   ├── validator.ts            # AFF JSON schema validation (Ajv 2020-12)
+│   │   └── schemas/                # Bundled schemas from SAP/abap-file-formats
 │   └── lint/
 │       └── lint.ts                 # ABAP lint wrapper (@abaplint/core)
 │

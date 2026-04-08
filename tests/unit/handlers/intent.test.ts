@@ -366,6 +366,160 @@ describe('Intent Handler', () => {
       // Should still attempt with empty name (SAP will return error)
       expect(result.isError).toBeUndefined();
     });
+
+    it('reads class with format="structured" returns JSON with metadata and source fields', async () => {
+      const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:final="true" class:visibility="public" class:category="00" class:fixPointArithmetic="true"
+    adtcore:name="ZCL_TEST" adtcore:type="CLAS/OC" adtcore:description="Test class" adtcore:language="EN"
+    adtcore:masterLanguage="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+</class:abapClass>`;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oo/classes/ZCL_TEST') && !urlStr.includes('/source/') && !urlStr.includes('/includes/')) {
+          return mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/source/main')) {
+          return mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.\nCLASS zcl_test IMPLEMENTATION.\nENDCLASS.', {
+            'x-csrf-token': 'T',
+          });
+        }
+        if (urlStr.includes('/includes/')) {
+          return mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'structured',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(parsed.metadata).toBeDefined();
+      expect(parsed.metadata.name).toBe('ZCL_TEST');
+      expect(parsed.metadata.description).toBe('Test class');
+      expect(parsed.main).toContain('CLASS zcl_test');
+      expect(parsed.testclasses).toBeNull();
+      expect(parsed.definitions).toBeNull();
+      expect(parsed.implementations).toBeNull();
+      expect(parsed.macros).toBeNull();
+    });
+
+    it('reads class with format="text" returns plain source (default behavior)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'text',
+      });
+      expect(result.isError).toBeUndefined();
+      // Plain text, not JSON
+      expect(() => JSON.parse(result.content[0]?.text ?? '')).toThrow();
+    });
+
+    it('reads class without format returns plain source (backwards compatible)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      // Plain text, not JSON — backwards compatible
+      expect(result.content[0]?.text).toContain('REPORT');
+    });
+
+    it('returns error when format="structured" used with non-CLAS type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+        format: 'structured',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('structured');
+      expect(result.content[0]?.text).toContain('CLAS');
+    });
+
+    it('reads class with format="structured" and method param — format takes precedence', async () => {
+      const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:category="00" class:fixPointArithmetic="true"
+    adtcore:name="ZCL_TEST" adtcore:description="Test class" adtcore:language="EN"
+    adtcore:masterLanguage="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+</class:abapClass>`;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oo/classes/ZCL_TEST') && !urlStr.includes('/source/') && !urlStr.includes('/includes/')) {
+          return mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/source/main')) {
+          return mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.\nCLASS zcl_test IMPLEMENTATION.\nENDCLASS.', {
+            'x-csrf-token': 'T',
+          });
+        }
+        if (urlStr.includes('/includes/')) {
+          return mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'structured',
+        method: 'get_name',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(parsed.metadata).toBeDefined();
+      expect(parsed.main).toBeDefined();
+    });
+
+    it('structured response is valid JSON with expected keys', async () => {
+      const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
+<class:abapClass class:category="00" class:fixPointArithmetic="true"
+    adtcore:name="ZCL_TEST" adtcore:description="Structured test" adtcore:language="EN"
+    adtcore:masterLanguage="EN"
+    xmlns:class="http://www.sap.com/adt/oo/classes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:name="ZDEV"/>
+</class:abapClass>`;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oo/classes/ZCL_TEST') && !urlStr.includes('/source/') && !urlStr.includes('/includes/')) {
+          return mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/source/main')) {
+          return mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.', { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/includes/testclasses')) {
+          return mockResponse(200, 'CLASS ltcl_test DEFINITION.\nENDCLASS.', { 'x-csrf-token': 'T' });
+        }
+        if (urlStr.includes('/includes/')) {
+          return mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        format: 'structured',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(Object.keys(parsed)).toEqual(
+        expect.arrayContaining(['metadata', 'main', 'testclasses', 'definitions', 'implementations', 'macros']),
+      );
+      expect(parsed.metadata.package).toBe('ZDEV');
+      expect(parsed.testclasses).toContain('ltcl_test');
+    });
   });
 
   // ─── SAPSearch ─────────────────────────────────────────────────────
@@ -1894,6 +2048,255 @@ ENDCLASS.`;
       });
       // Should succeed (mock returns data)
       expect(result.isError).toBeUndefined();
+    });
+  });
+
+  // ─── SAPWrite batch_create ──────────────────────────────────────────
+
+  describe('SAPWrite batch_create', () => {
+    it('creates all objects in order', async () => {
+      // Mock: CSRF fetch, create POST, lock GET (for safeUpdateSource), update PUT, unlock POST, activation POST
+      // Use a simple mock that returns 200 for everything
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'mock-csrf-token' }));
+
+      // Disable lint to avoid CDS source being rejected by ABAP parser
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'DDLS', name: 'ZI_TEST', source: 'define root view entity ZI_TEST {}' },
+          { type: 'BDEF', name: 'ZI_TEST', source: 'managed implementation in class zbp_i_test;' },
+          { type: 'SRVD', name: 'ZSD_TEST', source: 'define service ZSD_TEST {}' },
+        ],
+      });
+
+      // Should mention all 3 objects in the summary
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('ZI_TEST (DDLS)');
+      expect(text).toContain('ZI_TEST (BDEF)');
+      expect(text).toContain('ZSD_TEST (SRVD)');
+      expect(text).toContain('3 objects');
+    });
+
+    it('stops on first failure and reports partial results', async () => {
+      let callCount = 0;
+      mockFetch.mockImplementation(() => {
+        callCount++;
+        // First few calls succeed (CSRF, create #1, lock, update, unlock, activate)
+        // Then fail on second object create
+        if (callCount <= 7) {
+          return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+        }
+        // Fail on subsequent calls (second object)
+        return Promise.resolve(mockResponse(500, 'Internal Server Error', { 'x-csrf-token': 'T' }));
+      });
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', source: "REPORT zprog1.\nWRITE: / 'hi'." },
+          { type: 'PROG', name: 'ZPROG2', source: "REPORT zprog2.\nWRITE: / 'hi'." },
+          { type: 'PROG', name: 'ZPROG3', source: "REPORT zprog3.\nWRITE: / 'hi'." },
+        ],
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      // Third object should appear as skipped
+      expect(text).toContain('ZPROG3');
+      expect(text).toContain('skipped');
+    });
+
+    it('returns error for empty objects array', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [],
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('non-empty');
+    });
+
+    it('respects read-only safety mode', async () => {
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' }],
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('blocked');
+    });
+
+    it('applies package filter', async () => {
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['ZALLOWED*'] },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'ZBLOCKED',
+        objects: [{ type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' }],
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('blocked');
+    });
+
+    it('activates each object after creation', async () => {
+      const fetchCalls: string[] = [];
+      mockFetch.mockImplementation((_url: string | URL, options?: { method?: string }) => {
+        const urlStr = typeof _url === 'string' ? _url : _url.toString();
+        fetchCalls.push(`${options?.method ?? 'GET'} ${urlStr}`);
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'PROG', name: 'ZPROG1' }],
+      });
+
+      // Should have an activation POST call
+      const activationCalls = fetchCalls.filter((c) => c.includes('activation'));
+      expect(activationCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('skips source update when no source provided', async () => {
+      const fetchCalls: string[] = [];
+      mockFetch.mockImplementation((_url: string | URL, options?: { method?: string }) => {
+        const urlStr = typeof _url === 'string' ? _url : _url.toString();
+        fetchCalls.push(`${options?.method ?? 'GET'} ${urlStr}`);
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'SRVD', name: 'ZSD_TEST' }],
+      });
+
+      // No PUT call for source update (only POST for create + POST for activation)
+      const putCalls = fetchCalls.filter((c) => c.startsWith('PUT'));
+      expect(putCalls.length).toBe(0);
+    });
+
+    it('batch_create succeeds with multiple objects', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', source: 'REPORT zprog2.' },
+        ],
+      });
+
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('2 objects');
+      expect(result.isError).toBeUndefined();
+    });
+  });
+
+  // ─── AFF validation in SAPWrite ─────────────────────────────────────
+
+  describe('SAPWrite AFF validation', () => {
+    it('create with valid metadata proceeds normally', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        package: '$TMP',
+        description: 'Test class',
+        source: 'CLASS zcl_test DEFINITION PUBLIC.\nENDCLASS.\nCLASS zcl_test IMPLEMENTATION.\nENDCLASS.',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Created CLAS ZCL_TEST');
+    });
+
+    it('create with description > 60 chars fails AFF validation', async () => {
+      const longDesc = 'A'.repeat(61);
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        package: '$TMP',
+        description: longDesc,
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('AFF metadata validation failed');
+      expect(text).toContain('CLAS ZCL_TEST');
+    });
+
+    it('create for type without AFF schema skips validation', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'create',
+        type: 'INCL',
+        name: 'Z_TEST_INCL',
+        package: '$TMP',
+        description: 'A'.repeat(100), // Long description, but no AFF schema for INCL
+      });
+      // Should not fail due to AFF validation (INCL has no schema)
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('batch_create stops on first AFF validation failure', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const longDesc = 'A'.repeat(61);
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', description: 'Valid desc', source: 'REPORT zprog1.' },
+          { type: 'CLAS', name: 'ZCL_BAD', description: longDesc },
+          { type: 'PROG', name: 'ZPROG2', source: 'REPORT zprog2.' },
+        ],
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('ZPROG1');
+      expect(text).toContain('ZCL_BAD');
+      expect(text).toContain('AFF metadata validation failed');
+      // Third object should appear as skipped
+      expect(text).toContain('ZPROG2');
+      expect(text).toContain('skipped');
+    });
+
+    it('AFF validation errors include field path and details', async () => {
+      const longDesc = 'A'.repeat(71); // PROG maxLength is 70
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZPROG1',
+        package: '$TMP',
+        description: longDesc,
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      // Should mention the field path and constraint
+      expect(text).toContain('/header/description');
+      expect(text).toContain('Fix the metadata and retry');
     });
   });
 

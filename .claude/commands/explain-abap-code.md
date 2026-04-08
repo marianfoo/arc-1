@@ -28,6 +28,24 @@ Use the first result's type. If ambiguous (multiple matches), ask the user.
 
 ### 1b. Read the source code
 
+For classes, prefer the structured format to get metadata and decomposed source in a single call:
+
+```
+SAPRead(type="CLAS", name="<class_name>", format="structured")
+```
+
+This returns JSON with:
+- **metadata**: description, language, category (e.g., "generalObjectType", "exitClass"), package
+- **main**: main class source
+- **testclasses**: test class source (or null if none)
+- **definitions**: local type definitions (or null)
+- **implementations**: local type implementations (or null)
+- **macros**: local macros (or null)
+
+The structured format automatically separates test code from production code and provides class metadata (description, category) without additional calls.
+
+For non-class types, use the standard text format:
+
 ```
 SAPRead(type="<type>", name="<object_name>")
 ```
@@ -50,8 +68,8 @@ Returns a formatted listing of all fields with key markers, aliases, association
 
 ### 1e. (Optional) Read related artifacts
 
-Depending on type, also read associated objects:
-- **CLAS**: `SAPRead(type="CLAS", name="<class>", include="testclasses")` — check if tests exist
+Depending on type, also read associated objects. If you already used `format="structured"` for a class, the testclasses are already included — no need to fetch them separately.
+- **CLAS**: `SAPRead(type="CLAS", name="<class>", include="testclasses")` — check if tests exist (skip if structured format was used)
 - **DDLS**: `SAPRead(type="BDEF", name="<entity>")` — check if behavior definition exists; `SAPRead(type="DDLX", name="<entity>")` — check for metadata extensions
 - **BDEF**: `SAPRead(type="DDLS", name="<entity>")` — read the associated CDS view
 

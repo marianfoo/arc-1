@@ -70,6 +70,7 @@ export const SAPReadSchema = z.object({
   group: z.string().optional(),
   method: z.string().optional(),
   expand_includes: z.coerce.boolean().optional(),
+  format: z.enum(['text', 'structured']).optional(),
   maxRows: z.coerce.number().optional(),
   sqlFilter: z.string().optional(),
 });
@@ -80,6 +81,7 @@ export const SAPReadSchemaBtp = z.object({
   include: z.string().optional(),
   group: z.string().optional(),
   method: z.string().optional(),
+  format: z.enum(['text', 'structured']).optional(),
   maxRows: z.coerce.number().optional(),
   sqlFilter: z.string().optional(),
 });
@@ -111,24 +113,42 @@ export const SAPQuerySchema = z.object({
 const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD'] as const;
 const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'] as const;
 
-export const SAPWriteSchema = z.object({
-  action: z.enum(['create', 'update', 'delete', 'edit_method']),
+const batchObjectSchemaOnprem = z.object({
   type: z.enum(SAPWRITE_TYPES_ONPREM),
   name: z.string(),
   source: z.string().optional(),
-  method: z.string().optional(),
-  package: z.string().optional(),
-  transport: z.string().optional(),
+  description: z.string().optional(),
 });
 
-export const SAPWriteSchemaBtp = z.object({
-  action: z.enum(['create', 'update', 'delete', 'edit_method']),
+const batchObjectSchemaBtp = z.object({
   type: z.enum(SAPWRITE_TYPES_BTP),
   name: z.string(),
   source: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const SAPWriteSchema = z.object({
+  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create']),
+  type: z.enum(SAPWRITE_TYPES_ONPREM).optional(),
+  name: z.string().optional(),
+  source: z.string().optional(),
   method: z.string().optional(),
+  description: z.string().optional(),
   package: z.string().optional(),
   transport: z.string().optional(),
+  objects: z.array(batchObjectSchemaOnprem).optional(),
+});
+
+export const SAPWriteSchemaBtp = z.object({
+  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create']),
+  type: z.enum(SAPWRITE_TYPES_BTP).optional(),
+  name: z.string().optional(),
+  source: z.string().optional(),
+  method: z.string().optional(),
+  description: z.string().optional(),
+  package: z.string().optional(),
+  transport: z.string().optional(),
+  objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
 // ─── SAPActivate ────────────────────────────────────────────────────

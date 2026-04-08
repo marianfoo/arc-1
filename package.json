@@ -27,7 +27,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && rm -rf dist/aff/schemas && cp -r src/aff/schemas dist/aff/schemas",
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/index.ts --transport http-streamable",
     "start": "node dist/index.js",
@@ -54,6 +54,7 @@
     "@modelcontextprotocol/sdk": "^1.28.0",
     "@sap/xsenv": "^6.1.0",
     "@sap/xssec": "^4.13.0",
+    "ajv": "^8.18.0",
     "better-sqlite3": "^12.8.0",
     "commander": "^14.0.3",
     "dotenv": "^17.3.1",
