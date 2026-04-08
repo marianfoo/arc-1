@@ -1071,6 +1071,9 @@ The following features are tracked but not planned for near-term implementation.
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | ✅ Complete (2026-04-01) |
 | MCP Elicitation | Interactive confirmations for destructive operations | ✅ Complete (2026-04-01) |
 | BTP ABAP Environment | OAuth 2.0 browser login, direct BTP connectivity | ✅ Complete (2026-04-01) |
+| AFF Structured Class Read | `SAPRead(format="structured")` — JSON with metadata + decomposed includes | ✅ Complete (2026-04-08) |
+| AFF Batch Object Creation | `SAPWrite(action="batch_create")` — multi-object create+activate in one call | ✅ Complete (2026-04-08) |
+| AFF Schema Validation | Bundled AFF JSON schemas, pre-create metadata validation | ✅ Complete (2026-04-08) |
 
 ---
 

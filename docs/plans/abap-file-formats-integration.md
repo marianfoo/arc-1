@@ -195,13 +195,13 @@ This task adds integration tests that exercise the new features against a real S
 
 This task updates all documentation artifacts to reflect the new AFF integration features.
 
-- [ ] Update `CLAUDE.md`: (1) Add `src/aff/` directory to the codebase structure tree with `validator.ts` and `schemas/` subdirectory. (2) Add rows to Key Files for Common Tasks table: "Add AFF schema" → `src/aff/schemas/`, "Modify AFF validation" → `src/aff/validator.ts`. (3) Add `format` parameter to the Configuration table if it becomes a server-level default. (4) Update the "Add new read operation" row to mention structured format handling.
-- [ ] Update `docs/tools.md`: (1) In the SAPRead section, document the new `format` parameter: default is `"text"`, `"structured"` returns JSON with metadata + decomposed includes (CLAS only). Include an example response. (2) In the SAPWrite section, document the `batch_create` action: accepts `objects` array, creates and activates in order, stops on first failure. Include an example with a RAP stack. (3) Note that AFF metadata validation runs automatically on create/batch_create for supported types.
-- [ ] Update `docs/architecture.md`: Add a note about the AFF validation layer in the request flow — between Zod input validation and the ADT client call. Mention bundled AFF schemas.
-- [ ] Update `docs/roadmap.md`: Add new entries for the three AFF features implemented. Mark them as completed with the implementation date. If there are existing AFF-related items, update their status.
-- [ ] Update `compare/00-feature-matrix.md`: Add rows for "Structured object decomposition (class metadata + includes)" and "Multi-object batch creation" and "AFF schema validation". Mark ARC-1 as supported. Update "Last Updated" date.
-- [ ] Update `README.md`: In the features section, add a brief mention of structured class reading and batch object creation. Keep it concise — one bullet point each.
-- [ ] Run `npm test` — all tests must pass (docs changes shouldn't break tests, but verify)
+- [x] Update `CLAUDE.md`: (1) Add `src/aff/` directory to the codebase structure tree with `validator.ts` and `schemas/` subdirectory. (2) Add rows to Key Files for Common Tasks table: "Add AFF schema" → `src/aff/schemas/`, "Modify AFF validation" → `src/aff/validator.ts`. (3) Add `format` parameter to the Configuration table if it becomes a server-level default. (4) Update the "Add new read operation" row to mention structured format handling.
+- [x] Update `docs/tools.md`: (1) In the SAPRead section, document the new `format` parameter: default is `"text"`, `"structured"` returns JSON with metadata + decomposed includes (CLAS only). Include an example response. (2) In the SAPWrite section, document the `batch_create` action: accepts `objects` array, creates and activates in order, stops on first failure. Include an example with a RAP stack. (3) Note that AFF metadata validation runs automatically on create/batch_create for supported types.
+- [x] Update `docs/architecture.md`: Add a note about the AFF validation layer in the request flow — between Zod input validation and the ADT client call. Mention bundled AFF schemas.
+- [x] Update `docs/roadmap.md`: Add new entries for the three AFF features implemented. Mark them as completed with the implementation date. If there are existing AFF-related items, update their status.
+- [x] Update `compare/00-feature-matrix.md`: Add rows for "Structured object decomposition (class metadata + includes)" and "Multi-object batch creation" and "AFF schema validation". Mark ARC-1 as supported. Update "Last Updated" date.
+- [x] Update `README.md`: In the features section, add a brief mention of structured class reading and batch object creation. Keep it concise — one bullet point each.
+- [x] Run `npm test` — all tests must pass (docs changes shouldn't break tests, but verify)
 
 ### Task 9: Update skills to leverage AFF features
 
