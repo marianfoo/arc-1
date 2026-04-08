@@ -209,7 +209,7 @@ _Last updated: 2026-04-04_
 | Unit tests | 707+ | 222 | 0 | 0 | 0 | Yes (Jest) | 0 | 163 |
 | Integration tests | ✅ (on-prem + BTP) | ✅ | ❌ | 13 (live SAP) | ❌ | ✅ | ❌ | ⚠️ scaffold |
 | CI/CD | ✅ (release-please) | ✅ (GoReleaser) | ❌ | ❌ | ❌ | ⚠️ (Husky + lint-staged) | ❌ | ❌ |
-| Input validation | Zod v3 | Custom | Untyped | Untyped | Pydantic | Zod v4 | Zod | Manual |
+| Input validation | Zod v4 | Custom | Untyped | Untyped | Pydantic | Zod v4 | Zod | Manual |
 | Linter | Biome | — | — | — | — | Biome | — | — |
 
 ---

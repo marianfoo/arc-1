@@ -113,7 +113,7 @@ Write the minimal code to make the tests pass. Follow project patterns:
 - **Handler routing**: case statement in `intent.ts` dispatching to client methods
 - **Safety checks**: use `checkOperation(this.safety, OperationType.X, 'OpName')`
 - **Error handling**: throw typed errors (`AdtApiError`, `AdtSafetyError`)
-- **Input validation**: use zod schemas in tool definitions
+- **Input validation**: define Zod v4 schemas in `src/handlers/schemas.ts` — see existing schemas for pattern
 - **Logging**: use structured logger, stderr only, redact sensitive fields
 
 ### 3d. Verify tests pass

@@ -327,35 +327,29 @@ describe('Intent Handler', () => {
       expect(parsed.package).toBe('SEDT');
     });
 
-    it('returns error for unknown type with supported types and mapping tip', async () => {
+    it('returns error for unknown type with supported types via Zod validation', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'UNKNOWN',
         name: 'TEST',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Unknown SAPRead type');
-      // Should list supported types
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPRead');
+      // Should list supported types from Zod enum validation
       expect(result.content[0]?.text).toContain('PROG');
       expect(result.content[0]?.text).toContain('CLAS');
       expect(result.content[0]?.text).toContain('STRU');
       expect(result.content[0]?.text).toContain('DOMA');
       expect(result.content[0]?.text).toContain('DTEL');
       expect(result.content[0]?.text).toContain('TRAN');
-      // Should include objectType mapping tip
-      expect(result.content[0]?.text).toContain('DDLS/DF');
-      expect(result.content[0]?.text).toContain('CLAS/OC');
-      expect(result.content[0]?.text).toContain('drop');
     });
 
-    it('returns error with mapping tip for empty/missing type', async () => {
+    it('returns validation error for empty/missing type', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: '',
         name: 'TEST',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Unknown SAPRead type');
-      expect(result.content[0]?.text).toContain('Supported types');
-      expect(result.content[0]?.text).toContain('slash suffix');
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPRead');
     });
 
     it('handles missing type parameter', async () => {
@@ -478,28 +472,31 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
-    it('returns error for unknown action with SAPDiagnose redirect hint', async () => {
+    it('returns Zod validation error for unknown action', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
         action: 'unknown',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('SAPDiagnose');
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPLint');
+      expect(result.content[0]?.text).toContain('lint');
+      expect(result.content[0]?.text).toContain('lint_and_fix');
+      expect(result.content[0]?.text).toContain('list_rules');
     });
 
-    it('redirects atc users to SAPDiagnose', async () => {
+    it('returns Zod validation error for atc (not a valid SAPLint action)', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
         action: 'atc',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('SAPDiagnose');
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPLint');
     });
 
-    it('redirects syntax users to SAPDiagnose', async () => {
+    it('returns Zod validation error for syntax (not a valid SAPLint action)', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
         action: 'syntax',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('SAPDiagnose');
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPLint');
     });
 
     it('returns error for missing action', async () => {
@@ -1008,13 +1005,14 @@ ENDCLASS.`,
       expect(result.content[0]?.text).toContain('name');
     });
 
-    it('returns error for unsupported type', async () => {
+    it('returns Zod validation error for unsupported type', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
         type: 'TABL',
         name: 'MARA',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('SAPContext supports types');
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPContext');
+      expect(result.content[0]?.text).toContain('CLAS');
     });
 
     it('dispatches successfully with provided source', async () => {
@@ -1181,7 +1179,7 @@ ENDCLASS.`;
         action: 'invalid',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Unknown SAPManage action');
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPManage');
     });
   });
 

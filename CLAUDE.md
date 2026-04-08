@@ -113,7 +113,9 @@ src/
 │       └── btp-auditlog.ts     # BTP Audit Log Service sink
 ├── handlers/
 │   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
-│   ├── tools.ts                # Tool definitions (names, descriptions, schemas)
+│   ├── tools.ts                # Tool definitions (names, descriptions, JSON schemas)
+│   ├── schemas.ts              # Zod v4 input schemas for all MCP tools (runtime validation)
+│   ├── zod-errors.ts           # Zod validation error formatting for LLM clients
 │   └── hyperfocused.ts         # Hyperfocused mode (single SAP tool, ~200 tokens)
 ├── adt/
 │   ├── client.ts               # ADT client facade (all read operations)
@@ -177,7 +179,8 @@ tests/
 | Task | Files |
 |------|-------|
 | Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` |
-| Add new tool type | `src/handlers/tools.ts`, `src/handlers/intent.ts` |
+| Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
+| Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add method-level surgery | `src/context/method-surgery.ts` |
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
 | Add XML response parser | `src/adt/xml-parser.ts` |
@@ -228,7 +231,8 @@ Tool Call Handler (server/server.ts)
 handleToolCall (handlers/intent.ts)
   │
   ├─ 1. Scope check: TOOL_SCOPES[toolName] vs authInfo.scopes (only when authInfo present)
-  ├─ 2. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
+  ├─ 2. Zod validation: getToolSchema(toolName) → safeParse(args) (rejects invalid input with LLM-friendly errors)
+  ├─ 3. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
   │
   ▼
 ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
@@ -405,7 +409,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 | `fast-xml-parser` v5 | ADT XML parsing |
 | `better-sqlite3` | SQLite cache |
 | `commander` | CLI framework |
-| `zod` v3 | Input validation |
+| `zod` v4 | Tool input validation & error formatting |
 | `vitest` | Testing |
 | `biome` | Linting + formatting |
 

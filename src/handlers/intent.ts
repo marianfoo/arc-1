@@ -52,6 +52,8 @@ import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
 import { expandHyperfocusedArgs, getHyperfocusedScope } from './hyperfocused.js';
+import { getToolSchema } from './schemas.js';
+import { formatZodError } from './zod-errors.js';
 
 /** MCP tool call result */
 export interface ToolResult {
@@ -192,6 +194,30 @@ export async function handleToolCall(
         `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
       );
     }
+  }
+
+  // Validate tool arguments with Zod schema
+  const isBtp = config.systemType === 'btp';
+  // Always use the full search schema for validation — the handler checks text search availability
+  // and returns a proper error message with the probe reason when source_code search is unavailable
+  const schema = getToolSchema(toolName, isBtp);
+  if (schema) {
+    const parsed = schema.safeParse(args);
+    if (!parsed.success) {
+      const validationError = formatZodError(parsed.error, toolName);
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        event: 'safety_blocked',
+        requestId: reqId,
+        user,
+        clientId,
+        operation: toolName,
+        reason: 'Input validation failed',
+      });
+      return errorResult(validationError);
+    }
+    args = parsed.data as Record<string, unknown>;
   }
 
   // Run within request context so HTTP-level logs get the requestId

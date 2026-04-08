@@ -85,6 +85,10 @@ sequenceDiagram
     participant SAP as SAP System
 
     Client->>Server: Tool Call (JSON-RPC)
+    Server->>Server: Zod schema validation
+    alt Invalid args
+        Server-->>Client: Validation error (field paths + expected values)
+    end
     Server->>Safety: Check permissions
 
     alt Blocked
