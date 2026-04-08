@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/marianfoo/arc-1/compare/v0.4.4...v1.0.0) (2026-04-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* SAPQuery now requires 'data' scope (was 'read'), SAPTransport requires 'write' (was 'admin')
+
+### Features
+
+* add textSearch smoketest at startup and other improvments ([#45](https://github.com/marianfoo/arc-1/issues/45)) ([792ff5b](https://github.com/marianfoo/arc-1/commit/792ff5ba605ba00e1dce869768903eeb99adcc94))
+* two-dimensional authorization model (scopes, roles, safety) ([#48](https://github.com/marianfoo/arc-1/issues/48)) ([8ce07d1](https://github.com/marianfoo/arc-1/commit/8ce07d11389928709de01da5073d0165cbc605b7))
+
+
+### Bug Fixes
+
+* use standard HTTP proxy for BTP connectivity ([#43](https://github.com/marianfoo/arc-1/issues/43)) ([a60dd1b](https://github.com/marianfoo/arc-1/commit/a60dd1b60145c40c02fb1be93b33c39aa3d9af54))
+
 ## [0.4.4](https://github.com/marianfoo/arc-1/compare/v0.4.3...v0.4.4) (2026-04-07)
 
 
