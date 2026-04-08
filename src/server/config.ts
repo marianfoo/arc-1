@@ -91,18 +91,21 @@ export const PROFILES: Record<string, Partial<ServerConfig>> = {
     blockData: true,
     blockFreeSQL: true,
     enableTransports: true,
+    allowedPackages: ['$TMP'],
   },
   'developer-data': {
     readOnly: false,
     blockData: false,
     blockFreeSQL: true,
     enableTransports: true,
+    allowedPackages: ['$TMP'],
   },
   'developer-sql': {
     readOnly: false,
     blockData: false,
     blockFreeSQL: false,
     enableTransports: true,
+    allowedPackages: ['$TMP'],
   },
 };
 

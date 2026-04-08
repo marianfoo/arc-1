@@ -117,12 +117,12 @@ Remove the `checkTransportableEdit()` calls from CRUD operations and add the mis
 
 Remove `allowTransportableEdits` from profiles and config parsing. Update the `allowedPackages` default behavior.
 
-- [ ] In `src/server/config.ts`: remove `allowTransportableEdits: false` from all three `viewer*` profiles (lines 75, 82, 89) and `allowTransportableEdits: true` from all three `developer*` profiles (lines 97, 103, 111).
-- [ ] In `src/server/config.ts`: remove the `allowTransportableEdits` parsing block (lines 201-206) that reads `--allow-transportable-edits` / `SAP_ALLOW_TRANSPORTABLE_EDITS`.
-- [ ] In `src/server/config.ts`: update `allowedPackages` parsing (lines 199-200). Currently if no packages are configured, it sets `[]`. After the change, if no explicit `--allowed-packages` is set AND no profile overrides it, keep the DEFAULT_CONFIG default of `['$TMP']`. The current code `config.allowedPackages = pkgs ? pkgs.split(',').map((p) => p.trim()) : []` should change the empty case to not override the default. Change to: if `pkgs` is non-empty, split it; otherwise leave `config.allowedPackages` unchanged (it already has `['$TMP']` from DEFAULT_CONFIG).
-- [ ] In `src/server/config.ts`: for `developer*` profiles, set `allowedPackages: ['$TMP']` explicitly. This makes it clear that developer profiles default to local-only writes. Users who need broader access use `--allowed-packages "Z*,$TMP"`.
-- [ ] In `src/server/server.ts`: remove `allowTransportableEdits: config.allowTransportableEdits` from the safety config object in `buildAdtConfig()` (line 61).
-- [ ] Run `npm test` — some tests will fail (expected, will fix in Task 5).
+- [x] In `src/server/config.ts`: remove `allowTransportableEdits: false` from all three `viewer*` profiles (lines 75, 82, 89) and `allowTransportableEdits: true` from all three `developer*` profiles (lines 97, 103, 111).
+- [x] In `src/server/config.ts`: remove the `allowTransportableEdits` parsing block (lines 201-206) that reads `--allow-transportable-edits` / `SAP_ALLOW_TRANSPORTABLE_EDITS`.
+- [x] In `src/server/config.ts`: update `allowedPackages` parsing (lines 199-200). Currently if no packages are configured, it sets `[]`. After the change, if no explicit `--allowed-packages` is set AND no profile overrides it, keep the DEFAULT_CONFIG default of `['$TMP']`. The current code `config.allowedPackages = pkgs ? pkgs.split(',').map((p) => p.trim()) : []` should change the empty case to not override the default. Change to: if `pkgs` is non-empty, split it; otherwise leave `config.allowedPackages` unchanged (it already has `['$TMP']` from DEFAULT_CONFIG).
+- [x] In `src/server/config.ts`: for `developer*` profiles, set `allowedPackages: ['$TMP']` explicitly. This makes it clear that developer profiles default to local-only writes. Users who need broader access use `--allowed-packages "Z*,$TMP"`.
+- [x] In `src/server/server.ts`: remove `allowTransportableEdits: config.allowTransportableEdits` from the safety config object in `buildAdtConfig()` (line 61).
+- [x] Run `npm test` — some tests will fail (expected, will fix in Task 5).
 
 ### Task 4: Update tool descriptions and registration
 
