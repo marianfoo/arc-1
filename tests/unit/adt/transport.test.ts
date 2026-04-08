@@ -23,7 +23,7 @@ describe('Transport Management', () => {
   describe('listTransports', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false, allowTransportableEdits: false };
+      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
       await expect(listTransports(http, safety)).rejects.toThrow(AdtSafetyError);
     });
 
@@ -39,13 +39,6 @@ describe('Transport Management', () => {
       expect(transports[0]?.description).toBe('Test transport');
       expect(transports[0]?.status).toBe('D');
       expect(transports[0]?.type).toBe('K');
-    });
-
-    it('works when allowTransportableEdits is true (read access)', async () => {
-      const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false, allowTransportableEdits: true };
-      const transports = await listTransports(http, safety);
-      expect(transports).toEqual([]);
     });
 
     it('handles multiple transports', async () => {
@@ -102,7 +95,7 @@ describe('Transport Management', () => {
 
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false, allowTransportableEdits: false };
+      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
       await expect(getTransport(http, safety, 'A4HK900100')).rejects.toThrow(AdtSafetyError);
     });
   });

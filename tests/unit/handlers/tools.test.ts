@@ -16,7 +16,7 @@ describe('Tool Definitions', () => {
   });
 
   it('registers all implemented tools', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, enableTransports: true });
     const names = tools.map((t) => t.name);
     // All implemented tools should be registered
     expect(names).toContain('SAPRead');
@@ -53,6 +53,18 @@ describe('Tool Definitions', () => {
 
   it('shows SAPTransport in read-only mode with enableTransports', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true, enableTransports: true });
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('SAPTransport');
+  });
+
+  it('hides SAPTransport when readOnly=false but enableTransports=false', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, enableTransports: false });
+    const names = tools.map((t) => t.name);
+    expect(names).not.toContain('SAPTransport');
+  });
+
+  it('shows SAPTransport when enableTransports=true', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, enableTransports: true });
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPTransport');
   });
@@ -322,7 +334,7 @@ describe('Tool Definitions', () => {
     });
 
     it('BTP SAPTransport description mentions gCTS', () => {
-      const tools = getToolDefinitions(btpConfig);
+      const tools = getToolDefinitions({ ...btpConfig, enableTransports: true });
       const sapTransport = tools.find((t) => t.name === 'SAPTransport')!;
 
       expect(sapTransport.description).toContain('gCTS');

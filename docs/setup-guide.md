@@ -65,10 +65,10 @@ The fastest way to get started. No install, no config files needed.
 
 ```bash
 # Interactive — prompts for password
-npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER
+npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
 
 # Or pass everything
-npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER --password YOUR_PASS
+npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER --password YOUR_PASS
 ```
 
 This starts an MCP server on **stdio** — the default transport for Claude Desktop, Claude Code, and most MCP clients.
@@ -82,7 +82,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
@@ -100,7 +100,7 @@ With safety controls (read-only, restricted packages):
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
@@ -117,7 +117,7 @@ With safety controls (read-only, restricted packages):
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
@@ -139,7 +139,7 @@ Add `.mcp.json` to your project root:
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
@@ -157,7 +157,7 @@ With read-only mode:
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
@@ -175,14 +175,14 @@ With read-only mode:
 VS Code and Copilot use HTTP Streamable transport, not stdio. Start arc1 as an HTTP server first:
 
 ```bash
-npx arc-1 --url https://host:44300 --user dev --password secret \
+npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
 With safety controls:
 
 ```bash
-npx arc-1 --url https://host:44300 --user dev --password secret \
+npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000 \
   --read-only --block-free-sql
 ```
@@ -208,7 +208,7 @@ For stdio mode, add to Cursor MCP settings:
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
@@ -226,13 +226,13 @@ For HTTP mode (same as VS Code), start the server first and point Cursor to `htt
 All MCP clients that support **stdio** work out of the box:
 
 ```bash
-npx arc-1 --url https://host:44300 --user dev --password secret
+npx arc-1@latest --url https://host:44300 --user dev --password secret
 ```
 
 For clients that support **HTTP Streamable**, start the server and connect to the URL:
 
 ```bash
-npx arc-1 --url https://host:44300 --user dev --password secret \
+npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000
 # Connect your client to http://localhost:3000/mcp
 ```
@@ -632,7 +632,7 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | false | Block SQL query execution |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | (all) | Whitelist operation types |
 | `--disallowed-ops` | `SAP_DISALLOWED_OPS` | (none) | Blacklist operation types |
-| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | (all) | Restrict to packages |
+| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Restrict to packages (default: `$TMP` local objects only) |
 | `--api-key` | `ARC1_API_KEY` | — | API key for HTTP auth |
 | `--oidc-issuer` | `SAP_OIDC_ISSUER` | — | OIDC issuer URL |
 | `--oidc-audience` | `SAP_OIDC_AUDIENCE` | — | OIDC audience |

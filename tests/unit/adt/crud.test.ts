@@ -144,8 +144,14 @@ describe('CRUD Operations', () => {
 
     it('sends create request with transport', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportableEdits: true };
-      await createObject(http, safety, '/sap/bc/adt/programs/programs', '<xml/>', 'application/xml', 'DEVK900001');
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs',
+        '<xml/>',
+        'application/xml',
+        'DEVK900001',
+      );
       expect(http.post).toHaveBeenCalledWith(expect.stringContaining('corrNr=DEVK900001'), '<xml/>', 'application/xml');
     });
 
@@ -153,22 +159,6 @@ describe('CRUD Operations', () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
       await expect(createObject(http, safety, '/url', '<xml/>')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport not allowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportableEdits: false };
-      await expect(createObject(http, safety, '/url', '<xml/>', 'application/xml', 'DEVK900001')).rejects.toThrow(
-        AdtSafetyError,
-      );
-    });
-
-    it('allows transport when allowTransportableEdits is true', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportableEdits: true };
-      await expect(
-        createObject(http, safety, '/url', '<xml/>', 'application/xml', 'A4HK900001'),
-      ).resolves.not.toThrow();
     });
   });
 
@@ -189,8 +179,7 @@ describe('CRUD Operations', () => {
 
     it('includes transport in URL when provided', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportableEdits: true };
-      await updateSource(http, safety, '/source/main', 'REPORT z.', 'HANDLE', 'DEVK900001');
+      await updateSource(http, unrestrictedSafetyConfig(), '/source/main', 'REPORT z.', 'HANDLE', 'DEVK900001');
       const url = (http.put as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
       expect(url).toContain('lockHandle=HANDLE');
       expect(url).toContain('corrNr=DEVK900001');

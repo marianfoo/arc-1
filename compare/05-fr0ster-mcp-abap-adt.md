@@ -200,6 +200,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-08 | v4.8.2-4.8.7 — Merge RuntimeAnalyzeDump into RuntimeGetDumpById, search TSV format (#40) | Medium | Search TSV format: consider for SAPSearch optimization | [Eval](fr0ster/evaluations/8a22669-search-tsv-format.md) |
 | 2026-04-02 | v4.8.0-4.8.1 — Structured dump list, datetime+user lookup, from/to filters | Medium | Defer — ARC-1 SAPDiagnose dumps work fine as-is | Evaluated |
 | 2026-04-01 | v4.7.0-4.7.1 — sap-rfc-lite replaces node-rfc | No | ARC-1 uses HTTP only | — |
 | 2026-03-31 | v4.6.0 — TLS/HTTPS support | **Critical** | Add TLS support for HTTP Streamable | TODO |
@@ -215,6 +216,6 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
 | 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-02_
+_Last updated: 2026-04-08_
 
 > **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

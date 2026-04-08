@@ -90,7 +90,7 @@ export function expandHyperfocusedArgs(args: Record<string, unknown>):
 export function getHyperfocusedToolDefinition(config: ServerConfig): ToolDefinition {
   const readActions = ['read', 'search', 'query', 'navigate', 'context', 'lint', 'diagnose'];
   const writeActions = config.readOnly ? [] : ['write', 'activate', 'manage'];
-  const adminActions = config.enableTransports || !config.readOnly ? ['transport'] : [];
+  const adminActions = config.enableTransports ? ['transport'] : [];
   const allActions = [...readActions, ...writeActions, ...adminActions];
 
   return {

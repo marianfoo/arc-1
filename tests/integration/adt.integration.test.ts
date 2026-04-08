@@ -330,7 +330,6 @@ describeIf('ADT Integration Tests', () => {
           enableTransports: false,
           transportReadOnly: false,
           allowedTransports: [],
-          allowTransportableEdits: false,
         },
       });
 
@@ -357,7 +356,6 @@ describeIf('ADT Integration Tests', () => {
           enableTransports: false,
           transportReadOnly: false,
           allowedTransports: [],
-          allowTransportableEdits: false,
         },
       });
 
@@ -383,7 +381,6 @@ describeIf('ADT Integration Tests', () => {
           enableTransports: false,
           transportReadOnly: false,
           allowedTransports: [],
-          allowTransportableEdits: false,
         },
       });
 

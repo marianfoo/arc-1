@@ -109,7 +109,6 @@ describe('Audit Logging Integration', () => {
         enableTransports: false,
         transportReadOnly: false,
         allowedTransports: [],
-        allowTransportableEdits: false,
       },
     });
 

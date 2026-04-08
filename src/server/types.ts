@@ -41,7 +41,6 @@ export interface ServerConfig {
   allowedOps: string;
   disallowedOps: string;
   allowedPackages: string[];
-  allowTransportableEdits: boolean;
   enableTransports: boolean;
 
   // --- Feature Detection ---
@@ -119,8 +118,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   blockData: false,
   allowedOps: '',
   disallowedOps: '',
-  allowedPackages: [],
-  allowTransportableEdits: false,
+  allowedPackages: ['$TMP'],
   enableTransports: false,
   featureAbapGit: 'auto',
   featureRap: 'auto',

@@ -30,7 +30,7 @@ As an **admin**, you control what the AI can and cannot do:
 
 ```bash
 # Run directly with npx (no install needed)
-npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER
+npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
 
 # Or install globally
 npm install -g arc-1
@@ -62,11 +62,32 @@ Add to `~/.config/claude/claude_desktop_config.json`:
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "your-username",
-        "SAP_PASSWORD": "your-password"
+        "SAP_PASSWORD": "your-password",
+        "SAP_CLIENT": "100"
+      }
+    }
+  }
+}
+```
+
+By default, write access is limited to `$TMP` (local objects). To write to custom packages, set `SAP_ALLOWED_PACKAGES` (e.g., `"Z*,$TMP"` for Z-packages, or `"*"` for unrestricted):
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "your-username",
+        "SAP_PASSWORD": "your-password",
+        "SAP_CLIENT": "100",
+        "SAP_ALLOWED_PACKAGES": "*"
       }
     }
   }
@@ -82,11 +103,12 @@ Add `.mcp.json` to your project root:
   "mcpServers": {
     "sap": {
       "command": "npx",
-      "args": ["-y", "arc-1"],
+      "args": ["-y", "arc-1@latest"],
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "your-username",
-        "SAP_PASSWORD": "your-password"
+        "SAP_PASSWORD": "your-password",
+        "SAP_CLIENT": "100"
       }
     }
   }
@@ -99,7 +121,7 @@ Start arc1 as an HTTP server, then point your MCP client to it:
 
 ```bash
 SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \
-  npx arc-1 --transport http-streamable --http-addr 0.0.0.0:3000
+  npx arc-1@latest --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
 Add to VS Code / Copilot MCP config:

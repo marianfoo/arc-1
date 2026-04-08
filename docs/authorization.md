@@ -155,7 +155,7 @@ Independent of scopes, the server administrator can set a global safety configur
 | Block free SQL | `--block-free-sql` / `SAP_BLOCK_FREE_SQL` | `false` | Blocks freestyle SQL queries |
 | Allowed operations | `--allowed-ops` / `SAP_ALLOWED_OPS` | (all) | Whitelist of operation type codes |
 | Disallowed operations | `--disallowed-ops` / `SAP_DISALLOWED_OPS` | (none) | Blacklist of operation type codes |
-| Allowed packages | `--allowed-packages` / `SAP_ALLOWED_PACKAGES` | (all) | Restrict to specific ABAP packages (supports wildcards) |
+| Allowed packages | `--allowed-packages` / `SAP_ALLOWED_PACKAGES` | `$TMP` | Restrict to specific ABAP packages (supports wildcards). Defaults to `$TMP` (local objects only). Set to `"*"` for unrestricted or `"Z*,$TMP"` for custom packages. |
 | Enable transports | `--enable-transports` / `SAP_ENABLE_TRANSPORTS` | `false` | Allow transport management |
 
 ### How Safety and Scopes Interact
@@ -180,14 +180,14 @@ The server always wins. If `blockFreeSQL=true` is set, no user can run freestyle
 
 Instead of setting individual flags, you can use `--profile` (or `ARC1_PROFILE`) to apply a named preset:
 
-| Profile | Read-only | Block Data | Block SQL | Transports | Use Case |
-|---------|-----------|------------|-----------|------------|----------|
-| `viewer` | Yes | Yes | Yes | No | Read-only access to source code |
-| `viewer-data` | Yes | No | Yes | No | Source code + table preview |
-| `viewer-sql` | Yes | No | No | No | Source code + table preview + SQL |
-| `developer` | No | Yes | Yes | Yes | Full development, no data access |
-| `developer-data` | No | No | Yes | Yes | Full development + table preview |
-| `developer-sql` | No | No | No | Yes | Full development + SQL |
+| Profile | Read-only | Block Data | Block SQL | Transports | Packages | Use Case |
+|---------|-----------|------------|-----------|------------|----------|----------|
+| `viewer` | Yes | Yes | Yes | No | — | Read-only access to source code |
+| `viewer-data` | Yes | No | Yes | No | — | Source code + table preview |
+| `viewer-sql` | Yes | No | No | No | — | Source code + table preview + SQL |
+| `developer` | No | Yes | Yes | Yes | `$TMP` | Full development, no data access |
+| `developer-data` | No | No | Yes | Yes | `$TMP` | Full development + table preview |
+| `developer-sql` | No | No | No | Yes | `$TMP` | Full development + SQL |
 
 Individual flags override profile defaults: `--profile viewer --read-only=false` disables read-only even though the viewer profile normally enables it.
 

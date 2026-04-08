@@ -1,25 +1,68 @@
 {
   "$schema": "Issue tracker for oisee/vibing-steampunk — relevance to ARC-1",
   "repo": "https://github.com/oisee/vibing-steampunk",
-  "lastUpdated": "2026-04-02",
+  "lastUpdated": "2026-04-08",
   "stats": {
-    "total": 38,
-    "open": 16,
-    "closed": 22,
-    "relevantToArc1": 14,
-    "evaluated": 38,
+    "total": 42,
+    "open": 17,
+    "closed": 25,
+    "relevantToArc1": 16,
+    "evaluated": 42,
     "pending": 0
   },
   "issues": [
     {
-      "number": 81,
+      "number": 91,
       "state": "open",
+      "date": "2026-04-08",
+      "title": "ExceptionResourceInvalidLockHandle (status 423)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Recurring lock handle 423 errors. ARC-1 uses try/finally unlock in crud.ts — verify 423 handling.",
+      "evaluationFile": "evaluations/issue-91-lock-handle-423.md"
+    },
+    {
+      "number": 90,
+      "state": "open",
+      "date": "2026-04-06",
+      "title": "BTP ABAP Environment: Authentication fails (401) despite valid Basic Auth credentials on abap-web domain",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "BTP ABAP doesn't support Basic Auth — requires OAuth. ARC-1 correctly uses OAuth for BTP (oauth.ts).",
+      "evaluationFile": "evaluations/issue-90-btp-basic-auth.md"
+    },
+    {
+      "number": 88,
+      "state": "open",
+      "date": "2026-04-05",
+      "title": "ExceptionResourceInvalidLockHandle, EditSource, WriteSource, CloneObject, ImportFromFile",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "More lock handle errors across multiple operations. Same pattern as #91 and #78. Verify ARC-1 lock handling.",
+      "evaluationFile": "evaluations/issue-91-lock-handle-423.md"
+    },
+    {
+      "number": 87,
+      "state": "closed",
+      "date": "2026-04-02",
+      "title": "InstallZADTVSP fails on SAP_BASIS 7.40: package creation aborts install even when package pre-exists",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ZADT_VSP install issue on old system. Not relevant to ARC-1."
+    },
+    {
+      "number": 81,
+      "state": "closed",
       "date": "2026-04-02",
       "title": "WRITE operation failed",
       "labels": [],
       "status": "evaluated",
       "priority": "low",
-      "relevance": "User write issue — likely config/transport problem. Monitor for patterns."
+      "relevance": "User write issue — likely config/transport problem. Now closed."
     },
     {
       "number": 78,

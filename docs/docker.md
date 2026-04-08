@@ -266,8 +266,7 @@ prefix. CLI flags map 1:1 to env vars:
 | `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `false` |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | |
 | `--disallowed-ops` | `SAP_DISALLOWED_OPS` | |
-| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | |
-| `--allow-transportable-edits` | `SAP_ALLOW_TRANSPORTABLE_EDITS` | `false` |
+| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` |
 | `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` |
 | `--feature-abapgit` | `SAP_FEATURE_ABAPGIT` | `auto` |
 | `--feature-rap` | `SAP_FEATURE_RAP` | `auto` |
@@ -457,17 +456,15 @@ Read operations (`R`, `S`) are not restricted by this filter — the AI can stil
 read objects from any package; it just cannot modify objects outside the
 allowlist.
 
-#### Transportable edits
+#### Package restrictions
 
-By default, arc1 only allows editing objects in local (non-transportable) packages
-like `$TMP`. To allow edits to objects that require a transport request:
+By default, write access is limited to `$TMP` (local objects). To allow writing to custom packages:
 
 ```bash
--e SAP_ALLOW_TRANSPORTABLE_EDITS=true
+-e SAP_ALLOWED_PACKAGES="Z*,$TMP"
 ```
 
-When enabled, write tools accept an optional `transport` parameter. Without a
-transport number, the edit will still fail for transportable objects.
+This allows writing to any Z-package and `$TMP`. Use `"*"` for unrestricted access.
 
 ---
 

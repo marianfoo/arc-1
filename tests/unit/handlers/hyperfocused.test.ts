@@ -148,11 +148,18 @@ describe('hyperfocused mode', () => {
       expect(tools[0]!.name).toBe('SAP');
     });
 
-    it('returns 11+ tools in standard mode', () => {
-      const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const };
+    it('returns 11+ tools in standard mode with transports enabled', () => {
+      const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const, enableTransports: true };
       const tools = getToolDefinitions(config);
       expect(tools.length).toBeGreaterThanOrEqual(11);
       expect(tools.find((t) => t.name === 'SAPRead')).toBeDefined();
+    });
+
+    it('returns 10 tools in standard mode without transports', () => {
+      const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const };
+      const tools = getToolDefinitions(config);
+      expect(tools.length).toBe(10);
+      expect(tools.find((t) => t.name === 'SAPTransport')).toBeUndefined();
     });
   });
 });

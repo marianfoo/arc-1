@@ -78,8 +78,8 @@ Same architecture as ARC-1 (ARC-1 inherited this design):
 
 | Transport | Supported |
 |-----------|-----------|
-| stdio | Yes (only) |
-| HTTP Streamable | **No** |
+| stdio | Yes |
+| HTTP Streamable | Yes (v2.38.0, mcp-go v0.47.0) |
 | SSE | **No** |
 | TLS | **No** |
 
@@ -91,6 +91,9 @@ Gemini CLI, Claude Code, GitHub Copilot, OpenAI Codex, Qwen Code, OpenCode, Goos
 
 | Version | Date | Key Feature |
 |---------|------|-------------|
+| **v2.39.0+** | Apr 7-8 | Boundary analysis sprint — side effect extraction, LUW classification, package boundary crossing, dead code analysis |
+| **v2.38.0** | Apr 5-6 | Streamable HTTP, graph engine, health analysis, rename preview, dead code analysis, API surface inventory, auth redirect fix |
+| **v2.33-37** | Apr 2-5 | Massive feature sprint — version history, i18n tools (7), gCTS tools (10), API release state, code coverage, CDS impact, table pagination |
 | **v2.32.0** | Mar 22 | "Full Stack ABAP" — Native ABAP parser/linter (91 statements, 8 rules, 100% accuracy), 28 CLI commands, WASM self-host compiler, Lua scripting (50+ bindings) |
 | **v2.30.0** | Mar 20 | WASM-to-ABAP AOT compiler (QuickJS: 1,410 functions → 101K lines ABAP), TS-to-Go transpiler, unified 5-layer code intelligence |
 | **v2.29.0** | Mar 19 | Token efficiency sprint — hyperfocused mode (~200 tokens), context compression (7-30x), method-level surgery (95% reduction) |
@@ -192,6 +195,12 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 | Date | Upstream Change | Relevant? | Decision | Status |
 |------|----------------|-----------|----------|--------|
+| 2026-04-08 | v2.39.0 — Side effect extraction, LUW classification, boundary crossing | Review | Consider future — novel analysis capabilities | [Eval](vibing-steampunk/evaluations/11c2253-side-effects-luw.md) |
+| 2026-04-07 | v2.38.1 — Auth headers on redirects, stateful lock sessions | Yes | Verify — check ARC-1 http.ts redirect behavior | [Verify](vibing-steampunk/evaluations/27d4d7c-auth-redirect-stateful.md) |
+| 2026-04-06 | v2.38.0 — Health analysis, rename preview, dead code, API surface | Review | Rename: consider (#18). Others: defer. | [Eval](vibing-steampunk/evaluations/dcaa358-rename-refactoring.md) |
+| 2026-04-05 | v2.38.0 — **Streamable HTTP transport** (mcp-go v0.47.0) | Landscape | ARC-1 no longer unique — VSP also has HTTP now | [Eval](vibing-steampunk/evaluations/daedc99-streamable-http.md) |
+| 2026-04-05 | v2.33-37 — i18n (7 tools), gCTS (10 tools), API release state | Yes | **API release state: implement**. i18n/gCTS: consider future. | [Eval](vibing-steampunk/evaluations/7270ad7-api-release-state.md) |
+| 2026-04-04 | v2.33-37 — Code coverage, CDS impact, table pagination, version history | Review | All medium priority — enhance existing tools | [Eval](vibing-steampunk/evaluations/dd06202-version-history.md) |
 | 2026-04-02 | Post-v2.32.0 — jseval LLVM improvements | No | N/A — experimental | — |
 | 2026-03-29 | LLVM-to-ABAP transpiler improvements | No | N/A — experimental | — |
 | 2026-03-22 | v2.32.0 — Native ABAP parser/linter, call graph, package deps | Review | Parser: no-action (same abaplint). Call graph: defer. | Done |
@@ -204,4 +213,4 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 > **Detailed commit-level tracking**: See [`compare/vibing-steampunk/`](vibing-steampunk/) for per-commit and per-issue evaluations.
 
-_Last updated: 2026-04-02_
+_Last updated: 2026-04-08_

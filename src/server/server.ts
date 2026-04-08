@@ -58,7 +58,6 @@ function buildAdtConfig(
       enableTransports: config.enableTransports,
       transportReadOnly: false,
       allowedTransports: [],
-      allowTransportableEdits: config.allowTransportableEdits,
     },
   };
 }

@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [fr0ster/mcp-abap-adt](https://github.com/fr0ster/mcp-abap-adt) for features worth adopting in ARC-1.
 
-_Last updated: 2026-04-02_
+_Last updated: 2026-04-08_
 
 ## Approach
 
@@ -10,7 +10,7 @@ _Last updated: 2026-04-02_
   - `feat:` → needs evaluation (pending)
   - `fix:` with SAP/ADT relevance → check
   - `chore:/docs:/test:/style:/ci:` → skipped
-- **Issues**: All 33 issues evaluated in `issues.json` with relevance to ARC-1
+- **Issues**: All 40 issues evaluated in `issues.json` with relevance to ARC-1
 - **Evaluations**: Detailed write-ups only for high/medium priority items in `evaluations/`
 - **Scope**: Tracking from v2.4.0 (2026-02-15) onwards — earlier commits are scaffolding/refactoring
 
@@ -18,11 +18,11 @@ _Last updated: 2026-04-02_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 765 | 33 |
-| Tracked | 48 | 33 |
-| Evaluated | 26 | 33 |
+| Total | 783 | 40 |
+| Tracked | 66 | 40 |
+| Evaluated | 30 | 40 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 22 | 20 |
+| Skipped (not relevant) | 36 | 25 |
 | Evaluation files | 17 | 10 |
 
 ## Priority Summary

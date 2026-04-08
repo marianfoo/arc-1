@@ -156,6 +156,12 @@ Safety system (read-only, op filter, pkg filter, SQL blocking), OIDC/JWT auth, B
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-05 | fix(data): skip decodeQueryResult crash on null DATE columns | Low | Verify ARC-1 RunQuery handles null dates | Evaluated |
+| 2026-04-03 | feat: abap_set_class_include tool + session-sticky lock/write/unlock | Medium | Verify ARC-1 crud.ts class include writes | Evaluated |
+| 2026-04-03 | fix: batch activation bypass for library array issue | Low | ARC-1 has own batch activation | -- |
+| 2026-04-03 | fix: DEVC auto-derives software component + transport layer | Low | ARC-1 package creation handles this differently | -- |
+| 2026-04-02 | feat: BDEF creation + STRU type support + abap_edit_method + compact mode | Medium | BDEF create: ARC-1 has. Edit method: ARC-1 has method surgery. | Evaluated |
+| 2026-04-01 | MCP quality-of-life: elicitation recovery, batch activation, ATC variant fallback | Low | ARC-1 elicitation already more complete | -- |
 | 2026-04-02 | Gap analysis updated (autoclosed PR report) | Yes | See 08-dassian-adt-feature-gap.md | Done |
 | 2026-03-30 | abap_where_used tool, abap_atc_run fix | Yes | Review where-used implementation | TODO |
 | 2026-03-28 | README cleanup | No | -- | -- |
@@ -171,4 +177,4 @@ albanleong/abap-mcpb packages dassian-adt v2.0 as an **MCPB** (MCP Bundle) for C
 - 2 files customized from dassian-adt: QualityHandlers.js (enhanced ATC), index.js (error handling)
 - Single commit, no releases yet — very early stage
 
-_Last updated: 2026-04-02_
+_Last updated: 2026-04-08_

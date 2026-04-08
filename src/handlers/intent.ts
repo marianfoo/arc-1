@@ -947,6 +947,7 @@ async function handleSAPWrite(
     }
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
+      checkPackage(client.safety, pkg);
       const description = String(args.description ?? name);
       checkPackage(client.safety, pkg);
 

@@ -1,19 +1,90 @@
 {
   "$schema": "Issue tracker for fr0ster/mcp-abap-adt — relevance to ARC-1",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-02",
+  "lastUpdated": "2026-04-08",
   "stats": {
-    "total": 33,
-    "open": 4,
-    "closed": 29,
-    "relevantToArc1": 10,
-    "evaluated": 10,
+    "total": 40,
+    "open": 2,
+    "closed": 38,
+    "relevantToArc1": 11,
+    "evaluated": 11,
     "pending": 0
   },
   "issues": [
     {
-      "number": 33,
+      "number": 40,
       "state": "open",
+      "date": "2026-04-07",
+      "title": "feat: return SearchObjects results in TSV format instead of XML",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Search result payload optimization — TSV format reduces token consumption vs XML/JSON. ARC-1 SAPSearch uses text format already, but TSV columns could be more structured.",
+      "evaluationFile": "evaluations/8a22669-search-tsv-format.md"
+    },
+    {
+      "number": 39,
+      "state": "closed",
+      "date": "2026-04-06",
+      "title": "fix: compact SearchObject XML response to reduce payload size",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Intermediate step before #40 TSV. ARC-1 already uses text format."
+    },
+    {
+      "number": 38,
+      "state": "closed",
+      "date": "2026-04-05",
+      "title": "GetPackageTree returns OK with empty tree for non-existent packages",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Error handling for missing packages. Verify ARC-1 getPackageContents."
+    },
+    {
+      "number": 37,
+      "state": "closed",
+      "date": "2026-04-05",
+      "title": "Handlers don't pass logger to createAdtClient",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Logging infrastructure fix. Not relevant to ARC-1."
+    },
+    {
+      "number": 36,
+      "state": "closed",
+      "date": "2026-04-05",
+      "title": "shared:setup does not activate BDEF",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Test infrastructure fix."
+    },
+    {
+      "number": 35,
+      "state": "closed",
+      "date": "2026-04-05",
+      "title": "BDEF test leaves object locked on failure",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "BDEF lock cleanup on failure. ARC-1 uses try-finally but verify BDEF specifically."
+    },
+    {
+      "number": 34,
+      "state": "closed",
+      "date": "2026-04-05",
+      "title": "Flaky: Domain create fails intermittently on BTP trial (description missing)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "BTP trial flakiness. Not relevant to ARC-1."
+    },
+    {
+      "number": 33,
+      "state": "closed",
       "date": "2026-04-02",
       "title": "test: TransportedObjectCrud fails — E77 transport configured for E19 system",
       "labels": [],
@@ -23,7 +94,7 @@
     },
     {
       "number": 32,
-      "state": "open",
+      "state": "closed",
       "date": "2026-04-02",
       "title": "test: FunctionLow/HighHandlers fail — FUGR locked in transport",
       "labels": [],
@@ -55,7 +126,7 @@
     },
     {
       "number": 29,
-      "state": "open",
+      "state": "closed",
       "date": "2026-04-01",
       "title": "Writing ABAP Program into SAP",
       "labels": [],

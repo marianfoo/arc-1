@@ -52,7 +52,6 @@ export interface SafetyConfig {
   enableTransports: boolean;
   transportReadOnly: boolean;
   allowedTransports: string[];
-  allowTransportableEdits: boolean;
 }
 
 /** Safe defaults: read-only, no free SQL, standard ops only */
@@ -68,7 +67,6 @@ export function defaultSafetyConfig(): SafetyConfig {
     enableTransports: false,
     transportReadOnly: false,
     allowedTransports: [],
-    allowTransportableEdits: false,
   };
 }
 
@@ -85,7 +83,6 @@ export function unrestrictedSafetyConfig(): SafetyConfig {
     enableTransports: false,
     transportReadOnly: false,
     allowedTransports: [],
-    allowTransportableEdits: false,
   };
 }
 
@@ -171,40 +168,10 @@ function isTransportInWhitelist(config: SafetyConfig, transport: string): boolea
   return false;
 }
 
-/** Check if operations on a given transport are allowed */
-export function isTransportAllowed(config: SafetyConfig, transport: string): boolean {
-  if (!config.enableTransports) return false;
-  if (config.allowedTransports.length === 0) return true;
-  return isTransportInWhitelist(config, transport);
-}
-
-/** Check if transport write operations are allowed */
-export function isTransportWriteAllowed(config: SafetyConfig): boolean {
-  if (!config.enableTransports) return false;
-  return !config.transportReadOnly;
-}
-
 /** Check transport operation and throw AdtSafetyError if blocked */
 export function checkTransport(config: SafetyConfig, transport: string, opName: string, isWrite: boolean): void {
-  // For read operations, allow if enableTransports OR allowTransportableEdits
-  if (!isWrite && (config.enableTransports || config.allowTransportableEdits)) {
-    if (transport && transport !== '*' && config.allowedTransports.length > 0) {
-      if (!isTransportInWhitelist(config, transport)) {
-        throw new AdtSafetyError(
-          `Operation '${opName}' on transport '${transport}' is blocked by safety configuration (allowed: ${JSON.stringify(config.allowedTransports)})`,
-        );
-      }
-    }
-    return;
-  }
-
-  // For write operations, require enableTransports
+  // Require enableTransports for all transport operations
   if (!config.enableTransports) {
-    if (config.allowTransportableEdits && isWrite) {
-      throw new AdtSafetyError(
-        `Transport write operation '${opName}' requires --enable-transports flag (--allow-transportable-edits only enables read operations)`,
-      );
-    }
     throw new AdtSafetyError(
       `Transport operation '${opName}' is blocked: transports not enabled (use --enable-transports or SAP_ENABLE_TRANSPORTS=true)`,
     );
@@ -215,34 +182,13 @@ export function checkTransport(config: SafetyConfig, transport: string, opName: 
     throw new AdtSafetyError(`Transport write operation '${opName}' is blocked: transport read-only mode enabled`);
   }
 
-  // Check transport whitelist
+  // Check transport whitelist (applies to both read and write)
   if (transport && transport !== '*' && config.allowedTransports.length > 0) {
-    if (!isTransportAllowed(config, transport)) {
+    if (!isTransportInWhitelist(config, transport)) {
       throw new AdtSafetyError(
         `Operation '${opName}' on transport '${transport}' is blocked by safety configuration (allowed: ${JSON.stringify(config.allowedTransports)})`,
       );
     }
-  }
-}
-
-/** Check if editing a transportable object is allowed */
-export function checkTransportableEdit(config: SafetyConfig, transport: string, opName: string): void {
-  if (!transport) return; // No transport = local object, always allowed
-
-  if (!config.allowTransportableEdits) {
-    throw new AdtSafetyError(
-      `Operation '${opName}' with transport '${transport}' is blocked: editing transportable objects is disabled.\n` +
-        'Objects in transportable packages require explicit opt-in.\n' +
-        'Use --allow-transportable-edits or SAP_ALLOW_TRANSPORTABLE_EDITS=true to enable.\n' +
-        'WARNING: This allows modifications to non-local objects that may affect production systems.',
-    );
-  }
-
-  // If transportable edits are allowed, also check transport whitelist
-  if (config.allowedTransports.length > 0 && !isTransportInWhitelist(config, transport)) {
-    throw new AdtSafetyError(
-      `Operation '${opName}' with transport '${transport}' is blocked by safety configuration (allowed transports: ${JSON.stringify(config.allowedTransports)})`,
-    );
   }
 }
 
@@ -277,7 +223,6 @@ export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): 
   if (!expanded.includes('write')) {
     effective.readOnly = true;
     effective.enableTransports = false;
-    effective.allowTransportableEdits = false;
   }
 
   // No data scope (and no sql, which implies data) → block table preview
@@ -309,7 +254,5 @@ export function describeSafety(config: SafetyConfig): string {
     if (config.transportReadOnly) parts.push('TRANSPORT-READ-ONLY');
     if (config.allowedTransports.length > 0) parts.push(`AllowedTransports=[${config.allowedTransports.join(',')}]`);
   }
-  if (config.allowTransportableEdits) parts.push('TRANSPORTABLE-EDITS-ALLOWED');
-
   return parts.length === 0 ? 'UNRESTRICTED' : parts.join(', ');
 }

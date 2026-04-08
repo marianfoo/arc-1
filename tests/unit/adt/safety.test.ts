@@ -4,14 +4,11 @@ import {
   checkOperation,
   checkPackage,
   checkTransport,
-  checkTransportableEdit,
   defaultSafetyConfig,
   deriveUserSafety,
   describeSafety,
   isOperationAllowed,
   isPackageAllowed,
-  isTransportAllowed,
-  isTransportWriteAllowed,
   OperationType,
   type SafetyConfig,
   unrestrictedSafetyConfig,
@@ -190,45 +187,14 @@ describe('Safety System', () => {
     });
   });
 
-  describe('isTransportAllowed', () => {
-    it('returns false when transports are not enabled', () => {
-      const cfg = config({ enableTransports: false });
-      expect(isTransportAllowed(cfg, 'A4HK900110')).toBe(false);
-    });
-
-    it('allows all transports when enabled with empty whitelist', () => {
-      const cfg = config({ enableTransports: true });
-      expect(isTransportAllowed(cfg, 'A4HK900110')).toBe(true);
-    });
-
-    it('enforces transport whitelist', () => {
-      const cfg = config({ enableTransports: true, allowedTransports: ['A4HK*', 'DEV*'] });
-      expect(isTransportAllowed(cfg, 'A4HK900110')).toBe(true);
-      expect(isTransportAllowed(cfg, 'DEVK900001')).toBe(true);
-      expect(isTransportAllowed(cfg, 'PROD900001')).toBe(false);
-    });
-  });
-
-  describe('isTransportWriteAllowed', () => {
-    it('returns false when transports are not enabled', () => {
-      const cfg = config({ enableTransports: false });
-      expect(isTransportWriteAllowed(cfg)).toBe(false);
-    });
-
-    it('returns false when transport read-only', () => {
-      const cfg = config({ enableTransports: true, transportReadOnly: true });
-      expect(isTransportWriteAllowed(cfg)).toBe(false);
-    });
-
-    it('returns true when enabled and not read-only', () => {
-      const cfg = config({ enableTransports: true, transportReadOnly: false });
-      expect(isTransportWriteAllowed(cfg)).toBe(true);
-    });
-  });
-
   describe('checkTransport', () => {
-    it('allows read operations when allowTransportableEdits is true', () => {
-      const cfg = config({ enableTransports: false, allowTransportableEdits: true });
+    it('blocks read operations when enableTransports is false', () => {
+      const cfg = config({ enableTransports: false });
+      expect(() => checkTransport(cfg, '', 'ListTransports', false)).toThrow(AdtSafetyError);
+    });
+
+    it('allows read operations when enableTransports is true', () => {
+      const cfg = config({ enableTransports: true });
       expect(() => checkTransport(cfg, '', 'ListTransports', false)).not.toThrow();
     });
 
@@ -248,26 +214,29 @@ describe('Safety System', () => {
     });
   });
 
-  describe('checkTransportableEdit', () => {
-    it('allows operations without transport (local object)', () => {
-      const cfg = config({ allowTransportableEdits: false });
-      expect(() => checkTransportableEdit(cfg, '', 'UpdateSource')).not.toThrow();
+  describe('checkPackage with $TMP default', () => {
+    it('default config (allowedPackages: [$TMP]) allows $TMP', () => {
+      const cfg = config({ allowedPackages: ['$TMP'] });
+      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
     });
 
-    it('blocks transportable edits when not allowed', () => {
-      const cfg = config({ allowTransportableEdits: false });
-      expect(() => checkTransportableEdit(cfg, 'A4HK900110', 'UpdateSource')).toThrow(AdtSafetyError);
+    it('default config (allowedPackages: [$TMP]) blocks ZTEST', () => {
+      const cfg = config({ allowedPackages: ['$TMP'] });
+      expect(() => checkPackage(cfg, 'ZTEST')).toThrow(AdtSafetyError);
     });
 
-    it('allows transportable edits when flag is set', () => {
-      const cfg = config({ allowTransportableEdits: true });
-      expect(() => checkTransportableEdit(cfg, 'A4HK900110', 'UpdateSource')).not.toThrow();
+    it('allowedPackages: [Z*, $TMP] allows both', () => {
+      const cfg = config({ allowedPackages: ['Z*', '$TMP'] });
+      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
+      expect(() => checkPackage(cfg, 'ZTEST')).not.toThrow();
+      expect(() => checkPackage(cfg, 'SAP_BASIS')).toThrow(AdtSafetyError);
     });
 
-    it('checks transport whitelist even when edits are allowed', () => {
-      const cfg = config({ allowTransportableEdits: true, allowedTransports: ['DEV*'] });
-      expect(() => checkTransportableEdit(cfg, 'A4HK900110', 'UpdateSource')).toThrow(AdtSafetyError);
-      expect(() => checkTransportableEdit(cfg, 'DEVK900001', 'UpdateSource')).not.toThrow();
+    it('allowedPackages: [] allows anything (unrestricted)', () => {
+      const cfg = config({ allowedPackages: [] });
+      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
+      expect(() => checkPackage(cfg, 'ZTEST')).not.toThrow();
+      expect(() => checkPackage(cfg, 'SAP_BASIS')).not.toThrow();
     });
   });
 
@@ -305,11 +274,10 @@ describe('Safety System', () => {
 
   describe('deriveUserSafety', () => {
     it('no write scope → readOnly=true, enableTransports=false', () => {
-      const server = config({ readOnly: false, enableTransports: true, allowTransportableEdits: true });
+      const server = config({ readOnly: false, enableTransports: true });
       const result = deriveUserSafety(server, ['read', 'data']);
       expect(result.readOnly).toBe(true);
       expect(result.enableTransports).toBe(false);
-      expect(result.allowTransportableEdits).toBe(false);
     });
 
     it('no data and no sql scope → blockData=true', () => {
@@ -380,7 +348,6 @@ describe('Safety System', () => {
       expect(result.blockFreeSQL).toBe(true);
       expect(result.blockData).toBe(true);
       expect(result.enableTransports).toBe(false);
-      expect(result.allowTransportableEdits).toBe(false);
     });
 
     it('all scopes → nothing restricted beyond server config', () => {
@@ -410,10 +377,9 @@ describe('Safety System', () => {
     });
 
     it('write scope enables transports if server allows', () => {
-      const server = config({ enableTransports: true, allowTransportableEdits: true });
+      const server = config({ enableTransports: true });
       const result = deriveUserSafety(server, ['read', 'write']);
       expect(result.enableTransports).toBe(true);
-      expect(result.allowTransportableEdits).toBe(true);
     });
 
     it('server enableTransports=false + write scope → still disabled (server wins)', () => {

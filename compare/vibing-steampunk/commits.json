@@ -1,19 +1,343 @@
 {
   "$schema": "Commit tracker for oisee/vibing-steampunk — grouped by release, auto-triaged",
   "repo": "https://github.com/oisee/vibing-steampunk",
-  "lastUpdated": "2026-04-02",
-  "lastCheckedSha": "24e0ff5",
+  "lastUpdated": "2026-04-08",
+  "lastCheckedSha": "11c2253",
   "stats": {
-    "totalCommits": 377,
+    "totalCommits": 470,
     "trackedFrom": "v2.22.0 (2026-02-01)",
-    "totalTracked": 42,
-    "evaluated": 42,
+    "totalTracked": 82,
+    "evaluated": 82,
     "pending": 0,
-    "skipped": 30
+    "skipped": 55
   },
   "releases": [
     {
-      "version": "post-v2.32.0 (unreleased)",
+      "version": "v2.38.1-v2.39.0+ (boundary analysis sprint)",
+      "date": "2026-04-07 to 2026-04-08",
+      "commits": [
+        {
+          "sha": "11c2253",
+          "date": "2026-04-08",
+          "message": "feat: side effect extraction + LUW classification (Phase 1)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Side effect analysis (DB writes, authority checks, commits) + LUW classification. Novel capability — could enhance SAPContext for safety analysis.",
+          "evaluationFile": "evaluations/11c2253-side-effects-luw.md"
+        },
+        {
+          "sha": "53fb790",
+          "date": "2026-04-08",
+          "message": "feat: directional package boundary crossing analysis",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Package boundary violations — useful for architecture governance. Could extend SAPContext.",
+          "evaluationFile": "evaluations/53fb790-boundary-crossing.md"
+        },
+        {
+          "sha": "8194cc4",
+          "date": "2026-04-07",
+          "message": "feat: add package changelog and CTS change grouping",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Package-level changelog from CTS. Useful for release management. Could extend SAPTransport."
+        },
+        {
+          "sha": "8623acd",
+          "date": "2026-04-07",
+          "message": "feat: add AnalyzeABAPCode — abaplint-based static analysis (from PR #89)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "abaplint analysis as MCP tool. ARC-1 already has SAPLint with @abaplint/core."
+        },
+        {
+          "sha": "1ecafe7",
+          "date": "2026-04-07",
+          "message": "feat: Slim V2 Phase 3 — method-level dead code + --level flag",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Dead code detection at method level using where-used analysis. Novel capability — could be valuable SAPContext extension.",
+          "evaluationFile": "evaluations/1ecafe7-dead-code-analysis.md"
+        },
+        {
+          "sha": "27d4d7c",
+          "date": "2026-04-07",
+          "message": "fix: preserve auth headers on redirects (#90) + stateful lock sessions (#88)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Auth headers lost on HTTP redirects + stateful session for locks. Verify ARC-1 http.ts handles redirects and stateful sessions correctly.",
+          "evaluationFile": "evaluations/27d4d7c-auth-redirect-stateful.md"
+        },
+        {
+          "sha": "9ae10f3",
+          "date": "2026-04-07",
+          "message": "feat: health MVP — E070 transport fallback for staleness signal",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Package health using transport data. CLI-focused, niche."
+        }
+      ]
+    },
+    {
+      "version": "v2.38.0 (graph + health + refactoring tools sprint)",
+      "date": "2026-04-05 to 2026-04-06",
+      "commits": [
+        {
+          "sha": "b661c09",
+          "date": "2026-04-05",
+          "message": "feat: add graph engine with package boundary analysis, dynamic call detection, and improved help",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Graph engine for call analysis and package boundaries. Extends the call graph capabilities ARC-1 lacks.",
+          "evaluationFile": "evaluations/53fb790-boundary-crossing.md"
+        },
+        {
+          "sha": "e986577",
+          "date": "2026-04-05",
+          "message": "feat: add browser-based SSO authentication and session keep-alive (from PR #77)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Browser SSO. ARC-1 already has OIDC/XSUAA/OAuth."
+        },
+        {
+          "sha": "daedc99",
+          "date": "2026-04-05",
+          "message": "feat: upgrade mcp-go v0.17.0 → v0.47.0, add Streamable HTTP transport (closes #21)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "no-action",
+          "relevance": "VSP now has Streamable HTTP! ARC-1 no longer unique here. No action needed but updates competitive landscape.",
+          "evaluationFile": "evaluations/daedc99-streamable-http.md"
+        },
+        {
+          "sha": "74efe5e",
+          "date": "2026-04-06",
+          "message": "feat: add health analysis in MCP and CLI",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Package health analysis — test coverage, staleness, complexity. Novel MCP tool category.",
+          "evaluationFile": "evaluations/74efe5e-health-analysis.md"
+        },
+        {
+          "sha": "79643b6",
+          "date": "2026-04-06",
+          "message": "feat: add method signature reader",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Method signature extraction. ARC-1 SAPContext contract extraction already covers this."
+        },
+        {
+          "sha": "5293d2c",
+          "date": "2026-04-06",
+          "message": "feat: add class sections reader",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Class section listing. ARC-1 method-surgery already handles this."
+        },
+        {
+          "sha": "dcaa358",
+          "date": "2026-04-06",
+          "message": "feat: add rename preview analysis",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Rename refactoring preview. Maps to refactoring feature gap. abap-adt-api has rename (3 methods).",
+          "evaluationFile": "evaluations/dcaa358-rename-refactoring.md"
+        },
+        {
+          "sha": "7027b83",
+          "date": "2026-04-06",
+          "message": "feat: add slim dead-code candidate analysis",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Dead code detection. Grouped with Slim V2.",
+          "evaluationFile": "evaluations/1ecafe7-dead-code-analysis.md"
+        },
+        {
+          "sha": "aa5aa5b",
+          "date": "2026-04-06",
+          "message": "feat: add api surface inventory for custom packages",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "API surface inventory — lists public methods/interfaces per package. Useful for clean core / refactoring.",
+          "evaluationFile": "evaluations/aa5aa5b-api-surface.md"
+        },
+        {
+          "sha": "562b5f8",
+          "date": "2026-04-06",
+          "message": "feat: add where-used-config analysis in CLI and MCP",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Where-used for configuration objects. CLI-focused."
+        },
+        {
+          "sha": "b74e7a8",
+          "date": "2026-04-06",
+          "message": "feat: add usage examples analysis in CLI and MCP",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Usage examples tool. CLI-focused."
+        },
+        {
+          "sha": "19c9e88",
+          "date": "2026-04-06",
+          "message": "feat: augment impact analysis with parser overlay",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Impact analysis enhancement. Go-specific parser."
+        },
+        {
+          "sha": "f613c01",
+          "date": "2026-04-06",
+          "message": "feat: add mermaid and html graph exports",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Graph visualization exports. CLI-focused."
+        },
+        {
+          "sha": "fcb9efa",
+          "date": "2026-04-05",
+          "message": "feat: add graph knowledge MVP with CLI and MCP queries",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Graph queries. Builds on call graph — ARC-1 doesn't have this yet."
+        }
+      ]
+    },
+    {
+      "version": "v2.33.0-v2.37.0 (massive feature sprint)",
+      "date": "2026-04-02 to 2026-04-05",
+      "commits": [
+        {
+          "sha": "dd06202",
+          "date": "2026-04-02",
+          "message": "feat: add version history tools (3 tools, 8 tests)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Version history — list versions, compare versions, get specific version. ARC-1 lacks this (#25 in matrix). abap-adt-api also has source versions.",
+          "evaluationFile": "evaluations/dd06202-version-history.md"
+        },
+        {
+          "sha": "566f1f7",
+          "date": "2026-04-05",
+          "message": "feat: add 7 i18n/translation tools with per-request language override (from PR #42, closes #40)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "7 translation tools. ARC-1 has T100/text elements read but not full translation management. Closes gap from issue #40.",
+          "evaluationFile": "evaluations/566f1f7-i18n-tools.md"
+        },
+        {
+          "sha": "81cce41",
+          "date": "2026-04-05",
+          "message": "feat: add 10 gCTS tools for git-enabled CTS (from PR #41, closes #39)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "10 gCTS tools. ARC-1 lacks gCTS (Medium #15 in matrix). VSP closes this gap.",
+          "evaluationFile": "evaluations/81cce41-gcts-tools.md"
+        },
+        {
+          "sha": "7270ad7",
+          "date": "2026-04-05",
+          "message": "feat: add GetAPIReleaseState for S/4HANA Clean Core checks (closes PR #53)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "API release state — check if objects/APIs are released for cloud. Critical for S/4HANA Clean Core compliance. ARC-1 should add this.",
+          "evaluationFile": "evaluations/7270ad7-api-release-state.md"
+        },
+        {
+          "sha": "333f462",
+          "date": "2026-04-04",
+          "message": "feat: add GetCodeCoverage and GetCheckRunResults tools (from PR #84)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Code coverage from unit tests + check run results. ARC-1 unit tests don't return coverage metrics.",
+          "evaluationFile": "evaluations/333f462-code-coverage.md"
+        },
+        {
+          "sha": "6c67140",
+          "date": "2026-04-04",
+          "message": "feat: add CDS impact analysis and element info tools (from PR #85)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "CDS impact analysis — downstream consumers of CDS views. ARC-1 SAPNavigate has where-used but not CDS-specific impact.",
+          "evaluationFile": "evaluations/6c67140-cds-impact.md"
+        },
+        {
+          "sha": "9fb6c8a",
+          "date": "2026-04-04",
+          "message": "feat: add offset and columns_only to GetTableContents (closes #34)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Table contents pagination (offset) + columns_only mode. ARC-1 RunQuery has maxRows but not offset. Closes VSP #34.",
+          "evaluationFile": "evaluations/9fb6c8a-table-pagination.md"
+        },
+        {
+          "sha": "d84db03",
+          "date": "2026-04-04",
+          "message": "fix: stateless session default, installer resilience, graph namespace",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Various fixes. ARC-1 already handles sessions differently."
+        },
+        {
+          "sha": "4143190",
+          "date": "2026-04-03",
+          "message": "fix: --verbose flag now works for all CLI subcommands",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI fix. Not relevant to MCP."
+        }
+      ]
+    },
+    {
+      "version": "post-v2.32.0 (jseval/compiler experiments)",
       "date": "2026-03-23 to 2026-04-02",
       "commits": [
         {

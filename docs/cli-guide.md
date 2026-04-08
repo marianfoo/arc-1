@@ -9,7 +9,7 @@
 npm install -g arc-1
 
 # Or run directly with npx
-npx arc-1 search "ZCL_*"
+npx arc-1@latest search "ZCL_*"
 ```
 
 ## Configuration

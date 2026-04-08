@@ -101,7 +101,7 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 | `--read-only` | `true` for production systems | Prevents any write operations through ARC-1 |
 | `--block-free-sql` | `true` for sensitive systems | Blocks arbitrary SQL queries against the database |
 | `--block-data` | `true` unless table preview is required | Prevents named table content preview |
-| `--allowed-packages` | `Z*,Y*` | Restricts operations to custom code packages only |
+| `--allowed-packages` | `Z*,Y*,$TMP` | Restricts operations to custom code packages (defaults to `$TMP` if not set) |
 | `--pp-strict` | `true` when PP is enabled | Rejects requests without user identity (no fallback to shared account) |
 | `--enable-transports` | `false` unless needed | Transport management is opt-in |
 
@@ -109,14 +109,14 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 
 Profiles are safety presets that combine multiple flags. Use `--profile` to apply one:
 
-| Profile | Read-only | Block Data | Block SQL | Transports | Scopes Granted |
-|---------|-----------|------------|-----------|------------|----------------|
-| `viewer` | Yes | Yes | Yes | No | `read` |
-| `viewer-data` | Yes | No | Yes | No | `read`, `data` |
-| `viewer-sql` | Yes | No | No | No | `read`, `data`, `sql` |
-| `developer` | No | Yes | Yes | Yes | `read`, `write` |
-| `developer-data` | No | No | Yes | Yes | `read`, `write`, `data` |
-| `developer-sql` | No | No | No | Yes | `read`, `write`, `data`, `sql` |
+| Profile | Read-only | Block Data | Block SQL | Transports | Packages | Scopes Granted |
+|---------|-----------|------------|-----------|------------|----------|----------------|
+| `viewer` | Yes | Yes | Yes | No | — | `read` |
+| `viewer-data` | Yes | No | Yes | No | — | `read`, `data` |
+| `viewer-sql` | Yes | No | No | No | — | `read`, `data`, `sql` |
+| `developer` | No | Yes | Yes | Yes | `$TMP` | `read`, `write` |
+| `developer-data` | No | No | Yes | Yes | `$TMP` | `read`, `write`, `data` |
+| `developer-sql` | No | No | No | Yes | `$TMP` | `read`, `write`, `data`, `sql` |
 
 Individual flags override profile defaults. The server safety config is always the ceiling -- per-user scopes from JWT tokens can only restrict further.
 

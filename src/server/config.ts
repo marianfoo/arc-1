@@ -73,42 +73,39 @@ export const PROFILES: Record<string, Partial<ServerConfig>> = {
     blockData: true,
     blockFreeSQL: true,
     enableTransports: false,
-    allowTransportableEdits: false,
   },
   'viewer-data': {
     readOnly: true,
     blockData: false,
     blockFreeSQL: true,
     enableTransports: false,
-    allowTransportableEdits: false,
   },
   'viewer-sql': {
     readOnly: true,
     blockData: false,
     blockFreeSQL: false,
     enableTransports: false,
-    allowTransportableEdits: false,
   },
   developer: {
     readOnly: false,
     blockData: true,
     blockFreeSQL: true,
     enableTransports: true,
-    allowTransportableEdits: true,
+    allowedPackages: ['$TMP'],
   },
   'developer-data': {
     readOnly: false,
     blockData: false,
     blockFreeSQL: true,
     enableTransports: true,
-    allowTransportableEdits: true,
+    allowedPackages: ['$TMP'],
   },
   'developer-sql': {
     readOnly: false,
     blockData: false,
     blockFreeSQL: false,
     enableTransports: true,
-    allowTransportableEdits: true,
+    allowedPackages: ['$TMP'],
   },
 };
 
@@ -196,15 +193,8 @@ export function parseArgs(args: string[]): ServerConfig {
   else if (!profileName) config.blockData = false;
   config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
-  const pkgs = resolve('allowed-packages', 'SAP_ALLOWED_PACKAGES', '');
-  config.allowedPackages = pkgs ? pkgs.split(',').map((p) => p.trim()) : [];
-  const allowTransportableEditsExplicit =
-    getFlag('allow-transportable-edits') ?? process.env.SAP_ALLOW_TRANSPORTABLE_EDITS;
-  if (allowTransportableEditsExplicit !== undefined)
-    config.allowTransportableEdits =
-      allowTransportableEditsExplicit === 'true' || allowTransportableEditsExplicit === '1';
-  else if (!profileName) config.allowTransportableEdits = false;
-
+  const pkgs = getFlag('allowed-packages') ?? process.env.SAP_ALLOWED_PACKAGES;
+  if (pkgs) config.allowedPackages = pkgs.split(',').map((p) => p.trim());
   const enableTransportsExplicit = getFlag('enable-transports') ?? process.env.SAP_ENABLE_TRANSPORTS;
   if (enableTransportsExplicit !== undefined)
     config.enableTransports = enableTransportsExplicit === 'true' || enableTransportsExplicit === '1';
