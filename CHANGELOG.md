@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/marianfoo/arc-1/compare/v0.5.0...v0.6.0) (2026-04-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* simplify write safety — default $TMP, remove allowTransportableEdits, enforce package allowlist ([#56](https://github.com/marianfoo/arc-1/issues/56))
+
+### Features
+
+* add class metadata types and ADT metadata parser ([#55](https://github.com/marianfoo/arc-1/issues/55)) ([0b44fb7](https://github.com/marianfoo/arc-1/commit/0b44fb7e32cb5fbca389edda77b6d1ef1b7c818b))
+* simplify write safety — default $TMP, remove allowTransportableEdits, enforce package allowlist ([#56](https://github.com/marianfoo/arc-1/issues/56)) ([1f6ac1d](https://github.com/marianfoo/arc-1/commit/1f6ac1da03f61d42099dccedd3e6b1f824aec091))
+
 ## [0.5.0](https://github.com/marianfoo/arc-1/compare/v0.4.4...v0.5.0) (2026-04-08)
 
 
