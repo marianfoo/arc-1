@@ -23,9 +23,9 @@ describe('extractOidcScopes', () => {
     expect(scopes).not.toContain('email');
   });
 
-  it('returns full access when no scope claims present (backward compat)', () => {
+  it('returns read-only when no scope claims present (safe default)', () => {
     const scopes = extractOidcScopes({ sub: 'user123' });
-    expect(scopes).toEqual(['read', 'write', 'data', 'sql', 'admin']);
+    expect(scopes).toEqual(['read']);
   });
 
   it('applies implied scope expansion: sql adds data', () => {

@@ -351,8 +351,8 @@ const KNOWN_SCOPES = ['read', 'write', 'data', 'sql', 'admin'];
  * Extract scopes from an OIDC JWT payload.
  *
  * Tries `scope` (space-separated string, standard OIDC) then `scp` (array, Azure AD style).
- * Filters to known scopes, applies implied scope expansion, and falls back to full access
- * when no scope claims are present (backward compat for providers that don't emit scopes).
+ * Filters to known scopes, applies implied scope expansion, and falls back to read-only
+ * when no scope claims are present (safe default for providers that don't emit scopes).
  */
 export function extractOidcScopes(payload: Record<string, unknown>): string[] {
   let rawScopes: string[] | undefined;
@@ -368,13 +368,13 @@ export function extractOidcScopes(payload: Record<string, unknown>): string[] {
     rawScopes = (payload.scp as string[]).filter((s) => typeof s === 'string' && s.length > 0);
   }
 
-  // No scope claims at all → full access (backward compat)
+  // No scope claims at all → read-only (safe default)
   if (rawScopes === undefined) {
     logger.warn(
-      'OIDC JWT has no scope/scp claims — granting full access for backward compatibility. ' +
-        'Configure scope claims in your OIDC provider to restrict access.',
+      'OIDC JWT has no scope/scp claims — granting read-only access. ' +
+        'Configure scope claims in your OIDC provider to grant write/data/sql access.',
     );
-    return ['read', 'write', 'data', 'sql', 'admin'];
+    return ['read'];
   }
 
   // Filter to known scopes
