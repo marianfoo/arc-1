@@ -201,13 +201,13 @@ Create the "RAP Business Logic Prediction" skill. This skill reads a behavior de
 
 Update the skills README to list all 6 skills (1 existing + 5 new).
 
-- [ ] Read `skills/README.md` and find the "Available Skills" table. Add entries for all new skills after the existing ones. The table should have these rows:
+- [x] Read `skills/README.md` and find the "Available Skills" table. Add entries for all new skills after the existing ones. The table should have these rows:
   - `| [generate-cds-unit-test](generate-cds-unit-test.md) | Generate ABAP Unit tests for CDS entities using CDS Test Double Framework |` (already exists)
   - `| [explain-abap-code](explain-abap-code.md) | Explain ABAP objects with dependency context and optional ATC analysis |`
   - `| [generate-abap-unit-test](generate-abap-unit-test.md) | Generate ABAP Unit tests for classes with dependency analysis and test doubles |`
   - `| [migrate-custom-code](migrate-custom-code.md) | ATC-driven S/4HANA custom code migration with fix proposals |`
   - `| [generate-rap-logic](generate-rap-logic.md) | Generate RAP determination and validation implementations |`
-- [ ] Run `npm test` — all tests must pass
+- [x] Run `npm test` — all tests must pass
 
 ### Task 7: Add type-specific buildCreateXml templates for DDLS, BDEF, SRVD, DDLX
 

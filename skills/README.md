@@ -58,3 +58,8 @@ These skills assume you have:
 | Skill | Description |
 |---|---|
 | [generate-cds-unit-test](generate-cds-unit-test.md) | Generate ABAP Unit tests for CDS entities using CDS Test Double Framework |
+| [explain-abap-code](explain-abap-code.md) | Explain ABAP objects with dependency context and optional ATC analysis |
+| [generate-abap-unit-test](generate-abap-unit-test.md) | Generate ABAP Unit tests for classes with dependency analysis and test doubles |
+| [migrate-custom-code](migrate-custom-code.md) | ATC-driven S/4HANA custom code migration with fix proposals |
+| [generate-rap-service](generate-rap-service.md) | Generate complete RAP OData UI service from natural language description |
+| [generate-rap-logic](generate-rap-logic.md) | Generate RAP determination and validation implementations |
