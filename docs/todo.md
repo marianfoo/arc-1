@@ -1,0 +1,6 @@
+- [ ] check each auth method and test manually
+- [ ] change and activate a field in a CDS View that multiple other CDS Views depends on (recognize dependencies and react accordingly, may ask user for confirmation)
+- [ ] use abap-file-format for better creations and in skills  /Users/marianzeis/DEV/arc-1-ralphex/compare/J4D/03-abap-file-formats-opportunity.md
+- [ ] test SAPWrite and SAPActivate in a vibe coding session against a real SAP system
+- [ ] test skills
+- [ ] update all compare and feature matrix
