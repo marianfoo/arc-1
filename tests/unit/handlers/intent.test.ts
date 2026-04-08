@@ -610,6 +610,47 @@ ENDCLASS.`;
     });
   });
 
+  // ─── SAPWrite Package Enforcement ──────────────────────────────
+
+  describe('SAPWrite package enforcement', () => {
+    it('rejects create for package not in allowedPackages', async () => {
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        package: 'ZTEST',
+        source: 'CLASS zcl_test DEFINITION PUBLIC. ENDCLASS. CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ZTEST');
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+
+    it('allows create for package in allowedPackages', async () => {
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        package: '$TMP',
+        source: 'CLASS zcl_test DEFINITION PUBLIC. ENDCLASS. CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+      });
+      // Should not be blocked by package check (may fail at HTTP level, but that's OK)
+      expect(result.content[0]?.text).not.toContain('blocked by safety');
+    });
+  });
+
   // ─── SAPWrite Pre-Write Lint Gate ───────────────────────────────
 
   describe('SAPWrite pre-write lint gate', () => {

@@ -99,9 +99,15 @@ describe('parseArgs', () => {
     expect(config.allowedPackages).toEqual(['Z*', '$TMP', 'YFOO']);
   });
 
-  it('returns empty array for no allowed packages', () => {
+  it('defaults allowedPackages to [$TMP] when not configured', () => {
     const config = parseArgs([]);
-    expect(config.allowedPackages).toEqual([]);
+    expect(config.allowedPackages).toEqual(['$TMP']);
+  });
+
+  it('--allowed-packages overrides the $TMP default', () => {
+    process.env.SAP_ALLOWED_PACKAGES = 'Z*,$TMP';
+    const config = parseArgs([]);
+    expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
   });
 
   it('parses cookie auth options', () => {
@@ -228,7 +234,6 @@ describe('parseArgs', () => {
     expect(config.blockData).toBe(true);
     expect(config.blockFreeSQL).toBe(true);
     expect(config.enableTransports).toBe(false);
-    expect(config.allowTransportableEdits).toBe(false);
   });
 
   it('--profile developer sets write-enabled defaults', () => {
@@ -237,7 +242,7 @@ describe('parseArgs', () => {
     expect(config.blockData).toBe(true);
     expect(config.blockFreeSQL).toBe(true);
     expect(config.enableTransports).toBe(true);
-    expect(config.allowTransportableEdits).toBe(true);
+    expect(config.allowedPackages).toEqual(['$TMP']);
   });
 
   it('--profile developer-data allows data but blocks SQL', () => {
@@ -261,7 +266,7 @@ describe('parseArgs', () => {
     expect(config.blockData).toBe(false);
     expect(config.blockFreeSQL).toBe(false);
     expect(config.enableTransports).toBe(true);
-    expect(config.allowTransportableEdits).toBe(true);
+    expect(config.allowedPackages).toEqual(['$TMP']);
   });
 
   it('explicit flag overrides profile default', () => {
@@ -277,7 +282,7 @@ describe('parseArgs', () => {
     const config = parseArgs([]);
     expect(config.readOnly).toBe(false);
     expect(config.enableTransports).toBe(true);
-    expect(config.allowTransportableEdits).toBe(true);
+    expect(config.allowedPackages).toEqual(['$TMP']);
   });
 
   it('unknown profile name throws error', () => {
