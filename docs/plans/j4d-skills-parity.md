@@ -243,8 +243,8 @@ The ADT API requires type-specific XML root elements. All follow the same patter
 
 The SAPActivate tool description already mentions batch activation for RAP stacks, but the example is incomplete. Update it so the LLM has a better template when generating RAP services or activating migration changes.
 
-- [ ] In `src/handlers/tools.ts`, find the SAPActivate `objects` property description (line ~385). Update the example array to show a full RAP stack: `[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"DDLS",name:"ZC_TRAVEL"},{type:"BDEF",name:"ZC_TRAVEL"},{type:"DDLX",name:"ZC_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]`
-- [ ] Run `npm test` — all tests must pass
+- [x] In `src/handlers/tools.ts`, find the SAPActivate `objects` property description (line ~385). Update the example array to show a full RAP stack: `[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"DDLS",name:"ZC_TRAVEL"},{type:"BDEF",name:"ZC_TRAVEL"},{type:"DDLX",name:"ZC_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 9: Final verification
 

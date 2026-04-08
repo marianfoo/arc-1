@@ -383,7 +383,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             },
             description:
               'For batch activation: array of objects to activate together. ' +
-              'Use for RAP stacks: [{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]',
+              'Use for RAP stacks: [{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"DDLS",name:"ZC_TRAVEL"},{type:"BDEF",name:"ZC_TRAVEL"},{type:"DDLX",name:"ZC_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]',
           },
         },
       },
