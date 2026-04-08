@@ -7,7 +7,7 @@
  * Run: npm run test:integration
  */
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
 import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
@@ -511,6 +511,88 @@ describeIf('ADT Integration Tests', () => {
           expect(traces[0]).toHaveProperty('timestamp');
         }
       });
+    });
+  });
+
+  // ─── Structured Class Read (AFF) ─────────────────────────────────
+
+  describe('structured class read', () => {
+    it('reads class metadata', async () => {
+      const metadata = await client.getClassMetadata('CL_ABAP_CHAR_UTILITIES');
+      expect(metadata.description).toBeTruthy();
+      expect(metadata.language).toBeTruthy();
+      expect(metadata.package).toBeTruthy();
+      expect(metadata.name).toBe('CL_ABAP_CHAR_UTILITIES');
+      expect(typeof metadata.fixPointArithmetic).toBe('boolean');
+    });
+
+    it('reads class with structured format', async () => {
+      const result = await client.getClassStructured('CL_ABAP_CHAR_UTILITIES');
+      // Metadata should be populated
+      expect(result.metadata.description).toBeTruthy();
+      expect(result.metadata.package).toBeTruthy();
+      // Main source should be non-empty
+      expect(result.main).toBeTruthy();
+      expect(result.main.length).toBeGreaterThan(0);
+      // Includes should be string or null
+      for (const include of ['testclasses', 'definitions', 'implementations', 'macros'] as const) {
+        expect(result[include] === null || typeof result[include] === 'string').toBe(true);
+      }
+    });
+
+    it('returns error for non-existent class metadata', async () => {
+      await expect(client.getClassMetadata('ZCL_NONEXISTENT_999')).rejects.toThrow();
+    });
+  });
+
+  // ─── Batch Create (AFF) ─────────────────────────────────────────
+
+  describe('batch create in $TMP', () => {
+    const suffix = Date.now().toString(36).toUpperCase();
+    const prog1 = `ZARC1_BAT1_${suffix}`;
+    const prog2 = `ZARC1_BAT2_${suffix}`;
+    const createdPrograms: string[] = [];
+
+    afterAll(async () => {
+      // Clean up: delete any programs created during the test
+      const { deleteObject, lockObject } = await import('../../src/adt/crud.js');
+      const { unrestrictedSafetyConfig } = await import('../../src/adt/safety.js');
+      const safety = unrestrictedSafetyConfig();
+      for (const name of createdPrograms) {
+        try {
+          const objectUrl = `/sap/bc/adt/programs/programs/${encodeURIComponent(name)}`;
+          await client.http.withStatefulSession(async (session) => {
+            const lock = await lockObject(session, safety, objectUrl);
+            await deleteObject(session, safety, objectUrl, lock.lockHandle);
+          });
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    it('creates multiple programs in sequence', async () => {
+      const { createObject } = await import('../../src/adt/crud.js');
+      const { buildCreateXml } = await import('../../src/handlers/intent.js');
+      const { unrestrictedSafetyConfig } = await import('../../src/adt/safety.js');
+      const safety = unrestrictedSafetyConfig();
+
+      // Create first program
+      const xml1 = buildCreateXml('PROG', prog1, '$TMP', 'ARC1 batch test 1');
+      await createObject(client.http, safety, '/sap/bc/adt/programs/programs', xml1);
+      createdPrograms.push(prog1);
+
+      // Create second program
+      const xml2 = buildCreateXml('PROG', prog2, '$TMP', 'ARC1 batch test 2');
+      await createObject(client.http, safety, '/sap/bc/adt/programs/programs', xml2);
+      createdPrograms.push(prog2);
+
+      // Verify both exist by reading them
+      const source1 = await client.getProgram(prog1);
+      expect(typeof source1).toBe('string');
+
+      const source2 = await client.getProgram(prog2);
+      expect(typeof source2).toBe('string');
     });
   });
 

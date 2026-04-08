@@ -177,11 +177,11 @@ This task wires the AFF validator into the SAPWrite handler so that object metad
 
 This task adds integration tests that exercise the new features against a real SAP system. These tests auto-skip when `TEST_SAP_URL` is not set, so they're safe to add without breaking CI.
 
-- [ ] Add integration test: `it('reads class with structured format')` — call `getClassStructured()` on a known test class (e.g., `ZCL_ARC1_TEST` from `tests/e2e/fixtures.ts`), verify metadata has description and package fields, verify main source is non-empty, verify testclasses/definitions/implementations are string or null.
-- [ ] Add integration test: `it('reads class metadata')` — call `getClassMetadata()` on a known class, verify description, language, package are populated.
-- [ ] Add integration test: `it('batch creates multiple objects')` — create 2-3 simple programs in `$TMP`, verify all succeed, clean up by deleting them. This tests the end-to-end batch flow.
-- [ ] Run `npm run test:integration` (if SAP system available) or verify tests are properly skipped when `TEST_SAP_URL` is not set.
-- [ ] Run `npm test` — all unit tests must pass
+- [x] Add integration test: `it('reads class with structured format')` — call `getClassStructured()` on a known test class (e.g., `ZCL_ARC1_TEST` from `tests/e2e/fixtures.ts`), verify metadata has description and package fields, verify main source is non-empty, verify testclasses/definitions/implementations are string or null.
+- [x] Add integration test: `it('reads class metadata')` — call `getClassMetadata()` on a known class, verify description, language, package are populated.
+- [x] Add integration test: `it('batch creates multiple objects')` — create 2-3 simple programs in `$TMP`, verify all succeed, clean up by deleting them. This tests the end-to-end batch flow.
+- [x] Run `npm run test:integration` (if SAP system available) or verify tests are properly skipped when `TEST_SAP_URL` is not set.
+- [x] Run `npm test` — all unit tests must pass
 
 ### Task 8: Update documentation and CLAUDE.md
 
