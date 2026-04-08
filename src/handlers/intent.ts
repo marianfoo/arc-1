@@ -948,6 +948,7 @@ async function handleSAPWrite(
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
       const description = String(args.description ?? name);
+      checkPackage(client.safety, pkg);
 
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
