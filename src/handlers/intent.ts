@@ -926,6 +926,11 @@ async function handleSAPWrite(
   const source = String(args.source ?? '');
   const transport = args.transport as string | undefined;
 
+  // type and name are required for all actions except batch_create
+  if (action !== 'batch_create' && (!type || !name)) {
+    return errorResult('"type" and "name" are required for this action.');
+  }
+
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
