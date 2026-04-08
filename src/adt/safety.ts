@@ -44,6 +44,7 @@ const WRITE_OPS = 'CDUAW';
 export interface SafetyConfig {
   readOnly: boolean;
   blockFreeSQL: boolean;
+  blockData: boolean;
   allowedOps: string;
   disallowedOps: string;
   allowedPackages: string[];
@@ -59,6 +60,7 @@ export function defaultSafetyConfig(): SafetyConfig {
   return {
     readOnly: true,
     blockFreeSQL: true,
+    blockData: true,
     allowedOps: 'RSQTI',
     disallowedOps: '',
     allowedPackages: [],
@@ -75,6 +77,7 @@ export function unrestrictedSafetyConfig(): SafetyConfig {
   return {
     readOnly: false,
     blockFreeSQL: false,
+    blockData: false,
     allowedOps: '',
     disallowedOps: '',
     allowedPackages: [],
@@ -96,6 +99,9 @@ export function isOperationAllowed(config: SafetyConfig, op: OperationTypeCode):
 
   // BlockFreeSQL specifically blocks free SQL queries
   if (config.blockFreeSQL && op === OperationType.FreeSQL) return false;
+
+  // BlockData blocks named table preview queries
+  if (config.blockData && op === OperationType.Query) return false;
 
   // Transport operations require explicit opt-in
   if (op === OperationType.Transport && !config.enableTransports) return false;
@@ -240,12 +246,60 @@ export function checkTransportableEdit(config: SafetyConfig, transport: string, 
   }
 }
 
+/**
+ * Expand implied scopes: `write` implies `read`, `sql` implies `data`.
+ * Returns a new array with implied scopes added.
+ */
+export function expandImpliedScopes(scopes: string[]): string[] {
+  const expanded = new Set(scopes);
+  if (expanded.has('write')) expanded.add('read');
+  if (expanded.has('sql')) expanded.add('data');
+  return [...expanded];
+}
+
+/**
+ * Derive a per-user safety config by merging server-level config (ceiling)
+ * with JWT scopes. Scopes can only RESTRICT further, never expand beyond
+ * what the server config allows.
+ *
+ * Key principle: start with server config, only tighten booleans (false→true).
+ * Never loosen (true→false).
+ */
+export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): SafetyConfig {
+  const effective = {
+    ...serverConfig,
+    allowedPackages: [...serverConfig.allowedPackages],
+    allowedTransports: [...serverConfig.allowedTransports],
+  };
+  const expanded = expandImpliedScopes(scopes);
+
+  // No write scope → force read-only and disable transports
+  if (!expanded.includes('write')) {
+    effective.readOnly = true;
+    effective.enableTransports = false;
+    effective.allowTransportableEdits = false;
+  }
+
+  // No data scope (and no sql, which implies data) → block table preview
+  if (!expanded.includes('data')) {
+    effective.blockData = true;
+  }
+
+  // No sql scope → block free SQL
+  if (!expanded.includes('sql')) {
+    effective.blockFreeSQL = true;
+  }
+
+  return effective;
+}
+
 /** Human-readable description of the safety configuration */
 export function describeSafety(config: SafetyConfig): string {
   const parts: string[] = [];
 
   if (config.readOnly) parts.push('READ-ONLY');
   if (config.blockFreeSQL) parts.push('NO-FREE-SQL');
+  if (config.blockData) parts.push('NO-DATA');
   if (config.dryRun) parts.push('DRY-RUN');
   if (config.allowedOps) parts.push(`AllowedOps=${config.allowedOps}`);
   if (config.disallowedOps) parts.push(`DisallowedOps=${config.disallowedOps}`);

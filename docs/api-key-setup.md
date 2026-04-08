@@ -1,12 +1,13 @@
-# Phase 1: API Key Authentication Setup
+# API Key Setup
 
-Protect your centralized arc1 MCP server with a shared API key. This is the simplest way to secure a remote arc1 instance.
+Protect your centralized arc1 MCP server with API keys. This is the simplest way to secure a remote arc1 instance — no external identity provider needed.
 
 ## When to Use
 
 - Quick proof-of-concept
-- Small teams with trusted users
+- Small-to-medium teams with trusted users
 - When you don't need per-user SAP identity
+- Internal network deployments where you want role-based access without an IdP
 - All users share the same SAP service account
 
 ## Architecture
@@ -63,6 +64,70 @@ curl -s -o /dev/null -w "%{http_code}" \
 # Health check (no auth required)
 curl http://localhost:8080/health
 ```
+
+## Multi-Key Setup (Role-Based Access)
+
+For teams that need different access levels, use `--api-keys` to assign each key a [profile](authorization.md#profiles-safety-presets):
+
+### 1. Generate Keys Per Role
+
+```bash
+VIEWER_KEY=$(openssl rand -base64 32)
+DEV_KEY=$(openssl rand -base64 32)
+SQL_KEY=$(openssl rand -base64 32)
+```
+
+### 2. Start arc1 with Per-Key Profiles
+
+```bash
+# Using CLI flag
+arc1 --url https://sap.example.com:44300 \
+    --user SAP_SERVICE_USER \
+    --password 'ServicePassword123' \
+    --transport http-streamable \
+    --api-keys "$VIEWER_KEY:viewer,$DEV_KEY:developer,$SQL_KEY:developer-sql"
+
+# Using environment variable
+export ARC1_API_KEYS="$VIEWER_KEY:viewer,$DEV_KEY:developer,$SQL_KEY:developer-sql"
+arc1
+```
+
+Each key gets both scopes (tool visibility) and safety restrictions from its profile:
+
+| Key | Profile | Can Do | Cannot Do |
+|-----|---------|--------|-----------|
+| `$VIEWER_KEY` | `viewer` | Read source, search, navigate | Write, data, SQL |
+| `$DEV_KEY` | `developer` | Read + write source, transports | Data preview, SQL |
+| `$SQL_KEY` | `developer-sql` | Everything | Nothing restricted |
+
+### 3. Test Per-Key Access
+
+```bash
+# Viewer key — should succeed for read operations
+curl -X POST -H "Authorization: Bearer $VIEWER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' \
+  http://localhost:8080/mcp
+
+# Developer key — should show additional tools (SAPWrite, SAPActivate, etc.)
+curl -X POST -H "Authorization: Bearer $DEV_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' \
+  http://localhost:8080/mcp
+```
+
+### Available Profiles
+
+| Profile | Scopes | Description |
+|---------|--------|-------------|
+| `viewer` | `read` | Read-only source code access |
+| `viewer-data` | `read`, `data` | Source + table preview |
+| `viewer-sql` | `read`, `data`, `sql` | Source + table preview + SQL |
+| `developer` | `read`, `write` | Full development, no data |
+| `developer-data` | `read`, `write`, `data` | Development + table preview |
+| `developer-sql` | `read`, `write`, `data`, `sql` | Full access |
+
+See [Authorization & Roles](authorization.md) for detailed scope descriptions.
 
 ## Client Configuration
 
@@ -171,19 +236,20 @@ server {
 ## Security Notes
 
 - Always use HTTPS in production (TLS termination at reverse proxy or load balancer)
-- Store the API key in a secrets manager, not in plaintext configs
-- Rotate the API key periodically
-- All users share the same SAP identity — no per-user audit trail
-- For per-user SAP auth, use Phase 2 (OAuth) + Phase 3 (Principal Propagation)
+- Store API keys in a secrets manager, not in plaintext configs
+- Rotate keys periodically
+- With multi-key, audit logs include the profile name (e.g. `api-key:viewer`) to identify which key was used
+- All API key users share the same SAP identity — no per-user SAP audit trail
+- For per-user SAP auth, use [OAuth / JWT](oauth-jwt-setup.md) + [Principal Propagation](principal-propagation-setup.md)
 
 ## Limitations
 
-- No user identity (everyone shares one API key)
-- Cannot do per-user SAP authorization
-- Manual key rotation requires updating all clients
+- No true user identity — keys identify roles, not individuals
+- Cannot do per-user SAP authorization (all keys use the shared SAP service account)
+- Manual key rotation requires updating all clients that use that key
 - Not MCP-spec-compliant OAuth (but works with all major clients)
 
 ## Next Steps
 
-→ [Phase 2: OAuth / JWT Authentication](phase2-oauth-setup.md) — Add user identity
-→ [Phase 3: Principal Propagation](phase3-principal-propagation-setup.md) — Per-user SAP auth
+→ [OAuth / JWT Setup](oauth-jwt-setup.md) — Add user identity
+→ [Principal Propagation Setup](principal-propagation-setup.md) — Per-user SAP auth

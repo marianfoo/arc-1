@@ -63,6 +63,19 @@ export class AdtClient {
     this.http = new AdtHttpClient(httpConfig);
   }
 
+  /**
+   * Create a lightweight copy of this client with a different safety config.
+   * Shares the same HTTP client (connection, CSRF, cookies) — only safety changes.
+   * Used for per-request safety derived from JWT scopes.
+   */
+  withSafety(safety: SafetyConfig): AdtClient {
+    const clone = Object.create(AdtClient.prototype) as AdtClient;
+    Object.defineProperty(clone, 'http', { value: this.http, writable: false, enumerable: true });
+    Object.defineProperty(clone, 'safety', { value: safety, writable: false, enumerable: true });
+    Object.defineProperty(clone, 'username', { value: this.username, writable: false, enumerable: true });
+    return clone;
+  }
+
   // ─── Source Code Read Operations ──────────────────────────────────
 
   /** Get program source code */

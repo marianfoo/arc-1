@@ -72,7 +72,7 @@ export interface ToolResult {
 export const TOOL_SCOPES: Record<string, string> = {
   SAPRead: 'read',
   SAPSearch: 'read',
-  SAPQuery: 'read',
+  SAPQuery: 'sql',
   SAPNavigate: 'read',
   SAPContext: 'read',
   SAPLint: 'read',
@@ -80,8 +80,24 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPWrite: 'write',
   SAPActivate: 'write',
   SAPManage: 'write',
-  SAPTransport: 'admin',
+  SAPTransport: 'write',
 };
+
+/**
+ * Check if authInfo has the required scope, respecting implied scopes:
+ * - `write` implies `read`
+ * - `sql` implies `data`
+ */
+export function hasRequiredScope(authInfo: AuthInfo, requiredScope: string): boolean {
+  const scopes = authInfo.scopes;
+  if (scopes.includes(requiredScope)) return true;
+
+  // Implied scopes
+  if (requiredScope === 'read' && scopes.includes('write')) return true;
+  if (requiredScope === 'data' && scopes.includes('sql')) return true;
+
+  return false;
+}
 
 function textResult(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
@@ -160,7 +176,7 @@ export async function handleToolCall(
   // Scope enforcement — only when authInfo is present (XSUAA/OIDC mode)
   if (authInfo) {
     const requiredScope = TOOL_SCOPES[toolName];
-    if (requiredScope && !authInfo.scopes.includes(requiredScope)) {
+    if (requiredScope && !hasRequiredScope(authInfo, requiredScope)) {
       logger.emitAudit({
         timestamp: new Date().toISOString(),
         level: 'warn',
@@ -227,7 +243,7 @@ export async function handleToolCall(
           // Check scope for the delegated action
           if (authInfo) {
             const requiredScope = getHyperfocusedScope(String(args.action ?? ''));
-            if (!authInfo.scopes.includes(requiredScope)) {
+            if (!hasRequiredScope(authInfo, requiredScope)) {
               result = errorResult(
                 `Insufficient scope: '${requiredScope}' required for SAP(action="${args.action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
               );

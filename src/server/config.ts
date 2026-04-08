@@ -12,6 +12,107 @@ import type { FeatureToggle, ServerConfig, TransportType } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
 
 /**
+ * Parse API keys string into structured array.
+ * Format: "key1:profile1,key2:profile2"
+ * Each entry maps an API key to a named profile.
+ */
+export function parseApiKeys(raw: string): Array<{ key: string; profile: string }> {
+  const entries: Array<{ key: string; profile: string }> = [];
+  for (const pair of raw.split(',')) {
+    const trimmed = pair.trim();
+    if (!trimmed) continue;
+    // Use LAST colon as separator — keys may contain colons (e.g. base64)
+    // but profile names never do
+    const colonIdx = trimmed.lastIndexOf(':');
+    if (colonIdx === -1) {
+      throw new Error(
+        `Invalid API key entry '${trimmed}': expected 'key:profile' format. ` +
+          `Valid profiles: ${Object.keys(PROFILES).join(', ')}`,
+      );
+    }
+    const key = trimmed.slice(0, colonIdx);
+    const profile = trimmed.slice(colonIdx + 1);
+    if (!key) {
+      throw new Error('Invalid API key entry: key cannot be empty');
+    }
+    if (!PROFILES[profile]) {
+      throw new Error(
+        `Invalid profile '${profile}' in API key entry. Valid profiles: ${Object.keys(PROFILES).join(', ')}`,
+      );
+    }
+    entries.push({ key, profile });
+  }
+  if (entries.length === 0) {
+    throw new Error('ARC1_API_KEYS is set but contains no valid entries. Format: "key1:profile1,key2:profile2"');
+  }
+  return entries;
+}
+
+/**
+ * Maps profile names to the scopes they grant.
+ * Used when API keys are assigned to profiles — the key inherits these scopes.
+ * Kept in sync with PROFILES: each profile's safety flags determine its scopes.
+ */
+export const PROFILE_SCOPES: Record<string, string[]> = {
+  viewer: ['read'],
+  'viewer-data': ['read', 'data'],
+  'viewer-sql': ['read', 'data', 'sql'],
+  developer: ['read', 'write'],
+  'developer-data': ['read', 'write', 'data'],
+  'developer-sql': ['read', 'write', 'data', 'sql'],
+};
+
+/**
+ * Named profiles — convenience presets for common safety configurations.
+ * Each profile sets a combination of safety flags. Individual CLI flags
+ * applied after the profile can override any profile default.
+ */
+export const PROFILES: Record<string, Partial<ServerConfig>> = {
+  viewer: {
+    readOnly: true,
+    blockData: true,
+    blockFreeSQL: true,
+    enableTransports: false,
+    allowTransportableEdits: false,
+  },
+  'viewer-data': {
+    readOnly: true,
+    blockData: false,
+    blockFreeSQL: true,
+    enableTransports: false,
+    allowTransportableEdits: false,
+  },
+  'viewer-sql': {
+    readOnly: true,
+    blockData: false,
+    blockFreeSQL: false,
+    enableTransports: false,
+    allowTransportableEdits: false,
+  },
+  developer: {
+    readOnly: false,
+    blockData: true,
+    blockFreeSQL: true,
+    enableTransports: true,
+    allowTransportableEdits: true,
+  },
+  'developer-data': {
+    readOnly: false,
+    blockData: false,
+    blockFreeSQL: true,
+    enableTransports: true,
+    allowTransportableEdits: true,
+  },
+  'developer-sql': {
+    readOnly: false,
+    blockData: false,
+    blockFreeSQL: false,
+    enableTransports: true,
+    allowTransportableEdits: true,
+  },
+};
+
+/**
  * Parse CLI arguments and environment variables into a ServerConfig.
  *
  * We use a simple hand-rolled parser here (not commander) because
@@ -69,15 +170,45 @@ export function parseArgs(args: string[]): ServerConfig {
   config.transport = (transport === 'http-streamable' ? 'http-streamable' : 'stdio') as TransportType;
   config.httpAddr = resolve('http-addr', 'SAP_HTTP_ADDR', '0.0.0.0:8080');
 
-  // --- Safety ---
-  config.readOnly = resolveBool('read-only', 'SAP_READ_ONLY', false);
-  config.blockFreeSQL = resolveBool('block-free-sql', 'SAP_BLOCK_FREE_SQL', false);
+  // --- Profile (apply before individual safety flags so flags can override) ---
+  const profileName = getFlag('profile') ?? process.env.ARC1_PROFILE;
+  if (profileName) {
+    const profile = PROFILES[profileName];
+    if (!profile) {
+      throw new Error(`Unknown profile '${profileName}'. Valid profiles: ${Object.keys(PROFILES).join(', ')}`);
+    }
+    Object.assign(config, profile);
+  }
+
+  // --- Safety (individual flags override profile defaults) ---
+  // Only override profile defaults when the flag/env is explicitly set
+  const readOnlyExplicit = getFlag('read-only') ?? process.env.SAP_READ_ONLY;
+  if (readOnlyExplicit !== undefined) config.readOnly = readOnlyExplicit === 'true' || readOnlyExplicit === '1';
+  else if (!profileName) config.readOnly = false;
+
+  const blockFreeSQLExplicit = getFlag('block-free-sql') ?? process.env.SAP_BLOCK_FREE_SQL;
+  if (blockFreeSQLExplicit !== undefined)
+    config.blockFreeSQL = blockFreeSQLExplicit === 'true' || blockFreeSQLExplicit === '1';
+  else if (!profileName) config.blockFreeSQL = false;
+
+  const blockDataExplicit = getFlag('block-data') ?? process.env.SAP_BLOCK_DATA;
+  if (blockDataExplicit !== undefined) config.blockData = blockDataExplicit === 'true' || blockDataExplicit === '1';
+  else if (!profileName) config.blockData = false;
   config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
   const pkgs = resolve('allowed-packages', 'SAP_ALLOWED_PACKAGES', '');
   config.allowedPackages = pkgs ? pkgs.split(',').map((p) => p.trim()) : [];
-  config.allowTransportableEdits = resolveBool('allow-transportable-edits', 'SAP_ALLOW_TRANSPORTABLE_EDITS', false);
-  config.enableTransports = resolveBool('enable-transports', 'SAP_ENABLE_TRANSPORTS', false);
+  const allowTransportableEditsExplicit =
+    getFlag('allow-transportable-edits') ?? process.env.SAP_ALLOW_TRANSPORTABLE_EDITS;
+  if (allowTransportableEditsExplicit !== undefined)
+    config.allowTransportableEdits =
+      allowTransportableEditsExplicit === 'true' || allowTransportableEditsExplicit === '1';
+  else if (!profileName) config.allowTransportableEdits = false;
+
+  const enableTransportsExplicit = getFlag('enable-transports') ?? process.env.SAP_ENABLE_TRANSPORTS;
+  if (enableTransportsExplicit !== undefined)
+    config.enableTransports = enableTransportsExplicit === 'true' || enableTransportsExplicit === '1';
+  else if (!profileName) config.enableTransports = false;
 
   // --- Features ---
   config.featureAbapGit = resolveFeature('feature-abapgit', 'SAP_FEATURE_ABAPGIT');
@@ -93,6 +224,13 @@ export function parseArgs(args: string[]): ServerConfig {
 
   // --- Authentication (MCP client → ARC-1) ---
   config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY;
+
+  // Multiple API keys with per-key profiles: "key1:viewer,key2:developer"
+  const apiKeysRaw = getFlag('api-keys') ?? process.env.ARC1_API_KEYS;
+  if (apiKeysRaw) {
+    config.apiKeys = parseApiKeys(apiKeysRaw);
+  }
+
   config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
   config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);

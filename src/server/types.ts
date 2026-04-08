@@ -37,6 +37,7 @@ export interface ServerConfig {
   // --- Safety (gates all write operations) ---
   readOnly: boolean;
   blockFreeSQL: boolean;
+  blockData: boolean;
   allowedOps: string;
   disallowedOps: string;
   allowedPackages: string[];
@@ -57,6 +58,8 @@ export interface ServerConfig {
 
   // --- Authentication (MCP client → ARC-1) ---
   apiKey?: string;
+  /** Multiple API keys with per-key profile assignment (key:profile pairs) */
+  apiKeys?: Array<{ key: string; profile: string }>;
   oidcIssuer?: string;
   oidcAudience?: string;
   xsuaaAuth: boolean;
@@ -111,6 +114,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   httpAddr: '0.0.0.0:8080',
   readOnly: false,
   blockFreeSQL: false,
+  blockData: false,
   allowedOps: '',
   disallowedOps: '',
   allowedPackages: [],

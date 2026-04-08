@@ -48,10 +48,11 @@ nav:
       - BTP Cloud Foundry: phase4-btp-deployment.md
   - Authentication:
       - Overview: enterprise-auth.md
-      - Phase 1 – API Key: phase1-api-key-setup.md
-      - Phase 2 – OAuth / JWT: phase2-oauth-setup.md
-      - Phase 3 – Principal Propagation: phase3-principal-propagation-setup.md
-      - Phase 5 – XSUAA Setup: phase5-xsuaa-setup.md
+      - Authorization & Roles: authorization.md
+      - API Key: api-key-setup.md
+      - OAuth / JWT: oauth-jwt-setup.md
+      - Principal Propagation: principal-propagation-setup.md
+      - XSUAA Setup: xsuaa-setup.md
       - BTP Destination Setup: btp-destination-setup.md
       - Auth Test Process: auth-test-process.md
   - Reference:

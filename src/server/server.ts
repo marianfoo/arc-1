@@ -13,10 +13,17 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
+import { deriveUserSafety } from '../adt/safety.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
-import { getCachedFeatures, handleToolCall, setCachedFeatures, TOOL_SCOPES } from '../handlers/intent.js';
+import {
+  getCachedFeatures,
+  handleToolCall,
+  hasRequiredScope,
+  setCachedFeatures,
+  TOOL_SCOPES,
+} from '../handlers/intent.js';
 import { getToolDefinitions } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
@@ -43,6 +50,7 @@ function buildAdtConfig(
     safety: {
       readOnly: config.readOnly,
       blockFreeSQL: config.blockFreeSQL,
+      blockData: config.blockData,
       allowedOps: config.allowedOps,
       disallowedOps: config.disallowedOps,
       allowedPackages: config.allowedPackages,
@@ -161,6 +169,22 @@ export function runStartupProbe(
           features.textSearch = undefined;
         }
       }
+      // Log authorization probe results
+      if (features.authProbe) {
+        const ap = features.authProbe;
+        if (ap.searchAccess) {
+          logger.info('Authorization probe: object search access is available');
+        } else {
+          logger.warn(`Authorization probe: object search access denied — ${ap.searchReason ?? 'unknown reason'}`);
+        }
+        if (ap.transportAccess) {
+          logger.info('Authorization probe: transport access is available');
+        } else {
+          logger.info(
+            `Authorization probe: transport access is not available — ${ap.transportReason ?? 'unknown reason'}`,
+          );
+        }
+      }
       setCachedFeatures(features);
     } catch {
       // Probe failed (e.g., SAP system unreachable) — continue with default tool set
@@ -205,7 +229,7 @@ export function createServer(
     if (extra.authInfo) {
       tools = tools.filter((tool) => {
         const requiredScope = TOOL_SCOPES[tool.name];
-        return !requiredScope || extra.authInfo!.scopes.includes(requiredScope);
+        return !requiredScope || hasRequiredScope(extra.authInfo!, requiredScope);
       });
     }
 
@@ -276,8 +300,16 @@ export function createServer(
       } as Record<string, unknown>;
     }
 
+    // Per-request safety: merge server ceiling with JWT scopes.
+    // Scopes can only restrict further, never expand beyond server config.
+    let effectiveClient = client;
+    if (extra.authInfo?.scopes) {
+      const effectiveSafety = deriveUserSafety(client.safety, extra.authInfo.scopes);
+      effectiveClient = client.withSafety(effectiveSafety);
+    }
+
     const result = await handleToolCall(
-      client,
+      effectiveClient,
       config,
       toolName,
       args,

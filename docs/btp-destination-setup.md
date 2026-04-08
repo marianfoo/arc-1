@@ -336,7 +336,7 @@ This means you can enable PP without breaking existing API key users.
 ### Prerequisites
 
 - ARC-1 deployed on BTP CF with `SAP_XSUAA_AUTH=true` and `SAP_PP_ENABLED=true`
-- XSUAA service instance with `xs-security.json` (see [Phase 5 XSUAA Setup](phase5-xsuaa-setup.md))
+- XSUAA service instance with `xs-security.json` (see [XSUAA Setup](xsuaa-setup.md))
 - BTP Destination set to `PrincipalPropagation`
 - Cloud Connector and SAP configured for PP (Steps 2-3 above)
 
@@ -391,7 +391,7 @@ If using an MCP extension that supports HTTP Streamable transport:
 
 Copilot Studio uses a custom connector with Entra ID OAuth (not XSUAA). For PP with Copilot Studio:
 
-1. Use the Entra ID OIDC authentication (see [Phase 2 OAuth Setup](phase2-oauth-setup.md))
+1. Use the Entra ID OIDC authentication (see [OAuth / JWT Setup](oauth-jwt-setup.md))
 2. Ensure the Entra ID token's `preferred_username` or `email` claim maps to a SAP user
 3. ARC-1 will pass the Entra ID JWT to the Destination Service as `X-User-Token`
 4. The Destination Service generates the SAML assertion from the Entra ID token

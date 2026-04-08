@@ -2,8 +2,10 @@ import { Version } from '@abaplint/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureConfig } from '../../../src/adt/config.js';
 import {
+  classifyAuthProbeError,
   detectSystemType,
   mapSapReleaseToAbaplintVersion,
+  probeAuthorization,
   probeTextSearch,
   resolveWithoutProbing,
 } from '../../../src/adt/features.js';
@@ -237,6 +239,135 @@ describe('Feature Detection', () => {
       const result = await probeTextSearch(mockClientNetworkError());
       expect(result.available).toBe(false);
       expect(result.reason).toContain('Network error');
+    });
+  });
+
+  // ─── probeAuthorization ─────────────────────────────────────────────
+
+  describe('probeAuthorization', () => {
+    function mockClientByUrl(urlMap: Record<string, number | 'throw' | 'network-error'>): AdtHttpClient {
+      const getFn = vi.fn().mockImplementation((url: string) => {
+        for (const [pattern, result] of Object.entries(urlMap)) {
+          if (url.includes(pattern)) {
+            if (result === 'network-error') {
+              return Promise.reject(new Error('ECONNREFUSED'));
+            }
+            if (result === 'throw') {
+              return Promise.reject({ statusCode: 403 });
+            }
+            if (typeof result === 'number' && result >= 400) {
+              return Promise.reject({ statusCode: result });
+            }
+            return Promise.resolve({ statusCode: result, body: '' });
+          }
+        }
+        return Promise.resolve({ statusCode: 200, body: '' });
+      });
+      return { get: getFn } as unknown as AdtHttpClient;
+    }
+
+    it('returns both available when search and transport succeed', async () => {
+      const client = mockClientByUrl({
+        quickSearch: 200,
+        transportrequests: 200,
+      });
+      const result = await probeAuthorization(client);
+      expect(result.searchAccess).toBe(true);
+      expect(result.searchReason).toBeUndefined();
+      expect(result.transportAccess).toBe(true);
+      expect(result.transportReason).toBeUndefined();
+    });
+
+    it('reports search access denied on 403', async () => {
+      const client = mockClientByUrl({
+        quickSearch: 403,
+        transportrequests: 200,
+      });
+      const result = await probeAuthorization(client);
+      expect(result.searchAccess).toBe(false);
+      expect(result.searchReason).toContain('S_ADT_RES');
+      expect(result.transportAccess).toBe(true);
+    });
+
+    it('reports transport access denied on 403', async () => {
+      const client = mockClientByUrl({
+        quickSearch: 200,
+        transportrequests: 403,
+      });
+      const result = await probeAuthorization(client);
+      expect(result.searchAccess).toBe(true);
+      expect(result.transportAccess).toBe(false);
+      expect(result.transportReason).toContain('S_TRANSPRT');
+    });
+
+    it('reports both denied when both return 401', async () => {
+      const client = mockClientByUrl({
+        quickSearch: 401,
+        transportrequests: 401,
+      });
+      const result = await probeAuthorization(client);
+      expect(result.searchAccess).toBe(false);
+      expect(result.searchReason).toContain('authorization');
+      expect(result.transportAccess).toBe(false);
+      expect(result.transportReason).toContain('authorization');
+    });
+
+    it('handles 404 (ICF service not activated)', async () => {
+      const client = mockClientByUrl({
+        quickSearch: 404,
+        transportrequests: 404,
+      });
+      const result = await probeAuthorization(client);
+      expect(result.searchAccess).toBe(false);
+      expect(result.searchReason).toContain('SICF');
+      expect(result.transportAccess).toBe(false);
+      expect(result.transportReason).toContain('SICF');
+    });
+
+    it('handles network errors gracefully', async () => {
+      const client = mockClientByUrl({
+        quickSearch: 'network-error',
+        transportrequests: 'network-error',
+      });
+      const result = await probeAuthorization(client);
+      expect(result.searchAccess).toBe(false);
+      expect(result.searchReason).toContain('Network error');
+      expect(result.transportAccess).toBe(false);
+      expect(result.transportReason).toContain('Network error');
+    });
+  });
+
+  // ─── classifyAuthProbeError ─────────────────────────────────────────
+
+  describe('classifyAuthProbeError', () => {
+    it('classifies 403 for search probe', () => {
+      const result = classifyAuthProbeError(403, 'search');
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('S_ADT_RES');
+    });
+
+    it('classifies 401 for search probe', () => {
+      const result = classifyAuthProbeError(401, 'search');
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('S_ADT_RES');
+    });
+
+    it('classifies 403 for transport probe', () => {
+      const result = classifyAuthProbeError(403, 'transport');
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('S_TRANSPRT');
+    });
+
+    it('classifies 404 as SICF not activated', () => {
+      const result = classifyAuthProbeError(404, 'search');
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('SICF');
+    });
+
+    it('classifies unexpected status codes', () => {
+      const result = classifyAuthProbeError(500, 'transport');
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('HTTP 500');
     });
   });
 });

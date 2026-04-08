@@ -14,9 +14,8 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 const { AdtClient } = await import('../../../src/adt/client.js');
-const { handleToolCall, resetCachedFeatures, setCachedFeatures, TOOL_SCOPES, buildCreateXml } = await import(
-  '../../../src/handlers/intent.js'
-);
+const { handleToolCall, hasRequiredScope, resetCachedFeatures, setCachedFeatures, TOOL_SCOPES, buildCreateXml } =
+  await import('../../../src/handlers/intent.js');
 
 function createClient(): AdtClient {
   return new AdtClient({
@@ -751,10 +750,24 @@ ENDCLASS.`,
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
     };
 
+    const dataAuth: AuthInfo = {
+      token: 'test-token',
+      clientId: 'test-client',
+      scopes: ['read', 'data'],
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    };
+
+    const sqlAuth: AuthInfo = {
+      token: 'test-token',
+      clientId: 'test-client',
+      scopes: ['read', 'sql'],
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    };
+
     const adminAuth: AuthInfo = {
       token: 'test-token',
       clientId: 'test-client',
-      scopes: ['read', 'write', 'admin'],
+      scopes: ['read', 'write', 'data', 'sql', 'admin'],
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
       extra: { userName: 'test.user@company.com', email: 'test.user@company.com' },
     };
@@ -796,7 +809,7 @@ ENDCLASS.`,
       expect(result.content[0]?.text).not.toContain('Insufficient scope');
     });
 
-    it('blocks SAPTransport with write-only scope', async () => {
+    it('allows SAPTransport with write scope', async () => {
       const result = await handleToolCall(
         createClient(),
         DEFAULT_CONFIG,
@@ -804,19 +817,49 @@ ENDCLASS.`,
         { action: 'list' },
         writeAuth,
       );
-      expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain("Insufficient scope: 'admin'");
+      // Should reach the switch, not blocked by scope
+      expect(result.content[0]?.text).not.toContain('Insufficient scope');
     });
 
-    it('allows SAPTransport with admin scope', async () => {
+    it('blocks SAPTransport with read-only scope', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPTransport', { action: 'list' }, readAuth);
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+    });
+
+    it('blocks SAPQuery with read-only scope (requires sql)', async () => {
       const result = await handleToolCall(
         createClient(),
         DEFAULT_CONFIG,
-        'SAPTransport',
-        { action: 'list' },
-        adminAuth,
+        'SAPQuery',
+        { sql: 'SELECT * FROM t000' },
+        readAuth,
       );
-      // Should reach the switch, not blocked by scope
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'sql'");
+    });
+
+    it('blocks SAPQuery with data-only scope (requires sql)', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPQuery',
+        { sql: 'SELECT * FROM t000' },
+        dataAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'sql'");
+    });
+
+    it('allows SAPQuery with sql scope (sql implies data)', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPQuery',
+        { sql: 'SELECT * FROM t000' },
+        sqlAuth,
+      );
+      // Should reach the handler, not blocked by scope
       expect(result.content[0]?.text).not.toContain('Insufficient scope');
     });
 
@@ -847,29 +890,102 @@ ENDCLASS.`,
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {}, readAuth);
       expect(result.content[0]?.text).toContain('Your scopes: [read]');
     });
+
+    it('write scope implies read for SAPRead', async () => {
+      // User with only write scope (no explicit read) can access SAPRead
+      const writeOnlyAuth: AuthInfo = {
+        token: 'test-token',
+        clientId: 'test-client',
+        scopes: ['write'],
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      };
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'PROG', name: 'ZHELLO' },
+        writeOnlyAuth,
+      );
+      expect(result.isError).toBeUndefined();
+    });
   });
 
   // ─── TOOL_SCOPES mapping ──────────────────────────────────────────
 
   describe('TOOL_SCOPES', () => {
-    it('maps all read tools to read scope', () => {
-      for (const tool of ['SAPRead', 'SAPSearch', 'SAPQuery', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose']) {
+    it('maps read tools to read scope', () => {
+      for (const tool of ['SAPRead', 'SAPSearch', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose']) {
         expect(TOOL_SCOPES[tool]).toBe('read');
       }
     });
 
     it('maps write tools to write scope', () => {
-      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage']) {
+      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage', 'SAPTransport']) {
         expect(TOOL_SCOPES[tool]).toBe('write');
       }
     });
 
-    it('maps transport to admin scope', () => {
-      expect(TOOL_SCOPES.SAPTransport).toBe('admin');
+    it('maps SAPQuery to sql scope', () => {
+      expect(TOOL_SCOPES.SAPQuery).toBe('sql');
     });
 
     it('covers all 11 tools', () => {
       expect(Object.keys(TOOL_SCOPES)).toHaveLength(11);
+    });
+  });
+
+  // ─── hasRequiredScope ──────────────────────────────────────────────
+
+  describe('hasRequiredScope', () => {
+    function makeAuth(scopes: string[]): AuthInfo {
+      return {
+        token: 'test-token',
+        clientId: 'test-client',
+        scopes,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      };
+    }
+
+    it('returns true for direct scope match', () => {
+      expect(hasRequiredScope(makeAuth(['read']), 'read')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['write']), 'write')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['data']), 'data')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['sql']), 'sql')).toBe(true);
+    });
+
+    it('returns false when scope is missing', () => {
+      expect(hasRequiredScope(makeAuth(['read']), 'write')).toBe(false);
+      expect(hasRequiredScope(makeAuth(['read']), 'data')).toBe(false);
+      expect(hasRequiredScope(makeAuth(['data']), 'read')).toBe(false);
+    });
+
+    it('write implies read', () => {
+      expect(hasRequiredScope(makeAuth(['write']), 'read')).toBe(true);
+    });
+
+    it('sql implies data', () => {
+      expect(hasRequiredScope(makeAuth(['sql']), 'data')).toBe(true);
+    });
+
+    it('write does NOT imply data', () => {
+      expect(hasRequiredScope(makeAuth(['write']), 'data')).toBe(false);
+    });
+
+    it('sql does NOT imply read', () => {
+      expect(hasRequiredScope(makeAuth(['sql']), 'read')).toBe(false);
+    });
+
+    it('returns false for empty scopes', () => {
+      expect(hasRequiredScope(makeAuth([]), 'read')).toBe(false);
+      expect(hasRequiredScope(makeAuth([]), 'write')).toBe(false);
+      expect(hasRequiredScope(makeAuth([]), 'data')).toBe(false);
+      expect(hasRequiredScope(makeAuth([]), 'sql')).toBe(false);
+    });
+
+    it('admin scope does not imply other scopes', () => {
+      expect(hasRequiredScope(makeAuth(['admin']), 'read')).toBe(false);
+      expect(hasRequiredScope(makeAuth(['admin']), 'write')).toBe(false);
+      expect(hasRequiredScope(makeAuth(['admin']), 'data')).toBe(false);
     });
   });
 

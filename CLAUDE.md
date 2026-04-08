@@ -64,11 +64,13 @@ npm run dev
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
 | `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: false) |
+| `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: false) |
 | `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: false) |
 | `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
 | `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
 | `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict to packages (supports wildcards: "Z*") |
 | `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
+| `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`) |
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
 | `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
 | `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | BTP ABAP service key JSON (direct connection) |
@@ -86,6 +88,7 @@ npm run dev
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
 | `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
+| `ARC1_PROFILE` / `--profile` | Safety profile shortcut: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql` |
 
 ## Codebase Structure
 
@@ -187,11 +190,111 @@ tests/
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
+| Modify scope enforcement | `src/handlers/intent.ts` (TOOL_SCOPES), `src/server/server.ts` (tool listing filter) |
+| Modify OIDC token handling | `src/server/http.ts` (validateOidcToken, ~line 274) |
+| Add/modify auth scopes | `xs-security.json`, `src/server/xsuaa.ts`, `src/server/http.ts`, `src/handlers/intent.ts` |
+| Add safety config option | `src/adt/safety.ts`, `src/server/config.ts`, `src/server/types.ts` |
+| Add feature probe | `src/adt/features.ts` |
+| Add E2E test | `tests/e2e/`, helpers in `tests/e2e/helpers.ts`, fixtures in `tests/e2e/fixtures.ts` |
 | Modify object caching | `src/cache/caching-layer.ts`, `src/cache/cache.ts` |
 | Add cache warmup feature | `src/cache/warmup.ts`, `src/server/server.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |
+
+## Architecture: Request Flow
+
+Understanding how a request flows through the system is essential for working on any part of ARC-1:
+
+```
+MCP Client (Claude Desktop, Cursor, Copilot Studio)
+  │
+  ▼
+MCP Transport (stdio or HTTP Streamable)
+  │
+  ├─ stdio: no auth, safety config is the only gate
+  │
+  ├─ HTTP: auth layer (server/http.ts)
+  │   ├─ XSUAA OAuth (xsuaa.ts) → checkLocalScope() → AuthInfo { scopes, clientId, userName }
+  │   ├─ OIDC JWT (http.ts) → jwtVerify() → AuthInfo { scopes }
+  │   └─ API key (http.ts) → exact match → AuthInfo { scopes: all }
+  │
+  ▼
+Tool Call Handler (server/server.ts)
+  │
+  ├─ Per-user client? (PP: ppEnabled + JWT → BTP Destination → per-user SAP session)
+  │
+  ▼
+handleToolCall (handlers/intent.ts)
+  │
+  ├─ 1. Scope check: TOOL_SCOPES[toolName] vs authInfo.scopes (only when authInfo present)
+  ├─ 2. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
+  │
+  ▼
+ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
+  │
+  ├─ 3. Safety check: checkOperation(safety, OperationType.Read, 'GetProgram')
+  ├─ 4. Package check: checkPackage(safety, packageName) (for writes)
+  │
+  ▼
+HTTP Request (adt/http.ts)
+  │
+  ├─ CSRF token management (auto-fetch via HEAD, refresh on 403)
+  ├─ Cookie/session management
+  ├─ Stateful sessions for lock→modify→unlock sequences
+  │
+  ▼
+SAP ABAP System (ADT REST API)
+  └─ SAP-level authorization (S_DEVELOP, S_ADT_RES, S_TRANSPRT, etc.)
+```
+
+**Key invariant:** Checks are additive — scope check AND safety check AND SAP auth must all pass. If any layer blocks, the operation fails.
+
+## Authorization & Safety System
+
+### Safety System (`src/adt/safety.ts`)
+
+Server-level config, set at startup via env vars / CLI flags. Applies to ALL users.
+
+**Operation Types** (single-character codes, used in `allowedOps`/`disallowedOps`):
+```
+R = Read       S = Search     Q = Query (table preview)   F = FreeSQL
+C = Create     U = Update     D = Delete                  A = Activate
+T = Test       L = Lock       I = Intelligence             W = Workflow
+X = Transport
+```
+
+Write ops blocked by `readOnly`: `CDUAW`. All 36+ ADT endpoints have `checkOperation()` guards.
+
+### Scope Enforcement (`src/handlers/intent.ts`)
+
+`TOOL_SCOPES` maps each MCP tool to a required scope. Only enforced when `authInfo` is present (HTTP transport with auth). Stdio has no auth → all tools allowed.
+
+```typescript
+const TOOL_SCOPES: Record<string, string> = {
+  SAPRead: 'read',      SAPWrite: 'write',
+  SAPSearch: 'read',    SAPActivate: 'write',
+  SAPQuery: 'sql',      SAPManage: 'write',
+  SAPNavigate: 'read',  SAPTransport: 'write',
+  SAPContext: 'read',   SAPLint: 'read',
+  SAPDiagnose: 'read',
+};
+```
+
+### Auth Providers (Chained)
+
+In HTTP mode, `src/server/http.ts` and `src/server/xsuaa.ts` handle auth:
+1. **XSUAA** (BTP): OAuth proxy, `checkLocalScope()` extracts read/write/data/sql/admin
+2. **OIDC** (self-hosted): JWT verification via JWKS, scopes from `scope`/`scp` claim
+3. **API key**: Exact match, full access
+
+### Principal Propagation
+
+When `ppEnabled=true`, the user's JWT is used to get a per-user SAP session via BTP Destination Service. SAP sees the real user identity → SAP-level auth applies per-user. ARC-1 scopes still enforced as defense-in-depth.
+
+### Important: POST Needed for Read Operations
+
+7+ "read" endpoints use HTTP POST: code intelligence (findDefinition, findWhereUsed, getCompletion), syntax check, unit tests, ATC, table preview. A read-only SAP user needs `S_ADT_RES ACTVT=01 AND 02`.
 
 ## Code Patterns
 
@@ -216,32 +319,74 @@ case 'DOMA': {
   const domain = await client.getDomain(name);
   return textResult(JSON.stringify(domain, null, 2));
 }
-case 'DDLX':
-  return textResult(await client.getDdlx(name));
-case 'SRVB':
-  return textResult(await client.getSrvb(name));
 ```
 
 ### Safety Check
 
 ```typescript
 checkOperation(this.safety, OperationType.Create, 'CreateObject');
-// Throws AdtSafetyError if blocked
+// Throws AdtSafetyError if blocked by readOnly, allowedOps, etc.
+```
+
+### CRUD Pattern (lock → modify → unlock)
+
+```typescript
+await http.withStatefulSession(async (session) => {
+  const lockHandle = await lockObject(session, objectUrl);
+  try {
+    await updateSource(session, sourceUrl, source, lockHandle, transport);
+  } finally {
+    await unlockObject(session, objectUrl, lockHandle);
+  }
+});
 ```
 
 ## Testing
 
-### Unit Tests (707 tests)
-- No SAP system required — always run with `npm test`
-- Mock HTTP via `vi.mock('undici', ...)`
-- XML fixtures in `tests/fixtures/xml/`
+### Test Levels
 
-### Integration Tests (on-premise)
+| Level | Command | SAP Required | Count | Config |
+|-------|---------|--------------|-------|--------|
+| Unit | `npm test` | No | 707+ | `vitest.config.ts` |
+| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | ~50 | `vitest.integration.config.ts` |
+| BTP Integration | `npm run test:integration:btp` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 28 | same |
+| E2E | `npm run test:e2e` | Yes (MCP server running) | ~30 | `tests/e2e/vitest.e2e.config.ts` |
+
+### Unit Test Mocking Pattern
+
+All unit tests mock the HTTP layer via undici. Key helper: `tests/helpers/mock-fetch.ts`
+
+```typescript
+// Mock setup (top of test file)
+const mockFetch = vi.fn();
+vi.mock('undici', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('undici')>();
+  return { ...actual, fetch: mockFetch };
+});
+
+// In beforeEach
+vi.resetAllMocks();
+mockFetch.mockResolvedValue(mockResponse(200, 'source code', { 'x-csrf-token': 'T' }));
+
+// Helper to build mock Response objects
+import { mockResponse } from '../../helpers/mock-fetch.js';
+```
+
+### Integration Tests
 - Skipped automatically when `TEST_SAP_URL` is not set
-- Run: `npm run test:integration`
 - Uses `TEST_SAP_*` env vars (falls back to `SAP_*`)
+- `getTestClient()` factory in `tests/integration/helpers.ts` creates pre-configured clients
+- Sequential execution to avoid SAP session conflicts
 
-### BTP ABAP Integration Tests (28 tests, local only)
+### E2E Tests
+- Full MCP protocol tests via `@modelcontextprotocol/sdk` client
+- Connect to running ARC-1 server (`E2E_MCP_URL`, default: `http://localhost:3000/mcp`)
+- `connectClient()` / `callTool()` / `expectToolSuccess()` / `expectToolError()` helpers in `tests/e2e/helpers.ts`
+- `tests/e2e/setup.ts` ensures persistent test objects exist on SAP
+- `tests/e2e/fixtures.ts` defines test objects (ZARC1_TEST_REPORT, ZCL_ARC1_TEST, etc.)
+- 60s test timeout, 120s hook timeout, sequential execution
+
+### BTP ABAP Integration Tests (local only)
 - Skipped automatically when `TEST_BTP_SERVICE_KEY_FILE` is not set
 - Run: `TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp`
 - Tests BTP-specific behavior: OAuth login, restricted ABAP, released APIs, component differences
@@ -305,12 +450,16 @@ Requirements (all already configured):
 - **npm 11.5+**: The publish job installs `npm@latest` because Node 22's bundled npm 10.x doesn't support the OIDC handshake
 - **GitHub Actions**: `id-token: write` permission on the publish job
 
-## Security Notes
+## Security & Architectural Invariants
 
+- **stdout is sacred**: All logging goes to stderr. stdout is exclusively for MCP JSON-RPC protocol messages. Any `console.log` breaks the protocol.
 - Never commit `.env`, `cookies.txt`, or `.arc1.json` (all in `.gitignore`)
-- All logging goes to stderr (stdout reserved for MCP JSON-RPC)
 - Sensitive fields (password, token, cookie) are redacted in logs
-- CSRF tokens are auto-managed by `src/adt/http.ts`
+- CSRF tokens are auto-managed by `src/adt/http.ts` (fetch via HEAD, refresh on 403)
+- **Safety config is the server ceiling** — per-user scopes (JWT) can only restrict further, never expand beyond server config
+- **All ADT endpoints have safety guards** — every `http.get/post/put/delete` call is preceded by `checkOperation()`. No unguarded HTTP calls.
+- **Error types matter**: `AdtApiError` (SAP HTTP error), `AdtSafetyError` (blocked by config), `AdtNetworkError` (connectivity). `intent.ts` formats these with LLM-friendly hints.
+- **Stateful sessions**: Lock→modify→unlock sequences must use `http.withStatefulSession()` to share cookies/CSRF tokens across requests
 
 ## History
 

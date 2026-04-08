@@ -11,20 +11,38 @@
       "description": "Write SAP ABAP objects via MCP"
     },
     {
+      "name": "$XSAPPNAME.data",
+      "description": "Preview named table contents"
+    },
+    {
+      "name": "$XSAPPNAME.sql",
+      "description": "Execute freestyle SQL queries (implies data)"
+    },
+    {
       "name": "$XSAPPNAME.admin",
       "description": "Administrative access to ARC-1"
     }
   ],
   "role-templates": [
     {
-      "name": "MCPReader",
+      "name": "MCPViewer",
       "description": "Read-only access to SAP via ARC-1 MCP",
       "scope-references": ["$XSAPPNAME.read"]
     },
     {
-      "name": "MCPEditor",
+      "name": "MCPDeveloper",
       "description": "Read and write access to SAP via ARC-1 MCP",
       "scope-references": ["$XSAPPNAME.read", "$XSAPPNAME.write"]
+    },
+    {
+      "name": "MCPDataViewer",
+      "description": "Preview named table contents via ARC-1 MCP",
+      "scope-references": ["$XSAPPNAME.data"]
+    },
+    {
+      "name": "MCPSqlUser",
+      "description": "Execute freestyle SQL queries via ARC-1 MCP",
+      "scope-references": ["$XSAPPNAME.data", "$XSAPPNAME.sql"]
     },
     {
       "name": "MCPAdmin",
@@ -32,6 +50,8 @@
       "scope-references": [
         "$XSAPPNAME.read",
         "$XSAPPNAME.write",
+        "$XSAPPNAME.data",
+        "$XSAPPNAME.sql",
         "$XSAPPNAME.admin"
       ]
     }
@@ -40,12 +60,36 @@
     {
       "name": "ARC-1 Viewer",
       "description": "Read-only SAP access via ARC-1 MCP",
-      "role-template-references": ["$XSAPPNAME.MCPReader"]
+      "role-template-references": ["$XSAPPNAME.MCPViewer"]
     },
     {
-      "name": "ARC-1 Editor",
+      "name": "ARC-1 Developer",
       "description": "Read-write SAP access via ARC-1 MCP",
-      "role-template-references": ["$XSAPPNAME.MCPEditor"]
+      "role-template-references": ["$XSAPPNAME.MCPDeveloper"]
+    },
+    {
+      "name": "ARC-1 Data Viewer",
+      "description": "Read-only SAP access with table data preview",
+      "role-template-references": [
+        "$XSAPPNAME.MCPViewer",
+        "$XSAPPNAME.MCPDataViewer"
+      ]
+    },
+    {
+      "name": "ARC-1 Developer + Data",
+      "description": "Developer access with table data preview",
+      "role-template-references": [
+        "$XSAPPNAME.MCPDeveloper",
+        "$XSAPPNAME.MCPDataViewer"
+      ]
+    },
+    {
+      "name": "ARC-1 Developer + SQL",
+      "description": "Developer access with freestyle SQL queries",
+      "role-template-references": [
+        "$XSAPPNAME.MCPDeveloper",
+        "$XSAPPNAME.MCPSqlUser"
+      ]
     },
     {
       "name": "ARC-1 Admin",

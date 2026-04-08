@@ -14,7 +14,7 @@ npm test
 
 ---
 
-## Phase 1: API Key Authentication
+## API Key Setup
 
 ### Unit Tests
 
@@ -88,7 +88,7 @@ curl -s -H "Authorization: bearer test-key-12345" \
 
 ---
 
-## Phase 2: OAuth / JWT Authentication
+## OAuth / JWT Setup
 
 ### Unit Tests
 
@@ -172,7 +172,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ---
 
-## Phase 3: Principal Propagation
+## Principal Propagation Setup
 
 ### Unit Tests
 
@@ -184,7 +184,7 @@ npm test
 
 **Prerequisites:**
 - Phase 2 (OIDC) configured and working
-- SAP system configured with STRUST, CERTRULE, ICM (see [Phase 3 Setup](phase3-principal-propagation-setup.md))
+- SAP system configured with STRUST, CERTRULE, ICM (see [Principal Propagation Setup](principal-propagation-setup.md))
 
 **1. Generate test CA:**
 

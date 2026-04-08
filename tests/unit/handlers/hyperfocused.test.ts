@@ -95,7 +95,6 @@ describe('hyperfocused mode', () => {
     it('returns read scope for read actions', () => {
       expect(getHyperfocusedScope('read')).toBe('read');
       expect(getHyperfocusedScope('search')).toBe('read');
-      expect(getHyperfocusedScope('query')).toBe('read');
       expect(getHyperfocusedScope('context')).toBe('read');
     });
 
@@ -103,10 +102,11 @@ describe('hyperfocused mode', () => {
       expect(getHyperfocusedScope('write')).toBe('write');
       expect(getHyperfocusedScope('activate')).toBe('write');
       expect(getHyperfocusedScope('manage')).toBe('write');
+      expect(getHyperfocusedScope('transport')).toBe('write');
     });
 
-    it('returns admin scope for transport', () => {
-      expect(getHyperfocusedScope('transport')).toBe('admin');
+    it('returns sql scope for query', () => {
+      expect(getHyperfocusedScope('query')).toBe('sql');
     });
   });
 
