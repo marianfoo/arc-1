@@ -58,4 +58,3 @@ These skills assume you have:
 | Skill | Description |
 |---|---|
 | [generate-cds-unit-test](generate-cds-unit-test.md) | Generate ABAP Unit tests for CDS entities using CDS Test Double Framework |
-| [generate-rap-service](generate-rap-service.md) | Generate complete RAP OData UI service from natural language description |

@@ -7,18 +7,17 @@ Implement 5 skills that replicate SAP Joule for Developers (J4D) capabilities us
 Skills to implement:
 1. **explain-abap-code.md** (P0) — Explain ABAP objects, dependencies, and ATC findings
 2. **generate-abap-unit-test.md** (P0) — Generate ABAP Unit tests with dependency analysis and test doubles
-3. **generate-rap-service.md** (P0) — Already written, needs backend support (buildCreateXml templates)
+3. **generate-rap-service.md** (P0) — Generate complete RAP OData UI service from natural language description
 4. **migrate-custom-code.md** (P0) — ATC-driven S/4HANA custom code migration assistant
 5. **generate-rap-logic.md** (P1) — Generate RAP determination/validation implementations
 
-Already done: `generate-cds-unit-test.md` (exists), `generate-rap-service.md` (skill file written).
+Already done: `generate-cds-unit-test.md` (exists).
 
 ## Context
 
 ### Current State
 - ARC-1 has 11 intent-based tools: SAPRead, SAPWrite, SAPActivate, SAPDiagnose, SAPContext, SAPSearch, SAPQuery, SAPNavigate, SAPLint, SAPTransport, SAPManage
 - One existing skill: `generate-cds-unit-test.md`
-- One newly written skill: `generate-rap-service.md` (created but not yet backed by buildCreateXml improvements)
 - `buildCreateXml()` in `src/handlers/intent.ts:697` only has XML templates for PROG, CLAS, INTF, INCL — DDLS/BDEF/SRVD/DDLX use a broken generic fallback
 - Method surgery (`src/context/method-surgery.ts`) supports listMethods, extractMethod, spliceMethod — critical for test generation and RAP logic skills
 - SAPDiagnose supports: syntax check, ABAP Unit tests, ATC checks (with variant param)
@@ -140,7 +139,39 @@ Create the "Custom Code Migration Assistant" skill. This skill runs ATC readines
 - [ ] Copy `skills/migrate-custom-code.md` to `.claude/commands/migrate-custom-code.md`
 - [ ] Run `npm test` — all tests must pass
 
-### Task 4: Create generate-rap-logic.md skill
+### Task 4: Create generate-rap-service.md skill
+
+**Files:**
+- Create: `skills/generate-rap-service.md`
+- Create: `.claude/commands/generate-rap-service.md`
+
+Create the "Generate RAP OData UI Service from Scratch" skill. This skill orchestrates multiple ARC-1 tool calls to create a complete RAP stack (database table, CDS views, behavior definitions, metadata extension, service definition, service binding) from a natural language description. Read `skills/generate-cds-unit-test.md` for format reference.
+
+Key constraints (v1 guardrails matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
+
+- [ ] Write the skill file `skills/generate-rap-service.md` with this structure:
+  - **Input**: Natural language description of the business object (required). Optional: entity name prefix (default: auto-generate Z namespace), package (default: `$TMP`), transport, draft enabled (default: yes on BTP), OData version (default: V4).
+  - **Step 1: Check system capabilities** — `SAPManage(action="features")` to verify RAP/CDS is available and detect BTP vs on-prem. Include a BTP vs on-prem differences table (namespace, language version, draft tables, OData version).
+  - **Step 2: Design the data model** — Based on user description, design the complete artifact stack with naming conventions: `Z<ENTITY>_D` (table), `ZI_<Entity>` (interface view), `ZC_<Entity>` (projection view), `ZC_<Entity>` (DDLX), `ZI_<Entity>` (interface BDEF), `ZC_<Entity>` (projection BDEF), `ZSD_<Entity>` (SRVD), `ZSB_<Entity>_V4` (SRVB), `ZBP_I_<Entity>` (behavior pool). Field design rules: UUID primary key (`sysuuid_x16`), admin fields (created_by/at, last_changed_by/at, local_last_changed_at), business fields from description. Present design to user for confirmation before proceeding.
+  - **Step 3: (Optional) Research RAP patterns** — If mcp-sap-docs available: `search("RAP managed business object CDS behavior definition")`, `search("RAP draft handling total ETag")`, `search("CDS annotation Fiori Elements list report")`.
+  - **Step 4: Create database table** — As CDS table entity via `SAPWrite(action="create", type="DDLS", name="<table>")`. Include complete table entity DDL template with `@AbapCatalog` annotations, client field, UUID key, all business fields, admin fields. Fallback: instruct user to create manually if table entity creation fails.
+  - **Step 5: Create interface CDS view** — `SAPWrite(action="create", type="DDLS", name="ZI_<entity>")`. Include `root view entity` DDL with `@AccessControl`, `@Semantics` annotations for admin fields, `@Semantics.amount.currencyCode` for amounts.
+  - **Step 6: Create interface behavior definition** — `SAPWrite(action="create", type="BDEF", name="ZI_<entity>")`. Two variants: with draft (`managed; with draft; draft table <table>_d; lock master total etag; draft action Resume/Edit/Activate/Discard/Prepare`) and without draft. Include field readonly for UUID + admin fields, `field ( numbering : managed )` for UUID, create/update/delete, and complete field mapping block.
+  - **Step 7: Create projection CDS view** — `SAPWrite(action="create", type="DDLS", name="ZC_<entity>")`. Include `provider contract transactional_query`, `@Metadata.allowExtensions: true`, `@Search.searchable: true` with `@Search.defaultSearchElement` on key business fields.
+  - **Step 8: Create projection behavior definition** — `SAPWrite(action="create", type="BDEF", name="ZC_<entity>")`. Two variants: with draft (`projection; use draft; use action Resume/Edit/Activate/Discard/Prepare`) and without.
+  - **Step 9: Create metadata extension (DDLX)** — `SAPWrite(action="create", type="DDLX", name="ZC_<entity>")`. Include `@Metadata.layer: #CUSTOMER`, `@UI.headerInfo`, `@UI.facet` for identification reference, `@UI.lineItem`/`@UI.identification`/`@UI.selectionField` annotations per field, `@UI.hidden: true` for UUID and admin fields.
+  - **Step 10: Create service definition** — `SAPWrite(action="create", type="SRVD", name="ZSD_<entity>")`. Simple `define service` with `expose` statement.
+  - **Step 11: Batch activate all artifacts** — `SAPActivate(objects=[...])` with all objects in dependency order. Fallback: sequential activation if batch fails. Include syntax check for failing objects.
+  - **Step 12: Create behavior pool class** — `SAPWrite(action="create", type="CLAS", name="ZBP_I_<entity>")`. Minimal abstract class `FOR BEHAVIOR OF <interface_view>`. Activate.
+  - **Step 13: Service binding** — Instruct user to create SRVB manually (ARC-1 cannot create SRVB). Provide step-by-step ADT instructions. Verify with `SAPRead(type="SRVB", name="...")`.
+  - **Step 14: Verify complete service** — Read back key artifacts, run syntax checks, report summary with checklist of created objects and next steps (add validations, value helps, access control).
+  - **Error handling table**: Object already exists, activation error (dependency order), draft table not found, field mapping incomplete, ETag field not found, behavior pool not found, BDEF creation fails (generic XML body), lint blocks write.
+  - **BTP vs on-prem notes**: BTP — Z*/Y* only, ABAP Cloud, V4, draft auto-managed. On-prem — more flexibility, V2 option, explicit draft tables.
+  - **What this skill does NOT do** (v1): No compositions/child entities, no custom actions, no determinations/validations (use generate-rap-logic), no value helps, no access control (DCLS), no unmanaged/abstract BOs.
+- [ ] Copy `skills/generate-rap-service.md` to `.claude/commands/generate-rap-service.md`
+- [ ] Run `npm test` — all tests must pass
+
+### Task 5: Create generate-rap-logic.md skill
 
 **Files:**
 - Create: `skills/generate-rap-logic.md`
@@ -163,7 +194,7 @@ Create the "RAP Business Logic Prediction" skill. This skill reads a behavior de
 - [ ] Copy `skills/generate-rap-logic.md` to `.claude/commands/generate-rap-logic.md`
 - [ ] Run `npm test` — all tests must pass
 
-### Task 5: Update skills README with all new skills
+### Task 6: Update skills README with all new skills
 
 **Files:**
 - Modify: `skills/README.md`
@@ -172,14 +203,13 @@ Update the skills README to list all 6 skills (1 existing + 5 new).
 
 - [ ] Read `skills/README.md` and find the "Available Skills" table. Add entries for all new skills after the existing ones. The table should have these rows:
   - `| [generate-cds-unit-test](generate-cds-unit-test.md) | Generate ABAP Unit tests for CDS entities using CDS Test Double Framework |` (already exists)
-  - `| [generate-rap-service](generate-rap-service.md) | Generate complete RAP OData UI service from natural language description |` (already added in previous commit)
   - `| [explain-abap-code](explain-abap-code.md) | Explain ABAP objects with dependency context and optional ATC analysis |`
   - `| [generate-abap-unit-test](generate-abap-unit-test.md) | Generate ABAP Unit tests for classes with dependency analysis and test doubles |`
   - `| [migrate-custom-code](migrate-custom-code.md) | ATC-driven S/4HANA custom code migration with fix proposals |`
   - `| [generate-rap-logic](generate-rap-logic.md) | Generate RAP determination and validation implementations |`
 - [ ] Run `npm test` — all tests must pass
 
-### Task 6: Add type-specific buildCreateXml templates for DDLS, BDEF, SRVD, DDLX
+### Task 7: Add type-specific buildCreateXml templates for DDLS, BDEF, SRVD, DDLX
 
 **Files:**
 - Modify: `src/handlers/intent.ts`
@@ -206,7 +236,7 @@ The ADT API requires type-specific XML root elements. All follow the same patter
 - [ ] Run `npm test` — all tests must pass
 - [ ] Run `npm run typecheck` — no errors
 
-### Task 7: Improve SAPActivate batch description for RAP stack workflow
+### Task 8: Improve SAPActivate batch description for RAP stack workflow
 
 **Files:**
 - Modify: `src/handlers/tools.ts`
@@ -216,10 +246,10 @@ The SAPActivate tool description already mentions batch activation for RAP stack
 - [ ] In `src/handlers/tools.ts`, find the SAPActivate `objects` property description (line ~385). Update the example array to show a full RAP stack: `[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"DDLS",name:"ZC_TRAVEL"},{type:"BDEF",name:"ZC_TRAVEL"},{type:"DDLX",name:"ZC_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]`
 - [ ] Run `npm test` — all tests must pass
 
-### Task 8: Final verification
+### Task 9: Final verification
 
 **Files:**
-- All modified files from Tasks 1-7
+- All modified files from Tasks 1-8
 
 - [ ] Run full test suite: `npm test` — all tests pass
 - [ ] Run typecheck: `npm run typecheck` — no errors
