@@ -22,7 +22,7 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Data access control** — block table data preview (`--block-data`) or free-form SQL (`--block-free-sql`)
 - **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only
 - **Safety profiles** — preconfigured roles like `--profile viewer`, `developer-data`, or `developer-sql`
-- **All writes blocked by default** — safe defaults out of the box
+- **Writes restricted to `$TMP` by default** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
 ### Authentication
 
@@ -97,7 +97,7 @@ arc1 probes the SAP system at startup and adapts its behavior:
 ## Quick Start
 
 ```bash
-npx arc-1 --url https://your-sap-host:44300 --user YOUR_USER
+npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
 ```
 
 For Docker, BTP deployment, client configuration (Claude Desktop, Claude Code, VS Code, Copilot Studio), and all authentication methods, see the **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)**.

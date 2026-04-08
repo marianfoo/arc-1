@@ -171,7 +171,7 @@ Update all tests to reflect the removal of `allowTransportableEdits`, the new `$
 
 Update all documentation to reflect the simplified safety model, new defaults, and fixed npx examples. Remove all references to `allowTransportableEdits` / `--allow-transportable-edits` / `SAP_ALLOW_TRANSPORTABLE_EDITS`.
 
-- [ ] In `docs/index.md`: fix all npx examples. Change `"args": ["-y", "arc-1"]` to `"args": ["-y", "arc-1@latest"]` in both Claude Desktop (line 65) and Claude Code (line 85) examples. Add `"SAP_CLIENT": "100"` to the env blocks. Add a write access example showing how to enable write access with package restriction:
+- [x] In `docs/index.md`: fix all npx examples. Change `"args": ["-y", "arc-1"]` to `"args": ["-y", "arc-1@latest"]` in both Claude Desktop (line 65) and Claude Code (line 85) examples. Add `"SAP_CLIENT": "100"` to the env blocks. Add a write access example showing how to enable write access with package restriction:
   ```json
   {
     "mcpServers": {
@@ -190,15 +190,15 @@ Update all documentation to reflect the simplified safety model, new defaults, a
   }
   ```
   Add a note explaining: by default, write access is limited to `$TMP` (local objects). To write to custom packages, set `SAP_ALLOWED_PACKAGES` (e.g., `"Z*,$TMP"` for Z-packages, or `"*"` for unrestricted).
-- [ ] In `docs/tools.md`: update SAPWrite section (around line 82-99). Add note about package restriction default. Remove any mention of `--allow-transportable-edits`. Update SAPTransport section (around line 181-195): note it requires `--enable-transports` (remove "or not in read-only mode" condition).
-- [ ] In `docs/authorization.md`: remove all references to `allowTransportableEdits` and `--allow-transportable-edits`. Update the safety config controls section (around lines 145-160). Update profile tables to remove the transport edits column. Explain the new default: writes are restricted to `$TMP` unless `--allowed-packages` is set.
-- [ ] In `docs/security-guide.md`: remove `--allow-transportable-edits` from the safety configuration table (around lines 95-122). Update the profile reference table. Add note about `$TMP` default.
-- [ ] In `docs/setup-guide.md`: remove `--allow-transportable-edits` / `SAP_ALLOW_TRANSPORTABLE_EDITS` from config table (around line 639). Update quick reference. Fix npx examples to use `arc-1@latest`. Add `SAP_CLIENT` to examples.
-- [ ] In `docs/cli-guide.md`: remove `--allow-transportable-edits` references. Update examples.
-- [ ] In `docs/deployment-best-practices.md`: update security recommendations (around lines 195-203). Remove `allowTransportableEdits` references. Note the new safe default.
-- [ ] In `README.md`: fix npx example at line 100 to use `arc-1@latest`. Ensure quick start mentions that writes default to `$TMP`.
-- [ ] In `CLAUDE.md`: remove `SAP_ALLOW_TRANSPORTABLE_EDITS` / `--allow-transportable-edits` from the config table. Update the `allowedPackages` default description from `(all)` to `$TMP`. Update the codebase structure if any files changed. Update the code patterns section if the safety check pattern changed. Update the Key Files table if needed.
-- [ ] Run `npm test` — all tests still pass after doc changes.
+- [x] In `docs/tools.md`: update SAPWrite section (around line 82-99). Add note about package restriction default. Remove any mention of `--allow-transportable-edits`. Update SAPTransport section (around line 181-195): note it requires `--enable-transports` (remove "or not in read-only mode" condition).
+- [x] In `docs/authorization.md`: remove all references to `allowTransportableEdits` and `--allow-transportable-edits`. Update the safety config controls section (around lines 145-160). Update profile tables to remove the transport edits column. Explain the new default: writes are restricted to `$TMP` unless `--allowed-packages` is set.
+- [x] In `docs/security-guide.md`: remove `--allow-transportable-edits` from the safety configuration table (around lines 95-122). Update the profile reference table. Add note about `$TMP` default.
+- [x] In `docs/setup-guide.md`: remove `--allow-transportable-edits` / `SAP_ALLOW_TRANSPORTABLE_EDITS` from config table (around line 639). Update quick reference. Fix npx examples to use `arc-1@latest`. Add `SAP_CLIENT` to examples.
+- [x] In `docs/cli-guide.md`: remove `--allow-transportable-edits` references. Update examples.
+- [x] In `docs/deployment-best-practices.md`: update security recommendations (around lines 195-203). Remove `allowTransportableEdits` references. Note the new safe default.
+- [x] In `README.md`: fix npx example at line 100 to use `arc-1@latest`. Ensure quick start mentions that writes default to `$TMP`.
+- [x] In `CLAUDE.md`: remove `SAP_ALLOW_TRANSPORTABLE_EDITS` / `--allow-transportable-edits` from the config table. Update the `allowedPackages` default description from `(all)` to `$TMP`. Update the codebase structure if any files changed. Update the code patterns section if the safety check pattern changed. Update the Key Files table if needed.
+- [x] Run `npm test` — all tests still pass after doc changes.
 
 ### Task 7: Update roadmap, feature matrix, and skills
 

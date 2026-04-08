@@ -196,7 +196,7 @@ applications:
 
 1. **Use `readOnly=true` for production systems** — prevents any write operations
 2. **Use `blockFreeSQL=true` for sensitive systems** — blocks arbitrary SQL queries
-3. **Use `allowedPackages=Z*,Y*`** — restricts operations to custom code packages
+3. **Use `allowedPackages=Z*,Y*,$TMP`** — restricts operations to custom code packages (default is `$TMP` only — local objects)
 4. **Use `ppStrict=true`** — ensures every request has a user identity (no fallback to service account)
 5. **Deploy separate instances per system** — limits blast radius
 6. **Use XSUAA auth for deployed instances** — proper OAuth 2.0 with scopes (read/write/admin)

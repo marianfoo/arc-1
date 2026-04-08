@@ -94,7 +94,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number |
 
-**Note:** Blocked when `--read-only` is active.
+**Note:** Blocked when `--read-only` is active. By default, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 
 ---
 
@@ -191,7 +191,7 @@ Manage CTS transport requests.
 | `description` | string | No | Description (for create) |
 | `user` | string | No | Filter by user (for list) |
 
-**Note:** Only available when `--enable-transports` or not in `--read-only` mode.
+**Note:** Only available when `--enable-transports` is set.
 
 ---
 
