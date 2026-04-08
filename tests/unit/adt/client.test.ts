@@ -463,7 +463,7 @@ describe('AdtClient', () => {
       expect(metadata.package).toBe('$TMP');
     });
 
-    it('getClassMetadata sends Accept: application/xml header', async () => {
+    it('getClassMetadata uses default Accept header (wildcard)', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue(mockResponse(200, classMetadataXml));
       const client = createClient();
@@ -472,7 +472,8 @@ describe('AdtClient', () => {
         const url = mockFetch.mock.calls[i]?.[0] as string;
         return url.includes('ZCL_EXAMPLE') && !url.includes('/source/main');
       });
-      expect(fetchHeaders(callIdx).Accept).toBe('application/xml');
+      // Default Accept is */* (set by http.ts) — SAP rejects application/xml with 406
+      expect(fetchHeaders(callIdx).Accept).toBe('*/*');
     });
 
     it('getClassStructured fetches metadata + main + all includes', async () => {

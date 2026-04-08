@@ -145,9 +145,7 @@ export class AdtClient {
   /** Get class metadata (description, language, category, etc.) from the object endpoint */
   async getClassMetadata(name: string): Promise<ClassMetadata> {
     checkOperation(this.safety, OperationType.Read, 'GetClassMetadata');
-    const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodeURIComponent(name)}`, {
-      Accept: 'application/xml',
-    });
+    const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodeURIComponent(name)}`);
     return parseClassMetadata(resp.body);
   }
 
