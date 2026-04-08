@@ -104,10 +104,10 @@ Remove the `allowTransportableEdits` field and its associated functions from the
 
 Remove the `checkTransportableEdit()` calls from CRUD operations and add the missing `checkPackage()` enforcement. Currently `checkPackage()` exists in `safety.ts:148` but is never called — this is a safety bug.
 
-- [ ] In `src/adt/crud.ts`: remove `import { checkTransportableEdit }` (line 14). Remove the `if (transport) checkTransportableEdit(...)` call in `createObject()` (line 61) and `safeUpdateSource()` (line 81).
-- [ ] In `src/handlers/intent.ts`: in `handleSAPWrite()`, add `checkPackage()` enforcement for the `create` action. After `const pkg = String(args.package ?? '$TMP')` at line 933, add: `checkPackage(client.safety, pkg)`. Import `checkPackage` from `../adt/safety.js`. This validates the target package against `allowedPackages` before creating the object.
-- [ ] Ensure the error message from `checkPackage()` (in safety.ts) is LLM-friendly. The current message at line 150-152 says: `Operations on package '${pkg}' are blocked by safety configuration (allowed: ${JSON.stringify(config.allowedPackages)})`. This is good — it tells the LLM which packages ARE allowed.
-- [ ] Run `npm test` — verify no regressions from CRUD changes.
+- [x] In `src/adt/crud.ts`: remove `import { checkTransportableEdit }` (line 14). Remove the `if (transport) checkTransportableEdit(...)` call in `createObject()` (line 61) and `safeUpdateSource()` (line 81).
+- [x] In `src/handlers/intent.ts`: in `handleSAPWrite()`, add `checkPackage()` enforcement for the `create` action. After `const pkg = String(args.package ?? '$TMP')` at line 933, add: `checkPackage(client.safety, pkg)`. Import `checkPackage` from `../adt/safety.js`. This validates the target package against `allowedPackages` before creating the object.
+- [x] Ensure the error message from `checkPackage()` (in safety.ts) is LLM-friendly. The current message at line 150-152 says: `Operations on package '${pkg}' are blocked by safety configuration (allowed: ${JSON.stringify(config.allowedPackages)})`. This is good — it tells the LLM which packages ARE allowed.
+- [x] Run `npm test` — verify no regressions from CRUD changes.
 
 ### Task 3: Update config parsing and profiles
 

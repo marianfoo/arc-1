@@ -33,7 +33,7 @@ import {
 } from '../adt/diagnostics.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
 import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
-import { isOperationAllowed, OperationType } from '../adt/safety.js';
+import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
@@ -931,6 +931,7 @@ async function handleSAPWrite(
     }
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
+      checkPackage(client.safety, pkg);
       const description = String(args.description ?? name);
 
       // Build type-specific creation XML body.
