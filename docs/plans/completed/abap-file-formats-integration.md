@@ -222,11 +222,11 @@ This task updates existing Claude Code skills to take advantage of the new AFF i
 **Files:**
 - (none — verification only)
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Verify structured class read works: grep for `getClassStructured` in source and tests, confirm it's wired end-to-end from tool definition through handler to client
-- [ ] Verify batch create works: grep for `batch_create` in source and tests, confirm it's wired end-to-end
-- [ ] Verify AFF validator works: grep for `validateAffMetadata` in source and tests, confirm it's called in both create and batch_create paths
-- [ ] Verify documentation is consistent: check that `CLAUDE.md` codebase tree includes `src/aff/`, `docs/tools.md` documents all new parameters, `docs/roadmap.md` has AFF entries
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Verify structured class read works: grep for `getClassStructured` in source and tests, confirm it's wired end-to-end from tool definition through handler to client
+- [x] Verify batch create works: grep for `batch_create` in source and tests, confirm it's wired end-to-end
+- [x] Verify AFF validator works: grep for `validateAffMetadata` in source and tests, confirm it's called in both create and batch_create paths
+- [x] Verify documentation is consistent: check that `CLAUDE.md` codebase tree includes `src/aff/`, `docs/tools.md` documents all new parameters, `docs/roadmap.md` has AFF entries
+- [x] Move this plan to `docs/plans/completed/`
