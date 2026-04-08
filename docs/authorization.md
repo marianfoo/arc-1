@@ -180,14 +180,14 @@ The server always wins. If `blockFreeSQL=true` is set, no user can run freestyle
 
 Instead of setting individual flags, you can use `--profile` (or `ARC1_PROFILE`) to apply a named preset:
 
-| Profile | Read-only | Block Data | Block SQL | Transports | Use Case |
-|---------|-----------|------------|-----------|------------|----------|
-| `viewer` | Yes | Yes | Yes | No | Read-only access to source code |
-| `viewer-data` | Yes | No | Yes | No | Source code + table preview |
-| `viewer-sql` | Yes | No | No | No | Source code + table preview + SQL |
-| `developer` | No | Yes | Yes | Yes | Full development, no data access |
-| `developer-data` | No | No | Yes | Yes | Full development + table preview |
-| `developer-sql` | No | No | No | Yes | Full development + SQL |
+| Profile | Read-only | Block Data | Block SQL | Transports | Packages | Use Case |
+|---------|-----------|------------|-----------|------------|----------|----------|
+| `viewer` | Yes | Yes | Yes | No | — | Read-only access to source code |
+| `viewer-data` | Yes | No | Yes | No | — | Source code + table preview |
+| `viewer-sql` | Yes | No | No | No | — | Source code + table preview + SQL |
+| `developer` | No | Yes | Yes | Yes | `$TMP` | Full development, no data access |
+| `developer-data` | No | No | Yes | Yes | `$TMP` | Full development + table preview |
+| `developer-sql` | No | No | No | Yes | `$TMP` | Full development + SQL |
 
 Individual flags override profile defaults: `--profile viewer --read-only=false` disables read-only even though the viewer profile normally enables it.
 

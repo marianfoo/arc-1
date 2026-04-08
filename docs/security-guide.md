@@ -109,14 +109,14 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 
 Profiles are safety presets that combine multiple flags. Use `--profile` to apply one:
 
-| Profile | Read-only | Block Data | Block SQL | Transports | Scopes Granted |
-|---------|-----------|------------|-----------|------------|----------------|
-| `viewer` | Yes | Yes | Yes | No | `read` |
-| `viewer-data` | Yes | No | Yes | No | `read`, `data` |
-| `viewer-sql` | Yes | No | No | No | `read`, `data`, `sql` |
-| `developer` | No | Yes | Yes | Yes | `read`, `write` |
-| `developer-data` | No | No | Yes | Yes | `read`, `write`, `data` |
-| `developer-sql` | No | No | No | Yes | `read`, `write`, `data`, `sql` |
+| Profile | Read-only | Block Data | Block SQL | Transports | Packages | Scopes Granted |
+|---------|-----------|------------|-----------|------------|----------|----------------|
+| `viewer` | Yes | Yes | Yes | No | — | `read` |
+| `viewer-data` | Yes | No | Yes | No | — | `read`, `data` |
+| `viewer-sql` | Yes | No | No | No | — | `read`, `data`, `sql` |
+| `developer` | No | Yes | Yes | Yes | `$TMP` | `read`, `write` |
+| `developer-data` | No | No | Yes | Yes | `$TMP` | `read`, `write`, `data` |
+| `developer-sql` | No | No | No | Yes | `$TMP` | `read`, `write`, `data`, `sql` |
 
 Individual flags override profile defaults. The server safety config is always the ceiling -- per-user scopes from JWT tokens can only restrict further.
 

@@ -336,7 +336,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       const pkgList = config.allowedPackages.join(', ');
       sapWriteDesc +=
         config.allowedPackages.length === 1
-          ? ` Write access is restricted to package: ${pkgList}. Objects in other packages cannot be created or modified.`
+          ? ` Write access is restricted to package: ${pkgList}. Objects in other packages cannot be created.`
           : ` Write access is restricted to packages: ${pkgList}.`;
     }
     tools.push({

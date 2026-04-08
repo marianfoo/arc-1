@@ -69,6 +69,7 @@ npm run dev
 | `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
 | `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
 | `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict to packages (default: `$TMP`; supports wildcards: "Z*") |
+| `SAP_ENABLE_TRANSPORTS` / `--enable-transports` | Enable CTS transport management (default: false) |
 | `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
 | `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`) |
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
