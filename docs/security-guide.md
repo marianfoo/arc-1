@@ -248,7 +248,7 @@ When ARC-1 runs with `--transport http-streamable`, the default bind address is 
 ### SAP Connection
 
 - Use HTTPS for the SAP connection (`SAP_URL=https://...`) whenever possible.
-- Avoid `--insecure` / `SAP_INSECURE=true` in production. If SAP uses an internal CA, provide it via `--ca-cert` instead.
+- Avoid `--insecure` / `SAP_INSECURE=true` in production. If SAP uses an internal CA, configure it at the OS/Node.js level (`NODE_EXTRA_CA_CERTS` environment variable).
 - BTP deployments route through Cloud Connector, which handles TLS termination to the on-premise SAP system.
 
 ---
