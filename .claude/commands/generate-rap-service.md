@@ -639,7 +639,7 @@ Created artifacts:
   [ ] Service binding published (publish after creating — see Step 13)
 
 Next steps:
-  - Create the service binding and publish it
+  - Create the service binding and publish it (use SAPActivate with action publish_srvb)
   - Add validations and determinations (use generate-rap-logic skill)
   - Add value helps for business fields
   - Add access control (DCLS)

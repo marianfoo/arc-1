@@ -1630,6 +1630,146 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('Successfully activated 2 objects');
     });
 
+    it('publishes a service binding', async () => {
+      // Mock: first call is CSRF HEAD, second is the publish POST, third is getSrvb readback
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>Published</SHORT_TEXT><LONG_TEXT></LONG_TEXT></DATA></asx:values></asx:abap>',
+            { 'x-csrf-token': 'T' },
+          ),
+        )
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<serviceBinding xmlns="http://www.sap.com/adt/ddic/ServiceBindings" name="ZSB_TRAVEL_O4" published="true"></serviceBinding>',
+            { 'x-csrf-token': 'T' },
+          ),
+        );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_TRAVEL_O4',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully published service binding ZSB_TRAVEL_O4');
+
+      // Verify wire-level: correct endpoint and body sent
+      const publishCall = mockFetch.mock.calls[1];
+      const publishUrl = String(publishCall[0]);
+      expect(publishUrl).toContain('/sap/bc/adt/businessservices/odatav2/publishjobs');
+      expect(publishUrl).toContain('servicename=ZSB_TRAVEL_O4');
+      expect(publishUrl).toContain('serviceversion=0001');
+      const publishOpts = publishCall[1] as Record<string, unknown>;
+      expect(publishOpts.method).toBe('POST');
+      expect(String(publishOpts.body)).toContain('adtcore:name="ZSB_TRAVEL_O4"');
+    });
+
+    it('returns error when publish_srvb fails', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>ERROR</SEVERITY><SHORT_TEXT>Binding not found</SHORT_TEXT><LONG_TEXT>Details</LONG_TEXT></DATA></asx:values></asx:abap>',
+            { 'x-csrf-token': 'T' },
+          ),
+        );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_MISSING',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Failed to publish service binding ZSB_MISSING');
+    });
+
+    it('handles UNKNOWN severity from unparseable publish response', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(mockResponse(200, '<unexpected>xml format</unexpected>', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<serviceBinding xmlns="http://www.sap.com/adt/ddic/ServiceBindings" name="ZSB_TEST" published="true"></serviceBinding>',
+            { 'x-csrf-token': 'T' },
+          ),
+        );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_TEST',
+      });
+      // UNKNOWN severity should produce a cautious message, not "Successfully published"
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('could not be fully parsed');
+    });
+
+    it('returns error when publish_srvb called without name', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Missing required "name"');
+    });
+
+    it('returns error when publish response is OK but readback shows unpublished', async () => {
+      // Simulate: SAP returns SEVERITY=OK but the SRVB readback still shows published=false
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>Published</SHORT_TEXT><LONG_TEXT></LONG_TEXT></DATA></asx:values></asx:abap>',
+            { 'x-csrf-token': 'T' },
+          ),
+        )
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<serviceBinding xmlns="http://www.sap.com/adt/ddic/ServiceBindings" name="ZSB_TRAVEL_O4" published="false"></serviceBinding>',
+            { 'x-csrf-token': 'T' },
+          ),
+        );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_TRAVEL_O4',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('still unpublished');
+    });
+
+    it('unpublishes a service binding', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>Unpublished</SHORT_TEXT><LONG_TEXT></LONG_TEXT></DATA></asx:values></asx:abap>',
+            { 'x-csrf-token': 'T' },
+          ),
+        )
+        // getSrvb readback: return unpublished SRVB metadata
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            '<serviceBinding xmlns="http://www.sap.com/adt/ddic/ServiceBindings" name="ZSB_TRAVEL_O4" published="false"></serviceBinding>',
+            { 'x-csrf-token': 'T' },
+          ),
+        );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'unpublish_srvb',
+        name: 'ZSB_TRAVEL_O4',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully unpublished service binding ZSB_TRAVEL_O4');
+
+      // Verify wire-level: correct endpoint for unpublish
+      const unpublishCall = mockFetch.mock.calls[1];
+      const unpublishUrl = String(unpublishCall[0]);
+      expect(unpublishUrl).toContain('/sap/bc/adt/businessservices/odatav2/unpublishjobs');
+      expect(unpublishUrl).toContain('servicename=ZSB_TRAVEL_O4');
+    });
+
     it('activates DDIC types with correct object URLs in XML body', async () => {
       // Activate STRU — the object URL should appear in the activation XML body
       await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
@@ -1673,7 +1813,7 @@ ENDCLASS.`;
       mockFetch
         .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF fetch for publish
         .mockResolvedValueOnce(mockResponse(200, publishOkXml, {})) // POST publishjobs
-        .mockResolvedValueOnce(mockResponse(200, '<serviceBinding />', {})); // GET SRVB readback
+        .mockResolvedValueOnce(mockResponse(200, '<serviceBinding published="true" bindingCreated="true" />', {})); // GET SRVB readback
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         action: 'publish_srvb',
         name: 'ZSB_BOOKING_V4',

@@ -576,6 +576,7 @@ ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
 6. **Service Definition**: `ZSD_<ENTITY>`
 7. **Finish** and **Activate**
 
+
 After the service binding is created and activated, publish it:
 
 ```

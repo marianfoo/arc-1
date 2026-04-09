@@ -95,11 +95,35 @@ export interface PublishResult {
   longText: string;
 }
 
+function findDeepValue(obj: unknown, key: string): unknown {
+  if (!obj || typeof obj !== 'object') return undefined;
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findDeepValue(item, key);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  if (key in record) return record[key];
+  for (const val of Object.values(record)) {
+    const found = findDeepValue(val, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 function parsePublishResponse(xml: string): PublishResult {
-  const severity = xml.match(/<SEVERITY>([^<]*)<\/SEVERITY>/)?.[1] ?? 'UNKNOWN';
-  const shortText = xml.match(/<SHORT_TEXT>([^<]*)<\/SHORT_TEXT>/)?.[1] ?? '';
-  const longText = xml.match(/<LONG_TEXT>([^<]*)<\/LONG_TEXT>/)?.[1] ?? '';
-  return { severity, shortText, longText };
+  if (!xml.trim()) return { severity: 'OK', shortText: '', longText: '' };
+  const parsed = parseXml(xml);
+  const severity = findDeepValue(parsed, 'SEVERITY');
+  const shortText = findDeepValue(parsed, 'SHORT_TEXT');
+  const longText = findDeepValue(parsed, 'LONG_TEXT');
+  return {
+    severity: severity != null ? String(severity) : 'UNKNOWN',
+    shortText: shortText != null ? String(shortText) : '',
+    longText: longText != null ? String(longText) : '',
+  };
 }
 
 function publishBody(name: string): string {
@@ -285,12 +309,18 @@ function parseUnitTestResults(xml: string): UnitTestResult[] {
   for (const tc of testClasses) {
     const className = String(tc['@_name'] ?? '');
     const uri = String(tc['@_uri'] ?? '');
-    // Extract program name from URI: .../classes/ZCL_TEST/... or .../programs/ZTEST/...
+    // Extract program name from URI:
+    //   classes: /sap/bc/adt/oo/classes/ZCL_TEST/...
+    //   programs: /sap/bc/adt/programs/programs/ZTEST/...  (note: "programs" appears twice)
     const uriParts = uri.split('/');
     let program = '';
     for (let i = 0; i < uriParts.length - 1; i++) {
-      if (uriParts[i] === 'classes' || uriParts[i] === 'programs') {
+      if (uriParts[i] === 'classes') {
         program = uriParts[i + 1] ?? '';
+        break;
+      }
+      if (uriParts[i] === 'programs' && uriParts[i + 1] === 'programs' && i + 2 < uriParts.length) {
+        program = uriParts[i + 2] ?? '';
         break;
       }
     }

@@ -1379,8 +1379,29 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     try {
       srvbInfo = await client.getSrvb(name);
     } catch {
+      if (result.severity === 'UNKNOWN') {
+        return errorResult(
+          `Publish response for ${name} could not be parsed and readback failed — use SAPRead to verify publish status.`,
+        );
+      }
       return textResult(
         `Successfully published service binding ${name} (readback of binding metadata failed — use SAPRead to verify)`,
+      );
+    }
+    // Verify the published flag from the SRVB readback
+    try {
+      const srvbData = JSON.parse(srvbInfo);
+      if (srvbData.published === false) {
+        return errorResult(
+          `Publish of service binding ${name} may have failed — binding is still unpublished.\n\n${srvbInfo}`,
+        );
+      }
+    } catch {
+      // If we can't parse the readback JSON, fall through — better to return what we have
+    }
+    if (result.severity === 'UNKNOWN') {
+      return textResult(
+        `Publish request for ${name} completed but response could not be fully parsed. Verify status below:\n\n${srvbInfo}`,
       );
     }
     return textResult(`Successfully published service binding ${name}.\n\n${srvbInfo}`);
@@ -1397,7 +1418,31 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
         `Failed to unpublish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,
       );
     }
-    return textResult(`Successfully unpublished service binding ${name}.`);
+    let srvbInfo: string | undefined;
+    try {
+      srvbInfo = await client.getSrvb(name);
+    } catch {
+      // Readback failed — fall through with what we have
+    }
+    // Verify the published flag from the SRVB readback
+    if (srvbInfo) {
+      try {
+        const srvbData = JSON.parse(srvbInfo);
+        if (srvbData.published === true) {
+          return errorResult(
+            `Unpublish of service binding ${name} may have failed — binding is still published.\n\n${srvbInfo}`,
+          );
+        }
+      } catch {
+        // If we can't parse the readback JSON, fall through
+      }
+    }
+    if (result.severity === 'UNKNOWN') {
+      return textResult(
+        `Unpublish request for ${name} completed but response could not be fully parsed.${srvbInfo ? ` Verify status below:\n\n${srvbInfo}` : ' Use SAPRead to verify status.'}`,
+      );
+    }
+    return textResult(`Successfully unpublished service binding ${name}.${srvbInfo ? `\n\n${srvbInfo}` : ''}`);
   }
 
   // Batch activation: multiple objects at once (for RAP stacks etc.)
