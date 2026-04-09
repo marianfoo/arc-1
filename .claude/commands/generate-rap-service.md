@@ -2,6 +2,8 @@
 
 Generate a complete RAP OData UI service from a natural language description of a business object. Creates the full artifact stack: database table, CDS views, behavior definitions, metadata extension, service definition, and behavior pool class.
 
+This is the **"vibe code"** mode — starts creating immediately with sensible defaults. For production-quality services that need deep system research, existing code analysis, architecture decisions, and user-approved plans first, use `generate-rap-service-researched` instead.
+
 This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
 **v1 Guardrails** (matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
@@ -596,9 +598,14 @@ ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
 5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
 6. **Service Definition**: `ZSD_<ENTITY>`
 7. **Finish** and **Activate**
-8. Click **Publish** to register the service
 
-After publishing, verify with:
+After the service binding is created and activated, publish it:
+
+```
+SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
+```
+
+Then verify the publish status and service URL:
 ```
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
@@ -629,6 +636,7 @@ Created artifacts:
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
   [ ] Service binding: ZSB_<Entity>_V4 (create manually — see Step 13)
+  [x] Service binding published
 
 Next steps:
   - Create the service binding and publish it
