@@ -204,26 +204,52 @@ describe('DevTools', () => {
   // ─── publishServiceBinding ─────────────────────────────────────────
 
   describe('publishServiceBinding', () => {
-    it('sends POST with action=publish to correct endpoint', async () => {
-      const http = mockHttp('<response/>');
-      await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_BOOKING_V4');
+    const okResponse =
+      '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>published locally</SHORT_TEXT><LONG_TEXT/></DATA></asx:values></asx:abap>';
+
+    it('sends POST to publishjobs endpoint with objectReferences body', async () => {
+      const http = mockHttp(okResponse);
+      const result = await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_BOOKING_V4');
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/businessservices/bindings/ZSB_BOOKING_V4?action=publish',
-        '',
+        '/sap/bc/adt/businessservices/odatav2/publishjobs?servicename=ZSB_BOOKING_V4&serviceversion=0001',
+        expect.stringContaining('adtcore:objectReference adtcore:name="ZSB_BOOKING_V4"'),
         'application/xml',
-        expect.objectContaining({ Accept: 'application/xml' }),
+        expect.objectContaining({ Accept: 'application/*' }),
       );
+      expect(result.severity).toBe('OK');
+      expect(result.shortText).toBe('published locally');
     });
 
     it('encodes the service binding name in the URL', async () => {
-      const http = mockHttp('<response/>');
-      await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB WITH SPACES');
+      const http = mockHttp(okResponse);
+      await publishServiceBinding(http, unrestrictedSafetyConfig(), '/DMO/UI_FLIGHT_R_V2');
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/businessservices/bindings/ZSB%20WITH%20SPACES?action=publish',
-        '',
+        '/sap/bc/adt/businessservices/odatav2/publishjobs?servicename=%2FDMO%2FUI_FLIGHT_R_V2&serviceversion=0001',
+        expect.any(String),
         'application/xml',
         expect.any(Object),
       );
+    });
+
+    it('passes custom service version', async () => {
+      const http = mockHttp(okResponse);
+      await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_TEST', '0002');
+      expect(http.post).toHaveBeenCalledWith(
+        expect.stringContaining('serviceversion=0002'),
+        expect.any(String),
+        'application/xml',
+        expect.any(Object),
+      );
+    });
+
+    it('parses error responses', async () => {
+      const errorXml =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>ERROR</SEVERITY><SHORT_TEXT>Activating failed</SHORT_TEXT><LONG_TEXT>TADIR check failed</LONG_TEXT></DATA></asx:values></asx:abap>';
+      const http = mockHttp(errorXml);
+      const result = await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_TEST');
+      expect(result.severity).toBe('ERROR');
+      expect(result.shortText).toBe('Activating failed');
+      expect(result.longText).toBe('TADIR check failed');
     });
 
     it('is blocked in read-only mode', async () => {
@@ -236,23 +262,28 @@ describe('DevTools', () => {
   // ─── unpublishServiceBinding ──────────────────────────────────────
 
   describe('unpublishServiceBinding', () => {
-    it('sends POST with action=unpublish to correct endpoint', async () => {
-      const http = mockHttp('<response/>');
-      await unpublishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_BOOKING_V4');
+    const okResponse =
+      '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>un-published locally</SHORT_TEXT><LONG_TEXT/></DATA></asx:values></asx:abap>';
+
+    it('sends POST to unpublishjobs endpoint with objectReferences body', async () => {
+      const http = mockHttp(okResponse);
+      const result = await unpublishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_BOOKING_V4');
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/businessservices/bindings/ZSB_BOOKING_V4?action=unpublish',
-        '',
+        '/sap/bc/adt/businessservices/odatav2/unpublishjobs?servicename=ZSB_BOOKING_V4&serviceversion=0001',
+        expect.stringContaining('adtcore:objectReference adtcore:name="ZSB_BOOKING_V4"'),
         'application/xml',
-        expect.objectContaining({ Accept: 'application/xml' }),
+        expect.objectContaining({ Accept: 'application/*' }),
       );
+      expect(result.severity).toBe('OK');
+      expect(result.shortText).toBe('un-published locally');
     });
 
     it('encodes the service binding name in the URL', async () => {
-      const http = mockHttp('<response/>');
-      await unpublishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB WITH SPACES');
+      const http = mockHttp(okResponse);
+      await unpublishServiceBinding(http, unrestrictedSafetyConfig(), '/DMO/UI_FLIGHT_R_V2');
       expect(http.post).toHaveBeenCalledWith(
-        '/sap/bc/adt/businessservices/bindings/ZSB%20WITH%20SPACES?action=unpublish',
-        '',
+        '/sap/bc/adt/businessservices/odatav2/unpublishjobs?servicename=%2FDMO%2FUI_FLIGHT_R_V2&serviceversion=0001',
+        expect.any(String),
         'application/xml',
         expect.any(Object),
       );

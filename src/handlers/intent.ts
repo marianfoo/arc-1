@@ -1262,13 +1262,19 @@ function runPreWriteLint(source: string, type: string, name: string, config: Ser
 async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const action = String(args.action ?? 'activate');
   const name = String(args.name ?? '');
+  const version = String(args.version ?? '0001');
 
   // Publish service binding
   if (action === 'publish_srvb') {
     if (!name) {
       return errorResult('Missing required "name" parameter for publish_srvb action.');
     }
-    await publishServiceBinding(client.http, client.safety, name);
+    const result = await publishServiceBinding(client.http, client.safety, name, version);
+    if (result.severity === 'ERROR') {
+      return errorResult(
+        `Failed to publish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,
+      );
+    }
     let srvbInfo: string;
     try {
       srvbInfo = await client.getSrvb(name);
@@ -1285,7 +1291,12 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     if (!name) {
       return errorResult('Missing required "name" parameter for unpublish_srvb action.');
     }
-    await unpublishServiceBinding(client.http, client.safety, name);
+    const result = await unpublishServiceBinding(client.http, client.safety, name, version);
+    if (result.severity === 'ERROR') {
+      return errorResult(
+        `Failed to unpublish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,
+      );
+    }
     return textResult(`Successfully unpublished service binding ${name}.`);
   }
 
