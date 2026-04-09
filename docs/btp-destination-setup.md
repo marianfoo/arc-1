@@ -442,116 +442,16 @@ If PP isn't mapping to the correct SAP user:
 
 ## Cloud Connector URL Path Reference
 
-ARC-1 calls SAP ADT REST endpoints under `/sap/bc/adt/` and one OData service under `/sap/opu/`. When configuring Cloud Connector resources, you can either allow everything (`/` with all sub-paths) or lock down to only the paths ARC-1 actually needs.
+ARC-1 uses two URL path prefixes. Add both as resources with **Path and all sub-paths** in the Cloud Connector:
 
-> **Applies to both system mappings** — if you use a dual-destination setup (HTTP + HTTPS for PP), both mappings need the same resource paths.
+| Resource | Sub-Paths | Purpose |
+|----------|-----------|---------|
+| `/sap/bc/adt/` | Yes | All ADT operations (source code, search, write, activate, tests, diagnostics, transports) |
+| `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/` | Yes | UI5 ABAP Repository OData Service — query deployed BSP/UI5 app metadata |
 
-### ADT Core (always required)
+> **Note:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/` is the only path outside `/sap/bc/adt/`. It uses the same OData V2 service as SAP Business Application Studio and `@sap-ux/deploy-tooling`.
 
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/core/discovery` | No | CSRF token fetch, system discovery |
-| `/sap/bc/adt/system/components` | No | SAP component/version detection |
-
-### Source Code & Metadata (SAPRead)
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/programs/programs` | Yes | Programs (PROG) |
-| `/sap/bc/adt/programs/includes` | Yes | Includes (INCL) |
-| `/sap/bc/adt/oo/classes` | Yes | Classes (CLAS) — source, includes, methods |
-| `/sap/bc/adt/oo/interfaces` | Yes | Interfaces (INTF) |
-| `/sap/bc/adt/functions/groups` | Yes | Function groups & modules (FUGR, FUNC) |
-| `/sap/bc/adt/ddic/ddl/sources` | Yes | CDS views (DDLS) |
-| `/sap/bc/adt/ddic/ddlx/sources` | Yes | Metadata extensions (DDLX) |
-| `/sap/bc/adt/ddic/tables` | Yes | Database tables (TABL) |
-| `/sap/bc/adt/ddic/views` | Yes | Database views (VIEW) |
-| `/sap/bc/adt/ddic/structures` | Yes | DDIC structures (STRU) |
-| `/sap/bc/adt/ddic/domains` | Yes | Domains (DOMA) |
-| `/sap/bc/adt/ddic/dataelements` | Yes | Data elements (DTEL) |
-| `/sap/bc/adt/ddic/srvd/sources` | Yes | Service definitions (SRVD) |
-| `/sap/bc/adt/bo/behaviordefinitions` | Yes | Behavior definitions (BDEF) |
-| `/sap/bc/adt/businessservices/bindings` | Yes | Service bindings (SRVB) |
-| `/sap/bc/adt/vit/wb/object_type/trant` | Yes | Transaction codes (TRAN) |
-| `/sap/bc/adt/msg/messages` | Yes | Message classes |
-| `/sap/bc/adt/repository/nodestructure` | No | Package contents (DEVC) |
-
-### Search & Code Intelligence (SAPSearch, SAPNavigate)
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/repository/informationsystem` | Yes | Object search, text search, where-used |
-| `/sap/bc/adt/navigation/target` | No | Go-to-definition |
-| `/sap/bc/adt/abapsource/codecompletion/proposals` | No | Code completion |
-
-### Write & Activate (SAPWrite, SAPActivate)
-
-Only needed if ARC-1 is **not** in read-only mode (`--read-only=false`):
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/activation` | No | Activate ABAP objects |
-| `/sap/bc/adt/checkruns` | No | Syntax check |
-| `/sap/bc/adt/businessservices/odatav2/publishjobs` | No | Publish OData service binding |
-| `/sap/bc/adt/businessservices/odatav2/unpublishjobs` | No | Unpublish OData service binding |
-
-### Data Access (SAPQuery)
-
-Only needed if data access is enabled:
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/datapreview/ddic` | No | Named table preview |
-| `/sap/bc/adt/datapreview/freestyle` | No | Freestyle SQL |
-
-### Testing & Diagnostics (SAPDiagnose)
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/abapunit/testruns` | No | ABAP Unit tests |
-| `/sap/bc/adt/atc/runs` | No | ATC check runs |
-| `/sap/bc/adt/atc/worklists` | Yes | ATC results |
-| `/sap/bc/adt/runtime/dumps` | No | List short dumps (ST22) |
-| `/sap/bc/adt/runtime/dump` | Yes | Dump details |
-| `/sap/bc/adt/runtime/traces/abaptraces` | Yes | Profiler traces |
-
-### Transport Management (SAPTransport)
-
-Only needed if transports are enabled (`--enable-transports=true`):
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/cts/transportrequests` | Yes | List, create, release transports |
-
-### UI5/Fiori Applications (SAPRead type=BSP, BSP_DEPLOY)
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/filestore/ui5-bsp` | Yes | BSP app structure, file content |
-| `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` | Yes | UI5 ABAP Repository OData Service (BSP_DEPLOY) |
-
-> **Note:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` is the only path outside `/sap/bc/adt/`. This is the same OData V2 service used by SAP Business Application Studio and `@sap-ux/deploy-tooling` for UI5 app deployment queries.
-
-### Feature Probes (startup & SAPManage)
-
-These paths are probed via HEAD to detect optional features:
-
-| Resource Path | Sub-Paths | Purpose |
-|---------------|-----------|---------|
-| `/sap/bc/adt/debugger/amdp` | No | AMDP debugging detection |
-| `/sap/bc/adt/abapgit/repos` | No | abapGit detection |
-| `/sap/bc/adt/ddic/sysinfo/hanainfo` | No | HANA database detection |
-
-### Recommended Quick Configurations
-
-**Minimal (2 resources, covers everything):**
-
-| Resource | Sub-Paths |
-|----------|-----------|
-| `/sap/bc/adt/` | Yes |
-| `/sap/opu/` | Yes |
-
-**Read-only (no write paths needed):** Use the tables above but skip the "Write & Activate", "Data Access", and "Transport Management" sections.
+> If you use a dual-destination setup (HTTP + HTTPS for PP), both system mappings need the same resource paths.
 
 ---
 
