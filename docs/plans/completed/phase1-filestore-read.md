@@ -96,11 +96,11 @@ Add three methods to the `AdtClient` class for BSP read operations. Place them a
 
 Expose BSP operations via the existing SAPRead tool.
 
-- [ ] Add `'BSP'` to `SAPREAD_TYPES_ONPREM` array at `src/handlers/schemas.ts:17` and `SAPREAD_TYPES_BTP` array at line ~45
-- [ ] Update SAPRead description strings in `src/handlers/tools.ts` (both `SAPREAD_DESC_ONPREM` at line ~87 and `SAPREAD_DESC_BTP` at line ~90) to include: `BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file)`
-- [ ] Add BSP case in `handleSAPRead` at `src/handlers/intent.ts` (near line ~483, after the SRVB case). Logic: if no `name` → `client.listBspApps(args.name)` (search); if `name` without `include` → `client.getBspAppStructure(name)`; if `name` with `include` that has an extension (contains `.`) → `client.getBspFileContent(name, include)`; otherwise → `client.getBspAppStructure(name, '/' + include)`
-- [ ] Add handler unit tests (~5 tests) in `tests/unit/handlers/intent.test.ts`: list BSP apps, browse app structure, browse subfolder, read file content, feature gate (should error or fallback when ui5 feature unavailable)
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `'BSP'` to `SAPREAD_TYPES_ONPREM` array at `src/handlers/schemas.ts:17` and `SAPREAD_TYPES_BTP` array at line ~45
+- [x] Update SAPRead description strings in `src/handlers/tools.ts` (both `SAPREAD_DESC_ONPREM` at line ~87 and `SAPREAD_DESC_BTP` at line ~90) to include: `BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file)`
+- [x] Add BSP case in `handleSAPRead` at `src/handlers/intent.ts` (near line ~483, after the SRVB case). Logic: if no `name` → `client.listBspApps(args.name)` (search); if `name` without `include` → `client.getBspAppStructure(name)`; if `name` with `include` that has an extension (contains `.`) → `client.getBspFileContent(name, include)`; otherwise → `client.getBspAppStructure(name, '/' + include)`
+- [x] Add handler unit tests (~5 tests) in `tests/unit/handlers/intent.test.ts`: list BSP apps, browse app structure, browse subfolder, read file content, feature gate (should error or fallback when ui5 feature unavailable)
+- [x] Run `npm test` — all tests must pass
 
 ### Task 4: Final verification
 

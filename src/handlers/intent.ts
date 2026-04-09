@@ -573,9 +573,26 @@ async function handleSAPRead(
       return textResult(await client.getTextElements(name));
     case 'VARIANTS':
       return textResult(await client.getVariants(name));
+    case 'BSP': {
+      const include = args.include as string | undefined;
+      if (!name) {
+        // List all BSP apps (optional search via query param not used here since name is empty)
+        const apps = await client.listBspApps();
+        return textResult(JSON.stringify(apps, null, 2));
+      }
+      if (!include) {
+        // Browse root structure of the app
+        return textResult(JSON.stringify(await client.getBspAppStructure(name), null, 2));
+      }
+      // If include contains a dot, treat as file read; otherwise browse subfolder
+      if (include.includes('.')) {
+        return textResult(await client.getBspFileContent(name, include));
+      }
+      return textResult(JSON.stringify(await client.getBspAppStructure(name, `/${include}`), null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP. ` +
           'Tip: Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type="DDLS", CLAS/OC → type="CLAS", PROG/P → type="PROG"). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
