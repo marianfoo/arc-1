@@ -101,8 +101,8 @@ Expose the OData query via `SAPRead(type="BSP_DEPLOY")`.
 
 ### Task 4: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Document in a comment in `src/adt/ui5-repository.ts` that CSRF token sharing with ADT needs manual verification on a real SAP system
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Document in a comment in `src/adt/ui5-repository.ts` that CSRF token sharing with ADT needs manual verification on a real SAP system
+- [x] Move this plan to `docs/plans/completed/`
