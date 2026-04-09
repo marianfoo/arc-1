@@ -254,8 +254,12 @@ SAP returns 412 when the deployed BSP's `sap.app/id` (from manifest.json) doesn'
 
 ## Part 2: ADT Filestore (Read-Only)
 
-**Base path:** `/sap/bc/adt/filestore/ui5-bsp`
+**Base path:** `/sap/bc/adt/filestore/ui5-bsp/objects`
 **ADT Discovery:** `scheme: 'http://www.sap.com/adt/categories/filestore'`, `term: 'filestore-ui5-bsp'`
+
+The ADT discovery XML also reveals two additional collections:
+- `ui5-rt-version` at `/sap/bc/adt/filestore/ui5-bsp/ui5-rt-version` — UI5 runtime version
+- `ui5-deploy-storage` at `/sap/bc/adt/filestore/ui5-bsp/deploy-storage` — deploy storage marker
 
 ### 2.1 Feature Detection
 
@@ -267,14 +271,18 @@ HEAD /sap/bc/adt/filestore/ui5-bsp
 
 VSP uses OPTIONS instead of HEAD — both work.
 
-### 2.2 List BSP Applications
+### 2.2 List/Search BSP Applications
 
 ```
 GET /sap/bc/adt/filestore/ui5-bsp/objects
 Accept: application/atom+xml
+Query: name={pattern}&maxResults={n}
 ```
 
-Returns Atom XML feed listing available BSP applications.
+The `name` parameter supports wildcards: `Z*`, `*DEMO*`, etc. Returns Atom XML feed where each `<entry>` represents a BSP app:
+- `<atom:title>` → app name (e.g., `ZTESTAPP`)
+- `<atom:summary>` → description
+- `<atom:id>` → URI
 
 ### 2.3 Get App Structure (Files/Folders)
 
@@ -284,9 +292,59 @@ Accept: application/xml
 Content-Type: application/atom+xml
 ```
 
-Returns Atom XML feed of files and folders. **NOT recursive** — only returns direct children. To get deep structure, must query each subfolder.
+Returns Atom XML feed of files and folders. **NOT recursive** — only returns immediate children. To get a full tree, recursively query each subfolder.
 
-### 2.4 Get File Content
+**Response example (root listing):**
+```xml
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"
+           xml:base="/sap/bc/adt/filestore/ui5-bsp/objects/">
+  <atom:id>ZTESTAPP</atom:id>
+  <atom:title>ZTESTAPP</atom:title>
+
+  <!-- FILE entry -->
+  <atom:entry>
+    <atom:category term="file"/>
+    <atom:content xmlns:afr="http://www.sap.com/adt/afr"
+                  afr:etag="20230112203908"
+                  type="application/octet-stream"
+                  src="./ZTESTAPP%2fComponent.js/content"/>
+    <atom:id>ZTESTAPP%2fComponent.js</atom:id>
+    <atom:title>ZTESTAPP/Component.js</atom:title>
+    <atom:link href="https://host/sap/bc/ui5_ui5/sap/ZTESTAPP/component.js?..."
+               rel="execute" type="application/http"/>
+  </atom:entry>
+
+  <!-- FOLDER entry -->
+  <atom:entry>
+    <atom:category term="folder"/>
+    <atom:content type="application/atom+xml;type=feed"
+                  src="./ZTESTAPP%2fi18n/content"/>
+    <atom:id>ZTESTAPP%2fi18n</atom:id>
+    <atom:title>ZTESTAPP/i18n</atom:title>
+  </atom:entry>
+</atom:feed>
+```
+
+**File vs folder detection:** `<atom:category term="file"/>` vs `<atom:category term="folder"/>`
+
+**File metadata:**
+- `afr:etag` — timestamp (format `YYYYMMDDHHMMSS`), useful for cache validation
+- `content.src` — URL to fetch the file content
+- `link[rel="execute"]` — browser-accessible URL for the file (dev-mode)
+
+### 2.4 List Subfolder Contents
+
+```
+GET /sap/bc/adt/filestore/ui5-bsp/objects/{encodeURIComponent(appName + '/' + subPath)}/content
+Accept: application/xml
+Content-Type: application/atom+xml
+```
+
+Example for i18n subfolder: `GET .../objects/ZTESTAPP%2fi18n/content`
+
+**Critical:** The slash between app name and path is **percent-encoded** (`%2f`), not a literal slash. The entire combined path is a single URL segment. Nested paths are doubly encoded: `ZTESTAPP%2fi18n%2fi18n.properties`.
+
+### 2.5 Get File Content
 
 ```
 GET /sap/bc/adt/filestore/ui5-bsp/objects/{encodeURIComponent(appName + '/' + filePath)}/content
@@ -294,13 +352,77 @@ Accept: application/xml
 Content-Type: application/octet-stream
 ```
 
-Returns raw file content.
+Returns **raw file content** (no XML wrapping). The `Content-Type` header distinguishes file requests from folder requests:
+- `application/octet-stream` → file content (raw bytes)
+- `application/atom+xml` → folder listing (Atom XML feed)
 
-### 2.5 API Quirks (from VSP experience)
+### 2.6 URL Encoding Pattern
+
+This is the trickiest part. The path uses `encodeURIComponent()` on the combined `appName + path`:
+
+```typescript
+// Correct:
+const url = `/objects/${encodeURIComponent(appName + filePath)}/content`;
+// Produces: /objects/ZTESTAPP%2fwebapp%2findex.html/content
+
+// WRONG:
+const url = `/objects/${encodeURIComponent(appName)}/${filePath}/content`;
+// Would produce: /objects/ZTESTAPP/webapp/index.html/content (404)
+```
+
+The `filePath` should start with `/` when non-empty:
+```typescript
+if (filePath && !filePath.startsWith('/')) {
+  throw new Error('filePath must start with /');
+}
+```
+
+### 2.7 Atom XML Parsing
+
+Use `fast-xml-parser` with namespace removal:
+```typescript
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  removeNSPrefix: true,
+  parseAttributeValue: true,
+  attributeNamePrefix: ''
+});
+```
+
+**Important:** When a folder contains exactly one entry, `parsed.feed.entry` is a **single object**, not an array. Always normalize:
+```typescript
+const entries = Array.isArray(parsed.feed.entry)
+  ? parsed.feed.entry
+  : parsed.feed.entry ? [parsed.feed.entry] : [];
+```
+
+Extract file info:
+```typescript
+const node = {
+  name: entry.title.split('/').pop(),           // "Component.js"
+  path: entry.title.substring(appName.length),  // "/Component.js"
+  type: entry.category.term,                    // "file" | "folder"
+  etag: entry.content?.['afr:etag'],            // "20230112203908" (files only)
+};
+```
+
+### 2.8 Summary of Read Operations
+
+| Operation | Method | Path | Content-Type | Response |
+|-----------|--------|------|-------------|----------|
+| List apps | GET | `/objects?name={pattern}&maxResults={n}` | — | Atom feed of apps |
+| List folder | GET | `/objects/{encodeURIComponent(app+path)}/content` | `application/atom+xml` | Atom feed of entries |
+| Get file | GET | `/objects/{encodeURIComponent(app+path)}/content` | `application/octet-stream` | Raw file content |
+
+### 2.9 API Quirks Summary
 
 - App names are **uppercased** by the server
 - Directory listing is **NOT recursive** (immediate children only)
-- Leading slashes must be **stripped** from file paths before URL encoding
+- Path separator `/` must be **percent-encoded** (`%2f`) as part of a single path segment
+- Leading slashes must be **stripped** from file paths before combining with app name
+- Single entry responses are an **object, not array** — must normalize
+- Write operations (POST, PUT, DELETE) return **HTTP 405 Method Not Allowed**
+- `afr:etag` format is `YYYYMMDDHHMMSS` (useful for caching/change detection)
 - Response is **Atom XML feed** format
 - File paths are encoded as `APPNAME%2FFILEPATH` (slash → %2F)
 - Write operations (POST, PUT, DELETE) return **HTTP 405 Method Not Allowed**
