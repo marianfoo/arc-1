@@ -60,6 +60,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | Context Compression | ✅ SAPContext with AST-based dependency extraction (7-30x reduction) |
 | Where-Used Analysis | ✅ Scope-based where-used in SAPNavigate (#38) |
 | Object Caching | ✅ SQLite + memory cache with on-demand + pre-warmer support (#31) |
+| LLM Search UX | ✅ Auto-transliteration, field-name hints, cache indicators |
 | HTTP Client | ✅ Native fetch + undici (replaced axios) (#35) |
 | Test Coverage | ✅ 1,104 unit tests + 28 BTP integration tests (vitest) |
 | Documentation | ✅ Architecture, auth guides, Docker guide, setup phases, security guide |

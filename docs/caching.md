@@ -46,7 +46,7 @@ To disable caching entirely, set `ARC1_CACHE=none`.
 
 Every time ARC-1 fetches source code from SAP (classes, interfaces, programs, functions, etc.), the response is stored in the cache keyed by `OBJECTTYPE:OBJECTNAME` (uppercased). A SHA-256 hash of the source content is computed and stored alongside it.
 
-On subsequent requests for the same object, the cached source is returned immediately without an ADT call.
+On subsequent requests for the same object, the cached source is returned immediately without an ADT call. When a cached source is returned via SAPRead, the response is prefixed with `[cached]` so the caller knows the result came from cache. This matches the behavior of SAPContext dependency results.
 
 ### Hash-on-fetch mechanism
 

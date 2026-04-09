@@ -91,6 +91,10 @@ SAPSearch(query="ZCL_ORDER*")
 SAPSearch(query="Z*INVOICE*", maxResults=20)
 ```
 
+**Umlaut handling:** Queries containing non-ASCII characters (ä, ö, ü, ß) are automatically transliterated to ASCII equivalents (AE, OE, UE, SS). SAP object names are ASCII-only.
+
+**Field names:** If searching for a field/column name (e.g., MATNR, BUKRS), use SAPQuery against DD03L instead — SAPSearch only searches object names.
+
 ---
 
 ## SAPWrite

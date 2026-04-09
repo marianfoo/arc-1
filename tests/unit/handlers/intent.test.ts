@@ -14,8 +14,16 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 const { AdtClient } = await import('../../../src/adt/client.js');
-const { handleToolCall, hasRequiredScope, resetCachedFeatures, setCachedFeatures, TOOL_SCOPES, buildCreateXml } =
-  await import('../../../src/handlers/intent.js');
+const {
+  handleToolCall,
+  hasRequiredScope,
+  resetCachedFeatures,
+  setCachedFeatures,
+  TOOL_SCOPES,
+  buildCreateXml,
+  transliterateQuery,
+  looksLikeFieldName,
+} = await import('../../../src/handlers/intent.js');
 
 function createClient(): AdtClient {
   return new AdtClient({
@@ -666,6 +674,127 @@ describe('Intent Handler', () => {
         query: 'Z*',
       });
       expect(result.isError).toBeUndefined();
+    });
+
+    // ─── Transliteration ──────────────────────────────────────────────
+
+    describe('transliterateQuery', () => {
+      it('transliterates German umlauts', () => {
+        expect(transliterateQuery('*Schätz*')).toEqual({ normalized: '*SchAEtz*', changed: true });
+      });
+
+      it('transliterates uppercase umlauts', () => {
+        expect(transliterateQuery('*Übersicht*')).toEqual({ normalized: '*UEbersicht*', changed: true });
+      });
+
+      it('transliterates ß to SS', () => {
+        expect(transliterateQuery('*straße*')).toEqual({ normalized: '*straSSe*', changed: true });
+      });
+
+      it('transliterates all umlauts in uppercase context', () => {
+        expect(transliterateQuery('*SCHÄTZÜNG*')).toEqual({ normalized: '*SCHAETZUENG*', changed: true });
+      });
+
+      it('returns unchanged for ASCII-only queries', () => {
+        expect(transliterateQuery('*SCHAETZ*')).toEqual({ normalized: '*SCHAETZ*', changed: false });
+      });
+
+      it('strips accented Latin characters', () => {
+        const result = transliterateQuery('*café*');
+        expect(result.normalized).toBe('*cafe*');
+        expect(result.changed).toBe(true);
+      });
+    });
+
+    it('transliterates umlaut query and includes note in response', async () => {
+      mockFetch.mockReset();
+      // Return a search result for the transliterated query
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<objectReferences><objectReference type="CLAS/OC" name="ZCL_SCHAETZ" uri="/sap/bc/adt/oo/classes/zcl_schaetz" packageName="$TMP" description="Test"/></objectReferences>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: '*Schätz*',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Transliterated');
+      expect(result.content[0]?.text).toContain('*Schätz*');
+      expect(result.content[0]?.text).toContain('*SchAEtz*');
+      expect(result.content[0]?.text).toContain('ZCL_SCHAETZ');
+    });
+
+    it('transliterates umlaut query and includes note when results are empty', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: '*Schätzung*',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Transliterated');
+      expect(result.content[0]?.text).toContain('No objects found');
+    });
+
+    it('does NOT transliterate source_code search queries', async () => {
+      mockFetch.mockReset();
+      // Return empty source search results
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'Schätzung',
+        searchType: 'source_code',
+      });
+      // Should not contain transliteration note (source code can have umlauts)
+      expect(result.content[0]?.text).not.toContain('Transliterated');
+    });
+
+    // ─── Field-name detection ─────────────────────────────────────────
+
+    describe('looksLikeFieldName', () => {
+      it('detects short uppercase field names', () => {
+        expect(looksLikeFieldName('QDSTAT')).toBe(true);
+        expect(looksLikeFieldName('MATNR')).toBe(true);
+        expect(looksLikeFieldName('BUKRS')).toBe(true);
+      });
+
+      it('rejects Z/Y-prefixed names (likely objects)', () => {
+        expect(looksLikeFieldName('ZCL_TEST')).toBe(false);
+        expect(looksLikeFieldName('Z_MY_FUNC')).toBe(false);
+        expect(looksLikeFieldName('YCL_HELPER')).toBe(false);
+      });
+
+      it('rejects wildcard patterns', () => {
+        expect(looksLikeFieldName('*SCHAETZ*')).toBe(false);
+      });
+
+      it('rejects long strings', () => {
+        expect(looksLikeFieldName('ABCDEFGHIJKLMNOPQRST')).toBe(false);
+      });
+
+      it('rejects lowercase strings', () => {
+        expect(looksLikeFieldName('matnr')).toBe(false);
+      });
+    });
+
+    it('includes field-name hint when empty results look like a field name', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'QDSTAT',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('dd03l');
+      expect(result.content[0]?.text).toContain('field/column name');
+    });
+
+    it('does NOT include field-name hint for Z* queries', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        query: 'ZCL_NONEXIST',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).not.toContain('field/column name');
     });
   });
 
@@ -1496,6 +1625,104 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Invalid arguments for SAPManage');
+    });
+  });
+
+  // ─── Cache Hit Indicator ───────────────────────────────────────────
+
+  describe('SAPRead cache hit indicator', () => {
+    it('shows [cached] prefix on second read of same object', async () => {
+      const { CachingLayer } = await import('../../../src/cache/caching-layer.js');
+      const { MemoryCache } = await import('../../../src/cache/memory.js');
+      const layer = new CachingLayer(new MemoryCache());
+
+      // First read — no [cached] prefix
+      const result1 = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'PROG', name: 'ZHELLO' },
+        undefined,
+        undefined,
+        layer,
+      );
+      expect(result1.isError).toBeUndefined();
+      expect(result1.content[0]?.text).not.toMatch(/^\[cached\]/);
+
+      // Second read — should have [cached] prefix
+      const result2 = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'PROG', name: 'ZHELLO' },
+        undefined,
+        undefined,
+        layer,
+      );
+      expect(result2.isError).toBeUndefined();
+      expect(result2.content[0]?.text).toMatch(/^\[cached\]/);
+    });
+
+    it('does NOT show [cached] when no cachingLayer is provided', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZHELLO' });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).not.toMatch(/^\[cached\]/);
+    });
+
+    it('does NOT show [cached] for types that bypass cachedGet (DOMA)', async () => {
+      const { CachingLayer } = await import('../../../src/cache/caching-layer.js');
+      const { MemoryCache } = await import('../../../src/cache/memory.js');
+      const layer = new CachingLayer(new MemoryCache());
+
+      // DOMA uses client.getDomain() directly, not cachedGet
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<dom:domain xmlns:dom="http://www.sap.com/adt/ddic/domains" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZTEST_DOMAIN"><dom:typeInformation dom:datatype="CHAR" dom:length="10"/></dom:domain>`,
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'DOMA', name: 'ZTEST_DOMAIN' },
+        undefined,
+        undefined,
+        layer,
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).not.toMatch(/^\[cached\]/);
+    });
+
+    it('shows [cached] for INTF on second read', async () => {
+      const { CachingLayer } = await import('../../../src/cache/caching-layer.js');
+      const { MemoryCache } = await import('../../../src/cache/memory.js');
+      const layer = new CachingLayer(new MemoryCache());
+
+      // First read
+      await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'INTF', name: 'ZIF_TEST' },
+        undefined,
+        undefined,
+        layer,
+      );
+      // Second read
+      const result2 = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'INTF', name: 'ZIF_TEST' },
+        undefined,
+        undefined,
+        layer,
+      );
+      expect(result2.isError).toBeUndefined();
+      expect(result2.content[0]?.text).toMatch(/^\[cached\]/);
     });
   });
 
