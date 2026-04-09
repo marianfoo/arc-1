@@ -57,6 +57,7 @@ const parser = new XMLParser({
       'alert',
       'finding',
       'msg',
+      'request',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings

@@ -7,7 +7,8 @@
 
 import type { AdtHttpClient } from './http.js';
 import { checkTransport, type SafetyConfig } from './safety.js';
-import type { TransportRequest } from './types.js';
+import type { TransportRequest, TransportTask } from './types.js';
+import { findDeepNodes, parseXml } from './xml-parser.js';
 
 /** List transport requests for a user */
 export async function listTransports(
@@ -61,8 +62,9 @@ export async function createTransport(
   });
 
   // Extract transport number from response
-  const match = resp.body.match(/tm:number="([^"]*)"/);
-  return match?.[1] ?? '';
+  const parsed = parseXml(resp.body);
+  const requests = findDeepNodes(parsed, 'request');
+  return String(requests[0]?.['@_number'] ?? '');
 }
 
 /** Release a transport request */
@@ -75,23 +77,26 @@ export async function releaseTransport(http: AdtHttpClient, safety: SafetyConfig
 // ─── Parsers ────────────────────────────────────────────────────────
 
 function parseTransportList(xml: string): TransportRequest[] {
-  const transports: TransportRequest[] = [];
-  const trRegex =
-    /<tm:request[^>]*tm:number="([^"]*)"[^>]*tm:owner="([^"]*)"[^>]*tm:desc="([^"]*)"[^>]*tm:status="([^"]*)"[^>]*tm:type="([^"]*)"/g;
+  const parsed = parseXml(xml);
+  const requests = findDeepNodes(parsed, 'request');
 
-  let match: RegExpExecArray | null;
-  while ((match = trRegex.exec(xml)) !== null) {
-    transports.push({
-      id: match[1]!,
-      description: match[3]!,
-      owner: match[2]!,
-      status: match[4]!,
-      type: match[5]!,
-      tasks: [],
-    });
-  }
+  return requests.map((req) => {
+    const tasks: TransportTask[] = findDeepNodes(req, 'task').map((t) => ({
+      id: String(t['@_number'] ?? ''),
+      description: String(t['@_desc'] ?? ''),
+      owner: String(t['@_owner'] ?? ''),
+      status: String(t['@_status'] ?? ''),
+    }));
 
-  return transports;
+    return {
+      id: String(req['@_number'] ?? ''),
+      description: String(req['@_desc'] ?? ''),
+      owner: String(req['@_owner'] ?? ''),
+      status: String(req['@_status'] ?? ''),
+      type: String(req['@_type'] ?? ''),
+      tasks,
+    };
+  });
 }
 
 function escapeXml(str: string): string {

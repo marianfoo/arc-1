@@ -72,6 +72,45 @@ describe('Transport Management', () => {
       const transports = await listTransports(http, enabledSafety);
       expect(transports).toEqual([]);
     });
+
+    it('extracts tasks from transport requests', async () => {
+      const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="DEVELOPER" tm:desc="Test transport" tm:status="D" tm:type="K">
+          <tm:task tm:number="DEVK900001T" tm:owner="DEV1" tm:desc="Task 1" tm:status="D"/>
+          <tm:task tm:number="DEVK900002T" tm:owner="DEV2" tm:desc="Task 2" tm:status="R"/>
+        </tm:request>
+      </tm:root>`;
+      const http = mockHttp(xml);
+      const transports = await listTransports(http, enabledSafety);
+      expect(transports).toHaveLength(1);
+      expect(transports[0]?.tasks).toHaveLength(2);
+      expect(transports[0]?.tasks[0]).toEqual({
+        id: 'DEVK900001T',
+        description: 'Task 1',
+        owner: 'DEV1',
+        status: 'D',
+      });
+      expect(transports[0]?.tasks[1]).toEqual({
+        id: 'DEVK900002T',
+        description: 'Task 2',
+        owner: 'DEV2',
+        status: 'R',
+      });
+    });
+
+    it('parses attributes in different order', async () => {
+      const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:desc="Reversed order" tm:type="K" tm:status="D" tm:owner="DEVELOPER" tm:number="DEVK900099"/>
+      </tm:root>`;
+      const http = mockHttp(xml);
+      const transports = await listTransports(http, enabledSafety);
+      expect(transports).toHaveLength(1);
+      expect(transports[0]?.id).toBe('DEVK900099');
+      expect(transports[0]?.owner).toBe('DEVELOPER');
+      expect(transports[0]?.description).toBe('Reversed order');
+      expect(transports[0]?.status).toBe('D');
+      expect(transports[0]?.type).toBe('K');
+    });
   });
 
   // ─── getTransport ──────────────────────────────────────────────────

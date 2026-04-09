@@ -151,15 +151,15 @@ The `activate()` and `activateBatch()` functions use `resp.body.includes('type="
 
 The `parseTransportList()` regex at line ~79 assumes exact attribute order. Replace with `parseXml()` + `findDeepNodes()`. Note: transport XML uses `tm:` namespace which is NOT stripped by the shared parser's `removeNSPrefix` — the parser config strips all namespace prefixes, so `tm:request` → `request`, `tm:number` → `number`, etc.
 
-- [ ] In `src/adt/transport.ts`, add import: `import { parseXml, findDeepNodes } from './xml-parser.js';`
-- [ ] Rewrite `parseTransportList()` (line ~77-95) to use `parseXml()`. Find `request` nodes (after NS strip, `tm:request` → `request`) via `findDeepNodes(parsed, 'request')`. For each request, extract `@_number` as id, `@_owner`, `@_desc` as description, `@_status`, `@_type`. Also extract child `task` elements via `findDeepNodes(req, 'task')` and map them to `TransportTask` objects with `@_number`, `@_desc`, `@_owner`, `@_status`
-- [ ] Add `'request'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config (note: `'task'` is already in the list)
-- [ ] Update existing test fixtures in `tests/unit/adt/transport.test.ts` — the current fixtures use `tm:` namespace prefixed attributes (`tm:number`, `tm:owner`), which after NS stripping become just `number`, `owner`. The parseXml parser strips the namespace prefix from attributes too. Update test XML to match real SAP responses more closely (namespace-prefixed elements with `adtcore:`-style attributes)
-- [ ] Add tests (~2 tests):
+- [x] In `src/adt/transport.ts`, add import: `import { parseXml, findDeepNodes } from './xml-parser.js';`
+- [x] Rewrite `parseTransportList()` (line ~77-95) to use `parseXml()`. Find `request` nodes (after NS strip, `tm:request` → `request`) via `findDeepNodes(parsed, 'request')`. For each request, extract `@_number` as id, `@_owner`, `@_desc` as description, `@_status`, `@_type`. Also extract child `task` elements via `findDeepNodes(req, 'task')` and map them to `TransportTask` objects with `@_number`, `@_desc`, `@_owner`, `@_status`
+- [x] Add `'request'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config (note: `'task'` is already in the list)
+- [x] Update existing test fixtures in `tests/unit/adt/transport.test.ts` — the current fixtures use `tm:` namespace prefixed attributes (`tm:number`, `tm:owner`), which after NS stripping become just `number`, `owner`. The parseXml parser strips the namespace prefix from attributes too. Update test XML to match real SAP responses more closely (namespace-prefixed elements with `adtcore:`-style attributes)
+- [x] Add tests (~2 tests):
   - Test transport with tasks: `<tm:request ...><tm:task tm:number="DEVK900001T" tm:owner="DEV1" tm:desc="Task 1" tm:status="D"/></tm:request>` → tasks array populated
   - Test attributes in different order → still parsed correctly
-- [ ] Also update `createTransport()` response parsing (line ~64): the regex `resp.body.match(/tm:number="([^"]*)"/)` should use `parseXml()` instead — extract `@_number` from the first `request` node found by `findDeepNodes(parsed, 'request')`
-- [ ] Run `npm test` — all tests must pass
+- [x] Also update `createTransport()` response parsing (line ~64): the regex `resp.body.match(/tm:number="([^"]*)"/)` should use `parseXml()` instead — extract `@_number` from the first `request` node found by `findDeepNodes(parsed, 'request')`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 8: Fix trace hitlist parser to use proper XML parsing (Issue #7)
 
