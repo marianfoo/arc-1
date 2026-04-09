@@ -201,7 +201,7 @@ Cloud Connector Admin UI → **Cloud to On-Premise → Access Control**:
    - **Protocol**: `HTTPS`
    - **Back-end Type**: ABAP System
    - **Authentication Mode**: `X509_GENERAL`
-2. Add resource `/` with all sub-paths enabled
+2. Add resources (see [URL path reference](#cloud-connector-url-path-reference) below for the full list). For a quick start, add `/` with **Path and all sub-paths**. For production, use fine-grained paths.
 
 Or via CC REST API:
 ```bash
@@ -437,6 +437,21 @@ If PP isn't mapping to the correct SAP user:
 1. Check the CERTRULE table via SM30, view `VUSREXTID`
 2. Verify the certificate subject (CN) matches what the Cloud Connector sends
 3. Use transaction `SU01` to verify the target SAP user exists
+
+---
+
+## Cloud Connector URL Path Reference
+
+ARC-1 uses two URL path prefixes. Add both as resources with **Path and all sub-paths** in the Cloud Connector:
+
+| Resource | Sub-Paths | Purpose |
+|----------|-----------|---------|
+| `/sap/bc/adt/` | Yes | All ADT operations (source code, search, write, activate, tests, diagnostics, transports) |
+| `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/` | Yes | UI5 ABAP Repository OData Service — query deployed BSP/UI5 app metadata |
+
+> **Note:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/` is the only path outside `/sap/bc/adt/`. It uses the same OData V2 service as SAP Business Application Studio and `@sap-ux/deploy-tooling`.
+
+> If you use a dual-destination setup (HTTP + HTTPS for PP), both system mappings need the same resource paths.
 
 ---
 
