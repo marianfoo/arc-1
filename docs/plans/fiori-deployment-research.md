@@ -440,117 +440,412 @@ Discovered in the open-ux-tools monorepo. Uses `@modelcontextprotocol/sdk` 1.29.
 
 ---
 
+## Key Decision: Use `@sap/generator-fiori` Headless Mode (Not In-Memory Templates)
+
+### Why Not Generate Templates In-Memory?
+
+The initial plan proposed generating `manifest.json`, `Component.js`, and `i18n.properties` from scratch in ARC-1. This was rejected because:
+
+1. **manifest.json varies significantly by UI5 version** — routing targets, dependency libs, descriptor version, model settings all change across 1.71, 1.84, 1.96, 1.108, 1.120, 1.136+
+2. **OData V2 vs V4 differences** — V2 uses `sap.suite.ui.generic.template.*`, V4 uses `sap.fe.templates.*`
+3. **Floorplan-specific configuration** — List Report, Worklist, Analytical, Overview Page each have different routing/target structures
+4. **SAP maintains this in `@sap-ux/fiori-elements-writer`** — ~10 packages, EJS templates, version-aware logic. Reimplementing is fragile and will break.
+
+### Three Options Evaluated
+
+| Option | Approach | Pros | Cons |
+|--------|----------|------|------|
+| A: In-memory templates | Generate manifest.json etc. ourselves | No external deps | Fragile, version-sensitive, maintenance burden |
+| B: `@sap/generator-fiori` headless | Shell out to `npx yo @sap/fiori:headless` | SAP-maintained, always correct, simple | Needs Node.js + npx, first-run download ~100MB |
+| C: fiori-mcp-server delegation | Orchestrate via MCP skill prompt | Zero code changes | User must configure 2 MCP servers, `@sap-ux/store` dependency for auth |
+
+### Decision: Option B — `@sap/generator-fiori` Headless Mode
+
+**Rationale:**
+- Single MCP server (no extra user config)
+- Uses ARC-1's existing SAP connection for EDMX fetching (no `@sap-ux/store` dependency)
+- SAP-maintained generator handles all UI5 version/floorplan complexity
+- `@sap/generator-fiori` is on **public npm** (Apache-2.0 license, v1.22.0+)
+- The fiori-mcp-server itself uses this exact approach internally
+
+**Option C as lightweight alternative:** The skill docs can mention that users with `fiori-mcp-server` configured can use it instead. No code needed — pure prompt guidance.
+
+---
+
+## Deep Dive: `@sap/generator-fiori` Headless Mode
+
+### Package Facts
+
+| Property | Value |
+|----------|-------|
+| Package | `@sap/generator-fiori` |
+| Registry | Public npm (npmjs.com) |
+| License | Apache-2.0 |
+| Current version | 1.22.0+ (April 2026) |
+| Size | ~10 MB unpacked, 444 files |
+| Code | Webpack-bundled/minified (closed source), but underlying open-source packages are in `SAP/open-ux-tools` |
+| Dependencies | All bundled (no transitive installs) |
+
+### Invocation
+
+```bash
+npx -y yo@4 @sap/fiori:headless <config-file.json> [--force] [--skipInstall] [--delete]
+```
+
+| Flag | Purpose |
+|------|---------|
+| `-y` | Auto-accept npx install prompt |
+| `yo@4` | Pinned Yeoman version (fiori-mcp-server pins this) |
+| `--force` | Overwrite existing files |
+| `--skipInstall` | Skip `npm install` (we only need `webapp/` for deployment) |
+| `--delete` | Delete config JSON after generation |
+
+### Config JSON Format (Version 0.2)
+
+The config format is versioned. Current version is `"0.2"` — the generator validates this and throws `App config version mismatch, supported: 0.2` on mismatch.
+
+**Complete reference** (from `@sap-ux/fiori-generator-shared` types + fiori-mcp-server Zod schemas):
+
+```typescript
+interface AppConfig {
+    readonly version: string;                    // MUST be "0.2"
+    readonly floorplan: FloorplanKey;           // "FE_LROP" | "FE_FPM" | "FE_OVP" | "FE_ALP" | "FE_FEOP" | "FE_WORKLIST" | "FF_SIMPLE"
+    project: {
+        readonly name: string;                   // MUST match /^[a-z0-9-]+$/ (lowercase + dashes only!)
+        targetFolder?: string;                   // Absolute path — generator creates {name}/ subfolder here
+        readonly namespace?: string;
+        readonly title?: string;
+        readonly description?: string;           // Required by MCP schema
+        readonly ui5Theme?: string;              // e.g. "sap_horizon" (defaults based on UI5 version)
+        readonly ui5Version?: string;            // e.g. "1.120.0" (defaults to latest if omitted)
+        readonly localUI5Version?: string;
+        readonly sapux?: boolean;                // MUST be true for all FE floorplans, false for FF_SIMPLE
+        readonly skipAnnotations?: boolean;
+        readonly enableEslint?: boolean;
+        readonly enableTypeScript?: boolean;
+    };
+    service?: {
+        readonly host?: string;                  // SAP system URL (HTTPS)
+        readonly servicePath?: string;           // OData service path
+        readonly client?: string;                // SAP client number
+        readonly edmx?: string;                  // FULL EDMX XML string (required for FE floorplans!)
+        readonly scp?: boolean;
+        readonly destination?: string;
+        readonly destinationInstance?: string;
+        readonly annotations?: Annotations;
+        readonly capService?: { ... };           // CAP-specific (not used for RAP)
+        readonly apiHubApiKey?: string;
+    };
+    // FE floorplans only:
+    readonly entityConfig?: {
+        mainEntity?: { entityName: string; type?: any };
+        filterEntityType?: string;
+        navigationEntity?: {
+            EntitySet: string;                    // Entity set name for nav target
+            Name: string;                         // Navigation property name (e.g. "_Booking")
+            Role?: string;
+        };
+        generateFormAnnotations?: boolean;        // Default: true. Set false when CDS DDLX handles annotations.
+        generateLROPAnnotations?: boolean;        // Default: true. Set false when CDS DDLX handles annotations.
+        qualifier?: string;
+        tableType?: string;                       // "GridTable" | "AnalyticalTable" | "ResponsiveTable" | "TreeTable"
+        hierarchyQualifier?: string;
+    };
+    deployConfig?: DeployConfig;
+    flpConfig?: FLPConfig;
+    telemetryData?: {
+        generationSourceName?: string;           // e.g. "arc-1"
+        generationSourceVersion?: string;
+    };
+}
+```
+
+### Floorplan Values
+
+The `floorplan` field uses **enum keys** (not values):
+
+| Key (use this) | Internal value | Description |
+|-----------------|----------------|-------------|
+| `FE_LROP` | `lrop` | List Report + Object Page (most common for RAP) |
+| `FE_FPM` | `fpm` | Flexible Programming Model |
+| `FE_OVP` | `ovp` | Overview Page |
+| `FE_ALP` | `alp` | Analytical List Page |
+| `FE_FEOP` | `feop` | Form Entry Object Page |
+| `FE_WORKLIST` | `worklist` | Worklist |
+| `FF_SIMPLE` | `basic` | Freestyle SAPUI5 app (not Fiori Elements) |
+
+### Minimal Config for a RAP Service (Simplest Possible)
+
+For a RAP service with CDS UI annotations (DDLX), we want the **simplest generation** — no local annotations, no TypeScript, no ESLint. The CDS `@UI.LineItem`, `@UI.FieldGroup` etc. annotations drive the UI entirely.
+
+```json
+{
+    "version": "0.2",
+    "floorplan": "FE_LROP",
+    "project": {
+        "name": "zbooking-app",
+        "description": "Booking Management",
+        "targetFolder": "/tmp/fiori-gen-abc123",
+        "sapux": true
+    },
+    "service": {
+        "host": "https://my-sap:443",
+        "servicePath": "/sap/opu/odata4/sap/zsb_booking/srvd_a2x/sap/zsd_booking/0001/",
+        "client": "100",
+        "edmx": "<?xml version=\"1.0\"?><edmx:Edmx ...full metadata...</edmx:Edmx>"
+    },
+    "entityConfig": {
+        "mainEntity": {
+            "entityName": "Booking"
+        },
+        "generateFormAnnotations": false,
+        "generateLROPAnnotations": false
+    },
+    "telemetryData": {
+        "generationSourceName": "arc-1",
+        "generationSourceVersion": "1.0.0"
+    }
+}
+```
+
+Setting `generateFormAnnotations: false` and `generateLROPAnnotations: false` is important — it tells the generator NOT to create local annotation files, relying entirely on backend CDS annotations. This is exactly right for RAP services where DDLX handles everything.
+
+### Output Structure
+
+The generator creates `{targetFolder}/{project.name}/`:
+
+```
+{project.name}/
+├── package.json               # npm package (not needed for deployment)
+├── ui5.yaml                   # UI5 tooling config (not needed for deployment)
+├── ui5-local.yaml             # Local dev config (not needed for deployment)
+├── README.md                  # (not needed for deployment)
+├── .gitignore                 # (not needed for deployment)
+└── webapp/                    # ← THIS is what gets ZIPped and deployed
+    ├── manifest.json          # Critical: routing, datasource, models, FLP config
+    ├── Component.js           # ~6 lines boilerplate (extends sap/fe/core/AppComponent)
+    ├── i18n/
+    │   └── i18n.properties    # appTitle, appDescription
+    └── test/
+        └── flpSandbox.html    # FLP sandbox for local testing
+```
+
+**For ABAP deployment, only the `webapp/` folder is ZIPped** — the root project files (`package.json`, `ui5.yaml`, etc.) are for local development and are not uploaded.
+
+### EDMX Metadata Requirement
+
+The generator requires the full OData EDMX XML as a string in `service.edmx`. Without it, generation throws: `Error('Missing required property: edmx')`.
+
+**How to obtain EDMX from a published RAP service binding:**
+
+For OData V4 (most common for RAP):
+```
+GET /sap/opu/odata4/sap/{service_binding}/srvd_a2x/sap/{service_definition}/0001/$metadata
+Accept: application/xml
+```
+
+For OData V2:
+```
+GET /sap/opu/odata/sap/{service_binding_v2}/$metadata
+Accept: application/xml
+```
+
+The service URL pattern is available from the service binding metadata (ARC-1's `getSrvb()` returns `odataVersion` and can derive the URL). After `publishServiceBinding()`, the service is live and `$metadata` is accessible.
+
+### Error Handling
+
+| Scenario | Error Message | ARC-1 Should |
+|----------|--------------|--------------|
+| Config version wrong | `App config version mismatch, supported: 0.2` | Validate before calling |
+| Missing EDMX | `Missing required property: edmx` | Always provide EDMX |
+| Folder exists (no --force) | `A folder with the application name already exists` | Always use `--force` |
+| Invalid project name | Zod/validation error | Validate `/^[a-z0-9-]+$/` before calling |
+| npx not found | Process error (ENOENT) | Check Node.js available, report |
+| Generator crashes | Exit code 1, stderr | Parse stderr, return to user |
+| First run download | ~30-60s delay | Warn user in skill docs |
+
+### How fiori-mcp-server Calls It (Reference Implementation)
+
+From `packages/fiori-mcp-server/src/tools/functionalities/generate-fiori-ui-application/execute-functionality.ts`:
+
+```typescript
+// 1. Merge with predefined values
+const generatorConfig = {
+    ...PREDEFINED_GENERATOR_VALUES,  // { version: '0.2', telemetryData: {...}, project: { sapux: true } }
+    ...generatorConfigValidated,
+    project: { ...PREDEFINED_GENERATOR_VALUES.project, ...generatorConfigValidated.project }
+};
+
+// 2. Set sapux based on floorplan
+generatorConfig.project.sapux = generatorConfig.floorplan !== 'FF_SIMPLE';
+
+// 3. Read EDMX from file and embed inline
+const metadata = await FSpromises.readFile(metadataPath, { encoding: 'utf8' });
+generatorConfig.service.edmx = metadata;
+
+// 4. Write config to temp file
+const configPath = join(targetDir, `${appName}-generator-config.json`);
+await FSpromises.writeFile(configPath, JSON.stringify(generatorConfig, null, 4), { encoding: 'utf8' });
+
+// 5. Run generator
+const command = `npx -y yo@4 @sap/fiori:headless ${configFileName} --force --skipInstall`;
+const { stdout, stderr } = await runCmd(command, { cwd: targetDir });
+
+// 6. Cleanup
+finally {
+    if (existsSync(configPath)) await FSpromises.unlink(configPath);
+    if (existsSync(metadataPath)) await FSpromises.unlink(metadataPath);
+}
+```
+
+### Two-Layer Architecture
+
+1. **`@sap/generator-fiori`** (closed source, bundled) — Yeoman shell handling CLI, sub-generator composition, headless config parsing
+2. **`@sap-ux/*` packages** (open source in `SAP/open-ux-tools`) — Actual generation logic:
+   - `@sap-ux/fiori-generator-shared` — Shared types including `AppConfig`
+   - `@sap-ux/fiori-elements-writer` — The `generate()` function producing files via mem-fs
+   - `@sap-ux/odata-service-writer` — OData service config in manifest.json
+   - `@sap-ux/ui5-application-writer` — package.json, ui5.yaml scaffolding
+
+The writer packages have a clean programmatic API via `mem-fs-editor` (files generated in memory, not written to disk until `fs.commit()`). However, using them directly would pull ~10 transitive `@sap-ux/*` packages + ejs + i18next + lodash + mem-fs into ARC-1's dependencies. The headless CLI approach avoids this dependency bloat.
+
+---
+
+## UI5 Version Detection: SAP_UI Component Mapping
+
+### The Problem
+
+The headless config needs `project.ui5Version` to generate a correct `manifest.json` with the right `minUI5Version`. Using a version higher than the target system means the app might use APIs that don't exist. Using a version too low means missing newer FE features.
+
+### Solution: Map SAP_UI Component to UI5 Version
+
+ARC-1 already fetches `/sap/bc/adt/system/components` at startup (`src/adt/features.ts:detectSystemFromComponents`). This returns all installed software components including `SAP_UI` with its release number.
+
+**The authoritative mapping** (from `https://ui5.sap.com/versionoverview.json`):
+
+| SAP_UI Release | UI5 LTS Version | Frontend Server | Support End |
+|----------------|------------------|-----------------|-------------|
+| `816` | `1.136.0` | FES 2025 for S/4HANA | Q4/2032 |
+| `758` | `1.120.0` | FES 2023 for S/4HANA | Q4/2030 |
+| `757` | `1.108.0` | FES 2022 for S/4HANA | Q4/2030 |
+| `756` | `1.96.0` | FES 2021 for S/4HANA | Q4/2026 |
+| `755` | `1.84.0` | FES 2020 for S/4HANA | Out of maintenance |
+| `754` | `1.71.0` | Fiori FES 6.0 | Q4/2030 |
+| `753` | `1.60.0` | Fiori FES 5.0 | Out of maintenance |
+
+**Implementation in ARC-1:**
+
+```typescript
+const SAP_UI_TO_UI5: Record<string, string> = {
+    '816': '1.136.0',
+    '758': '1.120.0',
+    '757': '1.108.0',
+    '756': '1.96.0',
+    '755': '1.84.0',
+    '754': '1.71.0',
+    '753': '1.60.0',
+};
+
+// Usage: extract from already-fetched components
+const components = await client.getInstalledComponents();
+const sapUi = components.find(c => c.name.toUpperCase() === 'SAP_UI');
+const ui5Version = sapUi ? SAP_UI_TO_UI5[sapUi.release] ?? '1.120.0' : '1.120.0';
+```
+
+**Why `.0` patch level:** Use `1.120.0` not `1.120.17`. The `minUI5Version` in manifest.json is a minimum requirement — `.0` ensures compatibility regardless of the system's patch level.
+
+**BTP systems:** For BTP (detected via `SAP_CLOUD` component presence), UI5 is loaded from CDN. Default to `1.136.0` (latest LTS).
+
+**This mapping is stable** — SAP_UI versions are fixed releases. SAP_UI 7.58 always ships UI5 1.120.x. The mapping only changes when SAP ships a new SAP_UI version (~annually). Zero additional HTTP requests needed.
+
+**Alternative endpoint** (less reliable): `GET /sap/public/bc/ui5_ui5/bootstrap_info.json` returns `{ "Version": "1.120.0" }` on some systems, but it's not available on BTP ABAP Environment (UI5 loaded from CDN) and not always present on-premise.
+
+**External reference:** `https://ui5.sap.com/versionoverview.json` contains the full mapping and can be fetched at build time or cached if dynamic mapping is ever needed.
+
+---
+
+## SAP fiori-mcp-server Analysis
+
+### What It Is
+
+`@sap-ux/fiori-mcp-server` (v0.6.48, Apache-2.0) is SAP's official MCP server for Fiori app generation. Part of the `SAP/open-ux-tools` monorepo. Actively developed (90+ releases since Sept 2025).
+
+### 5 MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| `search_docs` | Vector search across Fiori/UI5 docs (uses LanceDB + Xenova transformers) |
+| `list_fiori_apps` | Scan directory for existing Fiori apps |
+| `list_functionalities` | List available operations |
+| `get_functionality_details` | Get parameter schema for an operation |
+| `execute_functionality` | Execute an operation with parameters |
+
+### 6 Functionalities
+
+1. `generate-fiori-ui-application` — Generate FE app for OData (non-CAP, e.g., RAP)
+2. `generate-fiori-ui-application-cap` — Generate FE app within CAP project
+3. `add-page` — Add pages to existing app
+4. `delete-page` — Delete pages
+5. `create-controller-extension` — Add controller extensions
+6. `fetch-service-metadata` — Fetch EDMX from a live SAP system
+
+### Architecture: Shells Out to Yeoman
+
+Both generation functionalities work by:
+1. Building a JSON config from MCP tool parameters
+2. Writing it to a temp file
+3. Running `npx -y yo@4 @sap/fiori:headless <config>.json --force --skipInstall`
+4. Cleaning up temp files in `finally` block
+
+It does **not** use `@sap-ux/fiori-elements-writer` directly — it delegates to the closed-source `@sap/generator-fiori` Yeoman generator.
+
+### Key Limitation: SAP System Auth
+
+The `fetch-service-metadata` functionality uses `@sap-ux/store` to look up pre-stored SAP systems (saved via VS Code Fiori tools or Business Application Studio). It cannot take credentials from ARC-1's SAP connection. This is the main reason ARC-1 should fetch EDMX itself rather than delegating to fiori-mcp-server.
+
+### Does NOT Handle Deployment
+
+The MCP server only generates and modifies apps. There are no deployment functionalities. ARC-1 still needs its own deploy implementation via ABAP_REPOSITORY_SRV.
+
+### Can Be Used Alongside ARC-1 (Option C)
+
+Both Claude Desktop and Claude Code support multiple MCP servers. A skill/prompt can instruct the LLM to call tools from both servers:
+1. ARC-1 fetches EDMX via `SAPRead`
+2. LLM writes EDMX to temp file
+3. fiori-mcp-server generates app via `execute_functionality`
+4. ARC-1 deploys via `SAPManage(deploy_ui5)`
+
+This works but requires users to configure two MCP servers and pre-store SAP systems in `@sap-ux/store`.
+
+---
+
 ## Revised Implementation Plan
 
-### Phase 1: Publish Service Binding (Effort: XS, half day)
+### Phase 1: ADT Filestore Read Operations (COMPLETED)
+- **Status:** Implemented in `src/adt/client.ts`
+- `listBspApps()`, `getBspAppStructure()`, `getBspFileContent()` are live
+- Uses `/sap/bc/adt/filestore/ui5-bsp/objects` (read-only)
 
-Add `publishServiceBinding()` and `unpublishServiceBinding()` to complete the RAP generation pipeline.
+### Phase 2: Publish Service Binding (COMPLETED)
+- **Status:** Implemented in `src/adt/devtools.ts`
+- `publishServiceBinding()` and `unpublishServiceBinding()` are live
+- Uses `/sap/bc/adt/businessservices/odatav2/publishjobs` and `unpublishjobs`
 
-```
-POST /sap/bc/adt/businessservices/bindings/{name}?action=publish
-POST /sap/bc/adt/businessservices/bindings/{name}?action=unpublish
-```
-
-### Phase 2: ABAP Repository Deployment (Effort: M, 3-5 days)
-
-Implement the OData-based deployment using `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV`.
-
-| Task | Details |
-|------|---------|
-| Feature probe | HEAD `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` — detect availability |
-| Get app info | GET `/Repositories('{name}')` — check existence |
-| Deploy new app | POST `/Repositories` — Atom XML with base64 ZIP |
-| Redeploy app | PUT `/Repositories('{name}')` — same payload |
-| Undeploy app | DELETE `/Repositories('{name}')` |
-| Download app | GET `/Repositories('{name}')` with `DownloadFiles='RUNTIME'` |
-| ZIP creation | Use Node.js `archiver` or `adm-zip` to create webapp ZIP |
-| Transport integration | Reuse existing `src/adt/transport.ts` + new CTS check endpoint |
-
-**Note:** This is a separate HTTP endpoint from the ADT APIs (`/sap/opu/odata/` vs `/sap/bc/adt/`). ARC-1's HTTP client may need a small extension to support OData service paths.
-
-### Phase 3: Fiori Elements App Generation (Effort: S, 1-2 days)
-
-Generate the webapp files that get zipped and deployed.
-
-| File | Source |
-|------|--------|
-| `manifest.json` | Template with entity name, service URL, FLP config |
-| `Component.js` | Static boilerplate (~10 lines) |
-| `i18n/i18n.properties` | Entity labels from CDS annotations |
-| `index.html` | Optional FLP sandbox launcher |
-
-The `manifest.json` template (see above) is parameterized by:
-- Entity name (from RAP generation)
-- Service binding name (from RAP generation)
-- Service definition name (from RAP generation)
-- App ID (derived from entity name)
-- Semantic object (user input or derived)
-- UI5 version (from `/sap/public/bc/ui5_ui5/bootstrap_info.json`)
-
-### Phase 4: ADT Filestore Read (Effort: S, 1 day)
-
-Add read-only BSP tools for verifying deployed apps:
-
-| Tool | Endpoint |
-|------|----------|
-| List BSP apps | GET `/sap/bc/adt/filestore/ui5-bsp/objects` |
-| Read app structure | GET `/sap/bc/adt/filestore/ui5-bsp/objects/{name}/content` |
-| Read file content | GET `/sap/bc/adt/filestore/ui5-bsp/objects/{name}/{path}/content` |
-
----
-
-## What a Full "Generate RAP + Fiori + Deploy" Skill Would Look Like
-
-The end goal is a single E2E skill that takes a user from natural language description to a running Fiori Elements app. This extends the existing `generate-rap-service` skill.
-
-```
-Step 1-12:  [Existing] Generate RAP stack (table, CDS, BDEF, SRVD, DDLX, CLAS)
-Step 13:    [Existing] Create service binding (manual — instruct user)
-Step 14:    [Phase 2] Publish service binding → OData service is live, preview URL available
-Step 15:    [Phase 3] Query ABAP_REPOSITORY_SRV → check if BSP app already exists
-Step 16:    [Phase 4] Generate minimal Fiori Elements webapp (manifest.json, Component.js, i18n, index.html)
-Step 17:    [Phase 4] Deploy via ABAP_REPOSITORY_SRV → creates BSP + ICF node automatically
-Step 18:    [Phase 1] Verify deployment via ADT filestore read
-Step 19:    [Done] App accessible at /sap/bc/ui5_ui5/sap/{appName}/index.html (no FLP needed)
-```
-
----
-
-## Implementation Phases (Ordered by Priority)
-
-Each phase is independently valuable and will be tackled one by one. Detailed plans for each phase are in separate documents.
-
-### Phase 1: ADT Filestore Read Operations
-- **Effort:** S (1-2 days)
-- **Impact:** High — enables reading deployed UI5/Fiori apps, browsing webapp files, verifying deployments. Very useful standalone capability even without deployment.
-- **API:** `/sap/bc/adt/filestore/ui5-bsp/objects` (read-only, already feature-probed)
-- **Operations:** List BSP apps, browse file structure, read file content
-- **Implementation:** New methods in `src/adt/client.ts`, new SAPRead types (`BSP`, `BSP_FILE`), XML parser for Atom feeds
-- **Detailed plan:** `docs/plans/phase1-filestore-read.md`
-
-### Phase 2: Publish Service Binding
-- **Effort:** XS (half day)
-- **Impact:** High — eliminates the biggest manual step in RAP generation. Enables Fiori Elements preview URL (like ADT Eclipse "Preview" button) without needing a full BSP deployment.
-- **API:** `POST /sap/bc/adt/businessservices/bindings/{name}?action=publish`
-- **Implementation:** Add `publishServiceBinding()` and `unpublishServiceBinding()` to `src/adt/devtools.ts`, update `generate-rap-service` skill to include publish step
-- **Preview URL:** After publish, the OData service URL can be used with SAP's Fiori Elements preview: `/sap/bc/adt/businessservices/odatav4/{binding}/preview`
-- **Detailed plan:** `docs/plans/phase2-publish-srvb.md`
-
-### Phase 3: ABAP Repository Service (Query/Describe)
-- **Effort:** S (1-2 days)
-- **Impact:** Medium — enables querying deployed BSP apps via OData, checking app existence, downloading app content. Foundation for Phase 4.
-- **API:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` (GET operations only)
-- **Key concern:** This is an OData service on a different path than ADT (`/sap/opu/odata/` vs `/sap/bc/adt/`). Needs manual testing to verify CSRF token sharing, cookie behavior, auth headers.
-- **Operations:** Get app info, download app ZIP, feature probe
-- **Implementation:** New `src/adt/ui5-repository.ts` with separate CSRF handling
-- **Detailed plan:** `docs/plans/phase3-repository-query.md`
+### Phase 3: ABAP Repository Service — Query/Describe (COMPLETED)
+- **Status:** `getAppInfo()` implemented (or can use existing BSP read operations)
+- Foundation for Phase 4 deployment
 
 ### Phase 4: Deploy Fiori Elements App (E2E Skill)
-- **Effort:** M-L (5-7 days)
+- **Effort:** M (3-5 days)
 - **Impact:** Very high — completes the Table → RAP → Fiori Elements pipeline. First MCP server to do this.
-- **Approach:** Use SAP's existing `@sap-ux/fiori-elements-writer` patterns to generate a minimal Fiori Elements app. Deploy via ABAP_REPOSITORY_SRV. The deployed app creates its own ICF node and can be opened directly via `index.html` — no FLP/launchpad needed.
-- **Key insight:** Keep the generated app minimal — just enough for a working List Report + Object Page. SAP's Fiori tools packages provide the template patterns, but we generate the files ourselves (no npm dependency needed).
-- **Implementation:** New `generate-fiori-app` skill, ZIP creation with `adm-zip`, deploy via Phase 3 client
+- **Approach:** Use `@sap/generator-fiori` headless mode to generate the app. Deploy via ABAP_REPOSITORY_SRV. Only ZIP the `webapp/` subfolder.
+- **Key components:**
+  1. SAP_UI → UI5 version mapping (easy, data already available)
+  2. EDMX metadata fetching from published SRVB (medium)
+  3. Headless config builder + `npx` child process (medium)
+  4. `webapp/` ZIP creation with `adm-zip` (easy)
+  5. Deploy via ABAP_REPOSITORY_SRV POST/PUT (hard — different HTTP path, separate CSRF, Atom XML)
+  6. Skill/command markdown (easy)
 - **Detailed plan:** `docs/plans/phase4-deploy-fiori-app.md`
 
 ### Out of Scope: FLP Tile/Launchpad Configuration
@@ -558,6 +853,23 @@ FLP configuration varies significantly by system type and setup:
 - **BTP ABAP:** `crossNavigation.inbounds` in manifest.json is auto-registered. Managed App Router handles the rest.
 - **On-prem:** Requires admin to configure catalog/group via FLP Designer (transaction `/UI2/FLPD_CUST`), set up semantic objects (`/UI2/SEMOBJ_SAP`), and assign target mappings.
 - **Recommendation:** After deployment, provide system-specific guidance and link to SAP documentation. The deployed app is accessible directly via its ICF URL + `index.html` without FLP.
+
+---
+
+## What a Full "Generate RAP + Fiori + Deploy" Skill Would Look Like
+
+```
+Step 1-12:  [Existing] Generate RAP stack (table, CDS, BDEF, SRVD, DDLX, CLAS)
+Step 13:    [Existing] Create service binding (manual — instruct user)
+Step 14:    [Done] Publish service binding → OData service is live
+Step 15:    [Phase 4] Detect UI5 version from SAP_UI component
+Step 16:    [Phase 4] Fetch $metadata EDMX from published service
+Step 17:    [Phase 4] Build headless config + run @sap/generator-fiori
+Step 18:    [Phase 4] ZIP webapp/ folder with adm-zip
+Step 19:    [Phase 4] Deploy via ABAP_REPOSITORY_SRV (POST or PUT)
+Step 20:    [Done] Verify via BSP filestore read (already implemented)
+Step 21:    [Done] App accessible at /sap/bc/ui5_ui5/sap/{appName}?sap-client={client}
+```
 
 ---
 

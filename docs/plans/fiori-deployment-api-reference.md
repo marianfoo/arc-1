@@ -620,6 +620,30 @@ HEAD /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV
 
 ### Detect UI5 Version on Target System
 
+**Primary method (recommended): SAP_UI component mapping**
+
+ARC-1 already fetches `/sap/bc/adt/system/components` at startup. Extract the `SAP_UI` component release and map to the UI5 LTS version:
+
+```typescript
+const SAP_UI_TO_UI5: Record<string, string> = {
+    '816': '1.136.0',    // FES 2025 for S/4HANA, EOM Q4/2032
+    '758': '1.120.0',    // FES 2023 for S/4HANA, EOM Q4/2030
+    '757': '1.108.0',    // FES 2022 for S/4HANA, EOM Q4/2030
+    '756': '1.96.0',     // FES 2021 for S/4HANA, EOM Q4/2026
+    '755': '1.84.0',     // FES 2020 (out of maintenance)
+    '754': '1.71.0',     // Fiori FES 6.0, EOM Q4/2030
+    '753': '1.60.0',     // Fiori FES 5.0 (out of maintenance)
+};
+```
+
+This mapping is stable — SAP_UI versions are fixed releases. It only changes when SAP ships a new SAP_UI version (~annually). Source: `https://ui5.sap.com/versionoverview.json`.
+
+Always use `.0` patch level (e.g., `1.120.0` not `1.120.17`) — `minUI5Version` is a minimum requirement.
+
+For BTP systems (detected via `SAP_CLOUD` component), default to `1.136.0` (latest LTS). UI5 on BTP is loaded from CDN, not from the ABAP server.
+
+**Fallback method (less reliable):**
+
 ```
 GET /sap/public/bc/ui5_ui5/bootstrap_info.json
 ```
@@ -629,7 +653,15 @@ Response:
 { "Version": "1.120.0" }
 ```
 
-Use this to set `minUI5Version` in the generated `manifest.json`.
+Not available on BTP ABAP Environment (UI5 loaded from CDN) and not always present on-premise. Use only as fallback.
+
+**External reference endpoint:**
+
+```
+GET https://ui5.sap.com/versionoverview.json
+```
+
+Returns JSON with `activeVersion`, plus an array of all UI5 versions with `sapuiversion` (SAP_UI component version), `lts` flag, `support` status, and `eom`/`eocp` dates. Can be used to build/update the mapping dynamically at build time.
 
 ### Detect ATO Settings (Cloud vs On-Prem)
 
@@ -639,3 +671,148 @@ Accept: application/*
 ```
 
 Returns XML with `operationsType`: `C` (Cloud) or `P` (Premise). Useful for determining if transport is required and which development package to use.
+
+---
+
+## Part 8: Fiori Elements App Generation via `@sap/generator-fiori`
+
+### 8.1 Overview
+
+Instead of generating manifest.json/Component.js templates in-memory (fragile, version-sensitive), ARC-1 uses SAP's official `@sap/generator-fiori` package in **headless mode**. This is the same approach used by SAP's own `@sap-ux/fiori-mcp-server`.
+
+**Package:** `@sap/generator-fiori` (public npm, Apache-2.0, ~10 MB)
+**Mechanism:** Shell out to `npx -y yo@4 @sap/fiori:headless <config.json> --force --skipInstall`
+**Output:** Complete Fiori Elements project; only `webapp/` subfolder is ZIPped for deployment
+
+### 8.2 Headless Config JSON (Version 0.2)
+
+The config `version` field **must be `"0.2"`** — validated, throws on mismatch.
+
+**Minimal config for a RAP LROP app with CDS annotations:**
+
+```json
+{
+    "version": "0.2",
+    "floorplan": "FE_LROP",
+    "project": {
+        "name": "zbooking-app",
+        "description": "Booking Management",
+        "targetFolder": "/tmp/fiori-gen-abc123",
+        "ui5Version": "1.120.0",
+        "sapux": true
+    },
+    "service": {
+        "host": "https://my-sap:443",
+        "servicePath": "/sap/opu/odata4/sap/zsb_booking/srvd_a2x/sap/zsd_booking/0001/",
+        "client": "100",
+        "edmx": "<?xml version=\"1.0\"?><edmx:Edmx Version=\"4.0\" xmlns:edmx=\"http://docs.oasis-open.org/odata/ns/edmx\">...</edmx:Edmx>"
+    },
+    "entityConfig": {
+        "mainEntity": {
+            "entityName": "Booking"
+        },
+        "generateFormAnnotations": false,
+        "generateLROPAnnotations": false
+    },
+    "telemetryData": {
+        "generationSourceName": "arc-1",
+        "generationSourceVersion": "1.0.0"
+    }
+}
+```
+
+**Important fields:**
+
+| Field | Required | Constraints |
+|-------|----------|-------------|
+| `version` | Yes | Must be `"0.2"` |
+| `floorplan` | Yes | Enum key: `"FE_LROP"`, `"FE_FPM"`, `"FE_OVP"`, `"FE_ALP"`, `"FE_FEOP"`, `"FE_WORKLIST"`, `"FF_SIMPLE"` |
+| `project.name` | Yes | `/^[a-z0-9-]+$/` — lowercase + dashes only, no underscores |
+| `project.targetFolder` | Yes | Absolute path — generator creates `{name}/` subfolder here |
+| `project.sapux` | Yes | `true` for all FE floorplans, `false` only for `FF_SIMPLE` |
+| `project.description` | Recommended | Used in package.json + i18n |
+| `project.ui5Version` | Recommended | Defaults to latest if omitted; set from SAP_UI mapping |
+| `service.edmx` | Yes (FE) | Full EDMX XML string — throws `Missing required property: edmx` without it |
+| `service.host` | Yes | SAP system URL |
+| `service.servicePath` | Yes | OData service path |
+| `entityConfig.mainEntity.entityName` | Yes (FE) | EntitySet name from EDMX |
+| `entityConfig.generateFormAnnotations` | No | Default `true`. Set `false` when CDS DDLX handles annotations |
+| `entityConfig.generateLROPAnnotations` | No | Default `true`. Set `false` when CDS DDLX handles annotations |
+
+### 8.3 EDMX Metadata Acquisition
+
+The generator needs the full OData EDMX XML. ARC-1 fetches it from the published service binding.
+
+**OData V4 (typical for RAP):**
+```
+GET /sap/opu/odata4/sap/{service_binding_name}/srvd_a2x/sap/{service_definition_name}/0001/$metadata
+Accept: application/xml
+```
+
+**OData V2:**
+```
+GET /sap/opu/odata/sap/{service_binding_name}/$metadata
+Accept: application/xml
+```
+
+The service URL pattern and OData version are available from `getSrvb()` which returns `odataVersion`, `serviceDefinition`, and other metadata. The service must be published first (`publishServiceBinding()`).
+
+### 8.4 Generated Output
+
+```
+{project.name}/
+├── package.json               # Not needed for deployment
+├── ui5.yaml                   # Not needed for deployment
+├── ui5-local.yaml             # Not needed for deployment
+├── README.md                  # Not needed for deployment
+├── .gitignore                 # Not needed for deployment
+└── webapp/                    # ← ZIP this folder for deployment
+    ├── manifest.json          # Routing, datasource, models, FLP config
+    ├── Component.js           # ~6 lines (extends sap/fe/core/AppComponent)
+    ├── i18n/
+    │   └── i18n.properties    # appTitle, appDescription
+    └── test/
+        └── flpSandbox.html    # FLP sandbox
+```
+
+Only the `webapp/` folder contents go into the ZIP archive for ABAP deployment. Files must be at the ZIP root level (no `webapp/` parent folder in the archive).
+
+### 8.5 ARC-1 Integration Flow
+
+```
+1. Read SRVB metadata (getSrvb) → get odataVersion, serviceDefinition
+2. Detect UI5 version from SAP_UI component → e.g., "1.120.0"
+3. Fetch $metadata EDMX from published service
+4. Read projection CDS entity → get main entity name
+5. Derive project.name from BSP name (lowercase + dashes: "ZAPP_BOOKING" → "zapp-booking")
+6. Build headless config JSON
+7. Write config to temp file
+8. Run: npx -y yo@4 @sap/fiori:headless config.json --force --skipInstall
+9. ZIP contents of {targetFolder}/{project.name}/webapp/ using adm-zip
+10. Deploy ZIP via ABAP_REPOSITORY_SRV (POST or PUT)
+11. Cleanup temp directory
+12. Return app URL: /sap/bc/ui5_ui5/sap/{bspName.toLowerCase()}?sap-client={client}
+```
+
+### 8.6 Error Handling
+
+| Scenario | Generator Behavior | ARC-1 Should |
+|----------|-------------------|--------------|
+| Config version wrong | `Error('App config version mismatch, supported: 0.2')` | Hard-code `"0.2"`, never hits |
+| Missing EDMX | `Error('Missing required property: edmx')` | Always provide — validate before calling |
+| Invalid project.name | Validation error | Validate `/^[a-z0-9-]+$/` before calling |
+| Folder exists (no --force) | `Error('A folder already exists')` | Always use `--force` |
+| npx not found | ENOENT process error | Check Node.js available, report to user |
+| First run delay | ~30-60s (downloads yo + @sap/generator-fiori ~100MB) | Warn user in skill, not a code issue |
+| Generator crash | Exit code 1, error on stderr | Parse stderr, return to user |
+
+### 8.7 Gotchas
+
+1. **`project.name` must be lowercase-dashes** — ABAP names like `ZAPP_BOOKING` won't work as project names. Derive: `zapp-booking`. The BSP name for deployment remains uppercase.
+2. **`floorplan` uses enum keys** — `"FE_LROP"` not `"lrop"`
+3. **First run is slow** (~30-60s) — npx downloads Yeoman + `@sap/generator-fiori`. Subsequent runs are fast (cached).
+4. **Only `webapp/` gets ZIPped** — not the root project folder
+5. **EDMX must be the full XML document** — not a subset
+6. **`service.host` should be HTTPS** — the generator validates this for OData projects
+7. **Yeoman version pinned to v4** — `yo@4` specifically (fiori-mcp-server pins this)
+8. **Timeout consideration** — add a timeout guard (~120s) for the npx process; first run can be slow but shouldn't hang indefinitely
