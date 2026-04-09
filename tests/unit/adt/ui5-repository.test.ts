@@ -74,6 +74,12 @@ describe('UI5 Repository', () => {
       const http = mockHttp();
       await expect(getAppInfo(http, safety, 'ZAPP')).rejects.toThrow('blocked by safety');
     });
+
+    it('re-throws non-404 errors', async () => {
+      const http = mockHttp();
+      vi.mocked(http.get).mockRejectedValue(new AdtApiError('Internal Server Error', 500, '/test'));
+      await expect(getAppInfo(http, unrestrictedSafetyConfig(), 'ZAPP')).rejects.toThrow('Internal Server Error');
+    });
   });
 
   // ─── downloadApp ────────────────────────────────────────────────────
@@ -101,6 +107,18 @@ describe('UI5 Repository', () => {
       const result = await downloadApp(http, unrestrictedSafetyConfig(), 'ZAPP');
       expect(result).toBeUndefined();
     });
+
+    it('re-throws non-404 errors', async () => {
+      const http = mockHttp();
+      vi.mocked(http.get).mockRejectedValue(new AdtApiError('Internal Server Error', 500, '/test'));
+      await expect(downloadApp(http, unrestrictedSafetyConfig(), 'ZAPP')).rejects.toThrow('Internal Server Error');
+    });
+
+    it('throws on safety check when read is blocked', async () => {
+      const safety = { ...defaultSafetyConfig(), disallowedOps: 'R' };
+      const http = mockHttp();
+      await expect(downloadApp(http, safety, 'ZAPP')).rejects.toThrow('blocked by safety');
+    });
   });
 
   // ─── probeService ───────────────────────────────────────────────────
@@ -122,6 +140,13 @@ describe('UI5 Repository', () => {
     it('returns false on 404', async () => {
       const http = mockHttp();
       vi.mocked(http.get).mockRejectedValue(new AdtApiError('Not found', 404, SERVICE_PATH));
+      const result = await probeService(http);
+      expect(result).toBe(false);
+    });
+
+    it('returns false on non-AdtApiError (e.g. network error)', async () => {
+      const http = mockHttp();
+      vi.mocked(http.get).mockRejectedValue(new Error('ECONNREFUSED'));
       const result = await probeService(http);
       expect(result).toBe(false);
     });

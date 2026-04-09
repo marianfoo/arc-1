@@ -30,7 +30,7 @@ export async function getAppInfo(
 ): Promise<BspDeployInfo | undefined> {
   checkOperation(safety, OperationType.Read, 'GetBSPDeployInfo');
 
-  const path = `${SERVICE_PATH}/Repositories('${encodeURIComponent(appName)}')`;
+  const path = `${SERVICE_PATH}/Repositories('${encodeURIComponent(appName)}')?$format=json`;
   let resp: AdtResponse;
   try {
     resp = await http.get(path, {

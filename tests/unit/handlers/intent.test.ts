@@ -390,6 +390,14 @@ describe('Intent Handler', () => {
       expect(result.content[0]!.text).toContain('not found');
     });
 
+    it('returns error for BSP_DEPLOY when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BSP_DEPLOY',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]!.text).toContain('requires a name');
+    });
+
     it('returns error for BSP_DEPLOY when ui5repo feature is unavailable', async () => {
       setCachedFeatures({
         hana: { available: false },

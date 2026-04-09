@@ -134,6 +134,7 @@ src/
 │   ├── devtools.ts             # Dev tools (syntax check, activate, publish/unpublish SRVB, unit tests)
 │   ├── diagnostics.ts          # Runtime diagnostics (short dumps ST22, ABAP profiler traces)
 │   ├── codeintel.ts            # Code intelligence (find def, refs, where-used, completion)
+│   ├── ui5-repository.ts       # UI5 ABAP Repository OData client (BSP deploy queries)
 │   └── transport.ts            # CTS transport management
 ├── context/
 │   ├── types.ts                # Context compression types
@@ -191,6 +192,7 @@ tests/
 | Task | Files |
 |------|-------|
 | Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` (for structured format, also `src/adt/xml-parser.ts`, `src/adt/types.ts`) |
+| Add OData-based read (non-ADT) | `src/adt/ui5-repository.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add method-level surgery | `src/context/method-surgery.ts` |
