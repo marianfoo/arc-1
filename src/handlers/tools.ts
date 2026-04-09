@@ -413,12 +413,22 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       description:
         'Activate (publish) ABAP objects. Supports single object or batch activation.\n' +
         'For batch: pass "objects" array with {type, name} entries to activate multiple objects in one call. ' +
-        'Essential for RAP stacks where DDLS, BDEF, SRVD, DDLX, and SRVB depend on each other and must be activated together.',
+        'Essential for RAP stacks where DDLS, BDEF, SRVD, DDLX, and SRVB depend on each other and must be activated together.\n' +
+        'For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Object name (for single activation)' },
+          action: {
+            type: 'string',
+            enum: ['activate', 'publish_srvb', 'unpublish_srvb'],
+            description:
+              'Action to perform. "activate" (default): activate ABAP objects. ' +
+              '"publish_srvb": publish a service binding to make OData service available. ' +
+              '"unpublish_srvb": unpublish a service binding.',
+          },
+          name: { type: 'string', description: 'Object name (for single activation or publish/unpublish)' },
           type: { type: 'string', description: 'Object type (PROG, CLAS, DDLS, DDLX, BDEF, SRVD, SRVB, etc.)' },
+          version: { type: 'string', description: 'Service version for publish/unpublish (default: "0001")' },
           objects: {
             type: 'array',
             items: {

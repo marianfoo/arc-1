@@ -60,10 +60,10 @@ Standard unit test approach. The publish API is a simple POST — mock it and ve
 
 Add two new functions to `src/adt/devtools.ts` after the existing `activate()` function (line ~48).
 
-- [ ] Add `publishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — `checkOperation(safety, OperationType.Activate, 'PublishServiceBinding')`, then `POST /sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}` with query param `action=publish`, empty body. Return response body.
-- [ ] Add `unpublishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — same pattern with `action=unpublish`
-- [ ] Add unit tests (~6 tests): publish happy path (verify URL contains `?action=publish`, method is POST), unpublish happy path, safety check blocks in read-only mode for both, verify `encodeURIComponent` is applied to the name
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `publishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — `checkOperation(safety, OperationType.Activate, 'PublishServiceBinding')`, then `POST /sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}` with query param `action=publish`, empty body. Return response body.
+- [x] Add `unpublishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — same pattern with `action=unpublish`
+- [x] Add unit tests (~6 tests): publish happy path (verify URL contains `?action=publish`, method is POST), unpublish happy path, safety check blocks in read-only mode for both, verify `encodeURIComponent` is applied to the name
+- [x] Run `npm test` — all tests must pass
 
 ### Task 2: Wire up SAPActivate handler and schema
 
@@ -74,11 +74,11 @@ Add two new functions to `src/adt/devtools.ts` after the existing `activate()` f
 
 Expose publish/unpublish via the SAPActivate tool with new action values.
 
-- [ ] Update `SAPActivateSchema` at `src/handlers/schemas.ts:156` to add an optional `action` field: `action: z.enum(['activate', 'publish_srvb', 'unpublish_srvb']).optional()` (default behavior remains `activate` when action is omitted)
-- [ ] Update SAPActivate tool description in `src/handlers/tools.ts` to mention the new actions: `For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption`
-- [ ] Add `publish_srvb` and `unpublish_srvb` cases in `handleSAPActivate` at `src/handlers/intent.ts`. For `publish_srvb`: call `publishServiceBinding(http, safety, name)`, then call `client.getSrvb(name)` to read back and return the metadata with publish confirmation. For `unpublish_srvb`: call `unpublishServiceBinding(http, safety, name)` and return confirmation.
-- [ ] Add handler unit tests (~4 tests): publish_srvb action calls correct function and returns SRVB info, unpublish_srvb action works, missing name returns error, default action still works as activate
-- [ ] Run `npm test` — all tests must pass
+- [x] Update `SAPActivateSchema` at `src/handlers/schemas.ts:156` to add an optional `action` field: `action: z.enum(['activate', 'publish_srvb', 'unpublish_srvb']).optional()` (default behavior remains `activate` when action is omitted)
+- [x] Update SAPActivate tool description in `src/handlers/tools.ts` to mention the new actions: `For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption`
+- [x] Add `publish_srvb` and `unpublish_srvb` cases in `handleSAPActivate` at `src/handlers/intent.ts`. For `publish_srvb`: call `publishServiceBinding(http, safety, name)`, then call `client.getSrvb(name)` to read back and return the metadata with publish confirmation. For `unpublish_srvb`: call `unpublishServiceBinding(http, safety, name)` and return confirmation.
+- [x] Add handler unit tests (~4 tests): publish_srvb action calls correct function and returns SRVB info, unpublish_srvb action works, missing name returns error, default action still works as activate
+- [x] Run `npm test` — all tests must pass
 
 ### Task 3: Update generate-rap-service skill
 
@@ -88,15 +88,15 @@ Expose publish/unpublish via the SAPActivate tool with new action values.
 
 Update the RAP generation skill to use the new publish action after the user creates the service binding.
 
-- [ ] In `skills/generate-rap-service.md`, update Step 13 (line ~565-583): after the manual SRVB creation instructions, add a new sub-step: "After the service binding is created and activated, publish it:" with `SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")`. Then `SAPRead(type="SRVB", name="ZSB_<entity>_V4")` to verify and show the service URL.
-- [ ] Make the same update in `.claude/commands/generate-rap-service.md`
-- [ ] Update the summary checklist at Step 14 (line ~596) to include `[x] Service binding published` as a checklist item
-- [ ] Run `npm test` — all tests must pass (skill changes don't affect tests, but verify nothing is broken)
+- [x] In `skills/generate-rap-service.md`, update Step 13 (line ~565-583): after the manual SRVB creation instructions, add a new sub-step: "After the service binding is created and activated, publish it:" with `SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")`. Then `SAPRead(type="SRVB", name="ZSB_<entity>_V4")` to verify and show the service URL.
+- [x] Make the same update in `.claude/commands/generate-rap-service.md`
+- [x] Update the summary checklist at Step 14 (line ~596) to include `[x] Service binding published` as a checklist item
+- [x] Run `npm test` — all tests must pass (skill changes don't affect tests, but verify nothing is broken)
 
 ### Task 4: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Verify SAPActivate schema accepts `action="publish_srvb"` with a name parameter
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Verify SAPActivate schema accepts `action="publish_srvb"` with a name parameter
+- [x] Move this plan to `docs/plans/completed/`

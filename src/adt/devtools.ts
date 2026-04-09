@@ -106,6 +106,62 @@ ${refs}
   return { success: !hasErrors, messages };
 }
 
+/** Result of a publish/unpublish operation */
+export interface PublishResult {
+  severity: string;
+  shortText: string;
+  longText: string;
+}
+
+function parsePublishResponse(xml: string): PublishResult {
+  const severity = xml.match(/<SEVERITY>([^<]*)<\/SEVERITY>/)?.[1] ?? 'UNKNOWN';
+  const shortText = xml.match(/<SHORT_TEXT>([^<]*)<\/SHORT_TEXT>/)?.[1] ?? '';
+  const longText = xml.match(/<LONG_TEXT>([^<]*)<\/LONG_TEXT>/)?.[1] ?? '';
+  return { severity, shortText, longText };
+}
+
+function publishBody(name: string): string {
+  return `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:objectReference adtcore:name="${name}"/></adtcore:objectReferences>`;
+}
+
+/** Publish an OData service binding (makes the service available for consumption) */
+export async function publishServiceBinding(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  name: string,
+  version = '0001',
+): Promise<PublishResult> {
+  checkOperation(safety, OperationType.Activate, 'PublishServiceBinding');
+
+  const resp = await http.post(
+    `/sap/bc/adt/businessservices/odatav2/publishjobs?servicename=${encodeURIComponent(name)}&serviceversion=${encodeURIComponent(version)}`,
+    publishBody(name),
+    'application/xml',
+    { Accept: 'application/*' },
+  );
+
+  return parsePublishResponse(resp.body);
+}
+
+/** Unpublish an OData service binding (removes the service from consumption) */
+export async function unpublishServiceBinding(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  name: string,
+  version = '0001',
+): Promise<PublishResult> {
+  checkOperation(safety, OperationType.Activate, 'UnpublishServiceBinding');
+
+  const resp = await http.post(
+    `/sap/bc/adt/businessservices/odatav2/unpublishjobs?servicename=${encodeURIComponent(name)}&serviceversion=${encodeURIComponent(version)}`,
+    publishBody(name),
+    'application/xml',
+    { Accept: 'application/*' },
+  );
+
+  return parsePublishResponse(resp.body);
+}
+
 /** Run ABAP unit tests for an object */
 export async function runUnitTests(
   http: AdtHttpClient,

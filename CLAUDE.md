@@ -131,7 +131,7 @@ src/
 │   ├── cookies.ts              # Cookie file parsing (Netscape format)
 │   ├── oauth.ts                # OAuth 2.0 for BTP ABAP Environment (browser login, token lifecycle)
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
-│   ├── devtools.ts             # Dev tools (syntax check, activate, unit tests)
+│   ├── devtools.ts             # Dev tools (syntax check, activate, publish/unpublish SRVB, unit tests)
 │   ├── diagnostics.ts          # Runtime diagnostics (short dumps ST22, ABAP profiler traces)
 │   ├── codeintel.ts            # Code intelligence (find def, refs, where-used, completion)
 │   └── transport.ts            # CTS transport management

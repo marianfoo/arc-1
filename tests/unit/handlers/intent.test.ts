@@ -1474,6 +1474,81 @@ ENDCLASS.`;
       const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
       expect(lastCallOpts.body).toContain('/sap/bc/adt/vit/wb/object_type/trant/object_name/ZTRAN01');
     });
+
+    it('publish_srvb action publishes and returns SRVB info', async () => {
+      const publishOkXml =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>published locally</SHORT_TEXT><LONG_TEXT/></DATA></asx:values></asx:abap>';
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF fetch for publish
+        .mockResolvedValueOnce(mockResponse(200, publishOkXml, {})) // POST publishjobs
+        .mockResolvedValueOnce(mockResponse(200, '<serviceBinding />', {})); // GET SRVB readback
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_BOOKING_V4',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully published service binding ZSB_BOOKING_V4');
+      // Verify readback content (parsed SRVB metadata) is included in the response
+      expect(result.content[0]?.text).toContain('bindingCreated');
+    });
+
+    it('publish_srvb returns error when SAP reports failure', async () => {
+      const publishErrorXml =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>ERROR</SEVERITY><SHORT_TEXT>Activating failed</SHORT_TEXT><LONG_TEXT>TADIR check failed</LONG_TEXT></DATA></asx:values></asx:abap>';
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(mockResponse(200, publishErrorXml, {}));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_BOOKING_V4',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Failed to publish');
+      expect(result.content[0]?.text).toContain('TADIR check failed');
+    });
+
+    it('unpublish_srvb action unpublishes service binding', async () => {
+      const unpublishOkXml =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY><SHORT_TEXT>un-published locally</SHORT_TEXT><LONG_TEXT/></DATA></asx:values></asx:abap>';
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF fetch for unpublish
+        .mockResolvedValueOnce(mockResponse(200, unpublishOkXml, {})); // POST unpublishjobs
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'unpublish_srvb',
+        name: 'ZSB_BOOKING_V4',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully unpublished service binding ZSB_BOOKING_V4');
+      // Verify the POST was made to the unpublishjobs endpoint
+      const postCall = mockFetch.mock.calls.find((call) => (call[1] as RequestInit)?.method === 'POST');
+      expect(postCall).toBeDefined();
+      expect(String(postCall![0])).toContain('unpublishjobs');
+    });
+
+    it('publish_srvb returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Missing required "name"');
+    });
+
+    it('unpublish_srvb returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'unpublish_srvb',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Missing required "name"');
+    });
+
+    it('default action still works as activate', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully activated PROG ZTEST');
+    });
   });
 
   // ─── SAPManage ─────────────────────────────────────────────────────

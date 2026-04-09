@@ -4,8 +4,8 @@ export default defineConfig({
   test: {
     globalSetup: ['tests/e2e/global-setup.ts'],
     include: ['tests/e2e/**/*.e2e.test.ts'],
-    // SAP can be slow — allow 60s per test
-    testTimeout: 60_000,
+    // SAP can be slow — allow 120s per test (BAPIRET2 where-used, DDLX reads, dump triggers)
+    testTimeout: 120_000,
     // Hook timeout — setup/teardown may create objects on SAP
     hookTimeout: 120_000,
     // Run E2E tests sequentially — one SAP system, avoid session conflicts

@@ -22,7 +22,15 @@ import {
   type WhereUsedResult,
 } from '../adt/codeintel.js';
 import { createObject, deleteObject, lockObject, safeUpdateSource, unlockObject } from '../adt/crud.js';
-import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../adt/devtools.js';
+import {
+  activate,
+  activateBatch,
+  publishServiceBinding,
+  runAtcCheck,
+  runUnitTests,
+  syntaxCheck,
+  unpublishServiceBinding,
+} from '../adt/devtools.js';
 import {
   getDump,
   getTraceDbAccesses,
@@ -1252,9 +1260,49 @@ function runPreWriteLint(source: string, type: string, name: string, config: Ser
 // ─── SAPActivate Handler ─────────────────────────────────────────────
 
 async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const type = String(args.type ?? '');
+  const action = String(args.action ?? 'activate');
+  const name = String(args.name ?? '');
+  const version = String(args.version ?? '0001');
+
+  // Publish service binding
+  if (action === 'publish_srvb') {
+    if (!name) {
+      return errorResult('Missing required "name" parameter for publish_srvb action.');
+    }
+    const result = await publishServiceBinding(client.http, client.safety, name, version);
+    if (result.severity === 'ERROR') {
+      return errorResult(
+        `Failed to publish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,
+      );
+    }
+    let srvbInfo: string;
+    try {
+      srvbInfo = await client.getSrvb(name);
+    } catch {
+      return textResult(
+        `Successfully published service binding ${name} (readback of binding metadata failed — use SAPRead to verify)`,
+      );
+    }
+    return textResult(`Successfully published service binding ${name}.\n\n${srvbInfo}`);
+  }
+
+  // Unpublish service binding
+  if (action === 'unpublish_srvb') {
+    if (!name) {
+      return errorResult('Missing required "name" parameter for unpublish_srvb action.');
+    }
+    const result = await unpublishServiceBinding(client.http, client.safety, name, version);
+    if (result.severity === 'ERROR') {
+      return errorResult(
+        `Failed to unpublish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,
+      );
+    }
+    return textResult(`Successfully unpublished service binding ${name}.`);
+  }
 
   // Batch activation: multiple objects at once (for RAP stacks etc.)
+  const type = String(args.type ?? '');
+
   if (args.objects && Array.isArray(args.objects)) {
     const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
       const objType = String(o.type ?? type);
@@ -1274,7 +1322,6 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   }
 
   // Single activation (existing behavior)
-  const name = String(args.name ?? '');
   const objectUrl = objectUrlForType(type, name);
 
   const result = await activate(client.http, client.safety, objectUrl);
