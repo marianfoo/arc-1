@@ -356,6 +356,21 @@ describe('Runtime Diagnostics', () => {
     it('returns empty for no entries', () => {
       expect(parseTraceHitlist('<hitList/>')).toEqual([]);
     });
+
+    it('parses attributes in non-standard order', () => {
+      const xml = `<hitList>
+        <hitListEntry hitCount="7" calledProgram="CL_B=>RUN" grossTime="900" callingProgram="CL_A=>EXEC" traceEventNetTime="400"/>
+      </hitList>`;
+      const result = parseTraceHitlist(xml);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        callingProgram: 'CL_A=>EXEC',
+        calledProgram: 'CL_B=>RUN',
+        hitCount: 7,
+        grossTime: 900,
+        netTime: 400,
+      });
+    });
   });
 
   describe('parseTraceStatements', () => {

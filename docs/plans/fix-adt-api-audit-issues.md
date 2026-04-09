@@ -169,11 +169,11 @@ The `parseTransportList()` regex at line ~79 assumes exact attribute order. Repl
 
 The `parseTraceHitlist()` at line ~292 uses a primary regex with strict attribute order plus a fallback. Replace both with `parseXml()` + `findDeepNodes()`.
 
-- [ ] In `src/adt/diagnostics.ts`, add import if not already present: `import { parseXml, findDeepNodes } from './xml-parser.js';`
-- [ ] Rewrite `parseTraceHitlist()` (line ~292-330) to use `parseXml()` + `findDeepNodes(parsed, 'hitListEntry')`. For each entry, extract `@_callingProgram`, `@_calledProgram`, `@_hitCount`, `@_grossTime`, and `@_traceEventNetTime` (fallback to `@_netTime`)
-- [ ] Add `'hitListEntry'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config
-- [ ] Add test (~1 test) with attributes in non-standard order → still parsed correctly
-- [ ] Run `npm test` — all tests must pass
+- [x] In `src/adt/diagnostics.ts`, add import if not already present: `import { parseXml, findDeepNodes } from './xml-parser.js';`
+- [x] Rewrite `parseTraceHitlist()` (line ~292-330) to use `parseXml()` + `findDeepNodes(parsed, 'hitListEntry')`. For each entry, extract `@_callingProgram`, `@_calledProgram`, `@_hitCount`, `@_grossTime`, and `@_traceEventNetTime` (fallback to `@_netTime`)
+- [x] Add `'hitListEntry'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config
+- [x] Add test (~1 test) with attributes in non-standard order → still parsed correctly
+- [x] Run `npm test` — all tests must pass
 
 ### Task 9: Remove dead code in table contents parser (Issue #8)
 

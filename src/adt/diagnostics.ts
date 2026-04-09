@@ -19,6 +19,7 @@ import type {
   TraceHitlistEntry,
   TraceStatement,
 } from './types.js';
+import { findDeepNodes, parseXml } from './xml-parser.js';
 
 // ─── Short Dumps ────────────────────────────────────────────────────
 
@@ -290,43 +291,16 @@ export function parseTraceList(xml: string): TraceEntry[] {
  * Hitlist entries contain procedure names and timing data.
  */
 export function parseTraceHitlist(xml: string): TraceHitlistEntry[] {
-  const entries: TraceHitlistEntry[] = [];
-  const entryRegex =
-    /<hitListEntry[^>]*callingProgram="([^"]*)"[^>]*calledProgram="([^"]*)"[^>]*hitCount="(\d+)"[^>]*grossTime="(\d+)"[^>]*(?:traceEventNetTime|netTime)="(\d+)"/g;
+  const parsed = parseXml(xml);
+  const nodes = findDeepNodes(parsed, 'hitListEntry');
 
-  let match: RegExpExecArray | null;
-  while ((match = entryRegex.exec(xml)) !== null) {
-    entries.push({
-      callingProgram: match[1]!,
-      calledProgram: match[2]!,
-      hitCount: Number(match[3]),
-      grossTime: Number(match[4]),
-      netTime: Number(match[5]),
-    });
-  }
-
-  // Fallback: try generic attribute extraction if regex didn't match
-  if (entries.length === 0) {
-    const genericRegex = /<(?:hitListEntry|entry)[^>]+>/g;
-    let gMatch: RegExpExecArray | null;
-    while ((gMatch = genericRegex.exec(xml)) !== null) {
-      const tag = gMatch[0];
-      const callingProgram = extractAttrSimple(tag, 'callingProgram') || '';
-      const calledProgram = extractAttrSimple(tag, 'calledProgram') || '';
-      const hitCount = extractAttrSimple(tag, 'hitCount');
-      if (callingProgram || calledProgram) {
-        entries.push({
-          callingProgram,
-          calledProgram,
-          hitCount: hitCount ? Number(hitCount) : 0,
-          grossTime: Number(extractAttrSimple(tag, 'grossTime') || '0'),
-          netTime: Number(extractAttrSimple(tag, 'traceEventNetTime') || extractAttrSimple(tag, 'netTime') || '0'),
-        });
-      }
-    }
-  }
-
-  return entries;
+  return nodes.map((node) => ({
+    callingProgram: String(node['@_callingProgram'] ?? ''),
+    calledProgram: String(node['@_calledProgram'] ?? ''),
+    hitCount: Number(node['@_hitCount'] ?? 0),
+    grossTime: Number(node['@_grossTime'] ?? 0),
+    netTime: Number(node['@_traceEventNetTime'] ?? node['@_netTime'] ?? 0),
+  }));
 }
 
 /**
