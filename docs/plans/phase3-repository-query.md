@@ -93,11 +93,11 @@ Add a feature probe for the ABAP Repository OData Service.
 
 Expose the OData query via `SAPRead(type="BSP_DEPLOY")`.
 
-- [ ] Add `'BSP_DEPLOY'` to `SAPREAD_TYPES_ONPREM` at `src/handlers/schemas.ts:17` and `SAPREAD_TYPES_BTP` at line ~45
-- [ ] Update SAPRead description strings in `src/handlers/tools.ts` to include: `BSP_DEPLOY (query deployed UI5 apps via ABAP Repository Service — returns name, package, description)`
-- [ ] Add `BSP_DEPLOY` case in `handleSAPRead` at `src/handlers/intent.ts`. Call `getAppInfo(http, safety, name)`. If result is undefined, return "App not found". Otherwise return JSON.stringify of the metadata.
-- [ ] Add handler unit tests (~3 tests): BSP_DEPLOY returns metadata, returns "not found" for missing app, feature gate
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `'BSP_DEPLOY'` to `SAPREAD_TYPES_ONPREM` at `src/handlers/schemas.ts:17` and `SAPREAD_TYPES_BTP` at line ~45
+- [x] Update SAPRead description strings in `src/handlers/tools.ts` to include: `BSP_DEPLOY (query deployed UI5 apps via ABAP Repository Service — returns name, package, description)`
+- [x] Add `BSP_DEPLOY` case in `handleSAPRead` at `src/handlers/intent.ts`. Call `getAppInfo(http, safety, name)`. If result is undefined, return "App not found". Otherwise return JSON.stringify of the metadata.
+- [x] Add handler unit tests (~3 tests): BSP_DEPLOY returns metadata, returns "not found" for missing app, feature gate
+- [x] Run `npm test` — all tests must pass
 
 ### Task 4: Final verification
 

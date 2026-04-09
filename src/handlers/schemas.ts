@@ -41,6 +41,7 @@ const SAPREAD_TYPES_ONPREM = [
   'TEXT_ELEMENTS',
   'VARIANTS',
   'BSP',
+  'BSP_DEPLOY',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [
@@ -63,6 +64,7 @@ const SAPREAD_TYPES_BTP = [
   'COMPONENTS',
   'MESSAGES',
   'BSP',
+  'BSP_DEPLOY',
 ] as const;
 
 export const SAPReadSchema = z.object({

@@ -44,6 +44,7 @@ import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures 
 import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
 import type { ResolvedFeatures } from '../adt/types.js';
+import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
 import { extractCdsElements } from '../context/cds-deps.js';
@@ -676,9 +677,25 @@ async function handleSAPRead(
       }
       return textResult(JSON.stringify(await client.getBspAppStructure(name, `/${include}`), null, 2));
     }
+    case 'BSP_DEPLOY': {
+      if (cachedFeatures?.ui5repo && !cachedFeatures.ui5repo.available) {
+        return errorResult(
+          'ABAP Repository OData Service is not available on this SAP system. ' +
+            'Run SAPManage(action="probe") to verify feature availability.',
+        );
+      }
+      if (!name) {
+        return errorResult('BSP_DEPLOY requires a name parameter (e.g., name="ZAPP_BOOKING").');
+      }
+      const info = await getAppInfo(client.http, client.safety, name);
+      if (!info) {
+        return textResult(`App "${name}" not found in ABAP Repository.`);
+      }
+      return textResult(JSON.stringify(info, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY. ` +
           'Tip: Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type="DDLS", CLAS/OC → type="CLAS", PROG/P → type="PROG"). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );

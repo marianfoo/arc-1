@@ -357,6 +357,61 @@ describe('Intent Handler', () => {
       }
     });
 
+    it('reads BSP_DEPLOY metadata for a deployed app', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          JSON.stringify({
+            d: { Name: 'ZAPP_BOOKING', Package: '$TMP', Description: 'Booking App', Info: 'deployed' },
+          }),
+          { 'x-csrf-token': 'odata-token' },
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BSP_DEPLOY',
+        name: 'ZAPP_BOOKING',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('ZAPP_BOOKING');
+      expect(parsed.package).toBe('$TMP');
+      expect(parsed.description).toBe('Booking App');
+    });
+
+    it('returns "not found" for BSP_DEPLOY when app does not exist', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, 'Not Found'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BSP_DEPLOY',
+        name: 'ZNONEXISTENT',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]!.text).toContain('not found');
+    });
+
+    it('returns error for BSP_DEPLOY when ui5repo feature is unavailable', async () => {
+      setCachedFeatures({
+        hana: { available: false },
+        abapGit: { available: false },
+        rap: { available: false },
+        amdp: { available: false },
+        ui5: { available: false },
+        ui5repo: { available: false },
+        transport: { available: false },
+      });
+      try {
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+          type: 'BSP_DEPLOY',
+          name: 'ZAPP_BOOKING',
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]!.text).toContain('not available');
+      } finally {
+        resetCachedFeatures();
+      }
+    });
+
     it('reads a structure (STRU)', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'STRU',
