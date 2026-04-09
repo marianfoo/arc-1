@@ -128,7 +128,10 @@ const SAPCONTEXT_DESC_ONPREM =
   'Filtering: SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded — the LLM already knows standard SAP APIs. ' +
   'Custom objects (Z*, Y*) are prioritized.\n\n' +
   'Use SAPContext BEFORE writing code that modifies or extends existing objects. ' +
-  'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.';
+  'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.\n\n' +
+  'For CDS analysis: Use SAPContext instead of reading each view in the dependency chain individually. ' +
+  'A single SAPContext call on a consumption view (e.g., ZC_*) returns all dependent interface views, tables, and associations — ' +
+  'replacing 5-10 separate SAPRead calls. Only use targeted SAPRead for metadata extensions (DDLX) or service bindings (SRVB) that SAPContext does not cover.';
 
 const SAPCONTEXT_DESC_BTP =
   'Get compressed dependency context for an ABAP object or CDS entity (BTP ABAP Environment). Returns only the public API contracts ' +
@@ -141,7 +144,10 @@ const SAPCONTEXT_DESC_BTP =
   "Each dependency's full source is included. Essential for CDS unit test generation.\n\n" +
   'On BTP: released SAP objects (CL_ABAP_*, IF_ABAP_*) are included since they form the primary development API surface. ' +
   'Custom objects (Z*, Y*) are also included.\n\n' +
-  'Use SAPContext BEFORE writing code that modifies or extends existing objects.';
+  'Use SAPContext BEFORE writing code that modifies or extends existing objects.\n\n' +
+  'For CDS analysis: Use SAPContext instead of reading each view in the dependency chain individually. ' +
+  'A single SAPContext call on a consumption view returns all dependent interface views, tables, and associations — ' +
+  'replacing 5-10 separate SAPRead calls.';
 
 // ─── SAPQuery ───────────────────────────────────────────────────────
 
