@@ -308,6 +308,14 @@ export interface BspFileNode {
   etag?: string;
 }
 
+/** BSP deploy info from ABAP Repository OData Service */
+export interface BspDeployInfo {
+  name: string;
+  package: string;
+  description: string;
+  info: string;
+}
+
 /** Transaction code metadata */
 export interface TransactionInfo {
   code: string;
