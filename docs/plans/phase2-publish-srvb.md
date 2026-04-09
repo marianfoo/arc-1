@@ -1,148 +1,102 @@
 # Phase 2: Publish Service Binding
 
-## Goal
+## Overview
 
-Add the ability to publish and unpublish service bindings via ADT API. This is the missing step between creating a RAP stack and having a working OData service. After publishing, the Fiori Elements preview URL becomes available — just like clicking "Publish" and "Preview" in ADT Eclipse.
+Add the ability to publish and unpublish OData service bindings via the ADT API. This is the missing step between creating a RAP stack and having a working OData service. After publishing, the Fiori Elements preview URL becomes available — equivalent to clicking "Publish" in ADT Eclipse. The `generate-rap-service` skill currently tells users to create and publish the service binding manually (Step 13); this change enables `SAPActivate(action="publish_srvb")` to automate the publish step.
 
-## Why Second
+Confirmed working API — used by vibing-steampunk (`PublishServiceBinding`) and mcp-abap-abap-adt-api (`publishServiceBinding`, `unPublishServiceBinding`).
 
-- Eliminates the biggest manual step in RAP generation (Step 13 in `generate-rap-service` skill currently says "create manually in ADT")
-- Enables Fiori Elements preview URL without needing a full BSP deployment
-- Confirmed working API — used by vibing-steampunk (`PublishServiceBinding`) and mcp-abap-abap-adt-api (`publishServiceBinding`)
-- Very small effort (XS)
+## Context
 
-## API
+### Current State
 
-### Publish
+- ARC-1 can **read** service binding metadata: `getSrvb()` at `src/adt/client.ts:264-270` returns structured JSON with OData version, publish status, service definition reference
+- ARC-1 **cannot publish or unpublish** service bindings
+- The `generate-rap-service` skill instructs users to manually create and publish SRVB (Step 13 at `skills/generate-rap-service.md:565-583`)
+- `SAPActivate` currently only supports object activation (not service publishing)
 
-```
-POST /sap/bc/adt/businessservices/bindings/{encodeURIComponent(name)}
-X-Csrf-Token: {token}
-Query: action=publish
-```
+### Target State
 
-### Unpublish
+- `SAPActivate(action="publish_srvb", name="ZSB_BOOKING_V4")` publishes the service binding
+- `SAPActivate(action="unpublish_srvb", name="ZSB_BOOKING_V4")` unpublishes it
+- After publish, read back SRVB to confirm and show the service URL
+- `generate-rap-service` skill updated to include publish step
 
-```
-POST /sap/bc/adt/businessservices/bindings/{encodeURIComponent(name)}
-X-Csrf-Token: {token}
-Query: action=unpublish
-```
+### Key Files
 
-### Preview URL (after publish)
+| File | Role |
+|------|------|
+| `src/adt/devtools.ts` | Development tools — add `publishServiceBinding()`, `unpublishServiceBinding()` (after `activate` at line ~48) |
+| `src/handlers/intent.ts` | Intent handler — add `publish_srvb`/`unpublish_srvb` cases in `handleSAPActivate` |
+| `src/handlers/tools.ts` | Tool descriptions — update SAPActivate description |
+| `src/handlers/schemas.ts` | Zod schemas — add action enum to SAPActivate (line ~156) |
+| `skills/generate-rap-service.md` | RAP generation skill — update Step 13 |
+| `.claude/commands/generate-rap-service.md` | Claude Code command — same update |
+| `tests/unit/adt/devtools.test.ts` | Unit tests for new functions |
+| `tests/unit/handlers/intent.test.ts` | Handler tests for new actions |
 
-For OData V4 bindings, the service URL pattern is:
-```
-/sap/opu/odata4/sap/{binding_name}/srvd_a2x/sap/{service_definition}/0001/
-```
+### Design Principles
 
-The Fiori Elements preview (on systems with UI5) is accessible via the service binding's preview endpoint. The exact URL depends on the system but typically follows:
-```
-/sap/bc/adt/businessservices/odatav4/{binding_name}/preview
-```
+1. Follow existing devtools pattern: safety check → HTTP call → return result (see `activate()` at `src/adt/devtools.ts:48`)
+2. Use `OperationType.Activate` for both publish and unpublish — consistent with existing activation semantics and blocked by `readOnly` mode
+3. The API is a POST with `?action=publish` query parameter to the existing SRVB endpoint — minimal new HTTP logic
+4. After publish, read back the SRVB metadata to confirm success and show the service URL to the user
 
-**Note:** The exact preview URL mechanism needs manual testing. The SRVB metadata (already readable via `getSrvb()`) contains the service URL which can be used to construct the preview.
+## Development Approach
 
-## Implementation Tasks
+Standard unit test approach. The publish API is a simple POST — mock it and verify the URL, method, and query parameters. Update the skill markdown files to include the new step.
 
-### 1. Add publish/unpublish to devtools (`src/adt/devtools.ts`)
+## Validation Commands
 
-```typescript
-/** Publish a service binding → registers OData service */
-export async function publishServiceBinding(
-  http: AdtHttpClient,
-  safety: SafetyConfig,
-  name: string,
-): Promise<string> {
-  checkOperation(safety, OperationType.Activate, 'PublishServiceBinding');
-  const resp = await http.post(
-    `/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}`,
-    '', // empty body
-    { /* headers */ },
-    { action: 'publish' } // query params
-  );
-  return resp.body;
-}
+- `npm test`
+- `npm run typecheck`
+- `npm run lint`
 
-/** Unpublish a service binding → deregisters OData service */
-export async function unpublishServiceBinding(
-  http: AdtHttpClient,
-  safety: SafetyConfig,
-  name: string,
-): Promise<string> {
-  checkOperation(safety, OperationType.Activate, 'UnpublishServiceBinding');
-  const resp = await http.post(
-    `/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}`,
-    '',
-    { /* headers */ },
-    { action: 'unpublish' }
-  );
-  return resp.body;
-}
-```
+### Task 1: Implement publish/unpublish in devtools
 
-### 2. Add SAPActivate action (`src/handlers/intent.ts`)
+**Files:**
+- Modify: `src/adt/devtools.ts`
+- Modify: `tests/unit/adt/devtools.test.ts`
 
-Add `publish_srvb` and `unpublish_srvb` actions to SAPActivate handler:
+Add two new functions to `src/adt/devtools.ts` after the existing `activate()` function (line ~48).
 
-```typescript
-case 'publish_srvb':
-  await publishServiceBinding(http, safety, name);
-  // Read back to confirm and show service URL
-  const srvbInfo = await client.getSrvb(name);
-  return textResult(`Service binding ${name} published.\n${srvbInfo}`);
+- [ ] Add `publishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — `checkOperation(safety, OperationType.Activate, 'PublishServiceBinding')`, then `POST /sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}` with query param `action=publish`, empty body. Return response body.
+- [ ] Add `unpublishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — same pattern with `action=unpublish`
+- [ ] Add unit tests (~6 tests): publish happy path (verify URL contains `?action=publish`, method is POST), unpublish happy path, safety check blocks in read-only mode for both, verify `encodeURIComponent` is applied to the name
+- [ ] Run `npm test` — all tests must pass
 
-case 'unpublish_srvb':
-  await unpublishServiceBinding(http, safety, name);
-  return textResult(`Service binding ${name} unpublished.`);
-```
+### Task 2: Wire up SAPActivate handler and schema
 
-### 3. Update tool descriptions (`src/handlers/tools.ts`)
+**Files:**
+- Modify: `src/handlers/schemas.ts`
+- Modify: `src/handlers/tools.ts`
+- Modify: `src/handlers/intent.ts`
 
-Add `publish_srvb` and `unpublish_srvb` to SAPActivate action enum and description.
+Expose publish/unpublish via the SAPActivate tool with new action values.
 
-### 4. Update Zod schema (`src/handlers/schemas.ts`)
+- [ ] Update `SAPActivateSchema` at `src/handlers/schemas.ts:156` to add an optional `action` field: `action: z.enum(['activate', 'publish_srvb', 'unpublish_srvb']).optional()` (default behavior remains `activate` when action is omitted)
+- [ ] Update SAPActivate tool description in `src/handlers/tools.ts` to mention the new actions: `For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption`
+- [ ] Add `publish_srvb` and `unpublish_srvb` cases in `handleSAPActivate` at `src/handlers/intent.ts`. For `publish_srvb`: call `publishServiceBinding(http, safety, name)`, then call `client.getSrvb(name)` to read back and return the metadata with publish confirmation. For `unpublish_srvb`: call `unpublishServiceBinding(http, safety, name)` and return confirmation.
+- [ ] Add handler unit tests (~4 tests): publish_srvb action calls correct function and returns SRVB info, unpublish_srvb action works, missing name returns error, default action still works as activate
+- [ ] Run `npm test` — all tests must pass
 
-Add the new action values to SAPActivate schema.
+### Task 3: Update generate-rap-service skill
 
-### 5. Update generate-rap-service skill
+**Files:**
+- Modify: `skills/generate-rap-service.md`
+- Modify: `.claude/commands/generate-rap-service.md`
 
-Replace Step 13 "manual creation" instruction. After the SRVB is created (still manual), add:
+Update the RAP generation skill to use the new publish action after the user creates the service binding.
 
-```
-SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
-```
+- [ ] In `skills/generate-rap-service.md`, update Step 13 (line ~565-583): after the manual SRVB creation instructions, add a new sub-step: "After the service binding is created and activated, publish it:" with `SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")`. Then `SAPRead(type="SRVB", name="ZSB_<entity>_V4")` to verify and show the service URL.
+- [ ] Make the same update in `.claude/commands/generate-rap-service.md`
+- [ ] Update the summary checklist at Step 14 (line ~596) to include `[x] Service binding published` as a checklist item
+- [ ] Run `npm test` — all tests must pass (skill changes don't affect tests, but verify nothing is broken)
 
-Then read back to get the service URL:
-```
-SAPRead(type="SRVB", name="ZSB_<entity>_V4")
-```
+### Task 4: Final verification
 
-The skill can then provide the preview URL to the user.
-
-### 6. Safety considerations
-
-- `publishServiceBinding` uses `OperationType.Activate` — blocked by `readOnly` mode
-- `unpublishServiceBinding` also `OperationType.Activate`
-- Both require write access in safety config
-
-### 7. Tests
-
-- Unit test: mock POST with `?action=publish`, verify URL and method
-- Unit test: verify safety check blocks in read-only mode
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/adt/devtools.ts` | Add `publishServiceBinding()`, `unpublishServiceBinding()` |
-| `src/handlers/intent.ts` | Add `publish_srvb`, `unpublish_srvb` cases in SAPActivate |
-| `src/handlers/tools.ts` | Update SAPActivate description and action enum |
-| `src/handlers/schemas.ts` | Add new actions to SAPActivate schema |
-| `skills/generate-rap-service.md` | Update Step 13 to include publish step |
-| `.claude/commands/generate-rap-service.md` | Same update |
-| `tests/unit/adt/devtools.test.ts` | Unit tests |
-
-## Estimated Effort
-
-Half day including tests.
+- [ ] Run full test suite: `npm test` — all tests pass
+- [ ] Run typecheck: `npm run typecheck` — no errors
+- [ ] Run lint: `npm run lint` — no errors
+- [ ] Verify SAPActivate schema accepts `action="publish_srvb"` with a name parameter
+- [ ] Move this plan to `docs/plans/completed/`
