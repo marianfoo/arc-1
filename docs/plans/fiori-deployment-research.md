@@ -501,55 +501,63 @@ Add read-only BSP tools for verifying deployed apps:
 
 ## What a Full "Generate RAP + Fiori + Deploy" Skill Would Look Like
 
+The end goal is a single E2E skill that takes a user from natural language description to a running Fiori Elements app. This extends the existing `generate-rap-service` skill.
+
 ```
 Step 1-12:  [Existing] Generate RAP stack (table, CDS, BDEF, SRVD, DDLX, CLAS)
-Step 13:    [Existing] Create service binding (manual, instruct user)
-Step 14:    [New] Publish service binding → OData service is live
-Step 15:    [New] Detect UI5 version from target system
-Step 16:    [New] Generate manifest.json with service URL, entity, FLP config
-Step 17:    [New] Generate Component.js, i18n, index.html
-Step 18:    [New] ZIP webapp files, base64-encode
-Step 19:    [New] Deploy via POST /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories
-Step 20:    [New] Verify deployment via ADT filestore read
-Step 21:    [Verify] App accessible at /sap/bc/ui5_ui5/sap/{appName}
+Step 13:    [Existing] Create service binding (manual — instruct user)
+Step 14:    [Phase 2] Publish service binding → OData service is live, preview URL available
+Step 15:    [Phase 3] Query ABAP_REPOSITORY_SRV → check if BSP app already exists
+Step 16:    [Phase 4] Generate minimal Fiori Elements webapp (manifest.json, Component.js, i18n, index.html)
+Step 17:    [Phase 4] Deploy via ABAP_REPOSITORY_SRV → creates BSP + ICF node automatically
+Step 18:    [Phase 1] Verify deployment via ADT filestore read
+Step 19:    [Done] App accessible at /sap/bc/ui5_ui5/sap/{appName}/index.html (no FLP needed)
 ```
 
 ---
 
-## Recommendations
+## Implementation Phases (Ordered by Priority)
 
-### Priority 1: Publish Service Binding (Immediate Value)
+Each phase is independently valuable and will be tackled one by one. Detailed plans for each phase are in separate documents.
+
+### Phase 1: ADT Filestore Read Operations
+- **Effort:** S (1-2 days)
+- **Impact:** High — enables reading deployed UI5/Fiori apps, browsing webapp files, verifying deployments. Very useful standalone capability even without deployment.
+- **API:** `/sap/bc/adt/filestore/ui5-bsp/objects` (read-only, already feature-probed)
+- **Operations:** List BSP apps, browse file structure, read file content
+- **Implementation:** New methods in `src/adt/client.ts`, new SAPRead types (`BSP`, `BSP_FILE`), XML parser for Atom feeds
+- **Detailed plan:** `docs/plans/phase1-filestore-read.md`
+
+### Phase 2: Publish Service Binding
 - **Effort:** XS (half day)
-- **Impact:** Eliminates the biggest manual step in RAP generation
-- **API:** Already confirmed working (VSP + mcp-abap-abap-adt-api use it)
-- **Implementation:** Add `publishServiceBinding()` and `unpublishServiceBinding()` to `src/adt/devtools.ts`
+- **Impact:** High — eliminates the biggest manual step in RAP generation. Enables Fiori Elements preview URL (like ADT Eclipse "Preview" button) without needing a full BSP deployment.
+- **API:** `POST /sap/bc/adt/businessservices/bindings/{name}?action=publish`
+- **Implementation:** Add `publishServiceBinding()` and `unpublishServiceBinding()` to `src/adt/devtools.ts`, update `generate-rap-service` skill to include publish step
+- **Preview URL:** After publish, the OData service URL can be used with SAP's Fiori Elements preview: `/sap/bc/adt/businessservices/odatav4/{binding}/preview`
+- **Detailed plan:** `docs/plans/phase2-publish-srvb.md`
 
-### Priority 2: ABAP Repository Deployment (FEAT-29e revised)
-- **Effort:** M (3-5 days)
-- **Impact:** Enables full Fiori app deployment
-- **API:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` — the correct write API (NOT ADT filestore)
-- **Implementation:** New `src/adt/ui5-deploy.ts` or extend `src/adt/http.ts` for OData paths
-- **Reference:** See `docs/plans/fiori-deployment-api-reference.md` for exact HTTP specs
+### Phase 3: ABAP Repository Service (Query/Describe)
+- **Effort:** S (1-2 days)
+- **Impact:** Medium — enables querying deployed BSP apps via OData, checking app existence, downloading app content. Foundation for Phase 4.
+- **API:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` (GET operations only)
+- **Key concern:** This is an OData service on a different path than ADT (`/sap/opu/odata/` vs `/sap/bc/adt/`). Needs manual testing to verify CSRF token sharing, cookie behavior, auth headers.
+- **Operations:** Get app info, download app ZIP, feature probe
+- **Implementation:** New `src/adt/ui5-repository.ts` with separate CSRF handling
+- **Detailed plan:** `docs/plans/phase3-repository-query.md`
 
-### Priority 3: Fiori Elements App Template
-- **Effort:** S (1-2 days)  
-- **Impact:** Automates boilerplate generation — `manifest.json` is 90% of the work
-- **Implementation:** Template engine in a new `src/fiori/` module or as part of the RAP generation skill
+### Phase 4: Deploy Fiori Elements App (E2E Skill)
+- **Effort:** M-L (5-7 days)
+- **Impact:** Very high — completes the Table → RAP → Fiori Elements pipeline. First MCP server to do this.
+- **Approach:** Use SAP's existing `@sap-ux/fiori-elements-writer` patterns to generate a minimal Fiori Elements app. Deploy via ABAP_REPOSITORY_SRV. The deployed app creates its own ICF node and can be opened directly via `index.html` — no FLP/launchpad needed.
+- **Key insight:** Keep the generated app minimal — just enough for a working List Report + Object Page. SAP's Fiori tools packages provide the template patterns, but we generate the files ourselves (no npm dependency needed).
+- **Implementation:** New `generate-fiori-app` skill, ZIP creation with `adm-zip`, deploy via Phase 3 client
+- **Detailed plan:** `docs/plans/phase4-deploy-fiori-app.md`
 
-### Priority 4: ADT Filestore Read (Optional)
-- **Effort:** XS (half day)
-- **Impact:** Low — useful for verifying deployments, reading deployed files
-- **API:** `/sap/bc/adt/filestore/ui5-bsp` — read-only (list apps, browse files, get content)
-
-### Out of Scope: FLP Tile Creation
-FLP tile/catalog configuration varies significantly between BTP and on-prem:
-- **BTP ABAP:** `crossNavigation.inbounds` in manifest.json is auto-registered by app index
-- **On-prem:** Requires admin to assign app to catalog/group via FLP Designer (transaction `/UI2/FLPD_CUST`) or `/UI2/SEMOBJ_SAP` for semantic objects
-- **Recommendation:** After deployment, guide the user with system-specific instructions and SAP documentation links rather than trying to automate this
-
-### Not Needed: Custom ICF Node
-- BSP deployment via ABAP_REPOSITORY_SRV automatically creates the necessary ICF service entry
-- No custom ABAP program or ICF node is required
+### Out of Scope: FLP Tile/Launchpad Configuration
+FLP configuration varies significantly by system type and setup:
+- **BTP ABAP:** `crossNavigation.inbounds` in manifest.json is auto-registered. Managed App Router handles the rest.
+- **On-prem:** Requires admin to configure catalog/group via FLP Designer (transaction `/UI2/FLPD_CUST`), set up semantic objects (`/UI2/SEMOBJ_SAP`), and assign target mappings.
+- **Recommendation:** After deployment, provide system-specific guidance and link to SAP documentation. The deployed app is accessible directly via its ICF URL + `index.html` without FLP.
 
 ---
 
