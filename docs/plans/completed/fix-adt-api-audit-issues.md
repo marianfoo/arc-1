@@ -201,8 +201,8 @@ Update the audit report to reflect that all issues have been fixed, and ensure d
 
 ### Task 11: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Verify that all `isArray` additions in `src/adt/xml-parser.ts` are correct and don't break other parsers
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass (1192 tests)
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Verify that all `isArray` additions in `src/adt/xml-parser.ts` are correct and don't break other parsers
+- [x] Move this plan to `docs/plans/completed/`
