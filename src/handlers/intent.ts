@@ -1269,7 +1269,14 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
       return errorResult('Missing required "name" parameter for publish_srvb action.');
     }
     await publishServiceBinding(client.http, client.safety, name);
-    const srvbInfo = await client.getSrvb(name);
+    let srvbInfo: string;
+    try {
+      srvbInfo = await client.getSrvb(name);
+    } catch {
+      return textResult(
+        `Successfully published service binding ${name}. (Readback of binding metadata failed — use SAPRead to verify.)`,
+      );
+    }
     return textResult(`Successfully published service binding ${name}.\n\n${srvbInfo}`);
   }
 

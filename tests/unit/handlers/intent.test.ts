@@ -1487,20 +1487,37 @@ ENDCLASS.`;
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Successfully published service binding ZSB_BOOKING_V4');
+      // Verify readback content (parsed SRVB metadata) is included in the response
+      expect(result.content[0]?.text).toContain('bindingCreated');
     });
 
     it('unpublish_srvb action unpublishes service binding', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF fetch for unpublish
+        .mockResolvedValueOnce(mockResponse(200, '', {})); // POST unpublish
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         action: 'unpublish_srvb',
         name: 'ZSB_BOOKING_V4',
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Successfully unpublished service binding ZSB_BOOKING_V4');
+      // Verify the POST was made to the unpublish endpoint
+      const postCall = mockFetch.mock.calls.find((call) => (call[1] as RequestInit)?.method === 'POST');
+      expect(postCall).toBeDefined();
+      expect(String(postCall![0])).toContain('action=unpublish');
     });
 
     it('publish_srvb returns error when name is missing', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
         action: 'publish_srvb',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Missing required "name"');
+    });
+
+    it('unpublish_srvb returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'unpublish_srvb',
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Missing required "name"');

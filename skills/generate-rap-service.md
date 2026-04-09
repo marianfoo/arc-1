@@ -613,7 +613,7 @@ Created artifacts:
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
   [ ] Service binding: ZSB_<Entity>_V4 (create manually — see Step 13)
-  [x] Service binding published
+  [ ] Service binding published (publish after creating — see Step 13)
 
 Next steps:
   - Create the service binding and publish it
