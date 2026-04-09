@@ -338,12 +338,15 @@ describe('Intent Handler', () => {
         ui5: { available: false },
         transport: { available: false },
       });
-      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
-        type: 'BSP',
-      });
-      expect(result.isError).toBe(true);
-      expect(result.content[0]!.text).toContain('not available');
-      resetCachedFeatures();
+      try {
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+          type: 'BSP',
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]!.text).toContain('not available');
+      } finally {
+        resetCachedFeatures();
+      }
     });
 
     it('reads a structure (STRU)', async () => {
