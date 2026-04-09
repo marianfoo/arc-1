@@ -225,15 +225,15 @@ export function parseDumpDetail(xml: string, formattedText: string, dumpId: stri
   const user = String(root['@_author'] ?? '');
   const timestamp = String(root['@_datetime'] ?? '');
 
-  // Find termination link by relation attribute
-  const links = findDeepNodes(parsed, 'link');
+  // Find termination link by relation attribute (scope to dump root, not full document)
+  const links = findDeepNodes(root, 'link');
   const termLink = links.find(
     (l) => String(l['@_relation'] ?? '') === 'http://www.sap.com/adt/relations/runtime/dump/termination',
   );
   const terminationUri = termLink ? String(termLink['@_uri'] ?? '') || undefined : undefined;
 
-  // Extract chapters
-  const chapterNodes = findDeepNodes(parsed, 'chapter');
+  // Extract chapters (scope to dump root, not full document)
+  const chapterNodes = findDeepNodes(root, 'chapter');
   const chapters: DumpChapter[] = chapterNodes.map((ch) => ({
     name: String(ch['@_name'] ?? ''),
     title: String(ch['@_title'] ?? ''),
