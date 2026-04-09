@@ -92,15 +92,15 @@ The `parseUnitTestResults()` function at line ~218 always returns empty `program
 
 The `parseAtcFindings()` function at line ~241 always returns `uri: ''` and `line: 0`. Replace regex with `parseXml()` + `findDeepNodes()`.
 
-- [ ] In `src/adt/devtools.ts`, rewrite `parseAtcFindings()` (line ~241-257) to use `parseXml()` + `findDeepNodes(parsed, 'finding')`. For each finding node, extract `@_priority`, `@_checkTitle`, `@_messageTitle`, `@_uri`. Parse line number from URI fragment: if `@_uri` contains `#start=`, split on `=` and take first comma-separated number. Fallback to `@_location` attribute for URI if `@_uri` is missing
-- [ ] Add `'finding'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config
-- [ ] Update the `AtcFinding` interface (line ~186 in devtools.ts) — no changes needed, `uri` and `line` already exist
-- [ ] Update existing ATC tests in `tests/unit/adt/devtools.test.ts` (line ~249-302). Update fixture XML to include `uri` and `location` attributes on `<finding>` elements: `<finding priority="1" checkTitle="Extended Check" messageTitle="Unused variable" uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=42,1"/>`
-- [ ] Add new tests (~3 tests):
+- [x] In `src/adt/devtools.ts`, rewrite `parseAtcFindings()` (line ~241-257) to use `parseXml()` + `findDeepNodes(parsed, 'finding')`. For each finding node, extract `@_priority`, `@_checkTitle`, `@_messageTitle`, `@_uri`. Parse line number from URI fragment: if `@_uri` contains `#start=`, split on `=` and take first comma-separated number. Fallback to `@_location` attribute for URI if `@_uri` is missing
+- [x] Add `'finding'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config
+- [x] Update the `AtcFinding` interface (line ~186 in devtools.ts) — no changes needed, `uri` and `line` already exist
+- [x] Update existing ATC tests in `tests/unit/adt/devtools.test.ts` (line ~249-302). Update fixture XML to include `uri` and `location` attributes on `<finding>` elements: `<finding priority="1" checkTitle="Extended Check" messageTitle="Unused variable" uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=42,1"/>`
+- [x] Add new tests (~3 tests):
   - Test URI and line extraction from `#start=42,1` fragment
   - Test finding without URI → uri is empty, line is 0
   - Test ATC attribute order variation (priority after checkTitle) still parses correctly
-- [ ] Run `npm test` — all tests must pass
+- [x] Run `npm test` — all tests must pass
 
 ### Task 4: Fix ATC worklist ID extraction (Issue #6)
 

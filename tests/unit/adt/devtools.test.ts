@@ -415,8 +415,8 @@ describe('DevTools', () => {
     it('parses ATC findings', async () => {
       const createResp = '<atcResult id="42"/>';
       const resultResp = `<worklist>
-        <finding priority="1" checkTitle="Extended Check" messageTitle="Unused variable"/>
-        <finding priority="2" checkTitle="Naming" messageTitle="Non-standard naming"/>
+        <finding priority="1" checkTitle="Extended Check" messageTitle="Unused variable" uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=42,1"/>
+        <finding priority="2" checkTitle="Naming" messageTitle="Non-standard naming" uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=10,5"/>
       </worklist>`;
       const http = {
         ...mockHttp(createResp),
@@ -427,7 +427,10 @@ describe('DevTools', () => {
       expect(result.findings).toHaveLength(2);
       expect(result.findings[0]?.priority).toBe(1);
       expect(result.findings[0]?.checkTitle).toBe('Extended Check');
+      expect(result.findings[0]?.uri).toContain('/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(result.findings[0]?.line).toBe(42);
       expect(result.findings[1]?.priority).toBe(2);
+      expect(result.findings[1]?.line).toBe(10);
     });
 
     it('handles empty ATC results', async () => {
@@ -463,6 +466,53 @@ describe('DevTools', () => {
         expect.stringContaining('/sap/bc/adt/atc/worklists/'),
         expect.objectContaining({ Accept: expect.stringContaining('atc.worklist') }),
       );
+    });
+
+    it('extracts URI and line from #start= fragment', async () => {
+      const createResp = '<atcResult id="42"/>';
+      const resultResp = `<worklist>
+        <finding priority="1" checkTitle="Check" messageTitle="Issue" uri="/sap/bc/adt/oo/classes/ZCL_X/source/main#start=42,1"/>
+      </worklist>`;
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_X');
+      expect(result.findings[0]?.uri).toBe('/sap/bc/adt/oo/classes/ZCL_X/source/main#start=42,1');
+      expect(result.findings[0]?.line).toBe(42);
+    });
+
+    it('returns empty uri and line 0 for finding without URI', async () => {
+      const createResp = '<atcResult id="42"/>';
+      const resultResp = `<worklist>
+        <finding priority="3" checkTitle="Check" messageTitle="General issue"/>
+      </worklist>`;
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_X');
+      expect(result.findings[0]?.uri).toBe('');
+      expect(result.findings[0]?.line).toBe(0);
+    });
+
+    it('parses correctly regardless of attribute order', async () => {
+      const createResp = '<atcResult id="42"/>';
+      const resultResp = `<worklist>
+        <finding messageTitle="Wrong order" priority="2" uri="/sap/bc/adt/programs/programs/ZTEST#start=7,3" checkTitle="Order Check"/>
+      </worklist>`;
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.findings[0]?.priority).toBe(2);
+      expect(result.findings[0]?.checkTitle).toBe('Order Check');
+      expect(result.findings[0]?.messageTitle).toBe('Wrong order');
+      expect(result.findings[0]?.line).toBe(7);
     });
   });
 });

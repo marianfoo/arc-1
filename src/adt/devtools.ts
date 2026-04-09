@@ -324,21 +324,27 @@ function parseUnitTestResults(xml: string): UnitTestResult[] {
 }
 
 function parseAtcFindings(xml: string): AtcFinding[] {
-  const findings: AtcFinding[] = [];
-  const findingRegex = /<finding[^>]*priority="(\d)"[^>]*checkTitle="([^"]*)"[^>]*messageTitle="([^"]*)"[^>]*/g;
+  const parsed = parseXml(xml);
+  const nodes = findDeepNodes(parsed, 'finding');
 
-  let match: RegExpExecArray | null;
-  while ((match = findingRegex.exec(xml)) !== null) {
-    findings.push({
-      priority: Number.parseInt(match[1]!, 10),
-      checkTitle: match[2]!,
-      messageTitle: match[3]!,
-      uri: '',
-      line: 0,
-    });
-  }
+  return nodes.map((f) => {
+    const rawUri = String(f['@_uri'] ?? f['@_location'] ?? '');
+    let line = 0;
+    const startIdx = rawUri.indexOf('#start=');
+    if (startIdx !== -1) {
+      const fragment = rawUri.slice(startIdx + '#start='.length);
+      const firstNum = Number.parseInt(fragment.split(',')[0]!, 10);
+      if (!Number.isNaN(firstNum)) line = firstNum;
+    }
 
-  return findings;
+    return {
+      priority: Number.parseInt(String(f['@_priority'] ?? '0'), 10),
+      checkTitle: String(f['@_checkTitle'] ?? ''),
+      messageTitle: String(f['@_messageTitle'] ?? ''),
+      uri: rawUri,
+      line,
+    };
+  });
 }
 
 function extractAttr(xml: string, attr: string): string {
