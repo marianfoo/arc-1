@@ -60,6 +60,10 @@ const parser = new XMLParser({
       'request',
       'hitListEntry',
       'chapter',
+      'traceStatement',
+      'statement',
+      'dbAccess',
+      'access',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings

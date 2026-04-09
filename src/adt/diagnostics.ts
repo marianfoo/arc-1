@@ -172,28 +172,38 @@ export async function getTraceDbAccesses(
  * - atom:link rel="self" href → contains dump ID path
  */
 export function parseDumpList(xml: string): DumpEntry[] {
-  const entries: DumpEntry[] = [];
-  const entryRegex = /<atom:entry[\s\S]*?<\/atom:entry>/g;
+  const parsed = parseXml(xml);
+  const entryNodes = findDeepNodes(parsed, 'entry');
 
-  let match: RegExpExecArray | null;
-  while ((match = entryRegex.exec(xml)) !== null) {
-    const entry = match[0];
+  return entryNodes
+    .map((entry) => {
+      // Author name
+      const author = entry.author as Record<string, unknown> | undefined;
+      const user = String(author?.name ?? '');
 
-    const user = extractTag(entry, 'atom:name') || '';
-    const error = extractAttrValue(entry, 'term', 'ABAP runtime error');
-    const program = extractAttrValue(entry, 'term', 'Terminated ABAP program');
-    const timestamp = extractTag(entry, 'atom:published') || '';
+      // Categories: may be single object or array
+      const rawCat = entry.category;
+      const categories = Array.isArray(rawCat) ? rawCat : rawCat ? [rawCat] : [];
+      let error = '';
+      let program = '';
+      for (const cat of categories as Array<Record<string, unknown>>) {
+        const label = String(cat['@_label'] ?? '');
+        if (label === 'ABAP runtime error') error = String(cat['@_term'] ?? '');
+        if (label === 'Terminated ABAP program') program = String(cat['@_term'] ?? '');
+      }
 
-    // Extract dump ID from the self link (rel="self" type="text/plain")
-    const selfMatch = entry.match(/href="(?:adt:\/\/[^/]+)?\/sap\/bc\/adt\/runtime\/dump\/([^"]*)"[^>]*rel="self"/);
-    const id = selfMatch?.[1] || '';
+      const timestamp = String(entry.published ?? '');
 
-    if (id) {
-      entries.push({ id, timestamp, user, error, program });
-    }
-  }
+      // Extract dump ID from self link href
+      const links = Array.isArray(entry.link) ? entry.link : entry.link ? [entry.link] : [];
+      const selfLink = (links as Array<Record<string, unknown>>).find((l) => String(l['@_rel'] ?? '') === 'self');
+      const href = String(selfLink?.['@_href'] ?? '');
+      const dumpMatch = href.match(/\/sap\/bc\/adt\/runtime\/dump\/([^"]*)/);
+      const id = dumpMatch?.[1] || '';
 
-  return entries;
+      return { id, timestamp, user, error, program };
+    })
+    .filter((e) => e.id);
 }
 
 /**
@@ -249,40 +259,29 @@ export function parseDumpDetail(xml: string, formattedText: string, dumpId: stri
  * Trace entries may contain extended attributes in a trc: namespace.
  */
 export function parseTraceList(xml: string): TraceEntry[] {
-  const entries: TraceEntry[] = [];
-  const entryRegex = /<atom:entry[\s\S]*?<\/atom:entry>/g;
+  const parsed = parseXml(xml);
+  const entryNodes = findDeepNodes(parsed, 'entry');
 
-  let match: RegExpExecArray | null;
-  while ((match = entryRegex.exec(xml)) !== null) {
-    const entry = match[0];
+  return entryNodes
+    .map((entry) => {
+      const title = String(entry.title ?? '');
+      const timestamp = String(entry.updated ?? entry.published ?? '');
 
-    const title = extractTag(entry, 'atom:title') || '';
-    const timestamp = extractTag(entry, 'atom:updated') || extractTag(entry, 'atom:published') || '';
+      // Extract trace ID from self link href
+      const links = Array.isArray(entry.link) ? entry.link : entry.link ? [entry.link] : [];
+      const selfLink = (links as Array<Record<string, unknown>>).find((l) => String(l['@_rel'] ?? '') === 'self');
+      const href = String(selfLink?.['@_href'] ?? '');
+      const traceMatch = href.match(/\/sap\/bc\/adt\/runtime\/traces\/abaptraces\/([^"]*)/);
+      const id = traceMatch?.[1] || '';
 
-    // Extract trace ID from self link
-    const selfMatch = entry.match(
-      /href="(?:adt:\/\/[^/]+)?\/sap\/bc\/adt\/runtime\/traces\/abaptraces\/([^"]*)"[^>]*rel="self"/,
-    );
-    const id = selfMatch?.[1] || '';
+      // Extended trace data (namespace-prefixed attributes are stripped by removeNSPrefix)
+      const state = entry['@_state'] != null ? String(entry['@_state']) : undefined;
+      const objectName = entry['@_objectName'] != null ? String(entry['@_objectName']) : undefined;
+      const runtimeStr = entry['@_runtime'] != null ? String(entry['@_runtime']) : undefined;
 
-    // Extended trace data (namespace-prefixed attributes)
-    const state = extractAttrSimple(entry, 'state');
-    const objectName = extractAttrSimple(entry, 'objectName');
-    const runtimeStr = extractAttrSimple(entry, 'runtime');
-
-    if (id || title) {
-      entries.push({
-        id,
-        title,
-        timestamp,
-        state: state || undefined,
-        objectName: objectName || undefined,
-        runtime: runtimeStr ? Number(runtimeStr) : undefined,
-      });
-    }
-  }
-
-  return entries;
+      return { id, title, timestamp, state, objectName, runtime: runtimeStr ? Number(runtimeStr) : undefined };
+    })
+    .filter((e) => e.id || e.title);
 }
 
 /**
@@ -307,101 +306,43 @@ export function parseTraceHitlist(xml: string): TraceHitlistEntry[] {
  * Parse trace statements (call tree) XML.
  */
 export function parseTraceStatements(xml: string): TraceStatement[] {
-  const entries: TraceStatement[] = [];
-
-  // Extract self-closing tags, handling > inside attribute values
-  for (const tag of extractSelfClosingTags(xml, 'traceStatement', 'statement')) {
-    const callLevel = extractAttrSimple(tag, 'callLevel');
-    if (callLevel === null) continue;
-
-    entries.push({
-      callLevel: Number(callLevel),
-      hitCount: Number(extractAttrSimple(tag, 'hitCount') || '0'),
-      isProceduralUnit: extractAttrSimple(tag, 'isProceduralUnit') === 'true',
-      grossTime: Number(extractAttrSimple(tag, 'grossTime') || '0'),
-      description: extractAttrSimple(tag, 'description') || extractAttrSimple(tag, 'name') || '',
-    });
+  const parsed = parseXml(xml);
+  // Try both tag names: traceStatement and statement
+  let nodes = findDeepNodes(parsed, 'traceStatement');
+  if (nodes.length === 0) {
+    nodes = findDeepNodes(parsed, 'statement');
   }
 
-  return entries;
+  return nodes
+    .filter((node) => node['@_callLevel'] != null)
+    .map((node) => ({
+      callLevel: Number(node['@_callLevel'] ?? 0),
+      hitCount: Number(node['@_hitCount'] ?? 0),
+      isProceduralUnit: String(node['@_isProceduralUnit'] ?? '') === 'true',
+      grossTime: Number(node['@_grossTime'] ?? 0),
+      description: String(node['@_description'] ?? node['@_name'] ?? ''),
+    }));
 }
 
 /**
  * Parse trace database accesses XML.
  */
 export function parseTraceDbAccesses(xml: string): TraceDbAccess[] {
-  const tags = extractSelfClosingTags(xml, 'dbAccess', 'access');
-
-  return tags
-    .filter((tag) => extractAttrSimple(tag, 'tableName'))
-    .map((tag) => ({
-      tableName: extractAttrSimple(tag, 'tableName') || '',
-      statement: extractAttrSimple(tag, 'statement') || '',
-      type: extractAttrSimple(tag, 'type') || '',
-      totalCount: Number(extractAttrSimple(tag, 'totalCount') || '0'),
-      bufferedCount: Number(extractAttrSimple(tag, 'bufferedCount') || '0'),
-      accessTime: Number(extractAttrSimple(tag, 'accessTime') || '0'),
-    }));
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────
-
-/**
- * Extract self-closing XML tags by name, handling > inside attribute values.
- * Standard regex [^>]* breaks on attributes like description="CL_TEST=>MAIN".
- */
-function extractSelfClosingTags(xml: string, ...tagNames: string[]): string[] {
-  const tags: string[] = [];
-  for (const tagName of tagNames) {
-    let searchFrom = 0;
-    while (true) {
-      const startIdx = xml.indexOf(`<${tagName} `, searchFrom);
-      if (startIdx === -1) break;
-
-      // Find the closing /> by scanning past attribute values
-      let i = startIdx + tagName.length + 2;
-      while (i < xml.length) {
-        if (xml[i] === '"') {
-          // Skip quoted attribute value (may contain >)
-          i++;
-          while (i < xml.length && xml[i] !== '"') i++;
-          i++; // skip closing quote
-        } else if (xml[i] === '/' && xml[i + 1] === '>') {
-          tags.push(xml.slice(startIdx, i + 2));
-          i += 2;
-          break;
-        } else if (xml[i] === '>' && xml[i - 1] !== '/') {
-          // Opening tag without self-close; skip
-          i++;
-          break;
-        } else {
-          i++;
-        }
-      }
-      searchFrom = i;
-    }
+  const parsed = parseXml(xml);
+  // Try both tag names: dbAccess and access
+  let nodes = findDeepNodes(parsed, 'dbAccess');
+  if (nodes.length === 0) {
+    nodes = findDeepNodes(parsed, 'access');
   }
-  return tags;
-}
 
-/** Extract text content between opening and closing XML tags */
-function extractTag(xml: string, tagName: string): string | null {
-  const regex = new RegExp(`<${tagName}[^>]*>([^<]*)</${tagName}>`);
-  const match = xml.match(regex);
-  return match?.[1] ?? null;
-}
-
-/** Extract attribute value from an element where another attribute has a specific value */
-function extractAttrValue(xml: string, attrName: string, labelValue: string): string {
-  // Match: attrName="VALUE" ... label="labelValue" or label="labelValue" ... attrName="VALUE"
-  const regex = new RegExp(`${attrName}="([^"]*)"[^>]*label="${labelValue}"`);
-  const match = xml.match(regex);
-  return match?.[1] || '';
-}
-
-/** Extract a simple attribute value by name */
-function extractAttrSimple(xml: string, attr: string): string | null {
-  const regex = new RegExp(`(?:^|\\s|:)${attr}="([^"]*)"`);
-  const match = xml.match(regex);
-  return match?.[1] ?? null;
+  return nodes
+    .filter((node) => node['@_tableName'] != null)
+    .map((node) => ({
+      tableName: String(node['@_tableName'] ?? ''),
+      statement: String(node['@_statement'] ?? ''),
+      type: String(node['@_type'] ?? ''),
+      totalCount: Number(node['@_totalCount'] ?? 0),
+      bufferedCount: Number(node['@_bufferedCount'] ?? 0),
+      accessTime: Number(node['@_accessTime'] ?? 0),
+    }));
 }

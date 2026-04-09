@@ -209,8 +209,13 @@ export async function runAtcCheck(
     Accept: 'application/xml',
   });
 
-  // Parse worklist ID from response and fetch results
-  const worklistId = extractAttr(createResp.body, 'worklistId') || extractAttr(createResp.body, 'id') || '1';
+  // Parse worklist ID from response via proper XML parsing
+  const createParsed = parseXml(createResp.body);
+  const runs = findDeepNodes(createParsed, 'run');
+  const runNode = runs[0] ?? createParsed;
+  const worklistId = String(
+    (runNode as Record<string, unknown>)['@_worklistId'] ?? (runNode as Record<string, unknown>)['@_id'] ?? '1',
+  );
 
   const resultResp = await http.get(`/sap/bc/adt/atc/worklists/${worklistId}`, {
     Accept: 'application/atc.worklist.v1+xml',
@@ -347,10 +352,4 @@ function parseAtcFindings(xml: string): AtcFinding[] {
       line,
     };
   });
-}
-
-function extractAttr(xml: string, attr: string): string {
-  const regex = new RegExp(`(?:^|\\s|:)${attr}="([^"]*)"`);
-  const match = xml.match(regex);
-  return match?.[1] ?? '';
 }

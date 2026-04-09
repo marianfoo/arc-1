@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   activate,
   activateBatch,
+  parseActivationResult,
   publishServiceBinding,
   runAtcCheck,
   runUnitTests,
@@ -164,6 +165,19 @@ describe('DevTools', () => {
       const http = mockHttp(xml);
       const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
       expect(result.messages).toHaveLength(2);
+    });
+
+    it('returns success for empty response body', async () => {
+      const http = mockHttp('');
+      const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.success).toBe(true);
+      expect(result.messages).toEqual([]);
+    });
+
+    it('returns success for whitespace-only response body', () => {
+      const result = parseActivationResult('   ');
+      expect(result.success).toBe(true);
+      expect(result.messages).toEqual([]);
     });
 
     it('sends activation request to correct endpoint with method param', async () => {
