@@ -297,10 +297,14 @@ function parseUnitTestResults(xml: string): UnitTestResult[] {
       let message: string | undefined;
       if (hasAlert) {
         const titleVal = (alerts[0] as Record<string, unknown>).title;
-        if (Array.isArray(titleVal) && titleVal.length > 0) {
-          message = String(titleVal[0]);
-        } else if (typeof titleVal === 'string') {
-          message = titleVal;
+        if (titleVal != null) {
+          if (typeof titleVal === 'string') {
+            message = titleVal;
+          } else if (typeof titleVal === 'object' && !Array.isArray(titleVal)) {
+            message = String((titleVal as Record<string, unknown>)['#text'] ?? '');
+          } else {
+            message = String(titleVal);
+          }
         }
       }
       // Extract duration from executionTime attribute (in seconds)

@@ -149,6 +149,16 @@ describe('DevTools', () => {
       expect(result.messages).toContain('Abend during activation');
     });
 
+    it('detects type="A" alone as error without severity attribute', async () => {
+      const xml = `<messages>
+        <msg type="A" shortText="Abend during activation"/>
+      </messages>`;
+      const http = mockHttp(xml);
+      const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.success).toBe(false);
+      expect(result.messages).toContain('Abend during activation');
+    });
+
     it('extracts multiple messages', async () => {
       const xml = '<messages><msg shortText="Warning 1"/><msg shortText="Warning 2"/></messages>';
       const http = mockHttp(xml);
