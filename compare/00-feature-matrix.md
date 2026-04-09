@@ -176,7 +176,7 @@ _Last updated: 2026-04-08_
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
 | Feature auto-detection | ✅ (6 probes) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Caching (SQLite) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| UI5/Fiori BSP | ❌ | ✅ (7 tools) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| UI5/Fiori BSP | ❌ | ⚠️ (3 read-only; 4 write tools disabled — ADT filestore returns 405) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | abapGit/gCTS | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ |
 | BTP Destination Service | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
 | Cloud Connector proxy | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |

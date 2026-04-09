@@ -8,208 +8,494 @@ Can ARC-1 go beyond RAP service generation to also create a Fiori Elements app o
 
 | Capability | Feasible? | How? |
 |-----------|-----------|------|
-| Generate Fiori Elements app (UI5 project files) | **Yes** | Generate `manifest.json` + `Component.js` + views locally, upload via BSP CRUD |
-| Deploy to ABAP (BSP repository) | **Yes** | ADT `/sap/bc/adt/filestore/ui5-bsp` API — already feature-probed, needs CRUD implementation |
-| Publish service binding | **Yes** | ADT API exists (`PublishServiceBinding`) — vibing-steampunk already uses it |
-| Create launchpad tile | **Partial** | No standard ADT/OData API for FLP tile creation. Possible via custom ICF service or RFC |
-| Create ICF node programmatically | **Unlikely via ADT** | No ADT endpoint for SICF. Would need custom ABAP program or RFC |
+| Generate Fiori Elements app | **Yes** | Generate `manifest.json` + `Component.js` + i18n, ZIP it, deploy |
+| Deploy to ABAP (BSP repository) | **Yes** | OData service `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` — base64 ZIP upload |
+| Publish service binding | **Yes** | ADT API exists (`PublishServiceBinding`) — confirmed working |
+| Create launchpad tile | **Yes** | `crossNavigation.inbounds` in manifest.json — auto-registered by app index |
+| Custom ICF node needed? | **No** | Deployment creates ICF entry automatically; FLP uses manifest.json |
+
+**CRITICAL CORRECTION from initial research:** The ADT filestore endpoint (`/sap/bc/adt/filestore/ui5-bsp`) is **READ-ONLY** — returns HTTP 405 on POST/PUT/DELETE. SAP's official deploy-tooling uses a completely different OData service for writes.
 
 ---
 
-## Current State
+## VSP (vibing-steampunk) UI5/BSP: The Cautionary Tale
 
-### What ARC-1 Can Do Today (RAP Generation)
+### What Happened
 
-The `generate-rap-service` skill creates 9 artifacts:
-1. Database table entity (TABL)
-2. Interface CDS view (DDLS) — `ZI_<Entity>`
-3. Interface behavior definition (BDEF) — `ZI_<Entity>`
-4. Projection CDS view (DDLS) — `ZC_<Entity>`
-5. Projection behavior definition (BDEF) — `ZC_<Entity>`
-6. Metadata extension (DDLX) — `ZC_<Entity>` (with `@UI` annotations for Fiori)
-7. Service definition (SRVD) — `ZSD_<Entity>`
-8. Behavior pool class (CLAS) — `ZBP_I_<Entity>`
-9. Service binding (SRVB) — **manual step** (ADT API cannot create SRVB, only read)
+vibing-steampunk implemented 7 UI5/BSP tools in v2.10.0 against the ADT filestore endpoint. In v2.10.1, **4 write tools were disabled** because the ADT filestore API returns HTTP 405 (Method Not Allowed) on POST/PUT/DELETE.
 
-### What's Missing for End-to-End Fiori
+**Only 3 read-only tools work:**
+1. `UI5ListApps` — List BSP applications
+2. `UI5GetApp` — Get app details + file structure
+3. `UI5GetFileContent` — Read individual file content
 
-| Gap | Severity | Notes |
-|-----|----------|-------|
-| SRVB creation | High | ADT API can read SRVB but not create — manual ADT step needed |
-| SRVB publish/unpublish | High | API exists, not implemented in ARC-1. VSP has `PublishServiceBinding` |
-| UI5 app generation | Medium | Need to generate `manifest.json`, `Component.js`, views, i18n |
-| BSP deployment (upload) | High | ADT `/sap/bc/adt/filestore/ui5-bsp` exists, feature probe already coded |
-| FLP tile/catalog | Medium | No standard API for programmatic tile creation |
+**4 write tools exist in code but are disabled:**
+4. `UI5UploadFile` — PUT with content types (405)
+5. `UI5DeleteFile` — DELETE (405)
+6. `UI5CreateApp` — POST with XML payload (405)
+7. `UI5DeleteApp` — DELETE (405)
 
----
+### Sources
 
-## Competitor Analysis
+- `internal/mcp/tools_focused.go`: `// UI5/Fiori BSP Management (3 read-only - ADT filestore is read-only)`
+- `articles/2026-02-10-vsp-two-months-later.md`: "Write operations blocked - ADT Filestore is read-only"
+- `articles/2026-02-18-100-stars-celebration.md`: "UI5/BSP writes - ADT filestore is read-only. Need alternate API."
+- SAP/open-ux-tools issue #943 confirms the ADT filestore service is read-only
 
-### Feature Matrix: UI5/Fiori BSP
+### VSP's Identified Workaround (Not Implemented)
 
-From `compare/00-feature-matrix.md`:
+They identified `/UI5/CL_REPOSITORY_LOAD` (ABAP class) and `/UI5/UI5_REPOSITORY_LOAD` (function module) as alternatives, but haven't implemented them. Their README states: "UI5/BSP Write - ADT filestore is read-only, needs custom plugin."
 
-| Feature | ARC-1 | vibing-steampunk | fr0ster | dassian-adt | SAP Joule |
-|---------|-------|-----------------|---------|-------------|-----------|
-| UI5/Fiori BSP | **No** | **Yes (7 tools)** | No | No | No |
-| Service Binding Publish | No | Yes | No | No | N/A |
-| Fiori App Generation | No | No | No | No | No |
-| Launchpad Tile Creation | No | No | No | No | No |
+### API Quirks Discovered by VSP
 
-**Key finding:** vibing-steampunk is the **only** competitor with BSP CRUD capabilities. **No competitor** generates Fiori Elements apps or creates launchpad tiles. This would be a first-of-its-kind feature.
-
-### vibing-steampunk's UI5/BSP Tools
-
-From `compare/01-vibing-steampunk.md`, their expert mode includes BSP-related tools via the `/sap/bc/adt/filestore/ui5-bsp` endpoint. They also have `PublishServiceBinding` and `UnpublishServiceBinding`.
-
-### mcp-abap-abap-adt-api (mario-andreschak)
-
-From `compare/02-mcp-abap-abap-adt-api.md:53`, has 3 service binding tools:
-- `publishServiceBinding`
-- `unPublishServiceBinding`  
-- `bindingDetails`
-
-This confirms the ADT API for publishing service bindings exists and is usable.
+- App names must be **uppercased**
+- Directory listing is **NOT recursive** (only immediate children)
+- Leading slashes must be stripped from file paths before URL encoding
+- Response format is **Atom XML feed**, not JSON
+- Feature detection should use **OPTIONS** request (200 or 405 = available, 404 = unavailable)
 
 ---
 
-## Available ADT APIs
+## The Real Deployment API: SAP ABAP Repository OData Service
 
-### 1. UI5/Fiori BSP Repository — `/sap/bc/adt/filestore/ui5-bsp`
+### Discovery from SAP/open-ux-tools
 
-**Already feature-probed** in ARC-1 (`src/adt/features.ts:38`), but no CRUD operations implemented.
+SAP's official `@sap-ux/deploy-tooling` package (part of the 89-package open-ux-tools monorepo) does **NOT** use the ADT filestore for deployment. Instead, it uses:
 
-| Operation | HTTP Method | Endpoint | Purpose |
-|-----------|------------|----------|---------|
-| List apps | GET | `/sap/bc/adt/filestore/ui5-bsp` | List all BSP applications |
-| Create app | POST | `/sap/bc/adt/filestore/ui5-bsp` | Create new BSP app container |
-| Read app | GET | `/sap/bc/adt/filestore/ui5-bsp/{appName}` | Read app metadata + file list |
-| Update metadata | PUT | `/sap/bc/adt/filestore/ui5-bsp/{appName}` | Update app description/package |
-| Delete app | DELETE | `/sap/bc/adt/filestore/ui5-bsp/{appName}` | Delete entire BSP app |
-| Upload file | PUT | `/sap/bc/adt/filestore/ui5-bsp/{appName}/{path}` | Upload individual file |
-| Read file | GET | `/sap/bc/adt/filestore/ui5-bsp/{appName}/{path}` | Read individual file |
+**`/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV`**
 
-This is the **same API** used by SAP Web IDE, SAP Business Application Studio (`@sap/ux-ui5-tooling`), and the `ui5-task-nwabap-deployer` npm package for deploying UI5 apps.
+This is an OData service available since **SAP_UI 7.53** that accepts a **base64-encoded ZIP archive** of the entire webapp in an Atom XML payload. This is how SAP Web IDE, SAP Business Application Studio, and the `ui5-task-nwabap-deployer` all deploy Fiori apps.
 
-### 2. Service Binding Publish — `/sap/bc/adt/businessservices/bindings/{name}`
+### API Specification
 
-| Operation | HTTP Method | Endpoint/Params | Purpose |
-|-----------|------------|-----------------|---------|
-| Read binding | GET | `/sap/bc/adt/businessservices/bindings/{name}` | Get metadata (already implemented) |
-| Publish | POST | `/sap/bc/adt/businessservices/bindings/{name}?action=publish` | Publish OData service |
-| Unpublish | POST | `/sap/bc/adt/businessservices/bindings/{name}?action=unpublish` | Unpublish OData service |
-
-ARC-1 already reads SRVB (`src/adt/client.ts:263-270`). Adding publish/unpublish would be minimal effort.
-
-### 3. Service Binding Creation
-
-**No standard ADT API exists** for creating SRVB objects. This is a known limitation across all MCP servers. The ADT object creation endpoint (`POST /sap/bc/adt/...`) doesn't cover service bindings in the same way it covers DDLS, BDEF, SRVD.
-
-**Workaround:** Could potentially use the generic object creation endpoint or the AFF (ABAP File Formats) approach, but this needs investigation. SRVB has an AFF schema (`src/aff/schemas/srvb-v1.json`) which might enable creation via a generic template endpoint.
-
-### 4. Launchpad / FLP Tile APIs
-
-**No standard ADT API exists** for FLP tile/catalog management. FLP configuration is stored in:
-
-| Store | Technology | API Available? |
-|-------|-----------|---------------|
-| `/UI2/PAGE_BUILDER_PERS` | Table (ABAP) | No REST API |
-| `LPD_CUST` | Customizing transaction | No REST API |
-| Fiori Launchpad Designer | Web UI | No public API |
-| FLP Content Manager (BTP) | BTP service | REST API exists (BTP only) |
-| `/UI2/FLPD_CUST_CONF` | OData (on-prem) | **Possible** — OData service for FLP designer |
-
-**On-premise options:**
-- `/sap/bc/ui2/flpd_cust_conf/` — OData service used by FLP Designer. Could potentially be called to create catalog entries and target mappings. Undocumented but discoverable.
-- Custom RFC/ICF service — Most reliable approach for on-prem.
-
-**BTP options:**
-- Content Deployer (`@sap/ux-ui5-tooling`) — Uses `CommonDataModel.json` to deploy FLP content.
-- Managed App Router automatically registers apps.
-
-### 5. ICF Node Management
-
-**No ADT API exists** for SICF (ICF service node management). ICF nodes are managed via:
-- Transaction `SICF` — GUI only
-- RFC `HTTP_ACTIVATE_ICF_SERVICE` / `HTTP_DEACTIVATE_ICF_SERVICE` — Programmatic but needs RFC
-- Table `ICFSERVICE` + `ICFVIRSVR` — Direct table manipulation (dangerous)
-
-Not feasible via ADT REST APIs.
-
----
-
-## Proposed Solution: Three-Phase Approach
-
-### Phase 1: Complete RAP-to-OData Pipeline (Effort: S, 1-2 days)
-
-Close the gap between RAP generation and a running OData service.
-
-| Task | Status |
-|------|--------|
-| Implement `PublishServiceBinding` | New — use POST with `?action=publish` |
-| Implement `UnpublishServiceBinding` | New — use POST with `?action=unpublish` |
-| Investigate SRVB creation via ADT/AFF | Research — check if AFF template endpoint works |
-
-After Phase 1, the generated RAP service would have a **published OData endpoint** accessible via the service URL.
-
-### Phase 2: BSP Deployment (Effort: M, 3-5 days)
-
-Implement the UI5/Fiori BSP CRUD tools from roadmap FEAT-29e.
-
-| Task | Details |
-|------|---------|
-| BSP app CRUD | 7 tools via `/sap/bc/adt/filestore/ui5-bsp` |
-| Fiori Elements app template | Generate `manifest.json`, `Component.js`, `webapp/` structure |
-| Deploy workflow | Create BSP → upload files → register |
-
-The Fiori Elements app for a RAP service is mostly boilerplate:
+#### Check if app exists
 ```
-webapp/
-├── manifest.json          ← OData service URL, entity set, annotations
-├── Component.js           ← ~10 lines, standard boilerplate
-├── i18n/
-│   └── i18n.properties   ← App title, entity labels
-├── index.html             ← FLP sandbox launcher
-└── localService/          ← Optional: mock data for local testing
+GET /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories('{appName}')?$format=json
 ```
 
-The `manifest.json` is the critical file — it references the OData service URL and entity set. ARC-1 already knows both from the RAP generation step.
+#### Deploy new app (POST)
+```
+POST /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories
+Content-Type: application/atom+xml; type=entry; charset=UTF-8
+X-Csrf-Token: {token}
+Query: CodePage='UTF8'&CondenseMessagesInHttpResponseHeader=X&format=json
+Optional: TransportRequest={TR}&TestMode=true&SafeMode={bool}
+```
 
-### Phase 3: Launchpad Integration (Effort: M-L, depends on approach)
+#### Update existing app (PUT)
+```
+PUT /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories('{appName}')
+Content-Type: application/atom+xml; type=entry; charset=UTF-8
+X-Csrf-Token: {token}
+Query: (same as POST)
+```
 
-**Option A: Custom ABAP Program (on-prem)**
-Create a Z-program or Z-class that:
-1. Creates a catalog entry in `LPD_CUST`
-2. Creates a target mapping pointing to the BSP app
-3. Creates a tile in a catalog/group
+#### Delete app (DELETE)
+```
+DELETE /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories('{appName}')
+Query: TransportRequest={TR}&TestMode=true (optional)
+```
 
-This program could be invoked via ARC-1's `SAPWrite` → activate → run pattern, or deployed once and called via a custom ICF service.
+#### Download app files
+```
+GET /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories('{appName}')
+Query: CodePage='UTF8'&DownloadFiles='RUNTIME'
+```
+Returns base64-encoded ZIP.
 
-**Option B: OData API Discovery (on-prem)**
-Investigate `/sap/bc/ui2/flpd_cust_conf/` OData service. If it supports create operations, it could be called directly without custom ABAP code.
+### Atom XML Payload (POST/PUT)
 
-**Option C: Content Deployer (BTP)**
-For BTP ABAP, use the `CommonDataModel.json` format to define FLP content:
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom"
+       xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"
+       xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices"
+       xml:base="{serviceUrl}">
+  <id>{serviceUrl}/Repositories('{appName}')</id>
+  <title type="text">Repositories('{appName}')</title>
+  <updated>{ISO-8601-timestamp}</updated>
+  <category term="/UI5/ABAP_REPOSITORY_SRV.Repository"
+            scheme="http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"/>
+  <link href="Repositories('{appName}')" rel="edit" title="Repository"/>
+  <content type="application/xml">
+    <m:properties>
+      <d:Name>{appName}</d:Name>
+      <d:Package>{PACKAGE_UPPERCASE}</d:Package>
+      <d:Description>{description}</d:Description>
+      <d:ZipArchive>{base64-encoded-zip-of-webapp}</d:ZipArchive>
+      <d:Info/>
+    </m:properties>
+  </content>
+</entry>
+```
+
+### Key Implementation Details
+
+- **Always ZIP**: Entire webapp is zipped, base64-encoded, sent as single `ZipArchive` property
+- **No incremental deployment**: Full ZIP uploaded every time, SAP extracts and replaces all files
+- **CSRF tokens**: First request sends `X-Csrf-Token: Fetch` header, response returns token for subsequent writes
+- **Error handling**: 401 (auth failure), 412 (SafeMode conflict — app ID mismatch), 408/504 (timeout — retry up to 3 times)
+- **App URL after deployment**: `/sap/bc/ui5_ui5/sap/{appName}?sap-client={client}`
+- **Config**: `maxBodyLength: Infinity`, `maxContentLength: Infinity` (ZIPs can be large)
+- **Prerequisite**: SAP_UI 7.53+ with `S_DEVELOP` authorization
+
+### Deploy Workflow
+
+```
+1. Build webapp files (manifest.json, Component.js, i18n, etc.)
+2. Create ZIP archive of webapp/ directory
+3. Base64-encode the ZIP
+4. GET /Repositories('{appName}') → check if app exists
+5. If new:  POST /Repositories with Atom XML payload
+   If exists: PUT /Repositories('{appName}') with Atom XML payload
+6. Handle transport request (optional, via ADT CTS services)
+7. App is live at /sap/bc/ui5_ui5/sap/{appName}
+8. App index is automatically updated (no separate registration)
+```
+
+---
+
+## FLP Tile Creation: No Separate API Needed
+
+### The Discovery
+
+SAP's `@sap-ux/flp-config-sub-generator` does NOT call any FLP API. It simply writes `crossNavigation.inbounds` into the `manifest.json`. The Fiori app index **automatically** picks up this configuration when the app is deployed via the ABAP Repository service.
+
+### manifest.json FLP Configuration
+
 ```json
 {
-  "applications": {
-    "zapp_booking": {
-      "semanticObject": "ZBooking",
-      "action": "display",
-      "title": "Manage Bookings",
-      "url": "/sap/bc/ui5_ui5/sap/zapp_booking"
+  "sap.app": {
+    "crossNavigation": {
+      "inbounds": {
+        "myApp-display": {
+          "semanticObject": "ZBooking",
+          "action": "display",
+          "title": "{{appTitle}}",
+          "subtitle": "{{appSubTitle}}",
+          "icon": "sap-icon://list",
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
+        }
+      }
     }
   }
 }
 ```
 
-**Option D: Expose a Custom ICF Service**
-Create a small ABAP class implementing `IF_HTTP_EXTENSION` that:
-- Accepts JSON input (BSP name, tile title, catalog, semantic object)
-- Creates FLP catalog entry + target mapping + tile
-- Returns success/error JSON
+### What's Needed for a Tile to Appear
 
-This would be a one-time deployment (like vibing-steampunk's `ZADT_VSP`). ARC-1 could call it via HTTP POST.
+1. Deploy the app with `crossNavigation.inbounds` in manifest.json
+2. App index auto-registers the app
+3. Admin assigns the app to a catalog/group in FLP Designer (or it's auto-assigned in BTP)
+
+The `crossNavigation.inbounds` section defines the semantic object, action, title, and icon. This is sufficient for the app to be discoverable in FLP. Assignment to specific catalogs/groups is a one-time admin task, not something that needs automation.
+
+---
+
+## Fiori Elements manifest.json Template (OData V4 LROP)
+
+Based on SAP's `@sap-ux/fiori-elements-writer`, here is the complete manifest.json structure for a List Report + Object Page:
+
+```json
+{
+  "_version": "1.65.0",
+  "sap.app": {
+    "id": "z.my.app",
+    "type": "application",
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "applicationVersion": { "version": "1.0.0" },
+    "dataSources": {
+      "mainService": {
+        "uri": "/sap/opu/odata4/sap/{service_binding}/srvd_a2x/sap/{service_definition}/0001/",
+        "type": "OData",
+        "settings": {
+          "odataVersion": "4.0"
+        }
+      }
+    },
+    "crossNavigation": {
+      "inbounds": {
+        "{appId}-display": {
+          "semanticObject": "{SemanticObject}",
+          "action": "display",
+          "title": "{{appTitle}}",
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
+        }
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "deviceTypes": { "desktop": true, "tablet": true, "phone": true }
+  },
+  "sap.ui5": {
+    "flexEnabled": true,
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": {
+        "sap.m": {},
+        "sap.ui.core": {},
+        "sap.ushell": {},
+        "sap.fe.templates": {}
+      }
+    },
+    "models": {
+      "": {
+        "dataSource": "mainService",
+        "preload": true,
+        "settings": {
+          "operationMode": "Server",
+          "autoExpandSelect": true,
+          "earlyRequests": true
+        }
+      },
+      "@i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "uri": "i18n/i18n.properties"
+      }
+    },
+    "routing": {
+      "routes": [
+        {
+          "pattern": ":?query:",
+          "name": "{Entity}List",
+          "target": "{Entity}List"
+        },
+        {
+          "pattern": "{Entity}({key}):?query:",
+          "name": "{Entity}ObjectPage",
+          "target": "{Entity}ObjectPage"
+        }
+      ],
+      "targets": {
+        "{Entity}List": {
+          "type": "Component",
+          "id": "{Entity}List",
+          "name": "sap.fe.templates.ListReport",
+          "options": {
+            "settings": {
+              "contextPath": "/{Entity}",
+              "variantManagement": "Page",
+              "navigation": {
+                "{Entity}": {
+                  "detail": { "route": "{Entity}ObjectPage" }
+                }
+              }
+            }
+          }
+        },
+        "{Entity}ObjectPage": {
+          "type": "Component",
+          "id": "{Entity}ObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "editableHeaderContent": false,
+              "contextPath": "/{Entity}"
+            }
+          }
+        }
+      }
+    },
+    "contentDensities": { "compact": true, "cozy": true }
+  },
+  "sap.fiori": {
+    "registrationIds": [],
+    "archeType": "transactional"
+  }
+}
+```
+
+### Template Types Supported by SAP
+
+From `@sap-ux/fiori-elements-writer`:
+- `lrop` — List Report + Object Page (most common for RAP)
+- `worklist` — Worklist page
+- `alp` — Analytical List Page
+- `ovp` — Overview Page
+- `feop` — Form Entry Object Page
+- `fpm` — Flexible Programming Model
+
+### Minimal Webapp Structure
+
+```
+webapp/
+├── manifest.json          ← The critical file (see template above)
+├── Component.js           ← ~10 lines standard boilerplate
+├── i18n/
+│   └── i18n.properties   ← appTitle, appDescription, entity labels
+└── index.html             ← FLP sandbox launcher (optional, for testing)
+```
+
+**Component.js** (standard boilerplate):
+```javascript
+sap.ui.define(["sap/fe/core/AppComponent"], function(AppComponent) {
+  "use strict";
+  return AppComponent.extend("z.my.app.Component", {
+    metadata: { manifest: "json" }
+  });
+});
+```
+
+---
+
+## Other Useful open-ux-tools APIs Discovered
+
+### ADT Filestore (Read-Only) — for reading deployed apps
+
+```
+GET /sap/bc/adt/filestore/ui5-bsp/objects/{appName}/content
+Accept: application/xml
+```
+Returns Atom XML feed of files/folders. Useful for verifying deployment.
+
+### App Index Service — for querying deployed apps
+
+```
+GET /sap/bc/ui2/app_index/?fields={fields}&{searchParams}
+GET /sap/bc/ui2/app_index/ui5_app_info_json?id={appId}
+```
+Read-only. Automatically populated by ABAP Repository service on deploy.
+
+### ADT Transport Check — for UI5 app transport
+
+```
+POST /sap/bc/adt/cts/transportchecks
+Content-Type: application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.transport.service.checkData
+
+<DATA>
+  <DEVCLASS>{packageName}</DEVCLASS>
+  <OPERATION>I</OPERATION>
+  <URI>/sap/bc/adt/filestore/ui5-bsp/objects/{appName}/$create</URI>
+</DATA>
+```
+
+### ADT Transport Create — for UI5 app transport
+
+```
+POST /sap/bc/adt/cts/transports
+Content-Type: application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.CreateCorrectionRequest
+
+<DATA>
+  <OPERATION>I</OPERATION>
+  <DEVCLASS>{packageName}</DEVCLASS>
+  <REQUEST_TEXT>{description}</REQUEST_TEXT>
+  <REF>/sap/bc/adt/filestore/ui5-bsp/objects/{appName}/$create</REF>
+</DATA>
+```
+
+### ATO Settings — detect cloud vs on-prem
+
+```
+GET /sap/bc/adt/ato/settings
+Accept: application/*
+```
+Returns: `operationsType` (C=Cloud, P=Premise), `developmentPackage`, `isTransportRequestRequired`.
+
+### UI5 Version — detect available UI5 version
+
+```
+GET /sap/public/bc/ui5_ui5/bootstrap_info.json
+```
+Returns: `{ "Version": "1.120.0" }`. Useful for setting `minUI5Version` in manifest.json.
+
+### LREP Service — for adaptation projects (not needed for new apps)
+
+```
+POST/PUT/DELETE /sap/bc/lrep/dta_folder/
+```
+For deploying adaptation projects (app variants). Different from BSP deployment.
+
+---
+
+## Competitor Analysis (Updated)
+
+### Feature Matrix: UI5/Fiori Deployment
+
+| Feature | ARC-1 | vibing-steampunk | fr0ster | dassian-adt | SAP Joule | SAP fiori-mcp-server |
+|---------|-------|-----------------|---------|-------------|-----------|---------------------|
+| BSP Read (ADT filestore) | No | **Yes (3 tools)** | No | No | No | No |
+| BSP Write (ADT filestore) | N/A | **Broken (405)** | No | No | No | No |
+| BSP Deploy (ABAP_REPOSITORY_SRV) | No | No | No | No | No | No |
+| SRVB Publish | No | Yes | No | No | N/A | No |
+| Fiori App Generation | No | No | No | No | No | **Yes** |
+| FLP Tile via manifest.json | No | No | No | No | No | No |
+
+**Key findings:**
+1. **VSP's 7 BSP tools are misleading** — only 3 read-only tools work, 4 write tools are disabled
+2. **Nobody uses the correct deployment API** (`ABAP_REPOSITORY_SRV`) yet
+3. SAP has a `fiori-mcp-server` that can generate Fiori apps but doesn't deploy to ABAP
+4. **No MCP server** offers end-to-end RAP + Fiori + Deploy
+
+### SAP fiori-mcp-server
+
+Discovered in the open-ux-tools monorepo. Uses `@modelcontextprotocol/sdk` 1.29.0 with LanceDB embeddings. Tools include: `search_docs`, `list_fiori_apps`, `list_functionalities`, `get_functionality_details`, `execute_functionality`. Can generate Fiori Elements apps but doesn't deploy to ABAP systems.
+
+---
+
+## Revised Implementation Plan
+
+### Phase 1: Publish Service Binding (Effort: XS, half day)
+
+Add `publishServiceBinding()` and `unpublishServiceBinding()` to complete the RAP generation pipeline.
+
+```
+POST /sap/bc/adt/businessservices/bindings/{name}?action=publish
+POST /sap/bc/adt/businessservices/bindings/{name}?action=unpublish
+```
+
+### Phase 2: ABAP Repository Deployment (Effort: M, 3-5 days)
+
+Implement the OData-based deployment using `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV`.
+
+| Task | Details |
+|------|---------|
+| Feature probe | HEAD `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` — detect availability |
+| Get app info | GET `/Repositories('{name}')` — check existence |
+| Deploy new app | POST `/Repositories` — Atom XML with base64 ZIP |
+| Redeploy app | PUT `/Repositories('{name}')` — same payload |
+| Undeploy app | DELETE `/Repositories('{name}')` |
+| Download app | GET `/Repositories('{name}')` with `DownloadFiles='RUNTIME'` |
+| ZIP creation | Use Node.js `archiver` or `adm-zip` to create webapp ZIP |
+| Transport integration | Reuse existing `src/adt/transport.ts` + new CTS check endpoint |
+
+**Note:** This is a separate HTTP endpoint from the ADT APIs (`/sap/opu/odata/` vs `/sap/bc/adt/`). ARC-1's HTTP client may need a small extension to support OData service paths.
+
+### Phase 3: Fiori Elements App Generation (Effort: S, 1-2 days)
+
+Generate the webapp files that get zipped and deployed.
+
+| File | Source |
+|------|--------|
+| `manifest.json` | Template with entity name, service URL, FLP config |
+| `Component.js` | Static boilerplate (~10 lines) |
+| `i18n/i18n.properties` | Entity labels from CDS annotations |
+| `index.html` | Optional FLP sandbox launcher |
+
+The `manifest.json` template (see above) is parameterized by:
+- Entity name (from RAP generation)
+- Service binding name (from RAP generation)
+- Service definition name (from RAP generation)
+- App ID (derived from entity name)
+- Semantic object (user input or derived)
+- UI5 version (from `/sap/public/bc/ui5_ui5/bootstrap_info.json`)
+
+### Phase 4: ADT Filestore Read (Effort: S, 1 day)
+
+Add read-only BSP tools for verifying deployed apps:
+
+| Tool | Endpoint |
+|------|----------|
+| List BSP apps | GET `/sap/bc/adt/filestore/ui5-bsp/objects` |
+| Read app structure | GET `/sap/bc/adt/filestore/ui5-bsp/objects/{name}/content` |
+| Read file content | GET `/sap/bc/adt/filestore/ui5-bsp/objects/{name}/{path}/content` |
 
 ---
 
@@ -217,46 +503,16 @@ This would be a one-time deployment (like vibing-steampunk's `ZADT_VSP`). ARC-1 
 
 ```
 Step 1-12:  [Existing] Generate RAP stack (table, CDS, BDEF, SRVD, DDLX, CLAS)
-Step 13:    [New] Create service binding (if ADT API supports it, else manual)
+Step 13:    [Existing] Create service binding (manual, instruct user)
 Step 14:    [New] Publish service binding → OData service is live
-Step 15:    [New] Generate Fiori Elements webapp files (manifest.json, Component.js, etc.)
-Step 16:    [New] Create BSP application via ADT filestore API
-Step 17:    [New] Upload webapp files to BSP
-Step 18:    [New] Register in app index (automatic on some systems)
-Step 19:    [Optional] Create FLP tile (via custom service or manual instruction)
-Step 20:    [Verify] Open service URL, test Fiori app
+Step 15:    [New] Detect UI5 version from target system
+Step 16:    [New] Generate manifest.json with service URL, entity, FLP config
+Step 17:    [New] Generate Component.js, i18n, index.html
+Step 18:    [New] ZIP webapp files, base64-encode
+Step 19:    [New] Deploy via POST /sap/opu/odata/UI5/ABAP_REPOSITORY_SRV/Repositories
+Step 20:    [New] Verify deployment via ADT filestore read
+Step 21:    [Verify] App accessible at /sap/bc/ui5_ui5/sap/{appName}
 ```
-
----
-
-## Recommendations
-
-### Priority 1: Publish Service Binding (Immediate Value)
-- **Effort:** XS (half day)
-- **Impact:** Eliminates the biggest manual step in RAP generation
-- **API:** Already confirmed working (VSP + mcp-abap-abap-adt-api use it)
-- **Implementation:** Add `publishServiceBinding()` and `unpublishServiceBinding()` to `src/adt/devtools.ts`
-
-### Priority 2: BSP CRUD (FEAT-29e)
-- **Effort:** M (3-5 days)
-- **Impact:** Enables full Fiori app deployment
-- **API:** `/sap/bc/adt/filestore/ui5-bsp` — well-documented, widely used
-- **Implementation:** New methods in `src/adt/client.ts` + `src/adt/crud.ts`, new operations in intent handler
-
-### Priority 3: Fiori Elements App Template
-- **Effort:** S (1-2 days)  
-- **Impact:** Automates boilerplate generation — `manifest.json` is 90% of the work
-- **Implementation:** Template engine in a new `src/fiori/` module or as part of the RAP generation skill
-
-### Priority 4: FLP Tile (Research Needed)
-- **Effort:** M-L (depends on approach)
-- **Impact:** Nice-to-have — most devs can create tiles manually
-- **Recommendation:** First investigate `/sap/bc/ui2/flpd_cust_conf/` OData API. If it supports creates, no custom ABAP needed. Otherwise, consider a Z-helper class.
-
-### Not Recommended: Custom ICF Node
-- Creating ICF nodes programmatically is not supported via ADT APIs
-- BSP deployment automatically creates the necessary ICF service entry
-- No need for a custom ICF node just for deployment
 
 ---
 
@@ -264,11 +520,12 @@ Step 20:    [Verify] Open service URL, test Fiori app
 
 | Question | Answer |
 |----------|--------|
-| Can we create Fiori Elements app? | **Yes** — generate webapp files + deploy to BSP via ADT API |
-| Can we deploy it? | **Yes** — `/sap/bc/adt/filestore/ui5-bsp` API exists and is proven |
-| Can we create a tile? | **Partial** — no standard API, needs custom ABAP or OData investigation |
-| Do competitors do this? | **Only vibing-steampunk** has BSP CRUD. **Nobody** generates Fiori apps or tiles. |
-| Is a custom ICF node needed? | **No** — BSP deployment creates its own ICF entry automatically |
-| Are OData APIs available? | **Possibly** — `/sap/bc/ui2/flpd_cust_conf/` for FLP content, needs investigation |
+| Can we create a Fiori Elements app? | **Yes** — generate manifest.json + Component.js + i18n |
+| Can we deploy it? | **Yes** — via `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` (NOT ADT filestore) |
+| Can we create a tile? | **Yes** — via `crossNavigation.inbounds` in manifest.json (auto-registered) |
+| Do competitors do this? | **Nobody does end-to-end.** VSP has read-only BSP tools. SAP fiori-mcp-server generates but doesn't deploy. |
+| Is a custom ICF node needed? | **No** — ABAP Repository service handles everything |
+| Does the ADT filestore work for writes? | **No** — returns HTTP 405. Use ABAP_REPOSITORY_SRV instead. |
+| What about on-prem vs BTP? | Both supported — ABAP_REPOSITORY_SRV available since SAP_UI 7.53 |
 
-**Bottom line:** Phases 1-3 are fully feasible with existing SAP APIs. This would make ARC-1 the **first MCP server** to offer end-to-end RAP + Fiori generation and deployment — a significant competitive differentiator since not even SAP's Joule does this.
+**Bottom line:** This is fully feasible with proven SAP APIs. ARC-1 would be the **first MCP server** to offer end-to-end RAP + Fiori generation + deployment + FLP tile registration. The previous research incorrectly assumed the ADT filestore was the deployment API — SAP's official tooling uses an entirely different OData service.
