@@ -23,7 +23,7 @@ export async function listTransports(
     url += `?user=${encodeURIComponent(user)}`;
   }
 
-  const resp = await http.get(url, { Accept: 'application/xml' });
+  const resp = await http.get(url, { Accept: 'application/vnd.sap.adt.transportorganizertree.v1+xml' });
   return parseTransportList(resp.body);
 }
 
@@ -36,7 +36,7 @@ export async function getTransport(
   checkTransport(safety, transportId, 'GetTransport', false);
 
   const resp = await http.get(`/sap/bc/adt/cts/transportrequests/${encodeURIComponent(transportId)}`, {
-    Accept: 'application/xml',
+    Accept: 'application/vnd.sap.adt.transportorganizertree.v1+xml',
   });
 
   const transports = parseTransportList(resp.body);

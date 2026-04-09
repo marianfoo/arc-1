@@ -201,7 +201,7 @@ export async function runUnitTests(
     body,
     'application/vnd.sap.adt.abapunit.testruns.config.v4+xml',
     {
-      Accept: 'application/xml',
+      Accept: 'application/vnd.sap.adt.abapunit.testruns.result.v2+xml',
     },
   );
 

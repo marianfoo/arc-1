@@ -68,6 +68,11 @@ const parser = new XMLParser({
   },
   parseAttributeValue: false, // Keep attributes as strings
   parseTagValue: false, // Keep tag values as strings (prevents "001" → 1)
+  // SAP ADT responses use only standard XML entities (&amp; &lt; &gt; &quot;).
+  // Dump listings (ST22) can contain thousands of entity references in stack traces.
+  // fast-xml-parser v5 defaults to maxTotalExpansions=1000 which is too low.
+  // Disable custom entity processing — standard entities are handled regardless.
+  processEntities: false,
 });
 
 /** Parse raw XML string to a JS object */
