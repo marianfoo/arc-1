@@ -190,17 +190,7 @@ search("RAP value help CDS annotation")
 search("RAP access control authorization")
 ```
 
-**SAP standard naming conventions for RAP artifacts:**
-
-```
-search("SAP RAP naming conventions CDS view entity behavior definition")
-```
-
-```
-search("SAP ABAP development naming guidelines RAP artifacts prefix")
-```
-
-Research the official SAP-recommended naming schema for all RAP artifacts (tables, CDS views, BDEFs, service definitions, behavior pools, etc.). This becomes the default suggestion in Phase 2 — the user can override with system-specific conventions only if they explicitly prefer that.
+No need to research naming conventions at runtime — the official SAP naming schema is documented below in the "SAP Official Naming Conventions" reference section. Use it directly as the default.
 
 ### 1f. Research Summary
 
@@ -311,20 +301,20 @@ For each question, lead with a concrete recommendation based on the user's spec 
 ### Naming Questions
 
 **8. Entity naming**
-> I'm using the **SAP-recommended naming schema** for RAP artifacts [as researched in Phase 1e]:
+> I'm using the **official SAP naming conventions** (see reference section below). For an entity named e.g. `Travel`:
 >
-> | Artifact | SAP Naming Schema | Proposed Name |
-> |----------|-------------------|---------------|
-> | Database table | `Z<ENTITY>_D` | `Z<ENTITY>_D` |
-> | Interface CDS view | `ZI_<Entity>` | `ZI_<Entity>` |
-> | Projection CDS view | `ZC_<Entity>` | `ZC_<Entity>` |
-> | Interface BDEF | `ZI_<Entity>` | `ZI_<Entity>` |
-> | Projection BDEF | `ZC_<Entity>` | `ZC_<Entity>` |
-> | Metadata extension | `ZC_<Entity>` | `ZC_<Entity>` |
-> | Service definition | `ZSD_<Entity>` | `ZSD_<Entity>` |
-> | Service binding | `ZSB_<Entity>_V4` | `ZSB_<Entity>_V4` |
-> | Behavior pool | `ZBP_I_<Entity>` | `ZBP_I_<Entity>` |
-> | Draft table | `Z<ENTITY>_DD` | `Z<ENTITY>_DD` |
+> | Artifact | SAP Convention | Proposed Name |
+> |----------|---------------|---------------|
+> | Active persistence table | `A_` prefix | `ZA_TRAVEL` |
+> | Draft table | `D_` prefix | `ZD_TRAVEL` |
+> | Base/interface CDS view | `R_` or `I_` prefix, `TP` suffix | `ZR_TravelTP` |
+> | Projection CDS view | `C_` prefix | `ZC_Travel` |
+> | Interface BDEF | Same as root entity | `ZR_TravelTP` |
+> | Projection BDEF | Same as projection view | `ZC_Travel` |
+> | Metadata extension | Same as CDS entity it annotates | `ZC_Travel` |
+> | Service definition | `UI_` prefix (if UI service) | `ZUI_Travel` |
+> | Service binding | `UI_` prefix, `_O4` suffix | `ZUI_Travel_O4` |
+> | Behavior pool class | `BP_` prefix | `ZBP_R_TravelTP` |
 >
 > [If different patterns were found on the system]: Note: I found existing RAP projects on your system using a different convention (`<pattern found>`). I'm defaulting to SAP standard naming, but if you prefer to match the existing system-wide convention, or use a completely different one, let me know.
 >
@@ -703,3 +693,83 @@ This skill prioritizes **correctness and consistency** over speed. The extra res
 | `generate-abap-unit-test` | Follow-up — generate tests for the behavior pool |
 | `explain-abap-code` | Can be used during research to understand existing RAP projects found on the system |
 | `implement-feature` | For implementing non-RAP features in the arc-1 codebase itself |
+
+---
+
+## Reference: SAP Official Naming Conventions for RAP Artifacts
+
+Source: [SAP Help — Naming Conventions for Development Objects](https://help.sap.com/docs/ABAP_Cloud/f055b8bf582d4f34b91da667bc1fcce6/8b8f9d8f3cb948b2841d6045a255e503.html)
+
+### General Rule
+
+```
+[/<namespace>/][<prefix>]_<object_name>_[<suffix>]
+```
+
+- Use your own namespace reserved for your organization (Z* or Y* for customer objects)
+- The `/DMO/` namespace is reserved for SAP demo purposes only — never use it in productive development
+- Prefixes convey semantic differences between types of the same object kind
+- Suffixes add secondary differentiation (e.g., OData version, development guide variant)
+
+### ABAP Dictionary Objects
+
+| Object | Convention | Example (customer namespace) |
+|--------|-----------|------------------------------|
+| **Active persistence table** | `A_` prefix | `ZA_TRAVEL` |
+| **Draft table** | `D_` prefix | `ZD_TRAVEL` |
+
+### CDS Objects
+
+| Object | Convention | Notes | Example |
+|--------|-----------|-------|---------|
+| **Base/Root CDS view entity** | `R_` prefix | The base BO entity. Use `TP` suffix to indicate transactional processing relevance | `ZR_TravelTP` |
+| **Interface CDS view** | `I_` prefix | Reusable interface view layer (alternative to R_ in some patterns) | `ZI_Travel` |
+| **Projection CDS view** | `C_` prefix | `C` = consumption layer. If multiple projections exist, the name should represent the projection role | `ZC_Travel` |
+| **Extension include view** | `E_` prefix | For extensibility | `ZE_Travel` |
+| **Behavior definition** | Same name as root entity | BDEF always shares the name of the CDS view it belongs to | `ZR_TravelTP` (interface), `ZC_Travel` (projection) |
+| **Metadata extension** | Same name as CDS entity | If multiple extensions for one entity, add numbered suffix | `ZC_Travel`, `ZC_Travel_2` |
+
+### Business Services
+
+| Object | Convention | Notes | Example |
+|--------|-----------|-------|---------|
+| **Service definition** | No mandatory prefix | If not reused across UI/API, may use `UI_` or `API_` prefix | `ZUI_Travel` or `Z_Travel` |
+| **Service binding (UI)** | `UI_` prefix | For Fiori Elements / UI consumption | `ZUI_Travel_O4` |
+| **Service binding (Web API)** | `API_` prefix | For programmatic / integration consumption | `ZAPI_Travel_O4` |
+| **OData V2 suffix** | `_O2` | | `ZUI_Travel_O2` |
+| **OData V4 suffix** | `_O4` | | `ZUI_Travel_O4` |
+
+### Source Code Objects
+
+| Object | Convention | Notes | Example |
+|--------|-----------|-------|---------|
+| **Behavior pool class** | `BP_` prefix | Global class implementing BO behavior | `ZBP_R_TravelTP` |
+| **Local handler class** | `LHC_` prefix | Local class within behavior pool | `LHC_Travel_Create` |
+| **Local saver class** | `LSC_` prefix | Local class within behavior pool | `LSC_Travel` |
+
+### Complete Example: "Travel" Entity (V4, UI, Draft, Managed)
+
+| # | Object Type | SAP Naming | Name |
+|---|-------------|-----------|------|
+| 1 | Database table (active) | `A_` prefix | `ZA_TRAVEL` |
+| 2 | Database table (draft) | `D_` prefix | `ZD_TRAVEL` |
+| 3 | Base CDS view entity | `R_` prefix + `TP` suffix | `ZR_TravelTP` |
+| 4 | Projection CDS view | `C_` prefix | `ZC_Travel` |
+| 5 | Interface BDEF | = root entity name | `ZR_TravelTP` |
+| 6 | Projection BDEF | = projection view name | `ZC_Travel` |
+| 7 | Metadata extension | = projection view name | `ZC_Travel` |
+| 8 | Service definition | `UI_` prefix (optional) | `ZUI_Travel` |
+| 9 | Service binding | `UI_` prefix + `_O4` suffix | `ZUI_Travel_O4` |
+| 10 | Behavior pool class | `BP_` prefix | `ZBP_R_TravelTP` |
+
+### Notes on R_ vs I_ Prefix
+
+- **`R_`** (base/root view entity): Used in the SAP standard RAP development guides (managed, unmanaged, draft). This is the **current SAP recommendation** for new RAP development.
+- **`I_`** (interface view): Historically used and still common. Represents a reusable interface layer. Many existing tutorials and older projects use `I_` instead of `R_`.
+- Both are valid. Default to `R_` for new projects following SAP's latest guides. If existing code on the system uses `I_`, match that for consistency.
+
+### Notes on Table Naming
+
+- SAP uses `A_` and `D_` prefixes for active and draft tables respectively
+- Some older tutorials and community patterns use `_D` suffix for the table and `_DD` for draft — this is **not** the official SAP convention but is widely seen in practice
+- The SAP "OData UI Service from Scratch" wizard generates tables with these prefixes automatically
