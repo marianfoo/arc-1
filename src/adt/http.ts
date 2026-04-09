@@ -535,7 +535,7 @@ export class AdtHttpClient {
       method,
       headers,
       body,
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(120_000),
       ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
     }) as Promise<Response>;
   }
@@ -594,7 +594,7 @@ export class AdtHttpClient {
         path: url,
         headers: proxyHeaders,
         body: body ?? undefined,
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(120_000),
       });
 
       // Convert undici response to a Response-like object that matches
