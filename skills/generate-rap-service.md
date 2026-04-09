@@ -575,9 +575,14 @@ ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
 5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
 6. **Service Definition**: `ZSD_<ENTITY>`
 7. **Finish** and **Activate**
-8. Click **Publish** to register the service
 
-After publishing, verify with:
+After the service binding is created and activated, publish it:
+
+```
+SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
+```
+
+Then verify the publish status and service URL:
 ```
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
@@ -608,6 +613,7 @@ Created artifacts:
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
   [ ] Service binding: ZSB_<Entity>_V4 (create manually — see Step 13)
+  [x] Service binding published
 
 Next steps:
   - Create the service binding and publish it

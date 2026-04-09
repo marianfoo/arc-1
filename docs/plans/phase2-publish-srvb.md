@@ -88,10 +88,10 @@ Expose publish/unpublish via the SAPActivate tool with new action values.
 
 Update the RAP generation skill to use the new publish action after the user creates the service binding.
 
-- [ ] In `skills/generate-rap-service.md`, update Step 13 (line ~565-583): after the manual SRVB creation instructions, add a new sub-step: "After the service binding is created and activated, publish it:" with `SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")`. Then `SAPRead(type="SRVB", name="ZSB_<entity>_V4")` to verify and show the service URL.
-- [ ] Make the same update in `.claude/commands/generate-rap-service.md`
-- [ ] Update the summary checklist at Step 14 (line ~596) to include `[x] Service binding published` as a checklist item
-- [ ] Run `npm test` — all tests must pass (skill changes don't affect tests, but verify nothing is broken)
+- [x] In `skills/generate-rap-service.md`, update Step 13 (line ~565-583): after the manual SRVB creation instructions, add a new sub-step: "After the service binding is created and activated, publish it:" with `SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")`. Then `SAPRead(type="SRVB", name="ZSB_<entity>_V4")` to verify and show the service URL.
+- [x] Make the same update in `.claude/commands/generate-rap-service.md`
+- [x] Update the summary checklist at Step 14 (line ~596) to include `[x] Service binding published` as a checklist item
+- [x] Run `npm test` — all tests must pass (skill changes don't affect tests, but verify nothing is broken)
 
 ### Task 4: Final verification
 
