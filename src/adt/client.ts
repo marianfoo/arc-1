@@ -439,7 +439,7 @@ export class AdtClient {
     const objectPath = appName.toUpperCase() + normalizedSubPath;
     const resp = await this.http.get(
       `/sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(objectPath)}/content`,
-      { Accept: 'application/atom+xml' },
+      { Accept: 'application/xml', 'Content-Type': 'application/atom+xml' },
     );
     return parseBspFolderListing(resp.body, appName.toUpperCase());
   }
@@ -451,7 +451,7 @@ export class AdtClient {
     const objectPath = `${appName.toUpperCase()}/${cleanPath}`;
     const resp = await this.http.get(
       `/sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(objectPath)}/content`,
-      { Accept: 'application/octet-stream' },
+      { Accept: 'application/xml', 'Content-Type': 'application/octet-stream' },
     );
     return resp.body;
   }
