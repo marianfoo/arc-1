@@ -64,14 +64,14 @@ Standard unit test approach with mock HTTP responses. Create Atom XML fixture fi
 
 Add TypeScript interfaces for BSP app info and file nodes, then implement Atom XML parsers for the filestore responses.
 
-- [ ] Add `BspAppInfo` interface to `src/adt/types.ts`: `{ name: string; description: string }`
-- [ ] Add `BspFileNode` interface to `src/adt/types.ts`: `{ name: string; path: string; type: 'file' | 'folder'; etag?: string }`
-- [ ] Add `parseBspAppList(xml: string): BspAppInfo[]` to `src/adt/xml-parser.ts` — parse Atom feed with entries where `title` is app name and `summary` is description
-- [ ] Add `parseBspFolderListing(xml: string, appName: string): BspFileNode[]` to `src/adt/xml-parser.ts` — parse Atom feed, detect file vs folder via `<category term="file|folder"/>`, extract name from `title.split('/').pop()`, path from `title.substring(appName.length)`, etag from `content['@_afr:etag']`
-- [ ] Handle single-entry normalization: `Array.isArray(feed.entry) ? feed.entry : feed.entry ? [feed.entry] : []`
-- [ ] Create fixture files in `tests/fixtures/xml/` with realistic Atom XML (use format from `docs/plans/fiori-deployment-api-reference.md` Part 2 section 2.3)
-- [ ] Add unit tests (~6 tests) for both parsers: happy path, empty results, single entry, folder detection, file etag extraction
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `BspAppInfo` interface to `src/adt/types.ts`: `{ name: string; description: string }`
+- [x] Add `BspFileNode` interface to `src/adt/types.ts`: `{ name: string; path: string; type: 'file' | 'folder'; etag?: string }`
+- [x] Add `parseBspAppList(xml: string): BspAppInfo[]` to `src/adt/xml-parser.ts` — parse Atom feed with entries where `title` is app name and `summary` is description
+- [x] Add `parseBspFolderListing(xml: string, appName: string): BspFileNode[]` to `src/adt/xml-parser.ts` — parse Atom feed, detect file vs folder via `<category term="file|folder"/>`, extract name from `title.split('/').pop()`, path from `title.substring(appName.length)`, etag from `content['@_afr:etag']`
+- [x] Handle single-entry normalization: `Array.isArray(feed.entry) ? feed.entry : feed.entry ? [feed.entry] : []`
+- [x] Create fixture files in `tests/fixtures/xml/` with realistic Atom XML (use format from `docs/plans/fiori-deployment-api-reference.md` Part 2 section 2.3)
+- [x] Add unit tests (~6 tests) for both parsers: happy path, empty results, single entry, folder detection, file etag extraction
+- [x] Run `npm test` — all tests must pass
 
 ### Task 2: Add BSP client methods
 

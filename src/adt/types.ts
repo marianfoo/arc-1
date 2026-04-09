@@ -292,6 +292,22 @@ export interface StructuredClassResponse {
   macros: string | null;
 }
 
+// ─── BSP / UI5 Filestore Types ─────────────────────────────────────
+
+/** BSP application info from /sap/bc/adt/filestore/ui5-bsp/objects listing */
+export interface BspAppInfo {
+  name: string;
+  description: string;
+}
+
+/** File or folder node within a BSP application */
+export interface BspFileNode {
+  name: string;
+  path: string;
+  type: 'file' | 'folder';
+  etag?: string;
+}
+
 /** Transaction code metadata */
 export interface TransactionInfo {
   code: string;

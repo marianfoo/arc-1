@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"
+           xml:base="/sap/bc/adt/filestore/ui5-bsp/objects/">
+  <atom:id>/sap/bc/adt/filestore/ui5-bsp/objects</atom:id>
+  <atom:title>BSP Applications</atom:title>
+  <atom:entry>
+    <atom:id>ZAPP_BOOKING</atom:id>
+    <atom:title>ZAPP_BOOKING</atom:title>
+    <atom:summary>Manage Bookings</atom:summary>
+  </atom:entry>
+  <atom:entry>
+    <atom:id>ZAPP_TRAVEL</atom:id>
+    <atom:title>ZAPP_TRAVEL</atom:title>
+    <atom:summary>Travel Management</atom:summary>
+  </atom:entry>
+  <atom:entry>
+    <atom:id>ZAPP_MONITOR</atom:id>
+    <atom:title>ZAPP_MONITOR</atom:title>
+    <atom:summary>System Monitor</atom:summary>
+  </atom:entry>
+</atom:feed>

@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   findDeepNodes,
+  parseBspAppList,
+  parseBspFolderListing,
   parseClassMetadata,
   parseDataElementMetadata,
   parseDomainMetadata,
@@ -612,6 +614,94 @@ describe('XML Parser', () => {
       expect(result.language).toBe('');
       expect(result.fixPointArithmetic).toBe(false);
       expect(result.package).toBe('');
+    });
+  });
+
+  // ─── parseBspAppList ─────────────────────────────────────────────────
+
+  describe('parseBspAppList', () => {
+    it('parses app list from fixture', () => {
+      const xml = loadFixture('bsp-app-list.xml');
+      const apps = parseBspAppList(xml);
+      expect(apps).toHaveLength(3);
+      expect(apps[0]).toEqual({ name: 'ZAPP_BOOKING', description: 'Manage Bookings' });
+      expect(apps[1]).toEqual({ name: 'ZAPP_TRAVEL', description: 'Travel Management' });
+      expect(apps[2]).toEqual({ name: 'ZAPP_MONITOR', description: 'System Monitor' });
+    });
+
+    it('returns empty array for empty feed', () => {
+      const xml = `<?xml version="1.0"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:id>empty</atom:id>
+</atom:feed>`;
+      const apps = parseBspAppList(xml);
+      expect(apps).toEqual([]);
+    });
+
+    it('handles single entry (no array)', () => {
+      const xml = `<?xml version="1.0"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:title>ZSINGLE_APP</atom:title>
+    <atom:summary>Single app</atom:summary>
+  </atom:entry>
+</atom:feed>`;
+      const apps = parseBspAppList(xml);
+      expect(apps).toHaveLength(1);
+      expect(apps[0]).toEqual({ name: 'ZSINGLE_APP', description: 'Single app' });
+    });
+  });
+
+  // ─── parseBspFolderListing ───────────────────────────────────────────
+
+  describe('parseBspFolderListing', () => {
+    it('parses folder listing from fixture', () => {
+      const xml = loadFixture('bsp-folder-listing.xml');
+      const nodes = parseBspFolderListing(xml, 'ZAPP_BOOKING');
+      expect(nodes).toHaveLength(4);
+    });
+
+    it('detects files and folders', () => {
+      const xml = loadFixture('bsp-folder-listing.xml');
+      const nodes = parseBspFolderListing(xml, 'ZAPP_BOOKING');
+      const files = nodes.filter((n) => n.type === 'file');
+      const folders = nodes.filter((n) => n.type === 'folder');
+      expect(files).toHaveLength(2);
+      expect(folders).toHaveLength(2);
+    });
+
+    it('extracts etag for file entries', () => {
+      const xml = loadFixture('bsp-folder-listing.xml');
+      const nodes = parseBspFolderListing(xml, 'ZAPP_BOOKING');
+      const componentJs = nodes.find((n) => n.name === 'Component.js');
+      expect(componentJs).toBeDefined();
+      expect(componentJs!.etag).toBe('20230112203908');
+    });
+
+    it('omits etag for folder entries', () => {
+      const xml = loadFixture('bsp-folder-listing.xml');
+      const nodes = parseBspFolderListing(xml, 'ZAPP_BOOKING');
+      const i18n = nodes.find((n) => n.name === 'i18n');
+      expect(i18n).toBeDefined();
+      expect(i18n!.etag).toBeUndefined();
+    });
+
+    it('extracts relative path from title', () => {
+      const xml = loadFixture('bsp-folder-listing.xml');
+      const nodes = parseBspFolderListing(xml, 'ZAPP_BOOKING');
+      const componentJs = nodes.find((n) => n.name === 'Component.js');
+      expect(componentJs!.path).toBe('/Component.js');
+      const i18n = nodes.find((n) => n.name === 'i18n');
+      expect(i18n!.path).toBe('/i18n');
+    });
+
+    it('returns empty array for empty folder', () => {
+      const xml = `<?xml version="1.0"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:id>ZAPP_EMPTY</atom:id>
+</atom:feed>`;
+      const nodes = parseBspFolderListing(xml, 'ZAPP_EMPTY');
+      expect(nodes).toEqual([]);
     });
   });
 });

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"
+           xml:base="/sap/bc/adt/filestore/ui5-bsp/objects/">
+  <atom:id>ZAPP_BOOKING</atom:id>
+  <atom:title>ZAPP_BOOKING</atom:title>
+
+  <atom:entry>
+    <atom:category term="file"/>
+    <atom:content xmlns:afr="http://www.sap.com/adt/afr"
+                  afr:etag="20230112203908"
+                  type="application/octet-stream"
+                  src="./ZAPP_BOOKING%2fComponent.js/content"/>
+    <atom:id>ZAPP_BOOKING%2fComponent.js</atom:id>
+    <atom:title>ZAPP_BOOKING/Component.js</atom:title>
+    <atom:link href="https://host/sap/bc/ui5_ui5/sap/zapp_booking/component.js"
+               rel="execute" type="application/http"/>
+  </atom:entry>
+
+  <atom:entry>
+    <atom:category term="file"/>
+    <atom:content xmlns:afr="http://www.sap.com/adt/afr"
+                  afr:etag="20230115140022"
+                  type="application/octet-stream"
+                  src="./ZAPP_BOOKING%2fmanifest.json/content"/>
+    <atom:id>ZAPP_BOOKING%2fmanifest.json</atom:id>
+    <atom:title>ZAPP_BOOKING/manifest.json</atom:title>
+    <atom:link href="https://host/sap/bc/ui5_ui5/sap/zapp_booking/manifest.json"
+               rel="execute" type="application/http"/>
+  </atom:entry>
+
+  <atom:entry>
+    <atom:category term="folder"/>
+    <atom:content type="application/atom+xml;type=feed"
+                  src="./ZAPP_BOOKING%2fi18n/content"/>
+    <atom:id>ZAPP_BOOKING%2fi18n</atom:id>
+    <atom:title>ZAPP_BOOKING/i18n</atom:title>
+  </atom:entry>
+
+  <atom:entry>
+    <atom:category term="folder"/>
+    <atom:content type="application/atom+xml;type=feed"
+                  src="./ZAPP_BOOKING%2fview/content"/>
+    <atom:id>ZAPP_BOOKING%2fview</atom:id>
+    <atom:title>ZAPP_BOOKING/view</atom:title>
+  </atom:entry>
+</atom:feed>
