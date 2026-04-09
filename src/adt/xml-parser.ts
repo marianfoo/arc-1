@@ -487,10 +487,16 @@ export function parseServiceBinding(xml: string): string {
 export function parseBspAppList(xml: string): BspAppInfo[] {
   const parsed = parseXml(xml);
   const entries = getNestedArray(parsed, 'feed', 'entry');
-  return entries.map((entry: Record<string, unknown>) => ({
-    name: String(entry.title ?? ''),
-    description: String(entry.summary ?? ''),
-  }));
+  return entries.map((entry: Record<string, unknown>) => {
+    const summary = entry.summary;
+    // <atom:summary type="text">desc</atom:summary> → fast-xml-parser returns {#text, @_type} when attributes present
+    const description =
+      typeof summary === 'string' ? summary : String((summary as Record<string, unknown>)?.['#text'] ?? '');
+    return {
+      name: String(entry.title ?? ''),
+      description,
+    };
+  });
 }
 
 /**
