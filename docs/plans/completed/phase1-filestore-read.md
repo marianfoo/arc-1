@@ -104,8 +104,8 @@ Expose BSP operations via the existing SAPRead tool.
 
 ### Task 4: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Verify BSP type appears in SAPRead tool schema when listing tool definitions
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Verify BSP type appears in SAPRead tool schema when listing tool definitions
+- [x] Move this plan to `docs/plans/completed/`
