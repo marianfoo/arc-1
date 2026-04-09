@@ -190,11 +190,17 @@ search("RAP value help CDS annotation")
 search("RAP access control authorization")
 ```
 
-**SAP Notes for known issues or recommendations:**
+**SAP standard naming conventions for RAP artifacts:**
 
 ```
-sap_notes_search(q="RAP <specific_topic>")
+search("SAP RAP naming conventions CDS view entity behavior definition")
 ```
+
+```
+search("SAP ABAP development naming guidelines RAP artifacts prefix")
+```
+
+Research the official SAP-recommended naming schema for all RAP artifacts (tables, CDS views, BDEFs, service definitions, behavior pools, etc.). This becomes the default suggestion in Phase 2 — the user can override with system-specific conventions only if they explicitly prefer that.
 
 ### 1f. Research Summary
 
@@ -234,38 +240,54 @@ Based on research findings, ask targeted questions. Only ask what research could
 
 ### Architecture Questions
 
-Present options with a recommendation based on what was found:
+For each question, lead with a concrete recommendation based on the user's spec and research, explain why, then list alternatives with upsides/downsides. **These are foundational decisions — changing them after creation requires rebuilding most artifacts.** Make sure the user understands the trade-offs.
 
 **1. Implementation scenario**
-> Based on [finding], I recommend **managed** / **unmanaged**.
-> - **Managed**: Framework handles CRUD, you focus on business logic (determinations, validations). Best for new greenfield BOs.
-> - **Unmanaged**: You control all persistence. Needed when wrapping existing BAPIs/FMs or complex legacy logic.
-> - **Managed with unmanaged save**: Managed BO but custom save sequence (e.g., calling a BAPI in the save phase).
+> Based on your spec [quote relevant part], I would suggest **managed** because [reason — e.g., "this is a new greenfield BO with no existing persistence logic to wrap"].
 >
-> Which approach fits your needs?
+> Your options:
+> | Option | Upside | Downside |
+> |--------|--------|----------|
+> | **Managed** | Framework handles CRUD automatically, less code, faster to build | Less control over persistence, must follow RAP conventions |
+> | **Unmanaged** | Full control over persistence, can wrap existing BAPIs/FMs | You must implement all CRUD yourself, significantly more code |
+> | **Managed with unmanaged save** | Managed convenience + custom save (e.g., call BAPI in save phase) | More complex, need to understand save sequence |
+>
+> Does managed fit, or do you need to wrap existing logic?
 
 **2. Entity structure**
-> Your requirement suggests [single entity / parent-child hierarchy / multiple related entities].
-> - **Single root entity**: Simple, one table, one CDS stack. Good for flat data.
-> - **Compositions**: Parent-child (e.g., Order → LineItems). Draft-enabled compositions require draft tables for each entity.
-> - **Associations**: Related but independent entities (e.g., Order → Customer lookup).
+> Based on your spec [quote relevant part], I would suggest **[single entity / compositions]** because [reason — e.g., "your description mentions line items which is a classic parent-child pattern"].
 >
-> How many entities do you need, and what are their relationships?
+> Your options:
+> | Option | Upside | Downside |
+> |--------|--------|----------|
+> | **Single root entity** | Simplest, one table, one CDS stack | Cannot model hierarchies |
+> | **Compositions (parent → child)** | Models real business hierarchies (Order → Items), draft cascades to children | Each child entity needs its own table + draft table + CDS stack |
+> | **Associations** | Lightweight references to related entities (e.g., lookup to Customer) | No lifecycle dependency, no cascade delete |
+>
+> How many entities do you need and what are their relationships?
 
 **3. Key strategy**
-> Existing code uses [UUID / semantic keys / number ranges].
-> - **UUID (internal early numbering)**: Auto-generated, no user input needed. Simplest.
-> - **Semantic key**: User-provided (e.g., OrderNumber). Needs uniqueness validation.
-> - **Number range**: Server-assigned sequential numbers. Needs number range object.
+> Based on your spec, I would suggest **UUID (internal early numbering)** because [reason — e.g., "there's no mention of a user-visible business key, and UUID is the simplest and most reliable approach"].
+>
+> Your options:
+> | Option | Upside | Downside |
+> |--------|--------|----------|
+> | **UUID (internal early numbering)** | Auto-generated, no user input, no collision risk, simplest | Keys are not human-readable |
+> | **Semantic key** | User-provided meaningful key (e.g., OrderNumber) | Needs uniqueness validation, user must know the key upfront |
+> | **Number range** | Server-assigned sequential numbers, human-readable | Needs number range object configuration, more setup |
 >
 > Which key strategy fits your use case?
 
-**4. Draft handling**
-> [BTP systems typically use draft / On-prem: depends on Fiori Elements need].
-> - **With draft**: Users can save incomplete data, resume editing later. Required for Fiori Elements "edit" workflow.
-> - **Without draft**: Direct save only. Simpler, fewer artifacts.
+**4. OData version & draft**
+> I recommend **OData V4 with draft** because V4 is the current SAP standard for Fiori Elements applications and draft is the default interaction pattern for V4 transactional services.
 >
-> Do users need to save work-in-progress?
+> **Important context on OData V2 vs V4 and draft:**
+> - **V4 + draft** (recommended default): Standard for Fiori Elements List Report / Object Page. Draft is essentially built-in — V4 transactional services expect draft.
+> - **V2 without draft**: Better suited for non-draft transactional apps and SAP UI5 freestyle applications. V2 is more common in the freestyle world and has broader legacy support.
+> - **V4 without draft**: Not a standard pattern — V4 transactional services are designed around draft. Possible for read-only analytical services, but not for CRUD apps.
+> - **V2 with draft**: Supported but less common. Use only if V2 is required and draft is needed.
+>
+> Unless your requirements specifically suggest a non-draft or freestyle app, V4 with draft is the right choice. Is there any reason to deviate?
 
 ### Data Model Questions
 
@@ -289,29 +311,37 @@ Present options with a recommendation based on what was found:
 ### Naming Questions
 
 **8. Entity naming**
-> Based on existing conventions on your system [`<pattern found>`], I propose:
-> | Artifact | Name |
-> |----------|------|
-> | Table entity | `Z<ENTITY>_D` |
-> | Interface view | `ZI_<Entity>` |
-> | Projection view | `ZC_<Entity>` |
-> | ... | ... |
+> I'm using the **SAP-recommended naming schema** for RAP artifacts [as researched in Phase 1e]:
 >
-> Does this align with your standards? Any name changes?
+> | Artifact | SAP Naming Schema | Proposed Name |
+> |----------|-------------------|---------------|
+> | Database table | `Z<ENTITY>_D` | `Z<ENTITY>_D` |
+> | Interface CDS view | `ZI_<Entity>` | `ZI_<Entity>` |
+> | Projection CDS view | `ZC_<Entity>` | `ZC_<Entity>` |
+> | Interface BDEF | `ZI_<Entity>` | `ZI_<Entity>` |
+> | Projection BDEF | `ZC_<Entity>` | `ZC_<Entity>` |
+> | Metadata extension | `ZC_<Entity>` | `ZC_<Entity>` |
+> | Service definition | `ZSD_<Entity>` | `ZSD_<Entity>` |
+> | Service binding | `ZSB_<Entity>_V4` | `ZSB_<Entity>_V4` |
+> | Behavior pool | `ZBP_I_<Entity>` | `ZBP_I_<Entity>` |
+> | Draft table | `Z<ENTITY>_DD` | `Z<ENTITY>_DD` |
+>
+> [If different patterns were found on the system]: Note: I found existing RAP projects on your system using a different convention (`<pattern found>`). I'm defaulting to SAP standard naming, but if you prefer to match the existing system-wide convention, or use a completely different one, let me know.
+>
+> Any name changes?
 
 ### UI / Service Questions
 
-**9. OData version**
-> [V4 is recommended / V2 if Fiori Launchpad on older system].
-> Which OData version?
+**9. Fiori Elements frontend**
+> Will this service be consumed by a **Fiori Elements** app (auto-generated UI from annotations)?
+>
+> If yes, the metadata extension (DDLX) and UI annotations in the plan will be optimized for Fiori Elements List Report + Object Page (the most common pattern).
+>
+> **Note**: ARC-1 currently does not generate the Fiori Elements frontend application itself — only the backend OData service with proper annotations. The Fiori app can be generated from ADT ("Create Fiori Project..." on the service binding) or via the SAP Fiori tools in VS Code. The plan will include guidance on this as a follow-up step.
+>
+> If no (freestyle UI5 app or non-UI consumer), we can simplify the annotations.
 
-**10. UI layout preferences**
-> For Fiori Elements, which layout pattern?
-> - **List Report + Object Page** (most common): Table view → click row → detail page
-> - **Worklist**: Simple table view, no object page
-> - **Analytical List Page**: For reporting/analytics use cases
-
-**11. Searchable fields**
+**10. Searchable fields**
 > Which fields should be searchable (appear in the search bar)?
 
 ### Business Logic Questions (if applicable)
@@ -375,7 +405,7 @@ Create a comprehensive design table:
 | 7 | BDEF | ZC_<Entity> | Projection behavior definition | #5, #6 |
 | 8 | DDLX | ZC_<Entity> | Metadata extension | #6 |
 | 9 | SRVD | ZSD_<Entity> | Service definition | #6 |
-| 10 | SRVB | ZSB_<Entity>_V4 | Service binding (manual) | #9 |
+| 10 | SRVB | ZSB_<Entity>_V4 | Service binding | #9 |
 
 ### Field Definitions
 | Field | DB Column | CDS Alias | Type | Annotations | Notes |
@@ -414,7 +444,7 @@ Create a comprehensive design table:
 
 ### 3b. Present Plan for Approval
 
-Present the plan clearly and ask:
+Present the plan clearly and ask. **Emphasize that changes after creation are significantly harder:**
 
 > **Implementation Plan Ready**
 >
@@ -422,13 +452,16 @@ Present the plan clearly and ask:
 >
 > [Show the Artifact Stack table and Field Definitions table]
 >
+> **⚠️ Important: Please review carefully before approving.** Once the artifacts are created on the SAP system, changing fundamental decisions (managed vs. unmanaged, key strategy, entity structure, draft yes/no) requires deleting and recreating most artifacts. It is **much easier to change the plan now** than to restructure after creation. If anything is unclear or you're unsure about a decision, ask now.
+>
 > **Please review:**
 > 1. Are the artifact names correct?
 > 2. Are the fields complete and correctly typed?
 > 3. Is the architecture (managed/draft/keys) what you need?
-> 4. Any changes before I start creating?
+> 4. Any questions about the design decisions?
+> 5. Any changes before I start creating?
 >
-> **Say "approve" to proceed, or tell me what to change.**
+> **Say "approve" to proceed, or ask questions / tell me what to change.**
 
 Do NOT proceed until the user explicitly approves.
 
@@ -520,28 +553,35 @@ Fix any issues found. Re-activate if needed.
 
 ### 4e. Service Binding
 
-ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
+Create the service binding:
 
-> **Manual step required: Create Service Binding**
->
-> In ADT:
-> 1. Right-click package → New → Other ABAP Repository Object
-> 2. Search "Service Binding" → Next
-> 3. Name: `ZSB_<ENTITY>_V4`
-> 4. Description: `<Entity> OData V4 Service`
-> 5. Binding Type: OData V4 - UI
-> 6. Service Definition: `ZSD_<ENTITY>`
-> 7. Finish → Activate
+```
+SAPWrite(action="create", type="SRVB", name="ZSB_<entity>_V4", package="<package>", transport="<transport>", source="<srvb_source>")
+```
 
-After the user creates and activates the binding:
+Activate and publish the service binding:
+
+```
+SAPActivate(type="SRVB", name="ZSB_<entity>_V4")
+```
 
 ```
 SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
 ```
 
+Verify the publish status and service URL:
+
 ```
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
+
+### 4f. Preview the Service
+
+After the service binding is published, the RAP service can be previewed directly. In ADT, the user can open the service binding, select an entity (e.g., "Root"), and click "Preview..." to launch the Fiori Elements preview in a browser. This generates a preview URL via the ADT business services endpoint.
+
+Inform the user:
+
+> **Your service is live!** Open the service binding `ZSB_<ENTITY>_V4` in ADT, select the root entity, and click "Preview..." to see the auto-generated Fiori Elements List Report + Object Page.
 
 ---
 
@@ -569,7 +609,8 @@ RAP Service Generation Complete!
   [x] Metadata extension: ZC_<Entity>
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
-  [ ] Service binding: ZSB_<Entity>_V4 → create manually (see above)
+  [x] Service binding: ZSB_<Entity>_V4
+  [x] Service binding published
 
 ## Quality Checks
   [x] All artifacts activated successfully
@@ -590,16 +631,15 @@ Offer follow-up actions based on the plan:
 ```
 ## Recommended Next Steps
 
-1. **Create service binding** (manual step above)
-2. **Publish and test** the service in Fiori Elements preview
-3. **Add business logic** → use `generate-rap-logic` skill:
+1. **Preview the service** in Fiori Elements (ADT → Service Binding → select entity → Preview...)
+2. **Add business logic** → use `generate-rap-logic` skill:
    - Determinations: [list from plan]
    - Validations: [list from plan]
-4. **Add value helps** for reference fields
-5. **Add access control** (DCLS) for authorization
-6. **Add custom actions** if needed (e.g., Approve, Release)
-7. **Generate unit tests** → use `generate-abap-unit-test` skill
-8. **Add compositions** for child entities (if multi-entity scenario planned for Phase 2)
+3. **Add value helps** for reference fields
+4. **Add access control** (DCLS) for authorization
+5. **Add custom actions** if needed (e.g., Approve, Release)
+6. **Generate unit tests** → use `generate-abap-unit-test` skill
+7. **Add compositions** for child entities (if multi-entity scenario planned for Phase 2)
 ```
 
 ---
