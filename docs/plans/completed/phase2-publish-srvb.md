@@ -95,8 +95,8 @@ Update the RAP generation skill to use the new publish action after the user cre
 
 ### Task 4: Final verification
 
-- [ ] Run full test suite: `npm test` — all tests pass
-- [ ] Run typecheck: `npm run typecheck` — no errors
-- [ ] Run lint: `npm run lint` — no errors
-- [ ] Verify SAPActivate schema accepts `action="publish_srvb"` with a name parameter
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Run full test suite: `npm test` — all tests pass
+- [x] Run typecheck: `npm run typecheck` — no errors
+- [x] Run lint: `npm run lint` — no errors
+- [x] Verify SAPActivate schema accepts `action="publish_srvb"` with a name parameter
+- [x] Move this plan to `docs/plans/completed/`
