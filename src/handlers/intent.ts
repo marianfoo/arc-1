@@ -574,6 +574,12 @@ async function handleSAPRead(
     case 'VARIANTS':
       return textResult(await client.getVariants(name));
     case 'BSP': {
+      if (cachedFeatures?.ui5 && !cachedFeatures.ui5.available) {
+        return errorResult(
+          'UI5/Fiori BSP Filestore is not available on this SAP system. ' +
+            'Run SAPManage(action="probe") to verify feature availability.',
+        );
+      }
       const include = args.include as string | undefined;
       if (!name) {
         // List all BSP apps (optional search via query param not used here since name is empty)

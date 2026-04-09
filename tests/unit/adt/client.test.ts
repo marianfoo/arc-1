@@ -662,6 +662,41 @@ describe('AdtClient', () => {
       await expect(client.listBspApps()).rejects.toThrow(AdtSafetyError);
     });
 
+    it('getBspAppStructure blocked when read operations disallowed', async () => {
+      const client = createClient({
+        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
+      });
+      await expect(client.getBspAppStructure('ZAPP')).rejects.toThrow(AdtSafetyError);
+    });
+
+    it('getBspFileContent blocked when read operations disallowed', async () => {
+      const client = createClient({
+        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
+      });
+      await expect(client.getBspFileContent('ZAPP', 'file.js')).rejects.toThrow(AdtSafetyError);
+    });
+
+    it('getBspAppStructure normalizes subPath without leading slash', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, bspFolderXml));
+      const client = createClient();
+      await client.getBspAppStructure('zapp_booking', 'i18n');
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain(encodeURIComponent('ZAPP_BOOKING/i18n'));
+    });
+
+    it('getBspFileContent strips leading slash from filePath', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, 'file content'));
+      const client = createClient();
+      await client.getBspFileContent('ZAPP_BOOKING', '/manifest.json');
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain(encodeURIComponent('ZAPP_BOOKING/manifest.json'));
+      // Verify no double-slash in the path portion (after the protocol)
+      const pathPortion = url.replace('http://', '');
+      expect(pathPortion).not.toContain('//');
+    });
+
     it('listBspApps returns empty array for empty feed', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue(

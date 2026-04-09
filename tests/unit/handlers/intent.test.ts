@@ -329,6 +329,23 @@ describe('Intent Handler', () => {
       expect(result.content[0]!.text).toContain('sap.ui.define');
     });
 
+    it('returns error when ui5 feature is unavailable', async () => {
+      setCachedFeatures({
+        hana: { available: false },
+        abapGit: { available: false },
+        rap: { available: false },
+        amdp: { available: false },
+        ui5: { available: false },
+        transport: { available: false },
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BSP',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]!.text).toContain('not available');
+      resetCachedFeatures();
+    });
+
     it('reads a structure (STRU)', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'STRU',

@@ -510,9 +510,10 @@ export function parseBspFolderListing(xml: string, appName: string): BspFileNode
   return entries.map((entry: Record<string, unknown>) => {
     const title = String(entry.title ?? '');
     const category = entry.category as Record<string, unknown> | undefined;
-    const nodeType = String(category?.['@_term'] ?? 'file') as 'file' | 'folder';
+    const term = String(category?.['@_term'] ?? 'file');
+    const nodeType = term === 'folder' ? 'folder' : 'file';
     const content = entry.content as Record<string, unknown> | undefined;
-    const etag = content?.['@_etag'] ?? content?.['@_afr:etag'];
+    const etag = content?.['@_etag'];
 
     // Path relative to app root
     const path = title.startsWith(appName) ? title.substring(appName.length) : `/${title}`;
