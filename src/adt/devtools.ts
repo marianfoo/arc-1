@@ -10,6 +10,7 @@
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
+import { findDeepNodes, parseXml } from './xml-parser.js';
 
 /** Run syntax check on an ABAP object */
 export async function syntaxCheck(
@@ -273,22 +274,50 @@ function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {
 
 function parseUnitTestResults(xml: string): UnitTestResult[] {
   const results: UnitTestResult[] = [];
-  // Extract test results from ABAP Unit XML response
-  const testMethodRegex = /<testMethod[^>]*name="([^"]*)"[^>]*>/g;
+  const parsed = parseXml(xml);
+  const testClasses = findDeepNodes(parsed, 'testClass');
 
-  let match: RegExpExecArray | null;
-  while ((match = testMethodRegex.exec(xml)) !== null) {
-    const methodName = match[1]!;
-    // Check for alerts after this method
-    const afterMatch = xml.slice(match.index);
-    const hasAlert = afterMatch.includes('<alert') && afterMatch.indexOf('<alert') < afterMatch.indexOf('</testMethod');
+  for (const tc of testClasses) {
+    const className = String(tc['@_name'] ?? '');
+    const uri = String(tc['@_uri'] ?? '');
+    // Extract program name from URI: .../classes/ZCL_TEST/... or .../programs/ZTEST/...
+    const uriParts = uri.split('/');
+    let program = '';
+    for (let i = 0; i < uriParts.length - 1; i++) {
+      if (uriParts[i] === 'classes' || uriParts[i] === 'programs') {
+        program = uriParts[i + 1] ?? '';
+        break;
+      }
+    }
 
-    results.push({
-      program: '',
-      testClass: '',
-      testMethod: methodName,
-      status: hasAlert ? 'failed' : 'passed',
-    });
+    const methods = findDeepNodes(tc, 'testMethod');
+    for (const method of methods) {
+      const methodName = String(method['@_name'] ?? '');
+      const alerts = findDeepNodes(method, 'alert');
+      const hasAlert = alerts.length > 0;
+      // Extract message from first alert's title element
+      let message: string | undefined;
+      if (hasAlert) {
+        const titleVal = (alerts[0] as Record<string, unknown>).title;
+        if (Array.isArray(titleVal) && titleVal.length > 0) {
+          message = String(titleVal[0]);
+        } else if (typeof titleVal === 'string') {
+          message = titleVal;
+        }
+      }
+      // Extract duration from executionTime attribute (in seconds)
+      const execTime = method['@_executionTime'];
+      const duration = execTime ? Number(execTime) : undefined;
+
+      results.push({
+        program,
+        testClass: className,
+        testMethod: methodName,
+        status: hasAlert ? 'failed' : 'passed',
+        ...(message ? { message } : {}),
+        ...(duration !== undefined && !Number.isNaN(duration) ? { duration } : {}),
+      });
+    }
   }
 
   return results;

@@ -72,17 +72,17 @@ This is the highest-impact fix. The `parseSourceSearchResults()` function at lin
 
 The `parseUnitTestResults()` function at line ~218 always returns empty `program` and `testClass` fields, and doesn't extract alert messages. Replace the regex parser with `parseXml()` + `findDeepNodes()`.
 
-- [ ] In `src/adt/devtools.ts`, add import: `import { parseXml, findDeepNodes } from './xml-parser.js';`
-- [ ] Rewrite `parseUnitTestResults()` (line ~218-239) to use `parseXml()`. Find `testClass` nodes via `findDeepNodes(parsed, 'testClass')`. For each testClass, extract `@_name` as className and extract program name from `@_uri` (split by `/`, take segment after `classes/` or `programs/`). Find `testMethod` nodes within each testClass via `findDeepNodes(tc, 'testMethod')`. For each method, check for `alert` children. Populate `program`, `testClass`, `testMethod`, `status`, `message` (from alert title), and `duration` (from `@_executionTime`)
-- [ ] In `src/adt/types.ts`, the `UnitTestResult` type (line ~72) already has optional `message` and `duration` fields — no type changes needed
-- [ ] Add `'testClass'`, `'testMethod'`, `'alert'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config (line ~36)
-- [ ] Update existing unit tests in `tests/unit/adt/devtools.test.ts` (line ~198-244). Update the mock XML responses to include `<testClass>` wrappers with `name` attributes, e.g.: `<testResult><testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses"><testMethod name="test_success"/></testClass></testResult>`
-- [ ] Add new tests (~4 tests):
+- [x] In `src/adt/devtools.ts`, add import: `import { parseXml, findDeepNodes } from './xml-parser.js';`
+- [x] Rewrite `parseUnitTestResults()` (line ~218-239) to use `parseXml()`. Find `testClass` nodes via `findDeepNodes(parsed, 'testClass')`. For each testClass, extract `@_name` as className and extract program name from `@_uri` (split by `/`, take segment after `classes/` or `programs/`). Find `testMethod` nodes within each testClass via `findDeepNodes(tc, 'testMethod')`. For each method, check for `alert` children. Populate `program`, `testClass`, `testMethod`, `status`, `message` (from alert title), and `duration` (from `@_executionTime`)
+- [x] In `src/adt/types.ts`, the `UnitTestResult` type (line ~72) already has optional `message` and `duration` fields — no type changes needed
+- [x] Add `'testClass'`, `'testMethod'`, `'alert'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config (line ~36)
+- [x] Update existing unit tests in `tests/unit/adt/devtools.test.ts` (line ~198-244). Update the mock XML responses to include `<testClass>` wrappers with `name` attributes, e.g.: `<testResult><testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses"><testMethod name="test_success"/></testClass></testResult>`
+- [x] Add new tests (~4 tests):
   - Test alert message extraction: XML with `<alert><title>Expected X got Y</title></alert>` → `message` populated
   - Test multiple test classes in one response → each result has correct testClass
   - Test `program` extracted from URI
   - Test `duration` populated from `executionTime` attribute
-- [ ] Run `npm test` — all tests must pass
+- [x] Run `npm test` — all tests must pass
 
 ### Task 3: Fix ATC findings parser to include URI and line number (Issue #2)
 

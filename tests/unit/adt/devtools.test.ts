@@ -299,20 +299,26 @@ describe('DevTools', () => {
   // ─── runUnitTests ──────────────────────────────────────────────────
 
   describe('runUnitTests', () => {
-    it('parses passing tests', async () => {
+    it('parses passing tests with class info', async () => {
       const xml = `<testResult>
-        <testMethod name="test_success"></testMethod>
+        <testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_success"></testMethod>
+        </testClass>
       </testResult>`;
       const http = mockHttp(xml);
       const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
       expect(results).toHaveLength(1);
       expect(results[0]?.testMethod).toBe('test_success');
       expect(results[0]?.status).toBe('passed');
+      expect(results[0]?.testClass).toBe('LTCL_TEST');
+      expect(results[0]?.program).toBe('ZCL_TEST');
     });
 
     it('detects failing tests (with alerts)', async () => {
       const xml = `<testResult>
-        <testMethod name="test_fail"><alert kind="failedAssertion"/></testMethod>
+        <testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_fail"><alert kind="failedAssertion"><title>Expected X got Y</title></alert></testMethod>
+        </testClass>
       </testResult>`;
       const http = mockHttp(xml);
       const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
@@ -328,9 +334,11 @@ describe('DevTools', () => {
 
     it('handles multiple test methods', async () => {
       const xml = `<testResult>
-        <testMethod name="test_a"></testMethod>
-        <testMethod name="test_b"><alert kind="failedAssertion"/></testMethod>
-        <testMethod name="test_c"></testMethod>
+        <testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_a"></testMethod>
+          <testMethod name="test_b"><alert kind="failedAssertion"><title>Assertion failed</title></alert></testMethod>
+          <testMethod name="test_c"></testMethod>
+        </testClass>
       </testResult>`;
       const http = mockHttp(xml);
       const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
@@ -338,6 +346,60 @@ describe('DevTools', () => {
       expect(results[0]?.status).toBe('passed');
       expect(results[1]?.status).toBe('failed');
       expect(results[2]?.status).toBe('passed');
+    });
+
+    it('extracts alert message from title element', async () => {
+      const xml = `<testResult>
+        <testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_fail">
+            <alert kind="failedAssertion"><title>Expected 42 got 0</title></alert>
+          </testMethod>
+        </testClass>
+      </testResult>`;
+      const http = mockHttp(xml);
+      const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results).toHaveLength(1);
+      expect(results[0]?.message).toBe('Expected 42 got 0');
+    });
+
+    it('parses multiple test classes in one response', async () => {
+      const xml = `<testResult>
+        <testClass name="LTCL_FIRST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_one"></testMethod>
+        </testClass>
+        <testClass name="LTCL_SECOND" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_two"></testMethod>
+        </testClass>
+      </testResult>`;
+      const http = mockHttp(xml);
+      const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results).toHaveLength(2);
+      expect(results[0]?.testClass).toBe('LTCL_FIRST');
+      expect(results[0]?.testMethod).toBe('test_one');
+      expect(results[1]?.testClass).toBe('LTCL_SECOND');
+      expect(results[1]?.testMethod).toBe('test_two');
+    });
+
+    it('extracts program name from URI', async () => {
+      const xml = `<testResult>
+        <testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_MY_CLASS/includes/testclasses">
+          <testMethod name="test_it"></testMethod>
+        </testClass>
+      </testResult>`;
+      const http = mockHttp(xml);
+      const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_MY_CLASS');
+      expect(results[0]?.program).toBe('ZCL_MY_CLASS');
+    });
+
+    it('extracts duration from executionTime attribute', async () => {
+      const xml = `<testResult>
+        <testClass name="LTCL_TEST" uri="/sap/bc/adt/oo/classes/ZCL_TEST/includes/testclasses">
+          <testMethod name="test_fast" executionTime="0.015"></testMethod>
+        </testClass>
+      </testResult>`;
+      const http = mockHttp(xml);
+      const results = await runUnitTests(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results[0]?.duration).toBe(0.015);
     });
 
     it('is blocked when T is disallowed', async () => {

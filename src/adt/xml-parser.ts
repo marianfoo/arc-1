@@ -52,6 +52,9 @@ const parser = new XMLParser({
       'proposal',
       'referencedObject',
       'textSearchResult',
+      'testClass',
+      'testMethod',
+      'alert',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings
