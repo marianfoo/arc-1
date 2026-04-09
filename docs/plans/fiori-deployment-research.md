@@ -516,16 +516,68 @@ Step 21:    [Verify] App accessible at /sap/bc/ui5_ui5/sap/{appName}
 
 ---
 
+## Recommendations
+
+### Priority 1: Publish Service Binding (Immediate Value)
+- **Effort:** XS (half day)
+- **Impact:** Eliminates the biggest manual step in RAP generation
+- **API:** Already confirmed working (VSP + mcp-abap-abap-adt-api use it)
+- **Implementation:** Add `publishServiceBinding()` and `unpublishServiceBinding()` to `src/adt/devtools.ts`
+
+### Priority 2: ABAP Repository Deployment (FEAT-29e revised)
+- **Effort:** M (3-5 days)
+- **Impact:** Enables full Fiori app deployment
+- **API:** `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` — the correct write API (NOT ADT filestore)
+- **Implementation:** New `src/adt/ui5-deploy.ts` or extend `src/adt/http.ts` for OData paths
+- **Reference:** See `docs/plans/fiori-deployment-api-reference.md` for exact HTTP specs
+
+### Priority 3: Fiori Elements App Template
+- **Effort:** S (1-2 days)  
+- **Impact:** Automates boilerplate generation — `manifest.json` is 90% of the work
+- **Implementation:** Template engine in a new `src/fiori/` module or as part of the RAP generation skill
+
+### Priority 4: ADT Filestore Read (Optional)
+- **Effort:** XS (half day)
+- **Impact:** Low — useful for verifying deployments, reading deployed files
+- **API:** `/sap/bc/adt/filestore/ui5-bsp` — read-only (list apps, browse files, get content)
+
+### Out of Scope: FLP Tile Creation
+FLP tile/catalog configuration varies significantly between BTP and on-prem:
+- **BTP ABAP:** `crossNavigation.inbounds` in manifest.json is auto-registered by app index
+- **On-prem:** Requires admin to assign app to catalog/group via FLP Designer (transaction `/UI2/FLPD_CUST`) or `/UI2/SEMOBJ_SAP` for semantic objects
+- **Recommendation:** After deployment, guide the user with system-specific instructions and SAP documentation links rather than trying to automate this
+
+### Not Needed: Custom ICF Node
+- BSP deployment via ABAP_REPOSITORY_SRV automatically creates the necessary ICF service entry
+- No custom ABAP program or ICF node is required
+
+---
+
+## Detailed API Reference
+
+See **[`docs/plans/fiori-deployment-api-reference.md`](fiori-deployment-api-reference.md)** for:
+- Exact HTTP methods, URLs, headers, query parameters
+- Atom XML payload format with all fields
+- CSRF token flow differences from ADT
+- Error handling by HTTP status code
+- Retry logic for timeouts (408/504)
+- SafeMode/TestMode behavior
+- ZIP archive creation
+- Transport check/create XML payloads
+- ADT filestore read-only operations
+- Differences from ARC-1's existing ADT HTTP client
+
+---
+
 ## Summary
 
 | Question | Answer |
 |----------|--------|
 | Can we create a Fiori Elements app? | **Yes** — generate manifest.json + Component.js + i18n |
 | Can we deploy it? | **Yes** — via `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` (NOT ADT filestore) |
-| Can we create a tile? | **Yes** — via `crossNavigation.inbounds` in manifest.json (auto-registered) |
-| Do competitors do this? | **Nobody does end-to-end.** VSP has read-only BSP tools. SAP fiori-mcp-server generates but doesn't deploy. |
-| Is a custom ICF node needed? | **No** — ABAP Repository service handles everything |
+| Can we create a tile? | **Out of scope** — guide user with SAP docs (BTP vs on-prem differs) |
+| Do competitors do this? | **Nobody does end-to-end.** VSP has read-only BSP. SAP fiori-mcp-server generates but doesn't deploy. |
 | Does the ADT filestore work for writes? | **No** — returns HTTP 405. Use ABAP_REPOSITORY_SRV instead. |
 | What about on-prem vs BTP? | Both supported — ABAP_REPOSITORY_SRV available since SAP_UI 7.53 |
 
-**Bottom line:** This is fully feasible with proven SAP APIs. ARC-1 would be the **first MCP server** to offer end-to-end RAP + Fiori generation + deployment + FLP tile registration. The previous research incorrectly assumed the ADT filestore was the deployment API — SAP's official tooling uses an entirely different OData service.
+**Bottom line:** Phases 1-3 are fully feasible with proven SAP APIs. ARC-1 would be the **first MCP server** to offer end-to-end RAP + Fiori generation and deployment. The API reference document provides production-quality specs derived from SAP's own `@sap-ux/deploy-tooling` source code.
