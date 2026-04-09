@@ -8,7 +8,7 @@
 
 ## Summary
 
-While all 1174 unit tests pass, deep analysis reveals **11 confirmed issues** (1 originally flagged issue was verified correct after cross-referencing 3 independent implementations) ranging from fragile XML parsers to incomplete response handling. These issues would surface in production with real SAP systems, particularly with different SAP_BASIS versions or BTP ABAP environments.
+Deep analysis revealed **11 confirmed issues** (1 originally flagged issue was verified correct after cross-referencing 3 independent implementations) ranging from fragile XML parsers to incomplete response handling. **All 9 actionable issues have been resolved** by replacing regex-based parsers with proper `parseXml()` + `findDeepNodes()` parsing, enriching response types with all available SAP data, and removing dead code. Issues #9 and #12 required no fix.
 
 **Severity scale:**
 - **Critical:** Will fail on customer systems, blocks functionality
@@ -89,6 +89,9 @@ function parseUnitTestResults(xml: string): UnitTestResult[] {
 - Add test for alert message extraction
 - Add test for multiple test classes in one response
 
+### Resolution
+Resolved: replaced regex parser with `parseXml()` + `findDeepNodes()`. Now extracts `testClass` name from `@_name`, program from `@_uri`, alert messages from `<title>` children, and `executionTime` from `@_executionTime`. Added `testClass`, `testMethod`, `alert` to isArray config.
+
 ---
 
 ## Issue 2: ATC Findings Parser Missing URI and Line Number (High)
@@ -132,6 +135,9 @@ const findingRegex = /<finding[^>]*priority="(\d)"[^>]*checkTitle="([^"]*)"[^>]*
 
 Or better: use `parseXml()` + `findDeepNodes()` like other parsers.
 
+### Resolution
+Resolved: replaced regex parser with `parseXml()` + `findDeepNodes(parsed, 'finding')`. URI and line number are now extracted from `@_uri` (with `#start=` fragment parsing for line number). Added `finding` to isArray config.
+
 ---
 
 ## Issue 3: Syntax Check Parser Assumes Attribute Order (Medium)
@@ -169,6 +175,9 @@ for (const msg of msgs) {
 }
 ```
 
+### Resolution
+Resolved: replaced regex parser with `parseXml()` + `findDeepNodes(parsed, 'msg')`. Attributes are now extracted individually, so order doesn't matter. Added `msg` to isArray config.
+
 ---
 
 ## Issue 4: Transport List Parser Assumes Attribute Order (Medium)
@@ -205,6 +214,9 @@ for (const req of requests) {
   });
 }
 ```
+
+### Resolution
+Resolved: replaced regex parser with `parseXml()` + `findDeepNodes(parsed, 'request')`. Attributes are extracted individually (order-independent). Task extraction added via `findDeepNodes(req, 'task')`. Also replaced `createTransport()` response parsing regex with XML parsing. Added `request` to isArray config.
 
 ---
 
@@ -260,6 +272,9 @@ for (const ref of refs) {
 }
 ```
 
+### Resolution
+Resolved: extracted `textSearchResult` child elements from each `objectReference` using `findDeepNodes(ref, 'textSearchResult')`. Match details (line number, snippet) are now populated. Added `textSearchResult` to isArray config.
+
 ---
 
 ## Issue 6: ATC Worklist ID Extraction May Match Wrong Attribute (Medium)
@@ -292,6 +307,9 @@ Extract the correct attribute:
 const worklistId = extractAttr(createResp.body, 'worklistId') || extractAttr(createResp.body, 'id') || '1';
 ```
 
+### Resolution
+Resolved: changed `extractAttr` call to prefer `worklistId` attribute over `id`, with fallback chain: `worklistId` → `id` → `'1'`.
+
 ---
 
 ## Issue 7: Trace Hitlist Parser Fragile Attribute Order (Medium)
@@ -314,6 +332,9 @@ There is a fallback that uses individual attribute extraction, which is more rob
 
 ### Fix Suggestion
 Use `parseXml()` + `findDeepNodes()` for consistent parsing.
+
+### Resolution
+Resolved: replaced dual regex (primary + fallback) with `parseXml()` + `findDeepNodes(parsed, 'hitListEntry')`. Attributes extracted individually, so order doesn't matter. Added `hitListEntry` to isArray config.
 
 ---
 
@@ -340,6 +361,9 @@ Remove the dead branch:
 ```typescript
 const name = String(metadata?.['@_name'] ?? '');
 ```
+
+### Resolution
+Resolved: removed the dead `@_dataPreview:name` fallback branch. The `removeNSPrefix: true` config strips namespace prefixes, so `dataPreview:name` always becomes `name` (accessed as `@_name`).
 
 ---
 
@@ -438,6 +462,9 @@ const hasErrors = msgs.some(m =>
   m['@_severity'] === 'error' || m['@_type'] === 'E'
 );
 ```
+
+### Resolution
+Resolved: replaced inline `resp.body.includes('type="E"')` string matching in both `activate()` and `activateBatch()` with a shared `parseActivationResult()` helper that uses `parseXml()` + `findDeepNodes(parsed, 'msg')`. Checks `@_severity === 'error'`, `@_type === 'E'`, and `@_type === 'A'` on proper msg nodes, eliminating false positives from URI attributes like `adtcore:type="ENHO/E"`.
 
 ---
 

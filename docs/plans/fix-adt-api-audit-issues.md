@@ -195,9 +195,9 @@ The `@_dataPreview:name` fallback at line ~149 is dead code because `removeNSPre
 
 Update the audit report to reflect that all issues have been fixed, and ensure documentation is accurate.
 
-- [ ] In `docs/research/adt-api-audit-issues.md`, add a "Resolution" section to each fixed issue noting it was resolved, with the approach taken (e.g., "Resolved: replaced regex parser with parseXml() + findDeepNodes()")
-- [ ] Review `docs/tools.md` for any descriptions that should reflect the enriched data now returned (e.g., SAPDiagnose section, SAPActivate, SAPWrite's run_tests action)
-- [ ] Run `npm test` — all tests must pass
+- [x] In `docs/research/adt-api-audit-issues.md`, add a "Resolution" section to each fixed issue noting it was resolved, with the approach taken (e.g., "Resolved: replaced regex parser with parseXml() + findDeepNodes()")
+- [x] Review `docs/tools.md` for any descriptions that should reflect the enriched data now returned (e.g., SAPDiagnose section, SAPActivate, SAPWrite's run_tests action) — reviewed, docs are high-level and don't describe specific response fields, no changes needed
+- [x] Run `npm test` — all tests must pass
 
 ### Task 11: Final verification
 
