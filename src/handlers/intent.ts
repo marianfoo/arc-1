@@ -616,6 +616,14 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   }
 
   const results = await client.searchObject(query, maxResults);
+  if (Array.isArray(results) && results.length === 0) {
+    return textResult(
+      '[]' +
+        '\n\nNo objects found. If searching for custom objects, try Z* or Y* prefixes (e.g., "Z*ESTIM*"). ' +
+        'For German SAP systems, try German business terms. ' +
+        'If you already found objects in a package, use SAPRead with type=DEVC to list all package contents instead of more searches.',
+    );
+  }
   return textResult(JSON.stringify(results, null, 2));
 }
 
