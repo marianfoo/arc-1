@@ -183,9 +183,9 @@ The `parseTraceHitlist()` at line ~292 uses a primary regex with strict attribut
 
 The `@_dataPreview:name` fallback at line ~149 is dead code because `removeNSPrefix: true` strips the namespace prefix.
 
-- [ ] In `src/adt/xml-parser.ts`, change line ~149 from: `const name = String(metadata?.['@_name'] ?? metadata?.['@_dataPreview:name'] ?? '');` to: `const name = String(metadata?.['@_name'] ?? '');`
-- [ ] Verify existing `parseTableContents` tests still pass — no new tests needed since this is dead code removal
-- [ ] Run `npm test` — all tests must pass
+- [x] In `src/adt/xml-parser.ts`, change line ~149 from: `const name = String(metadata?.['@_name'] ?? metadata?.['@_dataPreview:name'] ?? '');` to: `const name = String(metadata?.['@_name'] ?? '');`
+- [x] Verify existing `parseTableContents` tests still pass — no new tests needed since this is dead code removal
+- [x] Run `npm test` — all tests must pass
 
 ### Task 10: Update documentation and audit report
 

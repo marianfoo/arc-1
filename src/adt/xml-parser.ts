@@ -153,7 +153,7 @@ export function parseTableContents(xml: string): { columns: string[]; rows: Reco
     // Old format: METADATA/@_name, DATASET/DATA
     // New format: metadata/@_name, dataSet/data
     const metadata = (col.METADATA ?? col.metadata) as Record<string, unknown> | undefined;
-    const name = String(metadata?.['@_name'] ?? metadata?.['@_dataPreview:name'] ?? '');
+    const name = String(metadata?.['@_name'] ?? '');
     if (!name) continue; // skip non-column entries like totalRows, name, etc.
     colNames.push(name);
 
