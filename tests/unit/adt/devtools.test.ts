@@ -467,7 +467,7 @@ describe('DevTools', () => {
 
   describe('runAtcCheck', () => {
     it('parses ATC findings', async () => {
-      const createResp = '<atcResult id="42"/>';
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
       const resultResp = `<worklist>
         <finding priority="1" checkTitle="Extended Check" messageTitle="Unused variable" uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=42,1"/>
         <finding priority="2" checkTitle="Naming" messageTitle="Non-standard naming" uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=10,5"/>
@@ -488,7 +488,7 @@ describe('DevTools', () => {
     });
 
     it('handles empty ATC results', async () => {
-      const createResp = '<atcResult id="42"/>';
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
       const resultResp = '<worklist/>';
       const http = {
         ...mockHttp(createResp),
@@ -500,7 +500,7 @@ describe('DevTools', () => {
     });
 
     it('sends create request and fetches worklist', async () => {
-      const createResp = '<atcResult id="123"/>';
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="123" worklistId="123"/>';
       const resultResp = '<worklist/>';
       const http = {
         ...mockHttp(createResp),
@@ -517,7 +517,7 @@ describe('DevTools', () => {
         expect.objectContaining({ Accept: 'application/xml' }),
       );
       expect(http.get).toHaveBeenCalledWith(
-        expect.stringContaining('/sap/bc/adt/atc/worklists/'),
+        '/sap/bc/adt/atc/worklists/123',
         expect.objectContaining({ Accept: expect.stringContaining('atc.worklist') }),
       );
     });
@@ -539,7 +539,7 @@ describe('DevTools', () => {
     });
 
     it('extracts URI and line from #start= fragment', async () => {
-      const createResp = '<atcResult id="42"/>';
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
       const resultResp = `<worklist>
         <finding priority="1" checkTitle="Check" messageTitle="Issue" uri="/sap/bc/adt/oo/classes/ZCL_X/source/main#start=42,1"/>
       </worklist>`;
@@ -554,7 +554,7 @@ describe('DevTools', () => {
     });
 
     it('returns empty uri and line 0 for finding without URI', async () => {
-      const createResp = '<atcResult id="42"/>';
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
       const resultResp = `<worklist>
         <finding priority="3" checkTitle="Check" messageTitle="General issue"/>
       </worklist>`;
@@ -569,7 +569,7 @@ describe('DevTools', () => {
     });
 
     it('parses correctly regardless of attribute order', async () => {
-      const createResp = '<atcResult id="42"/>';
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
       const resultResp = `<worklist>
         <finding messageTitle="Wrong order" priority="2" uri="/sap/bc/adt/programs/programs/ZTEST#start=7,3" checkTitle="Order Check"/>
       </worklist>`;
