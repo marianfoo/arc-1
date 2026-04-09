@@ -1274,7 +1274,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
       srvbInfo = await client.getSrvb(name);
     } catch {
       return textResult(
-        `Successfully published service binding ${name}. (Readback of binding metadata failed — use SAPRead to verify.)`,
+        `Successfully published service binding ${name} (readback of binding metadata failed — use SAPRead to verify)`,
       );
     }
     return textResult(`Successfully published service binding ${name}.\n\n${srvbInfo}`);
