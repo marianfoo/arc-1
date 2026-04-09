@@ -52,17 +52,7 @@ export async function activate(
     { Accept: 'application/xml' },
   );
 
-  // Check if activation succeeded (no error messages)
-  const hasErrors = resp.body.includes('severity="error"') || resp.body.includes('type="E"');
-  const messages: string[] = [];
-  // Extract message texts
-  const msgRegex = /shortText="([^"]+)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = msgRegex.exec(resp.body)) !== null) {
-    messages.push(match[1]!);
-  }
-
-  return { success: !hasErrors, messages };
+  return parseActivationResult(resp.body);
 }
 
 /**
@@ -95,16 +85,7 @@ ${refs}
     { Accept: 'application/xml' },
   );
 
-  // Check if activation succeeded (no error messages)
-  const hasErrors = resp.body.includes('severity="error"') || resp.body.includes('type="E"');
-  const messages: string[] = [];
-  const msgRegex = /shortText="([^"]+)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = msgRegex.exec(resp.body)) !== null) {
-    messages.push(match[1]!);
-  }
-
-  return { success: !hasErrors, messages };
+  return parseActivationResult(resp.body);
 }
 
 /** Result of a publish/unpublish operation */
@@ -246,6 +227,28 @@ export interface AtcFinding {
   messageTitle: string;
   uri: string;
   line: number;
+}
+
+/** Parse activation response XML to detect errors via proper XML parsing */
+export function parseActivationResult(xml: string): { success: boolean; messages: string[] } {
+  if (!xml.trim()) return { success: true, messages: [] };
+
+  const parsed = parseXml(xml);
+  const msgs = findDeepNodes(parsed, 'msg');
+  const messages: string[] = [];
+  let hasErrors = false;
+
+  for (const m of msgs) {
+    const severity = String(m['@_severity'] ?? '');
+    const type = String(m['@_type'] ?? '');
+    if (severity === 'error' || severity === 'fatal' || type === 'E' || type === 'A') {
+      hasErrors = true;
+    }
+    const shortText = String(m['@_shortText'] ?? '');
+    if (shortText) messages.push(shortText);
+  }
+
+  return { success: !hasErrors, messages };
 }
 
 function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {

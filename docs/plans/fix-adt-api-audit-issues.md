@@ -136,12 +136,12 @@ The `parseSyntaxCheckResult()` regex at line ~197 assumes `type` before `line` b
 
 The `activate()` and `activateBatch()` functions use `resp.body.includes('type="E"')` which can match URIs like `adtcore:type="ENHO/E"`. Replace with proper XML parsing.
 
-- [ ] In `src/adt/devtools.ts`, create a shared helper function `parseActivationResult(xml: string): { success: boolean; messages: string[] }` that uses `parseXml()` + `findDeepNodes(parsed, 'msg')`. Check for errors by testing `m['@_severity'] === 'error'` or `m['@_type'] === 'E'` or `m['@_type'] === 'A'` on `msg` nodes. Extract message texts from `@_shortText`. Handle empty body as success
-- [ ] Replace the inline string matching in both `activate()` (line ~54-64) and `activateBatch()` (line ~98-106) with calls to `parseActivationResult()`
-- [ ] Add tests (~2 tests):
+- [x] In `src/adt/devtools.ts`, create a shared helper function `parseActivationResult(xml: string): { success: boolean; messages: string[] }` that uses `parseXml()` + `findDeepNodes(parsed, 'msg')`. Check for errors by testing `m['@_severity'] === 'error'` or `m['@_type'] === 'E'` or `m['@_type'] === 'A'` on `msg` nodes. Extract message texts from `@_shortText`. Handle empty body as success
+- [x] Replace the inline string matching in both `activate()` (line ~54-64) and `activateBatch()` (line ~98-106) with calls to `parseActivationResult()`
+- [x] Add tests (~2 tests):
   - Test that `adtcore:type="ENHO/E"` in a URI does NOT trigger false error detection
   - Test that `severity="fatal"` or `type="A"` are also detected as errors
-- [ ] Run `npm test` — all tests must pass
+- [x] Run `npm test` — all tests must pass
 
 ### Task 7: Fix transport list parser to handle any attribute order (Issue #4)
 

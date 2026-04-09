@@ -128,6 +128,27 @@ describe('DevTools', () => {
       expect(result.success).toBe(false);
     });
 
+    it('does not false-positive on adtcore:type="ENHO/E" in URIs (Issue #11)', async () => {
+      const xml = `<messages>
+        <msg severity="info" shortText="Object activated" adtcore:type="ENHO/E" adtcore:uri="/sap/bc/adt/enhancements/ZENHO_TEST"/>
+      </messages>`;
+      const http = mockHttp(xml);
+      const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/enhancements/ZENHO_TEST');
+      expect(result.success).toBe(true);
+    });
+
+    it('detects severity="fatal" and type="A" as errors', async () => {
+      const xml = `<messages>
+        <msg severity="fatal" shortText="Fatal activation error"/>
+        <msg type="A" shortText="Abend during activation"/>
+      </messages>`;
+      const http = mockHttp(xml);
+      const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.success).toBe(false);
+      expect(result.messages).toContain('Fatal activation error');
+      expect(result.messages).toContain('Abend during activation');
+    });
+
     it('extracts multiple messages', async () => {
       const xml = '<messages><msg shortText="Warning 1"/><msg shortText="Warning 2"/></messages>';
       const http = mockHttp(xml);
