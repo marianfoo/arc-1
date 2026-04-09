@@ -205,30 +205,30 @@ export function parseDumpList(xml: string): DumpEntry[] {
  * And dump:chapter elements with name, title, category attributes.
  */
 export function parseDumpDetail(xml: string, formattedText: string, dumpId: string): DumpDetail {
-  // Extract root attributes
-  const error = extractAttrSimple(xml, 'error') || '';
-  const exception = extractAttrSimple(xml, 'exception') || '';
-  const program = extractAttrSimple(xml, 'terminatedProgram') || '';
-  const user = extractAttrSimple(xml, 'author') || '';
-  const timestamp = extractAttrSimple(xml, 'datetime') || '';
+  const parsed = parseXml(xml);
+  const dumps = findDeepNodes(parsed, 'dump');
+  const root = dumps[0] ?? {};
 
-  // Extract termination source URI
-  const termMatch = xml.match(
-    /relation="http:\/\/www\.sap\.com\/adt\/relations\/runtime\/dump\/termination"[^>]*uri="([^"]*)"/,
+  const error = String(root['@_error'] ?? '');
+  const exception = String(root['@_exception'] ?? '');
+  const program = String(root['@_terminatedProgram'] ?? '');
+  const user = String(root['@_author'] ?? '');
+  const timestamp = String(root['@_datetime'] ?? '');
+
+  // Find termination link by relation attribute
+  const links = findDeepNodes(parsed, 'link');
+  const termLink = links.find(
+    (l) => String(l['@_relation'] ?? '') === 'http://www.sap.com/adt/relations/runtime/dump/termination',
   );
-  const terminationUri = termMatch?.[1];
+  const terminationUri = termLink ? String(termLink['@_uri'] ?? '') || undefined : undefined;
 
   // Extract chapters
-  const chapters: DumpChapter[] = [];
-  const chapterRegex = /<dump:chapter[^>]*name="([^"]*)"[^>]*title="([^"]*)"[^>]*category="([^"]*)"/g;
-  let chMatch: RegExpExecArray | null;
-  while ((chMatch = chapterRegex.exec(xml)) !== null) {
-    chapters.push({
-      name: chMatch[1]!,
-      title: chMatch[2]!,
-      category: chMatch[3]!,
-    });
-  }
+  const chapterNodes = findDeepNodes(parsed, 'chapter');
+  const chapters: DumpChapter[] = chapterNodes.map((ch) => ({
+    name: String(ch['@_name'] ?? ''),
+    title: String(ch['@_title'] ?? ''),
+    category: String(ch['@_category'] ?? ''),
+  }));
 
   return {
     id: dumpId,
