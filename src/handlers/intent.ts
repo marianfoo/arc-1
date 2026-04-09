@@ -118,6 +118,47 @@ function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+// ─── Search Helpers ─────────────────────────────────────────────────
+
+/**
+ * Transliterate non-ASCII characters in search queries.
+ * SAP object names are ASCII-only, so umlauts and accented characters
+ * never appear in object names. This prevents wasted searches with
+ * German terms like "*Schätzung*" that silently return empty results.
+ */
+export function transliterateQuery(query: string): { normalized: string; changed: boolean } {
+  // Explicit German umlaut replacements (must come before NFD decomposition)
+  let result = query
+    .replace(/ä/g, 'AE')
+    .replace(/Ä/g, 'AE')
+    .replace(/ö/g, 'OE')
+    .replace(/Ö/g, 'OE')
+    .replace(/ü/g, 'UE')
+    .replace(/Ü/g, 'UE')
+    .replace(/ß/g, 'SS');
+
+  // General fallback: strip remaining diacritics (é→e, ñ→n, etc.)
+  result = result.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  return { normalized: result, changed: result !== query };
+}
+
+/**
+ * Detect if a search query looks like a field/column name rather than
+ * an object name. Field names are short, uppercase, and typically don't
+ * start with Z/Y (which are custom object prefixes).
+ */
+export function looksLikeFieldName(query: string): boolean {
+  // Wildcard patterns are object searches, not field names
+  if (query.includes('*')) return false;
+  if (query.length === 0 || query.length > 15) return false;
+  // Must be uppercase letters, digits, underscores only
+  if (!/^[A-Z0-9_]+$/.test(query)) return false;
+  // Z/Y prefix → more likely an object name
+  if (/^[ZY]/.test(query)) return false;
+  return true;
+}
+
 /** Classify error type for audit logging */
 /** Format error messages with LLM-friendly remediation hints */
 function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
@@ -379,11 +420,20 @@ async function handleSAPRead(
     return errorResult(BTP_HINTS[type]);
   }
 
-  // Helper: get source with cache support
-  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
-    if (!cachingLayer) return fetcher();
-    const { source } = await cachingLayer.getSource(objType, objName, fetcher);
-    return source;
+  // Helper: get source with cache support, returns cache hit status
+  const cachedGet = async (
+    objType: string,
+    objName: string,
+    fetcher: () => Promise<string>,
+  ): Promise<{ source: string; cacheHit: boolean }> => {
+    if (!cachingLayer) return { source: await fetcher(), cacheHit: false };
+    const { source, hit } = await cachingLayer.getSource(objType, objName, fetcher);
+    return { source, cacheHit: hit };
+  };
+
+  /** Prepend [cached] indicator when result came from cache */
+  const cachedTextResult = (source: string, cacheHit: boolean): ToolResult => {
+    return textResult(cacheHit ? `[cached]\n${source}` : source);
   };
 
   // Structured format is only supported for CLAS type
@@ -392,8 +442,10 @@ async function handleSAPRead(
   }
 
   switch (type) {
-    case 'PROG':
-      return textResult(await cachedGet('PROG', name, () => client.getProgram(name)));
+    case 'PROG': {
+      const { source, cacheHit } = await cachedGet('PROG', name, () => client.getProgram(name));
+      return cachedTextResult(source, cacheHit);
+    }
     case 'CLAS': {
       // Structured format: return JSON with metadata + decomposed source
       if (args.format === 'structured') {
@@ -402,8 +454,8 @@ async function handleSAPRead(
       }
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
-        // Method-level read — fetch full source then extract
-        const fullSource = await cachedGet('CLAS', name, () => client.getClass(name));
+        // Method-level read — fetch full source then extract (no cache indicator for derived results)
+        const { source: fullSource } = await cachedGet('CLAS', name, () => client.getClass(name));
         const abaplintVer = cachedFeatures?.abapRelease
           ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
           : undefined;
@@ -419,12 +471,15 @@ async function handleSAPRead(
       }
       // Only cache the full merged source (no include param), not individual includes
       if (!args.include) {
-        return textResult(await cachedGet('CLAS', name, () => client.getClass(name)));
+        const { source, cacheHit } = await cachedGet('CLAS', name, () => client.getClass(name));
+        return cachedTextResult(source, cacheHit);
       }
       return textResult(await client.getClass(name, args.include as string | undefined));
     }
-    case 'INTF':
-      return textResult(await cachedGet('INTF', name, () => client.getInterface(name)));
+    case 'INTF': {
+      const { source, cacheHit } = await cachedGet('INTF', name, () => client.getInterface(name));
+      return cachedTextResult(source, cacheHit);
+    }
     case 'FUNC': {
       let group = String(args.group ?? '');
       if (!group) {
@@ -439,7 +494,8 @@ async function handleSAPRead(
         }
         group = resolved;
       }
-      return textResult(await cachedGet('FUNC', name, () => client.getFunction(group, name)));
+      const { source, cacheHit } = await cachedGet('FUNC', name, () => client.getFunction(group, name));
+      return cachedTextResult(source, cacheHit);
     }
     case 'FUGR': {
       const expand = Boolean(args.expand_includes);
@@ -463,22 +519,30 @@ async function handleSAPRead(
       const fg = await client.getFunctionGroup(name);
       return textResult(JSON.stringify(fg, null, 2));
     }
-    case 'INCL':
-      return textResult(await cachedGet('INCL', name, () => client.getInclude(name)));
+    case 'INCL': {
+      const { source, cacheHit } = await cachedGet('INCL', name, () => client.getInclude(name));
+      return cachedTextResult(source, cacheHit);
+    }
     case 'DDLS': {
-      const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
+      const { source: ddlSource, cacheHit } = await cachedGet('DDLS', name, () => client.getDdls(name));
       if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
+        // Elements extraction is derived from source — no cache indicator
         return textResult(extractCdsElements(ddlSource, name));
       }
-      return textResult(ddlSource);
+      return cachedTextResult(ddlSource, cacheHit);
     }
-    case 'BDEF':
-      return textResult(await cachedGet('BDEF', name, () => client.getBdef(name)));
-    case 'SRVD':
-      return textResult(await cachedGet('SRVD', name, () => client.getSrvd(name)));
+    case 'BDEF': {
+      const { source, cacheHit } = await cachedGet('BDEF', name, () => client.getBdef(name));
+      return cachedTextResult(source, cacheHit);
+    }
+    case 'SRVD': {
+      const { source, cacheHit } = await cachedGet('SRVD', name, () => client.getSrvd(name));
+      return cachedTextResult(source, cacheHit);
+    }
     case 'DDLX': {
       try {
-        return textResult(await cachedGet('DDLX', name, () => client.getDdlx(name)));
+        const { source, cacheHit } = await cachedGet('DDLX', name, () => client.getDdlx(name));
+        return cachedTextResult(source, cacheHit);
       } catch (err) {
         if (isNotFoundError(err)) {
           return textResult(
@@ -488,14 +552,22 @@ async function handleSAPRead(
         throw err;
       }
     }
-    case 'SRVB':
-      return textResult(await cachedGet('SRVB', name, () => client.getSrvb(name)));
-    case 'TABL':
-      return textResult(await cachedGet('TABL', name, () => client.getTable(name)));
-    case 'VIEW':
-      return textResult(await cachedGet('VIEW', name, () => client.getView(name)));
-    case 'STRU':
-      return textResult(await cachedGet('STRU', name, () => client.getStructure(name)));
+    case 'SRVB': {
+      const { source, cacheHit } = await cachedGet('SRVB', name, () => client.getSrvb(name));
+      return cachedTextResult(source, cacheHit);
+    }
+    case 'TABL': {
+      const { source, cacheHit } = await cachedGet('TABL', name, () => client.getTable(name));
+      return cachedTextResult(source, cacheHit);
+    }
+    case 'VIEW': {
+      const { source, cacheHit } = await cachedGet('VIEW', name, () => client.getView(name));
+      return cachedTextResult(source, cacheHit);
+    }
+    case 'STRU': {
+      const { source, cacheHit } = await cachedGet('STRU', name, () => client.getStructure(name));
+      return cachedTextResult(source, cacheHit);
+    }
     case 'DOMA': {
       const domain = await client.getDomain(name);
       return textResult(JSON.stringify(domain, null, 2));
@@ -614,12 +686,12 @@ async function handleSAPRead(
 }
 
 async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
-  const query = String(args.query ?? '');
+  const rawQuery = String(args.query ?? '');
   const maxResults = Number(args.maxResults ?? 100);
   const searchType = String(args.searchType ?? 'object');
 
   if (searchType === 'source_code') {
-    // If probe already determined textSearch is unavailable, return the precise reason
+    // Source code search: do NOT transliterate — source can contain umlauts in strings/comments
     if (cachedFeatures?.textSearch && !cachedFeatures.textSearch.available) {
       return errorResult(
         `Source code search is not available on this SAP system. ${cachedFeatures.textSearch.reason ?? ''}` +
@@ -629,7 +701,7 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
     const objectType = args.objectType as string | undefined;
     const packageName = args.packageName as string | undefined;
     try {
-      const results = await client.searchSource(query, maxResults, objectType, packageName);
+      const results = await client.searchSource(rawQuery, maxResults, objectType, packageName);
       return textResult(JSON.stringify(results, null, 2));
     } catch (err) {
       if (err instanceof AdtApiError) {
@@ -646,16 +718,27 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
     }
   }
 
+  // Object search: transliterate non-ASCII (SAP object names are ASCII-only)
+  const { normalized: query, changed: wasTransliterated } = transliterateQuery(rawQuery);
+  const transliterationNote = wasTransliterated
+    ? `Note: Query contained non-ASCII characters. Transliterated "${rawQuery}" → "${query}" (SAP object names are ASCII-only).\n\n`
+    : '';
+
   const results = await client.searchObject(query, maxResults);
   if (Array.isArray(results) && results.length === 0) {
-    return textResult(
+    let hint =
       '[]' +
-        '\n\nNo objects found. If searching for custom objects, try Z* or Y* prefixes (e.g., "Z*ESTIM*"). ' +
-        'For German SAP systems, try German business terms. ' +
-        'If you already found objects in a package, use SAPRead with type=DEVC to list all package contents instead of more searches.',
-    );
+      '\n\n' +
+      transliterationNote +
+      'No objects found. If searching for custom objects, try Z* or Y* prefixes (e.g., "Z*ESTIM*"). ' +
+      'If you already found objects in a package, use SAPRead with type=DEVC to list all package contents instead of more searches.';
+    if (looksLikeFieldName(query)) {
+      const stripped = query.replace(/\*/g, '');
+      hint += `\nThis looks like a field/column name. Use SAPQuery("SELECT fieldname, rollname, domname FROM dd03l WHERE fieldname = '${stripped}'") or SAPRead(type='DDLS', include='elements') to find fields.`;
+    }
+    return textResult(hint);
   }
-  return textResult(JSON.stringify(results, null, 2));
+  return textResult(transliterationNote + JSON.stringify(results, null, 2));
 }
 
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
