@@ -23,6 +23,8 @@ import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type {
   AdtSearchResult,
+  BspAppInfo,
+  BspFileNode,
   ClassMetadata,
   DataElementInfo,
   DomainInfo,
@@ -31,6 +33,8 @@ import type {
   TransactionInfo,
 } from './types.js';
 import {
+  parseBspAppList,
+  parseBspFolderListing,
   parseClassMetadata,
   parseDataElementMetadata,
   parseDomainMetadata,
@@ -411,6 +415,44 @@ export class AdtClient {
   async getVariants(program: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetVariants');
     const resp = await this.http.get(`/sap/bc/adt/programs/programs/${encodeURIComponent(program)}/variants`);
+    return resp.body;
+  }
+
+  // ─── BSP / UI5 Filestore Read Operations ────────────────────────────
+
+  /** List deployed BSP/UI5 applications */
+  async listBspApps(query?: string, maxResults?: number): Promise<BspAppInfo[]> {
+    checkOperation(this.safety, OperationType.Read, 'ListBSPApps');
+    const params = new URLSearchParams();
+    if (query) params.set('name', query);
+    if (maxResults !== undefined) params.set('maxResults', String(maxResults));
+    const qs = params.toString();
+    const path = `/sap/bc/adt/filestore/ui5-bsp/objects${qs ? `?${qs}` : ''}`;
+    const resp = await this.http.get(path, { Accept: 'application/atom+xml' });
+    return parseBspAppList(resp.body);
+  }
+
+  /** Browse BSP app file structure (root or subfolder) */
+  async getBspAppStructure(appName: string, subPath?: string): Promise<BspFileNode[]> {
+    checkOperation(this.safety, OperationType.Read, 'GetBSPApp');
+    const normalizedSubPath = subPath && !subPath.startsWith('/') ? `/${subPath}` : subPath || '';
+    const objectPath = appName.toUpperCase() + normalizedSubPath;
+    const resp = await this.http.get(
+      `/sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(objectPath)}/content`,
+      { Accept: 'application/atom+xml' },
+    );
+    return parseBspFolderListing(resp.body, appName.toUpperCase());
+  }
+
+  /** Read a single file from a BSP app */
+  async getBspFileContent(appName: string, filePath: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetBSPFile');
+    const cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+    const objectPath = `${appName.toUpperCase()}/${cleanPath}`;
+    const resp = await this.http.get(
+      `/sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(objectPath)}/content`,
+      { Accept: 'application/octet-stream' },
+    );
     return resp.body;
   }
 }

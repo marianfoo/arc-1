@@ -557,4 +557,119 @@ describe('AdtClient', () => {
       expect(classUrls.some((u) => u.includes('/includes/macros'))).toBe(true);
     });
   });
+
+  describe('BSP / UI5 Filestore operations', () => {
+    const bspAppListXml = `<?xml version="1.0" encoding="UTF-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:title>ZAPP_BOOKING</atom:title>
+    <atom:summary>Manage Bookings</atom:summary>
+  </atom:entry>
+  <atom:entry>
+    <atom:title>ZAPP_TRAVEL</atom:title>
+    <atom:summary>Travel Management</atom:summary>
+  </atom:entry>
+</atom:feed>`;
+
+    const bspFolderXml = `<?xml version="1.0" encoding="UTF-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:category term="file"/>
+    <atom:content xmlns:afr="http://www.sap.com/adt/afr"
+                  afr:etag="20230112203908"
+                  type="application/octet-stream"/>
+    <atom:title>ZAPP_BOOKING/manifest.json</atom:title>
+  </atom:entry>
+  <atom:entry>
+    <atom:category term="folder"/>
+    <atom:content type="application/atom+xml;type=feed"/>
+    <atom:title>ZAPP_BOOKING/i18n</atom:title>
+  </atom:entry>
+</atom:feed>`;
+
+    it('listBspApps returns parsed app list', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, bspAppListXml));
+      const client = createClient();
+      const apps = await client.listBspApps();
+      expect(apps).toHaveLength(2);
+      expect(apps[0].name).toBe('ZAPP_BOOKING');
+      expect(apps[1].description).toBe('Travel Management');
+    });
+
+    it('listBspApps passes query parameter in URL', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, bspAppListXml));
+      const client = createClient();
+      await client.listBspApps('ZAPP');
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('name=ZAPP');
+    });
+
+    it('listBspApps passes maxResults parameter', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, bspAppListXml));
+      const client = createClient();
+      await client.listBspApps(undefined, 10);
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('maxResults=10');
+    });
+
+    it('getBspAppStructure returns files and folders', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, bspFolderXml));
+      const client = createClient();
+      const nodes = await client.getBspAppStructure('zapp_booking');
+      expect(nodes).toHaveLength(2);
+      expect(nodes[0].type).toBe('file');
+      expect(nodes[0].name).toBe('manifest.json');
+      expect(nodes[1].type).toBe('folder');
+      expect(nodes[1].name).toBe('i18n');
+    });
+
+    it('getBspAppStructure URL-encodes the app path with %2f', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, bspFolderXml));
+      const client = createClient();
+      await client.getBspAppStructure('zapp_booking', '/i18n');
+      const url = mockFetch.mock.calls[0][0] as string;
+      // The path ZAPP_BOOKING/i18n should be encoded as a single segment
+      expect(url).toContain(encodeURIComponent('ZAPP_BOOKING/i18n'));
+      expect(url).toContain('/content');
+    });
+
+    it('getBspFileContent returns raw text body', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '{"sap.app":{"id":"zapp.booking"}}'));
+      const client = createClient();
+      const content = await client.getBspFileContent('zapp_booking', 'manifest.json');
+      expect(content).toContain('sap.app');
+    });
+
+    it('getBspFileContent URL-encodes appName/filePath as single segment', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, 'file content'));
+      const client = createClient();
+      await client.getBspFileContent('ZAPP_BOOKING', 'view/Main.view.xml');
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain(encodeURIComponent('ZAPP_BOOKING/view/Main.view.xml'));
+    });
+
+    it('listBspApps blocked when read operations disallowed', async () => {
+      const client = createClient({
+        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
+      });
+      await expect(client.listBspApps()).rejects.toThrow(AdtSafetyError);
+    });
+
+    it('listBspApps returns empty array for empty feed', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(200, '<?xml version="1.0"?><atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>'),
+      );
+      const client = createClient();
+      const apps = await client.listBspApps();
+      expect(apps).toEqual([]);
+    });
+  });
 });

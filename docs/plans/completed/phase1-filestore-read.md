@@ -80,12 +80,12 @@ Add TypeScript interfaces for BSP app info and file nodes, then implement Atom X
 
 Add three methods to the `AdtClient` class for BSP read operations. Place them after `getSrvb()` (line ~270).
 
-- [ ] Add `listBspApps(query?: string, maxResults?: number): Promise<BspAppInfo[]>` — `GET /sap/bc/adt/filestore/ui5-bsp/objects` with optional `name` and `maxResults` query params. Accept header: `application/atom+xml`. Safety check: `checkOperation(safety, OperationType.Read, 'ListBSPApps')`
-- [ ] Add `getBspAppStructure(appName: string, subPath?: string): Promise<BspFileNode[]>` — `GET /sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(appName.toUpperCase() + (subPath || ''))}/content`. Accept: `application/xml`. Content-Type: `application/atom+xml`. Safety check: `checkOperation(safety, OperationType.Read, 'GetBSPApp')`
-- [ ] Add `getBspFileContent(appName: string, filePath: string): Promise<string>` — `GET /sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(appName.toUpperCase() + '/' + filePath)}/content`. Accept: `application/xml`. Content-Type: `application/octet-stream`. Returns raw text body. Safety check: `checkOperation(safety, OperationType.Read, 'GetBSPFile')`
-- [ ] Ensure `subPath` parameter starts with `/` when non-empty; strip leading `/` from `filePath` before combining
-- [ ] Add unit tests (~8 tests) in `tests/unit/adt/client.test.ts`: list apps, list with query, browse root, browse subfolder, read file, URL encoding verification (check the `%2f` in the request URL), safety block test, empty results
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `listBspApps(query?: string, maxResults?: number): Promise<BspAppInfo[]>` — `GET /sap/bc/adt/filestore/ui5-bsp/objects` with optional `name` and `maxResults` query params. Accept header: `application/atom+xml`. Safety check: `checkOperation(safety, OperationType.Read, 'ListBSPApps')`
+- [x] Add `getBspAppStructure(appName: string, subPath?: string): Promise<BspFileNode[]>` — `GET /sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(appName.toUpperCase() + (subPath || ''))}/content`. Accept: `application/xml`. Content-Type: `application/atom+xml`. Safety check: `checkOperation(safety, OperationType.Read, 'GetBSPApp')`
+- [x] Add `getBspFileContent(appName: string, filePath: string): Promise<string>` — `GET /sap/bc/adt/filestore/ui5-bsp/objects/${encodeURIComponent(appName.toUpperCase() + '/' + filePath)}/content`. Accept: `application/xml`. Content-Type: `application/octet-stream`. Returns raw text body. Safety check: `checkOperation(safety, OperationType.Read, 'GetBSPFile')`
+- [x] Ensure `subPath` parameter starts with `/` when non-empty; strip leading `/` from `filePath` before combining
+- [x] Add unit tests (~8 tests) in `tests/unit/adt/client.test.ts`: list apps, list with query, browse root, browse subfolder, read file, URL encoding verification (check the `%2f` in the request URL), safety block test, empty results
+- [x] Run `npm test` — all tests must pass
 
 ### Task 3: Wire up SAPRead handler and schema
 
