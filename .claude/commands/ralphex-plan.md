@@ -60,6 +60,49 @@ Search the codebase for similar patterns. If the feature extends an existing pat
 - `docs/research/` — existing research documents
 - `docs/plans/` — in-progress plans to avoid conflicts
 
+### 1e2. Audit documentation, roadmap, feature matrix & skills
+
+Every feature plan must account for the full artifact surface. Research what needs updating:
+
+**Internal technical documentation (`docs/`)**
+Read the docs that relate to the feature area. Key files include:
+- `docs/tools.md` — tool reference (update if adding/changing tool operations or parameters)
+- `docs/authorization.md` — auth model (update if changing safety, scopes, or auth behavior)
+- `docs/security-guide.md` — security practices (update if changing security posture)
+- `docs/caching.md` — caching architecture (update if touching cache layer)
+- `docs/architecture.md` — architecture overview (update if changing request flow or major components)
+- `docs/cli-guide.md` — CLI reference (update if adding new flags/env vars)
+- `docs/setup-guide.md`, `docs/docker.md`, `docs/btp-abap-environment.md`, `docs/enterprise-auth.md` — deployment docs (update if changing config or deployment behavior)
+- `CLAUDE.md` — AI assistant guidelines (update Key Files table, config table, codebase structure tree, code patterns — this is critical since autonomous agents depend on it)
+
+While reviewing each doc, note anything that is **outdated or missing** even if unrelated to the current feature — flag these as bonus fix items.
+
+**End-user documentation (`README.md`, `docs/index.md`)**
+Read `README.md` and `docs/index.md`. Check whether:
+- Feature highlights or capability lists need updating
+- Quick start or client config examples need changes
+- The feature table / badge section reflects the new capability
+
+**Roadmap (`docs/roadmap.md`)**
+Read `docs/roadmap.md`. Check whether:
+- The feature corresponds to an existing roadmap item (update status to "completed" or "in progress")
+- A new roadmap entry is needed
+- The "Current State" feature matrix at the top needs a new row
+- Any related items should be marked as unblocked or superseded
+
+**Feature matrix (`compare/00-feature-matrix.md`)**
+Read `compare/00-feature-matrix.md`. Check whether:
+- The feature adds a new capability that should appear in the comparison matrix
+- An existing row needs its status updated (e.g., from ❌ to ✅)
+- The "Last Updated" date should be refreshed
+
+**Skills (`.claude/commands/*.md`)**
+Read all skill files in `.claude/commands/`. Check whether:
+- Any existing skill can leverage the new feature (e.g., a new ADT operation that `explain-abap-code.md` or `implement-feature.md` could use)
+- A skill's instructions reference behavior that the feature changes (update the skill)
+- A new skill is warranted for the feature
+- Existing skills have outdated references to tool names, parameters, or workflows
+
 ### 1f. SAP-specific research (when needed)
 
 If the feature involves SAP-specific concepts (ADT APIs, authorization objects, BTP services, ABAP language features), use available MCP tools:
@@ -70,11 +113,13 @@ If the feature involves SAP-specific concepts (ADT APIs, authorization objects, 
 ### 1g. Summarize findings
 
 Before writing the plan, organize your findings:
-- **Affected files** (source + test + config + docs)
+- **Affected files** (source + test + config + docs + skills)
 - **Existing patterns** to follow (with file:line references)
 - **Dependencies** between changes
 - **Security/safety considerations**
-- **Test strategy** (what to test, how to test it)
+- **Test strategy** (what to test, how to test it — unit, integration, and E2E)
+- **Documentation updates** (which docs, roadmap entries, feature matrix rows, skills)
+- **Outdated docs spotted** (anything stale you noticed during research, even if unrelated)
 
 ---
 
@@ -185,17 +230,53 @@ Order tasks to minimize cross-task dependencies:
 2. **Wiring second** — connecting new code to existing infrastructure
 3. **Config/CLI third** — new flags, env vars, profiles
 4. **External config fourth** — xs-security.json, manifest.yml, etc.
-5. **Documentation fifth** — CLAUDE.md, README, tool descriptions
-6. **Final verification last** — always the last task
+5. **Tests fifth** — ensure unit tests cover the new code; add integration tests if the feature touches SAP system interaction; add E2E tests if the feature adds new tool operations or changes MCP protocol behavior (see "Test Requirements" below)
+6. **Documentation sixth** — update all affected artifacts:
+   - `CLAUDE.md` — codebase structure tree, Key Files table, config table, code patterns
+   - Internal docs in `docs/` — tool reference, architecture, security, auth, caching, CLI guide, etc.
+   - End-user docs — `README.md`, `docs/index.md`
+   - `docs/roadmap.md` — mark items completed, add new entries, update current state matrix
+   - `compare/00-feature-matrix.md` — add/update capability rows, refresh "Last Updated"
+   - Skills in `.claude/commands/` — update existing skills that can leverage the feature, fix stale references
+7. **Final verification last** — always the last task
 
 ### Test Requirements
 
 Tests are critical. Every task that modifies code MUST include test checkboxes. Follow these patterns:
-- Unit tests: `tests/unit/` mirroring source structure, using vitest
-- Mock HTTP: `vi.mock('undici', ...)` with `mockResponse()` helper
+
+**Unit tests (`tests/unit/`, 57+ files, 700+ tests)**
+- Mirror source structure under `tests/unit/` (e.g., `src/adt/client.ts` → `tests/unit/adt/client.test.ts`)
+- Mock HTTP layer: `vi.mock('undici', ...)` with `mockResponse()` helper from `tests/helpers/mock-fetch.ts`
 - XML fixtures: `tests/fixtures/xml/` for ADT response parsing
-- Integration tests: `tests/integration/` when the feature touches SAP system interaction (auto-skipped without credentials)
-- The test system described in `INFRASTRUCTURE.md` can be used for smoke testing and creating test fixtures
+- ABAP fixtures: `tests/fixtures/abap/` for source parsing
+- Config: `vitest.config.ts` (10s timeout, isolated modules)
+- Run: `npm test`
+
+**Integration tests (`tests/integration/`, 6 files)**
+- Add tests when the feature touches SAP system interaction
+- Auto-skipped when `TEST_SAP_URL` is not set — safe to add without breaking CI
+- Use `getTestClient()` factory from `tests/integration/helpers.ts`
+- Sequential execution (SAP session conflicts)
+- Config: `vitest.integration.config.ts` (30s timeout)
+- Run: `npm run test:integration`
+- BTP-specific: `tests/integration/btp-abap.integration.test.ts` (local only, needs `TEST_BTP_SERVICE_KEY_FILE`)
+
+**E2E tests (`tests/e2e/`, 6 files)**
+- Add tests when the feature adds new tool operations or changes MCP protocol behavior
+- Exercise the full MCP JSON-RPC stack via `@modelcontextprotocol/sdk` client
+- Use helpers: `connectClient()`, `callTool()`, `expectToolSuccess()`, `expectToolError()` from `tests/e2e/helpers.ts`
+- Test fixtures defined in `tests/e2e/fixtures.ts`, setup in `tests/e2e/setup.ts`
+- Config: `tests/e2e/vitest.e2e.config.ts` (60s test timeout, 120s hook timeout)
+- Run: `npm run test:e2e` (requires running MCP server at `E2E_MCP_URL`)
+- Full cycle: `npm run test:e2e:full` (build + deploy + test + stop)
+
+**The test system described in `INFRASTRUCTURE.md` can be used for smoke testing and creating test fixtures.**
+
+**Deciding which test tiers to include:**
+- Code-only changes (parsers, safety checks, config logic) → unit tests only
+- New ADT endpoints or changed SAP interaction → unit tests + integration tests
+- New/changed MCP tool operations → unit tests + E2E tests
+- Auth or transport changes → unit tests + integration tests + E2E tests
 
 ---
 
@@ -214,7 +295,17 @@ Before presenting the plan:
    - Every code-changing task has test checkboxes? Yes
    - Final verification task exists? Yes
 
-4. **Check total scope** — aim for 5-12 tasks. Fewer than 5 means tasks are too large. More than 12 means the feature should be split into multiple plans.
+4. **Verify artifact coverage** — every plan must account for all affected artifacts:
+   - [ ] **Tests**: Are the right test tiers included? (unit for all code changes, integration for SAP interaction, E2E for tool/protocol changes)
+   - [ ] **Internal docs**: Does a task update relevant `docs/*.md` files? (`tools.md`, `authorization.md`, `security-guide.md`, `caching.md`, `architecture.md`, `cli-guide.md`, etc.)
+   - [ ] **End-user docs**: Does a task update `README.md` and/or `docs/index.md` if the feature is user-visible?
+   - [ ] **CLAUDE.md**: Does a task update the codebase structure tree, Key Files table, config table, or code patterns?
+   - [ ] **Roadmap**: Does a task update `docs/roadmap.md` (mark completed, add entry, update current state)?
+   - [ ] **Feature matrix**: Does a task update `compare/00-feature-matrix.md` if the feature adds a new capability?
+   - [ ] **Skills**: Does a task update `.claude/commands/*.md` skills that reference changed behavior or could leverage the new feature?
+   - [ ] **Outdated docs**: Are any stale docs spotted during research included as bonus fix items?
+
+5. **Check total scope** — aim for 5-12 tasks. Fewer than 5 means tasks are too large. More than 12 means the feature should be split into multiple plans.
 
 ---
 
