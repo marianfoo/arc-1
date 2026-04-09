@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AdtApiError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient, AdtResponse } from '../../../src/adt/http.js';
 import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
-import { downloadApp, getAppInfo, probeService, SERVICE_PATH } from '../../../src/adt/ui5-repository.js';
+import { getAppInfo, SERVICE_PATH } from '../../../src/adt/ui5-repository.js';
 
 function mockHttp(responseBody = '', statusCode = 200): AdtHttpClient {
   return {
@@ -20,8 +20,6 @@ function odataJson(d: Record<string, unknown>): string {
 }
 
 describe('UI5 Repository', () => {
-  // ─── getAppInfo ─────────────────────────────────────────────────────
-
   describe('getAppInfo', () => {
     it('returns app metadata on success', async () => {
       const body = odataJson({
@@ -59,13 +57,13 @@ describe('UI5 Repository', () => {
       });
     });
 
-    it('sends Accept: application/json and CSRF Fetch header', async () => {
+    it('sends Accept: application/json header', async () => {
       const body = odataJson({ Name: 'X', Package: 'Y', Description: 'Z', Info: '' });
       const http = mockHttp(body);
       await getAppInfo(http, unrestrictedSafetyConfig(), 'ZAPP');
       expect(http.get).toHaveBeenCalledWith(
         expect.stringContaining(SERVICE_PATH),
-        expect.objectContaining({ Accept: 'application/json', 'X-Csrf-Token': 'Fetch' }),
+        expect.objectContaining({ Accept: 'application/json' }),
       );
     });
 
@@ -79,76 +77,6 @@ describe('UI5 Repository', () => {
       const http = mockHttp();
       vi.mocked(http.get).mockRejectedValue(new AdtApiError('Internal Server Error', 500, '/test'));
       await expect(getAppInfo(http, unrestrictedSafetyConfig(), 'ZAPP')).rejects.toThrow('Internal Server Error');
-    });
-  });
-
-  // ─── downloadApp ────────────────────────────────────────────────────
-
-  describe('downloadApp', () => {
-    it('returns Buffer from base64 ZipArchive', async () => {
-      const zipContent = Buffer.from('fake-zip-data');
-      const body = odataJson({ ZipArchive: zipContent.toString('base64') });
-      const http = mockHttp(body);
-      const result = await downloadApp(http, unrestrictedSafetyConfig(), 'ZAPP');
-      expect(result).toBeInstanceOf(Buffer);
-      expect(result!.toString()).toBe('fake-zip-data');
-    });
-
-    it('returns undefined when ZipArchive is empty', async () => {
-      const body = odataJson({ ZipArchive: '' });
-      const http = mockHttp(body);
-      const result = await downloadApp(http, unrestrictedSafetyConfig(), 'ZAPP');
-      expect(result).toBeUndefined();
-    });
-
-    it('returns undefined on 404', async () => {
-      const http = mockHttp();
-      vi.mocked(http.get).mockRejectedValue(new AdtApiError('Not found', 404, '/test'));
-      const result = await downloadApp(http, unrestrictedSafetyConfig(), 'ZAPP');
-      expect(result).toBeUndefined();
-    });
-
-    it('re-throws non-404 errors', async () => {
-      const http = mockHttp();
-      vi.mocked(http.get).mockRejectedValue(new AdtApiError('Internal Server Error', 500, '/test'));
-      await expect(downloadApp(http, unrestrictedSafetyConfig(), 'ZAPP')).rejects.toThrow('Internal Server Error');
-    });
-
-    it('throws on safety check when read is blocked', async () => {
-      const safety = { ...defaultSafetyConfig(), disallowedOps: 'R' };
-      const http = mockHttp();
-      await expect(downloadApp(http, safety, 'ZAPP')).rejects.toThrow('blocked by safety');
-    });
-  });
-
-  // ─── probeService ───────────────────────────────────────────────────
-
-  describe('probeService', () => {
-    it('returns true on 200', async () => {
-      const http = mockHttp('');
-      const result = await probeService(http);
-      expect(result).toBe(true);
-    });
-
-    it('returns true on 405', async () => {
-      const http = mockHttp();
-      vi.mocked(http.get).mockRejectedValue(new AdtApiError('Method not allowed', 405, SERVICE_PATH));
-      const result = await probeService(http);
-      expect(result).toBe(true);
-    });
-
-    it('returns false on 404', async () => {
-      const http = mockHttp();
-      vi.mocked(http.get).mockRejectedValue(new AdtApiError('Not found', 404, SERVICE_PATH));
-      const result = await probeService(http);
-      expect(result).toBe(false);
-    });
-
-    it('returns false on non-AdtApiError (e.g. network error)', async () => {
-      const http = mockHttp();
-      vi.mocked(http.get).mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await probeService(http);
-      expect(result).toBe(false);
     });
   });
 });
