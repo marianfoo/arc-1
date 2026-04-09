@@ -46,10 +46,11 @@ export async function getAppInfo(
 
   const data = JSON.parse(resp.body);
   const d = data.d;
+  if (!d) throw new Error('Unexpected OData response: missing "d" property');
   return {
-    name: d.Name,
-    package: d.Package,
-    description: d.Description,
+    name: d.Name ?? '',
+    package: d.Package ?? '',
+    description: d.Description ?? '',
     info: d.Info ?? '',
   };
 }
