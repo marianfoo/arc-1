@@ -110,9 +110,9 @@ The `parseAtcFindings()` function at line ~241 always returns `uri: ''` and `lin
 
 The `extractAttr(createResp.body, 'id')` at line ~175 may match the wrong `id` attribute. Should extract `worklistId` first.
 
-- [ ] In `src/adt/devtools.ts`, modify line ~175 to: `const worklistId = extractAttr(createResp.body, 'worklistId') || extractAttr(createResp.body, 'id') || '1';`
-- [ ] Add test (~1 test): mock ATC create response with both `id` and `worklistId` attributes: `<atc:run id="run123" worklistId="wl456"/>` → verify GET request uses `wl456`
-- [ ] Run `npm test` — all tests must pass
+- [x] In `src/adt/devtools.ts`, modify line ~175 to: `const worklistId = extractAttr(createResp.body, 'worklistId') || extractAttr(createResp.body, 'id') || '1';`
+- [x] Add test (~1 test): mock ATC create response with both `id` and `worklistId` attributes: `<atc:run id="run123" worklistId="wl456"/>` → verify GET request uses `wl456`
+- [x] Run `npm test` — all tests must pass
 
 ### Task 5: Fix syntax check parser to handle any attribute order (Issue #3)
 

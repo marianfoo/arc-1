@@ -468,6 +468,22 @@ describe('DevTools', () => {
       );
     });
 
+    it('prefers worklistId over id attribute', async () => {
+      const createResp = '<atc:run id="run123" worklistId="wl456"/>';
+      const resultResp = '<worklist/>';
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+
+      expect(http.get).toHaveBeenCalledWith(
+        '/sap/bc/adt/atc/worklists/wl456',
+        expect.objectContaining({ Accept: expect.stringContaining('atc.worklist') }),
+      );
+    });
+
     it('extracts URI and line from #start= fragment', async () => {
       const createResp = '<atcResult id="42"/>';
       const resultResp = `<worklist>

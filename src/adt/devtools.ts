@@ -229,7 +229,7 @@ export async function runAtcCheck(
   });
 
   // Parse worklist ID from response and fetch results
-  const worklistId = extractAttr(createResp.body, 'id') || '1';
+  const worklistId = extractAttr(createResp.body, 'worklistId') || extractAttr(createResp.body, 'id') || '1';
 
   const resultResp = await http.get(`/sap/bc/adt/atc/worklists/${worklistId}`, {
     Accept: 'application/atc.worklist.v1+xml',
