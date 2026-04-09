@@ -149,8 +149,8 @@ describe('E2E Smoke Tests', () => {
   it('SAPSearch — returns empty for non-existent', async () => {
     const result = await callTool(client, 'SAPSearch', { query: 'ZZZNONEXISTENT999*', maxResults: 5 });
     const text = expectToolSuccess(result);
-    const results = JSON.parse(text);
-    expect(results).toHaveLength(0);
+    // Response starts with "[]" JSON but may include LLM guidance hints after it
+    expect(text).toMatch(/^\[\]\s*/);
   });
 
   // ── SAPQuery ───────────────────────────────────────────────────
