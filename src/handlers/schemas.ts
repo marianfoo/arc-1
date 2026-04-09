@@ -156,6 +156,7 @@ export const SAPWriteSchemaBtp = z.object({
 // ─── SAPActivate ────────────────────────────────────────────────────
 
 export const SAPActivateSchema = z.object({
+  action: z.enum(['activate', 'publish_srvb', 'unpublish_srvb']).optional(),
   name: z.string().optional(),
   type: z.string().optional(),
   objects: z

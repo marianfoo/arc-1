@@ -266,6 +266,21 @@ describe('SAPActivateSchema', () => {
     const result = SAPActivateSchema.safeParse({});
     expect(result.success).toBe(true);
   });
+
+  it('accepts publish_srvb action', () => {
+    const result = SAPActivateSchema.safeParse({ action: 'publish_srvb', name: 'ZSB_BOOKING_V4' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts unpublish_srvb action', () => {
+    const result = SAPActivateSchema.safeParse({ action: 'unpublish_srvb', name: 'ZSB_BOOKING_V4' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid action', () => {
+    const result = SAPActivateSchema.safeParse({ action: 'invalid_action', name: 'ZSB_TEST' });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('SAPNavigateSchema', () => {

@@ -74,11 +74,11 @@ Add two new functions to `src/adt/devtools.ts` after the existing `activate()` f
 
 Expose publish/unpublish via the SAPActivate tool with new action values.
 
-- [ ] Update `SAPActivateSchema` at `src/handlers/schemas.ts:156` to add an optional `action` field: `action: z.enum(['activate', 'publish_srvb', 'unpublish_srvb']).optional()` (default behavior remains `activate` when action is omitted)
-- [ ] Update SAPActivate tool description in `src/handlers/tools.ts` to mention the new actions: `For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption`
-- [ ] Add `publish_srvb` and `unpublish_srvb` cases in `handleSAPActivate` at `src/handlers/intent.ts`. For `publish_srvb`: call `publishServiceBinding(http, safety, name)`, then call `client.getSrvb(name)` to read back and return the metadata with publish confirmation. For `unpublish_srvb`: call `unpublishServiceBinding(http, safety, name)` and return confirmation.
-- [ ] Add handler unit tests (~4 tests): publish_srvb action calls correct function and returns SRVB info, unpublish_srvb action works, missing name returns error, default action still works as activate
-- [ ] Run `npm test` — all tests must pass
+- [x] Update `SAPActivateSchema` at `src/handlers/schemas.ts:156` to add an optional `action` field: `action: z.enum(['activate', 'publish_srvb', 'unpublish_srvb']).optional()` (default behavior remains `activate` when action is omitted)
+- [x] Update SAPActivate tool description in `src/handlers/tools.ts` to mention the new actions: `For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption`
+- [x] Add `publish_srvb` and `unpublish_srvb` cases in `handleSAPActivate` at `src/handlers/intent.ts`. For `publish_srvb`: call `publishServiceBinding(http, safety, name)`, then call `client.getSrvb(name)` to read back and return the metadata with publish confirmation. For `unpublish_srvb`: call `unpublishServiceBinding(http, safety, name)` and return confirmation.
+- [x] Add handler unit tests (~4 tests): publish_srvb action calls correct function and returns SRVB info, unpublish_srvb action works, missing name returns error, default action still works as activate
+- [x] Run `npm test` — all tests must pass
 
 ### Task 3: Update generate-rap-service skill
 

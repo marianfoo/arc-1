@@ -1474,6 +1474,46 @@ ENDCLASS.`;
       const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
       expect(lastCallOpts.body).toContain('/sap/bc/adt/vit/wb/object_type/trant/object_name/ZTRAN01');
     });
+
+    it('publish_srvb action publishes and returns SRVB info', async () => {
+      // First call: POST publish, second call: GET SRVB metadata (CSRF HEAD + GET)
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF fetch for publish
+        .mockResolvedValueOnce(mockResponse(200, '', {})) // POST publish
+        .mockResolvedValueOnce(mockResponse(200, '<serviceBinding />', {})); // GET SRVB readback
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+        name: 'ZSB_BOOKING_V4',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully published service binding ZSB_BOOKING_V4');
+    });
+
+    it('unpublish_srvb action unpublishes service binding', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'unpublish_srvb',
+        name: 'ZSB_BOOKING_V4',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully unpublished service binding ZSB_BOOKING_V4');
+    });
+
+    it('publish_srvb returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'publish_srvb',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Missing required "name"');
+    });
+
+    it('default action still works as activate', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully activated PROG ZTEST');
+    });
   });
 
   // ─── SAPManage ─────────────────────────────────────────────────────

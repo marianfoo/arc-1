@@ -107,11 +107,7 @@ ${refs}
 }
 
 /** Publish an OData service binding (makes the service available for consumption) */
-export async function publishServiceBinding(
-  http: AdtHttpClient,
-  safety: SafetyConfig,
-  name: string,
-): Promise<string> {
+export async function publishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string> {
   checkOperation(safety, OperationType.Activate, 'PublishServiceBinding');
 
   const resp = await http.post(
