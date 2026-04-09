@@ -350,7 +350,7 @@ function parseAtcFindings(xml: string): AtcFinding[] {
 }
 
 function extractAttr(xml: string, attr: string): string {
-  const regex = new RegExp(`${attr}="([^"]*)"`);
+  const regex = new RegExp(`(?:^|\\s|:)${attr}="([^"]*)"`);
   const match = xml.match(regex);
   return match?.[1] ?? '';
 }

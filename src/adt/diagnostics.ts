@@ -330,23 +330,18 @@ export function parseTraceStatements(xml: string): TraceStatement[] {
  * Parse trace database accesses XML.
  */
 export function parseTraceDbAccesses(xml: string): TraceDbAccess[] {
-  const entries: TraceDbAccess[] = [];
-  const entryRegex = /<(?:dbAccess|access)[^>]*tableName="([^"]*)"[^>]*/g;
+  const tags = extractSelfClosingTags(xml, 'dbAccess', 'access');
 
-  let match: RegExpExecArray | null;
-  while ((match = entryRegex.exec(xml)) !== null) {
-    const tag = xml.slice(match.index, xml.indexOf('>', match.index + match[0].length) + 1);
-    entries.push({
-      tableName: match[1]!,
+  return tags
+    .filter((tag) => extractAttrSimple(tag, 'tableName'))
+    .map((tag) => ({
+      tableName: extractAttrSimple(tag, 'tableName') || '',
       statement: extractAttrSimple(tag, 'statement') || '',
       type: extractAttrSimple(tag, 'type') || '',
       totalCount: Number(extractAttrSimple(tag, 'totalCount') || '0'),
       bufferedCount: Number(extractAttrSimple(tag, 'bufferedCount') || '0'),
       accessTime: Number(extractAttrSimple(tag, 'accessTime') || '0'),
-    });
-  }
-
-  return entries;
+    }));
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
