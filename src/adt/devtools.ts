@@ -106,6 +106,42 @@ ${refs}
   return { success: !hasErrors, messages };
 }
 
+/** Publish an OData service binding (makes the service available for consumption) */
+export async function publishServiceBinding(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  name: string,
+): Promise<string> {
+  checkOperation(safety, OperationType.Activate, 'PublishServiceBinding');
+
+  const resp = await http.post(
+    `/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}?action=publish`,
+    '',
+    'application/xml',
+    { Accept: 'application/xml' },
+  );
+
+  return resp.body;
+}
+
+/** Unpublish an OData service binding (removes the service from consumption) */
+export async function unpublishServiceBinding(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  name: string,
+): Promise<string> {
+  checkOperation(safety, OperationType.Activate, 'UnpublishServiceBinding');
+
+  const resp = await http.post(
+    `/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}?action=unpublish`,
+    '',
+    'application/xml',
+    { Accept: 'application/xml' },
+  );
+
+  return resp.body;
+}
+
 /** Run ABAP unit tests for an object */
 export async function runUnitTests(
   http: AdtHttpClient,

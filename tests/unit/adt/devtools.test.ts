@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activate, activateBatch, runAtcCheck, runUnitTests, syntaxCheck } from '../../../src/adt/devtools.js';
+import {
+  activate,
+  activateBatch,
+  publishServiceBinding,
+  runAtcCheck,
+  runUnitTests,
+  syntaxCheck,
+  unpublishServiceBinding,
+} from '../../../src/adt/devtools.js';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
@@ -190,6 +198,70 @@ describe('DevTools', () => {
       await expect(
         activateBatch(http, safety, [{ url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' }]),
       ).rejects.toThrow(AdtSafetyError);
+    });
+  });
+
+  // ─── publishServiceBinding ─────────────────────────────────────────
+
+  describe('publishServiceBinding', () => {
+    it('sends POST with action=publish to correct endpoint', async () => {
+      const http = mockHttp('<response/>');
+      await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_BOOKING_V4');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/businessservices/bindings/ZSB_BOOKING_V4?action=publish',
+        '',
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('encodes the service binding name in the URL', async () => {
+      const http = mockHttp('<response/>');
+      await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB WITH SPACES');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/businessservices/bindings/ZSB%20WITH%20SPACES?action=publish',
+        '',
+        'application/xml',
+        expect.any(Object),
+      );
+    });
+
+    it('is blocked in read-only mode', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      await expect(publishServiceBinding(http, safety, 'ZSB_TEST')).rejects.toThrow(AdtSafetyError);
+    });
+  });
+
+  // ─── unpublishServiceBinding ──────────────────────────────────────
+
+  describe('unpublishServiceBinding', () => {
+    it('sends POST with action=unpublish to correct endpoint', async () => {
+      const http = mockHttp('<response/>');
+      await unpublishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB_BOOKING_V4');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/businessservices/bindings/ZSB_BOOKING_V4?action=unpublish',
+        '',
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('encodes the service binding name in the URL', async () => {
+      const http = mockHttp('<response/>');
+      await unpublishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSB WITH SPACES');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/businessservices/bindings/ZSB%20WITH%20SPACES?action=unpublish',
+        '',
+        'application/xml',
+        expect.any(Object),
+      );
+    });
+
+    it('is blocked in read-only mode', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      await expect(unpublishServiceBinding(http, safety, 'ZSB_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 

@@ -60,10 +60,10 @@ Standard unit test approach. The publish API is a simple POST — mock it and ve
 
 Add two new functions to `src/adt/devtools.ts` after the existing `activate()` function (line ~48).
 
-- [ ] Add `publishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — `checkOperation(safety, OperationType.Activate, 'PublishServiceBinding')`, then `POST /sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}` with query param `action=publish`, empty body. Return response body.
-- [ ] Add `unpublishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — same pattern with `action=unpublish`
-- [ ] Add unit tests (~6 tests): publish happy path (verify URL contains `?action=publish`, method is POST), unpublish happy path, safety check blocks in read-only mode for both, verify `encodeURIComponent` is applied to the name
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `publishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — `checkOperation(safety, OperationType.Activate, 'PublishServiceBinding')`, then `POST /sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}` with query param `action=publish`, empty body. Return response body.
+- [x] Add `unpublishServiceBinding(http: AdtHttpClient, safety: SafetyConfig, name: string): Promise<string>` — same pattern with `action=unpublish`
+- [x] Add unit tests (~6 tests): publish happy path (verify URL contains `?action=publish`, method is POST), unpublish happy path, safety check blocks in read-only mode for both, verify `encodeURIComponent` is applied to the name
+- [x] Run `npm test` — all tests must pass
 
 ### Task 2: Wire up SAPActivate handler and schema
 
