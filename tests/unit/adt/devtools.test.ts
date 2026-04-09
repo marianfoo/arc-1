@@ -82,6 +82,15 @@ describe('DevTools', () => {
       );
     });
 
+    it('handles reversed attribute order (Issue #3)', async () => {
+      const xml = '<checkMessages><msg line="5" col="1" type="E" shortText="Error found"/></checkMessages>';
+      const http = mockHttp(xml);
+      const result = await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.hasErrors).toBe(true);
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0]).toEqual({ severity: 'error', text: 'Error found', line: 5, column: 1 });
+    });
+
     it('is blocked when Read is disallowed', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };

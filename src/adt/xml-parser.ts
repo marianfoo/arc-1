@@ -56,6 +56,7 @@ const parser = new XMLParser({
       'testMethod',
       'alert',
       'finding',
+      'msg',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings

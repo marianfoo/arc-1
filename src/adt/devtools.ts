@@ -249,22 +249,17 @@ export interface AtcFinding {
 }
 
 function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {
-  const messages: SyntaxMessage[] = [];
-  // Parse check messages from XML
-  const msgRegex = /<msg[^>]*type="([^"]*)"[^>]*line="(\d+)"[^>]*col="(\d+)"[^>]*>/g;
-  const textRegex = /shortText="([^"]*)"/;
-
-  let match: RegExpExecArray | null;
-  while ((match = msgRegex.exec(xml)) !== null) {
-    const fullTag = xml.slice(match.index, xml.indexOf('>', match.index + match[0].length) + 1);
-    const textMatch = textRegex.exec(fullTag);
-    messages.push({
-      severity: match[1] === 'E' ? 'error' : match[1] === 'W' ? 'warning' : 'info',
-      text: textMatch?.[1] ?? '',
-      line: Number.parseInt(match[2]!, 10),
-      column: Number.parseInt(match[3]!, 10),
-    });
-  }
+  const parsed = parseXml(xml);
+  const msgs = findDeepNodes(parsed, 'msg');
+  const messages: SyntaxMessage[] = msgs.map((m) => {
+    const type = String(m['@_type'] ?? '');
+    return {
+      severity: type === 'E' ? 'error' : type === 'W' ? 'warning' : 'info',
+      text: String(m['@_shortText'] ?? ''),
+      line: Number.parseInt(String(m['@_line'] ?? '0'), 10),
+      column: Number.parseInt(String(m['@_col'] ?? '0'), 10),
+    };
+  });
 
   return {
     hasErrors: messages.some((m) => m.severity === 'error'),

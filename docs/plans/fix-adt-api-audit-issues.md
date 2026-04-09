@@ -122,11 +122,11 @@ The `extractAttr(createResp.body, 'id')` at line ~175 may match the wrong `id` a
 
 The `parseSyntaxCheckResult()` regex at line ~197 assumes `type` before `line` before `col`. Replace with `parseXml()` + `findDeepNodes()`.
 
-- [ ] In `src/adt/devtools.ts`, rewrite `parseSyntaxCheckResult()` (line ~194-216) to use `parseXml()` + `findDeepNodes(parsed, 'msg')`. For each msg node, extract `@_type`, `@_line`, `@_col`, `@_shortText` as individual attribute accesses. Map type: `'E'` → `'error'`, `'W'` → `'warning'`, else `'info'`
-- [ ] Add `'msg'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config
-- [ ] Add test (~1 test) for reversed attribute order: `<msg line="5" col="1" type="E" shortText="Error"/>` → still parsed correctly
-- [ ] Verify existing tests still pass with the new parser
-- [ ] Run `npm test` — all tests must pass
+- [x] In `src/adt/devtools.ts`, rewrite `parseSyntaxCheckResult()` (line ~194-216) to use `parseXml()` + `findDeepNodes(parsed, 'msg')`. For each msg node, extract `@_type`, `@_line`, `@_col`, `@_shortText` as individual attribute accesses. Map type: `'E'` → `'error'`, `'W'` → `'warning'`, else `'info'`
+- [x] Add `'msg'` to the `isArray` list in `src/adt/xml-parser.ts` XMLParser config
+- [x] Add test (~1 test) for reversed attribute order: `<msg line="5" col="1" type="E" shortText="Error"/>` → still parsed correctly
+- [x] Verify existing tests still pass with the new parser
+- [x] Run `npm test` — all tests must pass
 
 ### Task 6: Fix activation error detection to avoid false positives (Issue #11)
 
