@@ -1785,6 +1785,7 @@ async function handleSAPManage(
       featureConfig.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
       featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
       featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
+      featureConfig.ui5repo = config.featureUi5Repo as 'auto' | 'on' | 'off';
 
       const probed = await probeFeatures(client.http, featureConfig, config.systemType);
 

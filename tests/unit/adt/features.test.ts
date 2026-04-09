@@ -21,6 +21,7 @@ describe('Feature Detection', () => {
         amdp: 'on',
         ui5: 'on',
         transport: 'on',
+        ui5repo: 'on',
       };
       const result = resolveWithoutProbing(config);
 
@@ -38,6 +39,7 @@ describe('Feature Detection', () => {
         amdp: 'off',
         ui5: 'off',
         transport: 'off',
+        ui5repo: 'off',
       };
       const result = resolveWithoutProbing(config);
 
@@ -54,6 +56,7 @@ describe('Feature Detection', () => {
         amdp: 'auto',
         ui5: 'auto',
         transport: 'auto',
+        ui5repo: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -69,6 +72,7 @@ describe('Feature Detection', () => {
         amdp: 'on',
         ui5: 'off',
         transport: 'auto',
+        ui5repo: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -88,12 +92,44 @@ describe('Feature Detection', () => {
         amdp: 'auto',
         ui5: 'auto',
         transport: 'auto',
+        ui5repo: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
       expect(result.hana.message).toContain('Forced on');
       expect(result.abapGit.message).toContain('Disabled');
       expect(result.rap.message).toContain('not available');
+    });
+
+    it('resolves ui5repo feature when forced on', () => {
+      const config: FeatureConfig = {
+        hana: 'auto',
+        abapGit: 'auto',
+        rap: 'auto',
+        amdp: 'auto',
+        ui5: 'auto',
+        transport: 'auto',
+        ui5repo: 'on',
+      };
+      const result = resolveWithoutProbing(config);
+      expect(result.ui5repo.available).toBe(true);
+      expect(result.ui5repo.mode).toBe('on');
+    });
+
+    it('resolves ui5repo feature as unavailable in auto mode without probing', () => {
+      const config: FeatureConfig = {
+        hana: 'auto',
+        abapGit: 'auto',
+        rap: 'auto',
+        amdp: 'auto',
+        ui5: 'auto',
+        transport: 'auto',
+        ui5repo: 'auto',
+      };
+      const result = resolveWithoutProbing(config);
+      expect(result.ui5repo.available).toBe(false);
+      expect(result.ui5repo.mode).toBe('auto');
+      expect(result.ui5repo.message).toContain('not available');
     });
   });
 

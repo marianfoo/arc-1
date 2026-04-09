@@ -50,6 +50,7 @@ export interface ServerConfig {
   featureUi5: FeatureToggle;
   featureTransport: FeatureToggle;
   featureHana: FeatureToggle;
+  featureUi5Repo: FeatureToggle;
 
   // --- System Type Detection ---
   /** System type: 'auto' (detect from components), 'btp', or 'onprem' */
@@ -126,6 +127,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureUi5: 'auto',
   featureTransport: 'auto',
   featureHana: 'auto',
+  featureUi5Repo: 'auto',
   systemType: 'auto',
   xsuaaAuth: false,
   btpOAuthCallbackPort: 0,

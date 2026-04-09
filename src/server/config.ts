@@ -207,6 +207,7 @@ export function parseArgs(args: string[]): ServerConfig {
   config.featureUi5 = resolveFeature('feature-ui5', 'SAP_FEATURE_UI5');
   config.featureTransport = resolveFeature('feature-transport', 'SAP_FEATURE_TRANSPORT');
   config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA');
+  config.featureUi5Repo = resolveFeature('feature-ui5repo', 'SAP_FEATURE_UI5REPO');
 
   // --- System Type Detection ---
   const systemType = resolve('system-type', 'SAP_SYSTEM_TYPE', 'auto');

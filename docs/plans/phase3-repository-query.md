@@ -78,11 +78,11 @@ Create a new module for the ABAP Repository OData Service with read operations.
 
 Add a feature probe for the ABAP Repository OData Service.
 
-- [ ] Add `{ id: 'ui5repo', endpoint: '/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV', description: 'UI5 ABAP Repository Deploy' }` to the `PROBES` array at `src/adt/features.ts:33`
-- [ ] Add `ui5repo: FeatureStatus` to the `FeatureResults` type in `src/adt/types.ts` (near the existing `ui5: FeatureStatus` field)
-- [ ] Add `SAP_FEATURE_UI5REPO` environment variable support in `src/server/config.ts` and `src/server/types.ts` following the existing `SAP_FEATURE_UI5` pattern
-- [ ] Add unit test (~2 tests) to verify the probe is included and resolves correctly
-- [ ] Run `npm test` — all tests must pass
+- [x] Add `{ id: 'ui5repo', endpoint: '/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV', description: 'UI5 ABAP Repository Deploy' }` to the `PROBES` array at `src/adt/features.ts:33`
+- [x] Add `ui5repo: FeatureStatus` to the `FeatureResults` type in `src/adt/types.ts` (near the existing `ui5: FeatureStatus` field)
+- [x] Add `SAP_FEATURE_UI5REPO` environment variable support in `src/server/config.ts` and `src/server/types.ts` following the existing `SAP_FEATURE_UI5` pattern
+- [x] Add unit test (~2 tests) to verify the probe is included and resolves correctly
+- [x] Run `npm test` — all tests must pass
 
 ### Task 3: Wire up SAPRead handler
 

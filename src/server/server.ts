@@ -161,6 +161,7 @@ export function runStartupProbe(
       fc.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
       fc.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
       fc.transport = config.featureTransport as 'auto' | 'on' | 'off';
+      fc.ui5repo = config.featureUi5Repo as 'auto' | 'on' | 'off';
       const features = await probeFeatures(client.http, fc, config.systemType);
       if (config.ppEnabled && btpConfig && features.textSearch && !features.textSearch.available) {
         const reason = features.textSearch.reason ?? '';
