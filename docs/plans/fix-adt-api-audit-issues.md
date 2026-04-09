@@ -54,14 +54,14 @@ Tasks are ordered by priority (high-impact issues first). Each task is self-cont
 
 This is the highest-impact fix. The `parseSourceSearchResults()` function at line ~268 finds objectReference elements but discards all match details (line numbers, snippets). The `textSearchResult` child elements need to be extracted.
 
-- [ ] In `src/adt/xml-parser.ts`, modify `parseSourceSearchResults()` (line ~268-284). In the first branch where `refs.length > 0`, extract `textSearchResult` child elements from each `ref` using `findDeepNodes(ref, 'textSearchResult')`. Map them to `{ line: Number(m['@_line'] ?? 0), snippet: String(m['@_snippet'] ?? m['#text'] ?? '') }` and assign to the `matches` array instead of `[]`
-- [ ] Add `'textSearchResult'` to the `isArray` list in the XMLParser config (line ~36) to ensure single results are still treated as arrays
-- [ ] Add unit tests (~4 tests) in `tests/unit/adt/xml-parser.test.ts` under `parseSourceSearchResults`:
+- [x] In `src/adt/xml-parser.ts`, modify `parseSourceSearchResults()` (line ~268-284). In the first branch where `refs.length > 0`, extract `textSearchResult` child elements from each `ref` using `findDeepNodes(ref, 'textSearchResult')`. Map them to `{ line: Number(m['@_line'] ?? 0), snippet: String(m['@_snippet'] ?? m['#text'] ?? '') }` and assign to the `matches` array instead of `[]`
+- [x] Add `'textSearchResult'` to the `isArray` list in the XMLParser config (line ~36) to ensure single results are still treated as arrays
+- [x] Add unit tests (~4 tests) in `tests/unit/adt/xml-parser.test.ts` under `parseSourceSearchResults`:
   - Test objectReferences with textSearchResult children → matches populated with line/snippet
   - Test objectReference with single textSearchResult child → still returns array
   - Test objectReference with no textSearchResult children → matches is empty array
   - Test existing Atom feed fallback still works
-- [ ] Run `npm test` — all tests must pass
+- [x] Run `npm test` — all tests must pass
 
 ### Task 2: Fix unit test result parser to include class info and alerts (Issue #1)
 

@@ -13,6 +13,7 @@ import {
   parsePackageContents,
   parseSearchResults,
   parseServiceBinding,
+  parseSourceSearchResults,
   parseSystemInfo,
   parseTableContents,
   parseTransactionMetadata,
@@ -702,6 +703,65 @@ describe('XML Parser', () => {
 </atom:feed>`;
       const nodes = parseBspFolderListing(xml, 'ZAPP_EMPTY');
       expect(nodes).toEqual([]);
+    });
+  });
+
+  // ─── parseSourceSearchResults ─────────────────────────────────────────
+
+  describe('parseSourceSearchResults', () => {
+    it('extracts textSearchResult matches with line and snippet', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core" xmlns:txt="http://www.sap.com/adt/textsearch">
+  <adtcore:objectReference uri="/sap/bc/adt/programs/programs/ZTEST" type="PROG/P" name="ZTEST">
+    <txt:textSearchResult line="10" snippet="DATA lv_test TYPE string."/>
+    <txt:textSearchResult line="25" snippet="lv_test = 'hello'."/>
+  </adtcore:objectReference>
+</adtcore:objectReferences>`;
+      const results = parseSourceSearchResults(xml);
+      expect(results).toHaveLength(1);
+      expect(results[0]?.objectName).toBe('ZTEST');
+      expect(results[0]?.matches).toHaveLength(2);
+      expect(results[0]?.matches[0]).toEqual({ line: 10, snippet: 'DATA lv_test TYPE string.' });
+      expect(results[0]?.matches[1]).toEqual({ line: 25, snippet: "lv_test = 'hello'." });
+    });
+
+    it('handles single textSearchResult child (still returns array)', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core" xmlns:txt="http://www.sap.com/adt/textsearch">
+  <adtcore:objectReference uri="/sap/bc/adt/oo/classes/ZCL_TEST" type="CLAS/OC" name="ZCL_TEST">
+    <txt:textSearchResult line="42" snippet="METHOD do_something."/>
+  </adtcore:objectReference>
+</adtcore:objectReferences>`;
+      const results = parseSourceSearchResults(xml);
+      expect(results).toHaveLength(1);
+      expect(results[0]?.matches).toHaveLength(1);
+      expect(results[0]?.matches[0]).toEqual({ line: 42, snippet: 'METHOD do_something.' });
+    });
+
+    it('returns empty matches for objectReference with no textSearchResult children', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference uri="/sap/bc/adt/programs/programs/ZTEST" type="PROG/P" name="ZTEST"/>
+</adtcore:objectReferences>`;
+      const results = parseSourceSearchResults(xml);
+      expect(results).toHaveLength(1);
+      expect(results[0]?.objectName).toBe('ZTEST');
+      expect(results[0]?.matches).toEqual([]);
+    });
+
+    it('falls back to Atom feed format', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:id>/sap/bc/adt/programs/programs/ZTEST</atom:id>
+    <atom:title>ZTEST</atom:title>
+  </atom:entry>
+</atom:feed>`;
+      const results = parseSourceSearchResults(xml);
+      expect(results).toHaveLength(1);
+      expect(results[0]?.objectName).toBe('ZTEST');
+      expect(results[0]?.uri).toBe('/sap/bc/adt/programs/programs/ZTEST');
+      expect(results[0]?.matches).toEqual([]);
     });
   });
 });
