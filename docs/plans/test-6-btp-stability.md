@@ -63,13 +63,13 @@ Extract smoke-worthy tests into a new file, add failure taxonomy helpers, create
 
 Create a focused BTP smoke test file with strict, deterministic assertions for CI execution.
 
-- [ ] In `tests/integration/helpers.ts`, verify `hasBtpCredentials()` exists and check if it also handles a `TEST_BTP_SERVICE_KEY` env var (direct JSON, not just file path). If not, add support for it so CI can inject the key directly as a secret. The function should check `process.env.TEST_BTP_SERVICE_KEY_FILE || process.env.TEST_BTP_SERVICE_KEY`.
-- [ ] Create `tests/integration/btp-abap.smoke.integration.test.ts`:
+- [x] In `tests/integration/helpers.ts`, verify `hasBtpCredentials()` exists and check if it also handles a `TEST_BTP_SERVICE_KEY` env var (direct JSON, not just file path). If not, add support for it so CI can inject the key directly as a secret. The function should check `process.env.TEST_BTP_SERVICE_KEY_FILE || process.env.TEST_BTP_SERVICE_KEY`.
+- [x] Create `tests/integration/btp-abap.smoke.integration.test.ts`:
   - Import `hasBtpCredentials` from `./helpers.js`.
   - Top-level gate: `const describeIf = hasBtpCredentials() ? describe : describe.skip;`.
   - Client creation in `beforeAll`: create BTP client from service key (follow pattern in existing `btp-abap.integration.test.ts`).
   - Organize as `describeIf('BTP ABAP smoke', () => { ... })`.
-- [ ] Add smoke test: **connectivity check**:
+- [x] Add smoke test: **connectivity check**:
   ```typescript
   it('connects to BTP ABAP and gets CSRF token', async () => {
     // The client constructor should have established connectivity
@@ -78,7 +78,7 @@ Create a focused BTP smoke test file with strict, deterministic assertions for C
     expect(info).toBeTruthy();
   });
   ```
-- [ ] Add smoke test: **system info shape**:
+- [x] Add smoke test: **system info shape**:
   ```typescript
   it('returns system info with expected fields', async () => {
     const info = await client.getSystemInfo();
@@ -88,7 +88,7 @@ Create a focused BTP smoke test file with strict, deterministic assertions for C
     expect(typeof info.systemId).toBe('string');
   });
   ```
-- [ ] Add smoke test: **released object read** (read a standard released API, e.g., `CL_ABAP_RANDOM`):
+- [x] Add smoke test: **released object read** (read a standard released API, e.g., `CL_ABAP_RANDOM`):
   ```typescript
   it('reads a released SAP class', async () => {
     const source = await client.getClass('CL_ABAP_RANDOM');
@@ -96,7 +96,7 @@ Create a focused BTP smoke test file with strict, deterministic assertions for C
     expect(source.length).toBeGreaterThan(0);
   });
   ```
-- [ ] Add smoke test: **released object search**:
+- [x] Add smoke test: **released object search**:
   ```typescript
   it('searches for released objects', async () => {
     const results = await client.searchObject('CL_ABAP_*', 5);
@@ -105,7 +105,7 @@ Create a focused BTP smoke test file with strict, deterministic assertions for C
     expect(results[0]).toHaveProperty('objectName');
   });
   ```
-- [ ] Add smoke test: **BTP-specific behavior** (verify some classic programs are NOT available):
+- [x] Add smoke test: **BTP-specific behavior** (verify some classic programs are NOT available):
   ```typescript
   it('classic programs are not accessible on BTP', async () => {
     try {
@@ -116,9 +116,9 @@ Create a focused BTP smoke test file with strict, deterministic assertions for C
     }
   });
   ```
-- [ ] Set test timeout to 30s.
-- [ ] Import `expectSapFailureClass` from `../../helpers/expected-error.js` (created in plan test-4). If that plan hasn't been executed yet, inline the assertion: `expect(err).toBeInstanceOf(Error); expect((err as Error).message).toMatch(/404|403|not found/i);`.
-- [ ] Run `npm test` — all tests must pass (BTP tests will be skipped without credentials).
+- [x] Set test timeout to 30s.
+- [x] Import `expectSapFailureClass` from `../../helpers/expected-error.js` (created in plan test-4). If that plan hasn't been executed yet, inline the assertion: `expect(err).toBeInstanceOf(Error); expect((err as Error).message).toMatch(/404|403|not found/i);`.
+- [x] Run `npm test` — all tests must pass (BTP tests will be skipped without credentials).
 
 ### Task 2: Add npm Scripts and Document Extended Suite
 

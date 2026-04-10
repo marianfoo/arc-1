@@ -28,6 +28,15 @@ export function hasSapCredentials(): boolean {
   return !!(process.env.TEST_SAP_URL || process.env.SAP_URL);
 }
 
+/** Check if BTP service key is configured (file path or inline JSON) */
+export function hasBtpCredentials(): boolean {
+  return !!(
+    process.env.TEST_BTP_SERVICE_KEY_FILE ||
+    process.env.TEST_BTP_SERVICE_KEY ||
+    process.env.SAP_BTP_SERVICE_KEY_FILE
+  );
+}
+
 /** Skip reason message */
 export const SKIP_REASON = 'No SAP credentials configured (set TEST_SAP_URL or SAP_URL in .env)';
 
