@@ -1572,17 +1572,35 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
           `Invalid class name: "${className}". Only alphanumeric characters, underscores, and slashes are allowed.`,
         );
       }
+
+      const canFreeSQL = isOperationAllowed(client.safety, OperationType.FreeSQL);
+      const canQuery = isOperationAllowed(client.safety, OperationType.Query);
+
+      if (!canFreeSQL && !canQuery) {
+        return errorResult(
+          'Class hierarchy requires data access permissions. ' +
+            'Enable free SQL (--block-free-sql=false) or table preview (--block-data=false).',
+        );
+      }
+
       try {
-        // Query SEOMETAREL for the class's own relationships (superclass + interfaces)
-        const ownRels = await client.runQuery(
-          `SELECT CLSNAME, REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '${safeName}'`,
-          100,
-        );
-        // Query SEOMETAREL for direct subclasses (other classes that inherit from this one)
-        const subRels = await client.runQuery(
-          `SELECT CLSNAME FROM SEOMETAREL WHERE REFCLSNAME = '${safeName}' AND RELTYPE = '2'`,
-          100,
-        );
+        let ownRels: { columns: string[]; rows: Record<string, string>[] };
+        let subRels: { columns: string[]; rows: Record<string, string>[] };
+
+        if (canFreeSQL) {
+          ownRels = await client.runQuery(
+            `SELECT CLSNAME, REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '${safeName}'`,
+            100,
+          );
+          subRels = await client.runQuery(
+            `SELECT CLSNAME FROM SEOMETAREL WHERE REFCLSNAME = '${safeName}' AND RELTYPE = '2'`,
+            100,
+          );
+        } else {
+          // Fall back to named table preview (Query op type)
+          ownRels = await client.getTableContents('SEOMETAREL', 100, `CLSNAME = '${safeName}'`);
+          subRels = await client.getTableContents('SEOMETAREL', 100, `REFCLSNAME = '${safeName}' AND RELTYPE = '2'`);
+        }
 
         let superclass: string | null = null;
         const interfaces: string[] = [];
@@ -1606,9 +1624,7 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
         return textResult(JSON.stringify(result, null, 2));
       } catch (err) {
         if (err instanceof AdtApiError && err.statusCode === 404) {
-          return errorResult(
-            `Cannot query SEOMETAREL — table may not be accessible. Free SQL must be enabled (--block-free-sql=false).`,
-          );
+          return errorResult('Cannot query SEOMETAREL — table may not be accessible on this system.');
         }
         throw err;
       }

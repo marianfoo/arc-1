@@ -2514,6 +2514,53 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Invalid class name');
     });
+
+    it('falls back to getTableContents when free SQL is blocked', async () => {
+      mockFetch.mockReset();
+      // CSRF for first query
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // Own relationships via named table preview
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, seometarelXml([{ CLSNAME: 'ZCL_TEST', REFCLSNAME: 'CL_PARENT', RELTYPE: '2' }])),
+      );
+      // Subclasses via named table preview (CSRF cached)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, subclassXml(['ZCL_CHILD1'])));
+
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.superclass).toBe('CL_PARENT');
+      expect(parsed.subclasses).toEqual(['ZCL_CHILD1']);
+      // Verify it used the ddic endpoint (named table), not freestyle
+      const postCalls = mockFetch.mock.calls.filter((c: unknown[]) => (c[1] as { method?: string })?.method === 'POST');
+      expect(postCalls[0]![0]).toContain('/datapreview/ddic');
+    });
+
+    it('returns error when both free SQL and table preview are blocked', async () => {
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true, blockData: true },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('data access permissions');
+    });
   });
 
   // ─── BTP ABAP Handler Adaptation ────────────────────────────────────
