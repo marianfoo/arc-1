@@ -1158,11 +1158,12 @@ async function handleSAPWrite(
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
     }
     case 'delete': {
-      // Lock, delete, unlock pattern
+      // Lock, delete, unlock pattern — auto-propagate lock corrNr if no explicit transport
       await client.http.withStatefulSession(async (session) => {
         const lock = await lockObject(session, client.safety, objectUrl);
+        const effectiveTransport = transport ?? (lock.corrNr || undefined);
         try {
-          await deleteObject(session, client.safety, objectUrl, lock.lockHandle, transport);
+          await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
         } finally {
           try {
             await unlockObject(session, objectUrl, lock.lockHandle);

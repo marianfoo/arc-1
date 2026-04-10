@@ -3182,4 +3182,115 @@ ENDCLASS.`;
       expect(xml).toContain('adtcore:description="It&apos;s a test"');
     });
   });
+
+  // ─── SAPWrite delete corrNr auto-propagation ─────────────────────
+
+  describe('SAPWrite delete corrNr auto-propagation', () => {
+    const lockBodyWithCorrNr =
+      '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>A4HK900100</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>';
+    const lockBodyNoCorrNr =
+      '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+
+    it('auto-propagates lock corrNr to delete when no transport supplied', async () => {
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: url.toString(), method: opts?.method ?? 'GET' });
+        // CSRF HEAD
+        if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        // Lock POST
+        if (url.toString().includes('_action=LOCK'))
+          return Promise.resolve(mockResponse(200, lockBodyWithCorrNr, { 'x-csrf-token': 'T' }));
+        // Delete
+        if (opts?.method === 'DELETE') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        // Unlock POST
+        if (url.toString().includes('_action=UNLOCK'))
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const deleteCall = calls.find((c) => c.method === 'DELETE');
+      expect(deleteCall).toBeDefined();
+      expect(deleteCall!.url).toContain('corrNr=A4HK900100');
+    });
+
+    it('uses explicit transport over lock corrNr in delete', async () => {
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: url.toString(), method: opts?.method ?? 'GET' });
+        if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        if (url.toString().includes('_action=LOCK'))
+          return Promise.resolve(mockResponse(200, lockBodyWithCorrNr, { 'x-csrf-token': 'T' }));
+        if (opts?.method === 'DELETE') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        if (url.toString().includes('_action=UNLOCK'))
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'PROG',
+        name: 'ZTEST',
+        transport: 'EXPLICIT_TR',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const deleteCall = calls.find((c) => c.method === 'DELETE');
+      expect(deleteCall).toBeDefined();
+      expect(deleteCall!.url).toContain('corrNr=EXPLICIT_TR');
+      expect(deleteCall!.url).not.toContain('A4HK900100');
+    });
+
+    it('does not add corrNr to delete when lock returns empty corrNr', async () => {
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: url.toString(), method: opts?.method ?? 'GET' });
+        if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        if (url.toString().includes('_action=LOCK'))
+          return Promise.resolve(mockResponse(200, lockBodyNoCorrNr, { 'x-csrf-token': 'T' }));
+        if (opts?.method === 'DELETE') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        if (url.toString().includes('_action=UNLOCK'))
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const deleteCall = calls.find((c) => c.method === 'DELETE');
+      expect(deleteCall).toBeDefined();
+      expect(deleteCall!.url).not.toContain('corrNr');
+    });
+
+    it('delete succeeds for $TMP objects without transport', async () => {
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        if (url.toString().includes('_action=LOCK'))
+          return Promise.resolve(mockResponse(200, lockBodyNoCorrNr, { 'x-csrf-token': 'T' }));
+        if (opts?.method === 'DELETE') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        if (url.toString().includes('_action=UNLOCK'))
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Deleted PROG ZTEST');
+    });
+  });
 });

@@ -244,6 +244,91 @@ describe('CRUD Operations', () => {
       expect(http.withStatefulSession).toHaveBeenCalled();
     });
 
+    it('auto-propagates lock corrNr when no transport is supplied', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>A4HK900100</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>';
+      const postMock = vi
+        .fn()
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: lockBody })
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' }); // unlock
+      const putMock = vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' });
+
+      const http = {
+        ...mockHttp(),
+        withStatefulSession: vi.fn().mockImplementation(async (fn: any) => fn({ post: postMock, put: putMock })),
+      } as unknown as AdtHttpClient;
+
+      await safeUpdateSource(http, unrestrictedSafetyConfig(), '/obj', '/obj/source/main', 'source');
+
+      const putUrl = putMock.mock.calls[0]?.[0] as string;
+      expect(putUrl).toContain('corrNr=A4HK900100');
+    });
+
+    it('uses explicit transport over lock corrNr', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>A4HK900100</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>';
+      const postMock = vi
+        .fn()
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: lockBody })
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' });
+      const putMock = vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' });
+
+      const http = {
+        ...mockHttp(),
+        withStatefulSession: vi.fn().mockImplementation(async (fn: any) => fn({ post: postMock, put: putMock })),
+      } as unknown as AdtHttpClient;
+
+      await safeUpdateSource(http, unrestrictedSafetyConfig(), '/obj', '/obj/source/main', 'source', 'EXPLICIT_TR');
+
+      const putUrl = putMock.mock.calls[0]?.[0] as string;
+      expect(putUrl).toContain('corrNr=EXPLICIT_TR');
+      expect(putUrl).not.toContain('A4HK900100');
+    });
+
+    it('does not add corrNr when lock returns empty and no transport supplied', async () => {
+      // Default mockHttp returns empty CORRNR
+      const http = mockHttp();
+      const putMock = vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' });
+
+      const customHttp = {
+        ...http,
+        withStatefulSession: vi.fn().mockImplementation(async (fn: any) => {
+          const session = {
+            post: (http as any).withStatefulSession.mock.results?.[0]
+              ? undefined
+              : vi
+                  .fn()
+                  .mockResolvedValueOnce({
+                    statusCode: 200,
+                    headers: {},
+                    body: '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+                  })
+                  .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' }),
+            put: putMock,
+          };
+          return fn(session);
+        }),
+      } as unknown as AdtHttpClient;
+
+      await safeUpdateSource(customHttp, unrestrictedSafetyConfig(), '/obj', '/obj/source/main', 'source');
+
+      const putUrl = putMock.mock.calls[0]?.[0] as string;
+      expect(putUrl).not.toContain('corrNr');
+    });
+
+    it('no corrNr propagation for $TMP local objects', async () => {
+      // $TMP objects return empty corrNr and isLocal=true — no transport needed
+      const http = mockHttp(); // default mock returns empty CORRNR, isLocal=X
+      await safeUpdateSource(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/ZTEST',
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+      );
+      expect(http.withStatefulSession).toHaveBeenCalled();
+    });
+
     it('unlocks even if update fails (try-finally)', async () => {
       const postMock = vi
         .fn()

@@ -175,12 +175,12 @@ Transport compatibility issues recur across endpoints and SAP versions. Implemen
 
 **Existing test coverage:** `crud.test.ts` has 23 tests including `corrNr` parsing from lock response, but no test for auto-propagation when `transport` is omitted.
 
-- [ ] In `safeUpdateSource()`, derive `effectiveTransport = transport ?? lock.corrNr || undefined` and pass that to `updateSource()`.
-- [ ] In SAPWrite delete flow (`src/handlers/intent.ts`), pass `transport ?? lock.corrNr || undefined` to `deleteObject()`.
-- [ ] Keep explicit `transport` argument authoritative when supplied by caller.
-- [ ] Preserve existing lock->modify->unlock try/finally safety behavior and stateful session guarantees.
-- [ ] Add unit tests (~8 tests): auto `corrNr` propagation on update, explicit transport override, no `corrNr` when lock returns empty, delete-path fallback propagation, and no regression for `$TMP` flows.
-- [ ] Run `npm test -- tests/unit/adt/crud.test.ts tests/unit/handlers/intent.test.ts`.
+- [x] In `safeUpdateSource()`, derive `effectiveTransport = transport ?? lock.corrNr || undefined` and pass that to `updateSource()`.
+- [x] In SAPWrite delete flow (`src/handlers/intent.ts`), pass `transport ?? lock.corrNr || undefined` to `deleteObject()`.
+- [x] Keep explicit `transport` argument authoritative when supplied by caller.
+- [x] Preserve existing lock->modify->unlock try/finally safety behavior and stateful session guarantees.
+- [x] Add unit tests (~8 tests): auto `corrNr` propagation on update, explicit transport override, no `corrNr` when lock returns empty, delete-path fallback propagation, and no regression for `$TMP` flows.
+- [x] Run `npm test -- tests/unit/adt/crud.test.ts tests/unit/handlers/intent.test.ts`.
 
 ### Task 4: Improve User-Facing Error Hints for Transport/CorrNr Failures
 

@@ -119,8 +119,9 @@ export async function safeUpdateSource(
 ): Promise<void> {
   await http.withStatefulSession(async (session) => {
     const lock = await lockObject(session, safety, objectUrl);
+    const effectiveTransport = transport ?? (lock.corrNr || undefined);
     try {
-      await updateSource(session, safety, sourceUrl, source, lock.lockHandle, transport);
+      await updateSource(session, safety, sourceUrl, source, lock.lockHandle, effectiveTransport);
     } finally {
       await unlockObject(session, objectUrl, lock.lockHandle);
     }
