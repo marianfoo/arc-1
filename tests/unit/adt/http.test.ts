@@ -703,6 +703,38 @@ describe('AdtHttpClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
+    it('406 falls back to wildcard when Accept is application/xml and no inferred type', async () => {
+      // Accept: application/xml → 406, no inferred type in error body → retry with */*
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.get('/path', { Accept: 'application/xml' });
+
+      expect(resp.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(fetchHeaders(1).Accept).toBe('*/*');
+    });
+
+    it('negotiation retry guard is per-request, not per-instance', async () => {
+      const client = new AdtHttpClient(getDefaultConfig());
+
+      // First request: 406 → retry → success
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'first ok'));
+      const resp1 = await client.get('/path', { Accept: 'application/custom+xml' });
+      expect(resp1.statusCode).toBe(200);
+
+      // Second request on same instance: should also retry (guard is per-request)
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'second ok'));
+      const resp2 = await client.get('/path', { Accept: 'application/custom+xml' });
+      expect(resp2.statusCode).toBe(200);
+
+      // 4 total fetches: 2 per request (original + retry)
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
     it('415 skips retry when Content-Type is already application/xml', async () => {
       // CSRF fetch
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));

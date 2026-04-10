@@ -96,8 +96,6 @@ export class AdtHttpClient {
   private cookieJar: Map<string, string> = new Map();
   /** Guard to prevent infinite retry loops for DB connection errors */
   private dbRetryInProgress = false;
-  /** Guard to prevent infinite retry loops for 406/415 negotiation */
-  private negotiationRetryInProgress = false;
 
   constructor(config: AdtHttpConfig) {
     this.config = config;
@@ -222,6 +220,9 @@ export class AdtHttpClient {
     const url = this.buildUrl(path);
     const httpStart = Date.now();
 
+    // Per-request guard to prevent infinite retry loops for 406/415 negotiation
+    let negotiationRetried = false;
+
     try {
       const response = await this.doFetch(url, method, headers, body);
       const responseBody = await response.text();
@@ -321,79 +322,79 @@ export class AdtHttpClient {
       }
 
       // Handle 406/415 content negotiation failure — retry once with fallback headers
-      if ((response.status === 406 || response.status === 415) && !this.negotiationRetryInProgress) {
-        this.negotiationRetryInProgress = true;
-        try {
-          const fallbackHeaders = { ...headers };
+      if ((response.status === 406 || response.status === 415) && !negotiationRetried) {
+        negotiationRetried = true;
+        const fallbackHeaders = { ...headers };
 
-          let headersChanged = false;
+        let headersChanged = false;
 
-          if (response.status === 406) {
-            // Server rejected our Accept header — try fallback
-            const inferred = inferAcceptFromError(responseBody);
-            if (inferred && inferred !== fallbackHeaders.Accept) {
-              fallbackHeaders.Accept = inferred;
-              headersChanged = true;
-            } else if (
-              fallbackHeaders.Accept &&
-              fallbackHeaders.Accept !== '*/*' &&
-              fallbackHeaders.Accept !== 'application/xml'
-            ) {
-              // Fall back to generic XML, then wildcard
-              fallbackHeaders.Accept = 'application/xml';
-              headersChanged = true;
-            }
-            // If Accept is already */* and no inferred type, no useful fallback — skip retry
-          } else {
-            // 415: Server rejected our Content-Type — try application/xml fallback
-            if (contentType && contentType !== 'application/xml') {
-              fallbackHeaders['Content-Type'] = 'application/xml';
-              headersChanged = true;
-            }
-            // If Content-Type is already application/xml or absent, no useful fallback — skip retry
+        if (response.status === 406) {
+          // Server rejected our Accept header — try fallback
+          const inferred = inferAcceptFromError(responseBody);
+          if (inferred && inferred !== fallbackHeaders.Accept) {
+            fallbackHeaders.Accept = inferred;
+            headersChanged = true;
+          } else if (
+            fallbackHeaders.Accept &&
+            fallbackHeaders.Accept !== '*/*' &&
+            fallbackHeaders.Accept !== 'application/xml'
+          ) {
+            // Fall back to generic XML first
+            fallbackHeaders.Accept = 'application/xml';
+            headersChanged = true;
+          } else if (fallbackHeaders.Accept === 'application/xml') {
+            // application/xml was already rejected — fall back to wildcard
+            fallbackHeaders.Accept = '*/*';
+            headersChanged = true;
           }
-
-          if (headersChanged) {
-            logger.emitAudit({
-              timestamp: new Date().toISOString(),
-              level: 'warn',
-              event: 'http_request',
-              method,
-              path,
-              statusCode: response.status,
-              durationMs: Date.now() - httpStart,
-              errorBody: `Content negotiation ${response.status} — retrying with fallback headers`,
-            });
-
-            const retryResp = await this.doFetch(url, method, fallbackHeaders, body);
-            const retryBody = await retryResp.text();
-            this.storeCookies(retryResp);
-
-            // Store CSRF token from retry response
-            const retryToken = retryResp.headers.get('x-csrf-token');
-            if (retryToken && retryToken !== 'Required') {
-              this.csrfToken = retryToken;
-            }
-
-            const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
-
-            logger.emitAudit({
-              timestamp: new Date().toISOString(),
-              level: 'info',
-              event: 'http_request',
-              method,
-              path,
-              statusCode: retryResp.status,
-              durationMs: Date.now() - httpStart,
-              errorBody: `Content negotiation retry succeeded (${response.status} → ${retryResp.status})`,
-            });
-
-            return retryResult;
+          // If Accept is already */* and no inferred type, no useful fallback — skip retry
+        } else {
+          // 415: Server rejected our Content-Type — try application/xml fallback
+          if (contentType && contentType !== 'application/xml') {
+            fallbackHeaders['Content-Type'] = 'application/xml';
+            headersChanged = true;
           }
-          // No meaningful header change — fall through to normal error handling
-        } finally {
-          this.negotiationRetryInProgress = false;
+          // If Content-Type is already application/xml or absent, no useful fallback — skip retry
         }
+
+        if (headersChanged) {
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: response.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: `Content negotiation ${response.status} — retrying with fallback headers`,
+          });
+
+          const retryResp = await this.doFetch(url, method, fallbackHeaders, body);
+          const retryBody = await retryResp.text();
+          this.storeCookies(retryResp);
+
+          // Store CSRF token from retry response
+          const retryToken = retryResp.headers.get('x-csrf-token');
+          if (retryToken && retryToken !== 'Required') {
+            this.csrfToken = retryToken;
+          }
+
+          const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: retryResp.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: `Content negotiation retry succeeded (${response.status} → ${retryResp.status})`,
+          });
+
+          return retryResult;
+        }
+        // No meaningful header change — fall through to normal error handling
       }
 
       // Store CSRF token from response
