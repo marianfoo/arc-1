@@ -31,9 +31,13 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      # Unit tests with coverage — informational coverage does not block the build
-      - name: Run unit tests (with coverage)
+      - name: Run unit tests
+        run: npm test
+
+      # Coverage — informational only, does not block the build
+      - name: Run coverage (informational)
         run: npm run test:coverage
+        continue-on-error: true
 
       - name: Coverage summary
         if: always()
