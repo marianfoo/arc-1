@@ -1019,45 +1019,49 @@ function escapeXml(s: string): string {
 
 // ─── Object URL Mapping ──────────────────────────────────────────────
 
-/** Map object type + name to the ADT object URL used by CRUD/DevTools/etc. */
-function objectUrlForType(type: string, name: string): string {
-  const encoded = encodeURIComponent(name);
+/** Base path for an object type. Returns path prefix without trailing name segment. */
+function objectBasePath(type: string): string {
   switch (type) {
     case 'PROG':
-      return `/sap/bc/adt/programs/programs/${encoded}`;
+      return '/sap/bc/adt/programs/programs/';
     case 'CLAS':
-      return `/sap/bc/adt/oo/classes/${encoded}`;
+      return '/sap/bc/adt/oo/classes/';
     case 'INTF':
-      return `/sap/bc/adt/oo/interfaces/${encoded}`;
+      return '/sap/bc/adt/oo/interfaces/';
     case 'FUNC':
-      return `/sap/bc/adt/functions/groups/${encoded}`;
+      return '/sap/bc/adt/functions/groups/';
     case 'INCL':
-      return `/sap/bc/adt/programs/includes/${encoded}`;
+      return '/sap/bc/adt/programs/includes/';
     case 'FUGR':
-      return `/sap/bc/adt/functions/groups/${encoded}`;
+      return '/sap/bc/adt/functions/groups/';
     case 'DDLS':
-      return `/sap/bc/adt/ddic/ddl/sources/${encoded}`;
+      return '/sap/bc/adt/ddic/ddl/sources/';
     case 'BDEF':
-      return `/sap/bc/adt/bo/behaviordefinitions/${encoded}`;
+      return '/sap/bc/adt/bo/behaviordefinitions/';
     case 'SRVD':
-      return `/sap/bc/adt/ddic/srvd/sources/${encoded}`;
+      return '/sap/bc/adt/ddic/srvd/sources/';
     case 'DDLX':
-      return `/sap/bc/adt/ddic/ddlx/sources/${encoded}`;
+      return '/sap/bc/adt/ddic/ddlx/sources/';
     case 'SRVB':
-      return `/sap/bc/adt/businessservices/bindings/${encoded}`;
+      return '/sap/bc/adt/businessservices/bindings/';
     case 'TABL':
-      return `/sap/bc/adt/ddic/tables/${encoded}`;
+      return '/sap/bc/adt/ddic/tables/';
     case 'STRU':
-      return `/sap/bc/adt/ddic/structures/${encoded}`;
+      return '/sap/bc/adt/ddic/structures/';
     case 'DOMA':
-      return `/sap/bc/adt/ddic/domains/${encoded}`;
+      return '/sap/bc/adt/ddic/domains/';
     case 'DTEL':
-      return `/sap/bc/adt/ddic/dataelements/${encoded}`;
+      return '/sap/bc/adt/ddic/dataelements/';
     case 'TRAN':
-      return `/sap/bc/adt/vit/wb/object_type/trant/object_name/${encoded}`;
+      return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
     default:
-      return `/sap/bc/adt/programs/programs/${encoded}`;
+      return '/sap/bc/adt/programs/programs/';
   }
+}
+
+/** Map object type + name to the ADT object URL used by CRUD/DevTools/etc. Name is URI-encoded. */
+function objectUrlForType(type: string, name: string): string {
+  return `${objectBasePath(type)}${encodeURIComponent(name)}`;
 }
 
 /** Infer SAP object type from naming conventions. Returns empty string if type cannot be determined. */
@@ -1074,42 +1078,7 @@ function inferObjectType(name: string): string {
  * Used for API release state where the full URI is encoded as a single path segment by the caller.
  */
 function objectUrlForTypeRaw(type: string, name: string): string {
-  switch (type) {
-    case 'PROG':
-      return `/sap/bc/adt/programs/programs/${name}`;
-    case 'CLAS':
-      return `/sap/bc/adt/oo/classes/${name}`;
-    case 'INTF':
-      return `/sap/bc/adt/oo/interfaces/${name}`;
-    case 'FUNC':
-      return `/sap/bc/adt/functions/groups/${name}`;
-    case 'INCL':
-      return `/sap/bc/adt/programs/includes/${name}`;
-    case 'FUGR':
-      return `/sap/bc/adt/functions/groups/${name}`;
-    case 'DDLS':
-      return `/sap/bc/adt/ddic/ddl/sources/${name}`;
-    case 'BDEF':
-      return `/sap/bc/adt/bo/behaviordefinitions/${name}`;
-    case 'SRVD':
-      return `/sap/bc/adt/ddic/srvd/sources/${name}`;
-    case 'DDLX':
-      return `/sap/bc/adt/ddic/ddlx/sources/${name}`;
-    case 'SRVB':
-      return `/sap/bc/adt/businessservices/bindings/${name}`;
-    case 'TABL':
-      return `/sap/bc/adt/ddic/tables/${name}`;
-    case 'STRU':
-      return `/sap/bc/adt/ddic/structures/${name}`;
-    case 'DOMA':
-      return `/sap/bc/adt/ddic/domains/${name}`;
-    case 'DTEL':
-      return `/sap/bc/adt/ddic/dataelements/${name}`;
-    case 'TRAN':
-      return `/sap/bc/adt/vit/wb/object_type/trant/object_name/${name}`;
-    default:
-      return `/sap/bc/adt/programs/programs/${name}`;
-  }
+  return `${objectBasePath(type)}${name}`;
 }
 
 /** Get the source URL for an object (appends /source/main) */
