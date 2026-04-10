@@ -79,8 +79,8 @@ Add Vitest JSON reporter to all three test configs so each level produces machin
 
 Create a Node.js script that reads Vitest JSON result files and produces a Markdown summary table with executed/passed/skipped/failed counts and top skip reasons.
 
-- [ ] Create `scripts/ci/` directory structure.
-- [ ] Implement `scripts/ci/collect-test-reliability.mjs` with the following behavior:
+- [x] Create `scripts/ci/` directory structure.
+- [x] Implement `scripts/ci/collect-test-reliability.mjs` with the following behavior:
   - Accept `--results-dir` argument (default: `test-results/`).
   - For each JSON file found (`unit.json`, `integration.json`, `e2e.json`), parse and extract: total tests, passed, failed, skipped, and skip reasons (from `testResults[].assertionResults[].status === 'skipped'`).
   - Generate a Markdown table: `| Suite | Total | Passed | Failed | Skipped | Skip % |`.
@@ -89,8 +89,8 @@ Create a Node.js script that reads Vitest JSON result files and produces a Markd
   - Also print the summary to stdout for local use.
   - Exit 0 always (informational only).
   - Handle missing files gracefully (report "no results found" for that suite).
-- [ ] Add npm script `"test:reliability-report": "node scripts/ci/collect-test-reliability.mjs"` to `package.json`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add npm script `"test:reliability-report": "node scripts/ci/collect-test-reliability.mjs"` to `package.json`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Create Required Execution Assertion Script
 
