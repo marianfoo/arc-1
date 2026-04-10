@@ -59,8 +59,8 @@ Install the dependency first, configure vitest, create the summary script with u
 
 Install `@vitest/coverage-v8` and add coverage configuration to the unit test vitest config.
 
-- [ ] Run `npm install --save-dev @vitest/coverage-v8` to add the coverage provider as a dev dependency.
-- [ ] In `vitest.config.ts`, add a `coverage` block inside the `test` property:
+- [x] Run `npm install --save-dev @vitest/coverage-v8` to add the coverage provider as a dev dependency.
+- [x] In `vitest.config.ts`, add a `coverage` block inside the `test` property:
   ```typescript
   coverage: {
     provider: 'v8',
@@ -70,9 +70,9 @@ Install `@vitest/coverage-v8` and add coverage configuration to the unit test vi
   },
   ```
   Keep all existing settings (`include`, `exclude`, `testTimeout`, `isolate`) unchanged.
-- [ ] Add `coverage/` to `.gitignore` if not already present.
-- [ ] Run `npm run test:coverage` — verify it completes and produces `coverage/coverage-summary.json` and `coverage/lcov.info`.
-- [ ] Run `npm test` — all tests must pass (coverage config should not affect regular test runs).
+- [x] Add `coverage/` to `.gitignore` if not already present.
+- [x] Run `npm run test:coverage` — verify it completes and produces `coverage/coverage-summary.json` and `coverage/lcov.info`.
+- [x] Run `npm test` — all tests must pass (coverage config should not affect regular test runs).
 
 ### Task 2: Create Coverage Summary Script
 
