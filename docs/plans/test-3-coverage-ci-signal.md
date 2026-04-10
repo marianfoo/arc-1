@@ -143,7 +143,7 @@ Add a coverage step to the unit test job that runs after tests, publishes the co
 
 Add an informational coverage step in the release workflow so publish runs include visibility into tested surface area.
 
-- [ ] In the `publish-npm` job (after the `npm test` step at line 50), add:
+- [x] In the `publish-npm` job (after the `npm test` step at line 50), add:
   ```yaml
   - name: Run coverage (informational)
     run: npm run test:coverage
@@ -154,8 +154,8 @@ Add an informational coverage step in the release workflow so publish runs inclu
     run: node scripts/ci/coverage-summary.mjs
     continue-on-error: true
   ```
-- [ ] Add a comment: `# Coverage — informational only, does not block release`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add a comment: `# Coverage — informational only, does not block release`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 5: Final Verification
 
