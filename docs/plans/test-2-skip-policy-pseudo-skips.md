@@ -118,15 +118,15 @@ Replace all early-return pseudo-skips in integration tests with explicit `ctx.sk
 
 Replace all early-return pseudo-skips in E2E tests and reconcile README claims with reality.
 
-- [ ] In `tests/e2e/cds-context.e2e.test.ts`:
+- [x] In `tests/e2e/cds-context.e2e.test.ts`:
   - Import `requireOrSkip` from `../../helpers/skip-policy.js`.
   - At line 54 (`if (!cdsName) return;`): the test callback already may not accept `ctx`. Change to `it('reads raw DDL source', async (ctx) => {` and replace `if (!cdsName) return;` with `requireOrSkip(ctx, cdsName, 'No DDLS found on system — CDS tests skipped')`.
   - Apply same pattern at lines 64, 87, 99.
   - The `beforeAll` already sets `cdsName` and logs a skip message — keep that but now the individual tests will properly show as skipped in reports.
-- [ ] In `tests/e2e/README.md`:
+- [x] In `tests/e2e/README.md`:
   - Update the setup section (around line 77-78) to accurately describe current behavior. Replace the claim about automatic object creation with: "Test objects (ZARC1_TEST_REPORT, ZIF_ARC1_TEST, ZCL_ARC1_TEST, ZCL_ARC1_TEST_UT) must exist on the SAP system. If missing, tests that require them will skip with explicit reasons. The `ensureTestObjects()` function in `setup.ts` can create them on demand but is not called automatically."
   - Document the skip behavior: when custom objects are missing, navigate tests use `ctx.skip()`; when DDLS objects are missing, CDS tests use `requireOrSkip()`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Update CI Workflow for Main Branch Push
 

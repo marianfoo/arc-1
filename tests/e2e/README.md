@@ -74,7 +74,9 @@ Persistent objects on SAP (created once, expected to stay):
 | CLAS | `ZCL_ARC1_TEST_UT` | `$TMP` | Unit tests (ABAP Unit) |
 | INTF | `ZIF_ARC1_TEST` | `$TMP` | Read, context dependency |
 
-Setup (`beforeAll`) checks if these exist via SAPSearch. If missing, they're created from fixtures in `tests/fixtures/abap/`.
+Test objects must exist on the SAP system. If missing, tests that require them will skip with explicit reasons. The `ensureTestObjects()` function in `setup.ts` can create them on demand but is not called automatically.
+
+**Skip behavior:** When custom objects are missing, navigate tests use `ctx.skip()`. When DDLS objects are missing, CDS tests use `requireOrSkip()` from `tests/helpers/skip-policy.ts`. All skips appear as SKIPPED (not PASSED) in test reports.
 
 ## Adding New Tests
 
