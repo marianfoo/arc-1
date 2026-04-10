@@ -326,52 +326,67 @@ export class AdtHttpClient {
         try {
           const fallbackHeaders = { ...headers };
 
+          let headersChanged = false;
+
           if (response.status === 406) {
             // Server rejected our Accept header — try fallback
             const inferred = inferAcceptFromError(responseBody);
-            if (inferred) {
+            if (inferred && inferred !== fallbackHeaders.Accept) {
               fallbackHeaders.Accept = inferred;
+              headersChanged = true;
             } else if (fallbackHeaders.Accept && fallbackHeaders.Accept !== '*/*') {
               // Fall back to generic XML, then wildcard
               fallbackHeaders.Accept = 'application/xml';
-            } else {
-              fallbackHeaders.Accept = '*/*';
+              headersChanged = true;
             }
+            // If Accept is already */* and no inferred type, no useful fallback — skip retry
           } else {
             // 415: Server rejected our Content-Type — try application/xml fallback
             if (contentType && contentType !== 'application/xml') {
               fallbackHeaders['Content-Type'] = 'application/xml';
+              headersChanged = true;
             }
+            // If Content-Type is already application/xml or absent, no useful fallback — skip retry
           }
 
-          logger.emitAudit({
-            timestamp: new Date().toISOString(),
-            level: 'warn',
-            event: 'http_request',
-            method,
-            path,
-            statusCode: response.status,
-            durationMs: Date.now() - httpStart,
-            errorBody: `Content negotiation ${response.status} — retrying with fallback headers`,
-          });
+          if (headersChanged) {
+            logger.emitAudit({
+              timestamp: new Date().toISOString(),
+              level: 'warn',
+              event: 'http_request',
+              method,
+              path,
+              statusCode: response.status,
+              durationMs: Date.now() - httpStart,
+              errorBody: `Content negotiation ${response.status} — retrying with fallback headers`,
+            });
 
-          const retryResp = await this.doFetch(url, method, fallbackHeaders, body);
-          const retryBody = await retryResp.text();
-          this.storeCookies(retryResp);
-          const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+            const retryResp = await this.doFetch(url, method, fallbackHeaders, body);
+            const retryBody = await retryResp.text();
+            this.storeCookies(retryResp);
 
-          logger.emitAudit({
-            timestamp: new Date().toISOString(),
-            level: 'info',
-            event: 'http_request',
-            method,
-            path,
-            statusCode: retryResp.status,
-            durationMs: Date.now() - httpStart,
-            errorBody: `Content negotiation retry succeeded (${response.status} → ${retryResp.status})`,
-          });
+            // Store CSRF token from retry response
+            const retryToken = retryResp.headers.get('x-csrf-token');
+            if (retryToken && retryToken !== 'Required') {
+              this.csrfToken = retryToken;
+            }
 
-          return retryResult;
+            const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+
+            logger.emitAudit({
+              timestamp: new Date().toISOString(),
+              level: 'info',
+              event: 'http_request',
+              method,
+              path,
+              statusCode: retryResp.status,
+              durationMs: Date.now() - httpStart,
+              errorBody: `Content negotiation retry succeeded (${response.status} → ${retryResp.status})`,
+            });
+
+            return retryResult;
+          }
+          // No meaningful header change — fall through to normal error handling
         } finally {
           this.negotiationRetryInProgress = false;
         }

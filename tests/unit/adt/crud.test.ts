@@ -318,7 +318,21 @@ describe('CRUD Operations', () => {
 
     it('no corrNr propagation for $TMP local objects', async () => {
       // $TMP objects return empty corrNr and isLocal=true — no transport needed
-      const http = mockHttp(); // default mock returns empty CORRNR, isLocal=X
+      const putMock = vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' });
+      const postMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          statusCode: 200,
+          headers: {},
+          body: '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+        })
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' });
+
+      const http = {
+        ...mockHttp(),
+        withStatefulSession: vi.fn().mockImplementation(async (fn: any) => fn({ post: postMock, put: putMock })),
+      } as unknown as AdtHttpClient;
+
       await safeUpdateSource(
         http,
         unrestrictedSafetyConfig(),
@@ -326,7 +340,9 @@ describe('CRUD Operations', () => {
         '/sap/bc/adt/programs/programs/ZTEST/source/main',
         'REPORT ztest.',
       );
-      expect(http.withStatefulSession).toHaveBeenCalled();
+
+      const putUrl = putMock.mock.calls[0]?.[0] as string;
+      expect(putUrl).not.toContain('corrNr');
     });
 
     it('unlocks even if update fails (try-finally)', async () => {

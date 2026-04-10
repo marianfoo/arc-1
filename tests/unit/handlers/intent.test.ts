@@ -2056,7 +2056,7 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('SE09');
     });
 
-    it('transport not found error includes SE09 hint', async () => {
+    it('404 error gets generic not-found hint (takes priority over transport hint)', async () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(
         new AdtApiError(
@@ -2070,13 +2070,13 @@ ENDCLASS.`;
         type: 'PROG',
         name: 'ZPROG',
       });
-      // 404 with transport body should match transport hint, not generic not-found
-      // (not-found check happens first, so this gets the generic not-found hint)
+      // 404 triggers isNotFound check before getTransportHint — generic not-found hint is returned
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Hint');
+      expect(result.content[0]?.text).toContain('not found');
+      expect(result.content[0]?.text).toContain('SAPSearch');
     });
 
-    it('transport authorization error includes S_TRANSPRT hint', async () => {
+    it('403 error gets generic auth hint (takes priority over transport hint)', async () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(
         new AdtApiError(
@@ -2090,9 +2090,29 @@ ENDCLASS.`;
         type: 'PROG',
         name: 'ZPROG',
       });
-      // 403 hits the auth check first, which is fine — transport auth still gets a hint
+      // 403 triggers isForbidden check before getTransportHint — generic auth hint is returned
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Hint');
+      expect(result.content[0]?.text).toContain('Authorization error');
+    });
+
+    it('transport not found on 400 status gets transport-specific hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Transport request error',
+          400,
+          '/sap/bc/adt/programs/programs/ZPROG',
+          'E070 transport does not exist',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      // 400 does NOT trigger isNotFound — getTransportHint fires with E070 match
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('not modifiable');
+      expect(result.content[0]?.text).toContain('SE09');
     });
 
     it('package transport layer mismatch includes package hint', async () => {

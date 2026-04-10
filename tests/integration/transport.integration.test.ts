@@ -130,12 +130,9 @@ describe('Transport Integration Tests', () => {
       expect(transport!.description).toBe(desc);
     });
 
-    it('creates a transport with target package', async () => {
+    it('creates a transport with target package', async (ctx) => {
       const pkg = process.env.TEST_TRANSPORT_PACKAGE;
-      if (!pkg) {
-        // Skip silently — the env-gated test below covers this
-        return;
-      }
+      requireOrSkip(ctx, pkg, SkipReason.NO_TRANSPORT_PACKAGE);
 
       const desc = `ARC-1 IT pkg ${Date.now()}`;
       const id = await createTransport(client.http, client.safety, desc, pkg);

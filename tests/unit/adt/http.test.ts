@@ -597,16 +597,15 @@ describe('AdtHttpClient', () => {
       expect(fetchHeaders(1).Accept).toBe('application/xml');
     });
 
-    it('retries GET with wildcard Accept when original was already application/xml', async () => {
+    it('406 skips retry when default Accept */* has no useful fallback', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
-      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
 
       const client = new AdtHttpClient(getDefaultConfig());
-      // Default Accept is */* so the fallback should stay */*
-      const resp = await client.get('/path');
+      // Default Accept is */* — no better fallback available, should throw
+      await expect(client.get('/path')).rejects.toThrow();
 
-      expect(resp.statusCode).toBe(200);
-      expect(fetchHeaders(1).Accept).toBe('*/*');
+      // Only one fetch call — no retry
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('uses inferred Accept from SAP error body on 406', async () => {
@@ -693,32 +692,28 @@ describe('AdtHttpClient', () => {
       expect(fetchHeaders(2).Cookie).toContain('SAP_SESSIONID=sess1');
     });
 
-    it('406 retry with Accept fallback works for GET without extra headers', async () => {
-      // Default Accept is */* — fallback should remain */*
+    it('406 skips retry when Accept is already */* and no inferred type', async () => {
+      // Default Accept is */* — no useful fallback, should throw without retry
       mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
-      mockFetch.mockResolvedValueOnce(mockResponse(200, 'fallback ok'));
 
       const client = new AdtHttpClient(getDefaultConfig());
-      const resp = await client.get('/path');
+      await expect(client.get('/path')).rejects.toThrow();
 
-      expect(resp.statusCode).toBe(200);
-      expect(resp.body).toBe('fallback ok');
+      // Only one fetch call — no retry
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('415 retry does not change Content-Type when already application/xml', async () => {
+    it('415 skips retry when Content-Type is already application/xml', async () => {
       // CSRF fetch
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
-      // POST with application/xml → 415 (no useful fallback)
+      // POST with application/xml → 415 (no useful fallback, should throw without retry)
       mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported'));
-      // Retry — Content-Type stays application/xml since there's no better fallback
-      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
 
       const client = new AdtHttpClient(getDefaultConfig());
-      const resp = await client.post('/path', '<d/>', 'application/xml');
+      await expect(client.post('/path', '<d/>', 'application/xml')).rejects.toThrow();
 
-      expect(resp.statusCode).toBe(200);
-      // Content-Type should remain application/xml (no fallback available)
-      expect(fetchHeaders(2)['Content-Type']).toBe('application/xml');
+      // CSRF fetch + one POST — no retry
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 

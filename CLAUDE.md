@@ -369,7 +369,7 @@ Every code change requires tests. See `docs/testing-skip-policy.md` for the full
 ### Skip Policy (`tests/helpers/skip-policy.ts`)
 
 - `requireOrSkip(ctx, value, reason)` — skip if nullish, narrow type otherwise
-- `SkipReason` constants: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, etc.
+- `SkipReason` constants: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, `NO_TRANSPORT_PACKAGE`, etc.
 - **Valid:** missing credentials, fixture not on system, unsupported backend. **Invalid:** early return without skip, empty catch blocks.
 
 ### Error Assertions (`tests/helpers/expected-error.ts`)
