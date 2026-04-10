@@ -7,7 +7,7 @@
 
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { requireOrSkip } from '../helpers/skip-policy.js';
+import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
 
 /** Well-known CDS views to try, in order of likelihood */
@@ -52,7 +52,7 @@ describe('E2E CDS Context Tests', () => {
 
   describe('SAPRead DDLS', () => {
     it('reads raw DDL source for a CDS view', async (ctx) => {
-      requireOrSkip(ctx, cdsName, 'No DDLS found on system — CDS tests skipped');
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
       const result = await callTool(client, 'SAPRead', {
         type: 'DDLS',
         name: cdsName,
@@ -62,7 +62,7 @@ describe('E2E CDS Context Tests', () => {
     });
 
     it('returns structured elements with include="elements"', async (ctx) => {
-      requireOrSkip(ctx, cdsName, 'No DDLS found on system — CDS tests skipped');
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
       const result = await callTool(client, 'SAPRead', {
         type: 'DDLS',
         name: cdsName,
@@ -85,7 +85,7 @@ describe('E2E CDS Context Tests', () => {
 
   describe('SAPContext DDLS', () => {
     it('returns CDS dependency context', async (ctx) => {
-      requireOrSkip(ctx, cdsName, 'No DDLS found on system — CDS tests skipped');
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
       const result = await callTool(client, 'SAPContext', {
         type: 'DDLS',
         name: cdsName,
@@ -97,7 +97,7 @@ describe('E2E CDS Context Tests', () => {
     });
 
     it('returns CDS dependency context with depth=2', async (ctx) => {
-      requireOrSkip(ctx, cdsName, 'No DDLS found on system — CDS tests skipped');
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
       const result = await callTool(client, 'SAPContext', {
         type: 'DDLS',
         name: cdsName,
