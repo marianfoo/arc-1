@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.6.1](https://github.com/marianfoo/arc-1/compare/v0.6.0...v0.6.1) (2026-04-10)
+
+
+### Features
+
+* add API release state tool for clean core compliance (FEAT-02) ([#77](https://github.com/marianfoo/arc-1/issues/77)) ([57e5eaf](https://github.com/marianfoo/arc-1/commit/57e5eafdc05067e7acf4052da4087f1ea0e2b3c6))
+* add BSP types and Atom XML parsers for UI5 filestore ([#61](https://github.com/marianfoo/arc-1/issues/61)) ([264af14](https://github.com/marianfoo/arc-1/commit/264af14d1dcfde49a64965cdf94baba6db8b3731))
+* add BSP_DEPLOY type for ABAP Repository OData queries ([#66](https://github.com/marianfoo/arc-1/issues/66)) ([90a2fc6](https://github.com/marianfoo/arc-1/commit/90a2fc6b419720b3844480f3fe943a55bd2e9ac1))
+* add class hierarchy to SAPNavigate and fix doc inaccuracies ([#70](https://github.com/marianfoo/arc-1/issues/70)) ([1831808](https://github.com/marianfoo/arc-1/commit/183180828a44b7fcc3dd7db7a9944785364f6050))
+* add publishServiceBinding and unpublishServiceBinding to devtools ([#62](https://github.com/marianfoo/arc-1/issues/62)) ([ced5639](https://github.com/marianfoo/arc-1/commit/ced56393c8d396f999ecba7c673abef45dbe9dc0))
+* add transliteration, field hints, cache indicators ([#64](https://github.com/marianfoo/arc-1/issues/64)) ([0ce3347](https://github.com/marianfoo/arc-1/commit/0ce334712e2a40b0571b86c2ee5e3b40a13b2329))
+* transport/write compatibility — CTS media types, 406/415 retry, corrNr auto-propagation ([#78](https://github.com/marianfoo/arc-1/issues/78)) ([42f0786](https://github.com/marianfoo/arc-1/commit/42f078658fe3b98143a2344e276d6d663c64f78c))
+
+
+### Bug Fixes
+
+* add pre-cleanup for stale E2E write object ([#76](https://github.com/marianfoo/arc-1/issues/76)) ([a5aa26f](https://github.com/marianfoo/arc-1/commit/a5aa26f07ee7dbde7c58b8e2f0e0a13bcdd1eb76))
+* correct Accept headers and entity expansion limit for ADT APIs ([#69](https://github.com/marianfoo/arc-1/issues/69)) ([ff96ea8](https://github.com/marianfoo/arc-1/commit/ff96ea852ccb9d3136cffa3b0e8205d6cb466799))
+* implement comprehensive ADT API audit reports ([#65](https://github.com/marianfoo/arc-1/issues/65)) ([9f210ab](https://github.com/marianfoo/arc-1/commit/9f210ab0f0365ea65dd9cfa261436678af299c26))
+* improve LLM guidance for SAPSearch empty results and SAPContext CDS usage ([#59](https://github.com/marianfoo/arc-1/issues/59)) ([1df565a](https://github.com/marianfoo/arc-1/commit/1df565a6d68a89fec9565fa865cded82fc8f426e))
+
+
+### Tests
+
+* reliability hardening, fixtures, skip policy, coverage, try/catch, CRUD lifecycle, telemetry ([#72](https://github.com/marianfoo/arc-1/issues/72)) ([be42998](https://github.com/marianfoo/arc-1/commit/be42998f19f731939ddffad59f76e89cf8c26f55))
+
 ## [0.6.0](https://github.com/marianfoo/arc-1/compare/v0.5.0...v0.6.0) (2026-04-08)
 
 
