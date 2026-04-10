@@ -159,11 +159,11 @@ Add an informational coverage step in the release workflow so publish runs inclu
 
 ### Task 5: Final Verification
 
-- [ ] Run full unit suite: `npm test` — all tests pass (including 6+ new coverage summary tests).
-- [ ] Run `npm run test:coverage` — completes successfully, produces `coverage/coverage-summary.json`.
-- [ ] Run `npm run test:coverage-report` — prints Markdown coverage table to stdout.
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Verify `coverage/` is in `.gitignore`.
-- [ ] Verify workflow steps use `continue-on-error: true`.
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Run full unit suite: `npm test` — all tests pass (including 6+ new coverage summary tests).
+- [x] Run `npm run test:coverage` — completes successfully, produces `coverage/coverage-summary.json`.
+- [x] Run `npm run test:coverage-report` — prints Markdown coverage table to stdout.
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Verify `coverage/` is in `.gitignore`.
+- [x] Verify workflow steps use `continue-on-error: true`.
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.

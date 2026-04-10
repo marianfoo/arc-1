@@ -75,4 +75,8 @@ function main() {
   }
 }
 
-main();
+// Only run when executed directly, not when imported
+import { pathToFileURL } from 'node:url';
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
