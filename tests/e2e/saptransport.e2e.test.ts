@@ -35,13 +35,21 @@ describe('E2E SAPTransport Tests', () => {
 
   describe('SAPTransport create + get', () => {
     let createdTransportId: string | undefined;
+    let transportsEnabled = true;
 
-    it('creates a transport and returns a valid transport ID', async () => {
+    it('creates a transport and returns a valid transport ID', async (ctx) => {
       const desc = `ARC-1 E2E test ${Date.now()}`;
       const result = await callTool(client, 'SAPTransport', {
         action: 'create',
         description: desc,
       });
+
+      // Skip gracefully when transports aren't enabled on the MCP server
+      if (result.isError && result.content?.[0]?.text?.includes('transports not enabled')) {
+        transportsEnabled = false;
+        return ctx.skip('Transports not enabled on MCP server (--enable-transports)');
+      }
+
       const text = expectToolSuccess(result);
 
       // Response should contain a transport ID (pattern: <SID>K<number>)
@@ -52,6 +60,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('retrieves the created transport with correct details', async (ctx) => {
+      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
       requireOrSkip(ctx, createdTransportId, 'No transport was created in previous test');
 
       const result = await callTool(client, 'SAPTransport', {
@@ -68,7 +77,8 @@ describe('E2E SAPTransport Tests', () => {
       expect(transport.status).toBeTruthy();
     });
 
-    it('returns not-found message for non-existent transport', async () => {
+    it('returns not-found message for non-existent transport', async (ctx) => {
+      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
       const result = await callTool(client, 'SAPTransport', {
         action: 'get',
         id: 'ZZZK999999',
@@ -80,7 +90,8 @@ describe('E2E SAPTransport Tests', () => {
       expect(text).not.toContain('<?xml');
     });
 
-    it('lists transports without errors', async () => {
+    it('lists transports without errors', async (ctx) => {
+      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
       const result = await callTool(client, 'SAPTransport', {
         action: 'list',
       });
@@ -114,7 +125,7 @@ describe('E2E SAPTransport Tests', () => {
       const result = await callTool(client, 'SAPTransport', {
         action: 'nonexistent',
       });
-      expectToolError(result, 'Unknown SAPTransport action');
+      expectToolError(result, 'Invalid arguments for SAPTransport');
     });
   });
 
