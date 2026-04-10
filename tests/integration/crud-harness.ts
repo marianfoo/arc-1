@@ -149,7 +149,6 @@ export function buildCreateXml(objectType: string, name: string, packageName: st
                      adtcore:name="${escapeXml(name)}"
                      adtcore:type="PROG/P"
                      adtcore:masterLanguage="EN"
-                     adtcore:masterSystem="H00"
                      adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(packageName)}"/>
 </program:abapProgram>`;
@@ -161,7 +160,6 @@ export function buildCreateXml(objectType: string, name: string, packageName: st
                  adtcore:name="${escapeXml(name)}"
                  adtcore:type="CLAS/OC"
                  adtcore:masterLanguage="EN"
-                 adtcore:masterSystem="H00"
                  adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(packageName)}"/>
 </class:abapClass>`;

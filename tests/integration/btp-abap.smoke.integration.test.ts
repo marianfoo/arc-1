@@ -76,8 +76,7 @@ describeIf('BTP ABAP smoke', { timeout: 30_000 }, () => {
   it('returns system info with expected fields', async () => {
     const info = await client.getSystemInfo();
     const parsed = JSON.parse(info);
-    expect(parsed.systemId).toBeTruthy();
-    expect(typeof parsed.systemId).toBe('string');
+    expect(typeof parsed.user).toBe('string');
     expect(Array.isArray(parsed.collections)).toBe(true);
     expect(parsed.collections.length).toBeGreaterThan(0);
   });

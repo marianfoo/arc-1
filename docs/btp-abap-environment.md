@@ -377,7 +377,7 @@ Smoke tests are deterministic, non-interactive tests that verify core BTP connec
 
 **What they test:**
 - Connectivity: establishes a connection and retrieves a CSRF token
-- System info shape: verifies expected fields (systemId, systemType) are returned
+- System info shape: verifies expected fields (user, collections) are returned
 - Released object read: reads a standard released class (e.g., `CL_ABAP_RANDOM`)
 - Released object search: searches for released objects and validates result shape
 - BTP-specific behavior: confirms classic programs (e.g., `RSHOWTIM`) are not accessible
