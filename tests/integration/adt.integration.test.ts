@@ -296,23 +296,9 @@ describeIf('ADT Integration Tests', () => {
     });
   });
 
-  // ─── CRUD Operations (in $TMP) ──────────────────────────────────
-
-  describe('CRUD operations', () => {
-    const testProgramName = `ZTEST_ARC1_${Date.now().toString(36).toUpperCase()}`;
-
-    it('creates, reads, and deletes a program in $TMP', async () => {
-      // This is a full lifecycle test — create → read → delete
-      const searchResults = await client.searchObject(testProgramName, 1);
-      if (searchResults.length > 0) {
-        return; // Skip if test program already exists
-      }
-
-      // Note: Full CRUD test requires the create/update/delete methods
-      // which are in src/adt/crud.ts. For now we verify the search works.
-      expect(searchResults).toHaveLength(0);
-    });
-  });
+  // CRUD lifecycle test moved to tests/integration/crud.lifecycle.integration.test.ts
+  // This section previously only verified search — full create/read/update/activate/delete
+  // lifecycle is now covered by the dedicated suite.
 
   // ─── Safety Checks ──────────────────────────────────────────────
 

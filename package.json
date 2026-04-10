@@ -37,6 +37,7 @@
     "test:integration:btp": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.integration.test.ts",
     "test:integration:btp:smoke": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.smoke.integration.test.ts",
     "test:integration:btp:extended": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.integration.test.ts",
+    "test:integration:crud": "vitest run --config vitest.integration.config.ts tests/integration/crud.lifecycle.integration.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:coverage-report": "node scripts/ci/coverage-summary.mjs",
     "lint": "biome check .",

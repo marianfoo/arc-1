@@ -170,19 +170,19 @@ Create a dedicated integration test that exercises the complete CRUD lifecycle a
 
 Replace the placeholder CRUD section with a redirect, and add targeted npm scripts.
 
-- [ ] In `tests/integration/adt.integration.test.ts`, replace the placeholder "CRUD operations" section at lines 299-309 with:
+- [x] In `tests/integration/adt.integration.test.ts`, replace the placeholder "CRUD operations" section at lines 299-309 with:
   ```typescript
   // CRUD lifecycle test moved to tests/integration/crud.lifecycle.integration.test.ts
   // This section previously only verified search — full create/read/update/activate/delete
   // lifecycle is now covered by the dedicated suite.
   ```
   Remove the placeholder `it(...)` block entirely.
-- [ ] Add npm script to `package.json`:
+- [x] Add npm script to `package.json`:
   ```json
   "test:integration:crud": "vitest run --config vitest.integration.config.ts tests/integration/crud.lifecycle.integration.test.ts"
   ```
-- [ ] In `.github/workflows/test.yml`, in the integration job, the existing `npm run test:integration` already includes all `tests/integration/**/*.test.ts` files, so the new lifecycle test will be picked up automatically. No workflow change needed for inclusion.
-- [ ] Run `npm test` — all tests must pass.
+- [x] In `.github/workflows/test.yml`, in the integration job, the existing `npm run test:integration` already includes all `tests/integration/**/*.test.ts` files, so the new lifecycle test will be picked up automatically. No workflow change needed for inclusion.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Final Verification
 
