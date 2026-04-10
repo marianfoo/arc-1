@@ -23,6 +23,12 @@ export default defineConfig({
             : '/tmp/arc1-e2e-logs/junit-results.xml',
         },
       ],
+      [
+        'json',
+        {
+          outputFile: process.env.E2E_LOG_DIR ? `${process.env.E2E_LOG_DIR}/e2e.json` : 'test-results/e2e.json',
+        },
+      ],
     ],
   },
 });

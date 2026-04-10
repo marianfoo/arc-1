@@ -64,12 +64,12 @@ Start by adding JSON reporters to all vitest configs, then create the parsing/as
 
 Add Vitest JSON reporter to all three test configs so each level produces machine-readable output alongside the existing console output.
 
-- [ ] In `vitest.config.ts`, add `reporters` array with `['default', ['json', { outputFile: 'test-results/unit.json' }]]` and set `outputFile` for the JSON reporter. Keep the existing `include`, `exclude`, `testTimeout`, and `isolate` settings unchanged.
-- [ ] In `vitest.integration.config.ts`, add `reporters` array with `['default', ['json', { outputFile: 'test-results/integration.json' }]]`. Keep the existing `include`, `testTimeout`, and `sequence` settings unchanged.
-- [ ] In `tests/e2e/vitest.e2e.config.ts`, add JSON reporter alongside the existing JUnit reporter: add `['json', { outputFile: process.env.E2E_LOG_DIR ? '${process.env.E2E_LOG_DIR}/e2e.json' : 'test-results/e2e.json' }]` to the existing `reporters` array (lines 16-26).
-- [ ] Add `test-results/` to `.gitignore` so generated JSON files are not committed.
-- [ ] Run `npm test` locally and verify `test-results/unit.json` is created with valid JSON containing `testResults` array.
-- [ ] Run `npm test` — all tests must pass.
+- [x] In `vitest.config.ts`, add `reporters` array with `['default', ['json', { outputFile: 'test-results/unit.json' }]]` and set `outputFile` for the JSON reporter. Keep the existing `include`, `exclude`, `testTimeout`, and `isolate` settings unchanged.
+- [x] In `vitest.integration.config.ts`, add `reporters` array with `['default', ['json', { outputFile: 'test-results/integration.json' }]]`. Keep the existing `include`, `testTimeout`, and `sequence` settings unchanged.
+- [x] In `tests/e2e/vitest.e2e.config.ts`, add JSON reporter alongside the existing JUnit reporter: add `['json', { outputFile: process.env.E2E_LOG_DIR ? '${process.env.E2E_LOG_DIR}/e2e.json' : 'test-results/e2e.json' }]` to the existing `reporters` array (lines 16-26).
+- [x] Add `test-results/` to `.gitignore` so generated JSON files are not committed.
+- [x] Run `npm test` locally and verify `test-results/unit.json` is created with valid JSON containing `testResults` array.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Create Reliability Collection Script
 

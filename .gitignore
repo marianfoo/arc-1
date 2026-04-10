@@ -84,6 +84,9 @@ node_modules/
 # Claude worktrees
 .claude/worktrees/
 
+# Test result artifacts
+test-results/
+
 # TypeScript / Node.js
 dist/
 node_modules/
