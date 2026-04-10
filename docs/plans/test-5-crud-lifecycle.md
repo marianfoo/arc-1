@@ -68,7 +68,7 @@ Build the harness first with unit tests (pure logic, no SAP dependency), then cr
 
 Build a harness that provides unique name generation, an object registry for cleanup tracking, and retry-aware delete logic.
 
-- [ ] Create `tests/integration/crud-harness.ts` with:
+- [x] Create `tests/integration/crud-harness.ts` with:
   - `generateUniqueName(prefix: string): string` — returns `${prefix}_${Date.now().toString(36).toUpperCase().slice(-6)}` (e.g., `ZARC1_IT_LK4F2A`). Name must be valid ABAP (max 30 chars, uppercase, alphanumeric + underscore).
   - `CrudRegistry` class:
     - `register(objectUrl: string, objectType: string, name: string): void` — tracks created objects.
@@ -79,7 +79,7 @@ Build a harness that provides unique name generation, an object registry for cle
   - `cleanupAll(http: AdtHttpClient, safety: SafetyConfig, registry: CrudRegistry): Promise<{ cleaned: number; failed: Array<{ name: string; error: string }> }>` — iterates registry, attempts retryDelete for each, returns cleanup report.
   - `buildCreateXml(objectType: string, name: string, packageName: string, description: string): string` — generates ADT-compatible creation XML. This can be extracted from the existing pattern in `adt.integration.test.ts` lines 571-593.
   - All functions should be pure or take explicit dependencies (no global state).
-- [ ] Add unit tests (~10 tests) in `tests/unit/integration/crud-harness.test.ts`:
+- [x] Add unit tests (~10 tests) in `tests/unit/integration/crud-harness.test.ts`:
   - `generateUniqueName` produces valid ABAP names (uppercase, <= 30 chars).
   - `generateUniqueName` produces different names on sequential calls.
   - `CrudRegistry.register` adds entries.
@@ -91,7 +91,7 @@ Build a harness that provides unique name generation, an object registry for cle
   - `retryDelete` returns failure after max retries.
   - `cleanupAll` reports successes and failures.
   - `buildCreateXml` produces valid XML with correct name and package.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Implement Full CRUD Lifecycle Test
 
