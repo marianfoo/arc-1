@@ -70,13 +70,13 @@ Create the error assertion helpers first with unit tests, then refactor integrat
 
 Create shared helpers for asserting expected SAP error shapes in test catch blocks.
 
-- [ ] Create `tests/helpers/expected-error.ts` with:
+- [x] Create `tests/helpers/expected-error.ts` with:
   - `expectSapFailureClass(error: unknown, allowedStatuses: number[], allowedPatterns?: RegExp[]): void` — asserts the error is an instance of `Error`, then checks if `error.message` contains one of the allowed HTTP status codes (e.g., 403, 404, 500) or matches one of the allowed patterns. Throws a descriptive assertion error if neither condition is met. Example usage: `expectSapFailureClass(err, [404], [/not found/i])`.
   - `isSapError(error: unknown): error is Error & { message: string }` — type guard for SAP errors.
   - `expectSapErrorContains(error: unknown, substring: string): void` — asserts error message contains a specific substring. For simpler cases where status code matching is overkill.
   - `SapFailureCategory` type: `'not-found' | 'forbidden' | 'not-released' | 'timeout' | 'connectivity' | 'unknown'`.
   - `classifySapError(error: unknown): SapFailureCategory` — classifies error by status code or message pattern. 404 → 'not-found', 403 → 'forbidden', 'not released' → 'not-released', timeout/ECONNREFUSED → 'connectivity'.
-- [ ] Add unit tests (~12 tests) in `tests/unit/helpers/expected-error.test.ts`:
+- [x] Add unit tests (~12 tests) in `tests/unit/helpers/expected-error.test.ts`:
   - `expectSapFailureClass` passes with matching status code in message (e.g., "Request failed with status 404").
   - `expectSapFailureClass` passes with matching pattern.
   - `expectSapFailureClass` throws when status code doesn't match.
@@ -89,7 +89,7 @@ Create shared helpers for asserting expected SAP error shapes in test catch bloc
   - `classifySapError` classifies 404 as 'not-found'.
   - `classifySapError` classifies 403 as 'forbidden'.
   - `classifySapError` classifies unknown errors as 'unknown'.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Refactor Low-Signal Catches in ADT Integration Tests
 
