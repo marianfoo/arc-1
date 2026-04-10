@@ -152,7 +152,7 @@ Full reference: **[tools.md](tools.md)**
 
 - **1,300+ unit tests** run locally without SAP access (`npm test`)
 - **Integration + E2E lanes** run on `main` pushes and internal PRs in GitHub Actions
-- **BTP smoke tests** run on weekday schedule (`.github/workflows/btp-smoke.yml`)
+- **BTP tests** are local-only (`npm run test:integration:btp:smoke`, `npm run test:integration:btp:extended`)
 - **Reliability telemetry + coverage** are collected as informational CI signals
 
 ## Admin Controls (Safety)

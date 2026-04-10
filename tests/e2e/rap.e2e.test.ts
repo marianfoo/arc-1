@@ -152,15 +152,11 @@ describe('E2E RAP Completeness Tests', () => {
   });
 
   // ── Write + Activate Lifecycle ────────────────────────────────────
-  // NOTE: This test is intentionally skipped for now.
-  // Reason: SAPWrite create for PROG still sends a generic objectReferences XML
-  // on some paths; affected SAP systems expect program-specific abapProgram XML
-  // and reject creation. Keep skipped until create payload handling is unified.
 
   describe('SAPWrite + SAPActivate lifecycle', () => {
     const WRITE_NAME = 'ZARC1_E2E_WRITE';
 
-    it.skip('creates a program, updates source, activates, reads back, deletes', async () => {
+    it('creates a program, updates source, activates, reads back, deletes', async () => {
       // Step 1: Create the transient program
       const createResult = await callTool(client, 'SAPWrite', {
         action: 'create',

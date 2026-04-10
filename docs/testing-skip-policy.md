@@ -6,17 +6,15 @@ This document defines ARC-1's policy for skipping tests. Every skip must be expl
 
 These are the accepted reasons for a test to skip at runtime:
 
-### Missing SAP Credentials
+### Missing SAP Credentials (Fail Fast, No Skip)
 
-Integration and E2E tests require a live SAP system. When credentials are not configured, the entire `describe` block is skipped at module level using `describeIf`.
+Integration and E2E tests require a live SAP system. Missing credentials are treated as test setup errors and should fail immediately, not skip.
 
 ```typescript
-import { hasSapCredentials } from './helpers.js';
+import { requireSapCredentials } from './helpers.js';
 
-const describeIf = hasSapCredentials() ? describe : describe.skip;
-
-describeIf('ADT integration tests', () => {
-  // all tests in this block are skipped when credentials are absent
+beforeAll(() => {
+  requireSapCredentials();
 });
 ```
 
@@ -144,7 +142,7 @@ The shared helper at `tests/helpers/skip-policy.ts` exports these standard const
 
 | Constant | Value | When to use |
 |----------|-------|-------------|
-| `NO_CREDENTIALS` | SAP credentials not configured | Suite-level skip when `TEST_SAP_URL` is absent |
+| `NO_CREDENTIALS` | SAP credentials not configured | Per-test runtime prerequisite (not suite-level gating) |
 | `NO_DDLS` | No DDLS object found on system | CDS/DDLS tests when no view is available |
 | `NO_DUMPS` | No short dumps found on system | Diagnostics tests on clean systems |
 

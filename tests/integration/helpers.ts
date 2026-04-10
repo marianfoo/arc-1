@@ -2,7 +2,7 @@
  * Integration test helpers for ARC-1.
  *
  * Integration tests run against a live SAP system.
- * They are SKIPPED automatically when TEST_SAP_URL is not set.
+ * Missing SAP credentials are treated as a test setup error (hard fail).
  *
  * Credentials (resolved in priority order):
  *   TEST_SAP_URL      > SAP_URL
@@ -28,6 +28,22 @@ export function hasSapCredentials(): boolean {
   return !!(process.env.TEST_SAP_URL || process.env.SAP_URL);
 }
 
+/** Assert SAP credentials are configured; throw with actionable setup message if not. */
+export function requireSapCredentials(): void {
+  const url = process.env.TEST_SAP_URL || process.env.SAP_URL;
+  const user = process.env.TEST_SAP_USER || process.env.SAP_USER;
+  const password = process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD;
+
+  if (!url || !user || !password) {
+    throw new Error(
+      [
+        'Integration test setup error: SAP credentials are required.',
+        'Set TEST_SAP_URL, TEST_SAP_USER, TEST_SAP_PASSWORD (or SAP_URL, SAP_USER, SAP_PASSWORD).',
+      ].join(' '),
+    );
+  }
+}
+
 /** Check if BTP service key is configured (file path or inline JSON) */
 export function hasBtpCredentials(): boolean {
   return !!(
@@ -42,6 +58,8 @@ export const SKIP_REASON = 'No SAP credentials configured (set TEST_SAP_URL or S
 
 /** Create an ADT client configured for integration tests */
 export function getTestClient(): AdtClient {
+  requireSapCredentials();
+
   const url = process.env.TEST_SAP_URL || process.env.SAP_URL || '';
   const username = process.env.TEST_SAP_USER || process.env.SAP_USER || '';
   const password = process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '';

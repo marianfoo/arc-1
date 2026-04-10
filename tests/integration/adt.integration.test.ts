@@ -1,8 +1,8 @@
 /**
  * Integration tests for ARC-1 ADT client.
  *
- * These tests run against a live SAP system and are automatically
- * SKIPPED when TEST_SAP_URL is not configured.
+ * These tests run against a live SAP system.
+ * Missing credentials are treated as setup errors and fail the suite.
  *
  * Run: npm run test:integration
  */
@@ -13,15 +13,13 @@ import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
-import { getTestClient, hasSapCredentials } from './helpers.js';
+import { getTestClient, requireSapCredentials } from './helpers.js';
 
-// Skip entire suite if no SAP credentials
-const describeIf = hasSapCredentials() ? describe : describe.skip;
-
-describeIf('ADT Integration Tests', () => {
+describe('ADT Integration Tests', () => {
   let client: AdtClient;
 
   beforeAll(() => {
+    requireSapCredentials();
     client = getTestClient();
   });
 

@@ -2,7 +2,7 @@
  * Integration tests for SAPContext dependency compression.
  *
  * These tests run against a live SAP system (A4H at a4h.marianzeis.de:50000)
- * and are automatically SKIPPED when TEST_SAP_URL is not configured.
+ * and fail fast when SAP credentials are missing.
  *
  * Test objects:
  * - /DMO/CL_FLIGHT_LEGACY: Rich class with interface + exception deps
@@ -20,9 +20,7 @@ import { extractContract } from '../../src/context/contract.js';
 import { extractDependencies } from '../../src/context/deps.js';
 import { extractMethod, listMethods, spliceMethod } from '../../src/context/method-surgery.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
-import { getTestClient, hasSapCredentials } from './helpers.js';
-
-const describeIf = hasSapCredentials() ? describe : describe.skip;
+import { getTestClient, requireSapCredentials } from './helpers.js';
 
 /** Well-known CDS views that may exist on SAP demo systems */
 const DDLS_CANDIDATES = ['/DMO/I_TRAVEL', '/DMO/I_FLIGHT', '/DMO/I_BOOKING', 'I_LANGUAGE', 'SEPM_I_SALESORDER'];
@@ -56,10 +54,11 @@ async function findAnyDdls(client: AdtClient): Promise<{ name: string; source: s
   return undefined;
 }
 
-describeIf('SAPContext Integration Tests', () => {
+describe('SAPContext Integration Tests', () => {
   let client: AdtClient;
 
   beforeAll(() => {
+    requireSapCredentials();
     client = getTestClient();
   });
 

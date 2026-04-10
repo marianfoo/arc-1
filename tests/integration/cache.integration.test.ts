@@ -1,8 +1,8 @@
 /**
  * Integration tests for the object caching layer.
  *
- * These tests run against a live SAP system and are automatically
- * SKIPPED when TEST_SAP_URL is not configured.
+ * These tests run against a live SAP system.
+ * Missing credentials are treated as setup errors and fail the suite.
  *
  * What is tested:
  * - Source cache hit/miss/invalidation (MemoryCache and SqliteCache)
@@ -28,9 +28,7 @@ import { SqliteCache } from '../../src/cache/sqlite.js';
 import { runWarmup } from '../../src/cache/warmup.js';
 import { handleToolCall } from '../../src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../src/server/types.js';
-import { getTestClient, hasSapCredentials } from './helpers.js';
-
-const describeIf = hasSapCredentials() ? describe : describe.skip;
+import { getTestClient, requireSapCredentials } from './helpers.js';
 
 /** Known Z class on this SAP system — small, fast to fetch */
 const TEST_CLASS = 'ZCL_MCPT_26256';
@@ -39,10 +37,11 @@ const TEST_CLASS_WITH_DEPS = 'ZCL_DEMO_D_CALC_AMOUNT';
 /** Package that contains the test classes with deps */
 const _TEST_PACKAGE = '$DEMO_SOI_DRAFT';
 
-describeIf('Cache Integration Tests', () => {
+describe('Cache Integration Tests', () => {
   let client: AdtClient;
 
   beforeAll(() => {
+    requireSapCredentials();
     client = getTestClient();
   });
 

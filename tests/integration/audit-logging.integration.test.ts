@@ -4,7 +4,7 @@
  * Tests that real ADT operations produce correctly structured audit events
  * including HTTP request logs with real status codes and durations.
  *
- * SKIPPED when TEST_SAP_URL is not configured.
+ * Missing credentials are treated as setup errors and fail the suite.
  */
 
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
@@ -17,11 +17,9 @@ import type { AuditEvent } from '../../src/server/audit.js';
 import { logger } from '../../src/server/logger.js';
 import { FileSink } from '../../src/server/sinks/file.js';
 import { DEFAULT_CONFIG } from '../../src/server/types.js';
-import { getTestClient, hasSapCredentials } from './helpers.js';
+import { getTestClient, requireSapCredentials } from './helpers.js';
 
-const describeIf = hasSapCredentials() ? describe : describe.skip;
-
-describeIf('Audit Logging Integration', () => {
+describe('Audit Logging Integration', () => {
   let client: AdtClient;
   const events: AuditEvent[] = [];
   const captureSink = { write: (e: AuditEvent) => events.push(e) };
@@ -29,6 +27,7 @@ describeIf('Audit Logging Integration', () => {
   let fileSink: FileSink;
 
   beforeAll(() => {
+    requireSapCredentials();
     client = getTestClient();
     logger.addSink(captureSink);
     fileSink = new FileSink(logFile);

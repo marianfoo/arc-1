@@ -433,18 +433,7 @@ Auth and connectivity failures are expected with free-tier instances. Assertion 
 
 - Tests assume a BTP ABAP Environment with standard released objects (e.g., `CL_ABAP_RANDOM`, `IF_ABAP_RANDOM`)
 - Free-tier limitations: instances stop nightly, expire after 90 days, one instance per global account
-- **Recommended for reliable CI:** Use a paid test tenant instead of free tier to avoid nightly stops and expiry
-
-### Scheduled Workflow
-
-The `btp-smoke.yml` GitHub Actions workflow runs BTP smoke tests automatically:
-
-- **Schedule:** Weekdays at 08:00 UTC (after BTP free tier instances typically restart)
-- **Manual trigger:** Available via `workflow_dispatch` in the Actions tab
-- **Results:** Test output is uploaded as artifacts with 30-day retention
-- **Failure summary:** The workflow classifies failures and posts a summary to the GitHub Actions step summary
-
-The workflow is informational — failures do not block other CI pipelines.
+- BTP test execution is local-only by design in this project
 
 ## Troubleshooting
 

@@ -4,7 +4,7 @@
  * Exercises the full create -> read -> update -> activate -> delete -> verify-deleted
  * roundtrip against a live SAP system.
  *
- * Skipped automatically when TEST_SAP_URL is not configured.
+ * Missing credentials are treated as setup errors and fail the suite.
  *
  * Run: npm run test:integration:crud
  */
@@ -14,15 +14,14 @@ import type { AdtClient } from '../../src/adt/client.js';
 import { createObject, deleteObject, lockObject, safeUpdateSource } from '../../src/adt/crud.js';
 import { activate } from '../../src/adt/devtools.js';
 import { buildCreateXml, CrudRegistry, cleanupAll, generateUniqueName } from './crud-harness.js';
-import { getTestClient, hasSapCredentials } from './helpers.js';
+import { getTestClient, requireSapCredentials } from './helpers.js';
 
-const describeIf = hasSapCredentials() ? describe : describe.skip;
-
-describeIf('CRUD lifecycle', () => {
+describe('CRUD lifecycle', () => {
   let client: AdtClient;
   const registry = new CrudRegistry();
 
   beforeAll(() => {
+    requireSapCredentials();
     client = getTestClient();
   });
 
