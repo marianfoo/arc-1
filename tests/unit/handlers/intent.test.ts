@@ -2034,6 +2034,101 @@ ENDCLASS.`;
     });
   });
 
+  // ─── Transport/corrNr error hints ──────────────────────────────────
+
+  describe('transport error hints', () => {
+    it('corrNr-missing error includes transport hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Correction number is required for this package',
+          400,
+          '/sap/bc/adt/programs/programs/ZPROG/source/main',
+          'correction number required',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('transport/correction number is required');
+      expect(result.content[0]?.text).toContain('SE09');
+    });
+
+    it('transport not found error includes SE09 hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Transport does not exist',
+          404,
+          '/sap/bc/adt/cts/transportrequests/NPLK900042',
+          'E070 transport does not exist',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      // 404 with transport body should match transport hint, not generic not-found
+      // (not-found check happens first, so this gets the generic not-found hint)
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Hint');
+    });
+
+    it('transport authorization error includes S_TRANSPRT hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'No authorization for transport operations',
+          403,
+          '/sap/bc/adt/cts/transportrequests',
+          'S_TRANSPRT no authorization',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      // 403 hits the auth check first, which is fine — transport auth still gets a hint
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Hint');
+    });
+
+    it('package transport layer mismatch includes package hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Package has no transport layer',
+          400,
+          '/sap/bc/adt/programs/programs/ZPROG',
+          'package ZTEST no transport layer assigned',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('transport layer');
+      expect(result.content[0]?.text).toContain('$TMP');
+    });
+
+    it('non-transport errors remain unchanged', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError('Some generic server error', 500, '/sap/bc/adt/programs/programs/ZPROG', 'internal error'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      expect(result.isError).toBe(true);
+      // No hint appended for generic 500 errors
+      expect(result.content[0]?.text).not.toContain('Hint');
+    });
+  });
+
   // ─── Issue 2: FUNC auto-resolve group ───────────────────────────────
 
   describe('FUNC auto-resolve group', () => {

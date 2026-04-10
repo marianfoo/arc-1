@@ -172,6 +172,11 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     if (err.isUnauthorized || err.isForbidden) {
       return `${message}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
     }
+    // Transport / corrNr specific hints
+    const transportHint = getTransportHint(err);
+    if (transportHint) {
+      return `${message}\n\nHint: ${transportHint}`;
+    }
   }
 
   if (err instanceof AdtNetworkError) {
@@ -179,6 +184,52 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
   }
 
   return message;
+}
+
+/** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
+function getTransportHint(err: AdtApiError): string | undefined {
+  const body = (err.responseBody ?? '').toLowerCase();
+  const msg = err.message.toLowerCase();
+  const combined = `${msg} ${body}`;
+
+  // Missing or invalid transport/correction number
+  if (
+    combined.includes('correction number') ||
+    combined.includes('corrnr') ||
+    (combined.includes('transport request') &&
+      (combined.includes('missing') || combined.includes('required') || combined.includes('invalid')))
+  ) {
+    return 'A transport/correction number is required but was not provided or is invalid. Provide an explicit "transport" parameter with a valid transport request ID, or check SE09 in SAP GUI that an open transport exists for your user and target package.';
+  }
+
+  // Transport not found or not modifiable
+  if (
+    combined.includes('e070') ||
+    (combined.includes('transport') &&
+      (combined.includes('not found') || combined.includes('does not exist') || combined.includes('not modifiable')))
+  ) {
+    return 'The specified transport request was not found or is not modifiable. Verify the transport ID in SE09, ensure it is not yet released, and that it belongs to the correct user and target package.';
+  }
+
+  // Package / transport layer mismatch
+  if (
+    combined.includes('transport layer') ||
+    (combined.includes('package') &&
+      combined.includes('transport') &&
+      (combined.includes('mismatch') || combined.includes('not assigned') || combined.includes('no transport layer')))
+  ) {
+    return 'The target package has no transport layer or a transport layer mismatch. Check that the package is configured for transport in SE80/TDEVC, or use a local package ($TMP) if no transport is needed.';
+  }
+
+  // Authorization for transport operations
+  if (
+    combined.includes('s_transprt') ||
+    (combined.includes('transport') && (combined.includes('no authorization') || combined.includes('not authorized')))
+  ) {
+    return 'The SAP user lacks transport authorization (S_TRANSPRT). Contact your SAP basis administrator to grant the required transport permissions.';
+  }
+
+  return undefined;
 }
 
 function classifyError(err: unknown): string {

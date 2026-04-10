@@ -190,11 +190,11 @@ Transport compatibility issues recur across endpoints and SAP versions. Implemen
 
 When fallback still cannot resolve a write (e.g., transport not assignable, missing authorization, package mismatch), the error should guide the operator immediately instead of returning generic ADT failures.
 
-- [ ] Extend `formatErrorForLLM()` (`src/handlers/intent.ts`) to detect common transport/corrNr failure signatures and add specific remediation hints (`SE09` transport check, package/allowlist reminder, provide explicit `transport`).
-- [ ] Keep existing not-found/auth/network hints intact and non-duplicative.
-- [ ] Ensure hints never leak raw XML or internal stack traces.
-- [ ] Add unit tests (~4 tests): corrNr-missing hint, transport authorization hint, and non-transport errors remain unchanged.
-- [ ] Run `npm test -- tests/unit/handlers/intent.test.ts`.
+- [x] Extend `formatErrorForLLM()` (`src/handlers/intent.ts`) to detect common transport/corrNr failure signatures and add specific remediation hints (`SE09` transport check, package/allowlist reminder, provide explicit `transport`).
+- [x] Keep existing not-found/auth/network hints intact and non-duplicative.
+- [x] Ensure hints never leak raw XML or internal stack traces.
+- [x] Add unit tests (~4 tests): corrNr-missing hint, transport authorization hint, and non-transport errors remain unchanged.
+- [x] Run `npm test -- tests/unit/handlers/intent.test.ts`.
 
 ### Task 5: Add Live Integration Tests for CTS Compatibility and CorrNr Propagation
 
