@@ -208,12 +208,12 @@ This task validates the exact real-system scenarios reproduced on A4H: media-typ
 
 **Use PR #72 test infrastructure:** `requireOrSkip()` for env-gated tests, `expectSapFailureClass()` for expected SAP errors, `CrudRegistry` + `retryDelete()` for cleanup.
 
-- [ ] Add env-gated integration scenario for transportable package writes (skip when `TEST_TRANSPORT_PACKAGE` is unset, using `requireOrSkip(ctx, process.env.TEST_TRANSPORT_PACKAGE, SkipReason.NO_TRANSPORT_PACKAGE)`).
-- [ ] Add integration test for `getTransport` returning expected transport details with corrected Accept behavior.
-- [ ] Add integration test for `createTransport` succeeding with corrected payload namespace/media type and returning transport id.
-- [ ] Add integration test for create+update in transportable package where update succeeds without caller-supplied transport due to lock `corrNr` propagation.
-- [ ] Add deterministic cleanup strategy using `CrudRegistry` and `retryDelete()` from `tests/integration/crud-harness.ts`; never release created test transports automatically.
-- [ ] Run `npm run test:integration -- tests/integration/adt.integration.test.ts` and the env-gated variant with `TEST_TRANSPORT_PACKAGE=Z_LLM_TEST_PACKAGE`.
+- [x] Add env-gated integration scenario for transportable package writes (skip when `TEST_TRANSPORT_PACKAGE` is unset, using `requireOrSkip(ctx, process.env.TEST_TRANSPORT_PACKAGE, SkipReason.NO_TRANSPORT_PACKAGE)`).
+- [x] Add integration test for `getTransport` returning expected transport details with corrected Accept behavior.
+- [x] Add integration test for `createTransport` succeeding with corrected payload namespace/media type and returning transport id.
+- [x] Add integration test for create+update in transportable package where update succeeds without caller-supplied transport due to lock `corrNr` propagation.
+- [x] Add deterministic cleanup strategy using `CrudRegistry` and `retryDelete()` from `tests/integration/crud-harness.ts`; never release created test transports automatically.
+- [x] Run `npm run test:integration -- tests/integration/adt.integration.test.ts` and the env-gated variant with `TEST_TRANSPORT_PACKAGE=Z_LLM_TEST_PACKAGE`.
 
 ### Task 6: Add MCP E2E Coverage for SAPTransport + Transportable SAPWrite
 

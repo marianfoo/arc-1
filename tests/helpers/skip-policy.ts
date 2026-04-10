@@ -11,6 +11,7 @@ export const SkipReason = {
   NO_CREDENTIALS: 'SAP credentials not configured',
   NO_DDLS: 'No DDLS object found on system',
   NO_DUMPS: 'No short dumps found on system',
+  NO_TRANSPORT_PACKAGE: 'TEST_TRANSPORT_PACKAGE not configured (transportable package required)',
 } as const;
 
 /**
