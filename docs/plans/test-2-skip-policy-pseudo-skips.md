@@ -160,14 +160,14 @@ Update the workflow so internal pushes to `main` also run integration and E2E te
 
 Document the skip taxonomy, valid vs problematic patterns, and expectations for new tests.
 
-- [ ] Create `docs/testing-skip-policy.md` with:
+- [x] Create `docs/testing-skip-policy.md` with:
   - **Valid Skip Reasons** section: missing credentials (SAP/BTP), missing fixture on shared system, backend version doesn't support feature, optional custom objects not deployed. Each with code example from the codebase.
   - **Problematic Patterns** section (DO NOT): early return without skip (`if (!x) return;`), catch-and-continue without assertion, permanent `it.skip` without issue tracking, workflow-level skip hiding runtime regressions.
   - **How to Skip Correctly** section: use `requireOrSkip(ctx, value, reason)` for precondition checks, use `ctx.skip('reason')` for runtime decisions, always include actionable reason text.
   - **Skip Reason Constants** section: list the `SkipReason` constants from `tests/helpers/skip-policy.ts` and when to use each.
   - **CI Policy** section: internal PRs and main pushes run all suites; external fork PRs skip integration/E2E (no secrets); all skips are visible in telemetry reports.
   - **Reference Patterns** section: link to `tests/e2e/navigate.e2e.test.ts` as the canonical example of correct skip usage.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 6: Final Verification
 
