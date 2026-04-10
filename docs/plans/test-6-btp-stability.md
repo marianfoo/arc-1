@@ -158,7 +158,7 @@ Add targeted npm scripts for smoke and extended BTP tests, and mark the existing
 
 Create a GitHub Actions workflow that runs BTP smoke tests on a schedule and manual dispatch, with failure taxonomy reporting.
 
-- [ ] Create `.github/workflows/btp-smoke.yml`:
+- [x] Create `.github/workflows/btp-smoke.yml`:
   ```yaml
   name: BTP Smoke Tests
 
@@ -207,7 +207,7 @@ Create a GitHub Actions workflow that runs BTP smoke tests on a schedule and man
               echo "- **assertion**: Test contract violation (potential regression)" >> $GITHUB_STEP_SUMMARY
             fi
   ```
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Update BTP Documentation
 
