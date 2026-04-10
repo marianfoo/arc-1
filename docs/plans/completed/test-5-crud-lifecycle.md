@@ -186,9 +186,9 @@ Replace the placeholder CRUD section with a redirect, and add targeted npm scrip
 
 ### Task 4: Final Verification
 
-- [ ] Run full unit suite: `npm test` — all tests pass (including 10+ new harness tests).
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Verify `npm run test:integration:crud` command is valid (will skip if no SAP credentials).
-- [ ] Verify the placeholder in `adt.integration.test.ts` is removed (no more misleading "CRUD operations" test).
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Run full unit suite: `npm test` — all tests pass (including 10+ new harness tests).
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Verify `npm run test:integration:crud` command is valid (will skip if no SAP credentials).
+- [x] Verify the placeholder in `adt.integration.test.ts` is removed (no more misleading "CRUD operations" test).
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.
