@@ -100,14 +100,14 @@ Build a harness that provides unique name generation, an object registry for cle
 
 Create a dedicated integration test that exercises the complete CRUD lifecycle against a live SAP system.
 
-- [ ] Create `tests/integration/crud.lifecycle.integration.test.ts`:
+- [x] Create `tests/integration/crud.lifecycle.integration.test.ts`:
   - Import `getTestClient`, `hasSapCredentials` from `./helpers.js`.
   - Import CRUD functions from `../../src/adt/crud.js` (`lockObject`, `unlockObject`, `createObject`, `updateSource`, `deleteObject`).
   - Import `activateObject` from `../../src/adt/devtools.js`.
   - Import `CrudRegistry`, `generateUniqueName`, `cleanupAll`, `buildCreateXml` from `./crud-harness.js`.
   - Top-level gate: `const describeIf = hasSapCredentials() ? describe : describe.skip;`.
   - Create a `CrudRegistry` instance for tracking.
-- [ ] Implement the lifecycle test inside `describeIf('CRUD lifecycle', ...)`:
+- [x] Implement the lifecycle test inside `describeIf('CRUD lifecycle', ...)`:
   ```
   let testName: string;
   const registry = new CrudRegistry();
@@ -157,9 +157,9 @@ Create a dedicated integration test that exercises the complete CRUD lifecycle a
   });
   ```
   Adjust the exact API calls based on how `src/adt/crud.ts` and `src/adt/client.ts` work. The test client from `getTestClient()` has an unrestricted safety config.
-- [ ] Set test timeout to 60s (CRUD lifecycle involves multiple network roundtrips).
-- [ ] Run `npm run test:integration` if SAP credentials are available — lifecycle test should execute end-to-end.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Set test timeout to 60s (CRUD lifecycle involves multiple network roundtrips).
+- [x] Run `npm run test:integration` if SAP credentials are available — lifecycle test should execute end-to-end.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Update Placeholder and Add npm Scripts
 
