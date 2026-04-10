@@ -24,7 +24,6 @@ import {
   parseServiceKey,
 } from '../../src/adt/oauth.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
-import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { hasBtpCredentials } from './helpers.js';
 
 // Load .env before anything else
@@ -103,13 +102,7 @@ describeIf('BTP ABAP smoke', { timeout: 30_000 }, () => {
   // ─── BTP-Specific Behavior ─────────────────────────────────────
 
   it('classic programs are not accessible on BTP', async () => {
-    try {
-      const source = await client.getProgram('RSHOWTIM');
-      // If it unexpectedly succeeds, verify it returns valid source
-      expect(typeof source).toBe('string');
-    } catch (err) {
-      // Expected: 404 or not found — BTP doesn't have classic programs
-      expectSapFailureClass(err, [403, 404], [/not found/i, /not available/i]);
-    }
+    // BTP ABAP should not have classic SE38 programs
+    await expect(client.getProgram('RSHOWTIM')).rejects.toThrow(/403|404|not found|not available/i);
   });
 });

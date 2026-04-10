@@ -1,6 +1,6 @@
 import type { TaskContext } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
-import { requireOrSkip, SkipReason, skipWithReason } from '../../helpers/skip-policy.js';
+import { requireOrSkip } from '../../helpers/skip-policy.js';
 
 /** Create a mock TaskContext with a spy on skip. */
 function mockCtx(): TaskContext {
@@ -8,20 +8,6 @@ function mockCtx(): TaskContext {
 }
 
 describe('skip-policy', () => {
-  describe('skipWithReason', () => {
-    it('calls ctx.skip with the reason text', () => {
-      const ctx = mockCtx();
-      skipWithReason(ctx, 'No SAP system');
-      expect(ctx.skip).toHaveBeenCalledWith('No SAP system');
-    });
-
-    it('calls ctx.skip even with an empty string reason', () => {
-      const ctx = mockCtx();
-      skipWithReason(ctx, '');
-      expect(ctx.skip).toHaveBeenCalledWith('');
-    });
-  });
-
   describe('requireOrSkip', () => {
     it('does not skip when value is a non-empty string', () => {
       const ctx = mockCtx();
@@ -68,28 +54,6 @@ describe('skip-policy', () => {
       // This assignment would fail to compile if type narrowing didn't work.
       const narrowed: string = value;
       expect(narrowed).toBe('ZDDLS_TEST');
-    });
-  });
-
-  describe('SkipReason constants', () => {
-    it('has expected constant values', () => {
-      expect(SkipReason.NO_CREDENTIALS).toBe('SAP credentials not configured');
-      expect(SkipReason.NO_FIXTURE).toBe('Required test fixture not available on system');
-      expect(SkipReason.BACKEND_UNSUPPORTED).toBe('Backend does not support this feature');
-      expect(SkipReason.NO_DDLS).toBe('No DDLS object found on system');
-      expect(SkipReason.NO_DUMPS).toBe('No short dumps found on system');
-      expect(SkipReason.NO_CUSTOM_OBJECTS).toBe('Custom Z objects not deployed on system');
-    });
-
-    it('has all six expected keys', () => {
-      const keys = Object.keys(SkipReason);
-      expect(keys).toHaveLength(6);
-      expect(keys).toContain('NO_CREDENTIALS');
-      expect(keys).toContain('NO_FIXTURE');
-      expect(keys).toContain('BACKEND_UNSUPPORTED');
-      expect(keys).toContain('NO_DDLS');
-      expect(keys).toContain('NO_DUMPS');
-      expect(keys).toContain('NO_CUSTOM_OBJECTS');
     });
   });
 });

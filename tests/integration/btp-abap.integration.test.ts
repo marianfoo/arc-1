@@ -29,14 +29,10 @@ import { AdtClient } from '../../src/adt/client.js';
 import { createBearerTokenProvider, loadServiceKeyFile } from '../../src/adt/oauth.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
+import { hasBtpCredentials } from './helpers.js';
 
 // Load .env before anything else
 config();
-
-/** Check if BTP service key is configured */
-function hasBtpCredentials(): boolean {
-  return !!(process.env.TEST_BTP_SERVICE_KEY_FILE || process.env.SAP_BTP_SERVICE_KEY_FILE);
-}
 
 /** Create an ADT client configured for BTP ABAP */
 function getBtpTestClient(): AdtClient {
@@ -190,14 +186,7 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
   describe('BTP restricted ABAP behavior', () => {
     it('classic programs like RSHOWTIM are NOT available', async () => {
       // BTP ABAP doesn't have classic SE38 programs
-      try {
-        const source = await client.getProgram('RSHOWTIM');
-        // If it unexpectedly succeeds, verify it returns valid source
-        expect(typeof source).toBe('string');
-      } catch (err) {
-        // Expected: 404 or not found — BTP doesn't have classic programs
-        expectSapFailureClass(err, [403, 404], [/not found/i, /not available/i, /not released/i]);
-      }
+      await expect(client.getProgram('RSHOWTIM')).rejects.toThrow(/403|404|not found|not available|not released/i);
     });
 
     it('classic function modules may not be available', async () => {

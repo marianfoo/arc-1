@@ -46,13 +46,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
-
-      # Coverage — informational only, does not block release
-      - name: Run coverage (informational)
+      # Unit tests with coverage — informational coverage does not block release
+      - name: Run tests (with coverage)
         run: npm run test:coverage
-        continue-on-error: true
 
       - name: Coverage summary
         if: always()

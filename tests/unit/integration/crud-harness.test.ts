@@ -19,15 +19,14 @@ describe('generateUniqueName', () => {
   });
 
   it('produces different names on sequential calls', () => {
+    vi.useFakeTimers({ now: 1_000_000 });
     const name1 = generateUniqueName('ZARC1_IT');
-    // Advance time to ensure different timestamp
-    vi.useFakeTimers();
-    vi.advanceTimersByTime(1);
+    vi.advanceTimersByTime(100);
     const name2 = generateUniqueName('ZARC1_IT');
     vi.useRealTimers();
-    // Names may differ (timestamp-based); at minimum they are valid
     expect(name1).toMatch(/^ZARC1_IT_[A-Z0-9]+$/);
     expect(name2).toMatch(/^ZARC1_IT_[A-Z0-9]+$/);
+    expect(name1).not.toBe(name2);
   });
 
   it('throws if prefix is too long', () => {

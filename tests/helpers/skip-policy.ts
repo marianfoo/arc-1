@@ -17,15 +17,6 @@ export const SkipReason = {
 } as const;
 
 /**
- * Skip the current test with an explicit reason.
- *
- * Calls `ctx.skip()` so the test appears as SKIPPED (not PASSED) in reports.
- */
-export function skipWithReason(ctx: TaskContext, reason: string): void {
-  ctx.skip(reason);
-}
-
-/**
  * Assert that `value` is non-nullish, or skip the test with a reason.
  *
  * After this call, TypeScript narrows `value` to `T` (non-null, non-undefined).
