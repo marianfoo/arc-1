@@ -189,8 +189,8 @@ Add do/don't rules for try/catch usage in tests to the testing conventions secti
 
 ### Task 6: Final Verification
 
-- [ ] Run full unit suite: `npm test` — all tests pass (including 12+ new expected-error helper tests).
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Grep for empty catch blocks in `tests/integration/` and `tests/e2e/`: all remaining catches should either have assertions or `// best-effort-cleanup` tags.
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Run full unit suite: `npm test` — all tests pass (including 12+ new expected-error helper tests).
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Grep for empty catch blocks in `tests/integration/` and `tests/e2e/`: all remaining catches should either have assertions or `// best-effort-cleanup` tags.
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.
