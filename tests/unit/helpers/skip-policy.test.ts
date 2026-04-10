@@ -2,9 +2,13 @@ import type { TaskContext } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 import { requireOrSkip } from '../../helpers/skip-policy.js';
 
-/** Create a mock TaskContext with a spy on skip. */
+/** Create a mock TaskContext with a spy on skip that throws (like real Vitest). */
 function mockCtx(): TaskContext {
-  return { skip: vi.fn() } as unknown as TaskContext;
+  return {
+    skip: vi.fn(() => {
+      throw new Error('VITEST_SKIP');
+    }),
+  } as unknown as TaskContext;
 }
 
 describe('skip-policy', () => {
@@ -18,13 +22,13 @@ describe('skip-policy', () => {
 
     it('skips when value is null', () => {
       const ctx = mockCtx();
-      requireOrSkip(ctx, null, 'No DDLS candidate found');
+      expect(() => requireOrSkip(ctx, null, 'No DDLS candidate found')).toThrow();
       expect(ctx.skip).toHaveBeenCalledWith('No DDLS candidate found');
     });
 
     it('skips when value is undefined', () => {
       const ctx = mockCtx();
-      requireOrSkip(ctx, undefined, 'No DDLS source available');
+      expect(() => requireOrSkip(ctx, undefined, 'No DDLS source available')).toThrow();
       expect(ctx.skip).toHaveBeenCalledWith('No DDLS source available');
     });
 
