@@ -62,7 +62,7 @@ describe('E2E Diagnostics Tests', () => {
       }
     });
 
-    it('lists dumps filtered by user', async () => {
+    it('lists dumps filtered by user', async (ctx) => {
       // First get unfiltered to find a user that has dumps
       const allResult = await callTool(client, 'SAPDiagnose', {
         action: 'dumps',
@@ -70,7 +70,7 @@ describe('E2E Diagnostics Tests', () => {
       });
       const allDumps = JSON.parse(expectToolSuccess(allResult));
       if (allDumps.length === 0) {
-        console.log('    [SKIP] No dumps on system — cannot test user filter');
+        ctx.skip('No dumps on system — cannot test user filter');
         return;
       }
 
@@ -91,7 +91,7 @@ describe('E2E Diagnostics Tests', () => {
       console.log(`    ${dumps.length} dumps for user ${user}`);
     });
 
-    it('reads dump detail with formatted text', async () => {
+    it('reads dump detail with formatted text', async (ctx) => {
       // Get a dump ID to read
       const listResult = await callTool(client, 'SAPDiagnose', {
         action: 'dumps',
@@ -99,7 +99,7 @@ describe('E2E Diagnostics Tests', () => {
       });
       const dumps = JSON.parse(expectToolSuccess(listResult));
       if (dumps.length === 0) {
-        console.log('    [SKIP] No dumps on system — cannot test detail read');
+        ctx.skip('No dumps on system — cannot test detail read');
         return;
       }
 
