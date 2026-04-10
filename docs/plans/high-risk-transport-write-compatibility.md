@@ -226,11 +226,11 @@ Integration tests prove ADT behavior; this task proves full MCP JSON-RPC behavio
 
 **Use PR #72 test infrastructure:** `requireOrSkip()` for env-gated tests, `expectSapFailureClass()` for expected errors.
 
-- [ ] Add e2e test for SAPTransport `create` + `get` with assertions on returned IDs/details and no raw XML leakage.
-- [ ] Add env-gated e2e test for SAPWrite update in a transportable package without explicit transport, asserting successful completion (or clear skip message when env missing).
-- [ ] Keep existing skipped lifecycle tests untouched unless this work directly unblocks them; avoid introducing flaky cleanup dependencies.
-- [ ] Document required env variables (`E2E_MCP_URL`, `TEST_TRANSPORT_PACKAGE`, credentials) for local execution.
-- [ ] Run `npm run test:e2e -- tests/e2e/rap.e2e.test.ts` (plus new e2e file if created).
+- [x] Add e2e test for SAPTransport `create` + `get` with assertions on returned IDs/details and no raw XML leakage.
+- [x] Add env-gated e2e test for SAPWrite update in a transportable package without explicit transport, asserting successful completion (or clear skip message when env missing).
+- [x] Keep existing skipped lifecycle tests untouched unless this work directly unblocks them; avoid introducing flaky cleanup dependencies.
+- [x] Document required env variables (`E2E_MCP_URL`, `TEST_TRANSPORT_PACKAGE`, credentials) for local execution.
+- [x] Run `npm run test:e2e -- tests/e2e/rap.e2e.test.ts` (plus new e2e file if created).
 
 ### Task 7: Update Technical and User Documentation, Roadmap, and Feature Matrix
 
