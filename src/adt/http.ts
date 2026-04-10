@@ -334,7 +334,11 @@ export class AdtHttpClient {
             if (inferred && inferred !== fallbackHeaders.Accept) {
               fallbackHeaders.Accept = inferred;
               headersChanged = true;
-            } else if (fallbackHeaders.Accept && fallbackHeaders.Accept !== '*/*') {
+            } else if (
+              fallbackHeaders.Accept &&
+              fallbackHeaders.Accept !== '*/*' &&
+              fallbackHeaders.Accept !== 'application/xml'
+            ) {
               // Fall back to generic XML, then wildcard
               fallbackHeaders.Accept = 'application/xml';
               headersChanged = true;
