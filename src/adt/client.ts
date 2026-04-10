@@ -23,6 +23,7 @@ import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type {
   AdtSearchResult,
+  ApiReleaseStateInfo,
   BspAppInfo,
   BspFileNode,
   ClassMetadata,
@@ -33,6 +34,7 @@ import type {
   TransactionInfo,
 } from './types.js';
 import {
+  parseApiReleaseState,
   parseBspAppList,
   parseBspFolderListing,
   parseClassMetadata,
@@ -313,6 +315,15 @@ export class AdtClient {
     checkOperation(this.safety, OperationType.Read, 'GetTransaction');
     const resp = await this.http.get(`/sap/bc/adt/vit/wb/object_type/trant/object_name/${encodeURIComponent(name)}`);
     return parseTransactionMetadata(resp.body);
+  }
+
+  /** Get API release state for an object (clean core / ABAP Cloud compliance) */
+  async getApiReleaseState(objectUri: string): Promise<ApiReleaseStateInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetApiReleaseState');
+    const resp = await this.http.get(`/sap/bc/adt/apireleases/${encodeURIComponent(objectUri)}`, {
+      Accept: 'application/vnd.sap.adt.apirelease.v10+xml',
+    });
+    return parseApiReleaseState(resp.body);
   }
 
   // ─── Search Operations ─────────────────────────────────────────────

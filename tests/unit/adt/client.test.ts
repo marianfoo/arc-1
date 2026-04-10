@@ -316,6 +316,55 @@ describe('AdtClient', () => {
     });
   });
 
+  // ─── API Release State ──────────────────────────────────────────
+
+  describe('getApiReleaseState', () => {
+    it('returns parsed release state for a released object', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_salv_table" adtcore:type="CLAS/OC" adtcore:name="CL_SALV_TABLE"/>
+  <apirelease:c1Release apirelease:contract="C1" apirelease:useInKeyUserApps="true" apirelease:useInSAPCloudPlatform="true">
+    <apirelease:status apirelease:state="RELEASED" apirelease:stateDescription="Released"/>
+  </apirelease:c1Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="true" apirelease:isAnyContractReleased="true"/>
+</apirelease:apiReleaseInfos>`,
+        ),
+      );
+      const client = createClient();
+      const state = await client.getApiReleaseState('/sap/bc/adt/oo/classes/cl_salv_table');
+      expect(state.objectName).toBe('CL_SALV_TABLE');
+      expect(state.contracts).toHaveLength(1);
+      expect(state.contracts[0]!.state).toBe('RELEASED');
+      expect(state.isAnyContractReleased).toBe(true);
+    });
+
+    it('URL-encodes the object URI as a path segment', async () => {
+      const client = createClient();
+      await client.getApiReleaseState('/sap/bc/adt/oo/classes/cl_salv_table');
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      // The object URI should be URL-encoded in the path
+      expect(calledUrl).toContain('/sap/bc/adt/apireleases/%2Fsap%2Fbc%2Fadt%2Foo%2Fclasses%2Fcl_salv_table');
+    });
+
+    it('sends correct Accept header', async () => {
+      const client = createClient();
+      await client.getApiReleaseState('/sap/bc/adt/oo/classes/cl_test');
+      const calledHeaders = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
+      expect(calledHeaders?.Accept).toBe('application/vnd.sap.adt.apirelease.v10+xml');
+    });
+
+    it('is blocked when read operations are disallowed', async () => {
+      const client = createClient({
+        safety: { ...unrestrictedSafetyConfig(), disallowedOps: new Set(['R']) },
+      });
+      await expect(client.getApiReleaseState('/sap/bc/adt/oo/classes/cl_test')).rejects.toThrow();
+    });
+  });
+
   // ─── URL Encoding (Issues #18, #52) ─────────────────────────────
 
   describe('URL encoding for namespaced objects', () => {

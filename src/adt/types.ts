@@ -334,3 +334,25 @@ export interface ClassHierarchy {
   interfaces: string[];
   subclasses: string[];
 }
+
+// ─── API Release State Types ──────────────────────────────────────
+
+/** Single release contract (C0–C4) with state and successor info */
+export interface ApiReleaseContract {
+  contract: string;
+  state: string;
+  stateDescription: string;
+  useInKeyUserApps: boolean;
+  useInSAPCloudPlatform: boolean;
+  successors: Array<{ uri: string; type: string; name: string }>;
+}
+
+/** API release state from /sap/bc/adt/apireleases/{encoded-object-uri} */
+export interface ApiReleaseStateInfo {
+  objectUri: string;
+  objectType: string;
+  objectName: string;
+  contracts: ApiReleaseContract[];
+  isAnyContractReleased: boolean;
+  isAnyAssignmentPossible: boolean;
+}

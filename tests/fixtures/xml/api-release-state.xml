@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_salv_table" adtcore:type="CLAS/OC" adtcore:name="CL_SALV_TABLE"/>
+  <apirelease:c1Release apirelease:contract="C1" apirelease:useInKeyUserApps="true" apirelease:useInSAPCloudPlatform="true" apirelease:name="C1_RELEASE" apirelease:changedAt="2024-01-15T10:00:00Z" apirelease:changedBy="SAP">
+    <apirelease:status apirelease:state="RELEASED" apirelease:stateDescription="Released"/>
+    <apirelease:useConceptAsSuccessor>false</apirelease:useConceptAsSuccessor>
+  </apirelease:c1Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="true" apirelease:isAnyContractReleased="true"/>
+</apirelease:apiReleaseInfos>

@@ -17,6 +17,8 @@
 import { XMLParser } from 'fast-xml-parser';
 import type {
   AdtSearchResult,
+  ApiReleaseContract,
+  ApiReleaseStateInfo,
   BspAppInfo,
   BspFileNode,
   ClassMetadata,
@@ -64,6 +66,7 @@ const parser = new XMLParser({
       'statement',
       'dbAccess',
       'access',
+      'successor',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings
@@ -446,6 +449,68 @@ export function parseTransactionMetadata(xml: string): TransactionInfo {
     description: String(obj['@_description'] ?? ''),
     program: '', // Not available from this endpoint — populated via SQL in handler
     package: String(pkgRef['@_name'] ?? ''),
+  };
+}
+
+/**
+ * Parse API release state XML from /sap/bc/adt/apireleases/{encoded-uri}.
+ *
+ * Returns structured release info with per-contract states (C0–C4),
+ * successor information, and catalog metadata.
+ *
+ * Expected root: element with releasableObject, c0Release–c4Release, apiCatalogData.
+ */
+export function parseApiReleaseState(xml: string): ApiReleaseStateInfo {
+  const parsed = parseXml(xml);
+  // The root element name varies — find the first non-declaration key
+  const rootKey = Object.keys(parsed).find((k) => !k.startsWith('?'));
+  const root = (rootKey ? parsed[rootKey] : parsed) as Record<string, unknown>;
+
+  // releasableObject attrs
+  const relObj = (root.releasableObject ?? {}) as Record<string, unknown>;
+
+  // Parse C0–C4 contract releases
+  const contracts: ApiReleaseContract[] = [];
+  for (const key of ['c0Release', 'c1Release', 'c2Release', 'c3Release', 'c4Release']) {
+    const release = root[key] as Record<string, unknown> | undefined;
+    if (!release) continue;
+    const status = (release.status ?? {}) as Record<string, unknown>;
+    const successorsContainer = release.successors as Record<string, unknown> | undefined;
+    const successorArr: Array<{ uri: string; type: string; name: string }> = [];
+    if (successorsContainer) {
+      const succs = Array.isArray(successorsContainer.successor)
+        ? (successorsContainer.successor as Array<Record<string, unknown>>)
+        : successorsContainer.successor
+          ? [successorsContainer.successor as Record<string, unknown>]
+          : [];
+      for (const s of succs) {
+        successorArr.push({
+          uri: String(s['@_uri'] ?? ''),
+          type: String(s['@_type'] ?? ''),
+          name: String(s['@_name'] ?? ''),
+        });
+      }
+    }
+    contracts.push({
+      contract: String(release['@_contract'] ?? key.replace('Release', '').toUpperCase()),
+      state: String(status['@_state'] ?? ''),
+      stateDescription: String(status['@_stateDescription'] ?? ''),
+      useInKeyUserApps: String(release['@_useInKeyUserApps'] ?? 'false') === 'true',
+      useInSAPCloudPlatform: String(release['@_useInSAPCloudPlatform'] ?? 'false') === 'true',
+      successors: successorArr,
+    });
+  }
+
+  // apiCatalogData attrs
+  const catalog = (root.apiCatalogData ?? {}) as Record<string, unknown>;
+
+  return {
+    objectUri: String(relObj['@_uri'] ?? ''),
+    objectType: String(relObj['@_type'] ?? ''),
+    objectName: String(relObj['@_name'] ?? ''),
+    contracts,
+    isAnyContractReleased: String(catalog['@_isAnyContractReleased'] ?? 'false') === 'true',
+    isAnyAssignmentPossible: String(catalog['@_isAnyAssignmentPossible'] ?? 'false') === 'true',
   };
 }
 

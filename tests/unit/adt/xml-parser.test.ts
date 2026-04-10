@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   findDeepNodes,
+  parseApiReleaseState,
   parseBspAppList,
   parseBspFolderListing,
   parseClassMetadata,
@@ -453,6 +454,115 @@ describe('XML Parser', () => {
       expect(tran.code).toBe('ZT01');
       expect(tran.description).toBe('Custom Transaction');
       expect(tran.package).toBe('');
+    });
+  });
+
+  // ─── parseApiReleaseState ──────────────────────────────────────────
+
+  describe('parseApiReleaseState', () => {
+    it('parses released object from fixture', () => {
+      const xml = loadFixture('api-release-state.xml');
+      const state = parseApiReleaseState(xml);
+      expect(state.objectUri).toBe('/sap/bc/adt/oo/classes/cl_salv_table');
+      expect(state.objectType).toBe('CLAS/OC');
+      expect(state.objectName).toBe('CL_SALV_TABLE');
+      expect(state.isAnyContractReleased).toBe(true);
+      expect(state.isAnyAssignmentPossible).toBe(true);
+      expect(state.contracts).toHaveLength(1);
+      expect(state.contracts[0]!.contract).toBe('C1');
+      expect(state.contracts[0]!.state).toBe('RELEASED');
+      expect(state.contracts[0]!.stateDescription).toBe('Released');
+      expect(state.contracts[0]!.useInKeyUserApps).toBe(true);
+      expect(state.contracts[0]!.useInSAPCloudPlatform).toBe(true);
+    });
+
+    it('parses deprecated object with successor', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_gui_alv_grid" adtcore:type="CLAS/OC" adtcore:name="CL_GUI_ALV_GRID"/>
+  <apirelease:c1Release apirelease:contract="C1" apirelease:useInKeyUserApps="false" apirelease:useInSAPCloudPlatform="false">
+    <apirelease:status apirelease:state="DEPRECATED" apirelease:stateDescription="Deprecated — use successor"/>
+    <apirelease:successors>
+      <apirelease:successor adtcore:uri="/sap/bc/adt/oo/classes/cl_salv_table" adtcore:type="CLAS/OC" adtcore:name="CL_SALV_TABLE"/>
+    </apirelease:successors>
+  </apirelease:c1Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="false" apirelease:isAnyContractReleased="false"/>
+</apirelease:apiReleaseInfos>`;
+      const state = parseApiReleaseState(xml);
+      expect(state.objectName).toBe('CL_GUI_ALV_GRID');
+      expect(state.contracts[0]!.state).toBe('DEPRECATED');
+      expect(state.contracts[0]!.successors).toHaveLength(1);
+      expect(state.contracts[0]!.successors[0]!.name).toBe('CL_SALV_TABLE');
+      expect(state.isAnyContractReleased).toBe(false);
+    });
+
+    it('parses not-released object', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_internal_helper" adtcore:type="CLAS/OC" adtcore:name="CL_INTERNAL_HELPER"/>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="false" apirelease:isAnyContractReleased="false"/>
+</apirelease:apiReleaseInfos>`;
+      const state = parseApiReleaseState(xml);
+      expect(state.objectName).toBe('CL_INTERNAL_HELPER');
+      expect(state.contracts).toHaveLength(0);
+      expect(state.isAnyContractReleased).toBe(false);
+    });
+
+    it('parses object with multiple contracts', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_multi" adtcore:type="CLAS/OC" adtcore:name="CL_MULTI"/>
+  <apirelease:c0Release apirelease:contract="C0">
+    <apirelease:status apirelease:state="NOT_RELEASED" apirelease:stateDescription="Not Released"/>
+  </apirelease:c0Release>
+  <apirelease:c1Release apirelease:contract="C1" apirelease:useInKeyUserApps="true" apirelease:useInSAPCloudPlatform="true">
+    <apirelease:status apirelease:state="RELEASED" apirelease:stateDescription="Released"/>
+  </apirelease:c1Release>
+  <apirelease:c2Release apirelease:contract="C2" apirelease:useInKeyUserApps="false" apirelease:useInSAPCloudPlatform="true">
+    <apirelease:status apirelease:state="RELEASED" apirelease:stateDescription="Released"/>
+  </apirelease:c2Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="true" apirelease:isAnyContractReleased="true"/>
+</apirelease:apiReleaseInfos>`;
+      const state = parseApiReleaseState(xml);
+      expect(state.contracts).toHaveLength(3);
+      expect(state.contracts[0]!.contract).toBe('C0');
+      expect(state.contracts[0]!.state).toBe('NOT_RELEASED');
+      expect(state.contracts[1]!.contract).toBe('C1');
+      expect(state.contracts[1]!.state).toBe('RELEASED');
+      expect(state.contracts[2]!.contract).toBe('C2');
+      expect(state.contracts[2]!.state).toBe('RELEASED');
+      expect(state.contracts[2]!.useInSAPCloudPlatform).toBe(true);
+    });
+
+    it('handles minimal response with no contracts or catalog', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_minimal" adtcore:type="CLAS/OC" adtcore:name="CL_MINIMAL"/>
+</apirelease:apiReleaseInfos>`;
+      const state = parseApiReleaseState(xml);
+      expect(state.objectName).toBe('CL_MINIMAL');
+      expect(state.contracts).toHaveLength(0);
+      expect(state.isAnyContractReleased).toBe(false);
+      expect(state.isAnyAssignmentPossible).toBe(false);
+    });
+
+    it('parses deprecated with multiple successors', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_old" adtcore:type="CLAS/OC" adtcore:name="CL_OLD"/>
+  <apirelease:c1Release apirelease:contract="C1">
+    <apirelease:status apirelease:state="DEPRECATED" apirelease:stateDescription="Deprecated"/>
+    <apirelease:successors>
+      <apirelease:successor adtcore:uri="/sap/bc/adt/oo/classes/cl_new_a" adtcore:type="CLAS/OC" adtcore:name="CL_NEW_A"/>
+      <apirelease:successor adtcore:uri="/sap/bc/adt/oo/classes/cl_new_b" adtcore:type="CLAS/OC" adtcore:name="CL_NEW_B"/>
+    </apirelease:successors>
+  </apirelease:c1Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="false" apirelease:isAnyContractReleased="false"/>
+</apirelease:apiReleaseInfos>`;
+      const state = parseApiReleaseState(xml);
+      expect(state.contracts[0]!.successors).toHaveLength(2);
+      expect(state.contracts[0]!.successors[0]!.name).toBe('CL_NEW_A');
+      expect(state.contracts[0]!.successors[1]!.name).toBe('CL_NEW_B');
     });
   });
 

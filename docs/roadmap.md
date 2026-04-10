@@ -41,7 +41,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | # | ID | Feature | Priority | Effort | Category |
 |---|-----|---------|----------|--------|----------|
-| 1 | FEAT-02 | API Release Status / Clean Core | P0 | S | Features |
+| ~~1~~ | ~~FEAT-02~~ | ~~API Release Status / Clean Core~~ | ~~P0~~ | ~~S~~ | ~~Completed 2026-04-10~~ |
 | 2 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P0 | S | Features |
 | 3 | FEAT-08 | Content-Type 415/406 Auto-Retry | P0 | XS | Features |
 | 4 | FEAT-14 | 401 Session Timeout Auto-Retry | P0 | XS | Features |
@@ -129,7 +129,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 > Priorities are assigned based on which [core design principle](#vision) a feature serves. Sourced from 3 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
 
 ### Phase A: Production Blockers (P0)
-1. **FEAT-02** API Release Status / Clean Core (S) — **upgraded from P1**: VSP now has this (Apr 5), ARC-1 is the only major project without it
+1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
 2. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
 3. **FEAT-14** 401 Session Timeout Auto-Retry (XS) — centralized gateway idles between requests
 4. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — enterprise deployments without reverse proxy
@@ -193,16 +193,14 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Very High — critical for S/4HANA Cloud and clean core compliance |
-| **Status** | Not started |
+| **Status** | Completed |
 | **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/7270ad7-api-release-state.md) |
 
 **What:** Check whether an SAP object (class, function module, table, CDS view) is released, deprecated, or internal. Returns the API release state (C1 Released, C2 Deprecated, Not Released) and the recommended successor.
 
 **Why:** Every S/4HANA Cloud / BTP ABAP customer needs to check if their code uses only released APIs. This is a "must have" for any AI copilot helping with ABAP Cloud development.
 
-**Why not:** ADT doesn't directly expose release state via REST — implementation may require importing SAP's released object registry (version-specific, maintenance burden), hitting an external service (latency, network risk), or shipping static data that goes stale per SAP release. LLMs already know many release states from training data. However, the competitive pressure (VSP has it since Apr 5) and enterprise demand make this a clear P0 regardless.
-
-**Competitive urgency (2026-04-08):** VSP added `GetAPIReleaseState` (commit 7270ad7, Apr 5). ARC-1 is now the only major project without this. **Upgraded from P1 to P0.**
+**Implementation (2026-04-10):** Added `API_STATE` type to `SAPRead`. Uses ADT endpoint `/sap/bc/adt/apireleases/{encoded-uri}` with `Accept: application/vnd.sap.adt.apirelease.v10+xml`. Returns structured JSON with contract-level states (C0-C4), successor info, and catalog metadata. Based on VSP's corrected implementation (commit 8a478aa).
 
 ---
 
@@ -446,7 +444,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - Custom rule overrides via `--abaplint-config` or per-call `rules` parameter
 - ATC Cloud check variant integration (server-side, complements offline abaplint)
 - Combined cloud readiness report (ATC + abaplint findings merged)
-- API release state check (see FEAT-02, **now P0** — VSP has this since Apr 5)
+- ✅ API release state check (FEAT-02, completed 2026-04-10)
 
 ---
 

@@ -23,6 +23,7 @@ Read any SAP ABAP object.
 | `group` | string | No | For FUNC: function group name |
 | `maxRows` | number | No | For TABLE_CONTENTS: max rows (default 100) |
 | `sqlFilter` | string | No | For TABLE_CONTENTS: SQL WHERE clause filter |
+| `objectType` | string | No | For API_STATE: SAP object type (CLAS, INTF, PROG, FUGR, etc.) — auto-detected from name if omitted |
 
 **Supported types:**
 
@@ -47,6 +48,7 @@ Read any SAP ABAP object.
 | `TRAN` | Transaction metadata (structured JSON: code, description, program) |
 | `SOBJ` | BOR business object (list methods, or read specific method with `method` param) |
 | `BSP` | BSP/UI5 filestore (list apps, browse structure, read files via `name`+`include` path) |
+| `API_STATE` | API release state (clean core compliance — contract states C0-C4, successor info) |
 | `TABLE_CONTENTS` | Table data (rows) |
 | `DEVC` | Package contents |
 | `SYSTEM` | System info (SID, release, kernel) |
@@ -84,6 +86,9 @@ SAPRead(type="DTEL", name="MANDT")               — data element metadata with 
 SAPRead(type="TRAN", name="SE38")                — transaction metadata
 SAPRead(type="SOBJ", name="BUS2032")             — list BOR object methods
 SAPRead(type="BSP")                              — list all BSP/UI5 apps
+SAPRead(type="API_STATE", name="CL_SALV_TABLE")              — check if class is released for ABAP Cloud
+SAPRead(type="API_STATE", name="IF_HTTP_CLIENT")              — check interface release state
+SAPRead(type="API_STATE", name="MARA", objectType="TABL")     — check table with explicit type
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
 SAPRead(type="SYSTEM")
 ```

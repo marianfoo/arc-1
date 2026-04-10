@@ -143,6 +143,7 @@ _Last updated: 2026-04-10_
 | abaplint (local offline) | ✅ | ✅ (native Go port, 8 rules) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Unit tests | ✅ | ✅ | ✅ | ❌ | ✅ (with coverage) | ✅ | N/A | ❌ |
 | CDS unit tests | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
+| API release state (clean core) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Fix proposals | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | PrettyPrint | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | Migration analysis | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | N/A | ❌ |
@@ -280,7 +281,7 @@ The following items were incorrectly marked in the previous version and have sin
 - TLS/HTTPS for HTTP Streamable (enterprise deployment without reverse proxy)
 
 **P1 — high-value gaps:**
-- Where-Used analysis, API release status (clean core), fix proposals
+- Where-Used analysis, fix proposals
 - DDIC write (DOMA/DTEL), namespace encoding audit, error intelligence
 - Type auto-mappings, function group bulk fetch
 - Documentation (Copilot Studio guide, Basis Admin guide)

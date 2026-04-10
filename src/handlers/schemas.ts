@@ -42,6 +42,7 @@ const SAPREAD_TYPES_ONPREM = [
   'VARIANTS',
   'BSP',
   'BSP_DEPLOY',
+  'API_STATE',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [
@@ -65,6 +66,7 @@ const SAPREAD_TYPES_BTP = [
   'MESSAGES',
   'BSP',
   'BSP_DEPLOY',
+  'API_STATE',
 ] as const;
 
 export const SAPReadSchema = z.object({
@@ -77,6 +79,7 @@ export const SAPReadSchema = z.object({
   format: z.enum(['text', 'structured']).optional(),
   maxRows: z.coerce.number().optional(),
   sqlFilter: z.string().optional(),
+  objectType: z.string().optional(),
 });
 
 export const SAPReadSchemaBtp = z.object({
@@ -88,6 +91,7 @@ export const SAPReadSchemaBtp = z.object({
   format: z.enum(['text', 'structured']).optional(),
   maxRows: z.coerce.number().optional(),
   sqlFilter: z.string().optional(),
+  objectType: z.string().optional(),
 });
 
 // ─── SAPSearch ──────────────────────────────────────────────────────

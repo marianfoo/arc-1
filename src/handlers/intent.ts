@@ -593,6 +593,14 @@ async function handleSAPRead(
       }
       return textResult(JSON.stringify(tran, null, 2));
     }
+    case 'API_STATE': {
+      // Determine object type for URL construction — use explicit objectType, infer from name, or default to CLAS
+      const explicitType = String(args.objectType ?? '').toUpperCase();
+      const inferredType = explicitType || inferObjectType(name);
+      const objectUri = objectUrlForType(inferredType, name);
+      const releaseState = await client.getApiReleaseState(objectUri);
+      return textResult(JSON.stringify(releaseState, null, 2));
+    }
     case 'TABLE_CONTENTS': {
       const maxRows = Number(args.maxRows ?? 100);
       const data = await client.getTableContents(name, maxRows, args.sqlFilter as string | undefined);
@@ -1044,6 +1052,15 @@ function objectUrlForType(type: string, name: string): string {
     default:
       return `/sap/bc/adt/programs/programs/${encoded}`;
   }
+}
+
+/** Infer SAP object type from naming conventions */
+function inferObjectType(name: string): string {
+  const upper = name.toUpperCase();
+  if (upper.startsWith('IF_') || upper.startsWith('ZIF_') || upper.startsWith('YIF_')) return 'INTF';
+  if (upper.startsWith('CL_') || upper.startsWith('ZCL_') || upper.startsWith('YCL_')) return 'CLAS';
+  // Default to CLAS — the most common case for API release state checks
+  return 'CLAS';
 }
 
 /** Get the source URL for an object (appends /source/main) */
