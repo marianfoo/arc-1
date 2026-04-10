@@ -35,7 +35,7 @@ async function findAnyDdls(client: AdtClient): Promise<{ name: string; source: s
       const source = await client.getDdls(name);
       if (source) return { name, source };
     } catch {
-      // Not available — try next
+      // discovery-fallback: not available — try next candidate
     }
   }
   // Fall back to searching for any DDLS
@@ -47,11 +47,11 @@ async function findAnyDdls(client: AdtClient): Promise<{ name: string; source: s
         const source = await client.getDdls(r.objectName);
         if (source) return { name: r.objectName, source };
       } catch {
-        // Can't read this one — try next
+        // discovery-fallback: can't read this one — try next
       }
     }
   } catch {
-    // Search failed
+    // discovery-fallback: search endpoint not available
   }
   return undefined;
 }

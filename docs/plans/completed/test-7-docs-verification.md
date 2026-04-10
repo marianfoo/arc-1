@@ -66,8 +66,8 @@ Run the test suite first to get accurate counts, then update each documentation 
 
 Update the public-facing testing section with accurate counts, CI policy, and new capabilities.
 
-- [ ] Run `npm test` and record the actual test count from the output (look for "X passed" in the vitest summary).
-- [ ] Update `README.md` testing section (around lines 60-66) to reflect:
+- [x] Run `npm test` and record the actual test count from the output (look for "X passed" in the vitest summary).
+- [x] Update `README.md` testing section (around lines 60-66) to reflect:
   - Actual unit test count (use "1,250+" or similar rounded number).
   - Number of unit test files (count files in `tests/unit/`).
   - Integration tests with note about skip behavior when credentials absent.
@@ -76,7 +76,7 @@ Update the public-facing testing section with accurate counts, CI policy, and ne
   - CI matrix: Node 22 and 24 (not Node 20 — verify in `.github/workflows/test.yml`).
   - Mention reliability telemetry and coverage as informational signals.
   - Remove or update the "33 test files" claim (count actual files).
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Update CLAUDE.md Test Matrix and Codebase Structure
 
@@ -85,12 +85,12 @@ Update the public-facing testing section with accurate counts, CI policy, and ne
 
 Update the test matrix table, codebase structure tree, and key files table to reflect new files and accurate counts.
 
-- [ ] Update the test matrix table (around line 373) with accurate counts:
+- [x] Update the test matrix table (around line 373) with accurate counts:
   - Unit test count from actual `npm test` output.
   - Integration test count (total tests including CRUD lifecycle suite).
   - E2E test count.
   - Add row for BTP Smoke tests if not present.
-- [ ] Update the codebase structure tree (around line 169) to include new directories and files:
+- [x] Update the codebase structure tree (around line 169) to include new directories and files:
   - `scripts/ci/` — CI telemetry and coverage scripts.
   - `tests/helpers/skip-policy.ts` — shared skip helper.
   - `tests/helpers/expected-error.ts` — expected error assertions.
@@ -98,13 +98,13 @@ Update the test matrix table, codebase structure tree, and key files table to re
   - `tests/integration/crud.lifecycle.integration.test.ts` — CRUD lifecycle tests.
   - `tests/integration/btp-abap.smoke.integration.test.ts` — BTP smoke tests.
   - `docs/testing-skip-policy.md` — skip policy documentation.
-- [ ] Update the Key Files for Common Tasks table to include:
+- [x] Update the Key Files for Common Tasks table to include:
   - "Add skip policy test" → `tests/helpers/skip-policy.ts`
   - "Add expected error assertion" → `tests/helpers/expected-error.ts`
   - "Add CRUD lifecycle test" → `tests/integration/crud.lifecycle.integration.test.ts`, `tests/integration/crud-harness.ts`
   - "Add BTP smoke test" → `tests/integration/btp-abap.smoke.integration.test.ts`
-- [ ] Verify the Quick Reference section's build/test commands are still accurate. Add `npm run test:coverage`, `npm run test:integration:crud`, `npm run test:integration:btp:smoke` if useful.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Verify the Quick Reference section's build/test commands are still accurate. Add `npm run test:coverage`, `npm run test:integration:crud`, `npm run test:integration:btp:smoke` if useful.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Update Roadmap and Feature Matrix
 
@@ -114,16 +114,16 @@ Update the test matrix table, codebase structure tree, and key files table to re
 
 Update project status and competitor comparison matrices with accurate test data.
 
-- [ ] In `docs/roadmap.md`:
+- [x] In `docs/roadmap.md`:
   - Line 47 (CI/CD row): Update to reflect accurate CI policy — "GitHub Actions: lint + typecheck + unit tests (Node 22/24) + integration tests + E2E tests (on push to main and internal PRs). BTP smoke tests on weekday schedule."
   - Line 66 (Test Coverage row): Update count — "1,250+ unit tests + ~150 integration tests + ~60 E2E tests + 28 BTP tests (vitest). Coverage reporting as informational CI signal."
   - Add a note about the reliability hardening initiative if there's a relevant section for recent improvements.
-- [ ] In `compare/00-feature-matrix.md`:
+- [x] In `compare/00-feature-matrix.md`:
   - Line 212 (Unit tests row): Update ARC-1 count from "707+" to actual count (e.g., "1,250+").
   - Line 213 (Integration tests row): Update from "on-prem + BTP" to "on-prem (CI) + BTP (scheduled smoke)" for accuracy.
   - Line 214 (CI/CD row): Keep as is or add note about reliability telemetry.
   - Update the "Last Updated" date in the header if present.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Update Planning Template and Audit Research Doc
 
@@ -133,11 +133,11 @@ Update project status and competitor comparison matrices with accurate test data
 
 Update the autonomous agent planning template with current test references, and append implementation evidence to the audit research document.
 
-- [ ] In `.claude/commands/ralphex-plan.md`:
+- [x] In `.claude/commands/ralphex-plan.md`:
   - Check for any references to test counts that need updating.
   - Check for references to `INFRASTRUCTURE.md` — if it doesn't exist, either create a minimal version or update the reference to point to `CLAUDE.md`'s testing section instead.
   - Ensure test tier guidance reflects new test suites (CRUD lifecycle, BTP smoke).
-- [ ] In `docs/research/test-reliability-audit-points-2-7.md`, append an "Implementation Evidence" section at the end:
+- [x] In `docs/research/test-reliability-audit-points-2-7.md`, append an "Implementation Evidence" section at the end:
   ```markdown
   ---
 
@@ -154,7 +154,7 @@ Update the autonomous agent planning template with current test references, and 
   - **Point 7 (BTP):** Smoke suite in `tests/integration/btp-abap.smoke.integration.test.ts`, scheduled workflow in `.github/workflows/btp-smoke.yml`, documentation in `docs/btp-abap-environment.md`.
   - **Telemetry:** JSON reporters on all test levels. `scripts/ci/collect-test-reliability.mjs` and `scripts/ci/assert-required-test-execution.mjs` parse and report test reliability metrics.
   ```
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 5: Final End-to-End Verification
 
@@ -163,12 +163,12 @@ Update the autonomous agent planning template with current test references, and 
 
 Run all validation commands and verify the complete test reliability hardening initiative.
 
-- [ ] Run full unit suite: `npm test` — all tests pass.
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Run coverage: `npm run test:coverage` — completes and produces reports.
-- [ ] Run reliability report: `npm run test:reliability-report` — produces summary (may show "no results" for integration/E2E without credentials — that's expected).
-- [ ] Verify all new files exist:
+- [x] Run full unit suite: `npm test` — all tests pass.
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Run coverage: `npm run test:coverage` — completes and produces reports.
+- [x] Run reliability report: `npm run test:reliability-report` — produces summary (may show "no results" for integration/E2E without credentials — that's expected).
+- [x] Verify all new files exist:
   - `scripts/ci/collect-test-reliability.mjs`
   - `scripts/ci/assert-required-test-execution.mjs`
   - `scripts/ci/coverage-summary.mjs`
@@ -179,12 +179,12 @@ Run all validation commands and verify the complete test reliability hardening i
   - `tests/integration/btp-abap.smoke.integration.test.ts`
   - `.github/workflows/btp-smoke.yml`
   - `docs/testing-skip-policy.md`
-- [ ] Verify documentation accuracy by spot-checking:
+- [x] Verify documentation accuracy by spot-checking:
   - README test count matches actual `npm test` output.
   - CLAUDE.md test matrix matches actual counts.
   - Roadmap CI description matches `.github/workflows/test.yml` behavior.
   - Feature matrix unit test count is current.
-- [ ] Move all completed test plans to `docs/plans/completed/`:
+- [x] Move all completed test plans to `docs/plans/completed/`:
   - `test-1-reliability-telemetry.md`
   - `test-2-skip-policy-pseudo-skips.md`
   - `test-3-coverage-ci-signal.md`
@@ -193,4 +193,4 @@ Run all validation commands and verify the complete test reliability hardening i
   - `test-6-btp-stability.md`
   - `test-7-docs-verification.md`
   - `test-reliability-audit-points-2-7-hardening.md`
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.

@@ -37,6 +37,18 @@ npm run test:integration
 # Run BTP ABAP integration tests (local only — needs BTP service key + browser login)
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
 
+# Run BTP smoke tests (CI-capable, non-interactive)
+TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:smoke
+
+# Run CRUD lifecycle integration tests (needs SAP credentials)
+npm run test:integration:crud
+
+# Run unit tests with coverage (informational, non-blocking in CI)
+npm run test:coverage
+
+# Generate coverage summary (Markdown table from coverage-summary.json)
+npm run test:coverage-report
+
 # Dev mode (stdio transport)
 npm run dev
 
@@ -166,7 +178,17 @@ src/
         ├── cloud.ts            # BTP/Steampunk lint preset (strict cloud rules)
         └── onprem.ts           # On-premise lint preset (relaxed rules)
 
+scripts/
+└── ci/
+    ├── collect-test-reliability.mjs # Aggregates unit/integration/e2e JSON reports
+    ├── assert-required-test-execution.mjs # Warn/enforce minimum executed-test thresholds
+    └── coverage-summary.mjs    # Parses coverage JSON into Markdown for GitHub step summary
+
 tests/
+├── helpers/                    # Shared test utilities
+│   ├── mock-fetch.ts           # HTTP mock helper (undici)
+│   ├── skip-policy.ts          # Skip policy (requireOrSkip, SkipReason)
+│   └── expected-error.ts       # Expected error assertions (expectSapFailureClass)
 ├── unit/                       # Unit tests (no SAP system needed)
 │   ├── adt/                    # ADT client tests
 │   ├── cache/                  # Cache tests
@@ -178,14 +200,22 @@ tests/
 │   └── cli/                    # CLI tests
 ├── integration/                # Integration tests (need SAP credentials)
 │   ├── helpers.ts              # Test client factory, skip logic
+│   ├── crud-harness.ts         # CRUD harness (unique names, registry, retry delete)
+│   ├── crud.lifecycle.integration.test.ts # Create→read→update→activate→delete roundtrip
 │   ├── adt.integration.test.ts # Live SAP tests
 │   ├── context.integration.test.ts # SAPContext live tests
 │   ├── audit-logging.integration.test.ts # Audit logging tests
-│   ├── btp-abap.integration.test.ts # BTP ABAP tests
+│   ├── btp-abap.integration.test.ts # BTP ABAP tests (local only, interactive)
+│   ├── btp-abap.smoke.integration.test.ts # BTP ABAP smoke tests (CI-capable)
 │   └── elicitation.integration.test.ts # MCP elicitation tests
 └── fixtures/
     ├── xml/                    # Sample ADT XML responses
-    └── abap/                   # Sample ABAP source files
+    ├── abap/                   # Sample ABAP source files
+    ├── test-results/           # Synthetic Vitest JSON fixtures for CI script tests
+    └── coverage/               # Coverage summary fixtures for CI script tests
+
+docs/
+└── testing-skip-policy.md      # Valid skip taxonomy (credentials/features/fixtures)
 ```
 
 ## Key Files for Common Tasks
@@ -219,10 +249,16 @@ tests/
 | Add cache warmup feature | `src/cache/warmup.ts`, `src/server/server.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
+| Add BTP smoke test | `tests/integration/btp-abap.smoke.integration.test.ts` |
 | BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |
 | BTP Destination Service / Connectivity proxy | `src/adt/btp.ts` |
 | Add AFF schema | `src/aff/schemas/` (add `{type}-v1.json`), `src/aff/validator.ts` (add type mapping) |
 | Modify AFF validation | `src/aff/validator.ts`, `src/handlers/intent.ts` (create/batch_create paths) |
+| Add skip policy test | `tests/helpers/skip-policy.ts` |
+| Add expected error assertion | `tests/helpers/expected-error.ts` |
+| Add CRUD integration test | `tests/integration/crud-harness.ts`, `tests/integration/crud.lifecycle.integration.test.ts` |
+| Modify CI coverage reporting | `scripts/ci/coverage-summary.mjs`, `.github/workflows/test.yml`, `.github/workflows/release.yml` |
+| Modify CI reliability reporting | `scripts/ci/collect-test-reliability.mjs`, `scripts/ci/assert-required-test-execution.mjs`, `.github/workflows/test.yml` |
 
 ## Architecture: Request Flow
 
@@ -370,10 +406,12 @@ await http.withStatefulSession(async (session) => {
 
 | Level | Command | SAP Required | Count | Config |
 |-------|---------|--------------|-------|--------|
-| Unit | `npm test` | No | 1148+ | `vitest.config.ts` |
-| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | ~50 | `vitest.integration.config.ts` |
+| Unit | `npm test` | No | 1315 | `vitest.config.ts` |
+| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | ~150 (`125 pass / 33 skip` in latest full run) | `vitest.integration.config.ts` |
+| CRUD Lifecycle | `npm run test:integration:crud` | Yes (`TEST_SAP_URL`) | 1 | `vitest.integration.config.ts` |
+| BTP Smoke | `npm run test:integration:btp:smoke` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 5 | `vitest.integration.config.ts` |
 | BTP Integration | `npm run test:integration:btp` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 28 | same |
-| E2E | `npm run test:e2e` | Yes (MCP server running) | ~30 | `tests/e2e/vitest.e2e.config.ts` |
+| E2E | `npm run test:e2e` | Yes (MCP server running) | ~60 (`58 pass / 5 skip` in latest full run) | `tests/e2e/vitest.e2e.config.ts` |
 
 ### Unit Test Mocking Pattern
 
@@ -405,7 +443,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 - Full MCP protocol tests via `@modelcontextprotocol/sdk` client
 - Connect to running ARC-1 server (`E2E_MCP_URL`, default: `http://localhost:3000/mcp`)
 - `connectClient()` / `callTool()` / `expectToolSuccess()` / `expectToolError()` helpers in `tests/e2e/helpers.ts`
-- `tests/e2e/setup.ts` ensures persistent test objects exist on SAP
+- `tests/e2e/global-setup.ts` performs health preflight; persistent fixture objects are expected to exist (tests skip explicitly when missing)
 - `tests/e2e/fixtures.ts` defines test objects (ZARC1_TEST_REPORT, ZCL_ARC1_TEST, etc.)
 - 60s test timeout, 120s hook timeout, sequential execution
 

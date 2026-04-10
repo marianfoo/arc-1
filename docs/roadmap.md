@@ -44,7 +44,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | BTP ABAP Environment | ✅ OAuth 2.0 browser login, direct connectivity |
 | ABAP Linter | ✅ `@abaplint/core` with system-aware cloud/on-prem presets + pre-write validation |
 | Docker Image | ✅ Multi-platform (amd64/arm64), GHCR `ghcr.io/marianfoo/arc-1` |
-| CI/CD | ✅ GitHub Actions: lint + typecheck + unit tests (Node 20/22) + integration tests |
+| CI/CD | ✅ GitHub Actions: lint + typecheck + unit tests (Node 22/24), integration + E2E on `main`/internal PRs, reliability summary job |
 | XSUAA OAuth Proxy | ✅ MCP SDK ProxyOAuthServerProvider + @sap/xssec JWT validation |
 | Authorization Model | ✅ Two-dimensional: scopes (read/write/admin) × roles (viewer/developer) × safety config |
 | Audit Logging | ✅ User identity in tool call logs, BTP Audit Log sink, file sink |
@@ -63,7 +63,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | Object Caching | ✅ SQLite + memory cache with on-demand + pre-warmer support (#31) |
 | LLM Search UX | ✅ Auto-transliteration, field-name hints, cache indicators |
 | HTTP Client | ✅ Native fetch + undici (replaced axios) (#35) |
-| Test Coverage | ✅ 1,104 unit tests + 28 BTP integration tests (vitest) |
+| Test Coverage | ✅ 1,300+ unit + ~150 integration + ~60 E2E + 28 BTP integration + 5 BTP smoke tests (vitest); coverage telemetry is informational |
 | Documentation | ✅ Architecture, auth guides, Docker guide, setup phases, security guide |
 
 ---
@@ -907,7 +907,7 @@ The following features are tracked but not planned for near-term implementation.
 | **Status** | ✅ Complete |
 
 **Implemented:**
-- `.github/workflows/test.yml` — lint + typecheck + unit tests (Node 20/22) on every push/PR, integration tests on main
+- `.github/workflows/test.yml` — lint + typecheck + unit tests (Node 22/24) on every push/PR, integration + E2E on `main` and internal PRs, plus reliability-summary aggregation
 - `.github/workflows/docker.yml` — multi-platform Docker build (amd64/arm64) to GHCR on tags + manual dispatch
 - `.github/workflows/release.yml` — npm publish with provenance on version tags
 
@@ -1086,7 +1086,7 @@ The following features are tracked but not planned for near-term implementation.
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,104 tests |
+| **ARC-1** | TypeScript | 11 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,500+ tests across unit/integration/E2E |
 | **vibing-steampunk** | Go 1.24 | 1-99+ (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 242 stars, **Streamable HTTP (v2.38.0)**, native parser, massive feature sprint (i18n, gCTS, API release state, version history, code coverage) |
 | **fr0ster/mcp-abap-adt** | TypeScript | 287 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
@@ -1103,7 +1103,7 @@ The following features are tracked but not planned for near-term implementation.
 6. **Multi-sink audit logging** — stderr + file + BTP Audit Log Service
 7. **Context compression + method-level surgery** — AST-based 7-30x + 95% method-level reduction
 8. **MCP elicitation** — interactive confirmations for destructive operations
-9. **1,104 automated tests** with CI on Node 20/22, BTP integration tests
+9. **1,500+ automated tests** with CI on Node 22/24, integration/E2E reliability telemetry, and BTP smoke lane
 10. **npm + Docker + release-please** — most professional distribution pipeline
 11. **RFC 9700 OAuth security** — state + PKCE, loopback binding, audience validation
 
@@ -1155,7 +1155,7 @@ The following features are tracked but not planned for near-term implementation.
 - `@abaplint/core` integration (replaces custom Go ABAP lexer with full abaplint rules)
 - `better-sqlite3` + in-memory cache (replaces Go CGO/SQLite)
 - 320 unit tests + 28 integration tests (vitest)
-- CI/CD: lint + typecheck + tests (Node 20/22), Docker multi-arch, npm publish
+- CI/CD: lint + typecheck + tests (Node 22/24), integration + E2E reliability telemetry, Docker multi-arch, npm publish
 - Go source code removed (47K lines deleted)
 
 **Migration report:** See `reports/2026-03-26-001-typescript-migration-plan.md`
@@ -1172,7 +1172,7 @@ The following features are tracked but not planned for near-term implementation.
 | Auth Phase 2: OAuth/OIDC | Entra ID JWT validation via `jose` library | ✅ Complete |
 | Auth Phase 4: BTP CF | Docker on CF with Destination Service + Cloud Connector | ✅ Complete |
 | TypeScript Migration | Full Go → TypeScript port, Go code removed | ✅ Complete (2026-03-26) |
-| CI/CD Pipeline | GitHub Actions: lint, typecheck, tests (Node 20/22), Docker, npm publish | ✅ Complete |
+| CI/CD Pipeline | GitHub Actions: lint, typecheck, tests (Node 22/24), integration + E2E on main/internal PRs, Docker, npm publish | ✅ Complete |
 | Copilot Studio E2E | OAuth + MCP + BTP Destination + Cloud Connector → SAP data | ✅ Complete |
 | XSUAA OAuth Proxy | SEC-07: MCP SDK auth + @sap/xssec, Express 5, 3 auth modes coexist | ✅ Complete (2026-03-27) |
 | Scope Enforcement | SEC-06: Per-tool scope checks, ListTools filtering, 12 tests | ✅ Complete (2026-03-27) |

@@ -11,12 +11,15 @@ import { deleteObject, lockObject } from '../../src/adt/crud.js';
 import type { AdtHttpClient } from '../../src/adt/http.js';
 import type { SafetyConfig } from '../../src/adt/safety.js';
 
+let nameCounter = 0;
+
 /**
  * Generate a unique ABAP-valid object name.
- * Returns `${prefix}_${timestamp_base36}` — uppercase, max 30 chars.
+ * Returns `${prefix}_${timestamp_base36}${counter_base36}` — uppercase, max 30 chars.
+ * Uses a monotonic counter to guarantee uniqueness even within the same millisecond.
  */
 export function generateUniqueName(prefix: string): string {
-  const suffix = Date.now().toString(36).toUpperCase().slice(-6);
+  const suffix = `${Date.now().toString(36)}${(nameCounter++).toString(36)}`.toUpperCase().slice(-6);
   const name = `${prefix}_${suffix}`;
   if (name.length > 30) {
     throw new Error(`Generated name "${name}" exceeds 30 characters. Use a shorter prefix.`);
@@ -130,45 +133,5 @@ export async function cleanupAll(
   return { cleaned, failed };
 }
 
-/** Escape XML special characters */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-/**
- * Build ADT-compatible creation XML for an object type.
- * Supports PROG and CLAS types (matching the patterns in src/handlers/intent.ts).
- */
-export function buildCreateXml(objectType: string, name: string, packageName: string, description: string): string {
-  switch (objectType) {
-    case 'PROG':
-      return `<?xml version="1.0" encoding="UTF-8"?>
-<program:abapProgram xmlns:program="http://www.sap.com/adt/programs/programs"
-                     xmlns:adtcore="http://www.sap.com/adt/core"
-                     adtcore:description="${escapeXml(description)}"
-                     adtcore:name="${escapeXml(name)}"
-                     adtcore:type="PROG/P"
-                     adtcore:masterLanguage="EN"
-                     adtcore:responsible="DEVELOPER">
-  <adtcore:packageRef adtcore:name="${escapeXml(packageName)}"/>
-</program:abapProgram>`;
-    case 'CLAS':
-      return `<?xml version="1.0" encoding="UTF-8"?>
-<class:abapClass xmlns:class="http://www.sap.com/adt/oo/classes"
-                 xmlns:adtcore="http://www.sap.com/adt/core"
-                 adtcore:description="${escapeXml(description)}"
-                 adtcore:name="${escapeXml(name)}"
-                 adtcore:type="CLAS/OC"
-                 adtcore:masterLanguage="EN"
-                 adtcore:responsible="DEVELOPER">
-  <adtcore:packageRef adtcore:name="${escapeXml(packageName)}"/>
-</class:abapClass>`;
-    default:
-      throw new Error(`Unsupported object type for XML generation: ${objectType}`);
-  }
-}
+// buildCreateXml is re-exported from src/handlers/intent.ts — no local duplicate needed.
+export { buildCreateXml } from '../../src/handlers/intent.js';

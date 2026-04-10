@@ -48,6 +48,7 @@ describeIf('CRUD lifecycle', () => {
     // 2. READ — verify creation
     const source1 = await client.getProgram(testName);
     expect(typeof source1).toBe('string');
+    expect(source1.length).toBeGreaterThan(0);
 
     // 3. UPDATE — modify source
     const newSource = `REPORT ${testName.toLowerCase()}.\nWRITE: / 'updated by CRUD lifecycle test'.`;
@@ -68,7 +69,7 @@ describeIf('CRUD lifecycle', () => {
     });
     registry.remove(testName);
 
-    // 7. VERIFY DELETION — read should fail
-    await expect(client.getProgram(testName)).rejects.toThrow();
+    // 7. VERIFY DELETION — read should fail with 404
+    await expect(client.getProgram(testName)).rejects.toThrow(/404|not found/i);
   }, 60_000);
 });

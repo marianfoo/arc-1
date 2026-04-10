@@ -34,6 +34,15 @@ jobs:
       - name: Run unit tests
         run: npm test
 
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-unit-${{ matrix.node-version }}
+          path: test-results/unit.json
+          retention-days: 7
+          if-no-files-found: warn
+
       # Coverage — informational only, does not block the build
       - name: Run coverage (informational)
         run: npm run test:coverage
@@ -83,6 +92,20 @@ jobs:
           TEST_SAP_CLIENT: ${{ secrets.TEST_SAP_CLIENT }}
           TEST_SAP_INSECURE: ${{ secrets.TEST_SAP_INSECURE }}
 
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-integration
+          path: test-results/integration.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Integration reliability summary
+        if: always()
+        run: node scripts/ci/collect-test-reliability.mjs --results-dir test-results
+        continue-on-error: true
+
   # Run on push (main) and internal PRs; skip external fork PRs (no secrets)
   e2e:
     runs-on: ubuntu-latest
@@ -128,6 +151,20 @@ jobs:
         env:
           E2E_MCP_URL: http://${{ secrets.E2E_SERVER }}:3000/mcp
 
+      - name: Upload E2E JSON test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-e2e
+          path: test-results/e2e.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: E2E reliability summary
+        if: always()
+        run: node scripts/ci/collect-test-reliability.mjs --results-dir test-results
+        continue-on-error: true
+
       - name: Stop MCP server & collect logs
         if: always()
         run: npm run test:e2e:stop
@@ -150,3 +187,46 @@ jobs:
           name: e2e-junit
           path: /tmp/arc1-e2e-logs/junit-results.xml
           retention-days: 7
+
+  reliability-summary:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [test, integration, e2e]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download test result artifacts
+        if: always()
+        uses: actions/download-artifact@v5
+        with:
+          pattern: test-results-*
+          path: downloaded-test-results
+          merge-multiple: true
+
+      - name: Normalize test result files
+        if: always()
+        run: |
+          mkdir -p test-results
+          find downloaded-test-results -name unit.json -print -quit | xargs -I{} cp {} test-results/unit.json || true
+          find downloaded-test-results -name integration.json -print -quit | xargs -I{} cp {} test-results/integration.json || true
+          find downloaded-test-results -name e2e.json -print -quit | xargs -I{} cp {} test-results/e2e.json || true
+
+      - name: Collect reliability summary
+        if: always()
+        run: npm run test:reliability-report -- --results-dir test-results
+        continue-on-error: true
+
+      - name: Assert required execution (warn mode)
+        if: always()
+        run: npm run test:assert-execution -- --results-dir test-results --mode warn
+        continue-on-error: true

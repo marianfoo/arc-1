@@ -118,13 +118,13 @@ Create a script that checks whether minimum test execution thresholds are met, w
 
 Add deterministic unit tests for both scripts using synthetic Vitest JSON result fixtures.
 
-- [ ] Create fixture files in `tests/fixtures/test-results/`:
+- [x] Create fixture files in `tests/fixtures/test-results/`:
   - `unit-healthy.json` — 100 passed, 0 failed, 0 skipped.
   - `integration-mixed.json` — 80 passed, 2 failed, 40 skipped with reason texts.
   - `e2e-all-skipped.json` — 0 passed, 0 failed, 20 skipped.
   - `malformed.json` — invalid JSON for error handling tests.
   - Fixtures should follow the Vitest JSON reporter output format: `{ testResults: [{ assertionResults: [{ status, title, failureMessages }] }] }`.
-- [ ] Test `collect-test-reliability.mjs` (~8 tests):
+- [x] Test `collect-test-reliability.mjs` (~8 tests):
   - Parses healthy unit results correctly (counts match).
   - Parses mixed integration results with skip reasons.
   - Handles all-skipped suite.
@@ -133,7 +133,7 @@ Add deterministic unit tests for both scripts using synthetic Vitest JSON result
   - Generates valid Markdown table format.
   - Generates skip reason summary with correct counts.
   - Writes to GITHUB_STEP_SUMMARY file when env var is set (use temp file).
-- [ ] Test `assert-required-test-execution.mjs` (~8 tests):
+- [x] Test `assert-required-test-execution.mjs` (~8 tests):
   - Passes when all suites meet thresholds.
   - Warns when suite is below threshold in warn mode (exit 0).
   - Fails when suite is below threshold in enforce mode (exit 1).
@@ -142,8 +142,8 @@ Add deterministic unit tests for both scripts using synthetic Vitest JSON result
   - Reports per-suite pass/fail status.
   - Handles all-skipped suite correctly (0 executed).
   - Default thresholds are applied when no config given.
-- [ ] Since scripts are `.mjs`, tests may need to import them or spawn them as child processes. Choose the approach that best fits vitest patterns (e.g., extract core logic into importable functions, or test via `execFileSync`).
-- [ ] Run `npm test` — all tests must pass (16+ new tests).
+- [x] Since scripts are `.mjs`, tests may need to import them or spawn them as child processes. Choose the approach that best fits vitest patterns (e.g., extract core logic into importable functions, or test via `execFileSync`).
+- [x] Run `npm test` — all tests must pass (16+ new tests).
 
 ### Task 5: Wire Telemetry into CI Workflows
 
@@ -152,24 +152,24 @@ Add deterministic unit tests for both scripts using synthetic Vitest JSON result
 
 Add artifact upload steps for all test result JSON files and add a reliability summary step.
 
-- [ ] In the `test` job (unit tests, lines 10-35), after the `npm test` step, add:
+- [x] In the `test` job (unit tests, lines 10-35), after the `npm test` step, add:
   - Upload artifact step: `actions/upload-artifact@v4` with name `test-results-unit-${{ matrix.node-version }}`, path `test-results/unit.json`, retention 7 days, `if: always()`.
-- [ ] In the `integration` job (lines 39-65), after the `npm run test:integration` step, add:
+- [x] In the `integration` job (lines 39-65), after the `npm run test:integration` step, add:
   - Upload artifact step: `actions/upload-artifact@v4` with name `test-results-integration`, path `test-results/integration.json`, retention 7 days, `if: always()`.
   - Reliability summary step: run `node scripts/ci/collect-test-reliability.mjs --results-dir test-results/` with `if: always()` and `continue-on-error: true`.
-- [ ] In the `e2e` job (lines 69-133), after the existing test step but before artifact uploads, add:
+- [x] In the `e2e` job (lines 69-133), after the existing test step but before artifact uploads, add:
   - Copy `test-results/e2e.json` to the E2E log dir if it exists.
   - Add `test-results/e2e.json` to the existing artifact upload paths.
   - Add reliability summary step similar to integration.
-- [ ] Add a final summary job that depends on all other jobs, downloads all `test-results-*` artifacts, runs `collect-test-reliability.mjs` on the combined results, and runs `assert-required-test-execution.mjs` in warn mode. Use `if: always()` so it runs even if test jobs fail.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add a final summary job that depends on all other jobs, downloads all `test-results-*` artifacts, runs `collect-test-reliability.mjs` on the combined results, and runs `assert-required-test-execution.mjs` in warn mode. Use `if: always()` so it runs even if test jobs fail.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 6: Final Verification
 
-- [ ] Run full unit suite: `npm test` — all tests pass (including 16+ new telemetry tests).
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Verify `test-results/unit.json` is created after `npm test` and contains valid JSON with test counts.
-- [ ] Verify `test-results/` is in `.gitignore`.
-- [ ] Verify `npm run test:reliability-report` runs without error (may show "no results" for integration/e2e if not configured locally — that's expected).
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Run full unit suite: `npm test` — all tests pass (including 16+ new telemetry tests).
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Verify `test-results/unit.json` is created after `npm test` and contains valid JSON with test counts.
+- [x] Verify `test-results/` is in `.gitignore`.
+- [x] Verify `npm run test:reliability-report` runs without error (may show "no results" for integration/e2e if not configured locally — that's expected).
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.

@@ -12,6 +12,10 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
 
+function parsePossiblyCachedJson(text: string): any {
+  return JSON.parse(text.replace(/^\[cached\]\n/, ''));
+}
+
 describe('E2E RAP Completeness Tests', () => {
   let client: Client;
 
@@ -72,7 +76,7 @@ describe('E2E RAP Completeness Tests', () => {
         name: '/DMO/UI_AGENCY_O4',
       });
       const text = expectToolSuccess(result);
-      const parsed = JSON.parse(text);
+      const parsed = parsePossiblyCachedJson(text);
 
       expect(parsed.name).toBe('/DMO/UI_AGENCY_O4');
       expect(parsed.type).toBe('SRVB/SVB');
@@ -89,7 +93,7 @@ describe('E2E RAP Completeness Tests', () => {
         name: '/DMO/UI_TRAVEL_U_V2',
       });
       const text = expectToolSuccess(result);
-      const parsed = JSON.parse(text);
+      const parsed = parsePossiblyCachedJson(text);
 
       expect(parsed.name).toBe('/DMO/UI_TRAVEL_U_V2');
       expect(parsed.odataVersion).toBe('V2');
@@ -102,7 +106,7 @@ describe('E2E RAP Completeness Tests', () => {
         name: '/DMO/UI_TRAVEL_D_D_O4',
       });
       const text = expectToolSuccess(result);
-      const parsed = JSON.parse(text);
+      const parsed = parsePossiblyCachedJson(text);
 
       // Binding should have publish status and service definition reference
       expect(typeof parsed.published).toBe('boolean');

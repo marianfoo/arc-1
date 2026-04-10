@@ -1,0 +1,144 @@
+{
+  "numTotalTestSuites": 2,
+  "numPassedTestSuites": 0,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 2,
+  "numTotalTests": 20,
+  "numPassedTests": 0,
+  "numFailedTests": 0,
+  "numPendingTests": 20,
+  "testResults": [
+    {
+      "name": "tests/e2e/read.e2e.test.ts",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Read"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        }
+      ]
+    },
+    {
+      "name": "tests/e2e/write.e2e.test.ts",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["E2E Write"],
+          "title": "MCP server not running",
+          "status": "pending",
+          "failureMessages": []
+        }
+      ]
+    }
+  ]
+}

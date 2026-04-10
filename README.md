@@ -1,6 +1,6 @@
 # arc1 — SAP ADT MCP Server
 
-**Enterprise-ready MCP server for SAP ABAP systems. Secure by default, deployable to BTP or on-premise, battle-tested with 700+ tests.**
+**Enterprise-ready MCP server for SAP ABAP systems. Secure by default, deployable to BTP or on-premise, and hardened with large unit/integration/E2E test coverage.**
 
 arc1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MCP client) to SAP systems via the [ADT REST API](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools). It ships as an [npm package](https://www.npmjs.com/package/arc-1) and [Docker image](https://github.com/marianfoo/arc-1/pkgs/container/arc-1).
 
@@ -59,11 +59,12 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 ### Testing
 
-- **700+ tests** across unit, integration, and E2E
-- **Unit tests** run without SAP system access (33 test files, mocked HTTP)
-- **Integration tests** against live SAP systems (on-premise + BTP ABAP)
-- **E2E tests** deploy the server and execute real MCP tool calls
-- **CI matrix** across Node 20, 22, and 24
+- **1,300+ unit tests** (`52` unit test files, mocked HTTP)
+- **~160 integration tests** against live SAP systems, with explicit skip reasons when credentials or fixtures are missing
+- **~60 E2E tests** that execute real MCP tool calls against a running ARC-1 server
+- **CRUD lifecycle and BTP smoke lanes** included (`test:integration:crud`, `test:integration:btp:smoke`)
+- **CI matrix** on Node `22` and `24`; integration + E2E run on `push` to `main` and internal PRs
+- **Reliability telemetry + coverage** published as informational CI signals (non-blocking)
 
 ### Tools Refined for Real-World Usage
 

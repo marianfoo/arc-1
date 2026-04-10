@@ -244,7 +244,7 @@ Order tasks to minimize cross-task dependencies:
 
 Tests are critical. Every task that modifies code MUST include test checkboxes. Follow these patterns:
 
-**Unit tests (`tests/unit/`, 57+ files, 700+ tests)**
+**Unit tests (`tests/unit/`, 52 files, 1300+ tests)**
 - Mirror source structure under `tests/unit/` (e.g., `src/adt/client.ts` → `tests/unit/adt/client.test.ts`)
 - Mock HTTP layer: `vi.mock('undici', ...)` with `mockResponse()` helper from `tests/helpers/mock-fetch.ts`
 - XML fixtures: `tests/fixtures/xml/` for ADT response parsing
@@ -252,7 +252,7 @@ Tests are critical. Every task that modifies code MUST include test checkboxes. 
 - Config: `vitest.config.ts` (10s timeout, isolated modules)
 - Run: `npm test`
 
-**Integration tests (`tests/integration/`, 6 files)**
+**Integration tests (`tests/integration/`, 8 files)**
 - Add tests when the feature touches SAP system interaction
 - Auto-skipped when `TEST_SAP_URL` is not set — safe to add without breaking CI
 - Use `getTestClient()` factory from `tests/integration/helpers.ts`
@@ -260,6 +260,7 @@ Tests are critical. Every task that modifies code MUST include test checkboxes. 
 - Config: `vitest.integration.config.ts` (30s timeout)
 - Run: `npm run test:integration`
 - BTP-specific: `tests/integration/btp-abap.integration.test.ts` (local only, needs `TEST_BTP_SERVICE_KEY_FILE`)
+- BTP smoke lane: `tests/integration/btp-abap.smoke.integration.test.ts` (`npm run test:integration:btp:smoke`)
 
 **E2E tests (`tests/e2e/`, 6 files)**
 - Add tests when the feature adds new tool operations or changes MCP protocol behavior

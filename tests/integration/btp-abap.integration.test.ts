@@ -170,8 +170,7 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
         expect(source).toBeTruthy();
       } catch (err) {
         // May not be available on all BTP systems — acceptable
-        const msg = err instanceof Error ? err.message : String(err);
-        expect(msg).toMatch(/404|not found|not accessible/i);
+        expectSapFailureClass(err, [404], [/not found/i, /not accessible/i]);
       }
     });
 

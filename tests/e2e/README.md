@@ -106,7 +106,7 @@ describe('My New Tests', () => {
 
 1. Add ABAP source to `tests/fixtures/abap/<name>.abap`
 2. Add entry to `PERSISTENT_OBJECTS` in `tests/e2e/fixtures.ts`
-3. The setup will auto-create it on next run
+3. Create it explicitly (manual SAP setup or call `ensureTestObjects()` in a controlled setup step)
 
 ### 3. Testing errors
 

@@ -18,10 +18,10 @@ describe('generateUniqueName', () => {
     expect(name.length).toBeLessThanOrEqual(30);
   });
 
-  it('produces different names on sequential calls', () => {
+  it('produces different names on sequential calls even within the same millisecond', () => {
     vi.useFakeTimers({ now: 1_000_000 });
     const name1 = generateUniqueName('ZARC1_IT');
-    vi.advanceTimersByTime(100);
+    // No time advance — same millisecond, counter ensures uniqueness
     const name2 = generateUniqueName('ZARC1_IT');
     vi.useRealTimers();
     expect(name1).toMatch(/^ZARC1_IT_[A-Z0-9]+$/);
@@ -174,7 +174,9 @@ describe('buildCreateXml', () => {
     expect(xml).toContain('adtcore:description="Test &amp; &lt;demo&gt;"');
   });
 
-  it('throws for unsupported object types', () => {
-    expect(() => buildCreateXml('TABL', 'ZTABLE', '$TMP', 'Test')).toThrow('Unsupported object type');
+  it('produces fallback XML for unknown object types', () => {
+    const xml = buildCreateXml('TABL', 'ZTABLE', '$TMP', 'Test');
+    expect(xml).toContain('<?xml version="1.0"');
+    expect(xml).toContain('adtcore:name="ZTABLE"');
   });
 });

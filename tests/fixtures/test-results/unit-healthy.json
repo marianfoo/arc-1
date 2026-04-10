@@ -1,0 +1,64 @@
+{
+  "numTotalTestSuites": 5,
+  "numPassedTestSuites": 5,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 100,
+  "numPassedTests": 100,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "testResults": [
+    {
+      "name": "tests/unit/adt/client.test.ts",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["ADT Client"],
+          "title": "fetches program source",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["ADT Client"],
+          "title": "fetches class source",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["ADT Client"],
+          "title": "fetches interface source",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["ADT Client"],
+          "title": "fetches function group",
+          "status": "passed",
+          "failureMessages": []
+        },
+        { "ancestorTitles": ["ADT Client"], "title": "fetches data element", "status": "passed", "failureMessages": [] }
+      ]
+    },
+    {
+      "name": "tests/unit/adt/safety.test.ts",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Safety"],
+          "title": "allows read in read-only mode",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["Safety"],
+          "title": "blocks write in read-only mode",
+          "status": "passed",
+          "failureMessages": []
+        },
+        { "ancestorTitles": ["Safety"], "title": "respects allowedOps", "status": "passed", "failureMessages": [] },
+        { "ancestorTitles": ["Safety"], "title": "respects disallowedOps", "status": "passed", "failureMessages": [] },
+        { "ancestorTitles": ["Safety"], "title": "checks package filter", "status": "passed", "failureMessages": [] }
+      ]
+    }
+  ]
+}
