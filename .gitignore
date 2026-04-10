@@ -35,6 +35,7 @@ MEMORY.md
 
 # Coverage
 coverage/
+!tests/fixtures/coverage/
 coverage.out
 coverage.html
 

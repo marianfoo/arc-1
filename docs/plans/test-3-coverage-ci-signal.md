@@ -84,7 +84,7 @@ Install `@vitest/coverage-v8` and add coverage configuration to the unit test vi
 
 Create a script that reads `coverage-summary.json` and outputs a concise Markdown summary suitable for GitHub step summaries.
 
-- [ ] Implement `scripts/ci/coverage-summary.mjs`:
+- [x] Implement `scripts/ci/coverage-summary.mjs`:
   - Accept `--coverage-dir` argument (default: `coverage/`).
   - Read `coverage-summary.json` from the coverage directory.
   - Extract `total` metrics: `lines`, `statements`, `functions`, `branches` — each with `pct` (percentage) and `total`/`covered` counts.
@@ -92,19 +92,19 @@ Create a script that reads `coverage-summary.json` and outputs a concise Markdow
   - If `GITHUB_STEP_SUMMARY` is set, append the table.
   - Print to stdout for local use.
   - Exit 0 always. Handle missing file with "No coverage data found" message.
-- [ ] Add npm script `"test:coverage-report": "node scripts/ci/coverage-summary.mjs"` to `package.json`.
-- [ ] Create fixture files in `tests/fixtures/coverage/`:
+- [x] Add npm script `"test:coverage-report": "node scripts/ci/coverage-summary.mjs"` to `package.json`.
+- [x] Create fixture files in `tests/fixtures/coverage/`:
   - `coverage-summary-healthy.json` — realistic coverage data with 80%+ across all metrics.
   - `coverage-summary-low.json` — low coverage (<30%) for visual comparison.
   - `coverage-summary-partial.json` — missing some metric fields.
-- [ ] Add unit tests (~6 tests) in `tests/unit/scripts/coverage-summary.test.ts`:
+- [x] Add unit tests (~6 tests) in `tests/unit/scripts/coverage-summary.test.ts`:
   - Parses healthy coverage correctly (percentages and counts match).
   - Parses low coverage correctly.
   - Handles missing coverage file gracefully.
   - Handles malformed JSON gracefully.
   - Handles partial coverage data (missing metrics).
   - Generates valid Markdown table format.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Wire Coverage into CI Test Workflow
 
