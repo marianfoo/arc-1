@@ -11,6 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
 import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
+import { expectSapFailureClass } from '../helpers/expected-error.js';
+import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 // Skip entire suite if no SAP credentials
@@ -220,8 +222,10 @@ describeIf('ADT Integration Tests', () => {
       try {
         const source = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
         expect(typeof source).toBe('string');
-      } catch {
-        // Some systems may not have all includes — that's OK
+        expect(source.length).toBeGreaterThan(0);
+      } catch (err) {
+        // Include may not be available on all systems — expect 404 or similar
+        expectSapFailureClass(err, [404, 500], [/not found/i, /does not exist/i]);
       }
     });
 
@@ -268,9 +272,11 @@ describeIf('ADT Integration Tests', () => {
       // IF_SERIALIZABLE_OBJECT exists on all systems
       try {
         const source = await client.getInterface('IF_SERIALIZABLE_OBJECT');
-        expect(source).toBeTruthy();
-      } catch {
-        // Some systems may not have this — skip gracefully
+        expect(typeof source).toBe('string');
+        expect(source.length).toBeGreaterThan(0);
+      } catch (err) {
+        // Interface may not exist on minimal systems — expect 404 or not-found
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
       }
     });
   });
@@ -282,11 +288,10 @@ describeIf('ADT Integration Tests', () => {
       // Try a standard function group
       try {
         const results = await client.searchObject('FUNCTION_EXISTS', 1);
-        if (results.length > 0) {
-          // Standard FM exists
-        }
-      } catch {
-        // Skip if search fails
+        expect(Array.isArray(results)).toBe(true);
+      } catch (err) {
+        // Search may fail on restricted systems — expect known error shape
+        expectSapFailureClass(err, [404, 403, 500], [/not found/i, /search/i]);
       }
     });
   });
@@ -428,22 +433,24 @@ describeIf('ADT Integration Tests', () => {
     });
 
     it('handles empty search query', async () => {
+      // Edge case: both outcomes are acceptable, but we assert the shape of whichever occurs
       try {
         const results = await client.searchObject('', 1);
-        // May return results or empty — either is acceptable
         expect(Array.isArray(results)).toBe(true);
-      } catch {
-        // SAP may reject empty search — that's acceptable too
+      } catch (err) {
+        // SAP may reject empty search — assert it's a known error shape
+        expectSapFailureClass(err, [400, 404, 500], [/search/i, /invalid/i, /empty/i]);
       }
     });
 
     it('table contents with maxRows=0 returns something', async () => {
+      // Edge case: both outcomes are acceptable, but we assert the shape of whichever occurs
       try {
         const result = await client.getTableContents('T000', 0);
-        // maxRows=0 may return all rows or be treated as default
         expect(result.columns).toContain('MANDT');
-      } catch {
-        // Some systems may reject 0 as invalid
+      } catch (err) {
+        // Some systems may reject 0 as invalid — assert known error shape
+        expectSapFailureClass(err, [400, 404, 500], [/invalid/i, /rows/i]);
       }
     });
   });
@@ -471,9 +478,9 @@ describeIf('ADT Integration Tests', () => {
         expect(dumps.length).toBeLessThanOrEqual(2);
       });
 
-      it('lists dumps filtered by current user', async () => {
+      it('lists dumps filtered by current user', async (ctx) => {
         const user = (process.env.TEST_SAP_USER || process.env.SAP_USER || '').toUpperCase();
-        if (!user) return;
+        requireOrSkip(ctx, user || undefined, SkipReason.NO_CREDENTIALS);
         const dumps = await listDumps(client.http, unrestrictedSafetyConfig(), { user, maxResults: 5 });
         expect(Array.isArray(dumps)).toBe(true);
         // All returned dumps should be for this user
@@ -482,11 +489,10 @@ describeIf('ADT Integration Tests', () => {
         }
       });
 
-      it('gets dump detail if dumps exist', async () => {
+      it('gets dump detail if dumps exist', async (ctx) => {
         const dumps = await listDumps(client.http, unrestrictedSafetyConfig(), { maxResults: 1 });
         if (dumps.length === 0) {
-          // No dumps on this system — skip
-          return;
+          ctx.skip(SkipReason.NO_DUMPS);
         }
         const detail = await getDump(client.http, unrestrictedSafetyConfig(), dumps[0]!.id);
         expect(detail.error).toBeTruthy();
@@ -563,7 +569,7 @@ describeIf('ADT Integration Tests', () => {
             await deleteObject(session, safety, objectUrl, lock.lockHandle);
           });
         } catch {
-          // Ignore cleanup errors
+          // best-effort-cleanup
         }
       }
     });

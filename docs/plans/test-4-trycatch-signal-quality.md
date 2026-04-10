@@ -98,8 +98,8 @@ Create shared helpers for asserting expected SAP error shapes in test catch bloc
 
 Convert Category C catch blocks in the ADT integration test to dual-path assertions.
 
-- [ ] Import `expectSapFailureClass` from `../../helpers/expected-error.js`.
-- [ ] Lines 220-225 (include read catch-ignore): refactor from `catch { /* ignore */ }` to a dual-path pattern:
+- [x] Import `expectSapFailureClass` from `../../helpers/expected-error.js`.
+- [x] Lines 220-225 (include read catch-ignore): refactor from `catch { /* ignore */ }` to a dual-path pattern:
   ```typescript
   try {
     const source = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
@@ -110,15 +110,15 @@ Convert Category C catch blocks in the ADT integration test to dual-path asserti
     expectSapFailureClass(err, [404, 500], [/not found/i, /does not exist/i]);
   }
   ```
-- [ ] Lines 269-274 (interface read catch-ignore): same dual-path pattern. Success: assert source is truthy and non-empty string. Failure: assert 404 or not-found error shape.
-- [ ] Lines 283-290 (FM search catch-ignore): same dual-path pattern. Success: assert results array. Failure: assert expected error shape (404 or search failure).
-- [ ] Lines 431-447 (both throw/no-throw accepted): These are edge-case tests. Refactor to:
+- [x] Lines 269-274 (interface read catch-ignore): same dual-path pattern. Success: assert source is truthy and non-empty string. Failure: assert 404 or not-found error shape.
+- [x] Lines 283-290 (FM search catch-ignore): same dual-path pattern. Success: assert results array. Failure: assert expected error shape (404 or search failure).
+- [x] Lines 431-447 (both throw/no-throw accepted): These are edge-case tests. Refactor to:
   - Empty search query: success asserts empty/valid array; failure asserts error (any shape acceptable for edge case).
   - Table contents maxRows=0: success asserts columns present; failure asserts expected error pattern.
   - Add comment: `// Edge case: both outcomes are acceptable, but we assert the shape of whichever occurs`.
-- [ ] Verify that existing `afterAll` cleanup blocks (lines 553-568) with catch-ignore are Category A — add `// best-effort-cleanup` comment tag to each.
-- [ ] Run `npm run test:integration` if SAP credentials are available — all tests should still pass. Otherwise run `npm test`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Verify that existing `afterAll` cleanup blocks (lines 553-568) with catch-ignore are Category A — add `// best-effort-cleanup` comment tag to each.
+- [x] Run `npm run test:integration` if SAP credentials are available — all tests should still pass. Otherwise run `npm test`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Refactor Permissive BTP Restriction Tests
 
