@@ -227,10 +227,10 @@ Update the BTP ABAP Environment documentation to describe the smoke/extended spl
 
 ### Task 5: Final Verification
 
-- [ ] Run full unit suite: `npm test` — all tests pass.
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Verify `npm run test:integration:btp:smoke` command works (tests will skip without BTP credentials — that's expected).
-- [ ] Verify `.github/workflows/btp-smoke.yml` is valid YAML.
-- [ ] Verify `docs/btp-abap-environment.md` has the new testing section.
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Run full unit suite: `npm test` — all tests pass.
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Verify `npm run test:integration:btp:smoke` command works (tests will skip without BTP credentials — that's expected).
+- [x] Verify `.github/workflows/btp-smoke.yml` is valid YAML.
+- [x] Verify `docs/btp-abap-environment.md` has the new testing section.
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.
