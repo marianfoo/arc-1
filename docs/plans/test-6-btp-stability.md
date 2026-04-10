@@ -216,14 +216,14 @@ Create a GitHub Actions workflow that runs BTP smoke tests on a schedule and man
 
 Update the BTP ABAP Environment documentation to describe the smoke/extended split, stability requirements, and failure escalation path.
 
-- [ ] Read `docs/btp-abap-environment.md` to understand current content.
-- [ ] Add a "Testing" section covering:
+- [x] Read `docs/btp-abap-environment.md` to understand current content.
+- [x] Add a "Testing" section covering:
   - **Smoke tests** (CI-capable): what they test, how to run (`npm run test:integration:btp:smoke`), what secrets are needed (`TEST_BTP_SERVICE_KEY`), expected behavior when instance is down.
   - **Extended tests** (local-only): what they test, how to run (`npm run test:integration:btp:extended`), why they need browser login, environment setup.
   - **Failure taxonomy**: auth failures (token expired, key invalid), connectivity failures (instance stopped, DNS unreachable), assertion failures (API contract changed), backend unavailable (503, maintenance).
   - **Tenant assumptions**: tests assume BTP ABAP with standard released objects; free-tier limitations (nightly stop, 90-day expiry); recommended: use paid test tenant for reliable CI.
   - **Scheduled workflow**: runs weekday mornings, results in GitHub Actions artifacts.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 5: Final Verification
 
