@@ -248,6 +248,7 @@ describe('E2E Diagnostics Tests', () => {
       } else {
         // Write steps succeeded but no dumps on system — program exists but
         // wasn't executed (we can't execute programs via MCP). Listing API works.
+        expect(Array.isArray(allDumps)).toBe(true);
         console.log('    Dump-trigger program ready but no dumps yet (program not executed) — listing API verified');
       }
     });

@@ -479,6 +479,7 @@ describeIf('ADT Integration Tests', () => {
         const dumps = await listDumps(client.http, unrestrictedSafetyConfig(), { maxResults: 1 });
         if (dumps.length === 0) {
           ctx.skip(SkipReason.NO_DUMPS);
+          return;
         }
         const detail = await getDump(client.http, unrestrictedSafetyConfig(), dumps[0]!.id);
         expect(detail.error).toBeTruthy();
