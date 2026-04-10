@@ -8,52 +8,40 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 Distributed as an npm package (`arc-1`) and Docker image (`ghcr.io/marianfoo/arc-1`).
 
+## Design Principles
+
+1. **Centralized admin control** — Runs as a managed service, not on developer laptops. Admins configure safety gates (read-only, package allowlists, operation filters, SQL blocking, transport guards) per instance. Every tool call is audited with user identity. Per-user JWT scopes can restrict further but never expand beyond server config.
+
+2. **Per-user SAP identity** — Principal propagation maps each MCP user to their own SAP user via BTP Destination Service + Cloud Connector. SAP's native authorization (S_DEVELOP, package checks) applies per user. No shared service accounts.
+
+3. **Token-efficient tool design** — 11 intent-based tools (~5K schema tokens) instead of 200+ endpoints. Hyperfocused mode: 1 tool (~200 tokens). Method-level surgery (95% reduction) and context compression (7-30x) keep responses within tight context windows. This is the difference between working and not working on mid-tier LLMs (GPT-4o-mini, Copilot Studio).
+
+4. **BTP-native deployment** — First-class BTP CF support: Destination Service, Cloud Connector, XSUAA OAuth, BTP Audit Log Service. Also deployable as Docker or npm. Local stdio mode for development.
+
+5. **Multi-client, vendor-neutral** — Standard MCP protocol. Three auth modes coexist: XSUAA OAuth + Entra ID OIDC + API key. Same instance serves Claude, Copilot Studio, VS Code Copilot, Gemini CLI, Cursor.
+
+6. **Safe defaults, opt-in power** — Read-only by default. Free SQL blocked. Package allowlist defaults to `$TMP`. Writing to transportable packages requires explicit config. Everything forbidden until the admin allows it.
+
 ## Quick Reference
 
 ### Build & Test
 
 ```bash
-# Install dependencies
-npm ci
-
-# Build (TypeScript → dist/)
-npm run build
-
-# Run unit tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Type check
-npm run typecheck
-
-# Lint
-npm run lint
-
-# Run integration tests (SAP system optional — skipped if not configured)
-npm run test:integration
-
-# Run BTP ABAP integration tests (local only — needs BTP service key + browser login)
+npm ci                          # Install dependencies
+npm run build                   # TypeScript → dist/
+npm test                        # Unit tests
+npm run test:watch              # Unit tests (watch mode)
+npm run typecheck               # Type check
+npm run lint                    # Lint
+npm run test:integration        # Integration tests (needs SAP credentials)
+npm run test:integration:crud   # CRUD lifecycle tests (needs SAP credentials)
+npm run test:coverage           # Unit tests with coverage (informational)
+npm run test:coverage-report    # Coverage summary (Markdown)
+npm run dev                     # Dev mode (stdio)
+npm run dev:http                # Dev mode (HTTP Streamable)
+# BTP tests (local only — needs service key + browser login):
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
-
-# Run BTP smoke tests (CI-capable, non-interactive)
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:smoke
-
-# Run CRUD lifecycle integration tests (needs SAP credentials)
-npm run test:integration:crud
-
-# Run unit tests with coverage (informational, non-blocking in CI)
-npm run test:coverage
-
-# Generate coverage summary (Markdown table from coverage-summary.json)
-npm run test:coverage-report
-
-# Dev mode (stdio transport)
-npm run dev
-
-# Dev mode (HTTP Streamable transport)
-npm run dev:http
 ```
 
 ### Configuration (Priority: CLI > Env > .env > Defaults)
@@ -107,8 +95,7 @@ npm run dev
 
 ```
 src/
-├── index.ts                    # MCP server entry point
-├── cli.ts                      # CLI entry point (commander)
+├── index.ts, cli.ts            # Entry points (MCP server, CLI)
 ├── server/
 │   ├── server.ts               # MCP server setup, tool registration
 │   ├── config.ts               # Config parser (CLI > env > .env > defaults)
@@ -116,113 +103,57 @@ src/
 │   ├── logger.ts               # Structured logger (stderr only, never stdout)
 │   ├── types.ts                # ServerConfig type, defaults
 │   ├── audit.ts                # Audit logging (tool calls, elicitation events)
-│   ├── context.ts              # MCP context helpers
-│   ├── elicit.ts               # MCP elicitation (confirmDestructive, selectOption, promptString)
+│   ├── context.ts, elicit.ts   # MCP context helpers, elicitation
 │   ├── xsuaa.ts                # XSUAA JWT validation for BTP
-│   └── sinks/                  # Audit log sinks
-│       ├── types.ts            # Sink interface
-│       ├── stderr.ts           # Stderr sink
-│       ├── file.ts             # File sink
-│       └── btp-auditlog.ts     # BTP Audit Log Service sink
+│   └── sinks/                  # Audit sinks: stderr, file, btp-auditlog
 ├── handlers/
 │   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
 │   ├── tools.ts                # Tool definitions (names, descriptions, JSON schemas)
-│   ├── schemas.ts              # Zod v4 input schemas for all MCP tools (runtime validation)
-│   ├── zod-errors.ts           # Zod validation error formatting for LLM clients
+│   ├── schemas.ts              # Zod v4 input schemas (runtime validation)
+│   ├── zod-errors.ts           # Zod error formatting for LLM clients
 │   └── hyperfocused.ts         # Hyperfocused mode (single SAP tool, ~200 tokens)
 ├── adt/
 │   ├── client.ts               # ADT client facade (all read operations)
 │   ├── http.ts                 # HTTP transport (undici/fetch, CSRF, cookies, sessions)
-│   ├── errors.ts               # Typed error classes (AdtApiError, AdtSafetyError)
+│   ├── errors.ts               # Typed errors (AdtApiError, AdtSafetyError, AdtNetworkError)
 │   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
 │   ├── features.ts             # Feature detection (auto/on/off)
-│   ├── config.ts               # ADT client configuration types
-│   ├── types.ts                # ADT response types
+│   ├── config.ts, types.ts     # ADT client config + response types
 │   ├── xml-parser.ts           # XML parser (fast-xml-parser v5)
 │   ├── btp.ts                  # BTP Destination Service + Connectivity proxy
-│   ├── cookies.ts              # Cookie file parsing (Netscape format)
-│   ├── oauth.ts                # OAuth 2.0 for BTP ABAP Environment (browser login, token lifecycle)
+│   ├── cookies.ts, oauth.ts    # Cookie parsing, OAuth 2.0 for BTP ABAP
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
-│   ├── devtools.ts             # Dev tools (syntax check, activate, publish/unpublish SRVB, unit tests)
-│   ├── diagnostics.ts          # Runtime diagnostics (short dumps ST22, ABAP profiler traces)
-│   ├── codeintel.ts            # Code intelligence (find def, refs, where-used, completion)
-│   ├── ui5-repository.ts       # UI5 ABAP Repository OData client (BSP deploy queries)
+│   ├── devtools.ts             # Syntax check, activate, publish SRVB, unit tests
+│   ├── diagnostics.ts          # Short dumps (ST22), ABAP profiler traces
+│   ├── codeintel.ts            # Find def, refs, where-used, completion
+│   ├── ui5-repository.ts       # UI5 ABAP Repository OData client
 │   └── transport.ts            # CTS transport management
 ├── context/
-│   ├── types.ts                # Context compression types
-│   ├── deps.ts                 # AST-based dependency extraction (@abaplint/core)
-│   ├── cds-deps.ts             # CDS-specific dependency extraction
+│   ├── deps.ts, cds-deps.ts    # AST-based dependency extraction
 │   ├── contract.ts             # Public API contract extraction
 │   ├── compressor.ts           # Orchestrator (fetch + compress + format)
-│   └── method-surgery.ts       # Method-level extraction, listing, and surgical replacement
+│   └── method-surgery.ts       # Method-level extraction and surgical replacement
 ├── cache/
-│   ├── cache.ts                # Cache interface + types (sources, dep graphs, edges, APIs)
-│   ├── memory.ts               # In-memory cache (default for stdio)
+│   ├── cache.ts, memory.ts     # Cache interface + in-memory impl
 │   ├── sqlite.ts               # SQLite cache (default for http-streamable)
-│   ├── caching-layer.ts        # Orchestration: source + dep caching, invalidation
-│   └── warmup.ts               # Pre-warmer: TADIR scan, bulk fetch, edge index
+│   ├── caching-layer.ts        # Source + dep caching, invalidation
+│   └── warmup.ts               # Pre-warmer: TADIR scan, bulk fetch
 ├── aff/
 │   ├── validator.ts            # AFF JSON schema validator (Ajv 2020-12)
-│   └── schemas/                # Bundled AFF JSON schemas (from SAP/abap-file-formats)
-│       ├── clas-v1.json        # Class schema
-│       ├── intf-v1.json        # Interface schema
-│       ├── prog-v1.json        # Program schema
-│       ├── ddls-v1.json        # CDS view schema
-│       ├── bdef-v1.json        # Behavior definition schema
-│       ├── srvd-v1.json        # Service definition schema
-│       └── srvb-v1.json        # Service binding schema
+│   └── schemas/                # Bundled AFF schemas: clas, intf, prog, ddls, bdef, srvd, srvb
 └── lint/
     ├── lint.ts                 # ABAP lint wrapper (@abaplint/core)
-    ├── config-builder.ts       # System-aware abaplint config builder (cloud/onprem presets)
-    └── presets/
-        ├── cloud.ts            # BTP/Steampunk lint preset (strict cloud rules)
-        └── onprem.ts           # On-premise lint preset (relaxed rules)
+    ├── config-builder.ts       # System-aware config builder (cloud/onprem)
+    └── presets/                # cloud.ts (strict), onprem.ts (relaxed)
 
-scripts/
-└── ci/
-    ├── collect-test-reliability.mjs # Aggregates unit/integration/e2e JSON reports
-    ├── assert-required-test-execution.mjs # Warn/enforce minimum executed-test thresholds
-    └── coverage-summary.mjs    # Parses coverage JSON into Markdown for GitHub step summary
+scripts/ci/                     # collect-test-reliability, assert-required-test-execution, coverage-summary
 
 tests/
-├── helpers/                    # Shared test utilities
-│   ├── mock-fetch.ts           # HTTP mock helper (undici)
-│   ├── skip-policy.ts          # Skip policy (requireOrSkip, SkipReason)
-│   └── expected-error.ts       # Expected error assertions (expectSapFailureClass)
-├── unit/                       # Unit tests (no SAP system needed)
-│   ├── adt/                    # ADT client tests
-│   ├── cache/                  # Cache tests
-│   ├── context/                # Context compression tests
-│   ├── handlers/               # Handler tests
-│   ├── server/                 # Server tests
-│   ├── lint/                   # Lint tests
-│   ├── aff/                    # AFF validator tests
-│   └── cli/                    # CLI tests
-├── integration/                # Integration tests (need SAP credentials)
-│   ├── helpers.ts              # Test client factory, requireSapCredentials(), skip logic
-│   ├── crud-harness.ts         # CRUD harness (unique names, registry, retry delete)
-│   ├── crud.lifecycle.integration.test.ts # Create→read→update→activate→delete roundtrip
-│   ├── adt.integration.test.ts # Live SAP tests
-│   ├── context.integration.test.ts # SAPContext live tests
-│   ├── audit-logging.integration.test.ts # Audit logging tests
-│   ├── btp-abap.integration.test.ts # BTP ABAP tests (local only, interactive)
-│   ├── btp-abap.smoke.integration.test.ts # BTP ABAP smoke tests (CI-capable)
-│   └── elicitation.integration.test.ts # MCP elicitation tests
-├── e2e/                        # E2E tests (need running MCP server)
-│   ├── fixtures.ts             # Persistent/transient test object definitions
-│   ├── setup.ts                # syncPersistentFixtures(), deletePersistentFixtures()
-│   ├── sync-fixtures.ts        # CLI: npm run test:e2e:fixtures (sync/clean)
-│   ├── helpers.ts              # connectClient, callTool, expectToolSuccess
-│   ├── global-setup.ts         # Health preflight (no fixture creation)
-│   └── *.e2e.test.ts           # Test suites (navigate, diagnostics, rap, cds-context, etc.)
-└── fixtures/
-    ├── xml/                    # Sample ADT XML responses
-    ├── abap/                   # Sample ABAP source files (also E2E fixture sources)
-    ├── test-results/           # Synthetic Vitest JSON fixtures for CI script tests
-    └── coverage/               # Coverage summary fixtures for CI script tests
-
-docs/
-└── testing-skip-policy.md      # Valid skip taxonomy (credentials/features/fixtures)
+├── helpers/                    # mock-fetch.ts, skip-policy.ts, expected-error.ts
+├── unit/                       # adt/, cache/, context/, handlers/, server/, lint/, aff/, cli/
+├── integration/                # helpers.ts, crud-harness.ts, adt/btp-abap/crud/elicitation tests
+├── e2e/                        # fixtures.ts, setup.ts, helpers.ts, *.e2e.test.ts
+└── fixtures/                   # xml/, abap/, test-results/, coverage/
 ```
 
 ## Key Files for Common Tasks
@@ -410,112 +341,61 @@ await http.withStatefulSession(async (session) => {
 
 ## Testing
 
-Testing is critical to this project. Every code change requires tests. The test infrastructure has been hardened with reliability telemetry, explicit skip policies, fixture management, and coverage reporting. See `docs/testing-skip-policy.md` for the full skip taxonomy.
+Every code change requires tests. See `docs/testing-skip-policy.md` for the full skip taxonomy.
 
 ### Test Levels
 
-| Level | Command | SAP Required | Count | Config |
-|-------|---------|--------------|-------|--------|
-| Unit | `npm test` | No | 1318 | `vitest.config.ts` |
-| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | 158 (`125 pass / 33 skip`) | `vitest.integration.config.ts` |
-| CRUD Lifecycle | `npm run test:integration:crud` | Yes (`TEST_SAP_URL`) | 1 | `vitest.integration.config.ts` |
-| BTP Smoke | `npm run test:integration:btp:smoke` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 5 | `vitest.integration.config.ts` |
-| BTP Integration | `npm run test:integration:btp` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 28 | same |
-| E2E | `npm run test:e2e` | Yes (MCP server running) | 63 (`62 pass / 1 skip`) | `tests/e2e/vitest.e2e.config.ts` |
+| Level | Command | SAP Required | Config |
+|-------|---------|--------------|--------|
+| Unit | `npm test` | No | `vitest.config.ts` |
+| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | `vitest.integration.config.ts` |
+| CRUD Lifecycle | `npm run test:integration:crud` | Yes (`TEST_SAP_URL`) | same |
+| BTP Smoke | `npm run test:integration:btp:smoke` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | same |
+| BTP Integration | `npm run test:integration:btp` | Yes (local only, interactive) | same |
+| E2E | `npm run test:e2e` | Yes (MCP server running) | `tests/e2e/vitest.e2e.config.ts` |
 
-### E2E Fixture Management
+### E2E Fixtures
 
-E2E tests require persistent SAP objects. The fixture lifecycle is fully automated:
+- `tests/e2e/fixtures.ts` defines persistent objects (`ZARC1_TEST_REPORT`, `ZIF_ARC1_TEST`, `ZCL_ARC1_TEST`, `ZCL_ARC1_TEST_UT` in `$TMP`)
+- `tests/e2e/setup.ts` has `syncPersistentFixtures()` / `deletePersistentFixtures()`
+- `npm run test:e2e` auto-syncs fixtures before running tests
+- Transient objects use `try/finally` for cleanup
+- **Key rule:** Never silently pass when fixtures are missing — use `requireOrSkip()`, not `if (!x) return;`
 
-- **`tests/e2e/fixtures.ts`** defines 4 persistent objects: `ZARC1_TEST_REPORT`, `ZIF_ARC1_TEST`, `ZCL_ARC1_TEST`, `ZCL_ARC1_TEST_UT` (all in `$TMP`).
-- **`tests/e2e/setup.ts`** contains `syncPersistentFixtures()` — creates missing objects, recreates drifted ones, cleans stale types. Also `deletePersistentFixtures()` for teardown.
-- **`tests/e2e/sync-fixtures.ts`** is the CLI entry point: `npm run test:e2e:fixtures` (sync) or `npm run test:e2e:fixtures:clean` (delete all).
-- **`npm run test:e2e`** automatically runs fixture sync before tests (`npm run test:e2e:fixtures && vitest ...`).
-- **Transient objects** (e.g., `ZARC1_E2E_WRITE` in rap.e2e.test.ts) are created/deleted within each test via `try/finally` blocks.
+### Skip Policy (`tests/helpers/skip-policy.ts`)
 
-**Key rule:** Tests must never silently pass when fixtures are missing. Use `ctx.skip('reason')` or `requireOrSkip()` if a fixture is unavailable, not `if (!x) return;`.
+- `requireOrSkip(ctx, value, reason)` — skip if nullish, narrow type otherwise
+- `SkipReason` constants: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, etc.
+- **Valid:** missing credentials, fixture not on system, unsupported backend. **Invalid:** early return without skip, empty catch blocks.
 
-### Skip Policy
+### Error Assertions (`tests/helpers/expected-error.ts`)
 
-Tests skip explicitly with actionable reasons. The shared helpers are in `tests/helpers/skip-policy.ts`:
+- `expectSapFailureClass(err, [404, 403], [/not found/i])` — assert expected HTTP status or message
+- `classifySapError(err)` — returns `'not-found'` | `'forbidden'` | `'not-released'` | `'connectivity'` | `'unknown'`
 
-- **`requireOrSkip(ctx, value, reason)`** — if value is nullish, skips with reason; otherwise narrows the type.
-- **`skipWithReason(ctx, reason)`** — unconditional skip with reason text.
-- **`SkipReason`** constants: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, `NO_DDLS`, `NO_DUMPS`, `NO_CUSTOM_OBJECTS`.
-
-**Valid skip reasons:** missing SAP/BTP credentials, fixture not on system, backend version doesn't support feature. **Invalid:** early return without skip, catch-and-continue without assertion, permanent `it.skip` without issue tracking.
-
-### Expected Error Assertions
-
-When a test catch block handles SAP errors, use the helpers in `tests/helpers/expected-error.ts`:
-
-- **`expectSapFailureClass(err, [404, 403], [/not found/i])`** — asserts the error matches expected HTTP status codes or message patterns.
-- **`classifySapError(err)`** — returns category: `'not-found'`, `'forbidden'`, `'not-released'`, `'connectivity'`, `'unknown'`.
-
-### Unit Test Mocking Pattern
-
-All unit tests mock the HTTP layer via undici. Key helper: `tests/helpers/mock-fetch.ts`
+### Unit Test Mocking
 
 ```typescript
-// Mock setup (top of test file)
 const mockFetch = vi.fn();
 vi.mock('undici', async (importOriginal) => {
   const actual = await importOriginal<typeof import('undici')>();
   return { ...actual, fetch: mockFetch };
 });
-
-// In beforeEach
-vi.resetAllMocks();
-mockFetch.mockResolvedValue(mockResponse(200, 'source code', { 'x-csrf-token': 'T' }));
-
-// Helper to build mock Response objects
+// In beforeEach: vi.resetAllMocks(); mockFetch.mockResolvedValue(mockResponse(200, 'source', { 'x-csrf-token': 'T' }));
 import { mockResponse } from '../../helpers/mock-fetch.js';
 ```
 
-### Integration Tests
-- **Hard fail** when `TEST_SAP_URL` is not configured — `requireSapCredentials()` throws, preventing silent skips
-- Uses `TEST_SAP_*` env vars (falls back to `SAP_*` for local dev convenience)
-- `getTestClient()` factory in `tests/integration/helpers.ts` creates pre-configured clients
-- Sequential execution to avoid SAP session conflicts
-- CRUD lifecycle uses unique names via `generateUniqueName()` in `tests/integration/crud-harness.ts`
+### try/catch Rules
 
-### E2E Tests
-- Full MCP protocol tests via `@modelcontextprotocol/sdk` client
-- Connect to running ARC-1 server (`E2E_MCP_URL`, default: `http://localhost:8080/mcp`)
-- `connectClient()` / `callTool()` / `expectToolSuccess()` / `expectToolError()` helpers in `tests/e2e/helpers.ts`
-- `tests/e2e/global-setup.ts` performs health preflight
-- Fixtures auto-synced before tests via `npm run test:e2e:fixtures` (see "E2E Fixture Management" above)
-- 120s test timeout, 120s hook timeout, sequential execution
+- **DO:** Assert success shape in try, expected error class in catch (`expectSapFailureClass`), tag cleanup with `// best-effort-cleanup`
+- **DON'T:** Empty catch blocks, catch-and-continue without assertion, try/catch hiding precondition failures (use `requireOrSkip`)
 
-### BTP ABAP Integration Tests (local only)
-- Skipped automatically when `TEST_BTP_SERVICE_KEY_FILE` is not set
-- Run: `TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp`
-- Tests BTP-specific behavior: OAuth login, restricted ABAP, released APIs, component differences
-- **Not run in CI** — BTP free tier instances stop nightly and expire after 90 days
-- Requires interactive browser login (OAuth Authorization Code flow)
-- Smoke subset (`npm run test:integration:btp:smoke`) is CI-capable but needs BTP service key secret
+### Integration / E2E Notes
 
-### try/catch Rules in Tests
-
-**DO:**
-- Assert success shape in try block (check fields, types, non-empty values)
-- Assert expected error class in catch block using `expectSapFailureClass()` from `tests/helpers/expected-error.ts`
-- Tag cleanup-only catches with `// best-effort-cleanup` comment
-- Use rethrow-with-context pattern for setup/teardown errors (see `tests/e2e/helpers.ts`)
-
-**DON'T:**
-- Catch and ignore errors without any assertion (empty catch or `catch { /* skip */ }`)
-- Accept both success and failure without asserting the shape of either
-- Use try/catch to hide test precondition failures (use `requireOrSkip` instead)
-
-### CI Reliability Telemetry
-
-All test levels produce JSON reporter output in `test-results/`. CI workflows parse these into GitHub step summaries:
-
-- **`scripts/ci/collect-test-reliability.mjs`** — aggregates pass/skip/fail counts into Markdown summary.
-- **`scripts/ci/assert-required-test-execution.mjs`** — checks minimum test thresholds (warning-only mode).
-- **`scripts/ci/coverage-summary.mjs`** — parses `coverage-summary.json` into Markdown table.
-- Coverage is informational only (`continue-on-error: true`) — never blocks builds.
+- Integration: `TEST_SAP_*` env vars, `getTestClient()` factory, sequential execution, CRUD uses `generateUniqueName()`
+- E2E: MCP SDK client, `connectClient()`/`callTool()`/`expectToolSuccess()` helpers, 120s timeout, sequential
+- BTP: local only (not CI), needs `TEST_BTP_SERVICE_KEY_FILE`, interactive browser login
+- CI telemetry: `scripts/ci/` aggregates JSON reports into GitHub step summaries. Coverage is informational only.
 
 ## Technology Stack
 
@@ -538,42 +418,11 @@ All test levels produce JSON reporter output in `test-results/`. CI workflows pa
 
 Automated via [release-please](https://github.com/googleapis/release-please). No manual version bumps or changelog edits.
 
-### Commit conventions
-
-Use [Conventional Commits](https://www.conventionalcommits.org/) in PR titles / commit messages:
-- `feat:` → minor bump, `fix:` → patch bump, `feat!:` / `BREAKING CHANGE:` → major bump
-- `chore:`, `docs:`, `ci:` → no release triggered
-
-### Process
-
-1. Merge PRs to `main` with conventional commit messages
-2. release-please auto-creates/updates a Release PR with version bump + `CHANGELOG.md`
-3. Merge the Release PR to trigger: npm publish, Docker push, GitHub Release
-
-### Key files
-
-| File | Purpose |
-|------|---------|
-| `.github/workflows/release.yml` | release-please + npm publish + Docker push |
-| `.github/workflows/docker.yml` | Dev `latest` Docker image on every main push |
-| `release-please-config.json` | Config: extra files to version-bump |
-| `.release-please-manifest.json` | Tracks current version |
-| `src/server/server.ts` | `VERSION` constant (auto-bumped via `x-release-please-version` marker) |
-
-### Version is maintained in two places
-
-- `package.json` — bumped by release-please automatically
-- `src/server/server.ts` `VERSION` constant — bumped via the `x-release-please-version` annotation comment
-
-### npm trusted publishing
-
-npm publish uses OIDC trusted publishing — no `NPM_TOKEN` secret, no token rotation.
-
-Requirements (all already configured):
-- **npmjs.com**: Trusted Publisher linked to `marianfoo/arc-1` / `release.yml`
-- **package.json**: `repository.url` must match the GitHub repo URL (npm verifies this against the provenance bundle)
-- **npm 11.5+**: The publish job installs `npm@latest` because Node 22's bundled npm 10.x doesn't support the OIDC handshake
-- **GitHub Actions**: `id-token: write` permission on the publish job
+- **Commit conventions:** `feat:` -> minor, `fix:` -> patch, `feat!:` / `BREAKING CHANGE:` -> major. `chore:`/`docs:`/`ci:` -> no release.
+- **Process:** Merge PRs to `main` -> release-please creates Release PR -> merge it -> npm publish + Docker push + GitHub Release
+- **Version in two places:** `package.json` (auto-bumped) + `src/server/server.ts` `VERSION` constant (via `x-release-please-version` marker)
+- **npm trusted publishing:** OIDC-based, no `NPM_TOKEN` secret. Requires `id-token: write` permission.
+- **Key files:** `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json`
 
 ## Security & Architectural Invariants
 
