@@ -519,6 +519,115 @@ describe('Intent Handler', () => {
       expect(parsed.package).toBe('SEDT');
     });
 
+    it('reads API release state (API_STATE) with explicit objectType', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_salv_table" adtcore:type="CLAS/OC" adtcore:name="CL_SALV_TABLE"/>
+  <apirelease:c1Release apirelease:contract="C1" apirelease:useInKeyUserApps="true" apirelease:useInSAPCloudPlatform="true">
+    <apirelease:status apirelease:state="RELEASED" apirelease:stateDescription="Released"/>
+  </apirelease:c1Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="true" apirelease:isAnyContractReleased="true"/>
+</apirelease:apiReleaseInfos>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'API_STATE',
+        name: 'CL_SALV_TABLE',
+        objectType: 'CLAS',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.objectName).toBe('CL_SALV_TABLE');
+      expect(parsed.contracts).toHaveLength(1);
+      expect(parsed.contracts[0].state).toBe('RELEASED');
+      expect(parsed.isAnyContractReleased).toBe(true);
+    });
+
+    it('reads API release state (API_STATE) with inferred CLAS type', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/cl_salv_table" adtcore:type="CLAS/OC" adtcore:name="CL_SALV_TABLE"/>
+  <apirelease:c1Release apirelease:contract="C1" apirelease:useInKeyUserApps="false" apirelease:useInSAPCloudPlatform="false">
+    <apirelease:status apirelease:state="NOT_RELEASED" apirelease:stateDescription="Not Released"/>
+  </apirelease:c1Release>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="false" apirelease:isAnyContractReleased="false"/>
+</apirelease:apiReleaseInfos>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'API_STATE',
+        name: 'CL_SALV_TABLE',
+      });
+      expect(result.isError).toBeUndefined();
+      // Verify the URL was built with the class path (inferred from CL_ prefix)
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/sap/bc/adt/apireleases/');
+      expect(calledUrl).toContain('classes');
+    });
+
+    it('reads API release state (API_STATE) with inferred INTF type from IF_ prefix', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/interfaces/if_http_client" adtcore:type="INTF/OI" adtcore:name="IF_HTTP_CLIENT"/>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="false" apirelease:isAnyContractReleased="false"/>
+</apirelease:apiReleaseInfos>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'API_STATE',
+        name: 'IF_HTTP_CLIENT',
+      });
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('interfaces');
+    });
+
+    it('returns error for API_STATE when type cannot be inferred', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'API_STATE',
+        name: 'MARA',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Cannot infer object type');
+      expect(result.content[0]?.text).toContain('objectType');
+    });
+
+    it('API_STATE uses raw URI to avoid double encoding for namespaced objects', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<apirelease:apiReleaseInfos xmlns:apirelease="http://www.sap.com/adt/apirelease" xmlns:adtcore="http://www.sap.com/adt/core">
+  <apirelease:releasableObject adtcore:uri="/sap/bc/adt/oo/classes/%2fBOBF%2fCL_LIB" adtcore:type="CLAS/OC" adtcore:name="/BOBF/CL_LIB"/>
+  <apirelease:apiCatalogData apirelease:isAnyAssignmentPossible="false" apirelease:isAnyContractReleased="false"/>
+</apirelease:apiReleaseInfos>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'API_STATE',
+        name: '/BOBF/CL_LIB',
+        objectType: 'CLAS',
+      });
+      expect(result.isError).toBeUndefined();
+      // The URL should encode the entire URI once — namespace slashes become %2F, not %252F
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('%2FBOBF%2FCL_LIB');
+      expect(calledUrl).not.toContain('%252F');
+    });
+
     it('returns error for unknown type with supported types via Zod validation', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'UNKNOWN',
