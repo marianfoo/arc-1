@@ -11,6 +11,19 @@
           "path": "src/server/server.ts",
           "glob": false
         }
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "test", "section": "Tests" },
+        { "type": "perf", "section": "Performance Improvements" },
+        { "type": "deps", "section": "Dependencies" },
+        { "type": "chore", "hidden": true },
+        { "type": "docs", "hidden": true },
+        { "type": "ci", "hidden": true },
+        { "type": "refactor", "hidden": true },
+        { "type": "style", "hidden": true },
+        { "type": "build", "hidden": true }
       ]
     }
   },
