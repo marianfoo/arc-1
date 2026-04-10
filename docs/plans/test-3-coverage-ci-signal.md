@@ -113,7 +113,7 @@ Create a script that reads `coverage-summary.json` and outputs a concise Markdow
 
 Add a coverage step to the unit test job that runs after tests, publishes the coverage directory as an artifact, and generates a step summary.
 
-- [ ] In the `test` job (lines 10-35), after the existing `npm test` step, add:
+- [x] In the `test` job (lines 10-35), after the existing `npm test` step, add:
   ```yaml
   - name: Run coverage (informational)
     run: npm run test:coverage
@@ -133,8 +133,8 @@ Add a coverage step to the unit test job that runs after tests, publishes the co
       retention-days: 7
     continue-on-error: true
   ```
-- [ ] Add a comment above the coverage steps: `# Coverage — informational only, does not block the build`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add a comment above the coverage steps: `# Coverage — informational only, does not block the build`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Wire Coverage into Release Workflow
 
