@@ -71,12 +71,12 @@ Start with the shared skip helper and its unit tests, then convert pseudo-skips 
 
 Create a shared helper that standardizes how tests skip with reasons, providing consistent formatting across integration and E2E suites.
 
-- [ ] Create `tests/helpers/skip-policy.ts` with:
+- [x] Create `tests/helpers/skip-policy.ts` with:
   - `skipWithReason(ctx: TaskContext, reason: string): void` — calls `ctx.skip()` after logging the reason. The `ctx` parameter is the Vitest test context (`import { TaskContext } from 'vitest'`). Example: `skipWithReason(ctx, 'No DDLS found on system')`.
   - `requireOrSkip<T>(ctx: TaskContext, value: T | null | undefined, reason: string): asserts value is T` — if value is nullish, calls `ctx.skip()` with reason; otherwise narrows the type. Example: `requireOrSkip(ctx, cdsName, 'No DDLS candidate found')`.
   - `SkipReason` enum or constants for common reasons: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, `NO_DDLS`, `NO_DUMPS`, `NO_CUSTOM_OBJECTS`.
   - Export all functions and constants.
-- [ ] Add unit tests (~10 tests) in `tests/unit/helpers/skip-policy.test.ts`:
+- [x] Add unit tests (~10 tests) in `tests/unit/helpers/skip-policy.test.ts`:
   - `requireOrSkip` with valid value does not skip (no call to ctx.skip).
   - `requireOrSkip` with null calls ctx.skip with formatted reason.
   - `requireOrSkip` with undefined calls ctx.skip with formatted reason.
@@ -87,7 +87,7 @@ Create a shared helper that standardizes how tests skip with reasons, providing 
   - Mock `ctx` object with a spy on `skip` method to verify calls.
   - Edge case: empty string reason still calls skip.
   - Edge case: value is `0` or `false` (falsy but defined) — should NOT skip.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Convert Integration Test Pseudo-Skips
 
