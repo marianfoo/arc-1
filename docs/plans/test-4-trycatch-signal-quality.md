@@ -152,16 +152,16 @@ Convert Category B restriction tests to assert specific expected failure classes
 
 Improve signal quality in the dump-trigger test fallback chain so that the test fails or explicitly skips when no verifiable outcome is produced.
 
-- [ ] In the dump trigger test (lines 141-270), refactor the create/update/activate chain:
+- [x] In the dump trigger test (lines 141-270), refactor the create/update/activate chain:
   - Track whether each step succeeded: `let createOk = false; let activateOk = false;`.
   - After create try/catch: set `createOk = true` in the try block.
   - After activate try/catch: set `activateOk = true` in the try block.
   - Before the dump-listing section, add a signal check: if none of the write steps succeeded, use `ctx.skip('Could not create or activate dump-trigger program — write steps all failed')` instead of silently continuing.
-- [ ] In the dump-listing section (lines 232-269), improve the "no dumps at all" branch:
+- [x] In the dump-listing section (lines 232-269), improve the "no dumps at all" branch:
   - Instead of the current silent pass (`console.log('No dumps on system at all'); // This is still a pass`), change to: if create/activate succeeded, expect at least one dump (the one we just triggered). If create/activate failed AND no dumps exist, skip with reason `'No dumps available and write steps failed — cannot verify dump functionality'`.
   - Keep the "different dump available" fallback (reading any available dump to verify API shape) — this is valid.
-- [ ] Add `// best-effort-cleanup` tag to any cleanup catch blocks in this test.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add `// best-effort-cleanup` tag to any cleanup catch blocks in this test.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 5: Update CLAUDE.md Testing Conventions
 
