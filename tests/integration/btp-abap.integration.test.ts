@@ -49,7 +49,8 @@ function getBtpTestClient(): AdtClient {
   });
 }
 
-// Skip entire suite if no BTP credentials
+// Skip entire suite if no BTP credentials.
+// This suite is intentionally local-only; CI workflows do not provide BTP service-key secrets for it.
 const describeIf = hasBtpCredentials() ? describe : describe.skip;
 
 describeIf('BTP ABAP Environment Integration Tests', () => {

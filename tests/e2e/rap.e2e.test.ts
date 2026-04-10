@@ -152,10 +152,10 @@ describe('E2E RAP Completeness Tests', () => {
   });
 
   // ── Write + Activate Lifecycle ────────────────────────────────────
-  // NOTE: SAPWrite create for PROG uses a generic objectReferences XML that
-  // some SAP systems reject (expecting program-specific abapProgram XML).
-  // This is a pre-existing issue tracked separately. The test is skipped
-  // until SAPWrite create is fixed to use type-specific XML bodies.
+  // NOTE: This test is intentionally skipped for now.
+  // Reason: SAPWrite create for PROG still sends a generic objectReferences XML
+  // on some paths; affected SAP systems expect program-specific abapProgram XML
+  // and reject creation. Keep skipped until create payload handling is unified.
 
   describe('SAPWrite + SAPActivate lifecycle', () => {
     const WRITE_NAME = 'ZARC1_E2E_WRITE';

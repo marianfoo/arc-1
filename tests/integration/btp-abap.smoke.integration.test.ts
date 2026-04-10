@@ -52,7 +52,8 @@ function getBtpSmokeClient(): AdtClient {
   });
 }
 
-// Skip entire suite if no BTP credentials
+// Skip entire suite if no BTP credentials.
+// In workflows that do not inject TEST_BTP_SERVICE_KEY* secrets, this skip is expected.
 const describeIf = hasBtpCredentials() ? describe : describe.skip;
 
 describeIf('BTP ABAP smoke', { timeout: 30_000 }, () => {
