@@ -199,7 +199,7 @@ tests/
 │   ├── aff/                    # AFF validator tests
 │   └── cli/                    # CLI tests
 ├── integration/                # Integration tests (need SAP credentials)
-│   ├── helpers.ts              # Test client factory, skip logic
+│   ├── helpers.ts              # Test client factory, requireSapCredentials(), skip logic
 │   ├── crud-harness.ts         # CRUD harness (unique names, registry, retry delete)
 │   ├── crud.lifecycle.integration.test.ts # Create→read→update→activate→delete roundtrip
 │   ├── adt.integration.test.ts # Live SAP tests
@@ -208,9 +208,16 @@ tests/
 │   ├── btp-abap.integration.test.ts # BTP ABAP tests (local only, interactive)
 │   ├── btp-abap.smoke.integration.test.ts # BTP ABAP smoke tests (CI-capable)
 │   └── elicitation.integration.test.ts # MCP elicitation tests
+├── e2e/                        # E2E tests (need running MCP server)
+│   ├── fixtures.ts             # Persistent/transient test object definitions
+│   ├── setup.ts                # syncPersistentFixtures(), deletePersistentFixtures()
+│   ├── sync-fixtures.ts        # CLI: npm run test:e2e:fixtures (sync/clean)
+│   ├── helpers.ts              # connectClient, callTool, expectToolSuccess
+│   ├── global-setup.ts         # Health preflight (no fixture creation)
+│   └── *.e2e.test.ts           # Test suites (navigate, diagnostics, rap, cds-context, etc.)
 └── fixtures/
     ├── xml/                    # Sample ADT XML responses
-    ├── abap/                   # Sample ABAP source files
+    ├── abap/                   # Sample ABAP source files (also E2E fixture sources)
     ├── test-results/           # Synthetic Vitest JSON fixtures for CI script tests
     └── coverage/               # Coverage summary fixtures for CI script tests
 
@@ -245,6 +252,7 @@ docs/
 | Add safety config option | `src/adt/safety.ts`, `src/server/config.ts`, `src/server/types.ts` |
 | Add feature probe | `src/adt/features.ts` |
 | Add E2E test | `tests/e2e/`, helpers in `tests/e2e/helpers.ts`, fixtures in `tests/e2e/fixtures.ts` |
+| Add/modify E2E fixture | `tests/e2e/fixtures.ts` (define object), `tests/fixtures/abap/` (source file), `tests/e2e/setup.ts` (sync logic) |
 | Modify object caching | `src/cache/caching-layer.ts`, `src/cache/cache.ts` |
 | Add cache warmup feature | `src/cache/warmup.ts`, `src/server/server.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
@@ -402,16 +410,47 @@ await http.withStatefulSession(async (session) => {
 
 ## Testing
 
+Testing is critical to this project. Every code change requires tests. The test infrastructure has been hardened with reliability telemetry, explicit skip policies, fixture management, and coverage reporting. See `docs/testing-skip-policy.md` for the full skip taxonomy.
+
 ### Test Levels
 
 | Level | Command | SAP Required | Count | Config |
 |-------|---------|--------------|-------|--------|
-| Unit | `npm test` | No | 1315 | `vitest.config.ts` |
-| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | ~150 (`125 pass / 33 skip` in latest full run) | `vitest.integration.config.ts` |
+| Unit | `npm test` | No | 1318 | `vitest.config.ts` |
+| Integration | `npm run test:integration` | Yes (`TEST_SAP_URL`) | 158 (`125 pass / 33 skip`) | `vitest.integration.config.ts` |
 | CRUD Lifecycle | `npm run test:integration:crud` | Yes (`TEST_SAP_URL`) | 1 | `vitest.integration.config.ts` |
 | BTP Smoke | `npm run test:integration:btp:smoke` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 5 | `vitest.integration.config.ts` |
 | BTP Integration | `npm run test:integration:btp` | Yes (`TEST_BTP_SERVICE_KEY_FILE`) | 28 | same |
-| E2E | `npm run test:e2e` | Yes (MCP server running) | ~60 (`58 pass / 5 skip` in latest full run) | `tests/e2e/vitest.e2e.config.ts` |
+| E2E | `npm run test:e2e` | Yes (MCP server running) | 63 (`62 pass / 1 skip`) | `tests/e2e/vitest.e2e.config.ts` |
+
+### E2E Fixture Management
+
+E2E tests require persistent SAP objects. The fixture lifecycle is fully automated:
+
+- **`tests/e2e/fixtures.ts`** defines 4 persistent objects: `ZARC1_TEST_REPORT`, `ZIF_ARC1_TEST`, `ZCL_ARC1_TEST`, `ZCL_ARC1_TEST_UT` (all in `$TMP`).
+- **`tests/e2e/setup.ts`** contains `syncPersistentFixtures()` — creates missing objects, recreates drifted ones, cleans stale types. Also `deletePersistentFixtures()` for teardown.
+- **`tests/e2e/sync-fixtures.ts`** is the CLI entry point: `npm run test:e2e:fixtures` (sync) or `npm run test:e2e:fixtures:clean` (delete all).
+- **`npm run test:e2e`** automatically runs fixture sync before tests (`npm run test:e2e:fixtures && vitest ...`).
+- **Transient objects** (e.g., `ZARC1_E2E_WRITE` in rap.e2e.test.ts) are created/deleted within each test via `try/finally` blocks.
+
+**Key rule:** Tests must never silently pass when fixtures are missing. Use `ctx.skip('reason')` or `requireOrSkip()` if a fixture is unavailable, not `if (!x) return;`.
+
+### Skip Policy
+
+Tests skip explicitly with actionable reasons. The shared helpers are in `tests/helpers/skip-policy.ts`:
+
+- **`requireOrSkip(ctx, value, reason)`** — if value is nullish, skips with reason; otherwise narrows the type.
+- **`skipWithReason(ctx, reason)`** — unconditional skip with reason text.
+- **`SkipReason`** constants: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, `NO_DDLS`, `NO_DUMPS`, `NO_CUSTOM_OBJECTS`.
+
+**Valid skip reasons:** missing SAP/BTP credentials, fixture not on system, backend version doesn't support feature. **Invalid:** early return without skip, catch-and-continue without assertion, permanent `it.skip` without issue tracking.
+
+### Expected Error Assertions
+
+When a test catch block handles SAP errors, use the helpers in `tests/helpers/expected-error.ts`:
+
+- **`expectSapFailureClass(err, [404, 403], [/not found/i])`** — asserts the error matches expected HTTP status codes or message patterns.
+- **`classifySapError(err)`** — returns category: `'not-found'`, `'forbidden'`, `'not-released'`, `'connectivity'`, `'unknown'`.
 
 ### Unit Test Mocking Pattern
 
@@ -434,18 +473,19 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 ```
 
 ### Integration Tests
-- Skipped automatically when `TEST_SAP_URL` is not set
-- Uses `TEST_SAP_*` env vars (falls back to `SAP_*`)
+- **Hard fail** when `TEST_SAP_URL` is not configured — `requireSapCredentials()` throws, preventing silent skips
+- Uses `TEST_SAP_*` env vars (falls back to `SAP_*` for local dev convenience)
 - `getTestClient()` factory in `tests/integration/helpers.ts` creates pre-configured clients
 - Sequential execution to avoid SAP session conflicts
+- CRUD lifecycle uses unique names via `generateUniqueName()` in `tests/integration/crud-harness.ts`
 
 ### E2E Tests
 - Full MCP protocol tests via `@modelcontextprotocol/sdk` client
-- Connect to running ARC-1 server (`E2E_MCP_URL`, default: `http://localhost:3000/mcp`)
+- Connect to running ARC-1 server (`E2E_MCP_URL`, default: `http://localhost:8080/mcp`)
 - `connectClient()` / `callTool()` / `expectToolSuccess()` / `expectToolError()` helpers in `tests/e2e/helpers.ts`
-- `tests/e2e/global-setup.ts` performs health preflight; persistent fixture objects are expected to exist (tests skip explicitly when missing)
-- `tests/e2e/fixtures.ts` defines test objects (ZARC1_TEST_REPORT, ZCL_ARC1_TEST, etc.)
-- 60s test timeout, 120s hook timeout, sequential execution
+- `tests/e2e/global-setup.ts` performs health preflight
+- Fixtures auto-synced before tests via `npm run test:e2e:fixtures` (see "E2E Fixture Management" above)
+- 120s test timeout, 120s hook timeout, sequential execution
 
 ### BTP ABAP Integration Tests (local only)
 - Skipped automatically when `TEST_BTP_SERVICE_KEY_FILE` is not set
@@ -453,6 +493,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 - Tests BTP-specific behavior: OAuth login, restricted ABAP, released APIs, component differences
 - **Not run in CI** — BTP free tier instances stop nightly and expire after 90 days
 - Requires interactive browser login (OAuth Authorization Code flow)
+- Smoke subset (`npm run test:integration:btp:smoke`) is CI-capable but needs BTP service key secret
 
 ### try/catch Rules in Tests
 
@@ -466,6 +507,15 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 - Catch and ignore errors without any assertion (empty catch or `catch { /* skip */ }`)
 - Accept both success and failure without asserting the shape of either
 - Use try/catch to hide test precondition failures (use `requireOrSkip` instead)
+
+### CI Reliability Telemetry
+
+All test levels produce JSON reporter output in `test-results/`. CI workflows parse these into GitHub step summaries:
+
+- **`scripts/ci/collect-test-reliability.mjs`** — aggregates pass/skip/fail counts into Markdown summary.
+- **`scripts/ci/assert-required-test-execution.mjs`** — checks minimum test thresholds (warning-only mode).
+- **`scripts/ci/coverage-summary.mjs`** — parses `coverage-summary.json` into Markdown table.
+- Coverage is informational only (`continue-on-error: true`) — never blocks builds.
 
 ## Technology Stack
 
