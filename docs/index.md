@@ -22,7 +22,7 @@ ARC-1 is a TypeScript MCP server (distributed as an npm package and Docker image
 As an **admin**, you control what the AI can and cannot do:
 
 - Restrict to read-only, specific packages, or whitelisted operations
-- Require transport assignments before any write
+- Require transport assignments before any write (update/delete auto-uses lock correction number when available)
 - Block free-form SQL execution
 - Allow or deny individual operation types per deployment
 
@@ -150,7 +150,7 @@ Full reference: **[tools.md](tools.md)**
 
 ## Testing & CI
 
-- **1,300+ unit tests** run locally without SAP access (`npm test`)
+- **1,349+ unit tests** run locally without SAP access (`npm test`)
 - **Integration + E2E lanes** run on `main` pushes and internal PRs in GitHub Actions
 - **BTP tests** are local-only (`npm run test:integration:btp:smoke`, `npm run test:integration:btp:extended`)
 - **Reliability telemetry + coverage** are collected as informational CI signals

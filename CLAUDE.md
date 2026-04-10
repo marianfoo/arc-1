@@ -238,6 +238,7 @@ ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
 HTTP Request (adt/http.ts)
   │
   ├─ CSRF token management (auto-fetch via HEAD, refresh on 403)
+  ├─ Content negotiation fallback (one-retry on 406/415 with header mutation)
   ├─ Cookie/session management
   ├─ Stateful sessions for lock→modify→unlock sequences
   │
@@ -330,14 +331,17 @@ checkOperation(this.safety, OperationType.Create, 'CreateObject');
 
 ```typescript
 await http.withStatefulSession(async (session) => {
-  const lockHandle = await lockObject(session, objectUrl);
+  const lock = await lockObject(session, objectUrl);
+  const effectiveTransport = transport ?? (lock.corrNr || undefined);
   try {
-    await updateSource(session, sourceUrl, source, lockHandle, transport);
+    await updateSource(session, safety, sourceUrl, source, lock.lockHandle, effectiveTransport);
   } finally {
-    await unlockObject(session, objectUrl, lockHandle);
+    await unlockObject(session, objectUrl, lock.lockHandle);
   }
 });
 ```
+
+**Note:** `lockObject()` returns `{ lockHandle, corrNr }`. When the caller omits `transport`, `safeUpdateSource()` and the delete flow automatically use `lock.corrNr` if present. Explicit `transport` always takes precedence.
 
 ## Testing
 

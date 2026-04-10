@@ -137,7 +137,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
 | `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
-| `transport` | string | No | Transport request number |
+| `transport` | string | No | Transport request number. For `update` and `delete`, if omitted ARC-1 auto-uses the correction number returned by the SAP lock (if any). Explicit value takes precedence. |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
 
 **Batch creation:**
@@ -154,6 +154,8 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
 ])
 ```
+
+**Transport behavior:** For `update` and `delete` actions on transportable packages, ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport. For `create` and `batch_create`, an explicit transport may still be required depending on the target package and system configuration.
 
 **Note:** Blocked when `--read-only` is active. By default, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 
@@ -254,6 +256,8 @@ Manage CTS transport requests.
 | `id` | string | No | Transport request ID (for get/release) |
 | `description` | string | No | Description (for create) |
 | `user` | string | No | Filter by user (for list) |
+
+**Protocol compatibility:** ARC-1 uses endpoint-specific CTS media types and includes a one-retry content negotiation fallback (406/415) for SAP version variance.
 
 **Note:** Only available when `--enable-transports` is set.
 

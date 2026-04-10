@@ -20,7 +20,7 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Operation allowlists/denylists** — control exactly which operation types (read, write, search, query, activate, transport) are permitted
 - **Package restrictions** — limit AI access to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`)
 - **Data access control** — block table data preview (`--block-data`) or free-form SQL (`--block-free-sql`)
-- **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only
+- **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only. Update/delete operations auto-use the lock correction number when no explicit transport is provided
 - **Safety profiles** — preconfigured roles like `--profile viewer`, `developer-data`, or `developer-sql`
 - **Writes restricted to `$TMP` by default** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
@@ -59,7 +59,7 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 ### Testing
 
-- **1,300+ unit tests** (`52` unit test files, mocked HTTP)
+- **1,349+ unit tests** (`53` unit test files, mocked HTTP)
 - **~160 integration tests** against live SAP systems, with explicit skip reasons when credentials or fixtures are missing
 - **~60 E2E tests** that execute real MCP tool calls against a running ARC-1 server
 - **CRUD lifecycle and BTP smoke lanes** included (`test:integration:crud`, `test:integration:btp:smoke`)

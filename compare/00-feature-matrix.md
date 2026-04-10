@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-10_
+_Last updated: 2026-04-10 (post transport/write hardening)_
 
 ## Legend
 - ✅ = Supported
@@ -275,7 +275,7 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~Token efficiency~~ → method-level surgery, hyperfocused mode, context compression
 
 **P0 — production blockers:**
-- 415/406 content-type auto-retry (SAP version compatibility)
+- ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented: one-retry negotiation fallback in `src/adt/http.ts`, endpoint-specific CTS media types, lock `corrNr` auto-propagation
 - 401 session timeout auto-retry (centralized gateway idle)
 - TLS/HTTPS for HTTP Streamable (enterprise deployment without reverse proxy)
 

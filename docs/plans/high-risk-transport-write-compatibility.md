@@ -247,13 +247,13 @@ Integration tests prove ADT behavior; this task proves full MCP JSON-RPC behavio
 
 Docs must reflect the new runtime truth: transport parameters remain supported, but update/delete on transportable objects can auto-use lock-provided `corrNr` when available.
 
-- [ ] Update tool docs to clarify transport parameter semantics (optional vs recommended, auto-propagation behavior, failure cases requiring explicit transport).
-- [ ] Update user-facing safety language so it no longer implies a mandatory manual transport parameter for every write.
-- [ ] Update roadmap entries for FEAT-08 and linked VSP high-risk items to reflect implemented status/scope.
-- [ ] Update feature matrix "Last updated" date and gap/status statements for 415/406 retry hardening.
-- [ ] Update `CLAUDE.md` sections affected by new behavior (key files, CRUD pattern notes, test counts/coverage references if changed).
-- [ ] Include bonus stale-doc correction spotted during research: resolve any scope/tool mapping inconsistency in roadmap text versus `docs/authorization.md`.
-- [ ] Run `npm run lint` to verify markdown style consistency where applicable.
+- [x] Update tool docs to clarify transport parameter semantics (optional vs recommended, auto-propagation behavior, failure cases requiring explicit transport).
+- [x] Update user-facing safety language so it no longer implies a mandatory manual transport parameter for every write.
+- [x] Update roadmap entries for FEAT-08 and linked VSP high-risk items to reflect implemented status/scope.
+- [x] Update feature matrix "Last updated" date and gap/status statements for 415/406 retry hardening.
+- [x] Update `CLAUDE.md` sections affected by new behavior (key files, CRUD pattern notes, test counts/coverage references if changed).
+- [x] Include bonus stale-doc correction spotted during research: resolve any scope/tool mapping inconsistency in roadmap text versus `docs/authorization.md`.
+- [x] Run `npm run lint` to verify markdown style consistency where applicable.
 
 ### Task 8: Align `.claude/commands` Skills with New Transport Behavior
 
