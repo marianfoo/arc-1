@@ -148,6 +148,13 @@ ARC-1 exposes 11 intent-based tools via MCP, designed for AI agents like Copilot
 
 Full reference: **[tools.md](tools.md)**
 
+## Testing & CI
+
+- **1,300+ unit tests** run locally without SAP access (`npm test`)
+- **Integration + E2E lanes** run on `main` pushes and internal PRs in GitHub Actions
+- **BTP tests** are local-only (`npm run test:integration:btp:smoke`, `npm run test:integration:btp:extended`)
+- **Reliability telemetry + coverage** are collected as informational CI signals
+
 ## Admin Controls (Safety)
 
 ```bash

@@ -1,0 +1,16 @@
+# Claude Code worktrees (duplicate source trees, huge file count)
+.claude/worktrees/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Git internals
+.git/
+
+# Coverage & test artifacts
+coverage.out
+coverage.html
+.vitest/

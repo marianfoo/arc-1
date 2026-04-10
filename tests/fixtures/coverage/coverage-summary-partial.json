@@ -1,0 +1,6 @@
+{
+  "total": {
+    "lines": { "total": 5000, "covered": 4000, "skipped": 0, "pct": 80 },
+    "branches": { "total": 1200, "covered": 960, "skipped": 0, "pct": 80 }
+  }
+}

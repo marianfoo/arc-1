@@ -242,9 +242,9 @@ Order tasks to minimize cross-task dependencies:
 
 ### Test Requirements
 
-Tests are critical. Every task that modifies code MUST include test checkboxes. Follow these patterns:
+Tests are critical to quality. Every task that modifies code MUST include test checkboxes. Read `CLAUDE.md` "Testing" section and `docs/testing-skip-policy.md` before writing any test task. These documents define the fixtures, helpers, skip policy, and try/catch conventions that tests must follow.
 
-**Unit tests (`tests/unit/`, 57+ files, 700+ tests)**
+**Unit tests (`tests/unit/`, 53 files, 1318+ tests)**
 - Mirror source structure under `tests/unit/` (e.g., `src/adt/client.ts` → `tests/unit/adt/client.test.ts`)
 - Mock HTTP layer: `vi.mock('undici', ...)` with `mockResponse()` helper from `tests/helpers/mock-fetch.ts`
 - XML fixtures: `tests/fixtures/xml/` for ADT response parsing
@@ -252,25 +252,36 @@ Tests are critical. Every task that modifies code MUST include test checkboxes. 
 - Config: `vitest.config.ts` (10s timeout, isolated modules)
 - Run: `npm test`
 
-**Integration tests (`tests/integration/`, 6 files)**
+**Integration tests (`tests/integration/`, 8 files)**
 - Add tests when the feature touches SAP system interaction
-- Auto-skipped when `TEST_SAP_URL` is not set — safe to add without breaking CI
+- Hard fail when `TEST_SAP_URL` is not set — `requireSapCredentials()` throws (no silent skips)
 - Use `getTestClient()` factory from `tests/integration/helpers.ts`
 - Sequential execution (SAP session conflicts)
 - Config: `vitest.integration.config.ts` (30s timeout)
 - Run: `npm run test:integration`
+- CRUD tests use `generateUniqueName()` from `tests/integration/crud-harness.ts` for collision-safe names
 - BTP-specific: `tests/integration/btp-abap.integration.test.ts` (local only, needs `TEST_BTP_SERVICE_KEY_FILE`)
+- BTP smoke lane: `tests/integration/btp-abap.smoke.integration.test.ts` (`npm run test:integration:btp:smoke`)
 
 **E2E tests (`tests/e2e/`, 6 files)**
 - Add tests when the feature adds new tool operations or changes MCP protocol behavior
 - Exercise the full MCP JSON-RPC stack via `@modelcontextprotocol/sdk` client
 - Use helpers: `connectClient()`, `callTool()`, `expectToolSuccess()`, `expectToolError()` from `tests/e2e/helpers.ts`
-- Test fixtures defined in `tests/e2e/fixtures.ts`, setup in `tests/e2e/setup.ts`
-- Config: `tests/e2e/vitest.e2e.config.ts` (60s test timeout, 120s hook timeout)
+- **Fixture management:** Persistent objects defined in `tests/e2e/fixtures.ts`, auto-synced by `tests/e2e/setup.ts` via `npm run test:e2e:fixtures`. If adding a new E2E test that needs a persistent SAP object, add it to `PERSISTENT_OBJECTS` in `fixtures.ts`, create the ABAP source in `tests/fixtures/abap/`, and the sync script will handle creation.
+- **Transient objects** created within a test must use `try/finally` for cleanup.
+- Config: `tests/e2e/vitest.e2e.config.ts` (120s test timeout, 120s hook timeout)
 - Run: `npm run test:e2e` (requires running MCP server at `E2E_MCP_URL`)
 - Full cycle: `npm run test:e2e:full` (build + deploy + test + stop)
 
 **The test system described in `INFRASTRUCTURE.md` can be used for smoke testing and creating test fixtures.**
+
+**Test quality rules (non-negotiable):**
+- Never use `if (!x) return;` to skip — use `requireOrSkip(ctx, x, 'reason')` from `tests/helpers/skip-policy.ts`
+- Never use empty `catch {}` — use `expectSapFailureClass(err, [404], [/pattern/])` from `tests/helpers/expected-error.ts`
+- Tag cleanup-only catches with `// best-effort-cleanup` comment
+- Every try/catch must assert something in both paths (success shape OR expected error class)
+- Transient SAP objects must be cleaned up in `finally` blocks
+- See `docs/testing-skip-policy.md` for the full skip taxonomy and valid/invalid patterns
 
 **Deciding which test tiers to include:**
 - Code-only changes (parsers, safety checks, config logic) → unit tests only

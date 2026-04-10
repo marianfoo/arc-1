@@ -9,5 +9,6 @@ export default defineConfig({
     sequence: {
       concurrent: false,
     },
+    reporters: ['default', ['json', { outputFile: 'test-results/integration.json' }]],
   },
 });

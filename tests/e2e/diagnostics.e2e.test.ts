@@ -30,7 +30,7 @@ describe('E2E Diagnostics Tests', () => {
     try {
       await client?.close();
     } catch {
-      // Ignore close errors
+      // best-effort-cleanup
     }
   });
 
@@ -62,7 +62,7 @@ describe('E2E Diagnostics Tests', () => {
       }
     });
 
-    it('lists dumps filtered by user', async () => {
+    it('lists dumps filtered by user', async (ctx) => {
       // First get unfiltered to find a user that has dumps
       const allResult = await callTool(client, 'SAPDiagnose', {
         action: 'dumps',
@@ -70,7 +70,7 @@ describe('E2E Diagnostics Tests', () => {
       });
       const allDumps = JSON.parse(expectToolSuccess(allResult));
       if (allDumps.length === 0) {
-        console.log('    [SKIP] No dumps on system — cannot test user filter');
+        ctx.skip('No dumps on system — cannot test user filter');
         return;
       }
 
@@ -91,7 +91,7 @@ describe('E2E Diagnostics Tests', () => {
       console.log(`    ${dumps.length} dumps for user ${user}`);
     });
 
-    it('reads dump detail with formatted text', async () => {
+    it('reads dump detail with formatted text', async (ctx) => {
       // Get a dump ID to read
       const listResult = await callTool(client, 'SAPDiagnose', {
         action: 'dumps',
@@ -99,7 +99,7 @@ describe('E2E Diagnostics Tests', () => {
       });
       const dumps = JSON.parse(expectToolSuccess(listResult));
       if (dumps.length === 0) {
-        console.log('    [SKIP] No dumps on system — cannot test detail read');
+        ctx.skip('No dumps on system — cannot test detail read');
         return;
       }
 
@@ -138,27 +138,11 @@ describe('E2E Diagnostics Tests', () => {
       }
     });
 
-    it('triggers a fresh dump and reads it back', async () => {
-      // Strategy: create a report that will cause a MESSAGE_TYPE_X dump,
-      // then run it via SAPQuery calling a function that executes it.
-      // Simplest approach: use SAPQuery with an intentionally invalid
-      // SQL expression that causes a runtime error.
-      //
-      // Actually, the most reliable way is to write an ABAP report that
-      // causes a controlled dump, create + activate it, then execute it.
-      // But since we don't have an "execute program" tool, we use an
-      // alternative: write a class with a static method, then use
-      // SAPQuery to SELECT from a CDS view that calls our method...
-      //
-      // The simplest reliable approach: Use SAPWrite to create a report
-      // that does `MESSAGE x001(00).` which always produces a
-      // MESSAGE_TYPE_X dump, then activate it, then execute it by
-      // reading its source through a path that triggers execution.
-      //
-      // Fallback: If we can't trigger a dump, verify we can at least
-      // read an existing one (covered by previous test).
+    it('triggers a fresh dump and reads it back', async (ctx) => {
+      // Strategy: create a report that causes a COMPUTE_INT_ZERODIVIDE dump,
+      // activate it, then check if it (or a previous run) produced dumps.
+      // If write steps all fail, skip rather than silently passing.
 
-      // Create a program that will dump when executed
       const dumpProgName = 'ZARC1_E2E_DUMP';
       const dumpSource = [
         `REPORT ${dumpProgName.toLowerCase()}.`,
@@ -169,6 +153,9 @@ describe('E2E Diagnostics Tests', () => {
         'lv_result = 1 / lv_zero.',
       ].join('\n');
 
+      let createOk = false;
+      let activateOk = false;
+
       // Create the program
       try {
         const createResult = await callTool(client, 'SAPWrite', {
@@ -178,24 +165,28 @@ describe('E2E Diagnostics Tests', () => {
           source: dumpSource,
           package: '$TMP',
         });
-        // May fail if already exists — that's OK
         if (!createResult.isError) {
+          createOk = true;
           console.log(`    Created ${dumpProgName}`);
         }
       } catch {
+        // best-effort-cleanup: create may fail if object already exists
         console.log(`    ${dumpProgName} already exists or create failed — continuing`);
       }
 
       // Update source (in case it already existed with different code)
       try {
-        await callTool(client, 'SAPWrite', {
+        const updateResult = await callTool(client, 'SAPWrite', {
           action: 'update',
           type: 'PROG',
           name: dumpProgName,
           source: dumpSource,
         });
+        if (!updateResult.isError) {
+          createOk = true; // update success counts as having the program ready
+        }
       } catch {
-        // Update may fail — continue anyway
+        // best-effort-cleanup: update may fail if locked or missing permissions
       }
 
       // Activate
@@ -207,27 +198,18 @@ describe('E2E Diagnostics Tests', () => {
         if (activateResult.isError) {
           console.log(`    Activation warning: ${activateResult.content[0]?.text?.slice(0, 200)}`);
         } else {
+          activateOk = true;
           console.log(`    Activated ${dumpProgName}`);
         }
       } catch {
+        // best-effort-cleanup: activation may fail due to permissions
         console.log(`    Activation failed — continuing`);
       }
 
-      // Now trigger the dump by executing the program via SAPQuery
-      // We use a trick: SELECT from a function module that calls SUBMIT
-      // Actually, the simplest SAP-standard way is to use the ADT
-      // "console application" endpoint, but we don't have that.
-      //
-      // Alternative: use SAPQuery to run a SQL that references the report
-      // through SUBMIT ... which would trigger it.
-      //
-      // Simplest approach that works: just try to read table data from
-      // a non-existent table constructed to cause a dump. But that gives
-      // a 404, not a dump.
-      //
-      // Final strategy: check if our deliberately-created dump program
-      // produced dumps in the past (it might have been run before), and
-      // if not, just verify the listing API works with existing dumps.
+      // Signal check: if all write steps failed, skip
+      if (!createOk && !activateOk) {
+        return ctx.skip('Could not create or activate dump-trigger program — write steps all failed');
+      }
 
       // Check for dumps from our test program
       const listResult = await callTool(client, 'SAPDiagnose', {
@@ -256,7 +238,7 @@ describe('E2E Diagnostics Tests', () => {
         console.log(`    Detail read OK: ${detail.formattedText.length} chars`);
       } else if (allDumps.length > 0) {
         console.log(`    No COMPUTE_INT_ZERODIVIDE dump found, but ${allDumps.length} other dumps available`);
-        // Still verify we can read at least one
+        // Verify we can read at least one — validates API shape with available data
         const detailResult = await callTool(client, 'SAPDiagnose', {
           action: 'dumps',
           id: allDumps[0].id,
@@ -264,8 +246,9 @@ describe('E2E Diagnostics Tests', () => {
         const detail = JSON.parse(expectToolSuccess(detailResult));
         expect(detail.formattedText).toBeTruthy();
       } else {
-        console.log('    No dumps on system at all — dump trigger did not produce visible dump');
-        // This is still a pass — the API works, just no data
+        // Write steps succeeded but no dumps on system — program exists but
+        // wasn't executed (we can't execute programs via MCP).
+        return ctx.skip('Dump-trigger program ready but no dumps — cannot execute programs via MCP');
       }
     });
   });

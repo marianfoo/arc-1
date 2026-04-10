@@ -34,6 +34,8 @@ MEMORY.md
 *.test
 
 # Coverage
+coverage/
+!tests/fixtures/coverage/
 coverage.out
 coverage.html
 
@@ -44,6 +46,7 @@ go.work.sum
 # IDE
 .idea/
 .vscode/
+!.vscode/settings.json
 *.swp
 *.swo
 *~
@@ -80,6 +83,9 @@ node_modules/
 
 # Claude worktrees
 .claude/worktrees/
+
+# Test result artifacts (root only, not test fixtures)
+/test-results/
 
 # TypeScript / Node.js
 dist/

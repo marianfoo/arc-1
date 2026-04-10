@@ -1,12 +1,10 @@
 /**
- * BTP ABAP Environment integration tests.
+ * BTP ABAP Extended Integration Tests (LOCAL ONLY)
  *
- * These tests run against a live BTP ABAP system and verify
- * BTP-specific behaviors: OAuth login, restricted ABAP, released APIs only.
+ * These tests require interactive browser login and are NOT run in CI.
+ * For CI-capable BTP tests, see btp-abap.smoke.integration.test.ts.
  *
- * SKIPPED automatically when TEST_BTP_SERVICE_KEY_FILE is not set.
- *
- * These tests are LOCAL ONLY — not run in CI because:
+ * Reasons for local-only:
  * - BTP free tier instances are stopped each night
  * - Free tier instances are deleted after 90 days
  * - OAuth browser login requires interactive user
@@ -19,10 +17,10 @@
  * - User has completed browser OAuth login at least once (token cached)
  *
  * Run:
- *   TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
+ *   TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:extended
  *
  * Or with env file:
- *   Set TEST_BTP_SERVICE_KEY_FILE in .env, then: npm run test:integration:btp
+ *   Set TEST_BTP_SERVICE_KEY_FILE in .env, then: npm run test:integration:btp:extended
  */
 
 import { config } from 'dotenv';
@@ -30,14 +28,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { AdtClient } from '../../src/adt/client.js';
 import { createBearerTokenProvider, loadServiceKeyFile } from '../../src/adt/oauth.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
+import { expectSapFailureClass } from '../helpers/expected-error.js';
+import { hasBtpCredentials } from './helpers.js';
 
 // Load .env before anything else
 config();
-
-/** Check if BTP service key is configured */
-function hasBtpCredentials(): boolean {
-  return !!(process.env.TEST_BTP_SERVICE_KEY_FILE || process.env.SAP_BTP_SERVICE_KEY_FILE);
-}
 
 /** Create an ADT client configured for BTP ABAP */
 function getBtpTestClient(): AdtClient {
@@ -54,7 +49,8 @@ function getBtpTestClient(): AdtClient {
   });
 }
 
-// Skip entire suite if no BTP credentials
+// Skip entire suite if no BTP credentials.
+// This suite is intentionally local-only; CI workflows do not provide BTP service-key secrets for it.
 const describeIf = hasBtpCredentials() ? describe : describe.skip;
 
 describeIf('BTP ABAP Environment Integration Tests', () => {
@@ -175,8 +171,7 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
         expect(source).toBeTruthy();
       } catch (err) {
         // May not be available on all BTP systems — acceptable
-        const msg = err instanceof Error ? err.message : String(err);
-        expect(msg).toMatch(/404|not found|not accessible/i);
+        expectSapFailureClass(err, [404], [/not found/i, /not accessible/i]);
       }
     });
 
@@ -191,21 +186,15 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
   describe('BTP restricted ABAP behavior', () => {
     it('classic programs like RSHOWTIM are NOT available', async () => {
       // BTP ABAP doesn't have classic SE38 programs
-      try {
-        await client.getProgram('RSHOWTIM');
-        // If it exists, that's unexpected but not a hard failure
-      } catch (err) {
-        // Expected: 404 or not found — BTP doesn't have classic programs
-        expect(err).toBeTruthy();
-      }
+      await expect(client.getProgram('RSHOWTIM')).rejects.toThrow(/403|404|not found|not available|not released/i);
     });
 
     it('classic function modules may not be available', async () => {
       // Standard FM FUNCTION_EXISTS may not exist on BTP
       const results = await client.searchObject('FUNCTION_EXISTS', 5);
       // On BTP, classic FMs are typically not accessible — 0 results is expected
-      // Some may still show up — either way is valid
-      expect(Array.isArray(results)).toBe(true);
+      // Some may still show up — either way is valid, but assert array shape
+      expect(results).toBeInstanceOf(Array);
     });
 
     it('table preview may be restricted on BTP', async () => {
@@ -216,19 +205,19 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
         expect(result.columns).toContain('MANDT');
       } catch (err) {
         // Expected on BTP: table preview is often restricted
-        const msg = err instanceof Error ? err.message : String(err);
-        // 403 Forbidden or specific restriction error
-        expect(msg).toBeTruthy();
+        expectSapFailureClass(err, [403, 500], [/restricted/i, /not authorized/i]);
       }
     });
 
     it('free SQL query is likely blocked on BTP', async () => {
       try {
-        await client.runQuery('SELECT * FROM T000', 5);
-        // If it works, that's surprising but OK
+        const result = await client.runQuery('SELECT * FROM T000', 5);
+        // If it works, verify result shape
+        expect(result).toBeTruthy();
+        expect(typeof result).toBe('string');
       } catch (err) {
         // Expected: BTP blocks free SQL execution
-        expect(err).toBeTruthy();
+        expectSapFailureClass(err, [403, 500], [/blocked/i, /not authorized/i, /restricted/i]);
       }
     });
   });

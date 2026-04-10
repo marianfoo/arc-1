@@ -367,6 +367,74 @@ When `SAP_SYSTEM_TYPE=btp` is set (or auto-detected), tool definitions and behav
 | `SAPNavigate` | Works — scope limited to released and custom objects. |
 | `SAPManage` | Returns `systemType: "btp"` in probe results. |
 
+## Automated Testing
+
+ARC-1 has two tiers of BTP ABAP integration tests: a CI-capable smoke suite and a local-only extended suite.
+
+### Smoke Tests (CI-Capable)
+
+Smoke tests are deterministic, non-interactive tests that verify core BTP connectivity and API contracts. They can run in CI with a service key secret — no browser login required.
+
+**What they test:**
+- Connectivity: establishes a connection and retrieves a CSRF token
+- System info shape: verifies expected fields (user, collections) are returned
+- Released object read: reads a standard released class (e.g., `CL_ABAP_RANDOM`)
+- Released object search: searches for released objects and validates result shape
+- BTP-specific behavior: confirms classic programs (e.g., `RSHOWTIM`) are not accessible
+
+**How to run:**
+```bash
+# With service key file
+TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:smoke
+
+# With inline service key (for CI)
+TEST_BTP_SERVICE_KEY='{"uaa":{...},...}' npm run test:integration:btp:smoke
+```
+
+**CI secret:** Set `TEST_BTP_SERVICE_KEY` as a GitHub Actions secret containing the full service key JSON.
+
+**When the instance is down:** Tests skip gracefully when no credentials are configured. When credentials are present but the instance is stopped, tests fail with connectivity errors — this is expected for free-tier instances that stop nightly.
+
+### Extended Tests (Local Only)
+
+Extended tests cover interactive scenarios that require browser-based OAuth login. They are never run in CI.
+
+**What they test:**
+- Full OAuth browser login flow
+- Write operations (create, update, delete)
+- Code intelligence (find definition, where-used, completion)
+- Transport management
+- Restriction behavior (blocked operations, restricted objects)
+
+**How to run:**
+```bash
+TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:extended
+```
+
+**Why local only:**
+- BTP free tier instances are stopped each night and deleted after 90 days
+- OAuth Authorization Code flow requires an interactive browser login
+- Write operations need a running instance with developer access
+
+### Failure Taxonomy
+
+When BTP tests fail, failures fall into one of these categories:
+
+| Category | Symptoms | Cause |
+|----------|----------|-------|
+| **Auth** | 401 Unauthorized, token exchange failure | OAuth token expired, service key invalid or revoked |
+| **Connectivity** | ECONNREFUSED, ETIMEDOUT, DNS resolution failure | BTP instance stopped (free tier nightly), network unreachable |
+| **Assertion** | Test assertion failure (expect mismatch) | API contract changed, potential regression in ARC-1 |
+| **Backend unavailable** | 503 Service Unavailable, maintenance page | BTP platform maintenance, instance provisioning |
+
+Auth and connectivity failures are expected with free-tier instances. Assertion failures indicate a real issue that needs investigation.
+
+### Tenant Assumptions
+
+- Tests assume a BTP ABAP Environment with standard released objects (e.g., `CL_ABAP_RANDOM`, `IF_ABAP_RANDOM`)
+- Free-tier limitations: instances stop nightly, expire after 90 days, one instance per global account
+- BTP test execution is local-only by design in this project
+
 ## Troubleshooting
 
 ### Classic login form (Benutzer/Kennwort) instead of SSO redirect

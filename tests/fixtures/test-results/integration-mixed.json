@@ -1,0 +1,96 @@
+{
+  "numTotalTestSuites": 3,
+  "numPassedTestSuites": 2,
+  "numFailedTestSuites": 1,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 122,
+  "numPassedTests": 80,
+  "numFailedTests": 2,
+  "numPendingTests": 40,
+  "testResults": [
+    {
+      "name": "tests/integration/adt.integration.test.ts",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["ADT Integration"],
+          "title": "reads program source",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["ADT Integration"],
+          "title": "reads class source",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["ADT Integration"],
+          "title": "searches objects",
+          "status": "passed",
+          "failureMessages": []
+        }
+      ]
+    },
+    {
+      "name": "tests/integration/context.integration.test.ts",
+      "status": "failed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Context Integration"],
+          "title": "compresses class context",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["Context Integration"],
+          "title": "handles missing object",
+          "status": "failed",
+          "failureMessages": ["Expected 404 but got 500"]
+        },
+        {
+          "ancestorTitles": ["Context Integration"],
+          "title": "handles timeout",
+          "status": "failed",
+          "failureMessages": ["Timeout after 30000ms"]
+        }
+      ]
+    },
+    {
+      "name": "tests/integration/skipped.integration.test.ts",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Skipped Tests"],
+          "title": "SAP system not configured",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["Skipped Tests"],
+          "title": "SAP system not configured",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["Skipped Tests"],
+          "title": "SAP system not configured",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["Skipped Tests"],
+          "title": "requires BTP environment",
+          "status": "pending",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["Skipped Tests"],
+          "title": "requires BTP environment",
+          "status": "pending",
+          "failureMessages": []
+        }
+      ]
+    }
+  ]
+}

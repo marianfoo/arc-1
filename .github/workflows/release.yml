@@ -49,6 +49,16 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # Coverage — informational only, does not block release
+      - name: Run coverage (informational)
+        run: npm run test:coverage
+        continue-on-error: true
+
+      - name: Coverage summary
+        if: always()
+        run: node scripts/ci/coverage-summary.mjs
+        continue-on-error: true
+
       - name: Build
         run: npm run build
 

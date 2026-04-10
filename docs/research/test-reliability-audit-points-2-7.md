@@ -499,3 +499,57 @@ For each point (2-7), the later implementation plan should define:
    - informational first, then enforcement
 6. Success metrics:
    - executed test count, skip ratio, coverage visibility, defect detection lead time
+
+---
+
+## Implementation Evidence (Post-Hardening)
+
+Date: 2026-04-10  
+Scope closed: test plans `test-1` through `test-7`, plus hardening follow-up fixes.
+
+### Changes Delivered
+
+- **Point 2 / 5 (skip policy + pseudo-skips):**
+  - Runtime pseudo-skips were refactored to explicit skip mechanisms (`ctx.skip` / `requireOrSkip`) in integration and E2E hotspots.
+  - Shared skip policy helper and docs were added (`tests/helpers/skip-policy.ts`, `docs/testing-skip-policy.md`).
+  - CI policy was updated so integration and E2E run on `push` to `main` and internal PRs.
+
+- **Point 3 (coverage visibility):**
+  - Coverage telemetry is active with `@vitest/coverage-v8`.
+  - Coverage collection runs as informational (non-blocking) in test and release workflows.
+  - Coverage summary is published via `scripts/ci/coverage-summary.mjs`.
+
+- **Point 4 (try/catch signal quality):**
+  - Low-signal catch blocks were converted to dual-path assertions (success contract or expected failure class).
+  - Shared helper introduced: `tests/helpers/expected-error.ts`.
+  - Cleanup-only catches are explicitly tagged as `best-effort-cleanup`.
+
+- **Point 6 (CRUD lifecycle):**
+  - Full lifecycle suite implemented in `tests/integration/crud.lifecycle.integration.test.ts`.
+  - Harness added in `tests/integration/crud-harness.ts` for deterministic names and cleanup guarantees.
+  - Placeholder coverage paths were replaced with executable lifecycle checks.
+
+- **Point 7 (BTP stability lane):**
+  - BTP checks split into local extended tests and CI-capable smoke tests.
+  - Smoke workflow added: `.github/workflows/btp-smoke.yml` (weekday schedule + manual dispatch).
+
+- **Telemetry foundation (plan-1 completion):**
+  - JSON test outputs across unit/integration/E2E.
+  - Reliability parsers/assertions added:
+    - `scripts/ci/collect-test-reliability.mjs`
+    - `scripts/ci/assert-required-test-execution.mjs`
+  - Aggregated reliability summary job added to CI (`reliability-summary`).
+
+### Verified Runtime Results (latest local validation)
+
+- `npm test`: **1315 passed** (52 files)
+- `npm run test:integration`: **125 passed, 33 skipped, 0 failed** (158 total)
+- `npm run test:e2e`: **58 passed, 5 skipped, 0 failed** (63 total)
+- `npm run test:coverage`: completes and publishes summary/artifacts (informational)
+
+### Follow-through on Audit Claims
+
+- Main-branch green now includes runtime integration/E2E execution for internal changes.
+- Skip behavior is explicit and auditable instead of hidden via early returns.
+- Coverage and execution telemetry are visible in CI summaries/artifacts.
+- Documentation and planning references were updated to current counts and workflow behavior in plan `test-7-docs-verification`.

@@ -20,7 +20,7 @@ npm run test:e2e:full
 # Or step by step:
 npm run build                     # 1. Build dist/
 npm run test:e2e:deploy           # 2. Deploy to server, start MCP
-E2E_MCP_URL=http://$E2E_SERVER:3000/mcp npm run test:e2e   # 3. Run tests
+E2E_MCP_URL=http://$E2E_SERVER:3000/mcp npm run test:e2e   # 3. Sync fixtures, then run tests
 npm run test:e2e:stop             # 4. Stop server, collect logs
 ```
 
@@ -74,7 +74,19 @@ Persistent objects on SAP (created once, expected to stay):
 | CLAS | `ZCL_ARC1_TEST_UT` | `$TMP` | Unit tests (ABAP Unit) |
 | INTF | `ZIF_ARC1_TEST` | `$TMP` | Read, context dependency |
 
-Setup (`beforeAll`) checks if these exist via SAPSearch. If missing, they're created from fixtures in `tests/fixtures/abap/`.
+`npm run test:e2e` now runs `npm run test:e2e:fixtures` first. This sync step ensures managed test objects exist in `$TMP`, and if fixture source drift is detected, it deletes and recreates those objects before the suite runs.
+
+Manual fixture commands:
+
+```bash
+# Sync managed fixtures only (create missing, recreate on drift)
+E2E_MCP_URL=http://$E2E_SERVER:3000/mcp npm run test:e2e:fixtures
+
+# Clean managed fixtures from SAP (manual reset)
+E2E_MCP_URL=http://$E2E_SERVER:3000/mcp npm run test:e2e:fixtures:clean
+```
+
+**Skip behavior:** Navigate tests still have runtime `ctx.skip()` guards as a fallback if custom objects are unavailable (for example, if fixture sync is bypassed). DDLS-dependent tests use `requireOrSkip()` from `tests/helpers/skip-policy.ts`. All skips appear as SKIPPED (not PASSED) in test reports.
 
 ## Adding New Tests
 
@@ -104,7 +116,7 @@ describe('My New Tests', () => {
 
 1. Add ABAP source to `tests/fixtures/abap/<name>.abap`
 2. Add entry to `PERSISTENT_OBJECTS` in `tests/e2e/fixtures.ts`
-3. The setup will auto-create it on next run
+3. Run fixture sync to provision it: `npm run test:e2e:fixtures`
 
 ### 3. Testing errors
 
