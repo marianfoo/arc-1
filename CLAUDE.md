@@ -139,6 +139,7 @@ src/
 ├── context/
 │   ├── types.ts                # Context compression types
 │   ├── deps.ts                 # AST-based dependency extraction (@abaplint/core)
+│   ├── cds-deps.ts             # CDS-specific dependency extraction
 │   ├── contract.ts             # Public API contract extraction
 │   ├── compressor.ts           # Orchestrator (fetch + compress + format)
 │   └── method-surgery.ts       # Method-level extraction, listing, and surgical replacement
@@ -201,6 +202,7 @@ tests/
 | Add safety check | `src/adt/safety.ts` |
 | Add lint rule config | `src/lint/lint.ts`, `src/lint/config-builder.ts`, `src/lint/presets/` |
 | Add dependency pattern | `src/context/deps.ts` |
+| Add CDS dependency pattern | `src/context/cds-deps.ts` |
 | Add contract extraction for new type | `src/context/contract.ts` |
 | Modify context output format | `src/context/compressor.ts` |
 | Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
@@ -218,6 +220,7 @@ tests/
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | BTP ABAP Environment auth | `src/adt/oauth.ts`, `src/server/server.ts` |
+| BTP Destination Service / Connectivity proxy | `src/adt/btp.ts` |
 | Add AFF schema | `src/aff/schemas/` (add `{type}-v1.json`), `src/aff/validator.ts` (add type mapping) |
 | Modify AFF validation | `src/aff/validator.ts`, `src/handlers/intent.ts` (create/batch_create paths) |
 

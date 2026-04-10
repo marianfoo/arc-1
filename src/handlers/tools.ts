@@ -454,14 +454,14 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
     {
       name: 'SAPNavigate',
       description: btp
-        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
-        : 'Navigate code: find definitions, references (where-used), and code completion. Use for "go to definition", "where is this used?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
+        : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['definition', 'references', 'completion'],
+            enum: ['definition', 'references', 'completion', 'hierarchy'],
             description: 'Navigation action',
           },
           uri: {

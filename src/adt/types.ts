@@ -324,3 +324,13 @@ export interface TransactionInfo {
   program: string;
   package: string;
 }
+
+// ─── Class Hierarchy Types ────────────────────────────────────────
+
+/** Class hierarchy from SEOMETAREL (reltype 1=interface, 2=inheritance) */
+export interface ClassHierarchy {
+  className: string;
+  superclass: string | null;
+  interfaces: string[];
+  subclasses: string[];
+}

@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-10_
 
 ## Legend
 - ✅ = Supported
@@ -131,7 +131,7 @@ _Last updated: 2026-04-08_
 | ABAP AST / parser | ⚠️ (abaplint for lint) | ✅ (native Go port) | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
 | Semantic analysis | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ |
 | Call graph analysis | ❌ | ✅ (5 tools) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
-| Type hierarchy | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
+| Type hierarchy | ✅ (via SQL) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 | CDS dependencies | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
 
 ## 8. Code Quality

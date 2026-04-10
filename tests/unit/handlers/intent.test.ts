@@ -2407,6 +2407,115 @@ ENDCLASS.`;
     });
   });
 
+  // ─── SAPNavigate hierarchy ──────────────────────────────────────────
+
+  describe('SAPNavigate hierarchy', () => {
+    /** Helper to build dataPreview XML with SEOMETAREL-like column data */
+    function seometarelXml(rows: Array<{ CLSNAME: string; REFCLSNAME: string; RELTYPE: string }>): string {
+      const clsData = rows.map((r) => `<DATA>${r.CLSNAME}</DATA>`).join('');
+      const refData = rows.map((r) => `<DATA>${r.REFCLSNAME}</DATA>`).join('');
+      const relData = rows.map((r) => `<DATA>${r.RELTYPE}</DATA>`).join('');
+      return `<dataPreview:tableData xmlns:dataPreview="http://www.sap.com/adt/dataPreview">
+        <dataPreview:totalRows>${rows.length}</dataPreview:totalRows>
+        <dataPreview:columns><dataPreview:metadata dataPreview:name="CLSNAME"/><dataPreview:dataSet>${clsData}</dataPreview:dataSet></dataPreview:columns>
+        <dataPreview:columns><dataPreview:metadata dataPreview:name="REFCLSNAME"/><dataPreview:dataSet>${refData}</dataPreview:dataSet></dataPreview:columns>
+        <dataPreview:columns><dataPreview:metadata dataPreview:name="RELTYPE"/><dataPreview:dataSet>${relData}</dataPreview:dataSet></dataPreview:columns>
+      </dataPreview:tableData>`;
+    }
+
+    function subclassXml(names: string[]): string {
+      const data = names.map((n) => `<DATA>${n}</DATA>`).join('');
+      return `<dataPreview:tableData xmlns:dataPreview="http://www.sap.com/adt/dataPreview">
+        <dataPreview:totalRows>${names.length}</dataPreview:totalRows>
+        <dataPreview:columns><dataPreview:metadata dataPreview:name="CLSNAME"/><dataPreview:dataSet>${data}</dataPreview:dataSet></dataPreview:columns>
+      </dataPreview:tableData>`;
+    }
+
+    it('returns superclass and interfaces', async () => {
+      mockFetch.mockReset();
+      // CSRF for first query
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // Own relationships: inherits CL_PARENT, implements IF_A and IF_B
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          seometarelXml([
+            { CLSNAME: 'ZCL_TEST', REFCLSNAME: 'CL_PARENT', RELTYPE: '2' },
+            { CLSNAME: 'ZCL_TEST', REFCLSNAME: 'IF_A', RELTYPE: '1' },
+            { CLSNAME: 'ZCL_TEST', REFCLSNAME: 'IF_B', RELTYPE: '1' },
+          ]),
+        ),
+      );
+      // Subclasses: ZCL_CHILD1, ZCL_CHILD2 (CSRF cached from first query)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, subclassXml(['ZCL_CHILD1', 'ZCL_CHILD2'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.className).toBe('ZCL_TEST');
+      expect(parsed.superclass).toBe('CL_PARENT');
+      expect(parsed.interfaces).toEqual(['IF_A', 'IF_B']);
+      expect(parsed.subclasses).toEqual(['ZCL_CHILD1', 'ZCL_CHILD2']);
+    });
+
+    it('returns null superclass when class has no parent', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // Only interface, no inheritance
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, seometarelXml([{ CLSNAME: 'ZCL_ROOT', REFCLSNAME: 'IF_SERIALIZABLE', RELTYPE: '1' }])),
+      );
+      // Subclasses query (CSRF cached)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, subclassXml([])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+        name: 'ZCL_ROOT',
+      });
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.superclass).toBeNull();
+      expect(parsed.interfaces).toEqual(['IF_SERIALIZABLE']);
+      expect(parsed.subclasses).toEqual([]);
+    });
+
+    it('returns empty hierarchy for class with no relationships', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, seometarelXml([])));
+      // Subclasses query (CSRF cached)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, subclassXml([])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+        name: 'ZCL_ISOLATED',
+      });
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.superclass).toBeNull();
+      expect(parsed.interfaces).toEqual([]);
+      expect(parsed.subclasses).toEqual([]);
+    });
+
+    it('returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Provide name');
+    });
+
+    it('rejects invalid class names', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'hierarchy',
+        name: "ZCL_TEST'; DROP TABLE--",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Invalid class name');
+    });
+  });
+
   // ─── BTP ABAP Handler Adaptation ────────────────────────────────────
 
   describe('BTP ABAP handler adaptation', () => {

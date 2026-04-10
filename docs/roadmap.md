@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-10
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -59,6 +59,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | RAP CRUD | ✅ DDLS, DDLX, BDEF, SRVD write + SRVB read |
 | Context Compression | ✅ SAPContext with AST-based dependency extraction (7-30x reduction) |
 | Where-Used Analysis | ✅ Scope-based where-used in SAPNavigate (#38) |
+| Class Hierarchy | ✅ SAPNavigate hierarchy action via SEOMETAREL SQL |
 | Object Caching | ✅ SQLite + memory cache with on-demand + pre-warmer support (#31) |
 | LLM Search UX | ✅ Auto-transliteration, field-name hints, cache indicators |
 | HTTP Client | ✅ Native fetch + undici (replaced axios) (#35) |
@@ -824,6 +825,34 @@ The following features are tracked but not planned for near-term implementation.
 | **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/566f1f7-i18n-tools.md) |
 
 **What:** Translation management tools: text elements, OTR texts, message class management, translation status, per-request language override. VSP added 7 translation tools (commit 566f1f7, Apr 5), closing their issue #40. ARC-1 has T100 message read and text elements read but not full management.
+
+---
+
+### FEAT-35: Class Hierarchy (SAPNavigate)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟠 P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | High — inheritance/interface understanding for LLM |
+| **Status** | ✅ Complete |
+| **Source** | [ADT API Audit](research/complete/adt-api-audit-documentation-and-unused.md) |
+
+**What:** Added `hierarchy` action to SAPNavigate. Returns superclass, implemented interfaces, and subclasses for a given ABAP class. Implemented via SQL queries against SEOMETAREL table (the ADT `/hierarchy` endpoint returned 404 on the test system). Includes SQL injection prevention via regex whitelist on class names.
+
+---
+
+### FEAT-36: Type Information (SAPNavigate)
+| Field | Value |
+|-------|-------|
+| **Priority** | 🟡 P2 |
+| **Effort** | S (1–2 days) |
+| **Risk** | Medium — endpoint availability varies by SAP version |
+| **Usefulness** | Medium-High — variable type resolution for LLM |
+| **Status** | Deferred — endpoint not available on test system |
+| **Source** | [ADT API Audit](research/complete/adt-api-audit-documentation-and-unused.md) |
+
+**What:** `POST /sap/bc/adt/abapsource/typeinformation` returns the complete type of a variable/expression at a given source position. Tested on A4H 7.52 — returned 404. May be available on newer SAP NetWeaver/S/4HANA versions. Revisit when a newer test system is available.
 
 ---
 

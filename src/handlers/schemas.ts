@@ -175,7 +175,7 @@ export const SAPActivateSchema = z.object({
 // ─── SAPNavigate ────────────────────────────────────────────────────
 
 export const SAPNavigateSchema = z.object({
-  action: z.enum(['definition', 'references', 'completion']),
+  action: z.enum(['definition', 'references', 'completion', 'hierarchy']),
   uri: z.string().optional(),
   type: z.string().optional(),
   name: z.string().optional(),

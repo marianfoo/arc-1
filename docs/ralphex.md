@@ -32,16 +32,43 @@ OLLAMA_MODEL=qwen3.5:27b ralphex docs/plans/my-plan.md
 3. `gemma4:31b` — solid general reasoning
 4. `llama3.1:8b` — too small, skip for review
 
-### External Review: Codex (Default)
+### Switching Reviewers
 
-To switch back to Codex, update config:
+There is **no CLI flag** to override the reviewer at runtime — you must change `~/.config/ralphex/config` before running ralphex.
+
+**Temporarily switch to Codex and back:**
+```bash
+# Switch to Codex, run review, switch back to Ollama
+sed -i '' 's/^external_review_tool = custom/external_review_tool = codex/' ~/.config/ralphex/config \
+  && ralphex --review \
+  ; sed -i '' 's/^external_review_tool = codex/external_review_tool = custom/' ~/.config/ralphex/config
 ```
+
+**Manually edit config** (`~/.config/ralphex/config`):
+```
+# Ollama (our default)
+external_review_tool = custom
+
+# Codex
 external_review_tool = codex
+
+# No external review
+external_review_tool = none
 ```
 
-Or disable external review entirely:
-```
-external_review_tool = none
+### Limiting Review Rounds
+
+Use `--max-external-iterations=N` to cap the number of external review iterations (default: 0 = auto/unlimited). Use `--review-patience=N` to stop early if N consecutive rounds find no new issues.
+
+```bash
+# Run review with exactly 2 Codex iterations
+ralphex --review --max-external-iterations=2
+
+# Run full execution, cap external review at 3 rounds
+ralphex --max-external-iterations=3 docs/plans/my-plan.md
+
+# Stop if 2 consecutive rounds have no changes
+ralphex --review --review-patience=2
 ```
 
 ### Running Ralphex

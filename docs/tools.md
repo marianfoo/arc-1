@@ -17,7 +17,9 @@ Read any SAP ABAP object.
 | `type` | string | Yes | Object type (see below) |
 | `name` | string | No | Object name (e.g., `ZTEST_PROGRAM`, `ZCL_ORDER`, `MARA`) |
 | `format` | string | No | Output format: `"text"` (default) or `"structured"` (CLAS only, see below) |
-| `include` | string | No | For CLAS: `testclasses`, `definitions`, `implementations`, `macros` |
+| `include` | string | No | For CLAS: `main`, `testclasses`, `definitions`, `implementations`, `macros`. For DDLS: `elements` (extract CDS view elements). |
+| `method` | string | No | For CLAS: method name to read (e.g., `get_name`), or `*` to list all methods |
+| `expand_includes` | boolean | No | For FUGR: expand include source inline |
 | `group` | string | No | For FUNC: function group name |
 | `maxRows` | number | No | For TABLE_CONTENTS: max rows (default 100) |
 | `sqlFilter` | string | No | For TABLE_CONTENTS: SQL WHERE clause filter |
@@ -39,6 +41,12 @@ Read any SAP ABAP object.
 | `SRVB` | Service binding (structured JSON: OData version, binding type, publish status) |
 | `TABL` | Table definition (structure) |
 | `VIEW` | DDIC view |
+| `STRU` | Structure definition (DDIC structure source) |
+| `DOMA` | Domain metadata (structured JSON: data type, length, fixed values, value table) |
+| `DTEL` | Data element metadata (structured JSON: type, labels, search help) |
+| `TRAN` | Transaction metadata (structured JSON: code, description, program) |
+| `SOBJ` | BOR business object (list methods, or read specific method with `method` param) |
+| `BSP` | BSP/UI5 filestore (list apps, browse structure, read files via `name`+`include` path) |
 | `TABLE_CONTENTS` | Table data (rows) |
 | `DEVC` | Package contents |
 | `SYSTEM` | System info (SID, release, kernel) |
@@ -64,8 +72,18 @@ This is useful when you need to understand class structure or separate test code
 SAPRead(type="PROG", name="ZTEST_REPORT")
 SAPRead(type="CLAS", name="ZCL_ORDER", include="testclasses")
 SAPRead(type="CLAS", name="ZCL_ORDER", format="structured")  — JSON with metadata + decomposed source
+SAPRead(type="CLAS", name="ZCL_ORDER", method="*")           — list all methods
+SAPRead(type="CLAS", name="ZCL_ORDER", method="get_name")    — read a specific method
+SAPRead(type="DDLS", name="ZI_TRAVEL", include="elements")   — extract CDS view elements
 SAPRead(type="DDLX", name="ZC_TRAVEL")          — metadata extension with UI annotations
 SAPRead(type="SRVB", name="ZUI_TRAVEL_O4")       — service binding metadata as JSON
+SAPRead(type="FUGR", name="ZUTILS", expand_includes=true)    — function group with all includes expanded
+SAPRead(type="STRU", name="BAPIRET2")            — structure definition
+SAPRead(type="DOMA", name="BUKRS")               — domain metadata with fixed values
+SAPRead(type="DTEL", name="MANDT")               — data element metadata with labels
+SAPRead(type="TRAN", name="SE38")                — transaction metadata
+SAPRead(type="SOBJ", name="BUS2032")             — list BOR object methods
+SAPRead(type="BSP")                              — list all BSP/UI5 apps
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
 SAPRead(type="SYSTEM")
 ```
@@ -80,20 +98,27 @@ Search for ABAP objects by name pattern with wildcards.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | Yes | Search pattern (e.g., `ZCL_ORDER*`, `Z*TEST*`) |
+| `query` | string | Yes | Search pattern (e.g., `ZCL_ORDER*`, `Z*TEST*`) or text to search in source code |
 | `maxResults` | number | No | Maximum results (default 100) |
+| `searchType` | string | No | `object` (default, name search) or `source_code` (text search within ABAP source) |
+| `objectType` | string | No | For `source_code` search: filter by object type |
+| `packageName` | string | No | For `source_code` search: filter by package |
 
-**Returns:** Object type, name, package, and description for each match.
+**Returns:** Object type, name, package, and description for each match. Source code search also returns line numbers and code snippets.
 
 **Examples:**
 ```
 SAPSearch(query="ZCL_ORDER*")
 SAPSearch(query="Z*INVOICE*", maxResults=20)
+SAPSearch(query="SY-SUBRC", searchType="source_code")
+SAPSearch(query="SELECT * FROM mara", searchType="source_code", objectType="CLAS", packageName="ZDEV")
 ```
 
-**Umlaut handling:** Queries containing non-ASCII characters (ä, ö, ü, ß) are automatically transliterated to ASCII equivalents (AE, OE, UE, SS). SAP object names are ASCII-only.
+**Umlaut handling:** Object name queries containing non-ASCII characters (ä, ö, ü, ß) are automatically transliterated to ASCII equivalents (AE, OE, UE, SS). SAP object names are ASCII-only. Source code search preserves non-ASCII characters.
 
 **Field names:** If searching for a field/column name (e.g., MATNR, BUKRS), use SAPQuery against DD03L instead — SAPSearch only searches object names.
+
+**Source code search availability:** Not available on all SAP systems. Requires SICF service activation. If unavailable, falls back with an error suggesting SAPQuery as an alternative.
 
 ---
 
@@ -160,13 +185,13 @@ SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL
 
 ## SAPNavigate
 
-Navigate code: find definitions, references (where-used), and code completion.
+Navigate code: find definitions, references (where-used), code completion, and class hierarchy.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `definition`, `references`, or `completion` |
+| `action` | string | Yes | `definition`, `references`, `completion`, or `hierarchy` |
 | `uri` | string | No | Source URI of the object. Optional for `references` if `type`+`name` are provided. |
 | `type` | string | No | Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to `uri` for `references`. |
 | `name` | string | No | Object name — alternative to `uri` for `references`. |
@@ -177,6 +202,8 @@ Navigate code: find definitions, references (where-used), and code completion.
 
 **References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
 
+**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--block-free-sql=false`).
+
 **Examples:**
 ```
 SAPNavigate(action="definition", uri="/sap/bc/adt/programs/programs/ztest", line=10, column=5)
@@ -184,6 +211,7 @@ SAPNavigate(action="references", uri="/sap/bc/adt/oo/classes/zcl_order")
 SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER")
 SAPNavigate(action="references", type="CLAS", name="ZCL_ORDER", objectType="PROG/P")
 SAPNavigate(action="completion", uri="/sap/bc/adt/programs/programs/ztest", line=10, column=15, source="...")
+SAPNavigate(action="hierarchy", name="ZCL_ORDER")
 ```
 
 ---
@@ -396,16 +424,41 @@ SAPLint(action="lint", source="...", rules={"line_length": {"severity": "Error",
 
 ## SAPDiagnose
 
-System diagnostics: runtime errors (short dumps), ABAP profiler traces, SQL traces.
+Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dumps (ST22), and ABAP profiler traces.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `dumps`, `dump_detail`, `traces`, `trace_detail`, `sql_traces`, `call_graph`, `object_structure` |
-| `name` | string | No | Object or dump ID |
-| `user` | string | No | Filter by user |
-| `maxResults` | number | No | Maximum results |
+| `action` | string | Yes | `syntax`, `unittest`, `atc`, `dumps`, or `traces` |
+| `name` | string | No | Object name (required for syntax/unittest/atc) |
+| `type` | string | No | Object type: `PROG`, `CLAS`, `INTF`, `FUNC` (required for syntax/unittest/atc) |
+| `id` | string | No | Dump ID (for dump detail) or Trace ID (for trace analysis) |
+| `user` | string | No | Filter dumps by user |
+| `maxResults` | number | No | Max dumps to return |
+| `variant` | string | No | ATC check variant name |
+| `analysis` | string | No | For trace detail: `hitlist`, `statements`, or `dbAccesses` |
+
+**Actions:**
+
+- **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message.
+- **`unittest`** — Run ABAP unit tests. Returns results per test class/method with status, alert messages, and execution time.
+- **`atc`** — Run ATC (ABAP Test Cockpit) checks. Returns findings with priority, check title, message, URI, and line number. Optional `variant` parameter for custom check variants.
+- **`dumps`** — List short dumps (ST22). Without `id`: returns recent dumps (filterable by `user`, `maxResults`). With `id`: returns full dump detail including error type, exception, program, stack trace, and formatted output.
+- **`traces`** — List ABAP profiler traces. Without `id`: returns trace list. With `id` + `analysis`: returns trace analysis (`hitlist` = call hierarchy with hit counts and timings, `statements` = executed statements, `dbAccesses` = database access details).
+
+**Examples:**
+```
+SAPDiagnose(action="syntax", type="CLAS", name="ZCL_ORDER")
+SAPDiagnose(action="unittest", type="CLAS", name="ZCL_ORDER")
+SAPDiagnose(action="atc", type="PROG", name="ZTEST_REPORT", variant="DEFAULT")
+SAPDiagnose(action="dumps")
+SAPDiagnose(action="dumps", user="DEVELOPER", maxResults=10)
+SAPDiagnose(action="dumps", id="20260409_123456_DUMP_ID")
+SAPDiagnose(action="traces")
+SAPDiagnose(action="traces", id="TRACE123", analysis="hitlist")
+SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
+```
 
 ---
 
@@ -455,4 +508,4 @@ SAPManage(action="features")    → get cached results (no SAP call)
 SAPManage(action="cache_stats") → check cache state and warmup status
 ```
 
-**Note:** Blocked when `--read-only` is active.
+**Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work regardless of `--read-only` mode. In HTTP auth mode, SAPManage requires `write` scope.

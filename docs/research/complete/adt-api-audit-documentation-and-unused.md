@@ -191,15 +191,35 @@
 ## Summary: Recommended Actions
 
 ### Documentation Fixes (High Priority)
-1. **Fix SAPDiagnose docs** — completely rewrite to match actual actions (syntax, unittest, atc, dumps, traces)
-2. **Add missing SAPRead types** — STRU, DOMA, DTEL, TRAN, SOBJ, BSP to the tools.md table
-3. **Add SAPSearch source_code mode** — document searchType, objectType, packageName parameters
-4. **Fix SAPManage read-only note** — probe/features/cache_stats are read operations
+1. **Fix SAPDiagnose docs** — completely rewrite to match actual actions (syntax, unittest, atc, dumps, traces) — ✅ **DONE**
+2. **Add missing SAPRead types** — STRU, DOMA, DTEL, TRAN, SOBJ, BSP to the tools.md table — ✅ **DONE**
+3. **Add SAPSearch source_code mode** — document searchType, objectType, packageName parameters — ✅ **DONE**
+4. **Fix SAPManage read-only note** — probe/features/cache_stats are read operations — ✅ **DONE**
 
 ### New API Implementations (Prioritized)
-1. Class hierarchy (`/hierarchy`) — High value, small effort
-2. Quick fix proposals — High value, medium effort
-3. Type information — Medium-high value, medium effort
+1. Class hierarchy (`/hierarchy`) — High value, small effort — ✅ **DONE** (implemented via SEOMETAREL SQL; ADT `/hierarchy` endpoint returned 404 on A4H 7.52)
+2. Quick fix proposals — High value, medium effort — tracked as FEAT-12
+3. Type information — Medium-high value, medium effort — **Deferred** (endpoint returned 404 on A4H 7.52; tracked as FEAT-36)
 4. Parse message class XML — Medium value, trivial effort
 5. Enhancement implementations — Medium value, small effort
-6. Test coverage (optional param) — Low priority, trivial effort
+6. Test coverage (optional param) — Low priority, trivial effort — tracked as FEAT-31
+
+### Implementation Notes (2026-04-10)
+
+**Documentation fixes applied:**
+- `docs/tools.md`: SAPDiagnose section rewritten with correct 5 actions + full parameter table; SAPRead updated with 6 missing types + 2 missing params; SAPSearch source_code mode documented; SAPManage read-only note corrected; SAPNavigate hierarchy action added
+- `CLAUDE.md`: Added `cds-deps.ts` to structure tree, added 2 missing Key Files entries
+
+**Class hierarchy implementation:**
+- Added `hierarchy` action to SAPNavigate (intent.ts, tools.ts, schemas.ts)
+- Uses SQL queries against SEOMETAREL table: reltype=1 → interface, reltype=2 → inheritance
+- Returns `ClassHierarchy` type: `{ className, superclass, interfaces, subclasses }`
+- SQL injection prevention via regex whitelist on class name input
+- 5 unit tests added (intent.test.ts)
+- ADT REST endpoint `/sap/bc/adt/oo/classes/{name}/hierarchy` returned 404 on test system (A4H 7.52)
+
+**Type information (deferred):**
+- `POST /sap/bc/adt/abapsource/typeinformation` returned 404 on A4H 7.52
+- Also tested `/codeelementinformation` — 404
+- Likely available on newer SAP NetWeaver or S/4HANA versions
+- Tracked as FEAT-36 for future implementation
