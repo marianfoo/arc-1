@@ -416,6 +416,19 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 - **Not run in CI** — BTP free tier instances stop nightly and expire after 90 days
 - Requires interactive browser login (OAuth Authorization Code flow)
 
+### try/catch Rules in Tests
+
+**DO:**
+- Assert success shape in try block (check fields, types, non-empty values)
+- Assert expected error class in catch block using `expectSapFailureClass()` from `tests/helpers/expected-error.ts`
+- Tag cleanup-only catches with `// best-effort-cleanup` comment
+- Use rethrow-with-context pattern for setup/teardown errors (see `tests/e2e/helpers.ts`)
+
+**DON'T:**
+- Catch and ignore errors without any assertion (empty catch or `catch { /* skip */ }`)
+- Accept both success and failure without asserting the shape of either
+- Use try/catch to hide test precondition failures (use `requireOrSkip` instead)
+
 ## Technology Stack
 
 | Technology | Purpose |

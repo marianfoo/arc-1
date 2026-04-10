@@ -170,7 +170,7 @@ Improve signal quality in the dump-trigger test fallback chain so that the test 
 
 Add do/don't rules for try/catch usage in tests to the testing conventions section.
 
-- [ ] In the `CLAUDE.md` file, find the "Testing" section (around line 345+). After the existing testing content, add a subsection:
+- [x] In the `CLAUDE.md` file, find the "Testing" section (around line 345+). After the existing testing content, add a subsection:
   ```markdown
   ### try/catch Rules in Tests
 
@@ -185,7 +185,7 @@ Add do/don't rules for try/catch usage in tests to the testing conventions secti
   - Accept both success and failure without asserting the shape of either
   - Use try/catch to hide test precondition failures (use `requireOrSkip` instead)
   ```
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 6: Final Verification
 
