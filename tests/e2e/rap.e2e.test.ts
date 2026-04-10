@@ -157,6 +157,18 @@ describe('E2E RAP Completeness Tests', () => {
     const WRITE_NAME = 'ZARC1_E2E_WRITE';
 
     it('creates a program, updates source, activates, reads back, deletes', async () => {
+      // Pre-cleanup: delete stale object from a previous run that failed mid-lifecycle
+      try {
+        await callTool(client, 'SAPWrite', {
+          action: 'delete',
+          type: 'PROG',
+          name: WRITE_NAME,
+        });
+        console.log(`    [cleanup] Deleted stale ${WRITE_NAME} from previous run`);
+      } catch {
+        // best-effort-cleanup: object may not exist — that's the happy path
+      }
+
       // Step 1: Create the transient program
       const createResult = await callTool(client, 'SAPWrite', {
         action: 'create',
