@@ -71,12 +71,12 @@ Start with the shared skip helper and its unit tests, then convert pseudo-skips 
 
 Create a shared helper that standardizes how tests skip with reasons, providing consistent formatting across integration and E2E suites.
 
-- [ ] Create `tests/helpers/skip-policy.ts` with:
+- [x] Create `tests/helpers/skip-policy.ts` with:
   - `skipWithReason(ctx: TaskContext, reason: string): void` — calls `ctx.skip()` after logging the reason. The `ctx` parameter is the Vitest test context (`import { TaskContext } from 'vitest'`). Example: `skipWithReason(ctx, 'No DDLS found on system')`.
   - `requireOrSkip<T>(ctx: TaskContext, value: T | null | undefined, reason: string): asserts value is T` — if value is nullish, calls `ctx.skip()` with reason; otherwise narrows the type. Example: `requireOrSkip(ctx, cdsName, 'No DDLS candidate found')`.
   - `SkipReason` enum or constants for common reasons: `NO_CREDENTIALS`, `NO_FIXTURE`, `BACKEND_UNSUPPORTED`, `NO_DDLS`, `NO_DUMPS`, `NO_CUSTOM_OBJECTS`.
   - Export all functions and constants.
-- [ ] Add unit tests (~10 tests) in `tests/unit/helpers/skip-policy.test.ts`:
+- [x] Add unit tests (~10 tests) in `tests/unit/helpers/skip-policy.test.ts`:
   - `requireOrSkip` with valid value does not skip (no call to ctx.skip).
   - `requireOrSkip` with null calls ctx.skip with formatted reason.
   - `requireOrSkip` with undefined calls ctx.skip with formatted reason.
@@ -87,7 +87,7 @@ Create a shared helper that standardizes how tests skip with reasons, providing 
   - Mock `ctx` object with a spy on `skip` method to verify calls.
   - Edge case: empty string reason still calls skip.
   - Edge case: value is `0` or `false` (falsy but defined) — should NOT skip.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Convert Integration Test Pseudo-Skips
 
@@ -97,17 +97,17 @@ Create a shared helper that standardizes how tests skip with reasons, providing 
 
 Replace all early-return pseudo-skips in integration tests with explicit `ctx.skip()` or `requireOrSkip()` calls using the new shared helper.
 
-- [ ] In `tests/integration/context.integration.test.ts`:
+- [x] In `tests/integration/context.integration.test.ts`:
   - Import `requireOrSkip` from `../../helpers/skip-policy.js`.
   - At line 277 (`if (!ddlSource || !cdsName) return;`): change test callback to accept `ctx` parameter (e.g., `it('extracts deps', async (ctx) => {`), then replace early return with `requireOrSkip(ctx, cdsName, 'No DDLS candidate found on system')` and `requireOrSkip(ctx, ddlSource, 'No DDLS source available')`.
   - Apply same pattern at lines 288, 308, 318, 325 — each early return becomes a `requireOrSkip` call with an appropriate reason.
   - Verify that the `beforeAll` block (which calls `findAnyDdls`) still populates `cdsName` and `ddlSource` as before.
-- [ ] In `tests/integration/adt.integration.test.ts`:
+- [x] In `tests/integration/adt.integration.test.ts`:
   - Import `requireOrSkip` from `../../helpers/skip-policy.js`.
   - At line 476 (`if (dumps.length === 0) return;` in diagnostics test): change test callback to accept `ctx`, replace with `if (dumps.length === 0) return ctx.skip('No dumps on system — nothing to verify')`.
   - Check for any other `return;` patterns in the file that act as pseudo-skips and convert them similarly.
-- [ ] Run `npm run test:integration` locally if SAP credentials are available — converted tests should appear as "skipped" (not "passed") when prerequisites are absent. If no credentials, run `npm test` to verify imports compile.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm run test:integration` locally if SAP credentials are available — converted tests should appear as "skipped" (not "passed") when prerequisites are absent. If no credentials, run `npm test` to verify imports compile.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Convert E2E Test Pseudo-Skips and Fix README
 
@@ -118,15 +118,15 @@ Replace all early-return pseudo-skips in integration tests with explicit `ctx.sk
 
 Replace all early-return pseudo-skips in E2E tests and reconcile README claims with reality.
 
-- [ ] In `tests/e2e/cds-context.e2e.test.ts`:
+- [x] In `tests/e2e/cds-context.e2e.test.ts`:
   - Import `requireOrSkip` from `../../helpers/skip-policy.js`.
   - At line 54 (`if (!cdsName) return;`): the test callback already may not accept `ctx`. Change to `it('reads raw DDL source', async (ctx) => {` and replace `if (!cdsName) return;` with `requireOrSkip(ctx, cdsName, 'No DDLS found on system — CDS tests skipped')`.
   - Apply same pattern at lines 64, 87, 99.
   - The `beforeAll` already sets `cdsName` and logs a skip message — keep that but now the individual tests will properly show as skipped in reports.
-- [ ] In `tests/e2e/README.md`:
+- [x] In `tests/e2e/README.md`:
   - Update the setup section (around line 77-78) to accurately describe current behavior. Replace the claim about automatic object creation with: "Test objects (ZARC1_TEST_REPORT, ZIF_ARC1_TEST, ZCL_ARC1_TEST, ZCL_ARC1_TEST_UT) must exist on the SAP system. If missing, tests that require them will skip with explicit reasons. The `ensureTestObjects()` function in `setup.ts` can create them on demand but is not called automatically."
   - Document the skip behavior: when custom objects are missing, navigate tests use `ctx.skip()`; when DDLS objects are missing, CDS tests use `requireOrSkip()`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Update CI Workflow for Main Branch Push
 
@@ -135,7 +135,7 @@ Replace all early-return pseudo-skips in E2E tests and reconcile README claims w
 
 Update the workflow so internal pushes to `main` also run integration and E2E tests, while still protecting against external fork PRs that lack secrets.
 
-- [ ] Modify the `integration` job `if:` condition (lines 41-43) from:
+- [x] Modify the `integration` job `if:` condition (lines 41-43) from:
   ```yaml
   if: >
     github.event_name == 'pull_request' &&
@@ -149,9 +149,9 @@ Update the workflow so internal pushes to `main` also run integration and E2E te
      github.event.pull_request.head.repo.full_name == github.repository)
   ```
   This allows the job to run on both push events (to main) and internal PRs, while still skipping external fork PRs.
-- [ ] Apply the same `if:` condition change to the `e2e` job (lines 71-73).
-- [ ] Verify that the secrets (`TEST_SAP_URL`, `E2E_SSH_KEY`, etc.) will be available on push events — they are repository secrets, so they are available for push events on the same repo. Add a comment above each `if:` explaining the policy: `# Run on push (main) and internal PRs; skip external fork PRs (no secrets)`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Apply the same `if:` condition change to the `e2e` job (lines 71-73).
+- [x] Verify that the secrets (`TEST_SAP_URL`, `E2E_SSH_KEY`, etc.) will be available on push events — they are repository secrets, so they are available for push events on the same repo. Add a comment above each `if:` explaining the policy: `# Run on push (main) and internal PRs; skip external fork PRs (no secrets)`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 5: Create Skip Policy Documentation
 
@@ -160,20 +160,20 @@ Update the workflow so internal pushes to `main` also run integration and E2E te
 
 Document the skip taxonomy, valid vs problematic patterns, and expectations for new tests.
 
-- [ ] Create `docs/testing-skip-policy.md` with:
+- [x] Create `docs/testing-skip-policy.md` with:
   - **Valid Skip Reasons** section: missing credentials (SAP/BTP), missing fixture on shared system, backend version doesn't support feature, optional custom objects not deployed. Each with code example from the codebase.
   - **Problematic Patterns** section (DO NOT): early return without skip (`if (!x) return;`), catch-and-continue without assertion, permanent `it.skip` without issue tracking, workflow-level skip hiding runtime regressions.
   - **How to Skip Correctly** section: use `requireOrSkip(ctx, value, reason)` for precondition checks, use `ctx.skip('reason')` for runtime decisions, always include actionable reason text.
   - **Skip Reason Constants** section: list the `SkipReason` constants from `tests/helpers/skip-policy.ts` and when to use each.
   - **CI Policy** section: internal PRs and main pushes run all suites; external fork PRs skip integration/E2E (no secrets); all skips are visible in telemetry reports.
   - **Reference Patterns** section: link to `tests/e2e/navigate.e2e.test.ts` as the canonical example of correct skip usage.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 6: Final Verification
 
-- [ ] Run full unit suite: `npm test` — all tests pass (including 10+ new skip policy tests).
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Verify no remaining `if (!x) return;` pseudo-skip patterns exist in `tests/integration/context.integration.test.ts`, `tests/e2e/cds-context.e2e.test.ts`, or `tests/integration/adt.integration.test.ts` by grepping for early-return patterns.
-- [ ] Verify `.github/workflows/test.yml` `if:` conditions allow push events.
-- [ ] Move this plan to `docs/plans/completed/` once all tasks are done.
+- [x] Run full unit suite: `npm test` — all tests pass (including 10+ new skip policy tests).
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Verify no remaining `if (!x) return;` pseudo-skip patterns exist in `tests/integration/context.integration.test.ts`, `tests/e2e/cds-context.e2e.test.ts`, or `tests/integration/adt.integration.test.ts` by grepping for early-return patterns.
+- [x] Verify `.github/workflows/test.yml` `if:` conditions allow push events.
+- [x] Move this plan to `docs/plans/completed/` once all tasks are done.

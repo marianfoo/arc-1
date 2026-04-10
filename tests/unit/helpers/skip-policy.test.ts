@@ -59,5 +59,11 @@ describe('skip-policy', () => {
       const narrowed: string = value;
       expect(narrowed).toBe('ZDDLS_TEST');
     });
+
+    it('skips with empty string reason', () => {
+      const ctx = mockCtx();
+      expect(() => requireOrSkip(ctx, null, '')).toThrow();
+      expect(ctx.skip).toHaveBeenCalledWith('');
+    });
   });
 });

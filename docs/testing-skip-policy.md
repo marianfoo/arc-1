@@ -8,11 +8,16 @@ These are the accepted reasons for a test to skip at runtime:
 
 ### Missing SAP Credentials
 
-Integration and E2E tests require a live SAP system. When credentials are not configured, tests skip early in `beforeAll`.
+Integration and E2E tests require a live SAP system. When credentials are not configured, the entire `describe` block is skipped at module level using `describeIf`.
 
 ```typescript
-const client = getTestClient();
-if (!client) return; // handled at suite level — entire describe block skipped
+import { hasSapCredentials } from './helpers.js';
+
+const describeIf = hasSapCredentials() ? describe : describe.skip;
+
+describeIf('ADT integration tests', () => {
+  // all tests in this block are skipped when credentials are absent
+});
 ```
 
 ### Missing Fixture on Shared System
@@ -32,7 +37,7 @@ Older SAP versions or BTP ABAP may lack specific ADT endpoints.
 
 ```typescript
 it('reads profiler traces', async (ctx) => {
-  requireOrSkip(ctx, profilerAvailable, SkipReason.BACKEND_UNSUPPORTED);
+  if (!profilerAvailable) return ctx.skip('Backend does not support profiler traces');
 });
 ```
 
@@ -140,11 +145,8 @@ The shared helper at `tests/helpers/skip-policy.ts` exports these standard const
 | Constant | Value | When to use |
 |----------|-------|-------------|
 | `NO_CREDENTIALS` | SAP credentials not configured | Suite-level skip when `TEST_SAP_URL` is absent |
-| `NO_FIXTURE` | Required test fixture not available on system | Expected object not found during discovery |
-| `BACKEND_UNSUPPORTED` | Backend does not support this feature | ADT endpoint returns 404/501 |
 | `NO_DDLS` | No DDLS object found on system | CDS/DDLS tests when no view is available |
 | `NO_DUMPS` | No short dumps found on system | Diagnostics tests on clean systems |
-| `NO_CUSTOM_OBJECTS` | Custom Z objects not deployed on system | E2E tests requiring ZARC1_TEST_* objects |
 
 Use these constants for consistency. Add new constants to the helper when a new skip category emerges.
 
