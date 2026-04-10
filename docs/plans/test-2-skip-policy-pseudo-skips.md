@@ -135,7 +135,7 @@ Replace all early-return pseudo-skips in E2E tests and reconcile README claims w
 
 Update the workflow so internal pushes to `main` also run integration and E2E tests, while still protecting against external fork PRs that lack secrets.
 
-- [ ] Modify the `integration` job `if:` condition (lines 41-43) from:
+- [x] Modify the `integration` job `if:` condition (lines 41-43) from:
   ```yaml
   if: >
     github.event_name == 'pull_request' &&
@@ -149,9 +149,9 @@ Update the workflow so internal pushes to `main` also run integration and E2E te
      github.event.pull_request.head.repo.full_name == github.repository)
   ```
   This allows the job to run on both push events (to main) and internal PRs, while still skipping external fork PRs.
-- [ ] Apply the same `if:` condition change to the `e2e` job (lines 71-73).
-- [ ] Verify that the secrets (`TEST_SAP_URL`, `E2E_SSH_KEY`, etc.) will be available on push events — they are repository secrets, so they are available for push events on the same repo. Add a comment above each `if:` explaining the policy: `# Run on push (main) and internal PRs; skip external fork PRs (no secrets)`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Apply the same `if:` condition change to the `e2e` job (lines 71-73).
+- [x] Verify that the secrets (`TEST_SAP_URL`, `E2E_SSH_KEY`, etc.) will be available on push events — they are repository secrets, so they are available for push events on the same repo. Add a comment above each `if:` explaining the policy: `# Run on push (main) and internal PRs; skip external fork PRs (no secrets)`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 5: Create Skip Policy Documentation
 

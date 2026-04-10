@@ -53,13 +53,13 @@ jobs:
           retention-days: 7
         continue-on-error: true
 
-  # Integration tests run on PRs from internal branches (secrets available)
-  # Skipped for external/fork PRs (secrets are not exposed)
+  # Run on push (main) and internal PRs; skip external fork PRs (no secrets)
   integration:
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     needs: test
 
     steps:
@@ -83,13 +83,13 @@ jobs:
           TEST_SAP_CLIENT: ${{ secrets.TEST_SAP_CLIENT }}
           TEST_SAP_INSECURE: ${{ secrets.TEST_SAP_INSECURE }}
 
-  # E2E tests: deploy MCP server to SAP test server, run real tool calls
-  # Only runs on PRs from internal branches (needs SSH key + server access)
+  # Run on push (main) and internal PRs; skip external fork PRs (no secrets)
   e2e:
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     needs: test
     timeout-minutes: 15
 
