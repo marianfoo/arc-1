@@ -28,6 +28,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { AdtClient } from '../../src/adt/client.js';
 import { createBearerTokenProvider, loadServiceKeyFile } from '../../src/adt/oauth.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
+import { expectSapFailureClass } from '../helpers/expected-error.js';
 
 // Load .env before anything else
 config();
@@ -190,11 +191,12 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
     it('classic programs like RSHOWTIM are NOT available', async () => {
       // BTP ABAP doesn't have classic SE38 programs
       try {
-        await client.getProgram('RSHOWTIM');
-        // If it exists, that's unexpected but not a hard failure
+        const source = await client.getProgram('RSHOWTIM');
+        // If it unexpectedly succeeds, verify it returns valid source
+        expect(typeof source).toBe('string');
       } catch (err) {
         // Expected: 404 or not found — BTP doesn't have classic programs
-        expect(err).toBeTruthy();
+        expectSapFailureClass(err, [403, 404], [/not found/i, /not available/i, /not released/i]);
       }
     });
 
@@ -202,8 +204,8 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
       // Standard FM FUNCTION_EXISTS may not exist on BTP
       const results = await client.searchObject('FUNCTION_EXISTS', 5);
       // On BTP, classic FMs are typically not accessible — 0 results is expected
-      // Some may still show up — either way is valid
-      expect(Array.isArray(results)).toBe(true);
+      // Some may still show up — either way is valid, but assert array shape
+      expect(results).toBeInstanceOf(Array);
     });
 
     it('table preview may be restricted on BTP', async () => {
@@ -214,19 +216,19 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
         expect(result.columns).toContain('MANDT');
       } catch (err) {
         // Expected on BTP: table preview is often restricted
-        const msg = err instanceof Error ? err.message : String(err);
-        // 403 Forbidden or specific restriction error
-        expect(msg).toBeTruthy();
+        expectSapFailureClass(err, [403, 500], [/restricted/i, /not authorized/i]);
       }
     });
 
     it('free SQL query is likely blocked on BTP', async () => {
       try {
-        await client.runQuery('SELECT * FROM T000', 5);
-        // If it works, that's surprising but OK
+        const result = await client.runQuery('SELECT * FROM T000', 5);
+        // If it works, verify result shape
+        expect(result).toBeTruthy();
+        expect(typeof result).toBe('string');
       } catch (err) {
         // Expected: BTP blocks free SQL execution
-        expect(err).toBeTruthy();
+        expectSapFailureClass(err, [403, 500], [/blocked/i, /not authorized/i, /restricted/i]);
       }
     });
   });

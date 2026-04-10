@@ -127,8 +127,8 @@ Convert Category C catch blocks in the ADT integration test to dual-path asserti
 
 Convert Category B restriction tests to assert specific expected failure classes.
 
-- [ ] Import `expectSapFailureClass` and `classifySapError` from `../../helpers/expected-error.js`.
-- [ ] Lines 194-200 (classic programs not available): refactor to expect failure:
+- [x] Import `expectSapFailureClass` and `classifySapError` from `../../helpers/expected-error.js`.
+- [x] Lines 194-200 (classic programs not available): refactor to expect failure:
   ```typescript
   it('classic programs like RSHOWTIM are NOT available', async () => {
     try {
@@ -140,10 +140,10 @@ Convert Category B restriction tests to assert specific expected failure classes
     }
   });
   ```
-- [ ] Lines 203-209 (function modules): keep flexible search assertion but add: `expect(results).toBeInstanceOf(Array)` on success path.
-- [ ] Lines 211-223 (table preview restricted): success path asserts columns; failure path uses `expectSapFailureClass(err, [403, 500], [/restricted/i, /not authorized/i])`.
-- [ ] Lines 225-232 (free SQL blocked): success path asserts result shape; failure path uses `expectSapFailureClass(err, [403, 500], [/blocked/i, /not authorized/i, /restricted/i])`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Lines 203-209 (function modules): keep flexible search assertion but add: `expect(results).toBeInstanceOf(Array)` on success path.
+- [x] Lines 211-223 (table preview restricted): success path asserts columns; failure path uses `expectSapFailureClass(err, [403, 500], [/restricted/i, /not authorized/i])`.
+- [x] Lines 225-232 (free SQL blocked): success path asserts result shape; failure path uses `expectSapFailureClass(err, [403, 500], [/blocked/i, /not authorized/i, /restricted/i])`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Refactor Diagnostics E2E Fallback Chain
 
