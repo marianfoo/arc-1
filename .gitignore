@@ -44,6 +44,7 @@ go.work.sum
 # IDE
 .idea/
 .vscode/
+!.vscode/settings.json
 *.swp
 *.swo
 *~
