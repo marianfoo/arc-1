@@ -155,13 +155,13 @@ Implement in layers: transport module correctness, shared HTTP retry mechanism, 
 
 Transport compatibility issues recur across endpoints and SAP versions. Implement the retry in the shared request layer (`src/adt/http.ts` request flow, currently only has 403 CSRF retry at lines ~291-319 and DB connection retry at ~235-289) so all callers benefit without duplicating logic.
 
-- [ ] Add a dedicated negotiation-retry helper that activates only for status `406`/`415`, mutates headers deterministically, and retries exactly once.
-- [ ] Implement Accept fallback strategy (primary configured Accept -> inferred accepted type from SAP error text when available -> wildcard fallback as last resort).
-- [ ] Implement Content-Type fallback strategy for modifying requests (preserve existing behavior unless 415 indicates media-type rejection).
-- [ ] Ensure retry logic works in both direct fetch and proxy mode without duplicating request construction.
-- [ ] Emit audit/debug metadata indicating retry attempt and effective fallback headers (without leaking sensitive values).
-- [ ] Add unit tests (~10 tests): 406 GET Accept fallback success, 415 POST Content-Type fallback success, no retry on non-406/415 errors, no infinite retry loop, and preservation of CSRF/cookie behavior.
-- [ ] Run `npm test -- tests/unit/adt/http.test.ts`.
+- [x] Add a dedicated negotiation-retry helper that activates only for status `406`/`415`, mutates headers deterministically, and retries exactly once.
+- [x] Implement Accept fallback strategy (primary configured Accept -> inferred accepted type from SAP error text when available -> wildcard fallback as last resort).
+- [x] Implement Content-Type fallback strategy for modifying requests (preserve existing behavior unless 415 indicates media-type rejection).
+- [x] Ensure retry logic works in both direct fetch and proxy mode without duplicating request construction.
+- [x] Emit audit/debug metadata indicating retry attempt and effective fallback headers (without leaking sensitive values).
+- [x] Add unit tests (~10 tests): 406 GET Accept fallback success, 415 POST Content-Type fallback success, no retry on non-406/415 errors, no infinite retry loop, and preservation of CSRF/cookie behavior.
+- [x] Run `npm test -- tests/unit/adt/http.test.ts`.
 
 ### Task 3: Auto-Propagate Lock `corrNr` for Update/Delete Write Paths (Issue #56)
 

@@ -96,6 +96,8 @@ export class AdtHttpClient {
   private cookieJar: Map<string, string> = new Map();
   /** Guard to prevent infinite retry loops for DB connection errors */
   private dbRetryInProgress = false;
+  /** Guard to prevent infinite retry loops for 406/415 negotiation */
+  private negotiationRetryInProgress = false;
 
   constructor(config: AdtHttpConfig) {
     this.config = config;
@@ -316,6 +318,63 @@ export class AdtHttpClient {
         });
 
         return result;
+      }
+
+      // Handle 406/415 content negotiation failure — retry once with fallback headers
+      if ((response.status === 406 || response.status === 415) && !this.negotiationRetryInProgress) {
+        this.negotiationRetryInProgress = true;
+        try {
+          const fallbackHeaders = { ...headers };
+
+          if (response.status === 406) {
+            // Server rejected our Accept header — try fallback
+            const inferred = inferAcceptFromError(responseBody);
+            if (inferred) {
+              fallbackHeaders.Accept = inferred;
+            } else if (fallbackHeaders.Accept && fallbackHeaders.Accept !== '*/*') {
+              // Fall back to generic XML, then wildcard
+              fallbackHeaders.Accept = 'application/xml';
+            } else {
+              fallbackHeaders.Accept = '*/*';
+            }
+          } else {
+            // 415: Server rejected our Content-Type — try application/xml fallback
+            if (contentType && contentType !== 'application/xml') {
+              fallbackHeaders['Content-Type'] = 'application/xml';
+            }
+          }
+
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: response.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: `Content negotiation ${response.status} — retrying with fallback headers`,
+          });
+
+          const retryResp = await this.doFetch(url, method, fallbackHeaders, body);
+          const retryBody = await retryResp.text();
+          this.storeCookies(retryResp);
+          const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: retryResp.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: `Content negotiation retry succeeded (${response.status} → ${retryResp.status})`,
+          });
+
+          return retryResult;
+        } finally {
+          this.negotiationRetryInProgress = false;
+        }
       }
 
       // Store CSRF token from response
@@ -623,4 +682,16 @@ export class AdtHttpClient {
 /** HTTP methods that modify server state and require CSRF token */
 function isModifyingMethod(method: string): boolean {
   return ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+}
+
+/**
+ * Try to extract an accepted media type from a SAP 406 error response body.
+ *
+ * SAP sometimes includes the expected media type in error text, e.g.:
+ *   "...expected application/vnd.sap.adt.transportorganizertree.v1+xml..."
+ * Returns the extracted media type or undefined if none found.
+ */
+function inferAcceptFromError(body: string): string | undefined {
+  const match = body.match(/application\/[\w.+-]+(?:\/[\w.+-]+)?/);
+  return match?.[0];
 }

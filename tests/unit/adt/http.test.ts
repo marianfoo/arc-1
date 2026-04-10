@@ -579,6 +579,149 @@ describe('AdtHttpClient', () => {
     });
   });
 
+  // ─── 406/415 Content Negotiation Retry ─────────────────────────────
+
+  describe('406/415 content negotiation retry', () => {
+    it('retries GET with fallback Accept on 406', async () => {
+      // First request → 406
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      // Retry with fallback Accept → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.get('/path', { Accept: 'application/vnd.sap.adt.custom+xml' });
+
+      expect(resp.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // Retry should use fallback Accept (application/xml since original was specific)
+      expect(fetchHeaders(1).Accept).toBe('application/xml');
+    });
+
+    it('retries GET with wildcard Accept when original was already application/xml', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      // Default Accept is */* so the fallback should stay */*
+      const resp = await client.get('/path');
+
+      expect(resp.statusCode).toBe(200);
+      expect(fetchHeaders(1).Accept).toBe('*/*');
+    });
+
+    it('uses inferred Accept from SAP error body on 406', async () => {
+      const errorBody =
+        '<exc:exception><exc:localizedMessage>Expected application/vnd.sap.adt.transportorganizertree.v1+xml</exc:localizedMessage></exc:exception>';
+      mockFetch.mockResolvedValueOnce(mockResponse(406, errorBody));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.get('/path', { Accept: 'application/xml' });
+
+      expect(resp.statusCode).toBe(200);
+      expect(fetchHeaders(1).Accept).toBe('application/vnd.sap.adt.transportorganizertree.v1+xml');
+    });
+
+    it('retries POST with fallback Content-Type on 415', async () => {
+      // CSRF fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // POST → 415
+      mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported Media Type'));
+      // Retry with application/xml → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'created'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.post('/path', '<data/>', 'text/xml');
+
+      expect(resp.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // Retry Content-Type should fall back to application/xml
+      expect(fetchHeaders(2)['Content-Type']).toBe('application/xml');
+    });
+
+    it('does not retry on non-406/415 errors', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(500, 'Internal Server Error'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/path')).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry infinitely — only retries once for 406', async () => {
+      // First 406
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      // Retry also 406 — should NOT retry again, should throw
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Still Not Acceptable'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/path', { Accept: 'application/custom+xml' })).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry infinitely — only retries once for 415', async () => {
+      // CSRF fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // First 415
+      mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported'));
+      // Retry also 415 — should throw
+      mockFetch.mockResolvedValueOnce(mockResponse(415, 'Still Unsupported'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.post('/path', '<d/>', 'text/xml')).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(3); // CSRF + POST + retry
+    });
+
+    it('preserves CSRF token and cookies during 406 retry', async () => {
+      // CSRF fetch returns cookie
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '', { 'x-csrf-token': 'MY_TOKEN' }, ['SAP_SESSIONID=sess1; Path=/']),
+      );
+      // POST → 406
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      // Retry → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.post('/path', '<d/>', 'application/custom+xml', {
+        Accept: 'application/custom+xml',
+      });
+
+      expect(resp.statusCode).toBe(200);
+      // Retry should still have CSRF token
+      expect(fetchHeaders(2)['X-CSRF-Token']).toBe('MY_TOKEN');
+      // Retry should still have session cookie
+      expect(fetchHeaders(2).Cookie).toContain('SAP_SESSIONID=sess1');
+    });
+
+    it('406 retry with Accept fallback works for GET without extra headers', async () => {
+      // Default Accept is */* — fallback should remain */*
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'fallback ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.get('/path');
+
+      expect(resp.statusCode).toBe(200);
+      expect(resp.body).toBe('fallback ok');
+    });
+
+    it('415 retry does not change Content-Type when already application/xml', async () => {
+      // CSRF fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // POST with application/xml → 415 (no useful fallback)
+      mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported'));
+      // Retry — Content-Type stays application/xml since there's no better fallback
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.post('/path', '<d/>', 'application/xml');
+
+      expect(resp.statusCode).toBe(200);
+      // Content-Type should remain application/xml (no fallback available)
+      expect(fetchHeaders(2)['Content-Type']).toBe('application/xml');
+    });
+  });
+
   // ─── Proxy Configuration ──────────────────────────────────────────
 
   describe('proxy configuration', () => {
