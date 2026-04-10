@@ -15,7 +15,7 @@ The user provides a natural language description of the business object (e.g., "
 - **Business object description** (required) — what the entity represents and its key business fields
 - **Entity name prefix** (optional — default: auto-generate Z namespace, e.g., `ZTRAVEL`)
 - **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+- **Transport request** (optional — explicit transport recommended for create actions in transportable packages; ARC-1 auto-propagates lock `corrNr` for subsequent updates when omitted)
 - **Draft enabled** (optional — default: yes on BTP, no on-prem)
 - **OData version** (optional — default: V4)
 

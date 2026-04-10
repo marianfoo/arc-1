@@ -11,7 +11,7 @@ The user provides an ABAP class to test. Ask the user for:
 - **Test class name** (optional — default: `ZCL_TEST_<CLASS>`)
 - **Methods to test** (optional — default: all public methods)
 - **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+- **Transport request** (optional — explicit transport recommended for transportable packages; ARC-1 auto-propagates lock `corrNr` for updates when omitted)
 
 If the user provides just a class name, use defaults and proceed.
 
@@ -296,6 +296,8 @@ SAPWrite(action="create", type="CLAS", name="<test_class_name>", source="<genera
 ```
 SAPWrite(action="update", type="CLAS", name="<test_class_name>", source="<generated_source>", transport="<transport>")
 ```
+
+**Note:** For the update action, `transport` is recommended but not always required. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied.
 
 ### 6c. Activate the test class
 

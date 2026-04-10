@@ -266,10 +266,10 @@ Docs must reflect the new runtime truth: transport parameters remain supported, 
 
 Skill instructions currently assume transport must always be manually supplied for transportable writes. After implementing lock-based auto-propagation, these instructions must be accurate to avoid over-constraining user flows.
 
-- [ ] Update skill guidance from "transport always required" to "explicit transport recommended; ARC-1 may auto-propagate lock `corrNr` for update/delete when available."
-- [ ] Keep create-flow guidance explicit: transport may still be required depending on package/system behavior.
-- [ ] Ensure examples remain valid and do not claim unsupported transport management automation.
-- [ ] Run `npm run lint` to catch formatting issues in edited markdown/docs files.
+- [x] Update skill guidance from "transport always required" to "explicit transport recommended; ARC-1 may auto-propagate lock `corrNr` for update/delete when available."
+- [x] Keep create-flow guidance explicit: transport may still be required depending on package/system behavior.
+- [x] Ensure examples remain valid and do not claim unsupported transport management automation.
+- [x] Run `npm run lint` to catch formatting issues in edited markdown/docs files.
 
 ### Task 9: Final Verification and Plan Closure
 

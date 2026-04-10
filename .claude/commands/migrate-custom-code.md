@@ -161,6 +161,8 @@ For full-source updates (programs, functions):
 SAPWrite(action="update", type="<type>", name="<object_name>", source="<fixed_source>", transport="<transport>")
 ```
 
+**Note on transport parameter:** For update and edit_method actions, the `transport` parameter is recommended but not always required. ARC-1 automatically propagates the lock-provided correction number (`corrNr`) when no explicit transport is supplied. If the object is in a transportable package and the system assigns a `corrNr` during lock, the update will succeed without a manual transport. Provide an explicit `transport` when you need to target a specific transport request. For **create** actions, transport may still be required depending on the package — `$TMP` objects never need a transport, but transportable packages typically do.
+
 ### 5b. Validate after each batch of fixes
 
 ```
@@ -221,7 +223,7 @@ Next steps:
 | No mcp-sap-docs available | Documentation MCP not configured | Explain findings using ATC finding text only, recommend user check SAP Help Portal |
 | Package has too many objects | Large package with 100+ objects | Suggest breaking into smaller batches by sub-package or object type |
 | ATC returns no findings | Object is already S/4HANA ready | Inform user — no findings is good news, suggest checking with a stricter variant |
-| Transport required but not provided | Object is in a transportable package | Ask user for transport request number before applying fixes |
+| Transport required but not provided | Object is in a transportable package and lock did not return a correction number | ARC-1 auto-propagates lock `corrNr` for updates/deletes; if that fails, ask user for transport request number |
 
 ## Notes
 
@@ -232,7 +234,7 @@ Next steps:
 
 ### What This Skill Does NOT Do
 
-- **No transport management**: User is responsible for creating and releasing transport requests
+- **Limited transport management**: ARC-1 auto-propagates lock-provided `corrNr` for updates/deletes, but users are responsible for creating and releasing transport requests
 - **No mass migration**: Handles one object or one package at a time — not a full system migration tool
 - **No custom ATC variant creation**: Uses existing ATC variants on the system
 - **No table structure migration**: Cannot modify DDIC table structures (e.g., field length changes for S/4HANA)

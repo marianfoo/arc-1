@@ -185,6 +185,8 @@ Write each method implementation using method-level surgery:
 SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method_name>", source="<generated_code>", transport="<transport>")
 ```
 
+**Note:** The `transport` parameter is recommended but not always required for edit_method. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied.
+
 After writing all methods, run a syntax check:
 
 ```

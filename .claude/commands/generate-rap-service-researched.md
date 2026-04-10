@@ -22,7 +22,7 @@ Gather initial context — do NOT over-interview at this stage. Research will su
 
 - **Business requirement** (required) — what the service should do
 - **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+- **Transport request** (optional — explicit transport recommended for create actions in transportable packages; ARC-1 auto-propagates lock `corrNr` for subsequent updates when omitted)
 - **Any known constraints** (optional — e.g., "must use existing table ZMAINT_ORDER", "needs to integrate with PM module")
 
 If the user provides just a description, proceed directly to research. Questions come AFTER research, when you know enough to ask the right ones.
