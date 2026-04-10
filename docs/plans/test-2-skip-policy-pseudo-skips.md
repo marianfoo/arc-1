@@ -97,17 +97,17 @@ Create a shared helper that standardizes how tests skip with reasons, providing 
 
 Replace all early-return pseudo-skips in integration tests with explicit `ctx.skip()` or `requireOrSkip()` calls using the new shared helper.
 
-- [ ] In `tests/integration/context.integration.test.ts`:
+- [x] In `tests/integration/context.integration.test.ts`:
   - Import `requireOrSkip` from `../../helpers/skip-policy.js`.
   - At line 277 (`if (!ddlSource || !cdsName) return;`): change test callback to accept `ctx` parameter (e.g., `it('extracts deps', async (ctx) => {`), then replace early return with `requireOrSkip(ctx, cdsName, 'No DDLS candidate found on system')` and `requireOrSkip(ctx, ddlSource, 'No DDLS source available')`.
   - Apply same pattern at lines 288, 308, 318, 325 — each early return becomes a `requireOrSkip` call with an appropriate reason.
   - Verify that the `beforeAll` block (which calls `findAnyDdls`) still populates `cdsName` and `ddlSource` as before.
-- [ ] In `tests/integration/adt.integration.test.ts`:
+- [x] In `tests/integration/adt.integration.test.ts`:
   - Import `requireOrSkip` from `../../helpers/skip-policy.js`.
   - At line 476 (`if (dumps.length === 0) return;` in diagnostics test): change test callback to accept `ctx`, replace with `if (dumps.length === 0) return ctx.skip('No dumps on system — nothing to verify')`.
   - Check for any other `return;` patterns in the file that act as pseudo-skips and convert them similarly.
-- [ ] Run `npm run test:integration` locally if SAP credentials are available — converted tests should appear as "skipped" (not "passed") when prerequisites are absent. If no credentials, run `npm test` to verify imports compile.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm run test:integration` locally if SAP credentials are available — converted tests should appear as "skipped" (not "passed") when prerequisites are absent. If no credentials, run `npm test` to verify imports compile.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Convert E2E Test Pseudo-Skips and Fix README
 

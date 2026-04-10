@@ -19,6 +19,7 @@ import { compressCdsContext, compressContext } from '../../src/context/compresso
 import { extractContract } from '../../src/context/contract.js';
 import { extractDependencies } from '../../src/context/deps.js';
 import { extractMethod, listMethods, spliceMethod } from '../../src/context/method-surgery.js';
+import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { getTestClient, hasSapCredentials } from './helpers.js';
 
 const describeIf = hasSapCredentials() ? describe : describe.skip;
@@ -273,8 +274,9 @@ describeIf('SAPContext Integration Tests', () => {
       ddlSource = found?.source;
     }, 30000);
 
-    it('extracts dependencies from CDS DDL source', async () => {
-      if (!ddlSource || !cdsName) return;
+    it('extracts dependencies from CDS DDL source', async (ctx) => {
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
+      requireOrSkip(ctx, ddlSource, SkipReason.NO_DDLS);
       const deps = extractCdsDependencies(ddlSource);
 
       expect(deps.length).toBeGreaterThan(0);
@@ -284,8 +286,9 @@ describeIf('SAPContext Integration Tests', () => {
       }
     });
 
-    it('extracts elements from CDS DDL source', async () => {
-      if (!ddlSource || !cdsName) return;
+    it('extracts elements from CDS DDL source', async (ctx) => {
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
+      requireOrSkip(ctx, ddlSource, SkipReason.NO_DDLS);
       const elements = extractCdsElements(ddlSource, cdsName);
 
       expect(elements).toContain(`=== ${cdsName} elements ===`);
@@ -304,8 +307,9 @@ describeIf('SAPContext Integration Tests', () => {
       ddlSource = found?.source;
     }, 30000);
 
-    it('compresses CDS context', async () => {
-      if (!ddlSource || !cdsName) return;
+    it('compresses CDS context', async (ctx) => {
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
+      requireOrSkip(ctx, ddlSource, SkipReason.NO_DDLS);
       const result = await compressCdsContext(client, ddlSource, cdsName, 5, 1);
 
       expect(result.depsResolved).toBeGreaterThan(0);
@@ -314,15 +318,17 @@ describeIf('SAPContext Integration Tests', () => {
       expect(result.objectType).toBe('DDLS');
     }, 30000);
 
-    it('respects maxDeps limit for CDS context', async () => {
-      if (!ddlSource || !cdsName) return;
+    it('respects maxDeps limit for CDS context', async (ctx) => {
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
+      requireOrSkip(ctx, ddlSource, SkipReason.NO_DDLS);
       const result = await compressCdsContext(client, ddlSource, cdsName, 2, 1);
 
       expect(result.depsResolved).toBeLessThanOrEqual(2);
     }, 30000);
 
-    it('compresses CDS context with depth=2', async () => {
-      if (!ddlSource || !cdsName) return;
+    it('compresses CDS context with depth=2', async (ctx) => {
+      requireOrSkip(ctx, cdsName, SkipReason.NO_DDLS);
+      requireOrSkip(ctx, ddlSource, SkipReason.NO_DDLS);
       const shallow = await compressCdsContext(client, ddlSource, cdsName, 5, 1);
       const deep = await compressCdsContext(client, ddlSource, cdsName, 5, 2);
 
