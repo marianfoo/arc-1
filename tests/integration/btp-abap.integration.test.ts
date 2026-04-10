@@ -1,12 +1,10 @@
 /**
- * BTP ABAP Environment integration tests.
+ * BTP ABAP Extended Integration Tests (LOCAL ONLY)
  *
- * These tests run against a live BTP ABAP system and verify
- * BTP-specific behaviors: OAuth login, restricted ABAP, released APIs only.
+ * These tests require interactive browser login and are NOT run in CI.
+ * For CI-capable BTP tests, see btp-abap.smoke.integration.test.ts.
  *
- * SKIPPED automatically when TEST_BTP_SERVICE_KEY_FILE is not set.
- *
- * These tests are LOCAL ONLY — not run in CI because:
+ * Reasons for local-only:
  * - BTP free tier instances are stopped each night
  * - Free tier instances are deleted after 90 days
  * - OAuth browser login requires interactive user
@@ -19,10 +17,10 @@
  * - User has completed browser OAuth login at least once (token cached)
  *
  * Run:
- *   TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
+ *   TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:extended
  *
  * Or with env file:
- *   Set TEST_BTP_SERVICE_KEY_FILE in .env, then: npm run test:integration:btp
+ *   Set TEST_BTP_SERVICE_KEY_FILE in .env, then: npm run test:integration:btp:extended
  */
 
 import { config } from 'dotenv';

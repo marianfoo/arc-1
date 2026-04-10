@@ -128,13 +128,13 @@ Create a focused BTP smoke test file with strict, deterministic assertions for C
 
 Add targeted npm scripts for smoke and extended BTP tests, and mark the existing test file as the extended suite.
 
-- [ ] Add npm scripts to `package.json`:
+- [x] Add npm scripts to `package.json`:
   ```json
   "test:integration:btp:smoke": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.smoke.integration.test.ts",
   "test:integration:btp:extended": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.integration.test.ts"
   ```
-- [ ] Rename existing `"test:integration:btp"` script to point to the extended suite specifically (if it currently points to the whole file, keep it as an alias for extended).
-- [ ] In `tests/integration/btp-abap.integration.test.ts`, add a header comment at the top:
+- [x] Rename existing `"test:integration:btp"` script to point to the extended suite specifically (if it currently points to the whole file, keep it as an alias for extended).
+- [x] In `tests/integration/btp-abap.integration.test.ts`, add a header comment at the top:
   ```typescript
   /**
    * BTP ABAP Extended Integration Tests (LOCAL ONLY)
@@ -149,7 +149,7 @@ Add targeted npm scripts for smoke and extended BTP tests, and mark the existing
    */
   ```
   Replace or merge with the existing comment at lines 7-13.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 3: Create Scheduled BTP Smoke Workflow
 
