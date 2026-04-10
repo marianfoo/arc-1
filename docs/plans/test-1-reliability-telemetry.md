@@ -100,14 +100,14 @@ Create a Node.js script that reads Vitest JSON result files and produces a Markd
 
 Create a script that checks whether minimum test execution thresholds are met, with configurable profiles and a warning-only default mode.
 
-- [ ] Implement `scripts/ci/assert-required-test-execution.mjs` with the following behavior:
+- [x] Implement `scripts/ci/assert-required-test-execution.mjs` with the following behavior:
   - Accept `--results-dir` (default: `test-results/`), `--mode` (`warn` or `enforce`, default: `warn`), and `--config` (inline JSON or file path for thresholds).
   - Default thresholds: `{ "unit": { "minExecuted": 1000 }, "integration": { "minExecuted": 10 }, "e2e": { "minExecuted": 5 } }`.
   - For each suite, check if `passed + failed >= minExecuted`. If below threshold: in `warn` mode, print warning to stderr and exit 0; in `enforce` mode, exit 1.
   - Report which suites passed/failed threshold checks.
   - Handle missing result files as threshold failure (0 executed).
-- [ ] Add npm script `"test:assert-execution": "node scripts/ci/assert-required-test-execution.mjs"` to `package.json`.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add npm script `"test:assert-execution": "node scripts/ci/assert-required-test-execution.mjs"` to `package.json`.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Add Unit Tests for Telemetry Scripts
 
