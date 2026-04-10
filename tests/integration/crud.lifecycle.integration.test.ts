@@ -27,6 +27,7 @@ describeIf('CRUD lifecycle', () => {
   });
 
   afterAll(async () => {
+    if (!client) return;
     const report = await cleanupAll(client.http, client.safety, registry);
     if (report.failed.length > 0) {
       console.error('CRUD cleanup failures:', report.failed);
