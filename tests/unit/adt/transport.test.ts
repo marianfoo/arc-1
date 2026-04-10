@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
-import { createTransport, getTransport, listTransports, releaseTransport } from '../../../src/adt/transport.js';
+import {
+  CTS_ACCEPT_TREE,
+  CTS_CONTENT_TYPE_ORGANIZER,
+  CTS_NAMESPACE_TM,
+  createTransport,
+  getTransport,
+  listTransports,
+  releaseTransport,
+} from '../../../src/adt/transport.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -204,9 +212,8 @@ describe('Transport Management', () => {
     it('posts to newreleasejobs endpoint', async () => {
       const http = mockHttp();
       await releaseTransport(http, enabledSafety, 'DEVK900001');
-      expect(http.post).toHaveBeenCalledWith(
-        expect.stringContaining('/sap/bc/adt/cts/transportrequests/DEVK900001/newreleasejobs'),
-      );
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('/sap/bc/adt/cts/transportrequests/DEVK900001/newreleasejobs');
     });
 
     it('encodes transport ID in URL', async () => {
@@ -214,6 +221,82 @@ describe('Transport Management', () => {
       await releaseTransport(http, enabledSafety, 'A4HK900100');
       const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
       expect(url).toContain('A4HK900100');
+    });
+  });
+
+  // ─── Media Type & Namespace Assertions ─────────────────────────────
+
+  describe('CTS media types and namespaces', () => {
+    it('listTransports sends tree Accept header', async () => {
+      const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
+      await listTransports(http, enabledSafety);
+      const headers = (http.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Record<string, string>;
+      expect(headers.Accept).toBe(CTS_ACCEPT_TREE);
+    });
+
+    it('getTransport sends tree Accept header', async () => {
+      const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
+      await getTransport(http, enabledSafety, 'DEVK900001');
+      const headers = (http.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Record<string, string>;
+      expect(headers.Accept).toBe(CTS_ACCEPT_TREE);
+    });
+
+    it('createTransport sends organizer Accept and Content-Type', async () => {
+      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+      await createTransport(http, enabledSafety, 'Test');
+      const calls = (http.post as ReturnType<typeof vi.fn>).mock.calls[0];
+      const contentType = calls?.[2] as string;
+      const headers = calls?.[3] as Record<string, string>;
+      expect(contentType).toBe(CTS_CONTENT_TYPE_ORGANIZER);
+      expect(headers.Accept).toBe(CTS_CONTENT_TYPE_ORGANIZER);
+    });
+
+    it('createTransport uses correct TM namespace in payload', async () => {
+      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+      await createTransport(http, enabledSafety, 'Test');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain(`xmlns:tm="${CTS_NAMESPACE_TM}"`);
+      expect(body).not.toContain('http://www.sap.com/cts/transports');
+    });
+
+    it('releaseTransport sends tree Accept header', async () => {
+      const http = mockHttp();
+      await releaseTransport(http, enabledSafety, 'DEVK900001');
+      const headers = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[3] as Record<string, string>;
+      expect(headers.Accept).toBe(CTS_ACCEPT_TREE);
+    });
+
+    it('createTransport endpoint is /sap/bc/adt/cts/transportrequests', async () => {
+      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+      await createTransport(http, enabledSafety, 'Test');
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toBe('/sap/bc/adt/cts/transportrequests');
+    });
+
+    it('response parsing handles both old and new namespace attributes', async () => {
+      // Responses may use either namespace — parser should handle both
+      const xmlOldNs = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="DEV" tm:desc="Old ns" tm:status="D" tm:type="K"/>
+      </tm:root>`;
+      const http = mockHttp(xmlOldNs);
+      const transports = await listTransports(http, enabledSafety);
+      expect(transports).toHaveLength(1);
+      expect(transports[0]?.id).toBe('DEVK900001');
+
+      // New namespace
+      const xmlNewNs = `<tm:root xmlns:tm="${CTS_NAMESPACE_TM}">
+        <tm:request tm:number="DEVK900002" tm:owner="DEV" tm:desc="New ns" tm:status="D" tm:type="K"/>
+      </tm:root>`;
+      const http2 = mockHttp(xmlNewNs);
+      const transports2 = await listTransports(http2, enabledSafety);
+      expect(transports2).toHaveLength(1);
+      expect(transports2[0]?.id).toBe('DEVK900002');
+    });
+
+    it('exported constants have correct values', () => {
+      expect(CTS_ACCEPT_TREE).toBe('application/vnd.sap.adt.transportorganizertree.v1+xml');
+      expect(CTS_CONTENT_TYPE_ORGANIZER).toBe('application/vnd.sap.adt.transportorganizer.v1+xml');
+      expect(CTS_NAMESPACE_TM).toBe('http://www.sap.com/cts/adt/tm');
     });
   });
 });
