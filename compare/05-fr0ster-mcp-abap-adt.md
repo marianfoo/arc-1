@@ -124,7 +124,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | v4.8.0-4.8.1 | Apr 2, 2026 | Structured dump list, dump lookup by datetime+user, from/to time filters |
 | v4.7.0-4.7.1 | Apr 1, 2026 | Replaced archived `node-rfc` with `@mcp-abap-adt/sap-rfc-lite` |
 | v4.6.0 | Mar 31, 2026 | HTTPS/TLS support for MCP server |
-| v4.5.0-4.5.2 | Mar 26-27, 2026 | try-finally lock fix, RAG-optimized descriptions, auth priority fix |
+| v4.5.0-4.5.2 | Mar 26-27, 2026 | try-finally lock fix (9 handlers), 415/406 Content-Type auto-retry via adt-clients 3.12.0 (per-endpoint caching), ListTransports Accept negotiation rewrite, RAG-optimized SearchObject description, auth priority fix. [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md) |
 | v4.4.0 | Mar 22, 2026 | Tool descriptions enriched for embedding-based discovery |
 | v4.3.0 | Mar 19, 2026 | `/mcp/health` endpoint, improved request logging |
 | v4.0.0-4.1.1 | Mar 13, 2026 | Major version bump (v3→v4) |
@@ -139,7 +139,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | Issue | Description | Relevant to ARC-1? |
 |-------|-------------|-------------------|
 | #22 | Lock leak — try-catch instead of try-finally for unlock | **Resolved** — ARC-1 already uses try-finally |
-| #22, #23, #25 | 415 Content-Type errors — SAP needs specific Accept/Content-Type | **Yes** — add 415 retry logic ([evaluation](fr0ster/evaluations/415-content-type-retry.md)) |
+| #22, #23, #25 | 415 Content-Type errors — SAP needs specific Accept/Content-Type | **Resolved** — ARC-1 already has 406/415 auto-retry in http.ts ([evaluation](fr0ster/evaluations/415-content-type-retry.md), [deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)) |
 | #24 | SAP_JWT_TOKEN overrides SAP_AUTH_TYPE | **No action** — ARC-1 infers auth type from credentials, no priority conflict ([evaluation](fr0ster/evaluations/dce44ca-auth-type-priority.md)) |
 | #7, #6 | 409 conflict details not propagated to LLM | **Verify** — check ARC-1 AdtApiError includes SAP error body ([evaluation](fr0ster/evaluations/issue-7-6-409-error-details.md)) |
 | #13 | Check runs fail with non-EN languages | **Verify** — check ARC-1 syntax check/ATC parsing uses language-independent attributes ([evaluation](fr0ster/evaluations/issue-13-i18n-check-handling.md)) |
@@ -167,7 +167,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | **CDS unit testing** (create/run/check) | Medium | 1d | Extend SAPDiagnose |
 | **Embeddable server** (EmbeddableMcpServer) | Low | 1d | SDK/library use case |
 | **GetProgFullCode** (recursive includes) | High | 1d | Reduces round trips |
-| **Content-Type 415 auto-retry** | Critical | 0.5d | Robustness improvement |
+| ~~**Content-Type 415 auto-retry**~~ | ~~Critical~~ | ~~0.5d~~ | ✅ **Done** — ARC-1 has 406/415 auto-retry in http.ts. Only gap: per-endpoint caching (P3 optimization). [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md) |
 | **Compact mode** (22 tools) | Low | 2d | ARC-1 already has intent-based |
 | **RAG-optimized tool descriptions** | Medium | 1d | Improve embedding discoverability |
 | **DDLX/Metadata Extension** (read + CRUD) | Critical | 1d | RAP completeness |
@@ -204,9 +204,11 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-04-02 | v4.8.0-4.8.1 — Structured dump list, datetime+user lookup, from/to filters | Medium | Defer — ARC-1 SAPDiagnose dumps work fine as-is | Evaluated |
 | 2026-04-01 | v4.7.0-4.7.1 — sap-rfc-lite replaces node-rfc | No | ARC-1 uses HTTP only | — |
 | 2026-03-31 | v4.6.0 — TLS/HTTPS support | **Critical** | Add TLS support for HTTP Streamable | TODO |
-| 2026-03-27 | v4.5.2 — Content-Type negotiation fixes | **Critical** | Add 415 retry logic to ARC-1 HTTP | TODO |
-| 2026-03-26 | v4.5.0 — Lock leak fix (try-finally) | Resolved | ARC-1 already uses try-finally | Done |
-| 2026-03-26 | RAG-optimized tool descriptions | No | Not relevant — ARC-1 uses intent routing, not RAG discovery | Evaluated |
+| 2026-03-27 | v4.5.2 — Husky + lint-staged pre-commit hook | No | ARC-1 already has Biome pre-commit | Done |
+| 2026-03-26 | v4.5.1 — ListTransports Accept negotiation rewrite | **Resolved** | Covered by ARC-1's global 415/406 retry in http.ts | Done |
+| 2026-03-26 | v4.5.0 — adt-clients 3.12.0 (415/406 auto-retry + per-endpoint caching) | **Resolved** | ARC-1 already has 415/406 retry. Per-endpoint caching is P3 optimization. [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md) | Done |
+| 2026-03-26 | v4.4.2 — Lock leak fix (try-finally in 9 handlers) | Resolved | ARC-1 already uses try-finally via centralized `safeUpdateSource()`. [Eval](fr0ster/evaluations/32ab9d4-try-finally-unlock.md) | Done |
+| 2026-03-26 | v4.4.1 — RAG-optimized SearchObject description | No | Not relevant — ARC-1 uses intent routing, not RAG discovery | Evaluated |
 | 2026-03-26 | Auth priority fix (#24) | No | ARC-1 infers auth from credentials — no priority conflict | Evaluated |
 | 2026-03-22 | v4.4.0 — Embedding-optimized descriptions | No | Same as above — RAG not applicable | Evaluated |
 | 2026-03-19 | v4.3.0 — /mcp/health endpoint | No | ARC-1 already has /health | — |
@@ -216,6 +218,6 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
 | 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-11_
 
 > **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

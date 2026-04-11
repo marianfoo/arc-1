@@ -276,7 +276,7 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~Token efficiency~~ → method-level surgery, hyperfocused mode, context compression
 
 **P0 — production blockers:**
-- ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented: one-retry negotiation fallback in `src/adt/http.ts`, endpoint-specific CTS media types, lock `corrNr` auto-propagation
+- ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented: one-retry negotiation fallback in `src/adt/http.ts`, endpoint-specific CTS media types, lock `corrNr` auto-propagation. fr0ster v4.5.0 added per-endpoint header caching (P3 optimization ARC-1 doesn't need yet). [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)
 - 401 session timeout auto-retry (centralized gateway idle)
 - TLS/HTTPS for HTTP Streamable (enterprise deployment without reverse proxy)
 

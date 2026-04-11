@@ -1,15 +1,15 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-08",
+  "lastUpdated": "2026-04-11",
   "lastCheckedSha": "783e596",
   "stats": {
     "totalCommits": 783,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 66,
-    "evaluated": 30,
+    "totalTracked": 67,
+    "evaluated": 33,
     "pending": 0,
-    "skipped": 36
+    "skipped": 34
   },
   "releases": [
     {
@@ -320,18 +320,40 @@
     },
     {
       "version": "v4.5.0-v4.5.2",
-      "date": "2026-03-26",
+      "date": "2026-03-26 to 2026-03-27",
+      "linkedInPost": "Oleksij Kyslytsja, 2026-03-28 — 'MCP ABAP ADT v4.5.0 — what's new'",
+      "releaseDeepDive": "evaluations/v4.5.0-release-deep-dive.md",
       "commits": [
+        {
+          "sha": "0cb3088",
+          "date": "2026-03-27",
+          "message": "chore: add husky + lint-staged for pre-commit Biome auto-fix",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 already has Biome pre-commit hook"
+        },
         {
           "sha": "3da3311",
           "date": "2026-03-26",
           "message": "feat: rewrite ListTransports to use AdtClient with Accept negotiation",
           "type": "feat",
           "status": "evaluated",
-          "priority": "medium",
-          "decision": "covered-by-415-retry",
-          "relevance": "Content-Type negotiation pattern — covered by 415 auto-retry implementation",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Content-Type negotiation for transports — ARC-1's global 415/406 retry in http.ts already covers this endpoint. Switched from raw HTTP to AdtClient abstraction, reducing 27 → 19 lines.",
           "evaluationFile": "evaluations/3da3311-accept-negotiation.md"
+        },
+        {
+          "sha": "b059736",
+          "date": "2026-03-26",
+          "message": "chore: update @mcp-abap-adt/adt-clients to 3.12.0 (415 Content-Type negotiation with auto-retry and caching)",
+          "type": "chore",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Core 415/406 auto-retry mechanism — ARC-1 already has equivalent functionality in http.ts. Only gap: fr0ster caches successful headers per endpoint; ARC-1 retries each time (P3 optimization).",
+          "evaluationFile": "evaluations/b059736-adt-clients-415-negotiation.md"
         },
         {
           "sha": "dce44ca",
@@ -349,9 +371,11 @@
           "date": "2026-03-26",
           "message": "fix: guarantee unlock via try-finally in all update handlers (#22)",
           "type": "fix",
-          "status": "skipped",
-          "priority": "skip",
-          "relevance": "ARC-1 already uses try-finally"
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "ARC-1 already uses try-finally via centralized safeUpdateSource() in crud.ts. fr0ster had the pattern duplicated in 9 handlers. ARC-1's approach is architecturally superior.",
+          "evaluationFile": "evaluations/32ab9d4-try-finally-unlock.md"
         },
         {
           "sha": "cfe67d2",
@@ -361,7 +385,7 @@
           "status": "evaluated",
           "priority": "low",
           "decision": "skip",
-          "relevance": "RAG tool descriptions — not relevant to intent-based architecture",
+          "relevance": "RAG tool descriptions — not relevant to intent-based architecture. Changed from type-list to action-verb format for embedding similarity. ARC-1's 11 tools don't need RAG discovery.",
           "evaluationFile": "evaluations/cfe67d2-rag-tool-descriptions.md"
         }
       ]

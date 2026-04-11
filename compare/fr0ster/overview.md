@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [fr0ster/mcp-abap-adt](https://github.com/fr0ster/mcp-abap-adt) for features worth adopting in ARC-1.
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-11_
 
 ## Approach
 
@@ -19,11 +19,11 @@ _Last updated: 2026-04-08_
 | Metric | Commits | Issues |
 |--------|---------|--------|
 | Total | 783 | 40 |
-| Tracked | 66 | 40 |
-| Evaluated | 30 | 40 |
+| Tracked | 67 | 40 |
+| Evaluated | 33 | 40 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 36 | 25 |
-| Evaluation files | 17 | 10 |
+| Skipped (not relevant) | 34 | 25 |
+| Evaluation files | 20 | 10 |
 
 ## Priority Summary
 
@@ -32,7 +32,7 @@ _Last updated: 2026-04-08_
 | Source | ID | Description | ARC-1 Matrix Ref |
 |--------|----|-------------|-------------------|
 | commit | TLS cluster (5 commits) | HTTPS/TLS for HTTP Streamable transport | Critical #5 |
-| issue | #22, #23, #25 | 415 Content-Type auto-retry / Accept negotiation | Critical #3 |
+| ~~issue~~ | ~~#22, #23, #25~~ | ~~415 Content-Type auto-retry / Accept negotiation~~ | ~~Critical #3~~ ✅ ARC-1 already has 406/415 retry |
 | issue | #26 | TLS/HTTPS implementation reference | Critical #5 |
 
 ### Medium Priority (evaluate for adoption)
