@@ -1,8 +1,8 @@
-# arc1 — SAP ADT MCP Server
+# ARC-1 — SAP ADT MCP Server
 
-**Enterprise-ready MCP server for SAP ABAP systems. Secure by default, deployable to BTP or on-premise, and hardened with large unit/integration/E2E test coverage.**
+**ARC-1** (pronounced _arc one_ [ɑːrk wʌn]) — Enterprise-ready MCP server for SAP ABAP systems. Secure by default, deployable to BTP or on-premise, and hardened with large unit/integration/E2E test coverage.
 
-arc1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MCP client) to SAP systems via the [ADT REST API](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools). It ships as an [npm package](https://www.npmjs.com/package/arc-1) and [Docker image](https://github.com/marianfoo/arc-1/pkgs/container/arc-1).
+ARC-1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MCP client) to SAP systems via the [ADT REST API](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools). It ships as an [npm package](https://www.npmjs.com/package/arc-1) and [Docker image](https://github.com/marianfoo/arc-1/pkgs/container/arc-1).
 
 > Continued from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (Go), rewritten in TypeScript with enterprise security, BTP deployment, and production-grade tooling.
 
@@ -10,9 +10,9 @@ arc1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MCP
 
 **[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
 
-## Why arc1?
+## Why ARC-1?
 
-Built for organizations that need AI-assisted SAP development with guardrails. Inspired by the pioneering work of [abap-adt-api](https://github.com/marcellourbani/abap-adt-api), [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt), and [vibing-steampunk](https://github.com/oisee/vibing-steampunk) — arc1 adds what's needed to run in production:
+Built for organizations that need AI-assisted SAP development with guardrails. Inspired by the pioneering work of [abap-adt-api](https://github.com/marcellourbani/abap-adt-api), [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt), and [vibing-steampunk](https://github.com/oisee/vibing-steampunk) — ARC-1 adds what's needed to run in production:
 
 ### Security & Admin Controls
 
@@ -34,12 +34,12 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 
 ### BTP Cloud Foundry Deployment
 
-Deploy arc1 as a Cloud Foundry app on SAP BTP with full platform integration:
+Deploy ARC-1 as a Cloud Foundry app on SAP BTP with full platform integration:
 
 - **Destination Service** — connect to SAP systems via managed destinations
 - **Cloud Connector** — reach on-premise systems through the connectivity proxy
 - **Principal Propagation** — user identity forwarded end-to-end via X.509 certificates
-- **XSUAA OAuth proxy** — MCP clients authenticate via standard OAuth, arc1 handles the BTP token exchange
+- **XSUAA OAuth proxy** — MCP clients authenticate via standard OAuth, ARC-1 handles the BTP token exchange
 - **Audit logging** — structured events to stderr, file, or BTP Audit Log Service
 
 ### Token Efficiency
@@ -88,7 +88,7 @@ Tool definitions automatically adapt to the target system (BTP vs on-premise), r
 
 ### Feature Detection
 
-arc1 probes the SAP system at startup and adapts its behavior:
+ARC-1 probes the SAP system at startup and adapts its behavior:
 
 - Detects HANA, abapGit, RAP/CDS, AMDP, UI5, and transport availability
 - Auto-detects BTP vs on-premise systems
@@ -129,7 +129,7 @@ See [CLAUDE.md](CLAUDE.md) for codebase structure, testing commands, and contrib
 
 | Project | Author | Contribution |
 |---------|--------|--------------|
-| [vibing-steampunk](https://github.com/oisee/vibing-steampunk) | oisee | Original Go MCP server — arc1's starting point |
+| [vibing-steampunk](https://github.com/oisee/vibing-steampunk) | oisee | Original Go MCP server — ARC-1's starting point |
 | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | Marcello Urbani | TypeScript ADT library, definitive API reference |
 | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | Mario Andreschak | First MCP server for ABAP ADT |
 | [abaplint](https://github.com/abaplint/abaplint) | Lars Hvam | ABAP parser/linter (used via @abaplint/core) |
