@@ -7,7 +7,7 @@
 
 import type { AdtHttpClient } from './http.js';
 import { checkTransport, type SafetyConfig } from './safety.js';
-import type { TransportRequest, TransportTask } from './types.js';
+import type { TransportObject, TransportRequest, TransportTask } from './types.js';
 import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
 // ─── CTS Media Types & Namespaces ──────────────────────────────────
@@ -47,7 +47,7 @@ export async function getTransport(
   checkTransport(safety, transportId, 'GetTransport', false);
 
   const resp = await http.get(`/sap/bc/adt/cts/transportrequests/${encodeURIComponent(transportId)}`, {
-    Accept: CTS_ACCEPT_TREE,
+    Accept: CTS_CONTENT_TYPE_ORGANIZER,
   });
 
   const transports = parseTransportList(resp.body);
@@ -60,12 +60,13 @@ export async function createTransport(
   safety: SafetyConfig,
   description: string,
   targetPackage?: string,
+  transportType = 'K',
 ): Promise<string> {
   checkTransport(safety, '', 'CreateTransport', true);
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <tm:root xmlns:tm="${CTS_NAMESPACE_TM}">
-  <tm:request tm:desc="${escapeXmlAttr(description)}" tm:type="K"${targetPackage ? ` tm:target="${escapeXmlAttr(targetPackage)}"` : ''}/>
+  <tm:request tm:desc="${escapeXmlAttr(description)}" tm:type="${escapeXmlAttr(transportType)}"${targetPackage ? ` tm:target="${escapeXmlAttr(targetPackage)}"` : ''}/>
 </tm:root>`;
 
   const resp = await http.post('/sap/bc/adt/cts/transportrequests', body, CTS_CONTENT_TYPE_ORGANIZER, {
@@ -86,7 +87,103 @@ export async function releaseTransport(http: AdtHttpClient, safety: SafetyConfig
     `/sap/bc/adt/cts/transportrequests/${encodeURIComponent(transportId)}/newreleasejobs`,
     undefined,
     undefined,
-    { Accept: CTS_ACCEPT_TREE },
+    { Accept: CTS_CONTENT_TYPE_ORGANIZER },
+  );
+}
+
+/** Release a transport request recursively — tasks first, then parent */
+export async function releaseTransportRecursive(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  transportId: string,
+): Promise<{ released: string[] }> {
+  checkTransport(safety, transportId, 'ReleaseTransportRecursive', true);
+
+  const transport = await getTransport(http, safety, transportId);
+  const released: string[] = [];
+
+  if (transport) {
+    for (const task of transport.tasks) {
+      if (task.status !== 'R') {
+        checkTransport(safety, task.id, 'ReleaseTransportRecursive', true);
+        await releaseTransport(http, safety, task.id);
+        released.push(task.id);
+      }
+    }
+
+    // Skip parent if already released (idempotent/retry-safe)
+    if (transport.status === 'R') {
+      return { released };
+    }
+  }
+
+  await releaseTransport(http, safety, transportId);
+  released.push(transportId);
+
+  return { released };
+}
+
+/** Delete a transport request */
+export async function deleteTransport(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  transportId: string,
+  recursive = false,
+): Promise<void> {
+  checkTransport(safety, transportId, 'DeleteTransport', true);
+
+  if (recursive) {
+    const transport = await getTransport(http, safety, transportId);
+    if (transport) {
+      for (const task of transport.tasks) {
+        if (task.status !== 'R') {
+          checkTransport(safety, task.id, 'DeleteTransport', true);
+          await http.delete(`/sap/bc/adt/cts/transportrequests/${encodeURIComponent(task.id)}`);
+        }
+      }
+    }
+  }
+
+  await http.delete(`/sap/bc/adt/cts/transportrequests/${encodeURIComponent(transportId)}`);
+}
+
+/** Reassign a transport request to a new owner */
+export async function reassignTransport(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  transportId: string,
+  newOwner: string,
+  recursive = false,
+): Promise<void> {
+  checkTransport(safety, transportId, 'ReassignTransport', true);
+
+  if (recursive) {
+    const transport = await getTransport(http, safety, transportId);
+    if (transport) {
+      for (const task of transport.tasks) {
+        if (task.status !== 'R') {
+          checkTransport(safety, task.id, 'ReassignTransport', true);
+          await reassignSingle(http, task.id, newOwner);
+        }
+      }
+    }
+  }
+
+  await reassignSingle(http, transportId, newOwner);
+}
+
+async function reassignSingle(http: AdtHttpClient, transportId: string, newOwner: string): Promise<void> {
+  const body = `<?xml version="1.0" encoding="ASCII"?>
+<tm:root xmlns:tm="${CTS_NAMESPACE_TM}"
+ tm:number="${escapeXmlAttr(transportId)}"
+ tm:targetuser="${escapeXmlAttr(newOwner)}"
+ tm:useraction="changeowner"/>`;
+
+  await http.put(
+    `/sap/bc/adt/cts/transportrequests/${encodeURIComponent(transportId)}`,
+    body,
+    CTS_CONTENT_TYPE_ORGANIZER,
+    { Accept: CTS_CONTENT_TYPE_ORGANIZER },
   );
 }
 
@@ -97,12 +194,25 @@ function parseTransportList(xml: string): TransportRequest[] {
   const requests = findDeepNodes(parsed, 'request');
 
   return requests.map((req) => {
-    const tasks: TransportTask[] = findDeepNodes(req, 'task').map((t) => ({
-      id: String(t['@_number'] ?? ''),
-      description: String(t['@_desc'] ?? ''),
-      owner: String(t['@_owner'] ?? ''),
-      status: String(t['@_status'] ?? ''),
-    }));
+    const tasks: TransportTask[] = findDeepNodes(req, 'task').map((t) => {
+      const objects: TransportObject[] = findDeepNodes(t, 'abap_object').map((o) => ({
+        pgmid: String(o['@_pgmid'] ?? ''),
+        type: String(o['@_type'] ?? ''),
+        name: String(o['@_name'] ?? ''),
+        wbtype: String(o['@_wbtype'] ?? ''),
+        description: String(o['@_obj_desc'] ?? o['@_obj_info'] ?? ''),
+        locked: String(o['@_lock_status'] ?? '') === 'X',
+        position: String(o['@_position'] ?? '000000'),
+      }));
+
+      return {
+        id: String(t['@_number'] ?? ''),
+        description: String(t['@_desc'] ?? ''),
+        owner: String(t['@_owner'] ?? ''),
+        status: String(t['@_status'] ?? ''),
+        objects,
+      };
+    });
 
     return {
       id: String(req['@_number'] ?? ''),

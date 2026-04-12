@@ -187,10 +187,11 @@ const SAPSEARCH_DESC_BTP =
 
 // ─── SAPTransport ───────────────────────────────────────────────────
 
-const SAPTRANSPORT_DESC_ONPREM = 'Manage CTS transport requests: list, get details, create, and release.';
+const SAPTRANSPORT_DESC_ONPREM =
+  'Manage CTS transport requests: list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release.';
 
 const SAPTRANSPORT_DESC_BTP =
-  'Manage transport requests (BTP ABAP Environment): list, get details, create, and release. ' +
+  'Manage transport requests (BTP ABAP Environment): list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release. ' +
   'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
   'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
 
@@ -652,10 +653,27 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['list', 'get', 'create', 'release'], description: 'Transport action' },
-          id: { type: 'string', description: 'Transport request ID (for get/release)' },
+          action: {
+            type: 'string',
+            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive'],
+            description: 'Transport action',
+          },
+          id: {
+            type: 'string',
+            description: 'Transport request ID (for get/release/delete/reassign/release_recursive)',
+          },
           description: { type: 'string', description: 'Description (for create)' },
           user: { type: 'string', description: 'Filter by user (for list)' },
+          type: {
+            type: 'string',
+            enum: ['K', 'W', 'T'],
+            description: 'Transport type for create: K=Workbench (default), W=Customizing, T=Transport of Copies',
+          },
+          owner: { type: 'string', description: 'New owner (for reassign)' },
+          recursive: {
+            type: 'boolean',
+            description: 'Apply recursively to tasks (for delete/reassign). release_recursive always recurses.',
+          },
         },
         required: ['action'],
       },

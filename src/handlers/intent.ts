@@ -42,7 +42,15 @@ import {
 import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
 import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
 import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
-import { createTransport, getTransport, listTransports, releaseTransport } from '../adt/transport.js';
+import {
+  createTransport,
+  deleteTransport,
+  getTransport,
+  listTransports,
+  reassignTransport,
+  releaseTransport,
+  releaseTransportRecursive,
+} from '../adt/transport.js';
 import type { ClassHierarchy, ResolvedFeatures } from '../adt/types.js';
 import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
@@ -1822,7 +1830,8 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
     case 'create': {
       const description = String(args.description ?? '');
       if (!description) return errorResult('Description is required for "create" action.');
-      const id = await createTransport(client.http, client.safety, description);
+      const transportType = String(args.type ?? 'K');
+      const id = await createTransport(client.http, client.safety, description, undefined, transportType);
       if (!id)
         return errorResult(
           'Transport creation succeeded but no transport ID was returned. Check the SAP system manually.',
@@ -1835,8 +1844,32 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
       await releaseTransport(client.http, client.safety, id);
       return textResult(`Released transport request: ${id}`);
     }
+    case 'delete': {
+      const id = String(args.id ?? '');
+      if (!id) return errorResult('Transport ID is required for "delete" action.');
+      const recursive = Boolean(args.recursive ?? false);
+      await deleteTransport(client.http, client.safety, id, recursive);
+      return textResult(`Deleted transport request: ${id}${recursive ? ' (recursive)' : ''}`);
+    }
+    case 'reassign': {
+      const id = String(args.id ?? '');
+      if (!id) return errorResult('Transport ID is required for "reassign" action.');
+      const owner = String(args.owner ?? '');
+      if (!owner) return errorResult('Owner is required for "reassign" action.');
+      const recursive = Boolean(args.recursive ?? false);
+      await reassignTransport(client.http, client.safety, id, owner, recursive);
+      return textResult(`Reassigned transport ${id} to ${owner}${recursive ? ' (recursive)' : ''}`);
+    }
+    case 'release_recursive': {
+      const id = String(args.id ?? '');
+      if (!id) return errorResult('Transport ID is required for "release_recursive" action.');
+      const result = await releaseTransportRecursive(client.http, client.safety, id);
+      return textResult(JSON.stringify(result, null, 2));
+    }
     default:
-      return errorResult(`Unknown SAPTransport action: ${action}. Supported: list, get, create, release`);
+      return errorResult(
+        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive`,
+      );
   }
 }
 

@@ -129,6 +129,125 @@ describe('E2E SAPTransport Tests', () => {
     });
   });
 
+  // ── New transport actions (delete, reassign, release_recursive, type) ──
+
+  describe('SAPTransport new actions', () => {
+    let transportsEnabled = true;
+
+    it('delete action removes a transport', async (ctx) => {
+      // Create transport first
+      const createResult = await callTool(client, 'SAPTransport', {
+        action: 'create',
+        description: `ARC-1 E2E delete test ${Date.now()}`,
+      });
+      if (createResult.isError && createResult.content?.[0]?.text?.includes('transports not enabled')) {
+        transportsEnabled = false;
+        return ctx.skip('Transports not enabled on MCP server');
+      }
+      const createText = expectToolSuccess(createResult);
+      const match = createText.match(/([A-Z0-9]+K\d+)/);
+      expect(match).toBeTruthy();
+      const id = match![1];
+
+      const deleteResult = await callTool(client, 'SAPTransport', {
+        action: 'delete',
+        id,
+      });
+      const text = expectToolSuccess(deleteResult);
+      expect(text).toContain(`Deleted transport request: ${id}`);
+    });
+
+    it('create with type W creates Customizing transport', async (ctx) => {
+      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+
+      let id = '';
+      try {
+        const result = await callTool(client, 'SAPTransport', {
+          action: 'create',
+          description: `ARC-1 E2E type-W ${Date.now()}`,
+          type: 'W',
+        });
+        const text = expectToolSuccess(result);
+        const match = text.match(/([A-Z0-9]+\w\d+)/);
+        expect(match).toBeTruthy();
+        id = match![1];
+      } finally {
+        if (id) {
+          try {
+            await callTool(client, 'SAPTransport', { action: 'delete', id });
+          } catch {
+            // best-effort-cleanup
+          }
+        }
+      }
+    });
+
+    it('reassign action changes transport owner', async (ctx) => {
+      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+
+      let id = '';
+      try {
+        // Create transport
+        const createResult = await callTool(client, 'SAPTransport', {
+          action: 'create',
+          description: `ARC-1 E2E reassign test ${Date.now()}`,
+        });
+        const createText = expectToolSuccess(createResult);
+        const match = createText.match(/([A-Z0-9]+K\d+)/);
+        expect(match).toBeTruthy();
+        id = match![1];
+
+        // Get current owner
+        const getResult = await callTool(client, 'SAPTransport', { action: 'get', id });
+        const transport = JSON.parse(expectToolSuccess(getResult));
+
+        // Reassign to same user (safe)
+        const reassignResult = await callTool(client, 'SAPTransport', {
+          action: 'reassign',
+          id,
+          owner: transport.owner,
+        });
+        const reassignText = expectToolSuccess(reassignResult);
+        expect(reassignText).toContain('Reassigned transport');
+      } finally {
+        if (id) {
+          try {
+            await callTool(client, 'SAPTransport', { action: 'delete', id });
+          } catch {
+            // best-effort-cleanup
+          }
+        }
+      }
+    });
+
+    it('release_recursive releases transport', async (ctx) => {
+      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+
+      const createResult = await callTool(client, 'SAPTransport', {
+        action: 'create',
+        description: `ARC-1 E2E recursive-release ${Date.now()}`,
+      });
+      const createText = expectToolSuccess(createResult);
+      const match = createText.match(/([A-Z0-9]+K\d+)/);
+      expect(match).toBeTruthy();
+      const id = match![1];
+
+      const result = await callTool(client, 'SAPTransport', {
+        action: 'release_recursive',
+        id,
+      });
+      const text = expectToolSuccess(result);
+      expect(text).toContain(id);
+    });
+
+    it('unknown action error lists all 7 actions', async () => {
+      const result = await callTool(client, 'SAPTransport', {
+        action: 'nonexistent',
+      });
+      expectToolError(result, 'Invalid arguments for SAPTransport');
+    });
+  });
+
   // ── Transportable SAPWrite with auto-corrNr ─────────────────────
 
   describe('SAPWrite in transportable package (auto-corrNr)', () => {

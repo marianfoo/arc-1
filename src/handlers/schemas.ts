@@ -214,10 +214,13 @@ export const SAPDiagnoseSchema = z.object({
 // ─── SAPTransport ───────────────────────────────────────────────────
 
 export const SAPTransportSchema = z.object({
-  action: z.enum(['list', 'get', 'create', 'release']),
+  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive']),
   id: z.string().optional(),
   description: z.string().optional(),
   user: z.string().optional(),
+  type: z.enum(['K', 'W', 'T']).optional(),
+  owner: z.string().optional(),
+  recursive: z.boolean().optional(),
 });
 
 // ─── SAPContext ─────────────────────────────────────────────────────

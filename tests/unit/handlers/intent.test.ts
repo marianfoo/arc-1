@@ -3634,4 +3634,103 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('Deleted PROG ZTEST');
     });
   });
+
+  // ─── SAPTransport handler routing ─────────────────────────────────
+
+  describe('SAPTransport handler routing', () => {
+    function createTransportClient(): AdtClient {
+      return new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), enableTransports: true },
+      });
+    }
+
+    it('delete action calls deleteTransport with correct ID', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'delete',
+        id: 'DEVK900001',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Deleted transport request: DEVK900001');
+    });
+
+    it('delete without ID returns error', async () => {
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'delete',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Transport ID is required');
+    });
+
+    it('reassign action calls reassignTransport with ID and owner', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'reassign',
+        id: 'DEVK900001',
+        owner: 'NEWUSER',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Reassigned transport DEVK900001 to NEWUSER');
+    });
+
+    it('reassign without owner returns error', async () => {
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'reassign',
+        id: 'DEVK900001',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Owner is required');
+    });
+
+    it('release_recursive action calls releaseTransportRecursive', async () => {
+      const transportXml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="DEV" tm:desc="Test" tm:status="D" tm:type="K"/>
+      </tm:root>`;
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF
+        .mockResolvedValueOnce(mockResponse(200, transportXml, {})) // getTransport
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' })) // CSRF
+        .mockResolvedValue(mockResponse(200, '', {})); // release
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'release_recursive',
+        id: 'DEVK900001',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('DEVK900001');
+    });
+
+    it('create with type W passes type through', async () => {
+      const responseXml = '<tm:request tm:number="DEVK900099"/>';
+      mockFetch.mockResolvedValue(mockResponse(200, responseXml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'create',
+        description: 'Customizing transport',
+        type: 'W',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('DEVK900099');
+      // Verify the W type was in the request body
+      const fetchBody = mockFetch.mock.calls.find(
+        (c: unknown[]) => typeof c[1]?.body === 'string' && c[1].body.includes('tm:type'),
+      );
+      expect(fetchBody?.[1]?.body).toContain('tm:type="W"');
+    });
+
+    it('create without type defaults to K', async () => {
+      const responseXml = '<tm:request tm:number="DEVK900099"/>';
+      mockFetch.mockResolvedValue(mockResponse(200, responseXml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'create',
+        description: 'Default transport',
+      });
+      expect(result.isError).toBeUndefined();
+      const fetchBody = mockFetch.mock.calls.find(
+        (c: unknown[]) => typeof c[1]?.body === 'string' && c[1].body.includes('tm:type'),
+      );
+      expect(fetchBody?.[1]?.body).toContain('tm:type="K"');
+    });
+  });
 });

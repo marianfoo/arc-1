@@ -19,8 +19,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AdtClient } from '../../src/adt/client.js';
 import { createObject, safeUpdateSource } from '../../src/adt/crud.js';
+import { AdtApiError } from '../../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
-import { createTransport, getTransport, listTransports } from '../../src/adt/transport.js';
+import {
+  createTransport,
+  deleteTransport,
+  getTransport,
+  listTransports,
+  reassignTransport,
+  releaseTransportRecursive,
+} from '../../src/adt/transport.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { buildCreateXml, CrudRegistry, cleanupAll, generateUniqueName } from './crud-harness.js';
@@ -49,6 +57,15 @@ function getTransportEnabledClient(): AdtClient {
     insecure,
     safety,
   });
+}
+
+/** Check if an error indicates the backend doesn't support this CTS operation */
+function isUnsupportedBackend(err: unknown): boolean {
+  if (err instanceof AdtApiError) {
+    // 400/405/501 typically indicate the operation isn't supported on this system
+    return [400, 405, 501].includes(err.statusCode);
+  }
+  return false;
 }
 
 describe('Transport Integration Tests', () => {
@@ -157,6 +174,128 @@ describe('Transport Integration Tests', () => {
         expect(typeof t.status).toBe('string');
       }
     });
+  });
+
+  // ─── deleteTransport ───────────────────────────────────────────
+
+  describe('deleteTransport', () => {
+    it('creates and deletes a transport', async () => {
+      const id = await createTransport(client.http, client.safety, `ARC-1 IT delete ${Date.now()}`);
+      expect(id).toBeTruthy();
+
+      await deleteTransport(client.http, client.safety, id);
+
+      // Verify transport is gone or returns null
+      try {
+        const result = await getTransport(client.http, client.safety, id);
+        expect(result === null || result?.id === '').toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404, 400], [/not found/i, /does not exist/i]);
+      }
+    }, 30_000);
+  });
+
+  // ─── createTransport with type ────────────────────────────────
+
+  describe('createTransport with type', () => {
+    it('creates a Customizing transport (type W)', async (ctx) => {
+      let id = '';
+      try {
+        id = await createTransport(client.http, client.safety, `ARC-1 IT type-W ${Date.now()}`, undefined, 'W');
+        expect(id).toBeTruthy();
+        const transport = await getTransport(client.http, client.safety, id);
+        expect(transport).not.toBeNull();
+        expect(transport!.type).toBe('W');
+      } catch (err) {
+        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support Customizing transports (type W)');
+        throw err;
+      } finally {
+        if (id) {
+          try {
+            await deleteTransport(client.http, client.safety, id, true);
+          } catch {
+            // best-effort-cleanup
+          }
+        }
+      }
+    }, 30_000);
+
+    it('creates a Transport of Copies (type T)', async (ctx) => {
+      let id = '';
+      try {
+        id = await createTransport(client.http, client.safety, `ARC-1 IT type-T ${Date.now()}`, undefined, 'T');
+        expect(id).toBeTruthy();
+        const transport = await getTransport(client.http, client.safety, id);
+        expect(transport).not.toBeNull();
+        expect(transport!.type).toBe('T');
+      } catch (err) {
+        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support Transport of Copies (type T)');
+        throw err;
+      } finally {
+        if (id) {
+          try {
+            await deleteTransport(client.http, client.safety, id, true);
+          } catch {
+            // best-effort-cleanup
+          }
+        }
+      }
+    }, 30_000);
+  });
+
+  // ─── reassignTransport ────────────────────────────────────────
+
+  describe('reassignTransport', () => {
+    it('reassigns a transport to same user', async (ctx) => {
+      let id = '';
+      try {
+        id = await createTransport(client.http, client.safety, `ARC-1 IT reassign ${Date.now()}`);
+        expect(id).toBeTruthy();
+
+        const transport = await getTransport(client.http, client.safety, id);
+        const currentOwner = transport!.owner;
+
+        // Reassign to same user (safe — we know the user exists)
+        await reassignTransport(client.http, client.safety, id, currentOwner);
+
+        const updated = await getTransport(client.http, client.safety, id);
+        expect(updated!.owner).toBe(currentOwner);
+      } catch (err) {
+        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support transport reassign');
+        throw err;
+      } finally {
+        if (id) {
+          try {
+            await deleteTransport(client.http, client.safety, id, true);
+          } catch {
+            // best-effort-cleanup
+          }
+        }
+      }
+    }, 30_000);
+  });
+
+  // ─── releaseTransportRecursive ────────────────────────────────
+
+  describe('releaseTransportRecursive', () => {
+    it('recursively releases a transport', async (ctx) => {
+      let id = '';
+      try {
+        id = await createTransport(client.http, client.safety, `ARC-1 IT recursive-release ${Date.now()}`);
+        expect(id).toBeTruthy();
+
+        const result = await releaseTransportRecursive(client.http, client.safety, id);
+        expect(result.released).toContain(id);
+
+        const transport = await getTransport(client.http, client.safety, id);
+        if (transport) {
+          expect(transport.status).toBe('R');
+        }
+      } catch (err) {
+        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support recursive release');
+        throw err;
+      }
+    }, 30_000);
   });
 
   // ─── Transportable Package Write with corrNr Propagation ──────

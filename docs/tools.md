@@ -251,16 +251,19 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests.
+Manage CTS transport requests: list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `list`, `get`, `create`, or `release` |
-| `id` | string | No | Transport request ID (for get/release) |
+| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, or `release_recursive` |
+| `id` | string | No | Transport request ID (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Description (for create) |
 | `user` | string | No | Filter by user (for list) |
+| `type` | string | No | Transport type for create: `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies) |
+| `owner` | string | No | New owner (for reassign) |
+| `recursive` | boolean | No | Apply recursively to tasks (for delete/reassign). `release_recursive` always recurses. |
 
 **Protocol compatibility:** ARC-1 uses endpoint-specific CTS media types and includes a one-retry content negotiation fallback (406/415) for SAP version variance.
 

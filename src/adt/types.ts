@@ -102,11 +102,22 @@ export interface TransportRequest {
   tasks: TransportTask[];
 }
 
+export interface TransportObject {
+  pgmid: string;
+  type: string;
+  name: string;
+  wbtype: string;
+  description: string;
+  locked: boolean;
+  position: string;
+}
+
 export interface TransportTask {
   id: string;
   description: string;
   owner: string;
   status: string;
+  objects: TransportObject[];
 }
 
 /** Source code search result */

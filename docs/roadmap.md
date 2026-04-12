@@ -59,7 +59,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 16 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 17 | FEAT-10 | PrettyPrint (Code Formatting) | P2 | XS | Features |
 | 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features |
-| 19 | FEAT-19 | Transport Contents (E071 List) | P2 | XS | Features |
+| 19 | FEAT-19 | Transport Contents (E071 List) | P2 | XS | Features | ✅ Completed (subsumed by FEAT-39) |
 | 20 | FEAT-20 | Source Version / Revision History | P2 | S | Features |
 | 21 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
 | 22 | FEAT-22 | gCTS/abapGit Integration | P2 | M | Features |
@@ -79,7 +79,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 36 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
 | 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
 | 38 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | P0 | S | Features |
-| 39 | FEAT-39 | Transport Enhancements (delete, reassign, types) | P2 | S | Features |
+| 39 | FEAT-39 | Transport Enhancements (delete, reassign, types) | P2 | S | Features | ✅ Completed (K/W/T types; S/R deferred) |
 | 40 | FEAT-40 | FLP Launchpad Management (OData) | P1 | M | Features |
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
@@ -535,14 +535,12 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Medium — show objects inside a transport request |
-| **Status** | Not started |
+| **Status** | ✅ Completed (subsumed by FEAT-39) |
 | **Source** | Dassian pattern, abap-adt-api |
 
 **What:** List the objects (E071 entries) contained in a transport request. Both dassian and abap-adt-api support this. Useful for reviewing what an LLM has changed before release.
 
-**Why:** Transport review is an important workflow step before release.
-
-**Why not:** ADT's transport API is minimal — no direct E071 table access. Workaround requires `SAPQuery` on table E071 (which requires `blockData=false`). `SAPTransport` already lists transports and metadata; the LLM can ask SAPQuery for transport contents as a follow-up — not worth a dedicated tool. Transport contents also vary by context (include task objects? show status?) pushing toward SAP's native SE09/SE10 UI.
+**Resolution:** Subsumed by FEAT-39. Transport object parsing (`tm:abap_object` elements) is now included in `getTransport()` responses when the SAP system returns them. Objects are parsed best-effort from task nodes with fields: pgmid, type, name, wbtype, description, locked, position.
 
 ---
 
@@ -979,21 +977,21 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — completes CTS lifecycle for LLM workflows |
-| **Status** | Not started |
+| **Status** | ✅ Completed |
 | **Source** | [sapcli comparison](../compare/09-sapcli.md) |
 
-**What:** Extend SAPTransport with: delete transport/task, reassign owner, transport type selection (Workbench/K, Customizing/W, Transport-of-Copies/T, Development-Correction/S, Repair/R), recursive release (release tasks first, then request), and transport contents listing (E071 objects). Subsumes FEAT-19.
+**What:** Extend SAPTransport with: delete transport/task, reassign owner, transport type selection (K/W/T), recursive release, and transport contents parsing. Subsumes FEAT-19.
 
-**Current state:** ARC-1 supports list, get, create (Workbench only), release. sapcli has full CTS lifecycle including delete, reassign, 5 transport types, recursive release, and `-rrr` detail levels showing objects.
+**Implemented:**
+- `deleteTransport()` with recursive flag (deletes unreleased tasks first)
+- `reassignTransport()` with recursive flag (reassigns unreleased tasks first)
+- `createTransport()` now accepts transport type parameter: K (Workbench), W (Customizing), T (Transport of Copies)
+- `releaseTransportRecursive()` as new action (releases tasks before parent)
+- Transport object parsing (`tm:abap_object`) in GET responses
+- Fixed Accept header bugs in `getTransport()` and `releaseTransport()`
+- All new operations gated by `checkTransport()` safety checks
 
-**Implementation:**
-- Add `deleteTransport()` to `src/adt/transport.ts` — `DELETE /sap/bc/adt/cts/transportrequests/{id}`
-- Add `reassignTransport()` — modify owner attribute
-- Add `transportType` parameter to `createTransport()` — currently hardcoded `tm:type="K"`
-- Add `recursive` flag to `releaseTransport()` — release child tasks before parent
-- Enhance `getTransport()` response parsing to include task objects (E071 entries)
-- Add new actions to SAPTransport handler in `src/handlers/intent.ts`
-- Safety check: transport operations gated by `enableTransports` config
+**Deferred:** Transport types S (Development-Correction) and R (Repair) require specific CTS configuration that most systems lack.
 
 ---
 
