@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-10 (post transport/write hardening)_
+_Last updated: 2026-04-12 (post fr0ster v5.0.0 feed tools analysis)_
 
 ## Legend
 - ✅ = Supported
@@ -166,6 +166,9 @@ _Last updated: 2026-04-10 (post transport/write hardening)_
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|
 | Short dumps (ST22) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ |
 | ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ |
+| System messages (SM02) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0) | N/A | ❌ |
+| Gateway error log (IWFND) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, on-prem) | N/A | ❌ |
+| ADT feed reader (unified) | ⚠️ (dumps+traces) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, 5 types) | N/A | ❌ |
 | SQL traces | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | ABAP debugger | ❌ | ✅ (8 tools) | ✅ | ❌ | ❌ | ❌ | N/A | ❌ |
 | AMDP/HANA debugger | ❌ | ✅ (7 tools) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ |
@@ -264,7 +267,7 @@ The following items were incorrectly marked in the previous version and have sin
 
 ### Biggest Competitive Threats
 1. **vibing-steampunk** (242 stars) — Community favorite. Now has Streamable HTTP (v2.38.0). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis. Still lacks BTP/enterprise auth but rapidly closing feature gaps.
-2. **fr0ster** (v4.8.7, 85+ releases) — Closest enterprise competitor. 287 tools, 9 auth providers, TLS, RFC, embeddable. Search TSV format optimization. Complex multi-repo but ambitious.
+2. **fr0ster** (v5.0.1, 90+ releases) — Closest enterprise competitor. 289 tools, 9 auth providers, TLS, RFC, embeddable. v5.0.0 added unified feed tools (SM02, gateway errors), adt-clients 4.0 factory API. Complex multi-repo but ambitious.
 3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
 
 ### Key Gaps to Close
@@ -287,6 +290,8 @@ The following items were incorrectly marked in the previous version and have sin
 - Documentation (Copilot Studio guide, Basis Admin guide)
 
 **P2+ — future gaps:**
+- System messages (SM02) — AI agent situational awareness. fr0ster v5.0.0 added this.
+- Gateway error log (IWFND) — OData/Gateway debugging with source code + call stack. fr0ster v5.0.0, on-prem only.
 - SQL traces, PrettyPrint, inactive objects, transport contents, source versions
 - Cloud readiness assessment, gCTS/abapGit, enhancement framework
 - Multi-system routing, rate limiting

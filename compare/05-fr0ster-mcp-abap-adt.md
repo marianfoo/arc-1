@@ -2,7 +2,7 @@
 
 > **Repository**: https://github.com/fr0ster/mcp-abap-adt
 > **Language**: TypeScript | **License**: MIT | **Stars**: 26
-> **Status**: Very Active (v4.8.1, 85+ releases in 5 months, 770+ commits)
+> **Status**: Very Active (v5.0.1, 90+ releases in 5 months, 799+ commits)
 > **NPM**: `@mcp-abap-adt/core` — 3,625 monthly downloads
 > **Relationship**: Independent TypeScript ADT MCP server with most advanced auth system
 
@@ -10,7 +10,7 @@
 
 ## Project Overview
 
-A multi-package monorepo MCP server for SAP ADT with 287 tools organized across 4 exposition tiers (read-only 52, high-level 113, low-level 122, compact 22). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
+A multi-package monorepo MCP server for SAP ADT with 289 tools organized across 4 exposition tiers (read-only 55, high-level 113, low-level 122, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
 
 Key differentiator: "AI Pairing, Not Vibing (AIPNV)" philosophy — positioned as pair programming assistant, not autopilot.
 
@@ -121,7 +121,9 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| v4.8.0-4.8.1 | Apr 2, 2026 | Structured dump list, dump lookup by datetime+user, from/to time filters |
+| v5.0.0-5.0.1 | Apr 11-12, 2026 | RuntimeListFeeds (unified ADT feed reader), RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG with detail view), adt-clients 4.0 factory API migration. Removed compact wrappers in v5.0.1 (LLM confusion). [Deep dive](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
+| v4.9.0 | Apr 9, 2026 | Minor release between v4.8.x and v5.0.0 |
+| v4.8.0-4.8.7 | Apr 2-8, 2026 | Structured dump list, dump lookup by datetime+user, from/to time filters, search TSV format |
 | v4.7.0-4.7.1 | Apr 1, 2026 | Replaced archived `node-rfc` with `@mcp-abap-adt/sap-rfc-lite` |
 | v4.6.0 | Mar 31, 2026 | HTTPS/TLS support for MCP server |
 | v4.5.0-4.5.2 | Mar 26-27, 2026 | try-finally lock fix (9 handlers), 415/406 Content-Type auto-retry via adt-clients 3.12.0 (per-endpoint caching), ListTransports Accept negotiation rewrite, RAG-optimized SearchObject description, auth priority fix. [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md) |
@@ -132,7 +134,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | v2.x | Dec 30, 2025 - Feb 23, 2026 | ~20 releases |
 | v1.1.0 | Nov 21, 2025 | First release |
 
-**Total: 85+ releases in ~5 months. Average: ~4 releases/week.**
+**Total: 90+ releases in ~5 months. Average: ~4 releases/week.**
 
 ## Known Issues
 
@@ -154,6 +156,9 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Feature | Priority | Effort | Notes |
 |---------|----------|--------|-------|
+| **SM02 system messages** (RuntimeListSystemMessages) | Medium | 0.5d | AI agent situational awareness (maintenance windows, system announcements) |
+| **Gateway error log** (RuntimeGetGatewayErrorLog) | Medium | 1d | /IWFND/ERROR_LOG with detail view — essential for OData debugging. On-prem only. |
+| **Unified ADT feed reader** (RuntimeListFeeds) | Low | 0.5d | Feed descriptor/variant discovery. ARC-1 already has dump + trace feeds. |
 | **9 auth providers** (SAML, OIDC device flow, etc.) | Low | 5d+ | Only if enterprise demand |
 | **TLS/HTTPS for MCP server** | Critical | 1d | Required for production without reverse proxy |
 | **sap-rfc-lite** (RFC connectivity) | Low | 3d | Alternative to ADT HTTP |
@@ -200,6 +205,9 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-12 | v5.0.1 — Removed compact feed wrappers (LLM confusion, 292→289 tools) | Lesson | Validates ARC-1's intent-based approach — duplicate tools confuse LLMs | Done |
+| 2026-04-11 | v5.0.0 — RuntimeListFeeds, RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG), adt-clients 4.0 factory API | **Medium** | Add `system_messages` + `gateway_errors` actions to SAPDiagnose | [Eval](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
+| 2026-04-09 | v4.9.0 — Minor release | No | — | — |
 | 2026-04-08 | v4.8.2-4.8.7 — Merge RuntimeAnalyzeDump into RuntimeGetDumpById, search TSV format (#40) | Medium | Search TSV format: consider for SAPSearch optimization | [Eval](fr0ster/evaluations/8a22669-search-tsv-format.md) |
 | 2026-04-02 | v4.8.0-4.8.1 — Structured dump list, datetime+user lookup, from/to filters | Medium | Defer — ARC-1 SAPDiagnose dumps work fine as-is | Evaluated |
 | 2026-04-01 | v4.7.0-4.7.1 — sap-rfc-lite replaces node-rfc | No | ARC-1 uses HTTP only | — |
@@ -218,6 +226,6 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
 | 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-11_
+_Last updated: 2026-04-12_
 
 > **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

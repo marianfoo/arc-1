@@ -1,17 +1,129 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-11",
-  "lastCheckedSha": "783e596",
+  "lastUpdated": "2026-04-12",
+  "lastCheckedSha": "be56df1",
   "stats": {
-    "totalCommits": 783,
+    "totalCommits": 799,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 67,
-    "evaluated": 33,
+    "totalTracked": 76,
+    "evaluated": 39,
     "pending": 0,
-    "skipped": 34
+    "skipped": 37
   },
   "releases": [
+    {
+      "version": "v5.0.0-v5.0.1",
+      "date": "2026-04-11 to 2026-04-12",
+      "releaseDeepDive": "evaluations/v5.0.0-release-deep-dive.md",
+      "commits": [
+        {
+          "sha": "be56df1",
+          "date": "2026-04-12",
+          "message": "fix: remove duplicate compact feed wrappers that confused LLM tool selection",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "lesson-learned",
+          "relevance": "Validates ARC-1's intent-based approach. Duplicate tools at different abstraction levels confuse LLMs — fr0ster dropped 3 wrappers (292→289 tools). ARC-1's action routing avoids this by design.",
+          "evaluationFile": "evaluations/v5.0.0-release-deep-dive.md"
+        },
+        {
+          "sha": "6f32ef8",
+          "date": "2026-04-11",
+          "message": "chore: bump version to 5.0.0",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "318b5d0",
+          "date": "2026-04-11",
+          "message": "feat: add RuntimeListFeeds handler for ADT feed reader",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "consider-future",
+          "relevance": "Unified ADT Atom feed reader with 5 feed types (descriptors, variants, dumps, system_messages, gateway_errors). ARC-1 already has dumps + traces. The individual feeds (SM02, gateway) are more useful than the meta-reader.",
+          "evaluationFile": "evaluations/v5.0.0-release-deep-dive.md"
+        },
+        {
+          "sha": "c0775a3",
+          "date": "2026-04-11",
+          "message": "feat: add RuntimeListSystemMessages handler for SM02 messages",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "implement",
+          "relevance": "SM02 system messages — ARC-1 doesn't have this. Useful for AI agent situational awareness (maintenance windows, system announcements). Add as 'system_messages' action on SAPDiagnose. Effort: 0.5 day.",
+          "evaluationFile": "evaluations/v5.0.0-release-deep-dive.md"
+        },
+        {
+          "sha": "276f414",
+          "date": "2026-04-11",
+          "message": "feat: add RuntimeGetGatewayErrorLog handler for /IWFND/ERROR_LOG",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "implement",
+          "relevance": "Gateway error log with detail view (source code + call stack). ARC-1 doesn't have this. Essential for OData/Gateway debugging. On-prem only. Add as 'gateway_errors' action on SAPDiagnose. Effort: 1 day.",
+          "evaluationFile": "evaluations/v5.0.0-release-deep-dive.md"
+        },
+        {
+          "sha": "e1540c3",
+          "date": "2026-04-11",
+          "message": "feat: register new runtime feed handlers in SystemHandlersGroup",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Handler registration infra — not relevant to ARC-1"
+        },
+        {
+          "sha": "15d1290",
+          "date": "2026-04-11",
+          "message": "feat: add compact wrapper handlers for feeds, system messages, gateway errors",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "skip",
+          "decision": "skip",
+          "relevance": "Compact wrappers — removed in v5.0.1 due to LLM confusion. Validates ARC-1's approach."
+        },
+        {
+          "sha": "6b3b5d1",
+          "date": "2026-04-11",
+          "message": "refactor: migrate dump handlers to adt-clients 4.0.0 factory API",
+          "type": "refactor",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal adt-clients API migration. ARC-1 uses own ADT client."
+        },
+        {
+          "sha": "ea79f0b",
+          "date": "2026-04-11",
+          "message": "refactor: migrate profiler handlers to adt-clients 4.0.0 factory API",
+          "type": "refactor",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal adt-clients API migration. ARC-1 uses own ADT client."
+        }
+      ]
+    },
+    {
+      "version": "v4.9.0",
+      "date": "2026-04-09",
+      "commits": [
+        {
+          "sha": "unknown",
+          "date": "2026-04-09",
+          "message": "v4.9.0 release (details not fetched)",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Release between v4.8.x and v5.0.0. No significant new features identified."
+        }
+      ]
+    },
     {
       "version": "v4.8.2-v4.8.7",
       "date": "2026-04-04 to 2026-04-08",

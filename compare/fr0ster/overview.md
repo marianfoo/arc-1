@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [fr0ster/mcp-abap-adt](https://github.com/fr0ster/mcp-abap-adt) for features worth adopting in ARC-1.
 
-_Last updated: 2026-04-11_
+_Last updated: 2026-04-12_
 
 ## Approach
 
@@ -18,12 +18,12 @@ _Last updated: 2026-04-11_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 783 | 40 |
-| Tracked | 67 | 40 |
-| Evaluated | 33 | 40 |
+| Total | 799 | 40 |
+| Tracked | 76 | 40 |
+| Evaluated | 39 | 40 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 34 | 25 |
-| Evaluation files | 20 | 10 |
+| Skipped (not relevant) | 37 | 25 |
+| Evaluation files | 22 | 10 |
 
 ## Priority Summary
 
@@ -39,6 +39,8 @@ _Last updated: 2026-04-11_
 
 | Source | ID | Description | ARC-1 Matrix Ref |
 |--------|----|-------------|-------------------|
+| commit | c0775a3 | SM02 system messages reader (RuntimeListSystemMessages) | New SAPDiagnose action |
+| commit | 276f414 | Gateway error log with detail view (RuntimeGetGatewayErrorLog) | New SAPDiagnose action |
 | commit | 459f961 | Dump lookup by datetime+user, structured dump list | Enhance SAPDiagnose |
 | commit | e5628dc | Read handlers returning source + metadata together | UX improvement |
 | commit | 9ef5843 | Create vs Update separation (breaking change) | SAPWrite design |
