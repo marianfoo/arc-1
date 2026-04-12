@@ -21,7 +21,7 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Package restrictions** — limit AI access to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`)
 - **Data access control** — block table data preview (`--block-data`) or free-form SQL (`--block-free-sql`)
 - **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only. Update/delete operations auto-use the lock correction number when no explicit transport is provided
-- **Safety profiles** — preconfigured roles like `--profile viewer`, `developer-data`, or `developer-sql`
+- **Safety profiles** — preconfigured roles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
 - **Writes restricted to `$TMP` by default** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
 ### Authentication
@@ -59,9 +59,9 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 ### Testing
 
-- **1,349+ unit tests** (`53` unit test files, mocked HTTP)
+- **1,376+ unit tests** (`53` unit test files, mocked HTTP)
 - **~160 integration tests** against live SAP systems, with explicit skip reasons when credentials or fixtures are missing
-- **~60 E2E tests** that execute real MCP tool calls against a running ARC-1 server
+- **~70 E2E tests** that execute real MCP tool calls against a running ARC-1 server
 - **CRUD lifecycle and BTP smoke lanes** included (`test:integration:crud`, `test:integration:btp:smoke`)
 - **CI matrix** on Node `22` and `24`; integration + E2E run on `push` to `main` and internal PRs
 - **Reliability telemetry + coverage** published as informational CI signals (non-blocking)
@@ -81,7 +81,7 @@ The 11 tools are designed from real LLM interaction feedback:
 | **SAPTransport** | CTS transport management (list, create, release) |
 | **SAPContext** | Compressed dependency context — one call replaces N SAPRead calls |
 | **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) |
-| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps |
+| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps, profiler traces |
 | **SAPManage** | Feature probing — detect what the system supports before acting |
 
 Tool definitions automatically adapt to the target system (BTP vs on-premise), removing unavailable types and adjusting descriptions so the LLM never attempts unsupported operations.
