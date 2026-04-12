@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (ARC-1's upstream) for features and bug fixes worth adopting.
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-12_
 
 ## Approach
 
@@ -16,12 +16,12 @@ _Last updated: 2026-04-08_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 470 | 42 |
-| Tracked | 82 | 42 |
-| Evaluated | 82 | 42 |
+| Total | 495 | 42 |
+| Tracked | 95 | 42 |
+| Evaluated | 90 | 42 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 55 | 22 |
-| Evaluation files | 28 | 9 |
+| Skipped (not relevant) | 60 | 22 |
+| Evaluation files | 31 | 9 |
 
 ## Priority Summary
 
@@ -29,8 +29,9 @@ _Last updated: 2026-04-08_
 
 | Source | ID | Description | ARC-1 Matrix Ref |
 |--------|----|-------------|-------------------|
+| commit | **0713d75** | **CRITICAL: Package safety bypass on mutations — ARC-1 has same bug** | **Safety system bypass** |
 | commit | 7270ad7 | API release state for S/4HANA Clean Core | New — critical for BTP/cloud |
-| issue | #9 | Transport 406 Accept header (same class as fr0ster 415) | Critical #3 |
+| ~~issue~~ | ~~#9~~ | ~~Transport 406 Accept header (same class as fr0ster 415)~~ | ~~Critical #3~~ ✅ ARC-1 has 415/406 retry |
 
 ### Medium Priority (evaluate/verify)
 
@@ -57,6 +58,9 @@ _Last updated: 2026-04-08_
 | commit | 7fbfbba | ignore_warnings for EditSource | Consider for edit_method |
 | commit | ba83e22 + 558a300 | Package deps + call graph analysis | Medium #31 in matrix |
 | commit | 0756e94 | ABAP parser + deps as MCP tools | Consider for SAPContext |
+| commit | a66bcd5 | API release state bug fix (C0-C4 structure) | Verify getApiReleaseState |
+| commit | e62c7d5 | SAML SSO for S/4HANA Public Cloud | Low — defer unless SAML-only demand |
+| commit | 880aa68 | Default mode → hyperfocused (market signal) | Validates intent-based approach |
 | issue | #91, #88 | 423 lock handle errors (recurring) | Verify crud.ts |
 | issue | #78 | 423 lock handle on ECC 6.0 | Verify crud.ts |
 | issue | #40 | i18n/translation tools | Closed by commit 566f1f7 |

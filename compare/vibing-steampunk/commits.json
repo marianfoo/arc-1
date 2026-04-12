@@ -1,17 +1,151 @@
 {
   "$schema": "Commit tracker for oisee/vibing-steampunk — grouped by release, auto-triaged",
   "repo": "https://github.com/oisee/vibing-steampunk",
-  "lastUpdated": "2026-04-08",
-  "lastCheckedSha": "11c2253",
+  "lastUpdated": "2026-04-12",
+  "lastCheckedSha": "e62c7d5",
   "stats": {
-    "totalCommits": 470,
+    "totalCommits": 495,
     "trackedFrom": "v2.22.0 (2026-02-01)",
-    "totalTracked": 82,
-    "evaluated": 82,
+    "totalTracked": 95,
+    "evaluated": 90,
     "pending": 0,
-    "skipped": 55
+    "skipped": 60
   },
   "releases": [
+    {
+      "version": "post-v2.39.0 (Apr 9-12 sprint)",
+      "date": "2026-04-09 to 2026-04-12",
+      "commits": [
+        {
+          "sha": "e62c7d5",
+          "date": "2026-04-12",
+          "message": "feat: add SAML SSO authentication for S/4HANA Public Cloud (#97)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "SAML SSO auth (programmatic + browser) for S/4HANA Public Cloud with IAS. ARC-1 uses BTP OAuth / Destination Service instead. Low priority unless SAML-only customers appear. Credential-cmd pattern is independently interesting.",
+          "evaluationFile": "evaluations/e62c7d5-saml-sso-auth.md"
+        },
+        {
+          "sha": "d96c38e",
+          "date": "2026-04-12",
+          "message": "feat: detect HANA database from S4CORE component in GetSystemInfo (#100)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "consider-future",
+          "relevance": "HANA detection fallback via S4CORE component. ARC-1 GetSystemInfo could benefit if database type detection is needed."
+        },
+        {
+          "sha": "0713d75",
+          "date": "2026-04-12",
+          "message": "fix: enforce SAP_ALLOWED_PACKAGES on existing-object mutations (#101)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "critical",
+          "decision": "implement",
+          "relevance": "CRITICAL: ARC-1 has the SAME BUG. checkPackage() only called on create, not on update/delete/edit_method. Package allowlist can be bypassed for mutations to existing objects. Must fix immediately.",
+          "evaluationFile": "evaluations/0713d75-package-safety-mutations.md"
+        },
+        {
+          "sha": "a66bcd5",
+          "date": "2026-04-10",
+          "message": "fix: correct releaseState bug and update tests for C0-C4 API structure",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "API release state was reading from uninitialized variable instead of actual C1.Status.State. ARC-1 should verify its getApiReleaseState extracts correctly.",
+          "evaluationFile": "evaluations/a66bcd5-release-state-bugfix.md"
+        },
+        {
+          "sha": "880aa68",
+          "date": "2026-04-09",
+          "message": "feat: default mode changed to hyperfocused",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "market-signal",
+          "relevance": "vibing-steampunk now defaults to hyperfocused (1 tool) instead of focused (100 tools). Market signal: single-tool mode is winning. Validates ARC-1's intent-based approach."
+        },
+        {
+          "sha": "fc99eb3",
+          "date": "2026-04-09",
+          "message": "feat: add tr-boundaries, cr-boundaries, cr-history commands",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI-only transport/CR boundary analysis. Queries E070A, R3TR, LIMU tables. Not MCP tools — CLI commands for analysis reports."
+        },
+        {
+          "sha": "5049e0e",
+          "date": "2026-04-09",
+          "message": "fix: batch SAP IN-clause queries to 5 items (255-char limit)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "verify",
+          "relevance": "SAP has 255-char limit on WHERE clauses in free SQL. Queries with many items need batching. ARC-1 should verify RunQuery handles long IN clauses gracefully."
+        },
+        {
+          "sha": "b0e37c6",
+          "date": "2026-04-09",
+          "message": "feat: two-pass package resolution (TADIR + TFDIR fallback)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI-only package resolution for function modules via TFDIR. Not an MCP tool."
+        },
+        {
+          "sha": "8a478aa",
+          "date": "2026-04-09",
+          "message": "fix: RELEASE-State in runAPISurface (andreasmuenster)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Related to a66bcd5 — same API release state fix from community contributor. Verify ARC-1 implementation."
+        },
+        {
+          "sha": "8565769",
+          "date": "2026-04-09",
+          "message": "feat: CO_TRANSPORTED edge kind for co-change signals",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Graph analysis edge type — CLI-only boundary analysis."
+        },
+        {
+          "sha": "91b49f1",
+          "date": "2026-04-08",
+          "message": "feat: graph export formats (DOT, PlantUML, GraphML)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI-only graph export. Not MCP tools."
+        },
+        {
+          "sha": "8a60b62",
+          "date": "2026-04-08",
+          "message": "feat: Mermaid graph output with package subgraphs",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI-only graph export."
+        },
+        {
+          "sha": "7c8dfbc",
+          "date": "2026-04-08",
+          "message": "feat: cache config support in .vsp.json and env vars",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Cache configuration via config file. ARC-1 already has cache config via env vars and CLI flags."
+        }
+      ]
+    },
     {
       "version": "v2.38.1-v2.39.0+ (boundary analysis sprint)",
       "date": "2026-04-07 to 2026-04-08",

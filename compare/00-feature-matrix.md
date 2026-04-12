@@ -46,7 +46,7 @@ _Last updated: 2026-04-12 (post fr0ster v5.0.0 feed tools analysis)_
 | XSUAA OAuth | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
 | BTP Service Key | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Principal Propagation | ✅ | ❌ | ❌ | ❌ | ✅ (X.509) | ✅ | ✅ | ❌ |
-| SAML | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| SAML | ❌ | ✅ (v2.39.0+, PR #97) | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | X.509 Certificates | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Device Flow (OIDC) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Browser login page | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
@@ -266,7 +266,7 @@ The following items were incorrectly marked in the previous version and have sin
 9. **npm + Docker + release-please** — Most professional distribution pipeline.
 
 ### Biggest Competitive Threats
-1. **vibing-steampunk** (242 stars) — Community favorite. Now has Streamable HTTP (v2.38.0). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis. Still lacks BTP/enterprise auth but rapidly closing feature gaps.
+1. **vibing-steampunk** (242 stars) — Community favorite. Now has Streamable HTTP (v2.38.0), SAML SSO (v2.39.0+, PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening. Now defaults to hyperfocused mode (1 tool). Still lacks BTP OAuth / Destination Service but adding auth options.
 2. **fr0ster** (v5.0.1, 90+ releases) — Closest enterprise competitor. 289 tools, 9 auth providers, TLS, RFC, embeddable. v5.0.0 added unified feed tools (SM02, gateway errors), adt-clients 4.0 factory API. Complex multi-repo but ambitious.
 3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
 

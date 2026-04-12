@@ -2,7 +2,7 @@
 
 > **Repository**: https://github.com/oisee/vibing-steampunk
 > **Language**: Go 1.24 | **License**: MIT | **Stars**: 242
-> **Status**: Very Active (v2.32.0, daily commits in March 2026)
+> **Status**: Very Active (v2.39.0+, daily commits through April 2026, 495+ total commits)
 > **Relationship**: ARC-1's upstream/origin — forked and rewritten in TypeScript
 
 ---
@@ -195,6 +195,11 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 | Date | Upstream Change | Relevant? | Decision | Status |
 |------|----------------|-----------|----------|--------|
+| 2026-04-12 | **CRITICAL: Package safety bypass on mutations (#101)** — `SAP_ALLOWED_PACKAGES` not enforced on update/delete. **ARC-1 has same bug.** | **Critical** | **Fix immediately** — checkPackage() missing on update/delete/edit_method | [Eval](vibing-steampunk/evaluations/0713d75-package-safety-mutations.md) |
+| 2026-04-12 | SAML SSO auth for S/4HANA Public Cloud (#97) — programmatic + browser + credential-cmd | Low | Defer — ARC-1 uses BTP OAuth / Destination Service | [Eval](vibing-steampunk/evaluations/e62c7d5-saml-sso-auth.md) |
+| 2026-04-12 | HANA database detection from S4CORE component (#100) | Low | Consider — system info enhancement | — |
+| 2026-04-10 | API release state bug fix — C0-C4 structure (#95) | Medium | Verify ARC-1 getApiReleaseState | [Eval](vibing-steampunk/evaluations/a66bcd5-release-state-bugfix.md) |
+| 2026-04-09 | Default mode → hyperfocused (1 tool), transport/CR boundary analysis, batch IN-clause fix | Low | Market signal — validates intent-based approach | — |
 | 2026-04-08 | v2.39.0 — Side effect extraction, LUW classification, boundary crossing | Review | Consider future — novel analysis capabilities | [Eval](vibing-steampunk/evaluations/11c2253-side-effects-luw.md) |
 | 2026-04-07 | v2.38.1 — Auth headers on redirects, stateful lock sessions | Yes | Verify — check ARC-1 http.ts redirect behavior | [Verify](vibing-steampunk/evaluations/27d4d7c-auth-redirect-stateful.md) |
 | 2026-04-06 | v2.38.0 — Health analysis, rename preview, dead code, API surface | Review | Rename: consider (#18). Others: defer. | [Eval](vibing-steampunk/evaluations/dcaa358-rename-refactoring.md) |
@@ -213,4 +218,4 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 > **Detailed commit-level tracking**: See [`compare/vibing-steampunk/`](vibing-steampunk/) for per-commit and per-issue evaluations.
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-12_
