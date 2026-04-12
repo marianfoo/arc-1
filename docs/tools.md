@@ -515,17 +515,30 @@ SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
 Probe and report SAP system capabilities, and inspect the object cache state.
 
 **Actions:**
-- `probe` — Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). Detects optional features.
+- `probe` — Re-probe the SAP system now (makes 8 parallel HEAD requests, ~1-2s). Detects optional features.
 - `features` — Get cached feature status from last probe (fast, no SAP round-trip).
 - `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
+- `flp_list_catalogs` — List FLP business catalogs.
+- `flp_list_groups` — List FLP groups (`Pages`) from `/UI2/FLPD_CATALOG`.
+- `flp_list_tiles` — List tiles/target mappings in a catalog.
+- `flp_create_catalog` — Create an FLP business catalog.
+- `flp_create_group` — Create an FLP group.
+- `flp_create_tile` — Create a tile in an FLP catalog.
+- `flp_add_tile_to_group` — Assign a catalog tile instance into a group.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `probe`, `features`, or `cache_stats` |
+| `action` | string | Yes | `probe`, `features`, `cache_stats`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `catalogId` | string | No | Required for `flp_list_tiles`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `groupId` | string | No | Required for `flp_create_group`, `flp_add_tile_to_group` |
+| `domainId` | string | No | Required for `flp_create_catalog` |
+| `title` | string | No | Required for `flp_create_catalog`, `flp_create_group` |
+| `tileInstanceId` | string | No | Required for `flp_add_tile_to_group` |
+| `tile` | object | No | Required for `flp_create_tile`. Fields: `id`, `title`, `semanticObject`, `semanticAction`, optional `icon`, `url`, `subtitle`, `info` |
 
-**Probed features:** `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `transport`. Each returns `available` (bool), `mode` (auto/on/off), `message`, and `probedAt` timestamp.
+**Probed features:** `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `transport`, `ui5repo`, `flp`. Each returns `available` (bool), `mode` (auto/on/off), `message`, and `probedAt` timestamp.
 
 **cache_stats output:**
 ```json
@@ -554,6 +567,13 @@ Probe and report SAP system capabilities, and inspect the object cache state.
 SAPManage(action="probe")       → discover system capabilities
 SAPManage(action="features")    → get cached results (no SAP call)
 SAPManage(action="cache_stats") → check cache state and warmup status
+SAPManage(action="flp_list_catalogs")
+SAPManage(action="flp_list_groups")
+SAPManage(action="flp_list_tiles", catalogId="ZARC1_SALES")
+SAPManage(action="flp_create_catalog", domainId="ZARC1_SALES", title="Sales Catalog")
+SAPManage(action="flp_create_group", groupId="ZARC1_SALES_GRP", title="Sales Group")
+SAPManage(action="flp_create_tile", catalogId="ZARC1_SALES", tile={"id":"tile_sales","title":"Sales","semanticObject":"SalesOrder","semanticAction":"display"})
+SAPManage(action="flp_add_tile_to_group", groupId="ZARC1_SALES_GRP", catalogId="ZARC1_SALES", tileInstanceId="00O2TO3741QLWH4GV74AHMWQE")
 ```
 
 **Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work regardless of `--read-only` mode. In HTTP auth mode, SAPManage requires `write` scope.

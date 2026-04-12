@@ -247,9 +247,27 @@ Even after ARC-1 grants access via scopes, the SAP system performs its own autho
 | **S_TRANSPRT** | Transport management (create, release, delete) | SAPTransport |
 | **S_CTS_ADMI** | CTS administration | SAPTransport (release, delete) |
 | **S_SQL_VIEW** | SQL query access | SAPQuery |
+| **S_SERVICE** | OData service start authorization (hashed `SRV_NAME`, `SRV_TYPE=HT`) | SAPManage (FLP actions) |
+| **S_PB_CHIP** | FLP page-builder chip access | SAPManage (FLP actions) |
+| **/UI2/CHIP** | FLP chip access (`/UI2/CHIP` namespace) | SAPManage (FLP actions) |
 
 !!! warning "Read operations that use POST"
     Several ADT endpoints that perform read-like operations use HTTP POST internally. This means SAP requires **S_ADT_RES with ACTVT=01 AND 02** for read-only users. Without both activity types, operations like code completion, find references, and syntax check will fail with 403 errors. See the [SAP ADT Authorization documentation](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/authorization) for details.
+    FLP list operations use HTTP GET, but still require OData service authorization (`S_SERVICE`) for `/UI2/PAGE_BUILDER_CUST`.
+
+### ICF Service Activation (FLP OData)
+
+FLP management in ARC-1 uses the Gateway OData service `/UI2/PAGE_BUILDER_CUST`. It must be activated before `SAPManage` FLP actions can work. See SAP Help for [UI service authorizations](https://help.sap.com/docs/ABAP_PLATFORM_NEW/9765143c554c4ec3951fb17ff80d8989/86fa207d3edd4ed987e66b547d1b3025.html) and [OData activation for FLP](https://help.sap.com/docs/FIORI_IMPLEMENTATION_740/bc700aa28d5c468c84969c3b33773710/b7383953fcabff4fe10000000a44176d.html).
+
+1. Open transaction `/IWFND/MAINT_SERVICE`.
+2. Ensure service `/UI2/PAGE_BUILDER_CUST` is active (customer alias commonly `ZPAGE_BUILDER_CUST`).
+3. Verify endpoint access:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" "$SAP_URL/sap/opu/odata/UI2/PAGE_BUILDER_CUST/"
+```
+
+Expected result is `200`.
 
 ### Recommended SAP Roles
 
@@ -261,8 +279,11 @@ For on-premise systems using a shared technical user, create composite roles:
 | **ZMCP_WRITE** | S_DEVELOP (ACTVT 01+02+06), S_TRANSPRT, S_CTS_ADMI | Write + transport management |
 | **ZMCP_DATA** | S_TABU_DIS, relevant table auth groups | Table content preview |
 | **ZMCP_SQL** | S_SQL_VIEW | Freestyle SQL execution |
+| **ZMCP_FLP** | S_SERVICE (`/UI2/PAGE_BUILDER_CUST`), S_PB_CHIP, /UI2/CHIP, S_DEVELOP (`OBJTYPE=IWSG`) | FLP launchpad management via SAPManage |
 
 Assign the appropriate combination to your shared SAP user. With Principal Propagation, each SAP user's own authorization profile applies instead.
+
+Alternatively, assign SAP standard role `SAP_FLP_ADMIN`, which includes the required authorizations for FLP customization services.
 
 ---
 

@@ -22,6 +22,7 @@ describe('Feature Detection', () => {
         ui5: 'on',
         transport: 'on',
         ui5repo: 'on',
+        flp: 'on',
       };
       const result = resolveWithoutProbing(config);
 
@@ -40,6 +41,7 @@ describe('Feature Detection', () => {
         ui5: 'off',
         transport: 'off',
         ui5repo: 'off',
+        flp: 'off',
       };
       const result = resolveWithoutProbing(config);
 
@@ -57,6 +59,7 @@ describe('Feature Detection', () => {
         ui5: 'auto',
         transport: 'auto',
         ui5repo: 'auto',
+        flp: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -73,6 +76,7 @@ describe('Feature Detection', () => {
         ui5: 'off',
         transport: 'auto',
         ui5repo: 'auto',
+        flp: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -93,6 +97,7 @@ describe('Feature Detection', () => {
         ui5: 'auto',
         transport: 'auto',
         ui5repo: 'auto',
+        flp: 'auto',
       };
       const result = resolveWithoutProbing(config);
 
@@ -110,6 +115,7 @@ describe('Feature Detection', () => {
         ui5: 'auto',
         transport: 'auto',
         ui5repo: 'on',
+        flp: 'auto',
       };
       const result = resolveWithoutProbing(config);
       expect(result.ui5repo.available).toBe(true);
@@ -125,11 +131,45 @@ describe('Feature Detection', () => {
         ui5: 'auto',
         transport: 'auto',
         ui5repo: 'auto',
+        flp: 'auto',
       };
       const result = resolveWithoutProbing(config);
       expect(result.ui5repo.available).toBe(false);
       expect(result.ui5repo.mode).toBe('auto');
       expect(result.ui5repo.message).toContain('not available');
+    });
+
+    it('resolves flp feature when forced on', () => {
+      const config: FeatureConfig = {
+        hana: 'auto',
+        abapGit: 'auto',
+        rap: 'auto',
+        amdp: 'auto',
+        ui5: 'auto',
+        transport: 'auto',
+        ui5repo: 'auto',
+        flp: 'on',
+      };
+      const result = resolveWithoutProbing(config);
+      expect(result.flp.available).toBe(true);
+      expect(result.flp.mode).toBe('on');
+    });
+
+    it('resolves flp feature as unavailable in auto mode without probing', () => {
+      const config: FeatureConfig = {
+        hana: 'auto',
+        abapGit: 'auto',
+        rap: 'auto',
+        amdp: 'auto',
+        ui5: 'auto',
+        transport: 'auto',
+        ui5repo: 'auto',
+        flp: 'auto',
+      };
+      const result = resolveWithoutProbing(config);
+      expect(result.flp.available).toBe(false);
+      expect(result.flp.mode).toBe('auto');
+      expect(result.flp.message).toContain('not available');
     });
   });
 

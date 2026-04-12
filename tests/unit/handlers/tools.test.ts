@@ -84,6 +84,21 @@ describe('Tool Definitions', () => {
     }
   });
 
+  it('SAPManage exposes FLP actions', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
+    const sapManage = tools.find((t) => t.name === 'SAPManage')!;
+    const schema = sapManage.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toContain('flp_list_catalogs');
+    expect(actionEnum).toContain('flp_list_groups');
+    expect(actionEnum).toContain('flp_list_tiles');
+    expect(actionEnum).toContain('flp_create_catalog');
+    expect(actionEnum).toContain('flp_create_group');
+    expect(actionEnum).toContain('flp_create_tile');
+    expect(actionEnum).toContain('flp_add_tile_to_group');
+  });
+
   it('includes SAPLint but hides SAPQuery by default (blockFreeSQL=true)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const names = tools.map((t) => t.name);

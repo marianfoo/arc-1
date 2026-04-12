@@ -274,6 +274,8 @@ prefix. CLI flags map 1:1 to env vars:
 | `--feature-ui5` | `SAP_FEATURE_UI5` | `auto` |
 | `--feature-transport` | `SAP_FEATURE_TRANSPORT` | `auto` |
 | `--feature-hana` | `SAP_FEATURE_HANA` | `auto` |
+| `--feature-ui5repo` | `SAP_FEATURE_UI5REPO` | `auto` |
+| `--feature-flp` | `SAP_FEATURE_FLP` | `auto` |
 | `--transport` | `SAP_TRANSPORT` | `http-streamable` *(image default)* |
 | `--http-addr` | `SAP_HTTP_ADDR` | `0.0.0.0:8080` *(image default)* |
 | `--verbose` | `SAP_VERBOSE` | `false` |
@@ -495,6 +497,8 @@ Use `on` or `off` to skip the probe and force the behavior:
 | `SAP_FEATURE_UI5` | UI5/Fiori BSP | BSP app management |
 | `SAP_FEATURE_TRANSPORT` | CTS transport | Superset of `--enable-transports` |
 | `SAP_FEATURE_HANA` | HANA detection | AMDP, HANA SQL tools |
+| `SAP_FEATURE_UI5REPO` | UI5 ABAP Repository OData | BSP deploy metadata reads |
+| `SAP_FEATURE_FLP` | FLP PAGE_BUILDER_CUST OData | SAPManage FLP catalog/group/tile actions |
 
 ```bash
 # Force all features off — fastest startup, smallest tool surface

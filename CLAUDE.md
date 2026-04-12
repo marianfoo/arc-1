@@ -130,6 +130,7 @@ src/
 │   ├── diagnostics.ts          # Short dumps (ST22), ABAP profiler traces
 │   ├── codeintel.ts            # Find def, refs, where-used, completion
 │   ├── ui5-repository.ts       # UI5 ABAP Repository OData client
+│   ├── flp.ts                  # FLP PAGE_BUILDER_CUST OData client
 │   └── transport.ts            # CTS transport management
 ├── context/
 │   ├── deps.ts, cds-deps.ts    # AST-based dependency extraction
@@ -165,6 +166,7 @@ tests/
 |------|-------|
 | Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` (for structured format, also `src/adt/xml-parser.ts`, `src/adt/types.ts`) |
 | Add OData-based read (non-ADT) | `src/adt/ui5-repository.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
+| Add FLP operation | `src/adt/flp.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |

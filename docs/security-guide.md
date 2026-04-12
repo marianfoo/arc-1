@@ -174,6 +174,10 @@ When `SAP_PP_ENABLED=true`, each MCP user's JWT identity flows through to SAP vi
 
 BTP Destination Service centralizes SAP connection details and credentials. ARC-1 resolves the destination at runtime. Use `SAP_BTP_DESTINATION` for shared-user destinations and `SAP_BTP_PP_DESTINATION` for principal propagation destinations.
 
+If Cloud Connector uses path-level allowlists, include non-ADT OData routes needed by ARC-1 features, especially:
+- `/sap/opu/odata/UI2/PAGE_BUILDER_CUST` for FLP launchpad management (`SAPManage` FLP actions)
+- `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` for UI5 ABAP Repository metadata reads
+
 For detailed setup instructions:
 
 - [XSUAA Setup](xsuaa-setup.md) -- role templates, role collections, xs-security.json

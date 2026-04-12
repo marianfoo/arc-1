@@ -210,12 +210,20 @@ const SAPTRANSPORT_DESC_BTP =
 
 const SAPMANAGE_DESC_ONPREM =
   'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
-  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports).\n\n' +
+  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports, FLP customization).\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
-  '- "probe": Re-probe the SAP system now (makes 7 parallel requests, ~1-2s). ' +
-  'Use this on first use or if you suspect feature availability has changed.\n\n' +
+  '- "probe": Re-probe the SAP system now (makes 8 parallel requests, ~1-2s). ' +
+  'Use this on first use or if you suspect feature availability has changed.\n' +
+  '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- "flp_list_catalogs": List FLP business catalogs.\n' +
+  '- "flp_list_groups": List FLP groups.\n' +
+  '- "flp_list_tiles": List tiles in a catalog (requires "catalogId").\n' +
+  '- "flp_create_catalog": Create a business catalog (requires "domainId", "title").\n' +
+  '- "flp_create_group": Create a group (requires "groupId", "title").\n' +
+  '- "flp_create_tile": Create a tile in a catalog (requires "catalogId", "tile").\n' +
+  '- "flp_add_tile_to_group": Add a catalog tile to a group (requires "groupId", "catalogId", "tileInstanceId").\n\n' +
   'Returns JSON with features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
   'Also returns systemType ("btp" or "onprem") for understanding available capabilities. ' +
   '"available: false" means do NOT attempt operations that depend on it.';
@@ -225,9 +233,11 @@ const SAPMANAGE_DESC_BTP =
   'Returns feature status and system type.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe.\n' +
-  '- "probe": Re-probe the SAP system now.\n\n' +
+  '- "probe": Re-probe the SAP system now.\n' +
+  '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group.\n\n' +
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
-  'abapGit, AMDP, UI5/BSP may not be available depending on the BTP ABAP configuration.';
+  'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
 
 // ─── SAPSearch Builder ─────────────────────────────────────────────
 
@@ -729,9 +739,56 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['features', 'probe', 'cache_stats'],
+            enum: [
+              'features',
+              'probe',
+              'cache_stats',
+              'flp_list_catalogs',
+              'flp_list_groups',
+              'flp_list_tiles',
+              'flp_create_catalog',
+              'flp_create_group',
+              'flp_create_tile',
+              'flp_add_tile_to_group',
+            ],
             description:
-              'Action: "features" for cached status, "probe" to re-check SAP system, "cache_stats" for object cache statistics',
+              'Action to execute. FLP actions manage catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+          },
+          catalogId: {
+            type: 'string',
+            description:
+              'FLP catalog identifier (required for flp_list_tiles, flp_create_tile, flp_add_tile_to_group).',
+          },
+          groupId: {
+            type: 'string',
+            description: 'FLP group/page identifier (required for flp_create_group, flp_add_tile_to_group).',
+          },
+          title: {
+            type: 'string',
+            description: 'Title for FLP catalog/group creation.',
+          },
+          domainId: {
+            type: 'string',
+            description: 'Domain ID for FLP catalog creation (e.g., ZARC1_SALES).',
+          },
+          tileInstanceId: {
+            type: 'string',
+            description: 'Tile instance ID in the source catalog (required for flp_add_tile_to_group).',
+          },
+          tile: {
+            type: 'object',
+            description: 'Tile definition for flp_create_tile.',
+            properties: {
+              id: { type: 'string', description: 'Tile ID (client-side logical id).' },
+              title: { type: 'string', description: 'Display title.' },
+              icon: { type: 'string', description: 'Optional icon URI.' },
+              semanticObject: { type: 'string', description: 'Semantic object for intent navigation.' },
+              semanticAction: { type: 'string', description: 'Semantic action for intent navigation.' },
+              url: { type: 'string', description: 'Optional target URL.' },
+              subtitle: { type: 'string', description: 'Optional subtitle text.' },
+              info: { type: 'string', description: 'Optional info text.' },
+            },
+            required: ['id', 'title', 'semanticObject', 'semanticAction'],
           },
         },
         required: ['action'],

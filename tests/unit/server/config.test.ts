@@ -121,9 +121,10 @@ describe('parseArgs', () => {
   });
 
   it('parses feature toggles', () => {
-    const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off']);
+    const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off', '--feature-flp', 'on']);
     expect(config.featureAbapGit).toBe('on');
     expect(config.featureRap).toBe('off');
+    expect(config.featureFlp).toBe('on');
   });
 
   it('defaults unknown feature toggle to auto', () => {

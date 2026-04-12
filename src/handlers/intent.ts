@@ -56,6 +56,15 @@ import {
 } from '../adt/diagnostics.js';
 import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
 import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
+import {
+  addTileToGroup,
+  createCatalog,
+  createGroup,
+  createTile,
+  listCatalogs,
+  listGroups,
+  listTiles,
+} from '../adt/flp.js';
 import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
   createTransport,
@@ -2324,6 +2333,8 @@ async function handleSAPManage(
   isPerUserClient?: boolean,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
+  const flpUnavailableMessage =
+    'FLP customization service (PAGE_BUILDER_CUST) is not available on this system. Check ICF service activation in SICF.';
 
   switch (action) {
     case 'features': {
@@ -2333,6 +2344,94 @@ async function handleSAPManage(
         );
       }
       return textResult(JSON.stringify(cachedFeatures, null, 2));
+    }
+
+    case 'flp_list_catalogs': {
+      const catalogs = await listCatalogs(client.http, client.safety);
+      return textResult(JSON.stringify(catalogs, null, 2));
+    }
+
+    case 'flp_list_groups': {
+      const groups = await listGroups(client.http, client.safety);
+      return textResult(JSON.stringify(groups, null, 2));
+    }
+
+    case 'flp_list_tiles': {
+      const catalogId = String(args.catalogId ?? '');
+      if (!catalogId) return errorResult('"catalogId" is required for flp_list_tiles action.');
+      const tiles = await listTiles(client.http, client.safety, catalogId);
+      return textResult(JSON.stringify(tiles, null, 2));
+    }
+
+    case 'flp_create_catalog': {
+      if (cachedFeatures?.flp && !cachedFeatures.flp.available) {
+        return errorResult(flpUnavailableMessage);
+      }
+      const domainId = String(args.domainId ?? '');
+      const title = String(args.title ?? '');
+      if (!domainId) return errorResult('"domainId" is required for flp_create_catalog action.');
+      if (!title) return errorResult('"title" is required for flp_create_catalog action.');
+      const catalog = await createCatalog(client.http, client.safety, domainId, title);
+      return textResult(JSON.stringify(catalog, null, 2));
+    }
+
+    case 'flp_create_group': {
+      if (cachedFeatures?.flp && !cachedFeatures.flp.available) {
+        return errorResult(flpUnavailableMessage);
+      }
+      const groupId = String(args.groupId ?? '');
+      const title = String(args.title ?? '');
+      if (!groupId) return errorResult('"groupId" is required for flp_create_group action.');
+      if (!title) return errorResult('"title" is required for flp_create_group action.');
+      const group = await createGroup(client.http, client.safety, groupId, title);
+      return textResult(JSON.stringify(group, null, 2));
+    }
+
+    case 'flp_create_tile': {
+      if (cachedFeatures?.flp && !cachedFeatures.flp.available) {
+        return errorResult(flpUnavailableMessage);
+      }
+      const catalogId = String(args.catalogId ?? '');
+      if (!catalogId) return errorResult('"catalogId" is required for flp_create_tile action.');
+      const rawTile = args.tile;
+      if (!rawTile || typeof rawTile !== 'object' || Array.isArray(rawTile)) {
+        return errorResult('"tile" object is required for flp_create_tile action.');
+      }
+      const tile = rawTile as Record<string, unknown>;
+      const id = String(tile.id ?? '');
+      const title = String(tile.title ?? '');
+      const semanticObject = String(tile.semanticObject ?? '');
+      const semanticAction = String(tile.semanticAction ?? '');
+      if (!id || !title || !semanticObject || !semanticAction) {
+        return errorResult(
+          '"tile.id", "tile.title", "tile.semanticObject", and "tile.semanticAction" are required for flp_create_tile action.',
+        );
+      }
+      const tileInstance = await createTile(client.http, client.safety, catalogId, {
+        id,
+        title,
+        semanticObject,
+        semanticAction,
+        icon: typeof tile.icon === 'string' ? tile.icon : undefined,
+        url: typeof tile.url === 'string' ? tile.url : undefined,
+        subtitle: typeof tile.subtitle === 'string' ? tile.subtitle : undefined,
+        info: typeof tile.info === 'string' ? tile.info : undefined,
+      });
+      return textResult(JSON.stringify(tileInstance, null, 2));
+    }
+
+    case 'flp_add_tile_to_group': {
+      if (cachedFeatures?.flp && !cachedFeatures.flp.available) {
+        return errorResult(flpUnavailableMessage);
+      }
+      const groupId = String(args.groupId ?? '');
+      const catalogId = String(args.catalogId ?? '');
+      const tileInstanceId = String(args.tileInstanceId ?? '');
+      if (!groupId) return errorResult('"groupId" is required for flp_add_tile_to_group action.');
+      if (!catalogId) return errorResult('"catalogId" is required for flp_add_tile_to_group action.');
+      if (!tileInstanceId) return errorResult('"tileInstanceId" is required for flp_add_tile_to_group action.');
+      const result = await addTileToGroup(client.http, client.safety, groupId, catalogId, tileInstanceId);
+      return textResult(JSON.stringify(result, null, 2));
     }
 
     case 'cache_stats': {
@@ -2364,6 +2463,7 @@ async function handleSAPManage(
       featureConfig.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
       featureConfig.transport = config.featureTransport as 'auto' | 'on' | 'off';
       featureConfig.ui5repo = config.featureUi5Repo as 'auto' | 'on' | 'off';
+      featureConfig.flp = config.featureFlp as 'auto' | 'on' | 'off';
 
       const probed = await probeFeatures(client.http, featureConfig, config.systemType);
 
@@ -2390,7 +2490,9 @@ async function handleSAPManage(
     }
 
     default:
-      return errorResult(`Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats`);
+      return errorResult(
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group`,
+      );
   }
 }
 

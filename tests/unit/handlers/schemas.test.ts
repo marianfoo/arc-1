@@ -460,6 +460,30 @@ describe('SAPManageSchema', () => {
     expect(SAPManageSchema.safeParse({ action: 'features' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'probe' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'cache_stats' }).success).toBe(true);
+    expect(SAPManageSchema.safeParse({ action: 'flp_list_catalogs' }).success).toBe(true);
+    expect(SAPManageSchema.safeParse({ action: 'flp_list_groups' }).success).toBe(true);
+    expect(SAPManageSchema.safeParse({ action: 'flp_list_tiles', catalogId: 'ZCAT' }).success).toBe(true);
+    expect(
+      SAPManageSchema.safeParse({ action: 'flp_create_catalog', domainId: 'ZCAT', title: 'Test Catalog' }).success,
+    ).toBe(true);
+    expect(SAPManageSchema.safeParse({ action: 'flp_create_group', groupId: 'ZGROUP', title: 'Group' }).success).toBe(
+      true,
+    );
+    expect(
+      SAPManageSchema.safeParse({
+        action: 'flp_create_tile',
+        catalogId: 'ZCAT',
+        tile: { id: 'tile-1', title: 'Tile', semanticObject: 'ZSO', semanticAction: 'display' },
+      }).success,
+    ).toBe(true);
+    expect(
+      SAPManageSchema.safeParse({
+        action: 'flp_add_tile_to_group',
+        groupId: 'ZGROUP',
+        catalogId: 'ZCAT',
+        tileInstanceId: 'TILE123',
+      }).success,
+    ).toBe(true);
   });
 
   it('rejects invalid action', () => {
@@ -468,6 +492,15 @@ describe('SAPManageSchema', () => {
 
   it('rejects missing action', () => {
     expect(SAPManageSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects invalid tile object', () => {
+    const result = SAPManageSchema.safeParse({
+      action: 'flp_create_tile',
+      catalogId: 'ZCAT',
+      tile: { id: 'tile-1', title: 'Tile', semanticObject: 'ZSO' },
+    });
+    expect(result.success).toBe(false);
   });
 });
 

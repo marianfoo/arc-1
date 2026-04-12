@@ -569,6 +569,12 @@ resources are accessible yet. Click the system mapping row, then click
 
 Click **Save**. The system mapping is now fully configured.
 
+> The `/` wildcard already includes FLP and UI5 OData routes used by ARC-1, including:
+> - `/sap/opu/odata/UI2/PAGE_BUILDER_CUST` (FLP launchpad management)
+> - `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` (UI5 ABAP Repository)
+>
+> For production setups, prefer explicit path allowlists instead of `/` for tighter control.
+
 ### Password Reset
 
 If the CC admin password is lost or the account is locked, reset it directly

@@ -80,7 +80,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
 | 38 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | P0 | S | Features |
 | 39 | FEAT-39 | Transport Enhancements (delete, reassign, types) | P2 | S | Features | ✅ Completed (K/W/T types; S/R deferred) |
-| 40 | FEAT-40 | FLP Launchpad Management (OData) | P1 | M | Features |
+| ~~40~~ | ~~FEAT-40~~ | ~~FLP Launchpad Management (OData)~~ | ~~P1~~ | ~~M~~ | ~~Completed 2026-04-12~~ |
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
@@ -98,6 +98,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
 | FEAT-14 | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
 | FEAT-15 | Namespace URL Encoding Audit | 2026-04-12 | Features |
+| FEAT-40 | FLP Launchpad Management (OData) | 2026-04-12 | Features |
 | SEC-08 | OAuth Security Hardening (RFC 9700) | 2026-04-08 | Security |
 | — | AFF Structured Class Read | 2026-04-08 |  Features |
 | — | AFF Batch Object Creation | 2026-04-08 | Features |
@@ -150,7 +151,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ### Phase B: Core Value Features (P1)
 7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
-8. **FEAT-40** FLP Launchpad Management (M) — OData-based Fiori Launchpad customization (catalogs, groups, tiles). sapcli has full implementation via `/sap/opu/odata/UI2/PAGE_BUILDER_CUST`. High value for enterprise Fiori rollout automation.
+8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
 9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
 10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
@@ -231,7 +232,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Low — most deployments use reverse proxy for TLS termination |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-12) |
 | **Source** | [fr0ster tracker: TLS evaluation](../compare/fr0ster/evaluations/tls-https-support.md) |
 
 **What:** Add native TLS support to the HTTP Streamable transport. fr0ster added this in v4.6.0 with `--tls-cert`/`--tls-key` flags. Currently ARC-1 requires a reverse proxy (nginx, CF router) for HTTPS.

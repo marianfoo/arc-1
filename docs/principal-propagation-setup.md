@@ -73,6 +73,18 @@ Create a dual-destination setup in BTP Cockpit (Connectivity → Destinations):
 3. Enable **Principal Propagation** in the access control for the mapping
 4. Configure the system certificate for signing principal propagation certificates
 
+### Required Cloud Connector Resource Paths
+
+If you use restrictive Cloud Connector resource whitelisting, expose at least these paths:
+
+| URL Path | Access Policy | Purpose |
+|----------|---------------|---------|
+| `/sap/bc/adt` | Path and all sub-paths | ADT API used by ARC-1 core read/write operations |
+| `/sap/opu/odata/UI2/PAGE_BUILDER_CUST` | Path and all sub-paths | FLP launchpad management via `SAPManage` FLP actions |
+| `/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV` | Path and all sub-paths | UI5 ABAP Repository OData (BSP deploy metadata) |
+
+The trial setup guide uses `/` (all paths), which implicitly includes these routes. For production, explicit path allowlists are recommended for defense in depth.
+
 ## Step 3: Configure SAP System
 
 The SAP system must trust Cloud Connector's certificates and map them to SAP users.

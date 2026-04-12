@@ -38,6 +38,11 @@ const PROBES: FeatureProbe[] = [
   { id: 'ui5', endpoint: '/sap/bc/adt/filestore/ui5-bsp', description: 'UI5/Fiori BSP' },
   { id: 'transport', endpoint: '/sap/bc/adt/cts/transportrequests', description: 'CTS transport management' },
   { id: 'ui5repo', endpoint: '/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV', description: 'UI5 ABAP Repository Deploy' },
+  {
+    id: 'flp',
+    endpoint: '/sap/opu/odata/UI2/PAGE_BUILDER_CUST/',
+    description: 'FLP customization (PAGE_BUILDER_CUST)',
+  },
 ];
 
 /** Resolve a single feature based on its mode */
@@ -78,6 +83,7 @@ export async function probeFeatures(
     ui5: config.ui5,
     transport: config.transport,
     ui5repo: config.ui5repo,
+    flp: config.flp,
   };
 
   // Only probe features that are in "auto" mode
@@ -334,6 +340,7 @@ export function resolveWithoutProbing(config: FeatureConfig): ResolvedFeatures {
     ui5: 'UI5/Fiori BSP',
     transport: 'CTS transport management',
     ui5repo: 'UI5 ABAP Repository Deploy',
+    flp: 'FLP customization (PAGE_BUILDER_CUST)',
   };
 
   for (const [id, mode] of Object.entries(config)) {

@@ -2189,6 +2189,104 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Invalid arguments for SAPManage');
     });
+
+    it('flp_list_catalogs returns catalog list', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          JSON.stringify({
+            d: {
+              results: [
+                {
+                  id: '/UI2/CATALOG_ALL',
+                  domainId: '/UI2/CATALOG_ALL',
+                  title: 'Catalog with all Chips',
+                  type: '',
+                  scope: '',
+                  chipCount: '0042',
+                },
+              ],
+            },
+          }),
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'flp_list_catalogs',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].id).toBe('/UI2/CATALOG_ALL');
+    });
+
+    it('flp_list_tiles requires catalogId', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'flp_list_tiles',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"catalogId" is required');
+    });
+
+    it('flp_create_catalog is blocked in read-only safety mode', async () => {
+      const readOnlyClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+
+      const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
+        action: 'flp_create_catalog',
+        domainId: 'ZARC1_TEST',
+        title: 'Test',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('flp_create_tile serializes configuration correctly', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'csrf' })).mockResolvedValueOnce(
+        mockResponse(
+          201,
+          JSON.stringify({
+            d: {
+              pageId: 'X-SAP-UI2-CATALOGPAGE:ZCAT',
+              instanceId: 'TILE123',
+              chipId: 'X-SAP-UI2-CHIP:/UI2/STATIC_APPLAUNCHER',
+              title: 'Tile',
+              configuration: '{"tileConfiguration":"{}"}',
+            },
+          }),
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'flp_create_tile',
+        catalogId: 'ZCAT',
+        tile: {
+          id: 'tile-1',
+          title: 'Tile',
+          semanticObject: 'ZSO',
+          semanticAction: 'display',
+        },
+      });
+
+      expect(result.isError).toBeUndefined();
+      const postCall = mockFetch.mock.calls.find((call) => (call[1] as RequestInit)?.method === 'POST');
+      expect(postCall).toBeDefined();
+      const payload = JSON.parse((postCall?.[1] as RequestInit).body as string);
+      const outer = JSON.parse(payload.configuration);
+      const inner = JSON.parse(outer.tileConfiguration);
+      expect(inner.semantic_object).toBe('ZSO');
+      expect(inner.semantic_action).toBe('display');
+      expect(inner.display_title_text).toBe('Tile');
+    });
   });
 
   // ─── Cache Hit Indicator ───────────────────────────────────────────
@@ -2975,6 +3073,8 @@ ENDCLASS.`;
         amdp: { id: 'amdp', available: false, mode: 'auto' },
         ui5: { id: 'ui5', available: false, mode: 'auto' },
         transport: { id: 'transport', available: true, mode: 'auto' },
+        ui5repo: { id: 'ui5repo', available: false, mode: 'auto' },
+        flp: { id: 'flp', available: false, mode: 'auto' },
         abapRelease: '758',
         systemType: 'btp',
       };
