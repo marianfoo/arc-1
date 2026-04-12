@@ -1009,7 +1009,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | M (3-5 days) |
 | **Risk** | Medium — OData API, different from ADT REST |
 | **Usefulness** | Very High — enterprise Fiori rollout automation |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-12) |
 | **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli `sap/cli/flp.py` + `sap/odata/` |
 
 **What:** Manage Fiori Launchpad configuration: catalogs, groups, target mappings, and tile assignments. Uses OData service `/sap/opu/odata/UI2/PAGE_BUILDER_CUST` (on-prem) or equivalent BTP API.
@@ -1017,12 +1017,11 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 **Why:** Fiori Launchpad configuration is a major pain point in SAP projects. Automating catalog/group/tile setup via LLM saves hours of manual work per role. This is the kind of high-value enterprise automation that differentiates ARC-1 from developer-only tools.
 
 **Implementation:**
-- New `src/adt/flp.ts` module — OData client for PAGE_BUILDER_CUST
-- Operations: list catalogs, list groups, list target mappings, create/assign tiles, create catalog/group entries
-- New `SAPManage` action: `flp_catalog_list`, `flp_group_list`, `flp_assign_tile`, etc.
-- Alternatively: new FLP-specific tool if operations are complex enough
-- Safety: gated by write permissions; read operations always allowed
-- Consider pyodata-style OData parsing or use existing `src/adt/ui5-repository.ts` pattern
+- `src/adt/flp.ts` — OData client for PAGE_BUILDER_CUST with double-JSON tile config handling
+- SAPManage actions: `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group`, `flp_delete_catalog`
+- Feature-gated via `featureFlp` config (auto-probed at startup)
+- Write ops use `OperationType.Workflow` — blocked by `readOnly: true`
+- Graceful ASSERTION_FAILED handling for problematic catalogs
 
 ---
 
