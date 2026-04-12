@@ -11,7 +11,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
 import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
 import { AdtApiError } from '../../src/adt/errors.js';
-import { createCatalog, deleteCatalog, FLP_SERVICE_PATH, listCatalogs, listGroups } from '../../src/adt/flp.js';
+import {
+  createCatalog,
+  deleteCatalog,
+  FLP_SERVICE_PATH,
+  listCatalogs,
+  listGroups,
+  listTiles,
+} from '../../src/adt/flp.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
@@ -95,6 +102,16 @@ describe('ADT Integration Tests', () => {
       for (const group of groups) {
         expect(group.catalogId).toBe('/UI2/FLPD_CATALOG');
       }
+    }, 60000);
+
+    it('lists tiles for a catalog (returns array, may be empty)', async (ctx) => {
+      requireOrSkip(ctx, serviceAvailable, SkipReason.BACKEND_UNSUPPORTED);
+      const catalogs = await listCatalogs(client.http, unrestrictedSafetyConfig());
+      const catalogWithPrefix = catalogs.find((c) => c.id.startsWith('X-SAP-UI2-CATALOGPAGE:'));
+      requireOrSkip(ctx, catalogWithPrefix, SkipReason.NO_FIXTURE);
+      // Use full ID to verify normalization handles it correctly
+      const tiles = await listTiles(client.http, unrestrictedSafetyConfig(), catalogWithPrefix.id);
+      expect(Array.isArray(tiles)).toBe(true);
     }, 60000);
 
     it('CRUD lifecycle — create and delete catalog', async (ctx) => {

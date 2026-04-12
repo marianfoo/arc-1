@@ -97,6 +97,7 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('flp_create_group');
     expect(actionEnum).toContain('flp_create_tile');
     expect(actionEnum).toContain('flp_add_tile_to_group');
+    expect(actionEnum).toContain('flp_delete_catalog');
   });
 
   it('includes SAPLint but hides SAPQuery by default (blockFreeSQL=true)', () => {

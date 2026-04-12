@@ -10,6 +10,7 @@ import {
   listCatalogs,
   listGroups,
   listTiles,
+  normalizeCatalogId,
 } from '../../../src/adt/flp.js';
 import type { AdtHttpClient, AdtResponse } from '../../../src/adt/http.js';
 import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
@@ -286,6 +287,56 @@ describe('FLP OData client', () => {
         'application/json',
         expect.objectContaining({ Accept: 'application/json' }),
       );
+    });
+  });
+
+  describe('normalizeCatalogId', () => {
+    it('strips X-SAP-UI2-CATALOGPAGE: prefix', () => {
+      expect(normalizeCatalogId('X-SAP-UI2-CATALOGPAGE:MY_CATALOG')).toBe('MY_CATALOG');
+    });
+
+    it('passes through domain ID unchanged', () => {
+      expect(normalizeCatalogId('MY_CATALOG')).toBe('MY_CATALOG');
+    });
+
+    it('handles domain IDs with slashes', () => {
+      expect(normalizeCatalogId('/UI2/CATALOG_ALL')).toBe('/UI2/CATALOG_ALL');
+    });
+
+    it('strips prefix from IDs with slashes', () => {
+      expect(normalizeCatalogId('X-SAP-UI2-CATALOGPAGE:/UI2/CATALOG_ALL')).toBe('/UI2/CATALOG_ALL');
+    });
+  });
+
+  describe('catalog ID normalization in functions', () => {
+    it('listTiles accepts full catalog ID and strips prefix', async () => {
+      const http = mockHttp(odataCollection([]));
+      await listTiles(http, unrestrictedSafetyConfig(), 'X-SAP-UI2-CATALOGPAGE:MY_CATALOG');
+
+      const calledUrl = vi.mocked(http.get).mock.calls[0]![0] as string;
+      expect(calledUrl).toContain("'X-SAP-UI2-CATALOGPAGE:MY_CATALOG'");
+      expect(calledUrl).not.toContain('X-SAP-UI2-CATALOGPAGE:X-SAP-UI2-CATALOGPAGE');
+    });
+
+    it('createTile accepts full catalog ID and strips prefix', async () => {
+      const http = mockHttp(odataSingle({ pageId: '', instanceId: '', chipId: '', title: '', configuration: '' }));
+      await createTile(http, unrestrictedSafetyConfig(), 'X-SAP-UI2-CATALOGPAGE:MY_CATALOG', {
+        id: 'tile-1',
+        title: 'Test',
+        semanticObject: 'ZSO',
+        semanticAction: 'display',
+      });
+
+      const payload = JSON.parse(vi.mocked(http.post).mock.calls[0]![1] as string);
+      expect(payload.pageId).toBe('X-SAP-UI2-CATALOGPAGE:MY_CATALOG');
+    });
+
+    it('addTileToGroup accepts full catalog ID and strips prefix', async () => {
+      const http = mockHttp(odataSingle({ pageId: '', instanceId: '', chipId: '', title: '', configuration: '' }));
+      await addTileToGroup(http, unrestrictedSafetyConfig(), 'GRP', 'X-SAP-UI2-CATALOGPAGE:CAT', 'TILE1');
+
+      const payload = JSON.parse(vi.mocked(http.post).mock.calls[0]![1] as string);
+      expect(payload.chipId).toBe('X-SAP-UI2-PAGE:X-SAP-UI2-CATALOGPAGE:CAT:TILE1');
     });
   });
 });

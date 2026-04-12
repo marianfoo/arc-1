@@ -2249,6 +2249,29 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('blocked by safety');
     });
 
+    it('flp_delete_catalog requires catalogId', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'flp_delete_catalog',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"catalogId" is required');
+    });
+
+    it('flp_delete_catalog sends DELETE request', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'csrf' }))
+        .mockResolvedValueOnce(mockResponse(204, ''));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'flp_delete_catalog',
+        catalogId: 'X-SAP-UI2-CATALOGPAGE:ZARC1_TEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Deleted FLP catalog');
+    });
+
     it('flp_create_tile serializes configuration correctly', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'csrf' })).mockResolvedValueOnce(

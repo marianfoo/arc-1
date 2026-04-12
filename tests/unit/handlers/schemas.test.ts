@@ -484,6 +484,12 @@ describe('SAPManageSchema', () => {
         tileInstanceId: 'TILE123',
       }).success,
     ).toBe(true);
+    expect(
+      SAPManageSchema.safeParse({
+        action: 'flp_delete_catalog',
+        catalogId: 'X-SAP-UI2-CATALOGPAGE:ZARC1_TEST',
+      }).success,
+    ).toBe(true);
   });
 
   it('rejects invalid action', () => {

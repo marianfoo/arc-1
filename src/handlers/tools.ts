@@ -223,7 +223,8 @@ const SAPMANAGE_DESC_ONPREM =
   '- "flp_create_catalog": Create a business catalog (requires "domainId", "title").\n' +
   '- "flp_create_group": Create a group (requires "groupId", "title").\n' +
   '- "flp_create_tile": Create a tile in a catalog (requires "catalogId", "tile").\n' +
-  '- "flp_add_tile_to_group": Add a catalog tile to a group (requires "groupId", "catalogId", "tileInstanceId").\n\n' +
+  '- "flp_add_tile_to_group": Add a catalog tile to a group (requires "groupId", "catalogId", "tileInstanceId").\n' +
+  '- "flp_delete_catalog": Delete a business catalog (requires "catalogId").\n\n' +
   'Returns JSON with features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
   'Also returns systemType ("btp" or "onprem") for understanding available capabilities. ' +
   '"available: false" means do NOT attempt operations that depend on it.';
@@ -235,7 +236,7 @@ const SAPMANAGE_DESC_BTP =
   '- "features": Get cached feature status from last probe.\n' +
   '- "probe": Re-probe the SAP system now.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
-  '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group.\n\n' +
+  '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.\n\n' +
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
 
@@ -750,6 +751,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'flp_create_group',
               'flp_create_tile',
               'flp_add_tile_to_group',
+              'flp_delete_catalog',
             ],
             description:
               'Action to execute. FLP actions manage catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
@@ -757,7 +759,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           catalogId: {
             type: 'string',
             description:
-              'FLP catalog identifier (required for flp_list_tiles, flp_create_tile, flp_add_tile_to_group).',
+              'FLP catalog identifier — accepts either full ID (X-SAP-UI2-CATALOGPAGE:MY_CAT) or domain ID (MY_CAT). Required for flp_list_tiles, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.',
           },
           groupId: {
             type: 'string',

@@ -61,6 +61,7 @@ import {
   createCatalog,
   createGroup,
   createTile,
+  deleteCatalog,
   listCatalogs,
   listGroups,
   listTiles,
@@ -2434,6 +2435,16 @@ async function handleSAPManage(
       return textResult(JSON.stringify(result, null, 2));
     }
 
+    case 'flp_delete_catalog': {
+      if (cachedFeatures?.flp && !cachedFeatures.flp.available) {
+        return errorResult(flpUnavailableMessage);
+      }
+      const catalogId = String(args.catalogId ?? '');
+      if (!catalogId) return errorResult('"catalogId" is required for flp_delete_catalog action.');
+      await deleteCatalog(client.http, client.safety, catalogId);
+      return textResult(`Deleted FLP catalog: ${catalogId}`);
+    }
+
     case 'cache_stats': {
       if (!cachingLayer) {
         return textResult(JSON.stringify({ enabled: false, message: 'Object cache is disabled (ARC1_CACHE=none).' }));
@@ -2491,7 +2502,7 @@ async function handleSAPManage(
 
     default:
       return errorResult(
-        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group`,
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
       );
   }
 }

@@ -378,6 +378,7 @@ export const SAPManageSchema = z.object({
     'flp_create_group',
     'flp_create_tile',
     'flp_add_tile_to_group',
+    'flp_delete_catalog',
   ]),
   catalogId: z.string().optional(),
   groupId: z.string().optional(),

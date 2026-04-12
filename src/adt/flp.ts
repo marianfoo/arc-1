@@ -104,6 +104,22 @@ function mapTile(entity: FlpTileEntity): FlpTileInstance {
   };
 }
 
+const CATALOG_PAGE_PREFIX = 'X-SAP-UI2-CATALOGPAGE:';
+
+/**
+ * Normalize a catalog ID to domain-only form.
+ *
+ * listCatalogs returns both `id` (e.g. "X-SAP-UI2-CATALOGPAGE:FOO") and
+ * `domainId` (e.g. "FOO"). Functions that build pageId filters expect the
+ * domain ID, so we strip the prefix when callers pass the full form.
+ */
+export function normalizeCatalogId(catalogId: string): string {
+  if (catalogId.startsWith(CATALOG_PAGE_PREFIX)) {
+    return catalogId.slice(CATALOG_PAGE_PREFIX.length);
+  }
+  return catalogId;
+}
+
 function isAssertionFailedError(err: unknown): boolean {
   if (!(err instanceof AdtApiError) || err.statusCode !== 500) {
     return false;
@@ -199,7 +215,8 @@ export async function listTiles(
 ): Promise<FlpTileInstance[]> {
   checkOperation(safety, OperationType.Read, 'ListFlpTiles');
 
-  const pageId = `X-SAP-UI2-CATALOGPAGE:${encodeURIComponent(catalogId)}`;
+  const domain = normalizeCatalogId(catalogId);
+  const pageId = `X-SAP-UI2-CATALOGPAGE:${encodeURIComponent(domain)}`;
   const path =
     `${FLP_SERVICE_PATH}/PageChipInstances?` +
     `$format=json&$top=500&$select=pageId,instanceId,chipId,title,configuration&$filter=pageId%20eq%20'${pageId}'`;
@@ -258,7 +275,7 @@ export async function createTile(
 
   const payload = JSON.stringify({
     chipId: 'X-SAP-UI2-CHIP:/UI2/STATIC_APPLAUNCHER',
-    pageId: `X-SAP-UI2-CATALOGPAGE:${catalogId}`,
+    pageId: `X-SAP-UI2-CATALOGPAGE:${normalizeCatalogId(catalogId)}`,
     scope: 'CUSTOMIZING',
     title: tile.title,
     configuration: buildTileConfiguration(tile),
@@ -281,7 +298,7 @@ export async function addTileToGroup(
   checkOperation(safety, OperationType.Workflow, 'AddFlpTileToGroup');
 
   const payload = JSON.stringify({
-    chipId: `X-SAP-UI2-PAGE:X-SAP-UI2-CATALOGPAGE:${catalogId}:${tileInstanceId}`,
+    chipId: `X-SAP-UI2-PAGE:X-SAP-UI2-CATALOGPAGE:${normalizeCatalogId(catalogId)}:${tileInstanceId}`,
     pageId: groupId,
   });
 
