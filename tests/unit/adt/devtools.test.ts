@@ -463,6 +463,52 @@ describe('DevTools', () => {
     });
   });
 
+  // ─── XML attribute escaping ────────────────────────────────────────
+
+  describe('XML attribute escaping', () => {
+    it('syntaxCheck escapes special chars in object URL', async () => {
+      const http = mockHttp('<checkMessages/>');
+      await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/CL_TEST&FOO');
+
+      const callArgs = (http.post as any).mock.calls[0];
+      const body = callArgs[1] as string;
+      expect(body).toContain('&amp;');
+      expect(body).not.toContain('CL_TEST&FOO');
+    });
+
+    it('activate escapes special chars in object URL', async () => {
+      const http = mockHttp('<activation/>');
+      await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/CL_TEST&FOO');
+
+      const callArgs = (http.post as any).mock.calls[0];
+      const body = callArgs[1] as string;
+      expect(body).toContain('&amp;');
+      expect(body).not.toContain('CL_TEST&FOO');
+    });
+
+    it('activateBatch escapes special chars in name and URL', async () => {
+      const http = mockHttp('<activation/>');
+      await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/oo/classes/CL_TEST', name: 'ZCL_"TEST"' },
+      ]);
+
+      const callArgs = (http.post as any).mock.calls[0];
+      const body = callArgs[1] as string;
+      expect(body).toContain('&quot;');
+      expect(body).not.toContain('ZCL_"TEST"');
+    });
+
+    it('publishServiceBinding escapes name in XML body', async () => {
+      const http = mockHttp('');
+      await publishServiceBinding(http, unrestrictedSafetyConfig(), 'ZSRV<TEST');
+
+      const callArgs = (http.post as any).mock.calls[0];
+      const body = callArgs[1] as string;
+      expect(body).toContain('&lt;');
+      expect(body).not.toContain('ZSRV<TEST');
+    });
+  });
+
   // ─── runAtcCheck ───────────────────────────────────────────────────
 
   describe('runAtcCheck', () => {

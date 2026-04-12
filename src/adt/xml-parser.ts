@@ -28,6 +28,16 @@ import type {
   TransactionInfo,
 } from './types.js';
 
+/** Escape XML special characters for safe interpolation into XML attributes */
+export function escapeXmlAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 /** Shared parser instance — configured for ADT XML conventions */
 const parser = new XMLParser({
   ignoreAttributes: false,

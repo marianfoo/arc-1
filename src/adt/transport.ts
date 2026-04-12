@@ -8,7 +8,7 @@
 import type { AdtHttpClient } from './http.js';
 import { checkTransport, type SafetyConfig } from './safety.js';
 import type { TransportRequest, TransportTask } from './types.js';
-import { findDeepNodes, parseXml } from './xml-parser.js';
+import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
 // ─── CTS Media Types & Namespaces ──────────────────────────────────
 
@@ -65,7 +65,7 @@ export async function createTransport(
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <tm:root xmlns:tm="${CTS_NAMESPACE_TM}">
-  <tm:request tm:desc="${escapeXml(description)}" tm:type="K"${targetPackage ? ` tm:target="${escapeXml(targetPackage)}"` : ''}/>
+  <tm:request tm:desc="${escapeXmlAttr(description)}" tm:type="K"${targetPackage ? ` tm:target="${escapeXmlAttr(targetPackage)}"` : ''}/>
 </tm:root>`;
 
   const resp = await http.post('/sap/bc/adt/cts/transportrequests', body, CTS_CONTENT_TYPE_ORGANIZER, {
@@ -113,8 +113,4 @@ function parseTransportList(xml: string): TransportRequest[] {
       tasks,
     };
   });
-}
-
-function escapeXml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  escapeXmlAttr,
   findDeepNodes,
   parseApiReleaseState,
   parseBspAppList,
@@ -872,6 +873,22 @@ describe('XML Parser', () => {
       expect(results[0]?.objectName).toBe('ZTEST');
       expect(results[0]?.uri).toBe('/sap/bc/adt/programs/programs/ZTEST');
       expect(results[0]?.matches).toEqual([]);
+    });
+  });
+
+  // ─── escapeXmlAttr ──────────────────────────────────────────────────
+
+  describe('escapeXmlAttr', () => {
+    it('escapes & < > " and single quote', () => {
+      expect(escapeXmlAttr('a&b<c>d"e\'f')).toBe('a&amp;b&lt;c&gt;d&quot;e&apos;f');
+    });
+
+    it('passes through normal strings unchanged', () => {
+      expect(escapeXmlAttr('/sap/bc/adt/oo/classes/ZCL_TEST')).toBe('/sap/bc/adt/oo/classes/ZCL_TEST');
+    });
+
+    it('handles empty string', () => {
+      expect(escapeXmlAttr('')).toBe('');
     });
   });
 });

@@ -10,7 +10,7 @@
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
-import { findDeepNodes, parseXml } from './xml-parser.js';
+import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
 /** Run syntax check on an ABAP object */
 export async function syntaxCheck(
@@ -22,7 +22,7 @@ export async function syntaxCheck(
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" xmlns:adtcore="http://www.sap.com/adt/core">
-  <chkrun:checkObject adtcore:uri="${objectUrl}" chkrun:version="active"/>
+  <chkrun:checkObject adtcore:uri="${escapeXmlAttr(objectUrl)}" chkrun:version="active"/>
 </chkrun:checkObjectList>`;
 
   const resp = await http.post('/sap/bc/adt/checkruns', body, 'application/vnd.sap.adt.checkobjects+xml', {
@@ -42,7 +42,7 @@ export async function activate(
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:objectReference adtcore:uri="${objectUrl}"/>
+  <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"/>
 </adtcore:objectReferences>`;
 
   const resp = await http.post(
@@ -70,7 +70,10 @@ export async function activateBatch(
   checkOperation(safety, OperationType.Activate, 'ActivateBatch');
 
   const refs = objects
-    .map((o) => `  <adtcore:objectReference adtcore:uri="${o.url}" adtcore:name="${o.name}"/>`)
+    .map(
+      (o) =>
+        `  <adtcore:objectReference adtcore:uri="${escapeXmlAttr(o.url)}" adtcore:name="${escapeXmlAttr(o.name)}"/>`,
+    )
     .join('\n');
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
@@ -127,7 +130,7 @@ function parsePublishResponse(xml: string): PublishResult {
 }
 
 function publishBody(name: string): string {
-  return `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:objectReference adtcore:name="${name}"/></adtcore:objectReferences>`;
+  return `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:objectReference adtcore:name="${escapeXmlAttr(name)}"/></adtcore:objectReferences>`;
 }
 
 /** Publish an OData service binding (makes the service available for consumption) */
@@ -190,7 +193,7 @@ export async function runUnitTests(
   <adtcore:objectSets xmlns:adtcore="http://www.sap.com/adt/core">
     <objectSet kind="inclusive">
       <adtcore:objectReferences>
-        <adtcore:objectReference adtcore:uri="${objectUrl}"/>
+        <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"/>
       </adtcore:objectReferences>
     </objectSet>
   </adtcore:objectSets>
@@ -223,7 +226,7 @@ export async function runAtcCheck(
   <objectSets xmlns:adtcore="http://www.sap.com/adt/core">
     <objectSet kind="inclusive">
       <adtcore:objectReferences>
-        <adtcore:objectReference adtcore:uri="${objectUrl}"/>
+        <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"/>
       </adtcore:objectReferences>
     </objectSet>
   </objectSets>

@@ -43,9 +43,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 |---|-----|---------|----------|--------|----------|
 | ~~1~~ | ~~FEAT-02~~ | ~~API Release Status / Clean Core~~ | ~~P0~~ | ~~S~~ | ~~Completed 2026-04-10~~ |
 | 2 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
-| 3 | FEAT-08 | Content-Type 415/406 Auto-Retry | P0 | XS | Features |
-| 4 | FEAT-14 | 401 Session Timeout Auto-Retry | P0 | XS | Features |
-| 5 | FEAT-15 | Namespace URL Encoding Audit | P1 | XS | Features |
+| ~~3~~ | ~~FEAT-08~~ | ~~Content-Type 415/406 Auto-Retry~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
+| ~~4~~ | ~~FEAT-14~~ | ~~401 Session Timeout Auto-Retry~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
+| ~~5~~ | ~~FEAT-15~~ | ~~Namespace URL Encoding Audit~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | 6 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | P1 | S | Features |
 | 7 | FEAT-13 | DDIC Domain/Data Element Write | P1 | S | Features |
 | 8 | FEAT-16 | Error Intelligence (Actionable Hints) | P1 | S | Features |
@@ -94,6 +94,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
+| FEAT-14 | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
+| FEAT-15 | Namespace URL Encoding Audit | 2026-04-12 | Features |
 | SEC-08 | OAuth Security Hardening (RFC 9700) | 2026-04-08 | Security |
 | — | AFF Structured Class Read | 2026-04-08 |  Features |
 | — | AFF Batch Object Creation | 2026-04-08 | Features |
@@ -137,9 +140,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ### Phase A: Production Blockers (P0)
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
-2. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
-3. **FEAT-14** 401 Session Timeout Auto-Retry (XS) — centralized gateway idles between requests
-4. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
+2. ~~**FEAT-08** Content-Type 415/406 Auto-Retry (XS)~~ — **completed 2026-04-12** (already implemented in transport write compatibility work)
+3. ~~**FEAT-14** 401 Session Timeout Auto-Retry (XS)~~ — **completed 2026-04-12** (session reset + re-auth retry in `src/adt/http.ts`)
+4. ~~**FEAT-15** Namespace URL Encoding Audit (XS)~~ — **completed 2026-04-12** (audit confirmed `encodeURIComponent` consistency; XML attribute escaping hardened in `devtools.ts`)
 
 ### Phase A.5: Proactive Compatibility (P0)
 6. **FEAT-38** ADT Service Discovery / MIME Negotiation (S) — probe `/sap/bc/adt/discovery` once at startup to learn supported MIME types per endpoint; eliminates 415/406 retries entirely. sapcli has had this since 2018. Supersedes reactive FEAT-08 approach.
@@ -250,7 +253,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | High — robustness fix for SAP system variations |
-| **Status** | Not started |
+| **Status** | **Completed** (2026-04-12) |
+
+> **Implementation note:** Already fully implemented in `src/adt/http.ts:325-398` with guard-protected single retry, fallback header logic, and 13 unit tests. Was implemented as part of the transport write compatibility work.
 | **Source** | [fr0ster tracker: 415 evaluation](../compare/fr0ster/evaluations/415-content-type-retry.md), [VSP tracker: issue #9](../compare/vibing-steampunk/evaluations/issue-9-transport-accept-header.md) |
 
 **What:** SAP systems vary in Accept/Content-Type expectations across versions and endpoint types. When a request gets 415 (Unsupported Media Type) or 406 (Not Acceptable), automatically retry with alternative Content-Type headers.
@@ -275,7 +280,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | High — prevents mid-conversation failures |
-| **Status** | Not started |
+| **Status** | **Completed** (2026-04-12) |
+
+> **Implementation note:** Added `authRetryInProgress` guard and 401 retry block to `src/adt/http.ts`. On 401: reset session (cookies + CSRF), re-apply auth (Basic or Bearer token refresh), re-fetch CSRF for modifying methods, retry once. Follows the same guard pattern as DB connection retry. 7 unit tests cover Basic Auth, Bearer token, guard, cookie clearing, and per-request guard reset.
 | **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/d73460a-401-auto-retry.md) |
 
 **What:** After idle, SAP returns 401. ARC-1 handles CSRF 403 refresh but may not handle 401 session timeout. Add silent re-authentication and retry on 401 in `src/adt/http.ts`.
@@ -293,7 +300,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | High — prevents hard-to-debug failures |
-| **Status** | Not started |
+| **Status** | **Completed** (2026-04-12) |
+
+> **Implementation note:** Audit confirmed `encodeURIComponent()` is consistently applied across all 35+ call sites. Additionally hardened XML attribute escaping: extracted shared `escapeXmlAttr()` to `src/adt/xml-parser.ts`, applied it to all 6 interpolation sites in `devtools.ts`, and updated `codeintel.ts` and `transport.ts` to use the shared utility. 4 devtools escaping tests + 3 escapeXmlAttr unit tests added.
 | **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/59b4b90-namespace-url-encoding.md), [VSP eval](../compare/vibing-steampunk/evaluations/6d1f00a-namespace-syntax-check.md) |
 
 **What:** Namespaced objects (`/NAMESPACE/CLASS`) fail if `/` is not correctly encoded in ADT URLs. VSP hit this in issues #18, #52. Audit all `encodeURIComponent` usage in `src/adt/client.ts` and `src/adt/http.ts`.

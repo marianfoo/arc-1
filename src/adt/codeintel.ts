@@ -8,17 +8,7 @@
 
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import { findDeepNodes, parseXml } from './xml-parser.js';
-
-/** Escape XML special characters for safe interpolation into XML attributes */
-function escapeXmlAttr(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/'/g, '&apos;');
-}
+import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
 /** Definition navigation result */
 export interface DefinitionResult {

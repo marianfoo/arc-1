@@ -96,6 +96,8 @@ export class AdtHttpClient {
   private cookieJar: Map<string, string> = new Map();
   /** Guard to prevent infinite retry loops for DB connection errors */
   private dbRetryInProgress = false;
+  /** Guard to prevent infinite retry loops for 401 auth errors */
+  private authRetryInProgress = false;
 
   constructor(config: AdtHttpConfig) {
     this.config = config;
@@ -288,6 +290,70 @@ export class AdtHttpClient {
           return retryResult;
         } finally {
           this.dbRetryInProgress = false;
+        }
+      }
+
+      // Handle 401 session timeout — reset session and retry once
+      if (response.status === 401 && !this.authRetryInProgress) {
+        this.authRetryInProgress = true;
+        try {
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: 401,
+            durationMs: Date.now() - httpStart,
+            errorBody: '401 session expired — resetting session and retrying',
+          });
+
+          // Clear session to force fresh authentication
+          this.resetSession();
+
+          // Re-apply auth credentials
+          this.applyAuthHeader(headers);
+          if (this.config.bearerTokenProvider) {
+            const token = await this.config.bearerTokenProvider();
+            headers.Authorization = `Bearer ${token}`;
+          }
+
+          // Re-fetch CSRF token for modifying requests
+          if (isModifyingMethod(method)) {
+            await this.fetchCsrfToken();
+            headers['X-CSRF-Token'] = this.csrfToken;
+          }
+
+          // Rebuild cookie header from fresh jar
+          const freshCookieParts: string[] = [];
+          for (const [k, v] of this.cookieJar) {
+            freshCookieParts.push(`${k}=${v}`);
+          }
+          if (freshCookieParts.length > 0) {
+            headers.Cookie = freshCookieParts.join('; ');
+          } else {
+            delete headers.Cookie;
+          }
+
+          const retryResp = await this.doFetch(url, method, headers, body);
+          const retryBody = await retryResp.text();
+          this.storeCookies(retryResp);
+          const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+
+          logger.emitAudit({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            event: 'http_request',
+            method,
+            path,
+            statusCode: retryResp.status,
+            durationMs: Date.now() - httpStart,
+            errorBody: '401 session retry succeeded',
+          });
+
+          return retryResult;
+        } finally {
+          this.authRetryInProgress = false;
         }
       }
 

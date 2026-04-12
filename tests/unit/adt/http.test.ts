@@ -749,6 +749,122 @@ describe('AdtHttpClient', () => {
     });
   });
 
+  // ─── 401 Session Timeout Auto-Retry ────────────────────────────────
+
+  describe('401 session timeout auto-retry', () => {
+    it('retries GET on 401 after session reset', async () => {
+      // GET → 401
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(401, 'Unauthorized', { 'www-authenticate': 'Basic realm="SAP"' }, [
+          'sap-usercontext=sap-client=001; path=/',
+        ]),
+      );
+      // Retry GET → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'success'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.get('/sap/bc/adt/programs/programs/ZTEST/source/main');
+
+      expect(resp.statusCode).toBe(200);
+      expect(resp.body).toBe('success');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries POST on 401 with fresh CSRF token', async () => {
+      // Initial CSRF fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'TOKEN1' }));
+      // POST → 401
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      // CSRF re-fetch during retry
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'TOKEN2' }));
+      // Retry POST → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'created'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.post('/sap/bc/adt/activation', '<xml/>');
+
+      expect(resp.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // Retry POST should have fresh CSRF token
+      expect(fetchHeaders(3)['X-CSRF-Token']).toBe('TOKEN2');
+    });
+
+    it('does not retry on 401 when already retrying (guard)', async () => {
+      // GET → 401
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      // Retry also → 401 (should not retry again)
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Still Unauthorized'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/path')).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry non-401 errors', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(500, 'Internal Server Error'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/path')).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears cookies on 401 retry', async () => {
+      // CSRF fetch → sets session cookie
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '', { 'x-csrf-token': 'T' }, ['SAP_SESSIONID_A4H_001=SESSION1; Path=/']),
+      );
+      // POST → 401
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      // CSRF re-fetch during retry
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T2' }));
+      // Retry POST → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await client.post('/path', '<xml/>');
+
+      // Retry request should NOT contain the old session cookie
+      const retryCookie = fetchHeaders(3).Cookie ?? '';
+      expect(retryCookie).not.toContain('SAP_SESSIONID_A4H_001=SESSION1');
+    });
+
+    it('refreshes bearer token on 401 retry', async () => {
+      const tokenProvider = vi.fn().mockResolvedValueOnce('token1').mockResolvedValueOnce('token2');
+
+      // GET with token1 → 401
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      // Retry with token2 → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient({
+        ...getDefaultConfig(),
+        bearerTokenProvider: tokenProvider,
+      });
+      const resp = await client.get('/path');
+
+      expect(resp.statusCode).toBe(200);
+      expect(fetchHeaders(1).Authorization).toBe('Bearer token2');
+    });
+
+    it('401 retry guard is per-request not per-instance', async () => {
+      const client = new AdtHttpClient(getDefaultConfig());
+
+      // First request: 401 → retry → success
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'first ok'));
+      const resp1 = await client.get('/path1');
+      expect(resp1.statusCode).toBe(200);
+
+      // Second request: also 401 → retry → success (guard resets between requests)
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'second ok'));
+      const resp2 = await client.get('/path2');
+      expect(resp2.statusCode).toBe(200);
+
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
   // ─── Proxy Configuration ──────────────────────────────────────────
 
   describe('proxy configuration', () => {
