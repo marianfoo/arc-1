@@ -59,7 +59,7 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 ### Testing
 
-- **1,376+ unit tests** (`53` unit test files, mocked HTTP)
+- **1,367+ unit tests** (`53` unit test files, mocked HTTP)
 - **~160 integration tests** against live SAP systems, with explicit skip reasons when credentials or fixtures are missing
 - **~70 E2E tests** that execute real MCP tool calls against a running ARC-1 server
 - **CRUD lifecycle and BTP smoke lanes** included (`test:integration:crud`, `test:integration:btp:smoke`)
