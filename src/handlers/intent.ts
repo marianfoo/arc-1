@@ -972,6 +972,25 @@ function isDdicMetadataType(type: string): boolean {
   return type === 'DOMA' || type === 'DTEL';
 }
 
+/**
+ * Check if a DTEL create has properties that SAP ignores on POST but accepts on PUT.
+ * SAP's DTEL POST only stores the shell (name, description, package, typeKind, typeName, dataType, length).
+ * Labels, searchHelp, setGetParameter, etc. require a follow-up PUT to take effect.
+ */
+function dtelNeedsPostCreateUpdate(props: Record<string, unknown>): boolean {
+  return Boolean(
+    props.shortLabel ||
+      props.mediumLabel ||
+      props.longLabel ||
+      props.headingLabel ||
+      props.searchHelp ||
+      props.searchHelpParameter ||
+      props.setGetParameter ||
+      props.defaultComponentName ||
+      props.changeDocument,
+  );
+}
+
 function ddicContentTypeForType(type: string): string {
   switch (type) {
     case 'DOMA':
@@ -1351,6 +1370,10 @@ async function handleSAPWrite(
       const result = await createObject(client.http, client.safety, createUrl, body, contentType, transport);
 
       if (isDdicMetadataType(type)) {
+        // SAP's DTEL POST ignores labels, searchHelp, etc. — they require a follow-up PUT.
+        if (type === 'DTEL' && dtelNeedsPostCreateUpdate(ddicProperties)) {
+          await safeUpdateObject(client.http, client.safety, objectUrl, body, ddicContentTypeForType(type), transport);
+        }
         cachingLayer?.invalidate(type, name);
         return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
       }
@@ -1476,9 +1499,15 @@ async function handleSAPWrite(
           // Step 1: Create the object
           const objUrl = objectUrlForType(objType, objName);
           const createUrl = objUrl.replace(/\/[^/]+$/, '');
-          const body = buildCreateXml(objType, objName, pkg, objDescription, getDdicWriteProperties(obj));
+          const objDdicProps = getDdicWriteProperties(obj);
+          const body = buildCreateXml(objType, objName, pkg, objDescription, objDdicProps);
           const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/xml';
           await createObject(client.http, client.safety, createUrl, body, contentType, transport);
+
+          // Step 1b: DTEL POST ignores labels — follow up with PUT
+          if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objDdicProps)) {
+            await safeUpdateObject(client.http, client.safety, objUrl, body, contentType, transport);
+          }
 
           // Step 2: Write source if provided
           if (!metadataObject && objSource) {

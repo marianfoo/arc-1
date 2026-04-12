@@ -19,29 +19,34 @@
       <doma:appendExists>false</doma:appendExists>
       <doma:fixValues>
         <doma:fixValue>
+          <doma:position>0001</doma:position>
           <doma:low>S</doma:low>
           <doma:high/>
-          <doma:description>Success</doma:description>
+          <doma:text>Success</doma:text>
         </doma:fixValue>
         <doma:fixValue>
+          <doma:position>0002</doma:position>
           <doma:low>E</doma:low>
           <doma:high/>
-          <doma:description>Error</doma:description>
+          <doma:text>Error</doma:text>
         </doma:fixValue>
         <doma:fixValue>
+          <doma:position>0003</doma:position>
           <doma:low>W</doma:low>
           <doma:high/>
-          <doma:description>Warning</doma:description>
+          <doma:text>Warning</doma:text>
         </doma:fixValue>
         <doma:fixValue>
+          <doma:position>0004</doma:position>
           <doma:low>I</doma:low>
           <doma:high/>
-          <doma:description>Information</doma:description>
+          <doma:text>Information</doma:text>
         </doma:fixValue>
         <doma:fixValue>
+          <doma:position>0005</doma:position>
           <doma:low>A</doma:low>
           <doma:high/>
-          <doma:description>Abort</doma:description>
+          <doma:text>Abort</doma:text>
         </doma:fixValue>
       </doma:fixValues>
     </doma:valueInformation>

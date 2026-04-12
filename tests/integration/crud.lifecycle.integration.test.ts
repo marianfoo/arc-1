@@ -181,6 +181,8 @@ describe('CRUD lifecycle', () => {
         DATAELEMENT_V2_CONTENT_TYPE,
       );
       registry.register(dataElementUrl, 'DTEL', dataElementName);
+      // SAP ignores DTEL labels on POST — follow-up PUT is required to set them
+      await safeUpdateObject(client.http, client.safety, dataElementUrl, createXml, DATAELEMENT_V2_CONTENT_TYPE);
       expect((await activate(client.http, client.safety, dataElementUrl)).success).toBe(true);
 
       const created = await client.getDataElement(dataElementName);

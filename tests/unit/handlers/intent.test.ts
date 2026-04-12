@@ -3139,14 +3139,22 @@ ENDCLASS.`;
       expect(putCalls).toHaveLength(0);
     });
 
-    it('creates DTEL with predefined type using v2 content type', async () => {
+    it('creates DTEL with predefined type using v2 content type and follow-up PUT for labels', async () => {
       mockFetch.mockReset();
       const calls: Array<{ method: string; url: string; contentType?: string }> = [];
       mockFetch.mockImplementation(
         (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
           const method = opts?.method ?? 'GET';
           const headers = (opts?.headers ?? {}) as Record<string, string>;
-          calls.push({ method, url: String(url), contentType: headers['content-type'] ?? headers['Content-Type'] });
+          const urlStr = String(url);
+          calls.push({ method, url: urlStr, contentType: headers['content-type'] ?? headers['Content-Type'] });
+          if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+            return Promise.resolve(
+              mockResponse(200, '<asx:values><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+                'x-csrf-token': 'T',
+              }),
+            );
+          }
           return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
         },
       );
@@ -3165,6 +3173,32 @@ ENDCLASS.`;
       expect(result.isError).toBeUndefined();
       const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/ddic/dataelements'));
       expect(createCall?.contentType).toContain('application/vnd.sap.adt.dataelements.v2+xml');
+      // SAP ignores labels on POST — follow-up PUT is required
+      const putCall = calls.find((c) => c.method === 'PUT');
+      expect(putCall?.url).toContain('/sap/bc/adt/ddic/dataelements/ZTEXT20');
+      expect(putCall?.contentType).toContain('application/vnd.sap.adt.dataelements.v2+xml');
+    });
+
+    it('creates DTEL without labels skips follow-up PUT', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url) });
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DTEL',
+        name: 'ZTEXT_NOLABEL',
+        package: '$TMP',
+        typeKind: 'predefinedAbapType',
+        dataType: 'CHAR',
+        length: 10,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(calls.some((c) => c.method === 'PUT')).toBe(false);
     });
 
     it('updates DOMA via lock/PUT/unlock to object URL', async () => {
@@ -3234,11 +3268,21 @@ ENDCLASS.`;
       expect(putCall?.contentType).toContain('application/vnd.sap.adt.dataelements.v2+xml');
     });
 
-    it('batch_create supports DOMA + DTEL without source PUTs', async () => {
+    it('batch_create supports DOMA + DTEL with label update PUT', async () => {
       mockFetch.mockReset();
       const calls: Array<{ method: string; url: string }> = [];
       mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
-        calls.push({ method: opts?.method ?? 'GET', url: String(url) });
+        const urlStr = String(url);
+        // Lock needs a valid lock handle response
+        if (urlStr.includes('_action=LOCK')) {
+          calls.push({ method: opts?.method ?? 'GET', url: urlStr });
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        calls.push({ method: opts?.method ?? 'GET', url: urlStr });
         return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
       });
 
@@ -3253,6 +3297,27 @@ ENDCLASS.`;
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('2 objects');
+      // DOMA: no PUT (fixed values work on POST). DTEL with labels: one PUT (SAP ignores labels on POST).
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls.length).toBe(1);
+      expect(putCalls[0].url).toContain('/sap/bc/adt/ddic/dataelements/ZSTATUS');
+    });
+
+    it('batch_create DTEL without labels skips follow-up PUT', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url) });
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [{ type: 'DTEL', name: 'ZSTATUS', typeKind: 'predefinedAbapType', dataType: 'CHAR', length: 10 }],
+      });
+
+      expect(result.isError).toBeUndefined();
       expect(calls.some((c) => c.method === 'PUT')).toBe(false);
     });
 

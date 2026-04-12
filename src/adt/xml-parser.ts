@@ -380,7 +380,7 @@ export function parseDomainMetadata(xml: string): DomainInfo {
       fixedValues.push({
         low: String(fv.low ?? fv['@_low'] ?? ''),
         high: String(fv.high ?? fv['@_high'] ?? ''),
-        description: String(fv.description ?? fv['@_description'] ?? ''),
+        description: String(fv.text ?? fv.description ?? fv['@_text'] ?? fv['@_description'] ?? ''),
       });
     }
   }

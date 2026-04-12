@@ -96,10 +96,11 @@ export function buildDomainXml(params: DomainCreateParams): string {
       : [
           '      <doma:fixValues>',
           ...fixedValues.map(
-            (value) => `        <doma:fixValue>
+            (value, index) => `        <doma:fixValue>
+          <doma:position>${String(index + 1).padStart(4, '0')}</doma:position>
           <doma:low>${escapeXml(value.low)}</doma:low>
           <doma:high>${escapeXml(value.high ?? '')}</doma:high>
-          <doma:description>${escapeXml(value.description ?? '')}</doma:description>
+          <doma:text>${escapeXml(value.description ?? '')}</doma:text>
         </doma:fixValue>`,
           ),
           '      </doma:fixValues>',

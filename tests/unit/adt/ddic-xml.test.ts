@@ -34,9 +34,11 @@ describe('ddic-xml builders', () => {
       });
 
       expect(xml).toContain('<doma:fixValues>');
+      expect(xml).toContain('<doma:position>0001</doma:position>');
       expect(xml).toContain('<doma:low>A</doma:low>');
+      expect(xml).toContain('<doma:position>0002</doma:position>');
       expect(xml).toContain('<doma:high>Z</doma:high>');
-      expect(xml).toContain('<doma:description>Inactive range</doma:description>');
+      expect(xml).toContain('<doma:text>Inactive range</doma:text>');
     });
 
     it('includes value table when provided', () => {
@@ -206,7 +208,7 @@ describe('ddic-xml builders', () => {
 
     expect(domainXml).toContain('&quot;A&amp;B&quot; &lt;test&gt; &apos;apostrophe&apos;');
     expect(domainXml).toContain('<doma:low>A&amp;B</doma:low>');
-    expect(domainXml).toContain('<doma:description>A &lt; B</doma:description>');
+    expect(domainXml).toContain('<doma:text>A &lt; B</doma:text>');
     expect(dtelXml).toContain('Data &quot;element&quot;');
     expect(dtelXml).toContain('<dtel:shortFieldLabel>A&amp;B</dtel:shortFieldLabel>');
   });
