@@ -756,4 +756,40 @@ describe('AdtClient', () => {
       expect(apps).toEqual([]);
     });
   });
+
+  describe('resolveObjectPackage', () => {
+    it('extracts package name from ADT metadata XML', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<class:abapClass xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZCL_TEST"><adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/%24tmp" adtcore:type="DEVC/K" adtcore:name="$TMP" adtcore:description="Local Objects"/></class:abapClass>',
+        ),
+      );
+      const client = createClient();
+      const pkg = await client.resolveObjectPackage('/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(pkg).toBe('$TMP');
+    });
+
+    it('returns empty string when no packageRef in response', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<some:element/>'));
+      const client = createClient();
+      const pkg = await client.resolveObjectPackage('/sap/bc/adt/programs/programs/ZTEST');
+      expect(pkg).toBe('');
+    });
+
+    it('extracts package from minimal packageRef element', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<prog:program xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="ZPACKAGE"/></prog:program>',
+        ),
+      );
+      const client = createClient();
+      const pkg = await client.resolveObjectPackage('/sap/bc/adt/programs/programs/ZTEST');
+      expect(pkg).toBe('ZPACKAGE');
+    });
+  });
 });

@@ -1159,8 +1159,17 @@ async function handleSAPWrite(
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
+  // Helper: enforce allowedPackages for existing objects (update/delete/edit_method).
+  // Only fetches metadata when package restrictions are configured — no extra HTTP call otherwise.
+  async function enforcePackageForExistingObject(): Promise<void> {
+    if (client.safety.allowedPackages.length === 0) return;
+    const pkg = await client.resolveObjectPackage(objectUrl);
+    if (pkg) checkPackage(client.safety, pkg);
+  }
+
   switch (action) {
     case 'update': {
+      await enforcePackageForExistingObject();
       // Pre-write lint validation
       const lintWarnings = runPreWriteLint(source, type, name, config);
       if (lintWarnings.blocked) return lintWarnings.result!;
@@ -1215,6 +1224,7 @@ async function handleSAPWrite(
       if (!method) return errorResult('"method" is required for edit_method action.');
       if (!source) return errorResult('"source" (new method body) is required for edit_method action.');
       if (type !== 'CLAS') return errorResult('edit_method is only supported for type=CLAS.');
+      await enforcePackageForExistingObject();
 
       // Fetch current full source (use cache if available)
       const currentSource = cachingLayer
@@ -1243,6 +1253,7 @@ async function handleSAPWrite(
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
     }
     case 'delete': {
+      await enforcePackageForExistingObject();
       // Lock, delete, unlock pattern — auto-propagate lock corrNr if no explicit transport
       await client.http.withStatefulSession(async (session) => {
         const lock = await lockObject(session, client.safety, objectUrl);

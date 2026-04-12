@@ -466,4 +466,16 @@ export class AdtClient {
     );
     return resp.body;
   }
+
+  /**
+   * Resolve the ABAP package of an existing object by fetching its metadata.
+   * Returns the package name (e.g., "$TMP", "ZPACKAGE") or empty string if not found.
+   * Used by SAPWrite to enforce allowedPackages on update/delete/edit_method.
+   */
+  async resolveObjectPackage(objectUrl: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'ResolveObjectPackage');
+    const resp = await this.http.get(objectUrl);
+    const match = resp.body.match(/adtcore:packageRef[^>]*adtcore:name="([^"]*)"/);
+    return match?.[1] ?? '';
+  }
 }

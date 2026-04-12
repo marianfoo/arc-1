@@ -227,7 +227,7 @@ handleToolCall (handlers/intent.ts)
   ├─ 1. Scope check: TOOL_SCOPES[toolName] vs authInfo.scopes (only when authInfo present)
   ├─ 2. Zod validation: getToolSchema(toolName) → safeParse(args) (rejects invalid input with LLM-friendly errors)
   ├─ 3. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
-  ├─ 4. Package check: checkPackage(safety, packageName) (for SAPWrite create)
+  ├─ 4. Package check: checkPackage(safety, packageName) (for all SAPWrite actions: create, update, delete, edit_method)
   │
   ▼
 ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)

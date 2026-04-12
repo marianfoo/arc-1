@@ -1225,6 +1225,123 @@ ENDCLASS.`;
       // Should not be blocked by package check (may fail at HTTP level, but that's OK)
       expect(result.content[0]?.text).not.toContain('blocked by safety');
     });
+
+    it('rejects update when object is in a non-allowed package', async () => {
+      // Mock: first call = resolveObjectPackage (GET object URL → XML with packageRef),
+      // subsequent calls = normal CSRF/lock/update/unlock flow
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<class:abapClass xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZCL_TEST"><adtcore:packageRef adtcore:name="ZFORBIDDEN"/></class:abapClass>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: 'CLASS zcl_test DEFINITION PUBLIC. ENDCLASS. CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ZFORBIDDEN');
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+
+    it('rejects delete when object is in a non-allowed package', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<program:abapProgram xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="SAP_BASIS"/></program:abapProgram>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['Z*', '$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'PROG',
+        name: 'SAPL_STANDARD',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAP_BASIS');
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+
+    it('rejects edit_method when class is in a non-allowed package', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<class:abapClass xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="ZFORBIDDEN"/></class:abapClass>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'do_something',
+        source: 'METHOD do_something. ENDMETHOD.',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ZFORBIDDEN');
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+
+    it('allows update when object is in an allowed package', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<class:abapClass xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="$TMP"/></class:abapClass>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: 'CLASS zcl_test DEFINITION PUBLIC. ENDCLASS. CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+      });
+      expect(result.content[0]?.text).not.toContain('blocked by safety');
+    });
+
+    it('skips package resolution when allowedPackages is empty (unrestricted)', async () => {
+      // With no package restrictions, resolveObjectPackage should NOT be called
+      const client = createClient(); // unrestricted safety
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: 'CLASS zcl_test DEFINITION PUBLIC. ENDCLASS. CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+      });
+      // unrestricted config has empty allowedPackages → skip resolveObjectPackage
+      expect(result.content[0]?.text).not.toContain('blocked by safety');
+    });
   });
 
   // ─── SAPWrite Pre-Write Lint Gate ───────────────────────────────

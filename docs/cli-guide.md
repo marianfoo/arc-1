@@ -96,7 +96,7 @@ All connection and safety flags are available:
 # Read-only mode
 arc1 --read-only
 
-# Restrict packages
+# Restrict write operations to specific packages (reads are not restricted by package)
 arc1 --allowed-packages "ZPROD*,$TMP"
 
 # Block free-form SQL

@@ -68,7 +68,7 @@ npm run dev
 | `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: false) |
 | `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
 | `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
-| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict to packages (default: `$TMP`; supports wildcards: "Z*") |
+| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: "Z*"). Reads are not restricted by package. |
 | `SAP_ENABLE_TRANSPORTS` / `--enable-transports` | Enable CTS transport management (default: false) |
 | `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
 | `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`) |
@@ -227,7 +227,7 @@ handleToolCall (handlers/intent.ts)
   ├─ 1. Scope check: TOOL_SCOPES[toolName] vs authInfo.scopes (only when authInfo present)
   ├─ 2. Zod validation: getToolSchema(toolName) → safeParse(args) (rejects invalid input with LLM-friendly errors)
   ├─ 3. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
-  ├─ 4. Package check: checkPackage(safety, packageName) (for SAPWrite create)
+  ├─ 4. Package check: checkPackage(safety, packageName) (for all SAPWrite actions: create, update, delete, edit_method)
   │
   ▼
 ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
