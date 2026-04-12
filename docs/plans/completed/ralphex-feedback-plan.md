@@ -1,4 +1,4 @@
-# Plan: RalphEx Feedback — Arc-1 Tool Improvements
+# Plan: RalphEx Feedback — ARC-1 Tool Improvements
 
 ## Overview
 
