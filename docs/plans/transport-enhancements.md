@@ -8,7 +8,15 @@ Extend `SAPTransport` with the full CTS lifecycle: delete transport/task, reassi
 - `DELETE /sap/bc/adt/cts/transportrequests/{id}` → HTTP 200 (idempotent; 400 if already released)
 - Create with types K, W, T all return HTTP 201 (S and R need further testing — may require specific CTS config)
 - Change owner via `POST /{id}` with `tm:useraction="changeowner"` → HTTP 200
-- Transport contents (E071 objects): **NOT included** in GET response on trial system — the `addobject` mechanism requires proper CTS layer config. However, the `getTransport()` response XML already has the structure for `<tm:task>` nodes, and task objects would appear as nested `<tm:abapobject>` elements when the system records them. For now, we enhance parsing to capture whatever the system returns, and note that transport contents depend on CTS configuration.
+- Transport contents (E071 objects): **NOT included** in GET response on trial system — the `addobject` mechanism requires proper CTS layer config. However, the `getTransport()` response XML already has the structure for `<tm:task>` nodes, and task objects would appear as nested `<tm:abap_object>` elements when the system records them. For now, we enhance parsing to capture whatever the system returns, and note that transport contents depend on CTS configuration.
+
+**Reference implementation: [sapcli](https://github.com/jfilak/sapcli)** (`sap/adt/cts.py`) — trusted reference for CTS ADT operations. Key patterns adopted:
+- XML element for objects is `tm:abap_object` (with underscore), attributes: `tm:pgmid`, `tm:type`, `tm:name`, `tm:wbtype`, `tm:obj_desc`/`tm:obj_info`, `tm:lock_status`, `tm:position`
+- All three operations (delete, reassign, release) support `recursive` — release children first, skip already-released (status `R`)
+- Release response should be parsed for success/failure report (`ReleaseResponseHandler` in sapcli)
+- List transports sends dual Accept: `transportorganizertree.v1+xml, transportorganizer.v1+xml`
+- sapcli uses `PUT` for reassign with `tm:targetuser` attribute on root element; our A4H test showed `PUT` returns 400 but `POST` with nested `<tm:request tm:owner="...">` works — we use POST (likely SAP version difference, both are valid)
+- Create payload includes `tm:useraction="newrequest"` and a nested `<tm:task tm:owner="{owner}"/>` — we omit these as SAP accepts the simpler form
 
 **Bugs found during testing:**
 - `getTransport()` uses `CTS_ACCEPT_TREE` but should use `CTS_CONTENT_TYPE_ORGANIZER` — works via 406/415 retry fallback but wastes a round-trip
@@ -31,7 +39,7 @@ Current code:
 
 ### Target State
 
-SAPTransport supports 7 actions: `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`. Create accepts a `type` parameter (K/W/T). Get response includes task objects when available.
+SAPTransport supports 7 actions: `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`. Create accepts a `type` parameter (K/W/T). Delete and reassign also support a `recursive` flag (matching sapcli). Get response includes task objects when available.
 
 ### Key Files
 
@@ -52,9 +60,10 @@ SAPTransport supports 7 actions: `list`, `get`, `create`, `release`, `delete`, `
 
 1. **All new actions gated by `checkTransport()`** — delete and reassign are write operations (`isWrite: true`), matching create/release behavior.
 2. **Transport type limited to K/W/T** — Development-Correction (S) and Repair (R) require specific CTS config that most systems lack. Start with the 3 types confirmed working on the test system.
-3. **Recursive release is a new action, not a flag** — `release_recursive` as a distinct action prevents accidental recursive release when the LLM only intends single release.
-4. **Transport contents parsing is best-effort** — The GET response includes task objects only when the system records them. Parse whatever is available, don't fail if missing.
+3. **Recursive release is a new action, not a flag** — `release_recursive` as a distinct action prevents accidental recursive release when the LLM only intends single release. Delete and reassign accept a `recursive` boolean parameter (matching sapcli pattern).
+4. **Transport contents parsing is best-effort** — The GET response includes task objects only when the system records them. Parse whatever is available, don't fail if missing. Object attributes follow sapcli's `WorkbenchABAPObject` model: `pgmid`, `type`, `name`, `wbtype`, `description`, `locked`, `position`.
 5. **Fix Accept header bugs opportunistically** — `getTransport()` and `releaseTransport()` should use `CTS_CONTENT_TYPE_ORGANIZER`, not `CTS_ACCEPT_TREE`.
+6. **Follow sapcli patterns** — sapcli (`sap/adt/cts.py`) is the trusted reference implementation. Follow its XML structures, attribute names, and recursive operation patterns.
 
 ## Development Approach
 
@@ -74,18 +83,22 @@ Tasks are ordered: types first, then core transport functions, then handler wiri
 
 Add types for transport objects and fix the Accept header bugs found during SAP system testing.
 
-- [ ] In `src/adt/types.ts`, add `TransportObject` interface after the `TransportTask` interface (line ~110):
+- [ ] In `src/adt/types.ts`, add `TransportObject` interface after the `TransportTask` interface (line ~110). Follow sapcli's `WorkbenchABAPObject` model from `sap/adt/cts.py`:
   ```typescript
   export interface TransportObject {
-    pgmid: string;       // e.g., "R3TR", "LIMU"
-    object: string;      // e.g., "PROG", "CLAS", "METH"
-    objectName: string;  // e.g., "ZTEST_PROGRAM"
+    pgmid: string;       // e.g., "R3TR", "LIMU" — from tm:pgmid
+    type: string;        // e.g., "PROG", "CLAS", "TABD" — from tm:type
+    name: string;        // e.g., "ZTEST_PROGRAM" — from tm:name
+    wbtype: string;      // 2-letter workbench type code — from tm:wbtype
+    description: string; // object description — from tm:obj_desc or tm:obj_info
+    locked: boolean;     // lock status — from tm:lock_status ('X' = locked)
+    position: string;    // 6-digit zero-padded position — from tm:position
   }
   ```
 - [ ] In `src/adt/types.ts`, add `objects: TransportObject[]` to the `TransportTask` interface (line ~105-110)
 - [ ] In `src/adt/transport.ts`, fix `getTransport()` (line 50): change `Accept: CTS_ACCEPT_TREE` to `Accept: CTS_CONTENT_TYPE_ORGANIZER` — the single-transport endpoint requires the organizer media type, not the tree variant
 - [ ] In `src/adt/transport.ts`, fix `releaseTransport()` (line 89): change `Accept: CTS_ACCEPT_TREE` to `Accept: CTS_CONTENT_TYPE_ORGANIZER` — same issue
-- [ ] In `src/adt/transport.ts`, update `parseTransportList()` (line ~100-116) to extract `<tm:abapobject>` nodes from within each `<tm:task>` element, mapping attributes `@_pgmid`, `@_object`, `@_name` to `TransportObject[]`. Use `findDeepNodes(task, 'abapobject')` for extraction.
+- [ ] In `src/adt/transport.ts`, update `parseTransportList()` (line ~100-116) to extract `<tm:abap_object>` nodes (note: underscore in element name, per sapcli's SAX handler) from within each `<tm:task>` element. Map attributes: `@_pgmid` → `pgmid`, `@_type` → `type`, `@_name` → `name`, `@_wbtype` → `wbtype` (default `''`), `@_obj_desc` or `@_obj_info` → `description` (default `''`), `@_lock_status` → `locked` (`'X'` = true), `@_position` → `position` (default `'000000'`). Use `findDeepNodes(task, 'abap_object')` for extraction.
 - [ ] Run `npm test` — all tests must pass (some transport unit tests may need Accept header assertions updated)
 
 ### Task 2: Add deleteTransport, reassignTransport, and enhance createTransport
@@ -95,15 +108,15 @@ Add types for transport objects and fix the Accept header bugs found during SAP 
 
 Add the three new transport operations to the ADT layer.
 
-- [ ] Add `deleteTransport(http, safety, transportId)` function. SAP endpoint: `DELETE /sap/bc/adt/cts/transportrequests/{id}`. Use `checkTransport(safety, transportId, 'DeleteTransport', true)` — it's a write operation. The endpoint is idempotent (returns 200 even for non-existent transports) but returns 400 for already-released transports.
-- [ ] Add `reassignTransport(http, safety, transportId, newOwner)` function. SAP endpoint: `POST /sap/bc/adt/cts/transportrequests/{id}` with body:
+- [ ] Add `deleteTransport(http, safety, transportId, recursive?)` function. SAP endpoint: `DELETE /sap/bc/adt/cts/transportrequests/{id}`. Use `checkTransport(safety, transportId, 'DeleteTransport', true)` — it's a write operation. The endpoint is idempotent (returns 200 even for non-existent transports) but returns 400 for already-released transports. When `recursive=true`, first fetch the transport via `getTransport()`, then delete all unreleased tasks (status !== 'R') before deleting the parent — matching sapcli's `_delete_children()` pattern.
+- [ ] Add `reassignTransport(http, safety, transportId, newOwner, recursive?)` function. SAP endpoint: `POST /sap/bc/adt/cts/transportrequests/{id}` with body:
   ```xml
   <?xml version="1.0" encoding="UTF-8"?>
   <tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" tm:useraction="changeowner">
     <tm:request tm:number="{id}" tm:owner="{newOwner}"/>
   </tm:root>
   ```
-  Use `CTS_CONTENT_TYPE_ORGANIZER` for both Content-Type and Accept. Use `checkTransport(safety, transportId, 'ReassignTransport', true)`.
+  Use `CTS_CONTENT_TYPE_ORGANIZER` for both Content-Type and Accept. Use `checkTransport(safety, transportId, 'ReassignTransport', true)`. When `recursive=true`, first reassign all unreleased tasks before the parent — matching sapcli's `_reassign_children()` pattern. Note: sapcli uses `PUT` with `tm:targetuser` on root, but our A4H testing confirmed `POST` with nested `<tm:request tm:owner>` works; `PUT` returned 400. Use POST.
 - [ ] Enhance `createTransport()` (line ~58-79) to accept an optional `transportType` parameter (default `'K'`). Replace the hardcoded `tm:type="K"` on line 68 with `tm:type="${escapeXml(transportType)}"`. Valid values are `'K'` (Workbench), `'W'` (Customizing), `'T'` (Transport of Copies).
 - [ ] Run `npm test` — all tests must pass
 
@@ -131,14 +144,16 @@ Connect the new transport functions to the MCP tool interface.
   - Add `'delete'`, `'reassign'`, `'release_recursive'` to the `action` enum
   - Add `type: z.enum(['K', 'W', 'T']).optional()` for transport type selection on create
   - Add `owner: z.string().optional()` for reassign target
+  - Add `recursive: z.boolean().optional()` for recursive delete/reassign (matches sapcli's `--recursive` flag)
 - [ ] In `src/handlers/tools.ts` (line ~647-663), update the SAPTransport tool definition:
   - Extend the `action` enum: `['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive']`
   - Add `type` property: `{ type: 'string', enum: ['K', 'W', 'T'], description: 'Transport type for create: K=Workbench (default), W=Customizing, T=Transport of Copies' }`
   - Add `owner` property: `{ type: 'string', description: 'New owner (for reassign)' }`
+  - Add `recursive` property: `{ type: 'boolean', description: 'Apply recursively to tasks (for delete/reassign). release_recursive always recurses.' }`
   - Update the tool description string (both `SAPTRANSPORT_DESC_ONPREM` and `SAPTRANSPORT_DESC_BTP`) to mention new actions
 - [ ] In `src/handlers/intent.ts` (line ~1806-1841), add cases to the `handleSAPTransport()` switch:
-  - `case 'delete'`: require `id`, call `deleteTransport()`, return success message
-  - `case 'reassign'`: require `id` and `owner`, call `reassignTransport()`, return success message
+  - `case 'delete'`: require `id`, pass `recursive` boolean, call `deleteTransport()`, return success message
+  - `case 'reassign'`: require `id` and `owner`, pass `recursive` boolean, call `reassignTransport()`, return success message
   - `case 'release_recursive'`: require `id`, call `releaseTransportRecursive()`, return JSON of released IDs
   - For `case 'create'`: pass `args.type` (cast to string, default `'K'`) as the new `transportType` parameter
   - Update the default error message to list all 7 supported actions
@@ -152,18 +167,22 @@ Connect the new transport functions to the MCP tool interface.
 
 Add comprehensive unit tests for the new transport operations. The existing test file has 28 tests following patterns with `vi.fn()` mock HTTP clients and `enabledSafety` config.
 
-- [ ] Add tests for `deleteTransport()` (~5 tests):
+- [ ] Add tests for `deleteTransport()` (~7 tests):
   - Blocked when transports not enabled
   - Blocked when transport read-only
   - Sends DELETE to correct URL with encoded transport ID
   - Succeeds on HTTP 200
   - Verify it passes correct headers
-- [ ] Add tests for `reassignTransport()` (~5 tests):
+  - Recursive: deletes unreleased tasks before parent (verify call order — tasks first, then parent)
+  - Recursive: skips already-released tasks (status 'R')
+- [ ] Add tests for `reassignTransport()` (~7 tests):
   - Blocked when transports not enabled
   - Blocked when transport read-only
   - Sends POST with correct XML body containing `tm:useraction="changeowner"` and new owner
   - Escapes special characters in owner name
   - Uses correct CTS_CONTENT_TYPE_ORGANIZER media type
+  - Recursive: reassigns unreleased tasks before parent
+  - Recursive: skips already-released tasks (status 'R')
 - [ ] Add tests for `createTransport()` with transport type (~3 tests):
   - Default type is 'K' when not specified (existing behavior preserved)
   - Type 'W' included in XML body as `tm:type="W"`
@@ -176,9 +195,10 @@ Add comprehensive unit tests for the new transport operations. The existing test
 - [ ] Add tests for Accept header fixes (~2 tests):
   - `getTransport()` sends `CTS_CONTENT_TYPE_ORGANIZER` Accept header (was `CTS_ACCEPT_TREE`)
   - `releaseTransport()` sends `CTS_CONTENT_TYPE_ORGANIZER` Accept header (was `CTS_ACCEPT_TREE`)
-- [ ] Add tests for transport object parsing (~2 tests):
-  - Tasks with `<tm:abapobject>` elements parsed into `objects` array
+- [ ] Add tests for transport object parsing (~3 tests):
+  - Tasks with `<tm:abap_object>` elements (underscore in name, per sapcli) parsed into `objects` array with all fields: pgmid, type, name, wbtype, description, locked, position
   - Tasks without objects return empty `objects` array
+  - Object with `tm:lock_status="X"` parses as `locked: true`, missing/empty parses as `locked: false`
 - [ ] Run `npm test` — all tests must pass
 
 ### Task 6: Unit tests for handler routing
