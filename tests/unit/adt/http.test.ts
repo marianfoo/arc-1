@@ -863,6 +863,59 @@ describe('AdtHttpClient', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(4);
     });
+
+    it('preserves config cookies on 401 retry', async () => {
+      // GET → 401
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      // Retry → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient({
+        ...getDefaultConfig(),
+        cookies: { configCookie: 'cfg1' },
+      });
+      await client.get('/path');
+
+      // Retry should include the config cookie
+      expect(fetchHeaders(1).Cookie).toContain('configCookie=cfg1');
+    });
+
+    it('401 retry falls through to 406 negotiation recovery', async () => {
+      // GET → 401
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      // Retry → 406 (negotiation failure)
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      // 406 fallback retry → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.get('/path', { Accept: 'application/vnd.sap.adt.custom+xml' });
+
+      expect(resp.statusCode).toBe(200);
+      // 3 fetches: original 401, retry 406, negotiation fallback 200
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('auth retry guard is per-request scope (local variable)', async () => {
+      // Verify two separate instances can both retry independently
+      // This confirms the guard is not shared across instances/requests
+      const client1 = new AdtHttpClient(getDefaultConfig());
+      const client2 = new AdtHttpClient(getDefaultConfig());
+
+      // Client 1: 401 → retry → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok1'));
+      const resp1 = await client1.get('/path1');
+      expect(resp1.statusCode).toBe(200);
+
+      // Client 2: 401 → retry → 200 (not blocked by client1's retry)
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok2'));
+      const resp2 = await client2.get('/path2');
+      expect(resp2.statusCode).toBe(200);
+
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
   });
 
   // ─── Proxy Configuration ──────────────────────────────────────────
