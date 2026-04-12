@@ -125,6 +125,7 @@ src/
 │   ├── btp.ts                  # BTP Destination Service + Connectivity proxy
 │   ├── cookies.ts, oauth.ts    # Cookie parsing, OAuth 2.0 for BTP ABAP
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
+│   ├── ddic-xml.ts             # DDIC metadata XML builders (DOMA/DTEL create/update payloads)
 │   ├── devtools.ts             # Syntax check, activate, publish SRVB, unit tests
 │   ├── diagnostics.ts          # Short dumps (ST22), ABAP profiler traces
 │   ├── codeintel.ts            # Find def, refs, where-used, completion
@@ -166,6 +167,7 @@ tests/
 | Add OData-based read (non-ADT) | `src/adt/ui5-repository.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
+| Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |
 | Add method-level surgery | `src/context/method-surgery.ts` |
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
 | Add XML response parser | `src/adt/xml-parser.ts` |

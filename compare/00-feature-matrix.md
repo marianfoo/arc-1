@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools analysis)_
+_Last updated: 2026-04-12 (FEAT-13 complete: DOMA/DTEL write in SAPWrite)_
 
 ## Legend
 - ✅ = Supported
@@ -114,6 +114,8 @@ _Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools a
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (abap run) |
 | RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
+| Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ⚠️ (PR #149 in progress) |
+| Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (ADTObjectType) |
@@ -288,7 +290,7 @@ The following items were incorrectly marked in the previous version and have sin
 
 **P1 — high-value gaps:**
 - Where-Used analysis, fix proposals
-- DDIC write (DOMA/DTEL), ~~namespace encoding audit~~, error intelligence
+- ~~DDIC write (DOMA/DTEL)~~, ~~namespace encoding audit~~, error intelligence
 - Type auto-mappings, function group bulk fetch
 - Documentation (Copilot Studio guide, Basis Admin guide)
 

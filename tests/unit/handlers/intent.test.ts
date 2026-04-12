@@ -3108,6 +3108,194 @@ ENDCLASS.`;
     });
   });
 
+  describe('SAPWrite DOMA/DTEL metadata writes', () => {
+    it('creates DOMA with v2 content type and no source PUT', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({ method, url: String(url), contentType: headers['content-type'] ?? headers['Content-Type'] });
+          return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DOMA',
+        name: 'ZDOMAIN',
+        package: '$TMP',
+        description: 'Status domain',
+        dataType: 'CHAR',
+        length: 1,
+        fixedValues: [{ low: 'A', description: 'Active' }],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/ddic/domains'));
+      expect(createCall?.contentType).toContain('application/vnd.sap.adt.domains.v2+xml');
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls).toHaveLength(0);
+    });
+
+    it('creates DTEL with predefined type using v2 content type', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({ method, url: String(url), contentType: headers['content-type'] ?? headers['Content-Type'] });
+          return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DTEL',
+        name: 'ZTEXT20',
+        package: '$TMP',
+        typeKind: 'predefinedAbapType',
+        dataType: 'CHAR',
+        length: 20,
+        shortLabel: 'Text',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/ddic/dataelements'));
+      expect(createCall?.contentType).toContain('application/vnd.sap.adt.dataelements.v2+xml');
+    });
+
+    it('updates DOMA via lock/PUT/unlock to object URL', async () => {
+      const calls: Array<{ method: string; url: string; contentType?: string }> = [];
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({ method, url: String(url), contentType: headers['content-type'] ?? headers['Content-Type'] });
+          if (method === 'POST' && String(url).includes('_action=LOCK')) {
+            return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'DOMA',
+        name: 'ZDOMAIN',
+        package: '$TMP',
+        dataType: 'CHAR',
+        length: 1,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const putCall = calls.find((c) => c.method === 'PUT');
+      expect(putCall).toBeDefined();
+      expect(putCall!.url).toContain('/sap/bc/adt/ddic/domains/ZDOMAIN?lockHandle=');
+      expect(putCall!.contentType).toContain('application/vnd.sap.adt.domains.v2+xml');
+      const unlockCall = calls.find((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'));
+      expect(unlockCall).toBeDefined();
+    });
+
+    it('updates DTEL via metadata PUT', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({ method, url: String(url), contentType: headers['content-type'] ?? headers['Content-Type'] });
+          if (method === 'POST' && String(url).includes('_action=LOCK')) {
+            return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'DTEL',
+        name: 'ZSTATUS',
+        package: '$TMP',
+        typeKind: 'domain',
+        typeName: 'ZSTATUS',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const putCall = calls.find((c) => c.method === 'PUT');
+      expect(putCall?.url).toContain('/sap/bc/adt/ddic/dataelements/ZSTATUS?lockHandle=');
+      expect(putCall?.contentType).toContain('application/vnd.sap.adt.dataelements.v2+xml');
+    });
+
+    it('batch_create supports DOMA + DTEL without source PUTs', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url) });
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'DOMA', name: 'ZSTATUS_D', dataType: 'CHAR', length: 1, fixedValues: [{ low: 'A' }] },
+          { type: 'DTEL', name: 'ZSTATUS', typeKind: 'domain', typeName: 'ZSTATUS_D', shortLabel: 'Status' },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('2 objects');
+      expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+    });
+
+    it('respects package restrictions for DOMA create', async () => {
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DOMA',
+        name: 'ZDOMAIN',
+        package: 'ZBLOCKED',
+        dataType: 'CHAR',
+        length: 1,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+
+    it('blocks DTEL create in read-only mode', async () => {
+      const readOnlyClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+      const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DTEL',
+        name: 'ZTEXT',
+        package: '$TMP',
+        typeKind: 'predefinedAbapType',
+        dataType: 'CHAR',
+        length: 10,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+  });
+
   describe('SAPWrite edit_method', () => {
     it('rejects edit_method without method param', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
@@ -3504,6 +3692,30 @@ ENDCLASS.`;
       expect(xml).toContain('adtcore:name="ZC_TRAVEL"');
       expect(xml).toContain('adtcore:description="Travel Metadata Ext"');
       expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
+    });
+
+    it('returns domain metadata XML for DOMA', () => {
+      const xml = buildCreateXml('DOMA', 'ZSTATUS', '$TMP', 'Status domain', {
+        dataType: 'CHAR',
+        length: 1,
+        fixedValues: [{ low: 'A', description: 'Active' }],
+      });
+      expect(xml).toContain('<doma:domain');
+      expect(xml).toContain('adtcore:type="DOMA/DD"');
+      expect(xml).toContain('<doma:datatype>CHAR</doma:datatype>');
+      expect(xml).toContain('<doma:fixValue>');
+    });
+
+    it('returns data element metadata XML for DTEL', () => {
+      const xml = buildCreateXml('DTEL', 'ZSTATUS', '$TMP', 'Status data element', {
+        typeKind: 'domain',
+        typeName: 'ZSTATUS',
+        shortLabel: 'Status',
+      });
+      expect(xml).toContain('<blue:wbobj');
+      expect(xml).toContain('adtcore:type="DTEL/DE"');
+      expect(xml).toContain('<dtel:typeKind>domain</dtel:typeKind>');
+      expect(xml).toContain('<dtel:typeName>ZSTATUS</dtel:typeName>');
     });
 
     it('default fallback uses objectUrlForType instead of hardcoded path', () => {

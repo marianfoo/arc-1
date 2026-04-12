@@ -173,6 +173,41 @@ describe('SAPWriteSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts DOMA/DTEL write fields', () => {
+    const doma = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'DOMA',
+      name: 'ZDOMAIN',
+      dataType: 'CHAR',
+      length: '1',
+      decimals: '0',
+      outputLength: '1',
+      signExists: 'true',
+      lowercase: 'false',
+      fixedValues: [{ low: 'A', description: 'Active' }],
+      valueTable: 'T001',
+    });
+    expect(doma.success).toBe(true);
+    if (doma.success) {
+      expect(doma.data.length).toBe(1);
+      expect(doma.data.signExists).toBe(true);
+    }
+
+    const dtel = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'DTEL',
+      name: 'ZDELEM',
+      typeKind: 'domain',
+      typeName: 'ZDOMAIN',
+      shortLabel: 'Status',
+      changeDocument: 'true',
+    });
+    expect(dtel.success).toBe(true);
+    if (dtel.success) {
+      expect(dtel.data.changeDocument).toBe(true);
+    }
+  });
+
   it('accepts edit_method with all fields', () => {
     const result = SAPWriteSchema.safeParse({
       action: 'edit_method',
@@ -243,6 +278,8 @@ describe('SAPWriteSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'CLAS', name: 'Z' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DDLS', name: 'Z' }).success).toBe(true);
+    expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DOMA', name: 'ZDOMAIN' }).success).toBe(true);
+    expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DTEL', name: 'ZDELEM' }).success).toBe(true);
   });
 });
 

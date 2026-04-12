@@ -98,17 +98,19 @@ const SAPREAD_DESC_BTP =
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
+const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks. Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks.';
@@ -399,6 +401,43 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           },
           package: { type: 'string', description: 'Package for new objects (default $TMP)' },
           transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
+          dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type (e.g., CHAR, NUMC, DEC)' },
+          length: { type: 'number', description: 'DOMA/DTEL: data type length' },
+          decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
+          outputLength: { type: 'number', description: 'DOMA: output length' },
+          conversionExit: { type: 'string', description: 'DOMA: conversion exit (e.g., ALPHA)' },
+          signExists: { type: 'boolean', description: 'DOMA: signed values allowed' },
+          lowercase: { type: 'boolean', description: 'DOMA: lowercase characters allowed' },
+          fixedValues: {
+            type: 'array',
+            description: 'DOMA: fixed value ranges',
+            items: {
+              type: 'object',
+              properties: {
+                low: { type: 'string', description: 'Low value (required)' },
+                high: { type: 'string', description: 'High value for ranges (optional)' },
+                description: { type: 'string', description: 'Value description (optional)' },
+              },
+              required: ['low'],
+            },
+          },
+          valueTable: { type: 'string', description: 'DOMA: value table reference (e.g., T001)' },
+          typeKind: {
+            type: 'string',
+            enum: ['domain', 'predefinedAbapType'],
+            description: 'DTEL: type source (domain reference or predefined ABAP type)',
+          },
+          typeName: { type: 'string', description: 'DTEL: domain/type name reference (for typeKind=domain)' },
+          domainName: { type: 'string', description: 'DTEL: alias for typeName when referencing a domain' },
+          shortLabel: { type: 'string', description: 'DTEL: short field label' },
+          mediumLabel: { type: 'string', description: 'DTEL: medium field label' },
+          longLabel: { type: 'string', description: 'DTEL: long field label' },
+          headingLabel: { type: 'string', description: 'DTEL: heading field label' },
+          searchHelp: { type: 'string', description: 'DTEL: search help name' },
+          searchHelpParameter: { type: 'string', description: 'DTEL: search help parameter' },
+          setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
+          defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
+          changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
           objects: {
             type: 'array',
             items: {
@@ -412,6 +451,39 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
                 description: { type: 'string', description: 'Object description (defaults to name if omitted)' },
+                dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type' },
+                length: { type: 'number', description: 'DOMA/DTEL: data type length' },
+                decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
+                outputLength: { type: 'number', description: 'DOMA: output length' },
+                conversionExit: { type: 'string', description: 'DOMA: conversion exit' },
+                signExists: { type: 'boolean', description: 'DOMA: signed values allowed' },
+                lowercase: { type: 'boolean', description: 'DOMA: lowercase allowed' },
+                fixedValues: {
+                  type: 'array',
+                  description: 'DOMA: fixed value ranges',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      low: { type: 'string' },
+                      high: { type: 'string' },
+                      description: { type: 'string' },
+                    },
+                    required: ['low'],
+                  },
+                },
+                valueTable: { type: 'string', description: 'DOMA: value table' },
+                typeKind: { type: 'string', enum: ['domain', 'predefinedAbapType'], description: 'DTEL: type mode' },
+                typeName: { type: 'string', description: 'DTEL: domain/type name reference' },
+                domainName: { type: 'string', description: 'DTEL: alias for typeName' },
+                shortLabel: { type: 'string', description: 'DTEL: short field label' },
+                mediumLabel: { type: 'string', description: 'DTEL: medium field label' },
+                longLabel: { type: 'string', description: 'DTEL: long field label' },
+                headingLabel: { type: 'string', description: 'DTEL: heading field label' },
+                searchHelp: { type: 'string', description: 'DTEL: search help' },
+                searchHelpParameter: { type: 'string', description: 'DTEL: search help parameter' },
+                setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
+                defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
+                changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
               },
               required: ['type', 'name'],
             },

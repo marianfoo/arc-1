@@ -87,6 +87,30 @@ export async function updateSource(
   await http.put(url, source, 'text/plain');
 }
 
+/** Update object metadata XML (requires lock) */
+export async function updateObject(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objectUrl: string,
+  body: string,
+  lockHandle: string,
+  contentType: string,
+  transport?: string,
+): Promise<void> {
+  checkOperation(safety, OperationType.Update, 'UpdateObject');
+
+  let url = objectUrl;
+  const params: string[] = [`lockHandle=${encodeURIComponent(lockHandle)}`];
+  if (transport) {
+    params.push(`corrNr=${encodeURIComponent(transport)}`);
+  }
+  if (params.length > 0) {
+    url += (url.includes('?') ? '&' : '?') + params.join('&');
+  }
+
+  await http.put(url, body, contentType);
+}
+
 /** Delete an ABAP object (requires lock) */
 export async function deleteObject(
   http: AdtHttpClient,
@@ -122,6 +146,29 @@ export async function safeUpdateSource(
     const effectiveTransport = transport ?? (lock.corrNr || undefined);
     try {
       await updateSource(session, safety, sourceUrl, source, lock.lockHandle, effectiveTransport);
+    } finally {
+      await unlockObject(session, objectUrl, lock.lockHandle);
+    }
+  });
+}
+
+/**
+ * High-level: update object metadata with guaranteed unlock.
+ * lock → updateObject → unlock (in try-finally)
+ */
+export async function safeUpdateObject(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objectUrl: string,
+  body: string,
+  contentType: string,
+  transport?: string,
+): Promise<void> {
+  await http.withStatefulSession(async (session) => {
+    const lock = await lockObject(session, safety, objectUrl);
+    const effectiveTransport = transport ?? (lock.corrNr || undefined);
+    try {
+      await updateObject(session, safety, objectUrl, body, lock.lockHandle, contentType, effectiveTransport);
     } finally {
       await unlockObject(session, objectUrl, lock.lockHandle);
     }

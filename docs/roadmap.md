@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-11
+**Last Updated:** 2026-04-12
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -47,7 +47,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~4~~ | ~~FEAT-14~~ | ~~401 Session Timeout Auto-Retry~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | ~~5~~ | ~~FEAT-15~~ | ~~Namespace URL Encoding Audit~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | 6 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | P1 | S | Features |
-| 7 | FEAT-13 | DDIC Domain/Data Element Write | P1 | S | Features |
+| ~~7~~ | ~~FEAT-13~~ | ~~DDIC Domain/Data Element Write~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-12~~ |
 | 8 | FEAT-16 | Error Intelligence (Actionable Hints) | P1 | S | Features |
 | 9 | FEAT-17 | Type Auto-Mappings for SAPWrite | P1 | XS | Features |
 | 10 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
@@ -94,6 +94,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-13 | DDIC Domain/Data Element Write | 2026-04-12 | Features |
 | FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
 | FEAT-14 | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
 | FEAT-15 | Namespace URL Encoding Audit | 2026-04-12 | Features |
@@ -153,7 +154,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
 10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
-12. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
+12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
 13. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
 14. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 15. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
@@ -338,14 +339,19 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — completes AI-assisted data modeling |
-| **Status** | Not started |
+| **Status** | Complete (2026-04-12) |
 | **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/646bb9b-dtel-doma-write.md) |
 
 **What:** ARC-1 reads DOMA/DTEL but can't write properties or fixed values. The `abap-adt-api` library (v7.1.1) added `createDomainDefinition`, `createDataElement`, and `createStructure` with full property support. Add write support for these in SAPWrite.
 
 **Why:** Blocks full AI-assisted data modeling workflows. A developer asking the LLM to "create a domain ZSTATUS with values A=Active, I=Inactive" currently can't be fulfilled end-to-end.
 
-**Why not:** DDIC objects have massive property surfaces (domains: 15+ properties including datatype, length, decimals, conversion exit, fixed values, range tables, sign behavior; data elements: semantic properties, labels in 4 lengths, documentation). The ADT API for DDIC writes is not fully documented, and PATCH/PUT semantics are unclear. DDIC objects have complex interdependencies (domain value table must exist, fixed values must match domain type) — ARC-1 has no DDIC validation layer and would need to implement one or accept server-side rejections. DDIC changes ripple across hundreds of tables and programs, making LLM-driven changes inherently risky for data modeling.
+**Implementation (2026-04-12):**
+- Added DDIC metadata XML builders in `src/adt/ddic-xml.ts` (`buildDomainXml`, `buildDataElementXml`) with fixed value support and strict DTEL field ordering.
+- Added `updateObject` + `safeUpdateObject` in `src/adt/crud.ts` for lock/PUT/unlock metadata writes.
+- Enabled `DOMA`/`DTEL` in SAPWrite schemas and tool definitions (`src/handlers/schemas.ts`, `src/handlers/tools.ts`), including DDIC-specific parameters.
+- Wired SAPWrite create/update/batch_create in `src/handlers/intent.ts` to use DDIC v2 content types (`application/vnd.sap.adt.domains.v2+xml`, `application/vnd.sap.adt.dataelements.v2+xml`) and metadata write flow (no `/source/main`).
+- Added unit tests, integration CRUD lifecycle tests, and E2E tests for DOMA/DTEL write paths.
 
 ---
 
@@ -1329,7 +1335,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 |-------|-------|
 | **Status** | Complete (2026-04-01) |
 
-**Implemented:** Read support for domains (DOMA), data elements (DTEL), structures (STRU), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite.
+**Implemented:** Read support for domains (DOMA), data elements (DTEL), structures (STRU), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite (plus DOMA/DTEL metadata writes completed under FEAT-13).
 
 ---
 
@@ -1462,6 +1468,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Method-Level Surgery | `edit_method`, `list_methods`, `get_method` — 95% token reduction | Complete (2026-04-01) |
 | Runtime Diagnostics | SAPDiagnose — short dumps (ST22), ABAP profiler traces | Complete (2026-04-01) |
 | DDIC Completeness | FEAT-04: DOMA, DTEL, STRU, DDLX, TRAN, BOR, T100, variants | Complete (2026-04-01) |
+| DDIC Domain/Data Element Write | FEAT-13: DOMA/DTEL create, update, delete, batch_create in SAPWrite | Complete (2026-04-12) |
 | RAP CRUD | DDLS/DDLX/BDEF/SRVD write, SRVB read, batch activation | Complete (2026-04-01) |
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | Complete (2026-04-01) |
 | MCP Elicitation | Interactive confirmations for destructive operations | Complete (2026-04-01) |

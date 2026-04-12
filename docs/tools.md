@@ -136,18 +136,40 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `DOMA`, `DTEL` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
 | `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number. For `update` and `delete`, if omitted ARC-1 auto-uses the correction number returned by the SAP lock (if any). Explicit value takes precedence. |
+| `dataType` | string | No | DOMA/DTEL: ABAP data type (`CHAR`, `NUMC`, `DEC`, ...) |
+| `length` | number | No | DOMA/DTEL: data type length |
+| `decimals` | number | No | DOMA/DTEL: decimal places |
+| `outputLength` | number | No | DOMA: output length |
+| `conversionExit` | string | No | DOMA: conversion exit (e.g., `ALPHA`) |
+| `signExists` | boolean | No | DOMA: whether signed values are allowed |
+| `lowercase` | boolean | No | DOMA: whether lowercase characters are allowed |
+| `fixedValues` | array | No | DOMA: fixed value entries (`[{low, high?, description?}]`) |
+| `valueTable` | string | No | DOMA: value table reference (e.g., `T001`) |
+| `typeKind` | string | No | DTEL: `domain` or `predefinedAbapType` |
+| `typeName` | string | No | DTEL: referenced domain/type name (for `typeKind="domain"`) |
+| `shortLabel` | string | No | DTEL: short field label |
+| `mediumLabel` | string | No | DTEL: medium field label |
+| `longLabel` | string | No | DTEL: long field label |
+| `headingLabel` | string | No | DTEL: heading field label |
+| `searchHelp` | string | No | DTEL: search help name |
+| `searchHelpParameter` | string | No | DTEL: search help parameter |
+| `setGetParameter` | string | No | DTEL: SET/GET parameter ID |
+| `defaultComponentName` | string | No | DTEL: default component name |
+| `changeDocument` | boolean | No | DTEL: change document flag |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
+
+**DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
 
 **Batch creation:**
 
-`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional).
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
 
@@ -158,6 +180,14 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
 ])
+
+SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
+  dataType="CHAR", length=1,
+  fixedValues=[{low:"A",description:"Active"},{low:"I",description:"Inactive"}])
+
+SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
+  typeKind="domain", typeName="ZSTATUS",
+  shortLabel="Status", mediumLabel="Order Status")
 ```
 
 **Transport behavior:** For `update` and `delete` actions on transportable packages, ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport. For `create` and `batch_create`, an explicit transport may still be required depending on the target package and system configuration.

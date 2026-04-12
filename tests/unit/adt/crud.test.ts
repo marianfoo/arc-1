@@ -3,8 +3,10 @@ import {
   createObject,
   deleteObject,
   lockObject,
+  safeUpdateObject,
   safeUpdateSource,
   unlockObject,
+  updateObject,
   updateSource,
 } from '../../../src/adt/crud.js';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
@@ -200,6 +202,52 @@ describe('CRUD Operations', () => {
     });
   });
 
+  // ─── updateObject ──────────────────────────────────────────────────
+
+  describe('updateObject', () => {
+    it('sends PUT with lock handle and custom content type', async () => {
+      const http = mockHttp();
+      const body = '<doma:domain xmlns:doma="http://www.sap.com/dictionary/domain"/>';
+      await updateObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/ddic/domains/ZTEST_DOMA',
+        body,
+        'HANDLE',
+        'application/vnd.sap.adt.domains.v2+xml; charset=utf-8',
+      );
+      expect(http.put).toHaveBeenCalledWith(
+        expect.stringContaining('lockHandle=HANDLE'),
+        body,
+        'application/vnd.sap.adt.domains.v2+xml; charset=utf-8',
+      );
+    });
+
+    it('includes transport in URL when provided', async () => {
+      const http = mockHttp();
+      await updateObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/ddic/domains/ZTEST_DOMA',
+        '<xml/>',
+        'HANDLE',
+        'application/xml',
+        'DEVK900001',
+      );
+      const url = (http.put as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('lockHandle=HANDLE');
+      expect(url).toContain('corrNr=DEVK900001');
+    });
+
+    it('is blocked in read-only mode', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      await expect(updateObject(http, safety, '/url', '<xml/>', 'handle', 'application/xml')).rejects.toThrow(
+        AdtSafetyError,
+      );
+    });
+  });
+
   // ─── deleteObject ──────────────────────────────────────────────────
 
   describe('deleteObject', () => {
@@ -373,6 +421,67 @@ describe('CRUD Operations', () => {
       ).rejects.toThrow('Update failed');
 
       // Unlock should still have been called (via finally)
+      expect(postMock).toHaveBeenCalledTimes(2); // lock + unlock
+      const unlockUrl = postMock.mock.calls[1]?.[0] as string;
+      expect(unlockUrl).toContain('_action=UNLOCK');
+    });
+  });
+
+  // ─── safeUpdateObject ──────────────────────────────────────────────
+
+  describe('safeUpdateObject', () => {
+    it('performs lock → update → unlock in stateful session', async () => {
+      const http = mockHttp();
+      await safeUpdateObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/ddic/domains/ZTEST_DOMA',
+        '<xml/>',
+        'application/vnd.sap.adt.domains.v2+xml; charset=utf-8',
+      );
+      expect(http.withStatefulSession).toHaveBeenCalled();
+    });
+
+    it('auto-propagates lock corrNr when no transport is supplied', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>A4HK900100</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>';
+      const postMock = vi
+        .fn()
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: lockBody })
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' });
+      const putMock = vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' });
+
+      const http = {
+        ...mockHttp(),
+        withStatefulSession: vi.fn().mockImplementation(async (fn: any) => fn({ post: postMock, put: putMock })),
+      } as unknown as AdtHttpClient;
+
+      await safeUpdateObject(http, unrestrictedSafetyConfig(), '/obj', '<xml/>', 'application/xml');
+
+      const putUrl = putMock.mock.calls[0]?.[0] as string;
+      expect(putUrl).toContain('corrNr=A4HK900100');
+    });
+
+    it('unlocks even if update fails (try-finally)', async () => {
+      const postMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          statusCode: 200,
+          headers: {},
+          body: '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+        })
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' });
+      const putMock = vi.fn().mockRejectedValueOnce(new Error('Update failed'));
+
+      const http = {
+        ...mockHttp(),
+        withStatefulSession: vi.fn().mockImplementation(async (fn: any) => fn({ post: postMock, put: putMock })),
+      } as unknown as AdtHttpClient;
+
+      await expect(
+        safeUpdateObject(http, unrestrictedSafetyConfig(), '/obj', '<xml/>', 'application/xml'),
+      ).rejects.toThrow('Update failed');
+
       expect(postMock).toHaveBeenCalledTimes(2); // lock + unlock
       const unlockUrl = postMock.mock.calls[1]?.[0] as string;
       expect(unlockUrl).toContain('_action=UNLOCK');
