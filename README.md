@@ -4,9 +4,7 @@
 
 ARC-1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MCP client) to SAP systems via the [ADT REST API](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools). It ships as an [npm package](https://www.npmjs.com/package/arc-1) and [Docker image](https://github.com/marianfoo/arc-1/pkgs/container/arc-1).
 
-> Continued from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (Go), rewritten in TypeScript with enterprise security, BTP deployment, and production-grade tooling.
 
-![Vibing ABAP Developer](./media/vibing-steampunk.png)
 
 **[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
 
@@ -61,7 +59,7 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 - **1,367+ unit tests** (`53` unit test files, mocked HTTP)
 - **~160 integration tests** against live SAP systems, with explicit skip reasons when credentials or fixtures are missing
-- **~70 E2E tests** that execute real MCP tool calls against a running ARC-1 server
+- **~70 E2E tests** that execute real MCP tool calls against a running ARC-1 server and live SAP system
 - **CRUD lifecycle and BTP smoke lanes** included (`test:integration:crud`, `test:integration:btp:smoke`)
 - **CI matrix** on Node `22` and `24`; integration + E2E run on `push` to `main` and internal PRs
 - **Reliability telemetry + coverage** published as informational CI signals (non-blocking)
