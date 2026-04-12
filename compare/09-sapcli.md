@@ -1,8 +1,8 @@
 # jfilak/sapcli
 
 > **Repository**: https://github.com/jfilak/sapcli
-> **Language**: Python 3.10+ | **License**: Apache-2.0 | **Stars**: 77 | **Forks**: 28
-> **Status**: Very active — last commit 2026-04-09, 488 commits by primary author
+> **Language**: Python 3.10+ | **License**: Apache-2.0 | **Stars**: 78 | **Forks**: 28
+> **Status**: Very active — latest commit 2026-04-12 (daily activity in April 2026)
 > **Type**: CLI tool (not MCP), CI/CD-focused ABAP development automation
 
 ---
@@ -257,6 +257,8 @@ The most comprehensive open-source ADT endpoint coverage:
 
 ## Known Issues / Limitations
 
+### Structural limitations (project-level)
+
 | Issue | Description | Relevant to ARC-1? |
 |-------|-------------|-------------------|
 | No BTP/Cloud | Basic auth only, no OAuth/XSUAA/PP | ARC-1 already covers this |
@@ -264,15 +266,43 @@ The most comprehensive open-source ADT endpoint coverage:
 | No safety system | No read-only, no op filter | ARC-1 has this |
 | No caching | Every operation hits SAP | ARC-1 has SQLite + memory |
 | No async | Synchronous `requests` throughout | ARC-1 uses async undici |
-| Not on PyPI | Install from git only | ARC-1 is on npm |
+| No service mode | Single-user CLI, not multi-tenant server | ARC-1 has managed service architecture |
 | No audit logging | No structured audit trail | ARC-1 has this |
-| SAX XML parsing | Complex custom mapper, hard to extend | ARC-1 uses fast-xml-parser |
+| PyPI gap | Not published to PyPI (install via git or release wheel) | ARC-1 has npm + Docker publishing |
+
+### GitHub issue radar (open + closed)
+
+Issue snapshot (GitHub API, 2026-04-12): **13 open / 26 closed** issues (excluding PRs).
+
+#### Open issues with ARC-1 relevance
+
+| Issue | What sapcli reports | Relevant to ARC-1? | Action |
+|-------|---------------------|-------------------|--------|
+| [#67](https://github.com/jfilak/sapcli/issues/67) (open) | Migrate to public ADT ATC API | **Medium** (BTP/on-prem compatibility hardening) | Track for SAPDiagnose ATC backend compatibility. [Eval](sapcli/evaluations/issue-67-public-atc-api.md) |
+| [#108](https://github.com/jfilak/sapcli/issues/108) (open) | ATC priority filtering differs from SAP GUI | **Medium** (result parity matters for CI trust) | Verify ARC-1 ATC severity filtering semantics. |
+| [#24](https://github.com/jfilak/sapcli/issues/24) (open) | "No testable objects found" returns failure exit code | **High** (CI ergonomics for empty test scopes) | Add explicit "no tests found" status in SAPDiagnose aunit output. [Eval](sapcli/evaluations/issue-24-no-testable-exit-code.md) |
+| [#23](https://github.com/jfilak/sapcli/issues/23) (open) | AUnit on transports misses LIMU-only entries | **Medium** (transport-centric QA flows) | Consider parent-object normalization for LIMU items. |
+| [#21](https://github.com/jfilak/sapcli/issues/21) (open) | Include activation ambiguity with multiple master programs | **Medium** (include write/activate reliability) | Add hinting or explicit master-program resolution for include flows. |
+| [#62](https://github.com/jfilak/sapcli/issues/62) (open) | ATC/AUnit behavior differs on include programs | **Medium** | Add integration coverage for include targets (ATC + AUnit). |
+| [#13](https://github.com/jfilak/sapcli/issues/13) + [#15](https://github.com/jfilak/sapcli/issues/15) (open) | Mass activation result logging/traceability gaps | Low | Consider richer activation result payload in SAPActivate. |
+
+#### Closed issues with adoptable patterns
+
+| Issue | What was fixed in sapcli | Relevant to ARC-1? | Action |
+|-------|--------------------------|-------------------|--------|
+| [#22](https://github.com/jfilak/sapcli/issues/22) (closed 2023-08-03) | AUnit code coverage retrieval + formatting | **High** | Add coverage retrieval support in SAPDiagnose. [Eval](sapcli/evaluations/issue-22-aunit-coverage.md) |
+| [#26](https://github.com/jfilak/sapcli/issues/26) (closed 2023-08-03) | Sonar generic execution output for AUnit | Medium | Add optional CI-friendly formatter output (JUnit/Sonar-style). |
+| [#70](https://github.com/jfilak/sapcli/issues/70) (closed 2022-10-05) | Parse HTML server errors (e.g., UCON block) | **High** | Improve ARC-1 non-XML error classification/hints. [Eval](sapcli/evaluations/issue-70-html-error-parsing.md) |
+| [#81](https://github.com/jfilak/sapcli/issues/81) (closed 2022-09-21) | ATC `ERROR_LEVEL` filtering bug | Medium | Add tests for severity threshold parity. |
+| [#16](https://github.com/jfilak/sapcli/issues/16) (closed 2020-02-12) | Parse activation messages + force activation support | **High** | Improve activation diagnostics and actionable "forceSupported" hints. [Eval](sapcli/evaluations/issue-16-activation-force-supported.md) |
+| [#41](https://github.com/jfilak/sapcli/issues/41) (closed 2021-02-12) | Package create now accepts explicit transport request | Medium | Verify/deepen explicit corrNr handling in DEVC write flows. [Eval](sapcli/evaluations/issue-41-package-create-transport.md) |
+| [#20](https://github.com/jfilak/sapcli/issues/20) (closed 2019-12-19) | Release flow via `newreleasejobs` action support | Medium | Keep compatibility tests for CTS release endpoint behavior. [Eval](sapcli/evaluations/issue-20-newreleasejobs.md) |
 
 ---
 
 ## Features This Project Has That ARC-1 Lacks
 
-| Feature | Priority | Effort | Status (2026-04-10) |
+| Feature | Priority | Effort | Status (2026-04-12) |
 |---------|----------|--------|---------------------|
 | `abap run` (execute ABAP via IF_OO_ADT_CLASSRUN) | Medium | 2d | Not implemented — needs safety design (also in dassian-adt, vibing-steampunk) |
 | checkout/checkin in abapGit format (filesystem round-trip) | Medium | 3d | Not implemented — enables Git workflows without abapGit on server |
@@ -294,7 +324,7 @@ The most comprehensive open-source ADT endpoint coverage:
 | kubeconfig-style multi-connection config | N/A | — | Not applicable — ARC-1 uses env vars / CLI flags |
 | System info endpoint | Medium | 0.5d | Partial — system type detection exists but no full systeminfo |
 | Class include granularity (locals_def, locals_imp, test_classes, macros) | Medium | 1d | Partial — structured class decomposition exists but write granularity differs |
-| Service binding publish | Medium | 0.5d | Not implemented — SRVB read exists but no publish job |
+| ~~Service binding publish~~ | ~~Medium~~ | ~~0.5d~~ | ✅ Implemented — `SAPManage(action="publish_srvb"/"unpublish_srvb")` in ARC-1 |
 
 ## Features ARC-1 Has That This Project Lacks
 
@@ -329,10 +359,10 @@ MCP protocol (LLM integration), safety system (read-only, op filter, pkg filter,
    - ARC-1's where-used may be simpler — verify scope handling matches
    - **Files to check**: `src/adt/codeintel.ts`
 
-5. **Service Binding Publish** (`sap/cli/rap.py`)
-   - `POST /sap/bc/adt/businessservices/bindings/{name}/publishjobs` endpoint
-   - ARC-1 reads SRVB but doesn't publish — important for RAP workflow completeness
-   - **Files to modify**: `src/adt/devtools.ts`, `src/handlers/intent.ts`
+5. ~~**Service Binding Publish** (`sap/cli/rap.py`)~~
+   - ✅ Already implemented in ARC-1 via `SAPManage(action="publish_srvb"/"unpublish_srvb")`
+   - Keep compatibility tests for publish/unpublish endpoint variants across releases
+   - **Files to watch**: `src/adt/devtools.ts`, `src/handlers/intent.ts`
 
 6. **Inactive Objects List** (`sap/adt/activation.py`)
    - `GET /sap/bc/adt/inactivectsobjects` — shows what needs activation
@@ -384,15 +414,20 @@ MCP protocol (LLM integration), safety system (read-only, op filter, pkg filter,
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
-| 2026-04-11 | `c20d795` **Major refactor**: extracted HTTP/CSRF/auth into shared `sap/http/` module (`HTTPClient` class). Prep for pluggable auth (SSO). 763-line test file. | Medium | Watch for SSO/OAuth patterns. Architecture mirrors ARC-1's `src/adt/http.ts`. | Evaluated |
-| 2026-04-11 | `45b6228` CI fix: `fetch-depth: 0` for wheel version from git rev-list. Co-authored by Claude Sonnet 4.6. | No | — | — |
-| 2026-04-10 | `2ec4228` **New object type: Authorization Fields** (`authorizationfield` command). Read, where-used, activate. ADT endpoint: `/sap/bc/adt/authorizationfields/{name}`, XML namespace `http://www.sap.com/iam/auth`. | Medium | New ADT endpoint — could add to ARC-1's SAPRead for auth object analysis. | TODO |
-| 2026-04-11 | Issue #149 (OPEN): **Domain support** (DOMA) being added — create/delete disabled pending testing. | Low | ARC-1 already has DOMA read via `src/adt/client.ts`. Verify same endpoint used. | TODO |
-| 2026-04-09 | doc fixes | No | — | — |
-| 2026-04-07 | Windows install docs, GitHub CI updates | No | — | — |
-| 2026-03-31 | Added `abap find` command | Low | ARC-1 has SAPSearch | — |
-| 2026-03-28 | kubeconfig-style YAML config with CRUD subcommands | No | Different design (CLI vs MCP) | — |
-| 2026-03-23 | Function module auto-group-resolution | Low | Could adopt pattern | TODO |
-| 2018-2025 | Mature ADT client with 488+ commits | Yes | Study ADT endpoint patterns | Reference |
+| 2026-04-12 | `de9c13d` + `a606f05` + `198bd7d`: ADT connection error hardening + ADT object model docs | Medium | Re-check ARC-1 network error hint quality (`AdtNetworkError` / `formatErrorForLLM`). | Evaluated |
+| 2026-04-11 | `c014f0b` merged (PR [#149](https://github.com/jfilak/sapcli/pull/149)): tree-wide domain support (DOMA) | Low | ARC-1 already supports DOMA read; watch for create/delete edge cases only. | Done |
+| 2026-04-11 | `c20d795` major HTTP refactor: extracted shared HTTP/CSRF/auth module | Medium | Track for additional resilient retry/connection patterns. | Evaluated |
+| 2026-04-10 | `2ec4228` authorization fields support (`/sap/bc/adt/authorizationfields`) | Medium | Add AUTH read path if demand appears. | TODO |
+| 2026-03-23 | `bf93296` function module auto-group-resolution | Low | Optional SAPRead UX improvement for FUMO. | TODO |
+| 2023-09-08 | Issue [#14](https://github.com/jfilak/sapcli/issues/14) + [#116](https://github.com/jfilak/sapcli/issues/116) closed: class include generation/checkin include cleanup | Medium | If ARC-1 adds abapGit round-trip, include lifecycle handling is mandatory. | Tracked |
+| 2023-08-03 | Issue [#22](https://github.com/jfilak/sapcli/issues/22) + [#26](https://github.com/jfilak/sapcli/issues/26) closed: AUnit coverage + Sonar output | **High** | Add coverage and optional CI formatter output. | [Eval](sapcli/evaluations/issue-22-aunit-coverage.md) |
+| 2022-10-05 | Issue [#70](https://github.com/jfilak/sapcli/issues/70) closed: HTML server error parsing (UCON/forbidden) | **High** | Improve ARC-1 HTML error normalization. | [Eval](sapcli/evaluations/issue-70-html-error-parsing.md) |
+| 2022-09-21 | Issue [#81](https://github.com/jfilak/sapcli/issues/81) closed: ATC error-level filtering bug | Medium | Add regression tests for ATC threshold behavior. | Tracked |
+| 2022-04-22 | Issue [#67](https://github.com/jfilak/sapcli/issues/67) open: migrate to public ADT ATC API | Medium | Monitor for API deprecation risk and cloud parity. | [Eval](sapcli/evaluations/issue-67-public-atc-api.md) |
+| 2020-05-12 | Issue [#24](https://github.com/jfilak/sapcli/issues/24) open: no-testable-objects should not fail pipeline | **High** | Add explicit no-testable status semantics. | [Eval](sapcli/evaluations/issue-24-no-testable-exit-code.md) |
+| 2020-02-12 | Issue [#16](https://github.com/jfilak/sapcli/issues/16) closed: activation result parsing + force activation metadata | **High** | Improve activation message parsing and guidance in SAPActivate. | [Eval](sapcli/evaluations/issue-16-activation-force-supported.md) |
+| 2019-12-19 | Issue [#20](https://github.com/jfilak/sapcli/issues/20) closed: CTS release via `newreleasejobs` | Medium | Keep compatibility coverage for release endpoint behavior. | [Eval](sapcli/evaluations/issue-20-newreleasejobs.md) |
 
-_Last updated: 2026-04-11_
+_Last updated: 2026-04-12_
+
+> **Detailed issue/commit tracking**: See [sapcli/issues.json](sapcli/issues.json), [sapcli/commits.json](sapcli/commits.json), and [sapcli/evaluations/](sapcli/evaluations/).
