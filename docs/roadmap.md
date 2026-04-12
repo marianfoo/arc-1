@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-10
+**Last Updated:** 2026-04-11
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -77,9 +77,16 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 34 | FEAT-36 | Type Information (SAPNavigate) | P2 | S | Features |
 | 35 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
 | 36 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
-| 37 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
-| 38 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
-| 39 | OPS-03 | Multi-System Routing | P3 | L | Ops |
+| 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
+| 38 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | P0 | S | Features |
+| 39 | FEAT-39 | Transport Enhancements (delete, reassign, types) | P2 | S | Features |
+| 40 | FEAT-40 | FLP Launchpad Management (OData) | P1 | M | Features |
+| 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
+| 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
+| 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
+| 44 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
+| 45 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
+| 46 | OPS-03 | Multi-System Routing | P3 | L | Ops |
 
 ---
 
@@ -135,14 +142,19 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 4. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — enterprise deployments without reverse proxy
 5. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
 
+### Phase A.5: Proactive Compatibility (P0)
+6. **FEAT-38** ADT Service Discovery / MIME Negotiation (S) — probe `/sap/bc/adt/discovery` once at startup to learn supported MIME types per endpoint; eliminates 415/406 retries entirely. sapcli has had this since 2018. Supersedes reactive FEAT-08 approach.
+
 ### Phase B: Core Value Features (P1)
-6. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
-7. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
-8. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
-9. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
-10. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
-11. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
-12. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
+7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
+8. **FEAT-40** FLP Launchpad Management (M) — OData-based Fiori Launchpad customization (catalogs, groups, tiles). sapcli has full implementation via `/sap/opu/odata/UI2/PAGE_BUILDER_CUST`. High value for enterprise Fiori rollout automation.
+9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
+10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
+11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
+12. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
+13. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
+14. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
+15. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
 13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
@@ -154,11 +166,15 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
 ### Phase D: ADT Feature Parity (P2) — Larger Items
-20. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
-21. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
-22. **FEAT-20** Source Version / Revision History (S) — version comparison, rollback (VSP + abap-adt-api have it)
-23. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4)
-24. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
+20. **FEAT-39** Transport Enhancements (S) — delete, reassign owner, transport type selection (K/W/T/S/R), recursive release. sapcli has full CTS lifecycle.
+21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
+22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
+23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
+24. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
+25. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
+26. **FEAT-20** Source Version / Revision History (S) — version comparison, rollback (VSP + abap-adt-api have it)
+27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
+28. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
 25. **FEAT-24** CompareSource / Diff (S) — code review workflows
 26. **FEAT-26** MCP Client Config Snippets (S) — onboarding UX
 27. **FEAT-25** CDS Unit Tests (S) — CDS test-driven development
@@ -248,6 +264,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 - Retry with `Accept: application/xml` -> `Accept: */*` (or vice versa)
 - Retry with `Content-Type: application/xml` -> `text/plain` for transport endpoints
 - Max 1 retry, log the fallback
+- **See also FEAT-38** (ADT Service Discovery) for proactive MIME negotiation instead of reactive retry
 
 ---
 
@@ -894,6 +911,171 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 **Why:** SAP Community visibility drives adoption.
 
 **Why not:** Marketing, not a feature. Better timing is after P1 + most P2 features are stable — ship the product first, then evangelize. One blog post in a sea of SAP Community content may not move the needle for adoption.
+
+---
+
+### FEAT-37: DCL (Access Control) Read/Write
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — completes RAP development workflow |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md) |
+
+**What:** Add read and write support for CDS access control objects (DCL). sapcli uses the ADT basepath `/dcl/sources`. DCL objects are a mandatory part of RAP development — every CDS entity needs an access control to restrict data access.
+
+**Current gap:** ARC-1 supports DDLS, DDLX, BDEF, SRVD, SRVB for RAP but is missing DCL, which breaks the RAP object creation workflow.
+
+**Implementation:**
+- Add `getDcl(name)` to `src/adt/client.ts` using `/sap/bc/adt/acm/dcl/sources/{name}/source/main`
+- Add DCL to `objectBasePath()` and `sourceUrlForType()` in `src/adt/crud.ts`
+- Add `buildCreateXml()` support for DCL in `src/adt/crud.ts`
+- Add DCL to `SAPREAD_TYPES_ONPREM`, `SAPREAD_TYPES_BTP`, `SAPWRITE_TYPES_ONPREM`, `SAPWRITE_TYPES_BTP` in `src/handlers/tools.ts`
+- Add unit tests with XML fixtures
+
+---
+
+### FEAT-38: ADT Service Discovery (MIME Negotiation)
+| Field | Value |
+|-------|-------|
+| **Priority** | P0 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Very High — eliminates 415/406 content-type errors proactively |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli `sap/adt/discovery.py` |
+
+**What:** Call `GET /sap/bc/adt/discovery` at startup to learn which MIME type versions each ADT endpoint supports. Cache the accepted Content-Type/Accept values per endpoint. Use correct headers from the start instead of guessing and retrying on 415/406.
+
+**Why:** sapcli has done this since 2018 — it's the standard ADT pattern. ARC-1 currently uses reactive retry logic (FEAT-08) which adds latency and doesn't cover all edge cases. The discovery document tells you exactly what each endpoint accepts, eliminating guesswork.
+
+**Why this is better than FEAT-08 alone:** FEAT-08 retries after failure (1 extra round-trip per mismatch). FEAT-38 probes once at startup and gets it right the first time for all subsequent requests. Combined approach: discovery at startup + FEAT-08 retry as fallback.
+
+**Implementation:**
+- Add `fetchDiscovery()` to `src/adt/http.ts` — parses `/sap/bc/adt/discovery` XML into a `Map<endpointPath, { accept: string[], contentType: string[] }>`
+- Call during `AdtHttpClient` initialization (alongside CSRF fetch, which already hits `/sap/bc/adt/core/discovery`)
+- Store in `AdtHttpClient` instance; cache in SQLite if caching enabled
+- Before each request, look up endpoint in discovery map; use correct MIME types
+- Fallback to current behavior if discovery fails or endpoint not in map
+- Add to `src/adt/features.ts` as a feature probe
+
+---
+
+### FEAT-39: Transport Enhancements
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — completes CTS lifecycle for LLM workflows |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md) |
+
+**What:** Extend SAPTransport with: delete transport/task, reassign owner, transport type selection (Workbench/K, Customizing/W, Transport-of-Copies/T, Development-Correction/S, Repair/R), recursive release (release tasks first, then request), and transport contents listing (E071 objects). Subsumes FEAT-19.
+
+**Current state:** ARC-1 supports list, get, create (Workbench only), release. sapcli has full CTS lifecycle including delete, reassign, 5 transport types, recursive release, and `-rrr` detail levels showing objects.
+
+**Implementation:**
+- Add `deleteTransport()` to `src/adt/transport.ts` — `DELETE /sap/bc/adt/cts/transportrequests/{id}`
+- Add `reassignTransport()` — modify owner attribute
+- Add `transportType` parameter to `createTransport()` — currently hardcoded `tm:type="K"`
+- Add `recursive` flag to `releaseTransport()` — release child tasks before parent
+- Enhance `getTransport()` response parsing to include task objects (E071 entries)
+- Add new actions to SAPTransport handler in `src/handlers/intent.ts`
+- Safety check: transport operations gated by `enableTransports` config
+
+---
+
+### FEAT-40: FLP Launchpad Management (OData)
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | M (3-5 days) |
+| **Risk** | Medium — OData API, different from ADT REST |
+| **Usefulness** | Very High — enterprise Fiori rollout automation |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli `sap/cli/flp.py` + `sap/odata/` |
+
+**What:** Manage Fiori Launchpad configuration: catalogs, groups, target mappings, and tile assignments. Uses OData service `/sap/opu/odata/UI2/PAGE_BUILDER_CUST` (on-prem) or equivalent BTP API.
+
+**Why:** Fiori Launchpad configuration is a major pain point in SAP projects. Automating catalog/group/tile setup via LLM saves hours of manual work per role. This is the kind of high-value enterprise automation that differentiates ARC-1 from developer-only tools.
+
+**Implementation:**
+- New `src/adt/flp.ts` module — OData client for PAGE_BUILDER_CUST
+- Operations: list catalogs, list groups, list target mappings, create/assign tiles, create catalog/group entries
+- New `SAPManage` action: `flp_catalog_list`, `flp_group_list`, `flp_assign_tile`, etc.
+- Alternatively: new FLP-specific tool if operations are complex enough
+- Safety: gated by write permissions; read operations always allowed
+- Consider pyodata-style OData parsing or use existing `src/adt/ui5-repository.ts` pattern
+
+---
+
+### FEAT-41: ABAP Unit Test Coverage (Statement-Level)
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — enables test-driven ABAP development |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli `sap/adt/aunit.py` |
+
+**What:** Fetch statement-level code coverage after running ABAP Unit tests. Uses `POST /sap/bc/adt/runtime/traces/coverage/measurements/{id}` with paginated `rel=next` follow-up for large result sets.
+
+**Why:** Coverage data tells the LLM which lines are untested, enabling targeted test generation. sapcli and AWS Accelerator both have this. Currently ARC-1 runs tests but returns only pass/fail — no coverage metrics.
+
+**Concern:** Coverage for a 500-line class generates 500+ lines of output. May need summarization (e.g., "85% covered, 12 uncovered lines: 45-48, 102-105, 200-204") rather than raw line-by-line data.
+
+**Implementation:**
+- Add `enableCoverage` parameter to `runUnitTests()` in `src/adt/devtools.ts`
+- Post coverage measurement request, parse response with pagination
+- Return summary + uncovered line ranges (not raw per-line data, to avoid context bloat)
+- Integrate into SAPDiagnose or SAPRead `run_tests` action
+
+---
+
+### FEAT-42: ATC Output Formats
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — CI/CD integration |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md) |
+
+**What:** Format ATC check results as JUnit4 XML, checkstyle XML, or codeclimate JSON. Currently ARC-1 returns raw ATC results.
+
+**Why:** Standard output formats enable integration with CI/CD pipelines (GitHub Actions, Jenkins, GitLab CI) and code quality dashboards.
+
+**Implementation:**
+- Add `format` parameter to ATC handler in `src/handlers/intent.ts` (`raw`, `junit4`, `checkstyle`, `codeclimate`)
+- Formatter functions in new `src/adt/atc-formatters.ts`
+- Default to current format for LLM consumption; optional structured formats for CI/CD
+
+---
+
+### FEAT-43: DDIC Auth & Misc Read (Authorization Fields, Feature Toggles)
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — niche but useful for authorization analysis |
+| **Status** | Not started |
+| **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli commit `2ec4228` (Apr 2026) |
+
+**What:** Add read support for Authorization Fields (`/sap/bc/adt/authorizationfields/{name}`, XML namespace `http://www.sap.com/iam/auth`), Feature Toggles (`/sap/bc/adt/sfw/featuretoggles`), and Enhancement Implementations (BAdI). sapcli recently added Authorization Fields (Apr 2026) and has had Feature Toggles since 2023.
+
+**Why:** Authorization analysis is important for security audits. Feature toggles are used in SAP's switch framework for conditional features.
+
+**Implementation:**
+- Add `getAuthorizationField(name)` to `src/adt/client.ts`
+- Add `getFeatureToggle(name)` to `src/adt/client.ts`
+- Add both types to SAPRead handler
+- XML parsing in `src/adt/xml-parser.ts` for the `auth:auth` namespace
 
 ---
 
