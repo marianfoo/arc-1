@@ -280,8 +280,9 @@ The following items were incorrectly marked in the previous version and have sin
 
 **P0 — production blockers:**
 - ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented: one-retry negotiation fallback in `src/adt/http.ts`, endpoint-specific CTS media types, lock `corrNr` auto-propagation. fr0ster v4.5.0 added per-endpoint header caching (P3 optimization ARC-1 doesn't need yet). [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)
+- ADT service discovery / MIME negotiation (FEAT-38) — probe once at startup, eliminate 415/406 guesswork
 - 401 session timeout auto-retry (centralized gateway idle)
-- TLS/HTTPS for HTTP Streamable (enterprise deployment without reverse proxy)
+- ~~TLS/HTTPS for HTTP Streamable~~ — downgraded to P3: most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress)
 
 **P1 — high-value gaps:**
 - Where-Used analysis, fix proposals

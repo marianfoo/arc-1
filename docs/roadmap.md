@@ -42,7 +42,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | # | ID | Feature | Priority | Effort | Category |
 |---|-----|---------|----------|--------|----------|
 | ~~1~~ | ~~FEAT-02~~ | ~~API Release Status / Clean Core~~ | ~~P0~~ | ~~S~~ | ~~Completed 2026-04-10~~ |
-| 2 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P0 | S | Features |
+| 2 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
 | 3 | FEAT-08 | Content-Type 415/406 Auto-Retry | P0 | XS | Features |
 | 4 | FEAT-14 | 401 Session Timeout Auto-Retry | P0 | XS | Features |
 | 5 | FEAT-15 | Namespace URL Encoding Audit | P1 | XS | Features |
@@ -139,8 +139,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
 2. **FEAT-08** Content-Type 415/406 Auto-Retry (XS) — both fr0ster and VSP hit this
 3. **FEAT-14** 401 Session Timeout Auto-Retry (XS) — centralized gateway idles between requests
-4. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — enterprise deployments without reverse proxy
-5. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
+4. **FEAT-15** Namespace URL Encoding Audit (XS) — silent failures for namespaced objects
 
 ### Phase A.5: Proactive Compatibility (P0)
 6. **FEAT-38** ADT Service Discovery / MIME Negotiation (S) — probe `/sap/bc/adt/discovery` once at startup to learn supported MIME types per endpoint; eliminates 415/406 retries entirely. sapcli has had this since 2018. Supersedes reactive FEAT-08 approach.
@@ -195,8 +194,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 36. **FEAT-34** i18n Translation Management (M) — VSP added 7 translation tools
 
 ### Phase F: Future / Niche (P3)
-37. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
-38. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
+37. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress) for TLS termination; in-app TLS is edge case
+38. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
+39. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
 
 ---
 
@@ -223,10 +223,10 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### FEAT-07: TLS/HTTPS for HTTP Streamable Transport
 | Field | Value |
 |-------|-------|
-| **Priority** | P0 |
+| **Priority** | P3 (downgraded from P0, 2026-04-11) |
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
-| **Usefulness** | High — required for production enterprise deployments without reverse proxy |
+| **Usefulness** | Low — most deployments use reverse proxy for TLS termination |
 | **Status** | Not started |
 | **Source** | [fr0ster tracker: TLS evaluation](../compare/fr0ster/evaluations/tls-https-support.md) |
 
