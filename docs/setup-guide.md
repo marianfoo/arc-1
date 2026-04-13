@@ -93,7 +93,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
 }
 ```
 
-With write access enabled (developer profile):
+With write access enabled (developer profile, writes restricted to custom packages):
 
 ```json
 {
@@ -105,14 +105,15 @@ With write access enabled (developer profile):
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "ARC1_PROFILE": "developer"
+        "ARC1_PROFILE": "developer",
+        "SAP_ALLOWED_PACKAGES": "Z*,$TMP"
       }
     }
   }
 }
 ```
 
-With full access (writes + SQL + data):
+With individual flags (fine-grained control):
 
 ```json
 {
@@ -124,7 +125,9 @@ With full access (writes + SQL + data):
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "ARC1_PROFILE": "developer-sql"
+        "SAP_READ_ONLY": "false",
+        "SAP_ALLOWED_PACKAGES": "Z*,$TMP",
+        "SAP_BLOCK_FREE_SQL": "false"
       }
     }
   }
@@ -151,7 +154,7 @@ Add `.mcp.json` to your project root:
 }
 ```
 
-With developer access (writes enabled):
+With developer access (writes enabled, restricted to custom packages):
 
 ```json
 {
@@ -163,7 +166,8 @@ With developer access (writes enabled):
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "ARC1_PROFILE": "developer"
+        "ARC1_PROFILE": "developer",
+        "SAP_ALLOWED_PACKAGES": "Z*,$TMP"
       }
     }
   }
@@ -179,12 +183,12 @@ npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
-With developer access (writes enabled):
+With developer access (writes enabled, restricted to custom packages):
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000 \
-  --profile developer
+  --profile developer --allowed-packages "Z*,$TMP"
 ```
 
 Then add to VS Code MCP settings:
