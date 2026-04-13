@@ -1,17 +1,65 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-12",
-  "lastCheckedSha": "be56df1",
+  "lastUpdated": "2026-04-13",
+  "lastCheckedSha": "c358481",
   "stats": {
-    "totalCommits": 799,
+    "totalCommits": 803,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 76,
-    "evaluated": 39,
+    "totalTracked": 80,
+    "evaluated": 42,
     "pending": 0,
-    "skipped": 37
+    "skipped": 38
   },
   "releases": [
+    {
+      "version": "v5.0.6-v5.0.8",
+      "date": "2026-04-13",
+      "commits": [
+        {
+          "sha": "8fd0ef3",
+          "date": "2026-04-13",
+          "message": "feat: add ActivateObjects tool for group/mass activation (closes #49)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "no-action",
+          "relevance": "14 new activation tools (1 group + 1 low-level + 12 per-type). ARC-1 already has equivalent via SAPActivate with batch_activate action. Token cost: 14 tools vs ARC-1's 1. Key gap identified: GetInactiveObjects endpoint (P2).",
+          "evaluationFile": "evaluations/feat-49-activate-objects.md"
+        },
+        {
+          "sha": "246c78f",
+          "date": "2026-04-13",
+          "message": "feat: add per-type Activate handlers to high-level group",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "12 per-type activation handlers (ActivateDomain, ActivateClass, etc.) — ARC-1 handles via single SAPActivate tool.",
+          "evaluationFile": "evaluations/feat-49-activate-objects.md"
+        },
+        {
+          "sha": "ad785ac",
+          "date": "2026-04-13",
+          "message": "fix: use high-level names and descriptions for Activate handlers",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "lesson-learned",
+          "relevance": "Post-merge fix: per-type handlers had low-level names (ActivateDomainLow) and [low-level] descriptions. Shows maintenance cost of per-type tool proliferation that ARC-1's intent-based design avoids.",
+          "evaluationFile": "evaluations/feat-49-activate-objects.md"
+        },
+        {
+          "sha": "c358481",
+          "date": "2026-04-13",
+          "message": "chore: bump version to 5.0.8",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        }
+      ]
+    },
     {
       "version": "v5.0.0-v5.0.1",
       "date": "2026-04-11 to 2026-04-12",

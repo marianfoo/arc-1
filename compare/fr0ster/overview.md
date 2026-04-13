@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [fr0ster/mcp-abap-adt](https://github.com/fr0ster/mcp-abap-adt) for features worth adopting in ARC-1.
 
-_Last updated: 2026-04-12_
+_Last updated: 2026-04-13_
 
 ## Approach
 
@@ -18,12 +18,12 @@ _Last updated: 2026-04-12_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 799 | 40 |
-| Tracked | 76 | 40 |
-| Evaluated | 39 | 40 |
+| Total | 803 | 40 |
+| Tracked | 80 | 40 |
+| Evaluated | 42 | 40 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 37 | 25 |
-| Evaluation files | 22 | 10 |
+| Skipped (not relevant) | 38 | 25 |
+| Evaluation files | 23 | 10 |
 
 ## Priority Summary
 
@@ -46,6 +46,7 @@ _Last updated: 2026-04-12_
 | commit | 9ef5843 | Create vs Update separation (breaking change) | SAPWrite design |
 | commit | available_in cluster | Dynamic tool hiding by system capabilities | features.ts enhancement |
 | commit | 5f975fe | MCP client auto-configurator | High #21 in matrix |
+| commit | 8fd0ef3 | GetInactiveObjects endpoint (list pending activations) | New SAPRead/SAPDiagnose action |
 | issue | #30 | Object history + transport contents | Medium #20, #25 in matrix |
 | issue | #13 | i18n check handling for non-EN languages | Verify in ARC-1 |
 | issue | #7, #6 | 409 error detail extraction for LLM | Verify in ARC-1 |
