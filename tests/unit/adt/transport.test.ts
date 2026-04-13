@@ -360,19 +360,19 @@ describe('Transport Management', () => {
       await expect(reassignTransport(http, safety, 'DEVK900001', 'NEWUSER')).rejects.toThrow(AdtSafetyError);
     });
 
-    it('sends POST with correct XML body', async () => {
+    it('sends PUT with correct XML body', async () => {
       const http = mockHttp();
       await reassignTransport(http, enabledSafety, 'DEVK900001', 'NEWUSER');
-      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      const body = (http.put as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(body).toContain('tm:useraction="changeowner"');
-      expect(body).toContain('tm:owner="NEWUSER"');
+      expect(body).toContain('tm:targetuser="NEWUSER"');
       expect(body).toContain('tm:number="DEVK900001"');
     });
 
     it('escapes special characters in owner name', async () => {
       const http = mockHttp();
       await reassignTransport(http, enabledSafety, 'DEVK900001', 'USER<&>');
-      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      const body = (http.put as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(body).toContain('&lt;');
       expect(body).toContain('&amp;');
     });
@@ -380,7 +380,7 @@ describe('Transport Management', () => {
     it('uses correct CTS_CONTENT_TYPE_ORGANIZER media type', async () => {
       const http = mockHttp();
       await reassignTransport(http, enabledSafety, 'DEVK900001', 'NEWUSER');
-      const calls = (http.post as ReturnType<typeof vi.fn>).mock.calls[0];
+      const calls = (http.put as ReturnType<typeof vi.fn>).mock.calls[0];
       const contentType = calls?.[2] as string;
       const headers = calls?.[3] as Record<string, string>;
       expect(contentType).toBe(CTS_CONTENT_TYPE_ORGANIZER);
@@ -396,12 +396,12 @@ describe('Transport Management', () => {
       </tm:root>`;
       const http = mockHttp(xml);
       await reassignTransport(http, enabledSafety, 'DEVK900001', 'NEWUSER', true);
-      const postCalls = (http.post as ReturnType<typeof vi.fn>).mock.calls;
-      // get call uses http.get, post calls are: task1, task2, parent
-      expect(postCalls).toHaveLength(3);
-      expect(postCalls[0]?.[0] as string).toContain('DEVK900001T1');
-      expect(postCalls[1]?.[0] as string).toContain('DEVK900001T2');
-      expect(postCalls[2]?.[0] as string).toContain('DEVK900001');
+      const putCalls = (http.put as ReturnType<typeof vi.fn>).mock.calls;
+      // get call uses http.get, put calls are: task1, task2, parent
+      expect(putCalls).toHaveLength(3);
+      expect(putCalls[0]?.[0] as string).toContain('DEVK900001T1');
+      expect(putCalls[1]?.[0] as string).toContain('DEVK900001T2');
+      expect(putCalls[2]?.[0] as string).toContain('DEVK900001');
     });
 
     it('recursive skips already-released tasks', async () => {
@@ -413,10 +413,10 @@ describe('Transport Management', () => {
       </tm:root>`;
       const http = mockHttp(xml);
       await reassignTransport(http, enabledSafety, 'DEVK900001', 'NEWUSER', true);
-      const postCalls = (http.post as ReturnType<typeof vi.fn>).mock.calls;
-      expect(postCalls).toHaveLength(2); // Only T2 + parent
-      expect(postCalls[0]?.[0] as string).toContain('DEVK900001T2');
-      expect(postCalls[1]?.[0] as string).toContain('DEVK900001');
+      const putCalls = (http.put as ReturnType<typeof vi.fn>).mock.calls;
+      expect(putCalls).toHaveLength(2); // Only T2 + parent
+      expect(putCalls[0]?.[0] as string).toContain('DEVK900001T2');
+      expect(putCalls[1]?.[0] as string).toContain('DEVK900001');
     });
   });
 
