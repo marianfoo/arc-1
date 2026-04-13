@@ -223,6 +223,16 @@ If the user wants edits, incorporate them before proceeding.
 
 ## Step 6: Create, Activate, and Test
 
+### 6-pre. Lint-check generated code (optional)
+
+Before writing, validate the generated code against lint rules:
+
+```
+SAPLint(action="lint", source="<generated_source>", name="<test_class_name>")
+```
+
+Fix any lint findings before proceeding. Pre-write lint validation also runs automatically when enabled (default: on).
+
 ### 6a. Create the test class
 
 ```
@@ -241,7 +251,7 @@ SAPWrite(action="update", type="CLAS", name="<test_class_name>", source="<genera
 SAPActivate(type="CLAS", name="<test_class_name>")
 ```
 
-Check activation messages. If there are errors, fix them and re-activate.
+Activation returns structured responses with detailed error/warning messages including line numbers. Use these to pinpoint exact issues.
 
 ### 6d. Run the unit tests
 

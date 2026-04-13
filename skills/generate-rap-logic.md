@@ -45,7 +45,7 @@ Understand the data model: field names, types, aliases, associations. This is ne
 ### 1c. Get dependency context
 
 ```
-SAPContext(type="DDLS", name="<interface_view>")
+SAPContext(type="DDLS", name="<interface_view>", action="deps")
 ```
 
 Understand underlying tables, associations, and related entities. Useful for cross-entity validations or determinations that read associated data.
@@ -179,11 +179,19 @@ If the user wants edits, incorporate them before proceeding.
 
 ## Step 5: Write and Validate
 
+Before writing, optionally lint-check the generated code to catch issues before acquiring SAP locks:
+
+```
+SAPLint(action="lint", source="<generated_method_code>", name="<bp_class>")
+```
+
 Write each method implementation using method-level surgery:
 
 ```
 SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method_name>", source="<generated_code>", transport="<transport>")
 ```
+
+**Note:** The `transport` parameter is recommended but not always required for edit_method. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied. Pre-write lint validation runs automatically when enabled (default: on).
 
 After writing all methods, run a syntax check:
 
@@ -204,6 +212,8 @@ Activate the behavior pool and behavior definition together:
 ```
 SAPActivate(objects=[{type:"BDEF", name:"<bdef>"}, {type:"CLAS", name:"<bp_class>"}])
 ```
+
+**Note:** Activation returns structured responses with detailed error/warning messages including line numbers and URIs. Use this to pinpoint exact issues rather than re-reading full source.
 
 Optionally, if a test class exists, run the unit tests:
 

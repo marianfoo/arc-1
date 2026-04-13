@@ -554,6 +554,12 @@ SAPActivate(type="CLAS", name="ZBP_I_<entity>")
 
 ## Step 12: Batch Activate All Artifacts
 
+First, optionally check for any lingering inactive objects that might interfere:
+
+```
+SAPRead(type="INACTIVE_OBJECTS")
+```
+
 Activate all artifacts together to resolve cross-dependencies:
 
 ```
@@ -568,6 +574,8 @@ SAPActivate(objects=[
   {type:"SRVD", name:"ZSD_<entity>"}
 ])
 ```
+
+**Note:** Activation returns structured responses with detailed error/warning messages including line numbers and URIs. Errors block activation; warnings allow it but should be reviewed.
 
 If batch activation fails, activate sequentially in dependency order:
 1. Table entity
@@ -645,6 +653,8 @@ Next steps:
   - Add access control (DCLS)
   - Add custom actions if needed
   - Generate unit tests (use generate-abap-unit-test skill)
+  - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
+  - Create proper DOMA/DTEL for reusable typing (use SAPWrite with type=DOMA/DTEL)
 ```
 
 ## Error Handling
@@ -676,8 +686,11 @@ Next steps:
 - **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
 - **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
-- **Access control (DCLS)**: No authorization objects. Add manually.
+- **Access control (DCL)**: ARC-1 does not yet support DCL read/write (FEAT-37). Create manually in ADT.
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
+- **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
+- **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.
+- **Service binding creation**: SRVB must be created manually in ADT (not supported by ADT write API).
 
 ### When to Use This Skill
 

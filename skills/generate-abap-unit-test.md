@@ -11,7 +11,7 @@ The user provides an ABAP class to test. Ask the user for:
 - **Test class name** (optional — default: `ZCL_TEST_<CLASS>`)
 - **Methods to test** (optional — default: all public methods)
 - **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+- **Transport request** (optional — explicit transport recommended for transportable packages; ARC-1 auto-propagates lock `corrNr` for updates when omitted)
 
 If the user provides just a class name, use defaults and proceed.
 
@@ -20,6 +20,16 @@ If the user provides just a class name, use defaults and proceed.
 Read the class, its methods, dependencies, and any existing tests.
 
 ### 1a. Read the full class source
+
+Prefer the structured format to get metadata and all includes (including existing tests) in one call:
+
+```
+SAPRead(type="CLAS", name="<class_name>", format="structured")
+```
+
+This returns JSON with metadata (description, category, package) and decomposed source (main, testclasses, definitions, implementations, macros). The `testclasses` field contains existing test code if any — useful for analyzing what's already covered without a separate fetch.
+
+Alternatively, for just the main source:
 
 ```
 SAPRead(type="CLAS", name="<class_name>")
@@ -53,6 +63,10 @@ SAPContext(type="CLAS", name="<class_name>", depth=2)
 ```
 
 ### 1d. (Optional) Read existing test classes
+
+If you used `format="structured"` in Step 1a, the `testclasses` field already contains existing test code (or null if none) — skip this step.
+
+Otherwise, fetch test classes separately:
 
 ```
 SAPRead(type="CLAS", name="<class_name>", include="testclasses")
@@ -271,6 +285,16 @@ If the user wants edits, incorporate them before proceeding.
 
 ## Step 6: Create, Activate, and Test
 
+### 6-pre. Lint-check generated code (optional)
+
+Before writing, validate the generated code against lint rules:
+
+```
+SAPLint(action="lint", source="<generated_source>", name="<test_class_name>")
+```
+
+Fix any lint findings before proceeding. Pre-write lint validation also runs automatically when enabled (default: on).
+
 ### 6a. Create the test class
 
 ```
@@ -283,13 +307,15 @@ SAPWrite(action="create", type="CLAS", name="<test_class_name>", source="<genera
 SAPWrite(action="update", type="CLAS", name="<test_class_name>", source="<generated_source>", transport="<transport>")
 ```
 
+**Note:** For the update action, `transport` is recommended but not always required. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied.
+
 ### 6c. Activate the test class
 
 ```
 SAPActivate(type="CLAS", name="<test_class_name>")
 ```
 
-Check activation messages. If there are errors, fix them and re-activate.
+Activation returns structured responses with detailed error/warning messages including line numbers. Use these to pinpoint exact issues.
 
 ### 6d. Run the unit tests
 
