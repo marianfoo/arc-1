@@ -32,7 +32,8 @@ async function bestEffortDelete(client: Client, type: string, name: string): Pro
 
 describe('E2E RAP write lifecycle tests', () => {
   let client: Client;
-  let rapAvailable: boolean | undefined;
+  // true when RAP is available, undefined when not (so requireOrSkip can skip on undefined)
+  let rapAvailable: true | undefined;
 
   beforeAll(async () => {
     client = await connectClient();
@@ -41,7 +42,8 @@ describe('E2E RAP write lifecycle tests', () => {
     const probeResult = await callTool(client, 'SAPManage', { action: 'probe' });
     const probeText = expectToolSuccess(probeResult);
     const features = JSON.parse(probeText);
-    rapAvailable = features.rap?.available;
+    // requireOrSkip only skips on null/undefined, not false — so map false → undefined
+    rapAvailable = features.rap?.available === true ? true : undefined;
   });
 
   afterAll(async () => {
@@ -171,7 +173,27 @@ describe('E2E RAP write lifecycle tests', () => {
       });
       expectToolSuccess(activateViewResult);
 
-      // Step 3: Create BDEF for the view entity
+      // Step 3: Create the behavior pool class (required before BDEF activation)
+      const bpClassSource = [
+        `CLASS ${bpClassName.toLowerCase()} DEFINITION`,
+        '  PUBLIC ABSTRACT FINAL',
+        `  FOR BEHAVIOR OF ${viewName.toLowerCase()}.`,
+        'ENDCLASS.',
+        '',
+        `CLASS ${bpClassName.toLowerCase()} IMPLEMENTATION.`,
+        'ENDCLASS.',
+      ].join('\n');
+
+      const createBpResult = await callTool(client, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS',
+        name: bpClassName,
+        source: bpClassSource,
+        package: '$TMP',
+      });
+      expectToolSuccess(createBpResult);
+
+      // Step 4: Create BDEF for the view entity
       const bdefSource = [
         `managed implementation in class ${bpClassName.toLowerCase()} unique;`,
         'strict;',
@@ -197,10 +219,12 @@ describe('E2E RAP write lifecycle tests', () => {
       });
       expectToolSuccess(createBdefResult);
 
-      // Activate BDEF
+      // Activate BDEF and behavior pool together (cross-dependency)
       const activateBdefResult = await callTool(client, 'SAPActivate', {
-        type: 'BDEF',
-        name: bdefName,
+        objects: [
+          { type: 'CLAS', name: bpClassName },
+          { type: 'BDEF', name: bdefName },
+        ],
       });
       expectToolSuccess(activateBdefResult);
 
@@ -222,8 +246,9 @@ describe('E2E RAP write lifecycle tests', () => {
       expect(bdefText.toLowerCase()).toContain('managed');
       expect(bdefText.toLowerCase()).toContain(viewName.toLowerCase());
     } finally {
-      // Cleanup in reverse dependency order: BDEF -> view -> table
+      // Cleanup in reverse dependency order: BDEF -> class -> view -> table
       await bestEffortDelete(client, 'BDEF', bdefName);
+      await bestEffortDelete(client, 'CLAS', bpClassName);
       await bestEffortDelete(client, 'DDLS', viewName);
       await bestEffortDelete(client, 'DDLS', tableName);
     }

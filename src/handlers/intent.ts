@@ -1402,6 +1402,11 @@ async function handleSAPWrite(
   // RAP feature guard — block DDLS/BDEF/DDLX/SRVD writes when rap.available === false.
   // If features haven't been probed yet (cachedFeatures === undefined), allow the request
   // (the SAP system will validate). Same pattern as FLP guard in handleSAPManage.
+  // NOTE: In PP mode, per-user probes don't update the global cachedFeatures cache
+  // (only shared-client probes do). This means the shared/startup probe result gates all
+  // users — same limitation as the FLP guards. Acceptable because: (1) if the shared client
+  // sees rap.available=false, the ADT endpoint likely isn't active system-wide, and (2) if
+  // no probe has run yet, the guard allows the request through.
   const RAP_DEPENDENT_TYPES = ['DDLS', 'BDEF', 'DDLX', 'SRVD'];
   function checkRapAvailable(objType: string): string | undefined {
     if (!RAP_DEPENDENT_TYPES.includes(objType.toUpperCase())) return undefined;

@@ -4223,6 +4223,7 @@ ENDCLASS.`;
         package: '$TMP',
       });
       // Should NOT return RAP guard error
+      expect(result.isError).toBeUndefined();
       expect(result.content[0]!.text).not.toContain('RAP/CDS feature is not available');
     });
 
@@ -4238,6 +4239,7 @@ ENDCLASS.`;
         package: '$TMP',
       });
       // Should NOT return RAP guard error — allow request when features unknown
+      expect(result.isError).toBeUndefined();
       expect(result.content[0]!.text).not.toContain('RAP/CDS feature is not available');
     });
 
@@ -4252,6 +4254,7 @@ ENDCLASS.`;
         package: '$TMP',
       });
       // PROG should work even when RAP is unavailable
+      expect(result.isError).toBeUndefined();
       expect(result.content[0]!.text).not.toContain('RAP/CDS feature is not available');
     });
 
@@ -4264,6 +4267,7 @@ ENDCLASS.`;
         objects: [{ type: 'PROG', name: 'ZTEST', source: "REPORT ztest.\nWRITE: / 'Hello'." }],
       });
       // batch_create with non-RAP types should not be blocked
+      expect(result.isError).toBeUndefined();
       expect(result.content[0]!.text).not.toContain('RAP/CDS feature is not available');
     });
 
