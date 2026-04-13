@@ -94,7 +94,10 @@ export async function probeFeatures(
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
-          const response = await client.get(probe.endpoint);
+          // HEAD is lightweight — just checks if the endpoint exists (2xx/3xx = available).
+          // GET on collection endpoints like /ddic/ddl/sources can return 4xx/5xx even when
+          // the feature is available, because they expect a specific object name or parameters.
+          const response = await client.head(probe.endpoint);
           return { id: probe.id, available: response.statusCode < 400 };
         } catch {
           return { id: probe.id, available: false };
