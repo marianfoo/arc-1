@@ -166,6 +166,16 @@ export function parseArgs(args: string[]): ServerConfig {
   const transport = resolve('transport', 'SAP_TRANSPORT', 'stdio');
   config.transport = (transport === 'http-streamable' ? 'http-streamable' : 'stdio') as TransportType;
   config.httpAddr = resolve('http-addr', 'SAP_HTTP_ADDR', '0.0.0.0:8080');
+  // --port / ARC1_PORT overrides just the port part of httpAddr (simpler alternative to --http-addr)
+  const portOverride = getFlag('port') ?? process.env.ARC1_PORT;
+  if (portOverride) {
+    const parsedPort = Number.parseInt(portOverride, 10);
+    if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      throw new Error(`Invalid port '${portOverride}': must be a number between 1 and 65535`);
+    }
+    const addrHost = config.httpAddr.includes(':') ? config.httpAddr.split(':')[0] : '0.0.0.0';
+    config.httpAddr = `${addrHost}:${parsedPort}`;
+  }
 
   // --- Profile (apply before individual safety flags so flags can override) ---
   const profileName = getFlag('profile') ?? process.env.ARC1_PROFILE;

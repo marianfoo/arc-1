@@ -82,6 +82,42 @@ describe('parseArgs', () => {
     expect(config.transport).toBe('stdio');
   });
 
+  it('parses --port flag and overrides httpAddr port', () => {
+    const config = parseArgs(['--port', '9090']);
+    expect(config.httpAddr).toBe('0.0.0.0:9090');
+  });
+
+  it('ARC1_PORT env var overrides httpAddr port', () => {
+    process.env.ARC1_PORT = '7070';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('0.0.0.0:7070');
+    } finally {
+      delete process.env.ARC1_PORT;
+    }
+  });
+
+  it('--port takes precedence over ARC1_PORT', () => {
+    process.env.ARC1_PORT = '7070';
+    try {
+      const config = parseArgs(['--port', '9090']);
+      expect(config.httpAddr).toBe('0.0.0.0:9090');
+    } finally {
+      delete process.env.ARC1_PORT;
+    }
+  });
+
+  it('--port preserves custom host from --http-addr', () => {
+    const config = parseArgs(['--http-addr', '127.0.0.1:8080', '--port', '9999']);
+    expect(config.httpAddr).toBe('127.0.0.1:9999');
+  });
+
+  it('throws on invalid --port value', () => {
+    expect(() => parseArgs(['--port', 'notanumber'])).toThrow(/Invalid port/);
+    expect(() => parseArgs(['--port', '99999'])).toThrow(/Invalid port/);
+    expect(() => parseArgs(['--port', '0'])).toThrow(/Invalid port/);
+  });
+
   it('parses feature toggles', () => {
     const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off']);
     expect(config.featureAbapGit).toBe('on');

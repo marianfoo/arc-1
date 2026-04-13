@@ -63,6 +63,8 @@ npm run dev
 | `SAP_LANGUAGE` / `--language` | SAP language (default: EN) |
 | `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
+| `ARC1_PORT` / `--port` | HTTP server port (default: `8080`). Simpler alternative to `ARC1_HTTP_ADDR` when only the port needs to change |
+| `ARC1_HTTP_ADDR` / `--http-addr` | HTTP server bind address (default: `0.0.0.0:8080`). Use when you need to change both host and port |
 | `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: false) |
 | `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: false) |
 | `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: false) |

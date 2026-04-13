@@ -258,7 +258,7 @@ export async function startHttpServer(
   });
 
   // ─── Start listening ───────────────────────────────────────
-  app.listen(port, bindHost, () => {
+  const httpServer = app.listen(port, bindHost, () => {
     let authMode = 'NONE (open)';
     if (config.xsuaaAuth && xsuaaCredentials) authMode = 'XSUAA OAuth proxy';
     else if ((config.apiKey || config.apiKeys) && config.oidcIssuer) authMode = 'API key + OIDC';
@@ -272,6 +272,20 @@ export async function startHttpServer(
       mcp: `http://${bindHost}:${port}/mcp`,
       auth: authMode,
     });
+  });
+
+  // Catch port-in-use and other bind errors so the process exits with a clear message
+  // instead of silently dying without any output.
+  httpServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(
+        `Port ${port} is already in use — stop the existing process or change the port via ARC1_PORT (e.g. ARC1_PORT=8081) or ARC1_HTTP_ADDR`,
+        { port, code: err.code },
+      );
+    } else {
+      logger.error('HTTP server failed to start', { error: err.message, code: err.code });
+    }
+    process.exit(1);
   });
 }
 

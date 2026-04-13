@@ -73,6 +73,11 @@ arc1.tmp.json
 arc1*.tmp.json
 .arc1/
 
+# arc1 runtime cache (SQLite + WAL journal sidecars)
+.arc1-cache.db
+.arc1-cache.db-shm
+.arc1-cache.db-wal
+
 # Session summaries (may contain credentials)
 *SESSION-SUMMARY*
 /abap-adt-api/

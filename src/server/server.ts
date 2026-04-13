@@ -403,6 +403,16 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     readOnly: config.readOnly,
   });
 
+  // Pre-flight: warn clearly when no SAP connection is configured so users know
+  // why all feature probes will fail (rather than seeing cryptic network errors).
+  const hasBtpConnection = !!(config.btpServiceKey || config.btpServiceKeyFile || process.env.SAP_BTP_DESTINATION);
+  if (!config.url && !hasBtpConnection) {
+    logger.warn(
+      'SAP_URL is not configured — no SAP system connection available. ' +
+        'Copy .env.example to .env and set SAP_URL, SAP_USER, SAP_PASSWORD (or configure SAP_BTP_DESTINATION / SAP_BTP_SERVICE_KEY_FILE).',
+    );
+  }
+
   // Resolve BTP ABAP Environment direct connection (service key + OAuth)
   let bearerTokenProvider: (() => Promise<string>) | undefined;
   if (config.btpServiceKey || config.btpServiceKeyFile) {
@@ -510,10 +520,12 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
   const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise);
 
-  // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals)
+  // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals).
+  // IMPORTANT: registering a SIGINT/SIGTERM listener suppresses Node's default exit behavior,
+  // so we must call process.exit() explicitly after cleanup — otherwise Ctrl+C hangs the process.
   if (cachingLayer) {
     let cacheClosed = false;
-    const cleanup = () => {
+    const cleanup = (signal: string) => {
       if (cacheClosed) return;
       cacheClosed = true;
       try {
@@ -521,9 +533,21 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
       } catch {
         // Ignore close errors during shutdown
       }
+      logger.info(`ARC-1 shutting down (${signal})`);
+      process.exit(0);
     };
-    process.on('SIGTERM', cleanup);
-    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', () => cleanup('SIGTERM'));
+    process.on('SIGINT', () => cleanup('SIGINT'));
+  } else {
+    // No cache — still log clean shutdown on explicit signals so operators see it in logs.
+    process.on('SIGTERM', () => {
+      logger.info('ARC-1 shutting down (SIGTERM)');
+      process.exit(0);
+    });
+    process.on('SIGINT', () => {
+      logger.info('ARC-1 shutting down (SIGINT)');
+      process.exit(0);
+    });
   }
 
   if (config.transport === 'stdio') {
