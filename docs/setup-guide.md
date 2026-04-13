@@ -77,6 +77,8 @@ This starts an MCP server on **stdio** — the default transport for Claude Desk
 
 Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
+**Read-only** (default — no extra config needed):
+
 ```json
 {
   "mcpServers": {
@@ -93,7 +95,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
 }
 ```
 
-With write access enabled (developer profile, writes restricted to custom packages):
+**Developer** (write access to specific packages):
 
 ```json
 {
@@ -113,7 +115,7 @@ With write access enabled (developer profile, writes restricted to custom packag
 }
 ```
 
-With individual flags (fine-grained control):
+**Admin** (all capabilities — writes, SQL, data preview, transports, all packages):
 
 ```json
 {
@@ -125,9 +127,8 @@ With individual flags (fine-grained control):
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "SAP_READ_ONLY": "false",
-        "SAP_ALLOWED_PACKAGES": "Z*,$TMP",
-        "SAP_BLOCK_FREE_SQL": "false"
+        "ARC1_PROFILE": "developer-sql",
+        "SAP_ALLOWED_PACKAGES": "*"
       }
     }
   }
@@ -138,6 +139,8 @@ With individual flags (fine-grained control):
 
 Add `.mcp.json` to your project root:
 
+**Read-only** (default):
+
 ```json
 {
   "mcpServers": {
@@ -154,7 +157,7 @@ Add `.mcp.json` to your project root:
 }
 ```
 
-With developer access (writes enabled, restricted to custom packages):
+**Developer** (write access to specific packages):
 
 ```json
 {
@@ -174,21 +177,51 @@ With developer access (writes enabled, restricted to custom packages):
 }
 ```
 
+**Admin** (all capabilities):
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "ARC1_PROFILE": "developer-sql",
+        "SAP_ALLOWED_PACKAGES": "*"
+      }
+    }
+  }
+}
+```
+
 #### Connect VS Code / GitHub Copilot (HTTP mode)
 
 VS Code and Copilot use HTTP Streamable transport, not stdio. Start arc1 as an HTTP server first:
+
+**Read-only** (default):
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
-With developer access (writes enabled, restricted to custom packages):
+**Developer** (write access to specific packages):
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000 \
   --profile developer --allowed-packages "Z*,$TMP"
+```
+
+**Admin** (all capabilities):
+
+```bash
+npx arc-1@latest --url https://host:44300 --user dev --password secret \
+  --transport http-streamable --http-addr 0.0.0.0:3000 \
+  --profile developer-sql --allowed-packages "*"
 ```
 
 Then add to VS Code MCP settings:
