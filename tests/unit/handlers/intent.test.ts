@@ -3732,5 +3732,37 @@ ENDCLASS.`;
       );
       expect(fetchBody?.[1]?.body).toContain('tm:type="K"');
     });
+
+    it('list defaults to current SAP user and modifiable status', async () => {
+      const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="admin" tm:desc="Test" tm:status="D" tm:type="K"/>
+      </tm:root>`;
+      mockFetch.mockResolvedValue(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'list',
+      });
+      expect(result.isError).toBeUndefined();
+      // Verify the URL includes user=admin (the client username) and requestType=KWT
+      const fetchUrl = mockFetch.mock.calls.find(
+        (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('transportrequests'),
+      );
+      expect(fetchUrl?.[0]).toContain('user=admin');
+      expect(fetchUrl?.[0]).toContain('requestType=KWT');
+    });
+
+    it('list with status=* returns all statuses', async () => {
+      const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="admin" tm:desc="Modifiable" tm:status="D" tm:type="K"/>
+        <tm:request tm:number="DEVK900002" tm:owner="admin" tm:desc="Released" tm:status="R" tm:type="K"/>
+      </tm:root>`;
+      mockFetch.mockResolvedValue(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'list',
+        status: '*',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '[]');
+      expect(parsed).toHaveLength(2);
+    });
   });
 });

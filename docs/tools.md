@@ -251,19 +251,22 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests: list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release.
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, or `release_recursive` |
-| `id` | string | No | Transport request ID (for get/release/delete/reassign/release_recursive) |
-| `description` | string | No | Description (for create) |
-| `user` | string | No | Filter by user (for list) |
+| `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
+| `description` | string | No | Transport description text (required for create) |
+| `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
+| `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
 | `type` | string | No | Transport type for create: `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies) |
-| `owner` | string | No | New owner (for reassign) |
-| `recursive` | boolean | No | Apply recursively to tasks (for delete/reassign). `release_recursive` always recurses. |
+| `owner` | string | No | New owner SAP username (required for reassign) |
+| `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
+
+**List defaults:** Without parameters, `list` returns modifiable transports (status D) for the current SAP user, across all transport types (Workbench, Customizing, Transport of Copies). Query params follow sapcli's `workbench_params()` pattern (`requestType=KWT`, `requestStatus`).
 
 **Protocol compatibility:** ARC-1 uses endpoint-specific CTS media types and includes a one-retry content negotiation fallback (406/415) for SAP version variance.
 

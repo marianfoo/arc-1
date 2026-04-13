@@ -78,6 +78,49 @@ describe('Transport Management', () => {
       expect(url).not.toContain('user=');
     });
 
+    it('sends requestType=KWT and target=true (sapcli pattern)', async () => {
+      const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
+      await listTransports(http, enabledSafety);
+      const url = (http.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('requestType=KWT');
+      expect(url).toContain('target=true');
+    });
+
+    it('sends requestStatus=DR by default', async () => {
+      const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
+      await listTransports(http, enabledSafety);
+      const url = (http.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('requestStatus=DR');
+    });
+
+    it('sends requestStatus=D when status filter is D', async () => {
+      const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
+      await listTransports(http, enabledSafety, undefined, 'D');
+      const url = (http.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('requestStatus=D');
+    });
+
+    it('filters status client-side as fallback', async () => {
+      const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="DEV1" tm:desc="Modifiable" tm:status="D" tm:type="K"/>
+        <tm:request tm:number="DEVK900002" tm:owner="DEV2" tm:desc="Released" tm:status="R" tm:type="K"/>
+      </tm:root>`;
+      const http = mockHttp(xml);
+      const transports = await listTransports(http, enabledSafety, undefined, 'D');
+      expect(transports).toHaveLength(1);
+      expect(transports[0]?.status).toBe('D');
+    });
+
+    it('status=* returns all statuses', async () => {
+      const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="DEVK900001" tm:owner="DEV1" tm:desc="Modifiable" tm:status="D" tm:type="K"/>
+        <tm:request tm:number="DEVK900002" tm:owner="DEV2" tm:desc="Released" tm:status="R" tm:type="K"/>
+      </tm:root>`;
+      const http = mockHttp(xml);
+      const transports = await listTransports(http, enabledSafety, undefined, '*');
+      expect(transports).toHaveLength(2);
+    });
+
     it('handles empty response', async () => {
       const http = mockHttp('<tm:root xmlns:tm="http://www.sap.com/cts/transports"/>');
       const transports = await listTransports(http, enabledSafety);
