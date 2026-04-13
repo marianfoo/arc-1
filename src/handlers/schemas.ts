@@ -43,6 +43,7 @@ const SAPREAD_TYPES_ONPREM = [
   'BSP',
   'BSP_DEPLOY',
   'API_STATE',
+  'INACTIVE_OBJECTS',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [
@@ -67,6 +68,7 @@ const SAPREAD_TYPES_BTP = [
   'BSP',
   'BSP_DEPLOY',
   'API_STATE',
+  'INACTIVE_OBJECTS',
 ] as const;
 
 export const SAPReadSchema = z.object({
@@ -268,6 +270,7 @@ export const SAPActivateSchema = z.object({
   name: z.string().optional(),
   type: z.string().optional(),
   version: z.string().optional(),
+  preaudit: z.coerce.boolean().optional(),
   objects: z
     .array(
       z.object({

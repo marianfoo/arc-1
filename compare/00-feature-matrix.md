@@ -162,7 +162,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Transport contents | ⚠️ (parsed when available) | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (-rrr objects) |
 | Transport assign | ✅ (reassign owner) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (reassign owner) |
 | Transport gating | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
-| Inactive objects list | ❌ | ✅ | ��� | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
+| Inactive objects list | ✅ | ✅ | ��� | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 
 ## 10. Diagnostics & Runtime
 
@@ -298,7 +298,6 @@ The following items were incorrectly marked in the previous version and have sin
 **P2+ — future gaps:**
 - System messages (SM02) — AI agent situational awareness. fr0ster v5.0.0 added this.
 - Gateway error log (IWFND) — OData/Gateway debugging with source code + call stack. fr0ster v5.0.0, on-prem only.
-- GetInactiveObjects (`GET /sap/bc/adt/activation/inactive`) — fr0ster has this, enables "list inactive → batch activate" LLM workflow
 - SQL traces, PrettyPrint, transport contents, source versions
 - Cloud readiness assessment, gCTS/abapGit, enhancement framework
 - Multi-system routing, rate limiting

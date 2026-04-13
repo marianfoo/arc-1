@@ -37,6 +37,7 @@ import {
   type DomainCreateParams,
 } from '../adt/ddic-xml.js';
 import {
+  type ActivationResult,
   activate,
   activateBatch,
   publishServiceBinding,
@@ -780,9 +781,13 @@ async function handleSAPRead(
       }
       return textResult(JSON.stringify(info, null, 2));
     }
+    case 'INACTIVE_OBJECTS': {
+      const objects = await client.getInactiveObjects();
+      return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
           'Tip: Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type="DDLS", CLAS/OC → type="CLAS", PROG/P → type="PROG"). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
@@ -1823,6 +1828,8 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
 
   // Batch activation: multiple objects at once (for RAP stacks etc.)
   const type = String(args.type ?? '');
+  const preaudit = args.preaudit !== undefined ? Boolean(args.preaudit) : undefined;
+  const activateOpts = preaudit !== undefined ? { preaudit } : undefined;
 
   if (args.objects && Array.isArray(args.objects)) {
     const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
@@ -1831,28 +1838,60 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
       return { url: objectUrlForType(objType, objName), name: objName };
     });
 
-    const result = await activateBatch(client.http, client.safety, objects);
+    const result = await activateBatch(client.http, client.safety, objects, activateOpts);
     const names = objects.map((o) => o.name).join(', ');
 
     if (result.success) {
       return textResult(
-        `Successfully activated ${objects.length} objects: ${names}.${result.messages.length > 0 ? `\nMessages: ${result.messages.join('; ')}` : ''}`,
+        `Successfully activated ${objects.length} objects: ${names}.${formatActivationMessages(result)}`,
       );
     }
-    return errorResult(`Batch activation failed for: ${names}.\nErrors: ${result.messages.join('; ')}`);
+    return errorResult(`Batch activation failed for: ${names}.\n${formatActivationMessages(result)}`);
   }
 
   // Single activation (existing behavior)
   const objectUrl = objectUrlForType(type, name);
 
-  const result = await activate(client.http, client.safety, objectUrl);
+  const result = await activate(client.http, client.safety, objectUrl, activateOpts);
 
   if (result.success) {
-    return textResult(
-      `Successfully activated ${type} ${name}.${result.messages.length > 0 ? `\nMessages: ${result.messages.join('; ')}` : ''}`,
-    );
+    return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
-  return errorResult(`Activation failed for ${type} ${name}.\nErrors: ${result.messages.join('; ')}`);
+  return errorResult(`Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`);
+}
+
+/** Format activation result messages with structured detail (line numbers, URIs) when available */
+function formatActivationMessages(result: ActivationResult): string {
+  if (result.details.length === 0) return '';
+
+  const errors = result.details.filter((d) => d.severity === 'error');
+  const warnings = result.details.filter((d) => d.severity === 'warning');
+
+  const parts: string[] = [];
+
+  if (errors.length > 0) {
+    const formatted = errors.map((e) => {
+      const prefix = e.line ? `[line ${e.line}] ` : '';
+      const suffix = e.uri ? ` (${e.uri})` : '';
+      return `- ${prefix}${e.text}${suffix}`;
+    });
+    parts.push(`Errors:\n${formatted.join('\n')}`);
+  }
+
+  if (warnings.length > 0) {
+    const formatted = warnings.map((w) => {
+      const prefix = w.line ? `[line ${w.line}] ` : '';
+      return `- ${prefix}${w.text}`;
+    });
+    parts.push(`Warnings:\n${formatted.join('\n')}`);
+  }
+
+  // Fall back to flat messages if no errors/warnings but info messages exist
+  if (parts.length === 0 && result.messages.length > 0) {
+    return `\nMessages: ${result.messages.join('; ')}`;
+  }
+
+  return parts.length > 0 ? `\n${parts.join('\n')}` : '';
 }
 
 // ─── SAPNavigate Handler ─────────────────────────────────────────────

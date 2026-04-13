@@ -11,6 +11,7 @@ import {
   parseDataElementMetadata,
   parseDomainMetadata,
   parseFunctionGroup,
+  parseInactiveObjects,
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
@@ -877,6 +878,43 @@ describe('XML Parser', () => {
   });
 
   // ─── escapeXmlAttr ──────────────────────────────────────────────────
+
+  describe('parseInactiveObjects', () => {
+    it('parses inactive objects with description', () => {
+      const xml = loadFixture('inactive-objects.xml');
+      const objects = parseInactiveObjects(xml);
+      expect(objects).toHaveLength(3);
+      expect(objects[0]).toEqual({
+        name: 'ZCL_TEST',
+        type: 'CLAS/OC',
+        uri: '/sap/bc/adt/oo/classes/zcl_test',
+        description: 'Test class',
+      });
+      expect(objects[1]).toEqual({
+        name: 'ZTEST_DOMAIN',
+        type: 'DOMA/DD',
+        uri: '/sap/bc/adt/ddic/domains/ztest_domain',
+        description: 'Test domain',
+      });
+      // Third object has no description
+      expect(objects[2]).toEqual({
+        name: 'ZTEST_PROG',
+        type: 'PROG/P',
+        uri: '/sap/bc/adt/programs/programs/ztest_prog',
+      });
+      expect(objects[2]).not.toHaveProperty('description');
+    });
+
+    it('returns empty array for empty XML', () => {
+      expect(parseInactiveObjects('')).toEqual([]);
+      expect(parseInactiveObjects('  ')).toEqual([]);
+    });
+
+    it('returns empty array when no objectReference nodes', () => {
+      const xml = '<?xml version="1.0"?><root><empty/></root>';
+      expect(parseInactiveObjects(xml)).toEqual([]);
+    });
+  });
 
   describe('escapeXmlAttr', () => {
     it('escapes & < > " and single quote', () => {

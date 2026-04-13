@@ -56,6 +56,7 @@ Read any SAP ABAP object.
 | `MESSAGES` | Message class texts |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
+| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed) |
 
 **Structured format (CLAS only):**
 
@@ -91,6 +92,7 @@ SAPRead(type="API_STATE", name="IF_HTTP_CLIENT")              — check interfac
 SAPRead(type="API_STATE", name="MARA", objectType="TABL")     — check table with explicit type
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
 SAPRead(type="SYSTEM")
+SAPRead(type="INACTIVE_OBJECTS")                 — list objects pending activation
 ```
 
 ---
@@ -206,6 +208,7 @@ Activate (publish) ABAP objects. Supports single object or batch activation.
 |-----------|------|----------|-------------|
 | `name` | string | No | Object name (for single activation) |
 | `type` | string | No | Object type (`PROG`, `CLAS`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, etc.) |
+| `preaudit` | boolean | No | Request pre-activation audit from SAP (default: `true`). Set `false` to skip pre-audit for faster activation. |
 | `objects` | array | No | For batch: array of `{type, name}` objects to activate together |
 
 Use batch activation for RAP stacks where objects depend on each other (DDLS, BDEF, SRVD, DDLX, SRVB must be activated together).

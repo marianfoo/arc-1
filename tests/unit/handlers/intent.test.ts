@@ -668,6 +668,30 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('reads INACTIVE_OBJECTS and returns structured list', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0"?>
+          <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects" xmlns:adtcore="http://www.sap.com/adt/core">
+            <ioc:entry><ioc:object>
+              <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Test class"/>
+            </ioc:object></ioc:entry>
+          </ioc:inactiveObjects>`,
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'INACTIVE_OBJECTS',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '');
+      expect(parsed.count).toBe(1);
+      expect(parsed.objects[0].name).toBe('ZCL_TEST');
+      expect(parsed.objects[0].type).toBe('CLAS/OC');
+    });
+
     it('reads class with format="structured" returns JSON with metadata and source fields', async () => {
       const classMetadataXml = `<?xml version="1.0" encoding="utf-8"?>
 <class:abapClass class:final="true" class:visibility="public" class:category="00" class:fixPointArithmetic="true"
@@ -2106,6 +2130,41 @@ ENDCLASS.`;
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Successfully activated PROG ZTEST');
+    });
+
+    it('formats error messages with line numbers and URIs', async () => {
+      const xml = `<messages>
+        <msg type="E" severity="error" shortText="Type ZI_TRAVEL is not active" uri="/sap/bc/adt/ddic/ddl/sources/zi_travel" line="42"/>
+        <msg type="E" severity="error" shortText="Activation was cancelled"/>
+      </messages>`;
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('[line 42]');
+      expect(result.content[0]?.text).toContain('Type ZI_TRAVEL is not active');
+      expect(result.content[0]?.text).toContain('/sap/bc/adt/ddic/ddl/sources/zi_travel');
+    });
+
+    it('shows warnings on successful activation', async () => {
+      const xml = `<messages>
+        <msg type="W" severity="warning" shortText="Consider using CDS view entity"/>
+      </messages>`;
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }))
+        .mockResolvedValueOnce(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully activated');
+      expect(result.content[0]?.text).toContain('Warnings:');
+      expect(result.content[0]?.text).toContain('Consider using CDS view entity');
     });
   });
 
