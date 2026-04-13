@@ -25,7 +25,8 @@ description: ARC-1 — MCP Server for SAP ABAP Systems
 #   2. PrincipalPropagation destination (SAP_BTP_PP_DESTINATION) — used at
 #      runtime for per-user requests. Requires user JWT.
 #
-# Set credentials AFTER deploy (never in mta.yaml):
+# When using SAP_BTP_DESTINATION, URL/client come from the destination.
+# Only set manually if NOT using the Destination Service:
 #   cf set-env arc1-mcp-server SAP_URL "http://a4h-abap:50000"
 #   cf set-env arc1-mcp-server SAP_CLIENT "001"
 #   cf restage arc1-mcp-server

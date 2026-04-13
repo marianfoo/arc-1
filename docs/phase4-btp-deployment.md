@@ -83,14 +83,12 @@ The `mta.yaml` defines three BTP services that are created automatically:
 
 ### 2. Post-Deploy Configuration
 
-Set sensitive values via `cf set-env` (never in `mta.yaml`):
+When using `SAP_BTP_DESTINATION`, the URL and credentials come from the BTP Destination — no `cf set-env` for `SAP_URL` or `SAP_CLIENT` is needed. Only set them if you're not using the Destination Service:
 
 ```bash
-# SAP connection (URL must match Cloud Connector virtual host mapping)
+# Only needed if NOT using SAP_BTP_DESTINATION:
 cf set-env arc1-mcp-server SAP_URL "http://a4h-abap:50000"
 cf set-env arc1-mcp-server SAP_CLIENT "001"
-
-# Restart to apply
 cf restage arc1-mcp-server
 ```
 
@@ -253,8 +251,12 @@ curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/health
 # → {"status":"ok"}
 
 # Check Protected Resource Metadata (OAuth discovery)
-curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/.well-known/oauth-protected-resource
-# → {"resource":"https://arc1-mcp-server.cfapps...","...}
+curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/.well-known/oauth-protected-resource/mcp
+# → {"resource":"https://arc1-mcp-server.cfapps.../mcp","scopes_supported":["read","write","data","sql","admin"],...}
+
+# Check Authorization Server Metadata
+curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/.well-known/oauth-authorization-server
+# → {"authorization_endpoint":"...","token_endpoint":"...","registration_endpoint":"...",...}
 
 # Test with Bearer token
 TOKEN=$(az account get-access-token --scope "api://{client-id}/access_as_user" --query accessToken -o tsv)
@@ -327,6 +329,16 @@ cf restart arc1-mcp-server
 Then configure your MCP client (Copilot Studio, VS Code) to use OAuth authentication as described in [OAuth / JWT Setup](oauth-jwt-setup.md).
 
 ## Troubleshooting
+
+### MTA deploy fails: "Lifecycle type cannot be changed from docker to buildpack"
+
+If migrating from a Docker-based deployment to MTA (Node.js buildpack), CF cannot change the lifecycle type of an existing app. Delete the old Docker app first:
+
+```bash
+cf delete arc1-mcp-server -f -r
+# Then redeploy
+npm run btp:deploy
+```
 
 ### App crashes with "unable to find user arc1"
 
