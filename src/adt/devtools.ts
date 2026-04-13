@@ -278,11 +278,34 @@ export function parseActivationResult(xml: string): { success: boolean; messages
     if (severity === 'error' || severity === 'fatal' || type === 'E' || type === 'A') {
       hasErrors = true;
     }
-    const shortText = String(m['@_shortText'] ?? '');
+    // shortText may be an XML attribute (@_shortText) or a child element
+    // containing <txt> sub-elements. Handle both formats.
+    const shortText = extractShortText(m);
     if (shortText) messages.push(shortText);
   }
 
   return { success: !hasErrors, messages };
+}
+
+/** Extract shortText from an activation message node.
+ *  Format 1 (attribute): <msg shortText="..."/>
+ *  Format 2 (element):   <msg><shortText><txt>line1</txt><txt>line2</txt></shortText></msg>
+ */
+function extractShortText(m: Record<string, unknown>): string {
+  // Try attribute first (older SAP systems / some message types)
+  const attr = m['@_shortText'];
+  if (attr) return String(attr);
+
+  // Try child element with <txt> sub-elements
+  const shortTextNode = m.shortText;
+  if (!shortTextNode || typeof shortTextNode !== 'object') return '';
+
+  const record = shortTextNode as Record<string, unknown>;
+  const txt = record.txt ?? record['#text'];
+  if (typeof txt === 'string') return txt;
+  if (Array.isArray(txt)) return txt.map((t) => String(t)).join(' — ');
+  if (txt != null) return String(txt);
+  return '';
 }
 
 function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {

@@ -180,6 +180,34 @@ describe('DevTools', () => {
       expect(result.messages).toEqual([]);
     });
 
+    it('parses shortText from child <txt> elements (DDIC activation format)', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+        <chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">
+          <chkl:properties checkExecuted="true" activationExecuted="true" generationExecuted="false"/>
+          <msg type="E" line="0">
+            <shortText><txt>Activation was cancelled.</txt><txt>"DTEL X was not activated" (D0 408)</txt></shortText>
+          </msg>
+          <msg type="E" line="1">
+            <shortText><txt>No domain or data type was defined</txt></shortText>
+          </msg>
+        </chkl:messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.success).toBe(false);
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[0]).toContain('Activation was cancelled');
+      expect(result.messages[0]).toContain('DTEL X was not activated');
+      expect(result.messages[1]).toBe('No domain or data type was defined');
+    });
+
+    it('parses shortText from attribute (classic format)', () => {
+      const xml = `<chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">
+        <msg type="E" shortText="Some error"/>
+      </chkl:messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.success).toBe(false);
+      expect(result.messages).toEqual(['Some error']);
+    });
+
     it('sends activation request to correct endpoint with method param', async () => {
       const http = mockHttp('<activation/>');
       await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');

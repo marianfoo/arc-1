@@ -1043,6 +1043,66 @@ function getDdicWriteProperties(input: Record<string, unknown>): Record<string, 
 }
 
 /**
+ * Fetch existing DDIC metadata and merge with provided properties.
+ * This ensures that updating a single field (e.g., shortLabel) doesn't
+ * reset other fields (e.g., dataType, typeKind) to defaults, since
+ * DDIC updates are full-XML-replace operations.
+ *
+ * Internal _description and _package fields carry the existing values
+ * for the caller to use as fallbacks.
+ */
+async function mergeDdicProperties(
+  client: AdtClient,
+  type: string,
+  name: string,
+  provided: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  try {
+    if (type === 'DOMA') {
+      const existing = await client.getDomain(name);
+      return {
+        _description: existing.description,
+        _package: existing.package,
+        dataType: provided.dataType ?? existing.dataType,
+        length: provided.length ?? existing.length,
+        decimals: provided.decimals ?? existing.decimals,
+        outputLength: provided.outputLength ?? existing.outputLength,
+        conversionExit: provided.conversionExit ?? existing.conversionExit,
+        signExists: provided.signExists ?? existing.signExists,
+        lowercase: provided.lowercase ?? existing.lowercase,
+        fixedValues: provided.fixedValues ?? existing.fixedValues,
+        valueTable: provided.valueTable ?? existing.valueTable,
+      };
+    }
+    if (type === 'DTEL') {
+      const existing = await client.getDataElement(name);
+      return {
+        _description: existing.description,
+        _package: existing.package,
+        dataType: provided.dataType ?? existing.dataType,
+        length: provided.length ?? existing.length,
+        decimals: provided.decimals ?? existing.decimals,
+        typeKind: provided.typeKind ?? existing.typeKind,
+        typeName: provided.typeName ?? existing.typeName,
+        domainName: provided.domainName ?? existing.typeName, // DTEL stores domain in typeName
+        shortLabel: provided.shortLabel ?? existing.shortLabel,
+        mediumLabel: provided.mediumLabel ?? existing.mediumLabel,
+        longLabel: provided.longLabel ?? existing.longLabel,
+        headingLabel: provided.headingLabel ?? existing.headingLabel,
+        searchHelp: provided.searchHelp ?? existing.searchHelp,
+        searchHelpParameter: provided.searchHelpParameter,
+        setGetParameter: provided.setGetParameter,
+        defaultComponentName: provided.defaultComponentName ?? existing.defaultComponentName,
+        changeDocument: provided.changeDocument,
+      };
+    }
+  } catch {
+    // If we can't read existing metadata (e.g., object is new/inactive), fall through
+  }
+  return provided;
+}
+
+/**
  * Build the type-specific XML body for ADT object creation.
  *
  * SAP ADT requires each object type to have its own root XML element.
@@ -1329,9 +1389,14 @@ async function handleSAPWrite(
       const existingPackage = await enforcePackageForExistingObject();
 
       if (isDdicMetadataType(type)) {
-        const description = String(args.description ?? name);
-        const pkg = String(args.package ?? existingPackage ?? '$TMP');
-        const body = buildCreateXml(type, name, pkg, description, getDdicWriteProperties(args));
+        // DDIC updates are full-XML-replace — we must fetch existing metadata
+        // and merge with provided fields so omitted fields keep their current values.
+        // Without this, updating just labels would reset dataType/typeKind to defaults.
+        const ddicProps = getDdicWriteProperties(args);
+        const mergedProps = await mergeDdicProperties(client, type, name, ddicProps);
+        const description = String(args.description ?? mergedProps._description ?? name);
+        const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
+        const body = buildCreateXml(type, name, pkg, description, mergedProps);
         await safeUpdateObject(client.http, client.safety, objectUrl, body, ddicContentTypeForType(type), transport);
         cachingLayer?.invalidate(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
