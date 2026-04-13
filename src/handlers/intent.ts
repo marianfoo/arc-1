@@ -28,6 +28,7 @@ import {
   safeUpdateObject,
   safeUpdateSource,
   unlockObject,
+  updateObject,
 } from '../adt/crud.js';
 import {
   buildDataElementXml,
@@ -1371,8 +1372,19 @@ async function handleSAPWrite(
 
       if (isDdicMetadataType(type)) {
         // SAP's DTEL POST ignores labels, searchHelp, etc. — they require a follow-up PUT.
+        // Use withStatefulSession directly (not safeUpdateObject) to keep the lock cycle
+        // on the main client's session, avoiding lock contention with subsequent operations.
         if (type === 'DTEL' && dtelNeedsPostCreateUpdate(ddicProperties)) {
-          await safeUpdateObject(client.http, client.safety, objectUrl, body, ddicContentTypeForType(type), transport);
+          const ct = ddicContentTypeForType(type);
+          await client.http.withStatefulSession(async (session) => {
+            const lock = await lockObject(session, client.safety, objectUrl);
+            const effectiveTransport = transport ?? (lock.corrNr || undefined);
+            try {
+              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, effectiveTransport);
+            } finally {
+              await unlockObject(session, objectUrl, lock.lockHandle);
+            }
+          });
         }
         cachingLayer?.invalidate(type, name);
         return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
@@ -1504,9 +1516,25 @@ async function handleSAPWrite(
           const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/xml';
           await createObject(client.http, client.safety, createUrl, body, contentType, transport);
 
-          // Step 1b: DTEL POST ignores labels — follow up with PUT
+          // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
           if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objDdicProps)) {
-            await safeUpdateObject(client.http, client.safety, objUrl, body, contentType, transport);
+            await client.http.withStatefulSession(async (session) => {
+              const lock = await lockObject(session, client.safety, objUrl);
+              const effectiveTransport = transport ?? (lock.corrNr || undefined);
+              try {
+                await updateObject(
+                  session,
+                  client.safety,
+                  objUrl,
+                  body,
+                  lock.lockHandle,
+                  contentType,
+                  effectiveTransport,
+                );
+              } finally {
+                await unlockObject(session, objUrl, lock.lockHandle);
+              }
+            });
           }
 
           // Step 2: Write source if provided
