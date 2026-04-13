@@ -26,12 +26,22 @@ export async function listTransports(
   http: AdtHttpClient,
   safety: SafetyConfig,
   user?: string,
+  status?: string,
 ): Promise<TransportRequest[]> {
   checkTransport(safety, '', 'ListTransports', false);
 
-  let url = '/sap/bc/adt/cts/transportrequests';
+  const params = new URLSearchParams();
   if (user && user !== '*') {
-    url += `?user=${encodeURIComponent(user)}`;
+    params.set('user', user);
+  }
+  if (status) {
+    params.set('status', status);
+  }
+
+  let url = '/sap/bc/adt/cts/transportrequests';
+  const qs = params.toString();
+  if (qs) {
+    url += `?${qs}`;
   }
 
   const resp = await http.get(url, { Accept: CTS_ACCEPT_TREE });

@@ -1816,8 +1816,9 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
 
   switch (action) {
     case 'list': {
-      const user = args.user as string | undefined;
-      const transports = await listTransports(client.http, client.safety, user);
+      const user = (args.user as string | undefined) || client.username;
+      const status = (args.status as string | undefined) ?? 'D';
+      const transports = await listTransports(client.http, client.safety, user, status === '*' ? undefined : status);
       return textResult(JSON.stringify(transports, null, 2));
     }
     case 'get': {

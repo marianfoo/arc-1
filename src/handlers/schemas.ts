@@ -218,6 +218,7 @@ export const SAPTransportSchema = z.object({
   id: z.string().optional(),
   description: z.string().optional(),
   user: z.string().optional(),
+  status: z.string().optional(),
   type: z.enum(['K', 'W', 'T']).optional(),
   owner: z.string().optional(),
   recursive: z.boolean().optional(),
