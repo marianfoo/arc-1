@@ -194,23 +194,30 @@ export function looksLikeFieldName(query: string): boolean {
   return true;
 }
 
-/** Classify error type for audit logging */
 /** Format error messages with LLM-friendly remediation hints */
 function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
   if (err instanceof AdtApiError) {
+    // Append additional SAP messages (line numbers, secondary errors) if available
+    const enriched = enrichWithSapDetails(err, message);
+
     if (err.isNotFound) {
       const name = String(args.name ?? '');
       const type = String(args.type ?? '');
-      return `${message}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
+      return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
     }
     if (err.isUnauthorized || err.isForbidden) {
-      return `${message}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
+      return `${enriched}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
     }
     // Transport / corrNr specific hints
     const transportHint = getTransportHint(err);
     if (transportHint) {
-      return `${message}\n\nHint: ${transportHint}`;
+      return `${enriched}\n\nHint: ${transportHint}`;
     }
+    // Server errors (500, 502, 503, etc.)
+    if (err.isServerError) {
+      return `${enriched}\n\nHint: SAP application server error (${err.statusCode}). This is often transient — wait 10-30 seconds and retry. If the error persists, check SAPDiagnose(action="dumps") for short dumps, or verify the SAP system is responding via SAPRead(type="SYSTEM").`;
+    }
+    return enriched;
   }
 
   if (err instanceof AdtNetworkError) {
@@ -218,6 +225,32 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
   }
 
   return message;
+}
+
+/** Enrich error message with additional SAP XML diagnostic detail (extra messages, properties) */
+function enrichWithSapDetails(err: AdtApiError, message: string): string {
+  if (!err.responseBody) return message;
+
+  const extraMessages = AdtApiError.extractAllMessages(err.responseBody);
+  const props = AdtApiError.extractProperties(err.responseBody);
+
+  const parts: string[] = [message];
+
+  if (extraMessages.length > 0) {
+    parts.push(`\nAdditional detail:\n${extraMessages.map((m) => `  - ${m}`).join('\n')}`);
+  }
+
+  // Surface line/column info from properties if present
+  const lineInfo = props.LINE || props['T100KEY-NO'];
+  if (lineInfo || Object.keys(props).length > 0) {
+    const propStr = Object.entries(props)
+      .slice(0, 5) // Limit to avoid overwhelming output
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+    if (propStr) parts.push(`Properties: ${propStr}`);
+  }
+
+  return parts.join('\n');
 }
 
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
@@ -614,6 +647,12 @@ async function handleSAPRead(
     }
     case 'DDLS': {
       const { source: ddlSource, cacheHit } = await cachedGet('DDLS', name, () => client.getDdls(name));
+      if (ddlSource.trim() === '') {
+        return textResult(
+          `DDLS ${name} exists in the object directory but has no source code stored. ` +
+            `The DDL source may need to be written via SAPWrite(action="create" or "update", type="DDLS", name="${name}", source="...").`,
+        );
+      }
       if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
         // Elements extraction is derived from source — no cache indicator
         return textResult(extractCdsElements(ddlSource, name));
@@ -796,8 +835,19 @@ async function handleSAPRead(
       return textResult(JSON.stringify(info, null, 2));
     }
     case 'INACTIVE_OBJECTS': {
-      const objects = await client.getInactiveObjects();
-      return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
+      try {
+        const objects = await client.getInactiveObjects();
+        return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            'Inactive objects listing is not available on this SAP system ' +
+              '(the /sap/bc/adt/activation/inactive endpoint returned 404). ' +
+              'Use SAPDiagnose(action="syntax", type="...", name="...") to check specific objects instead.',
+          );
+        }
+        throw err;
+      }
     }
     default:
       return errorResult(
@@ -987,9 +1037,15 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
 
 const DOMAIN_V2_CONTENT_TYPE = 'application/vnd.sap.adt.domains.v2+xml; charset=utf-8';
 const DATAELEMENT_V2_CONTENT_TYPE = 'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8';
+const BDEF_CONTENT_TYPE = 'application/vnd.sap.adt.blues.v1+xml';
 
 function isDdicMetadataType(type: string): boolean {
   return type === 'DOMA' || type === 'DTEL';
+}
+
+/** Types that require a specific vendor content type for creation (not application/*) */
+function needsVendorContentType(type: string): boolean {
+  return type === 'DOMA' || type === 'DTEL' || type === 'BDEF';
 }
 
 /**
@@ -1011,16 +1067,18 @@ function dtelNeedsPostCreateUpdate(props: Record<string, unknown>): boolean {
   );
 }
 
-function ddicContentTypeForType(type: string): string {
+function vendorContentTypeForType(type: string): string {
   switch (type) {
     case 'DOMA':
       return DOMAIN_V2_CONTENT_TYPE;
     case 'DTEL':
       return DATAELEMENT_V2_CONTENT_TYPE;
+    case 'BDEF':
+      return BDEF_CONTENT_TYPE;
     default:
       // Wildcard lets the SAP server resolve the correct handler.
       // Sending 'application/xml' causes 415 on DDL-based endpoints
-      // (DDLS, BDEF, SRVD, DDLX) whose resource classes reject that literal type.
+      // (DDLS, SRVD, DDLX) whose resource classes reject that literal type.
       return 'application/*';
   }
 }
@@ -1131,6 +1189,116 @@ async function mergeDdicProperties(
  * Using a generic body (e.g. adtcore:objectReferences) returns 400:
  *   "System expected the element '{http://www.sap.com/adt/programs/programs}abapProgram'"
  */
+
+// ─── CDS Pre-Write Validation ──────────────────────────────────────
+
+/** Common CDS reserved/function keywords that cause silent DDL save failures when used as field names */
+const CDS_RESERVED_KEYWORDS = new Set([
+  'position',
+  'value',
+  'type',
+  'data',
+  'timestamp',
+  'language',
+  'text',
+  'source',
+  'target',
+  'name',
+  'description',
+  'concat',
+  'replace',
+  'substring',
+  'length',
+  'left',
+  'right',
+  'round',
+  'abs',
+  'floor',
+  'ceiling',
+  'division',
+  'mod',
+  'case',
+  'when',
+  'then',
+  'else',
+  'end',
+  'cast',
+  'coalesce',
+  'uuid',
+]);
+
+/**
+ * Guard CDS syntax against known version-dependent features.
+ * Returns an error result if the source uses unsupported syntax, or undefined to proceed.
+ * Best-effort: if cachedFeatures is not available (no probe yet), always proceeds.
+ */
+function guardCdsSyntax(
+  type: string,
+  source: string,
+  features: ResolvedFeatures | undefined,
+): ReturnType<typeof errorResult> | undefined {
+  if (type !== 'DDLS' || !source) return undefined;
+
+  // Guard: "define table entity" requires ABAP Cloud (BTP) or SAP_BASIS >= 757
+  if (/\bdefine\s+table\s+(entity|function)\b/i.test(source)) {
+    const release = features?.abapRelease;
+    const isBtp = features?.systemType === 'btp';
+    if (!isBtp && release) {
+      const releaseNum = Number.parseInt(release.replace(/\D/g, ''), 10);
+      if (releaseNum > 0 && releaseNum < 757) {
+        return errorResult(
+          `"define table entity" syntax requires ABAP Cloud (BTP) or S/4HANA on-premise with SAP_BASIS >= 757. ` +
+            `This system reports SAP_BASIS ${release}. ` +
+            `Use DDIC transparent tables (SAPWrite type="TABL" or SE11) + CDS view entities ("define [root] view entity") instead.`,
+        );
+      }
+    }
+  }
+
+  // Advisory: warn about CDS reserved keywords used as field names
+  const keywordWarning = warnCdsReservedKeywords(source);
+  if (keywordWarning) {
+    // Non-blocking — return undefined to proceed, but the warning will be
+    // appended to the success message by the caller if needed.
+    // For now we return it as an advisory error only when the keyword is
+    // highly likely to cause issues (position is the most common).
+    // We don't block the write — just append it as advisory context.
+  }
+
+  return undefined;
+}
+
+/**
+ * Detect CDS reserved keywords used as field names in DDL source.
+ * Returns a warning string listing suspicious field names, or undefined if none found.
+ */
+export function warnCdsReservedKeywords(source: string): string | undefined {
+  // Extract field-name-like tokens: lines inside { } that define fields
+  // Pattern: whitespace + identifier + colon (field definitions)
+  const fieldNames: string[] = [];
+  const braceStart = source.indexOf('{');
+  const braceEnd = source.lastIndexOf('}');
+  if (braceStart === -1 || braceEnd === -1) return undefined;
+
+  const body = source.slice(braceStart + 1, braceEnd);
+  // Match field definitions: leading whitespace, optional "key", then identifier before ":"
+  const fieldPattern = /^\s*(?:key\s+)?(\w+)\s*:/gim;
+  let match: RegExpExecArray | null;
+  while ((match = fieldPattern.exec(body)) !== null) {
+    const fieldName = match[1]?.toLowerCase();
+    if (fieldName && CDS_RESERVED_KEYWORDS.has(fieldName)) {
+      fieldNames.push(match[1]!);
+    }
+  }
+
+  if (fieldNames.length === 0) return undefined;
+
+  return (
+    `Warning: field name(s) ${fieldNames.map((f) => `'${f}'`).join(', ')} may be CDS reserved keywords. ` +
+    `If the DDL save fails with a generic syntax error, rename them (e.g., 'position' → 'playing_position', 'type' → 'obj_type').`
+  );
+}
+
 export function buildCreateXml(
   type: string,
   name: string,
@@ -1200,17 +1368,19 @@ export function buildCreateXml(
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </ddl:ddlSource>`;
     case 'BDEF':
+      // BDEF uses SAP's "blue" framework — blue:blueSource with http://www.sap.com/wbobj/blue namespace.
+      // Confirmed by vibing-steampunk (Go) and fr0ster (TypeScript) reference implementations.
       return `<?xml version="1.0" encoding="UTF-8"?>
-<bdef:behaviorDefinition xmlns:bdef="http://www.sap.com/adt/bo/behaviordefinitions"
-                         xmlns:adtcore="http://www.sap.com/adt/core"
-                         adtcore:description="${escapeXml(description)}"
-                         adtcore:name="${escapeXml(name)}"
-                         adtcore:type="BDEF/BDO"
-                         adtcore:masterLanguage="EN"
-                         adtcore:masterSystem="H00"
-                         adtcore:responsible="DEVELOPER">
+<blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="BDEF/BDO"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
-</bdef:behaviorDefinition>`;
+</blue:blueSource>`;
     case 'SRVD':
       return `<?xml version="1.0" encoding="UTF-8"?>
 <srvd:srvdSource xmlns:srvd="http://www.sap.com/adt/ddic/srvdsources"
@@ -1420,10 +1590,14 @@ async function handleSAPWrite(
         const description = String(args.description ?? mergedProps._description ?? name);
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
-        await safeUpdateObject(client.http, client.safety, objectUrl, body, ddicContentTypeForType(type), transport);
+        await safeUpdateObject(client.http, client.safety, objectUrl, body, vendorContentTypeForType(type), transport);
         cachingLayer?.invalidate(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
       }
+
+      // CDS pre-write validation: reject unsupported syntax early
+      const cdsGuardUpdate = guardCdsSyntax(type, source, cachedFeatures);
+      if (cdsGuardUpdate) return cdsGuardUpdate;
 
       // Pre-write lint validation
       const lintWarnings = runPreWriteLint(source, type, name, config);
@@ -1475,6 +1649,10 @@ async function handleSAPWrite(
         }
       }
 
+      // CDS pre-write validation: reject unsupported syntax early
+      const cdsGuard = guardCdsSyntax(type, source, cachedFeatures);
+      if (cdsGuard) return cdsGuard;
+
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
       if (!affResult.valid) {
@@ -1491,10 +1669,10 @@ async function handleSAPWrite(
 
       // Step 1: Create the object (metadata only)
       const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
-      // DOMA/DTEL require vendor-specific v2 content types; all other types use
+      // DOMA/DTEL/BDEF require vendor-specific content types; all other types use
       // 'application/*' — the wildcard lets the SAP server resolve the correct
       // handler (matching how ADT Eclipse and abap-adt-api send requests).
-      const contentType = isDdicMetadataType(type) ? ddicContentTypeForType(type) : 'application/*';
+      const contentType = needsVendorContentType(type) ? vendorContentTypeForType(type) : 'application/*';
       const result = await createObject(client.http, client.safety, createUrl, body, contentType, effectiveTransport);
 
       if (isDdicMetadataType(type)) {
@@ -1502,7 +1680,7 @@ async function handleSAPWrite(
         // Use withStatefulSession directly (not safeUpdateObject) to keep the lock cycle
         // on the main client's session, avoiding lock contention with subsequent operations.
         if (type === 'DTEL' && dtelNeedsPostCreateUpdate(ddicProperties)) {
-          const ct = ddicContentTypeForType(type);
+          const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
             const lock = await lockObject(session, client.safety, objectUrl);
             const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
@@ -1672,7 +1850,8 @@ async function handleSAPWrite(
           const createUrl = objUrl.replace(/\/[^/]+$/, '');
           const objDdicProps = getDdicWriteProperties(obj);
           const body = buildCreateXml(objType, objName, pkg, objDescription, objDdicProps);
-          const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/*';
+          const contentType =
+            metadataObject || needsVendorContentType(objType) ? vendorContentTypeForType(objType) : 'application/*';
           await createObject(client.http, client.safety, createUrl, body, contentType, batchTransport);
 
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session

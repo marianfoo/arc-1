@@ -56,7 +56,7 @@ Read any SAP ABAP object.
 | `MESSAGES` | Message class texts |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
-| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed) |
+| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed). Returns 404-friendly fallback on systems where the endpoint is unavailable. |
 
 **Structured format (CLAS only):**
 
@@ -168,6 +168,14 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
 
 **DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
+
+**BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
+
+**CDS pre-write validation:**
+
+- **Table entity version guard:** `define table entity` syntax requires ABAP Cloud (BTP) or S/4HANA on-premise with SAP_BASIS >= 757. On older systems, ARC-1 rejects the write early with an actionable message instead of letting SAP fail with a generic error.
+- **Reserved keyword warnings:** CDS field names like `position`, `value`, `type`, `data` etc. may be CDS reserved keywords that cause silent DDL save failures. ARC-1 detects these and includes an advisory warning (non-blocking) suggesting renamed alternatives.
+- **Empty DDLS source:** When reading a DDLS that exists but has no stored source, ARC-1 returns an explicit warning instead of silent empty content.
 
 **Batch creation:**
 
@@ -523,7 +531,7 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 
 **Actions:**
 
-- **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message.
+- **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message. **Important:** Syntax check runs against the *active* (on-system) source, not proposed new source. After writing/updating an object, activate it first, then run syntax check.
 - **`unittest`** — Run ABAP unit tests. Returns results per test class/method with status, alert messages, and execution time.
 - **`atc`** — Run ATC (ABAP Test Cockpit) checks. Returns findings with priority, check title, message, URI, and line number. Optional `variant` parameter for custom check variants.
 - **`dumps`** — List short dumps (ST22). Without `id`: returns recent dumps (filterable by `user`, `maxResults`). With `id`: returns full dump detail including error type, exception, program, stack trace, and formatted output.

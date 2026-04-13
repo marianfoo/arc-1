@@ -205,6 +205,47 @@ Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
         → Returns full dump with stack trace
 ```
 
+### 6. RAP Stack Creation (CDS + BDEF + SRVD)
+
+Create a RAP (RESTful ABAP Programming) business object stack. Order matters — dependencies first.
+
+**Version consideration:** `define table entity` syntax requires ABAP Cloud (BTP) or SAP_BASIS >= 757. On older on-premise systems (7.50-7.56), use DDIC transparent tables + CDS view entities instead.
+
+```
+Step 1: Check system capabilities
+        SAPRead(type="SYSTEM")
+        → Check SAP_BASIS release for syntax support
+
+Step 2: Create database tables (on-prem < 757) OR use define table entity (BTP / >= 757)
+        SAPWrite(action="create", type="DDLS", name="ZI_TRAVEL",
+          source="define root view entity ZI_Travel as select from ztravel { ... }")
+
+Step 3: Create behavior definition
+        SAPWrite(action="create", type="BDEF", name="ZI_TRAVEL",
+          source="managed implementation in class ZBP_I_TRAVEL unique;\ndefine behavior for ZI_TRAVEL\n{ ... }")
+
+Step 4: Create service definition
+        SAPWrite(action="create", type="SRVD", name="ZSD_TRAVEL",
+          source="define service ZSD_Travel { expose ZI_Travel; }")
+
+Step 5: Create behavior implementation class
+        SAPWrite(action="create", type="CLAS", name="ZBP_I_TRAVEL",
+          source="CLASS zbp_i_travel DEFINITION PUBLIC ABSTRACT FINAL...")
+
+Step 6: Activate all objects
+        SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"},{type:"CLAS",name:"ZBP_I_TRAVEL"}])
+```
+
+**Or use batch creation for simpler workflow:**
+```
+SAPWrite(action="batch_create", package="$TMP", objects=[
+  {type:"DDLS", name:"ZI_TRAVEL", source:"define root view entity..."},
+  {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
+  {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
+])
+```
+
 ---
 
 ## Error Handling
@@ -223,6 +264,8 @@ Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
 |-------|-------|----------|
 | Package requires transport | Non-`$TMP` package, no transport provided | Use `SAPTransport(action="list")` or `SAPTransport(action="create")` to get a transport ID, then pass it via `transport` parameter |
 | Package not in allowed list | Package not in `--allowed-packages` | Admin must add the package to the allow list |
+| "define table entity" rejected | Syntax requires SAP_BASIS >= 757 | Use DDIC tables + CDS view entities on older systems |
+| CDS reserved keyword | Field name like `position`, `value`, `type` | Rename field (e.g., `playing_position`, `field_value`) |
 
 ### SAPRead Errors
 
@@ -230,6 +273,15 @@ Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
 |-------|-------|----------|
 | 404 Not Found | Object doesn't exist | Check name with SAPSearch first |
 | Missing `group` | FUNC without function group | Provide `group` parameter |
+| Empty DDLS source | DDLS exists but has no source | Write source via SAPWrite |
+
+### Server Errors (5xx)
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| 500 Internal Server Error | SAP application error | Wait 10-30 seconds and retry. Check `SAPDiagnose(action="dumps")` for short dumps |
+| 502 Bad Gateway | Proxy/gateway issue | Check SAP system availability via `SAPRead(type="SYSTEM")` |
+| 503 Service Unavailable | Server overloaded or restarting | Wait and retry. Common after heavy write/delete cycles |
 
 ---
 
