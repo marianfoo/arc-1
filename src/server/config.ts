@@ -191,16 +191,16 @@ export function parseArgs(args: string[]): ServerConfig {
   // Only override profile defaults when the flag/env is explicitly set
   const readOnlyExplicit = getFlag('read-only') ?? process.env.SAP_READ_ONLY;
   if (readOnlyExplicit !== undefined) config.readOnly = readOnlyExplicit === 'true' || readOnlyExplicit === '1';
-  else if (!profileName) config.readOnly = false;
+  else if (!profileName) config.readOnly = true;
 
   const blockFreeSQLExplicit = getFlag('block-free-sql') ?? process.env.SAP_BLOCK_FREE_SQL;
   if (blockFreeSQLExplicit !== undefined)
     config.blockFreeSQL = blockFreeSQLExplicit === 'true' || blockFreeSQLExplicit === '1';
-  else if (!profileName) config.blockFreeSQL = false;
+  else if (!profileName) config.blockFreeSQL = true;
 
   const blockDataExplicit = getFlag('block-data') ?? process.env.SAP_BLOCK_DATA;
   if (blockDataExplicit !== undefined) config.blockData = blockDataExplicit === 'true' || blockDataExplicit === '1';
-  else if (!profileName) config.blockData = false;
+  else if (!profileName) config.blockData = true;
   config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
   const pkgs = getFlag('allowed-packages') ?? process.env.SAP_ALLOWED_PACKAGES;

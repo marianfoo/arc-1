@@ -93,14 +93,22 @@ arc1 version
 All connection and safety flags are available:
 
 ```bash
-# Read-only mode
-arc1 --read-only
+# Default: safe mode (read-only, no SQL, no data preview)
+arc1
+
+# Developer profile: enables writes + transports
+arc1 --profile developer
+
+# Full access: writes + SQL + data + transports
+arc1 --profile developer-sql
+
+# Or enable individual capabilities
+arc1 --read-only=false           # Enable writes
+arc1 --block-free-sql=false      # Enable free SQL
+arc1 --block-data=false          # Enable table preview
 
 # Restrict write operations to specific packages (reads are not restricted by package)
 arc1 --allowed-packages "ZPROD*,$TMP"
-
-# Block free-form SQL
-arc1 --block-free-sql
 
 # Whitelist operations
 arc1 --allowed-ops "RSQ"

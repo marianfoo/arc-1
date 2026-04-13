@@ -262,8 +262,8 @@ prefix. CLI flags map 1:1 to env vars:
 | `--client` | `SAP_CLIENT` | `001` |
 | `--language` | `SAP_LANGUAGE` | `EN` |
 | `--insecure` | `SAP_INSECURE` | `false` |
-| `--read-only` | `SAP_READ_ONLY` | `false` |
-| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `false` |
+| `--read-only` | `SAP_READ_ONLY` | `true` |
+| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `true` |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | |
 | `--disallowed-ops` | `SAP_DISALLOWED_OPS` | |
 | `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` |
@@ -378,25 +378,26 @@ docker run -i --rm --env-file .env arc1
 
 ### Safety / Read-Only
 
-These flags protect SAP systems from unintended AI-driven modifications.
+ARC-1 is safe by default — read-only, no free SQL, no table preview, no transports. Use profiles or explicit flags to enable capabilities.
 
-#### Full read-only (safest)
+#### Default (safest)
 
-Blocks **all** write operations — create, update, delete, activate, execute:
+Out of the box, all write operations, free SQL, and table preview are blocked. No additional flags needed for read-only access.
+
+#### Enable developer access
+
+Use a profile to enable writes and transports:
 
 ```bash
--e SAP_READ_ONLY=true
+-e ARC1_PROFILE=developer
 ```
 
-Use this when pointing an AI at a production or QA system where you only want
-read/search access.
+#### Enable free SQL
 
-#### Block free SQL
-
-Prevents the AI from running arbitrary SELECT statements via `RunQuery`:
+To allow arbitrary SELECT statements via `RunQuery`:
 
 ```bash
--e SAP_BLOCK_FREE_SQL=true
+-e SAP_BLOCK_FREE_SQL=false
 ```
 
 #### Operation allowlist
@@ -633,7 +634,7 @@ stdio mode by overriding the transport:
 }
 ```
 
-For a production system where you want read-only access:
+For a production system (read-only is already the default — no extra flags needed):
 
 ```json
 {
@@ -646,7 +647,6 @@ For a production system where you want read-only access:
         "-e", "SAP_USER=readonly_user",
         "-e", "SAP_PASSWORD=secret",
         "-e", "SAP_TRANSPORT=stdio",
-        "-e", "SAP_READ_ONLY=true",
         "ghcr.io/marianfoo/arc-1:latest"
       ]
     }
@@ -674,7 +674,7 @@ configuration examples.
 
 ### Read-Only for Production Review
 
-Safe for handing to an AI agent with access to a production system:
+Default configuration is already read-only — safe for production:
 
 ```bash
 docker run -d --rm \
@@ -682,9 +682,6 @@ docker run -d --rm \
   -e SAP_URL=https://prod:44300 \
   -e SAP_USER=s_ai_viewer \
   -e SAP_PASSWORD=secret \
-  -e SAP_READ_ONLY=true \
-  -e SAP_BLOCK_FREE_SQL=true \
-  -e SAP_FEATURE_TRANSPORT=off \
   -e SAP_VERBOSE=true \
   ghcr.io/marianfoo/arc-1:latest
 ```
@@ -698,14 +695,14 @@ docker run -i --rm \
   -e SAP_URL=https://dev:44300 \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
+  -e SAP_READ_ONLY=false \
   -e SAP_ALLOWED_PACKAGES="Z*,\$TMP" \
-  -e SAP_BLOCK_FREE_SQL=true \
   -e SAP_DISALLOWED_OPS=D \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
 This setup lets the AI read system objects, write only to custom packages, and
-prevents deletions and arbitrary SQL.
+prevents deletions. Free SQL and table preview remain blocked (defaults).
 
 ### Cookie Authentication
 
@@ -788,8 +785,8 @@ when a new `ghcr.io/marianfoo/arc-1` image tag is published.
 2. **Protect your `.env` file.** If using `--env-file`, ensure the file has
    restricted permissions (`chmod 600`) and is in `.gitignore`.
 
-3. **Use `SAP_READ_ONLY=true` for production.** Only enable write access on
-   development systems.
+3. **Default is already read-only.** Only enable write access on
+   development systems via `ARC1_PROFILE=developer` or `SAP_READ_ONLY=false`.
 
 4. **The container runs as a non-root user** (`arc1:arc1`) inside Alpine. There
    are no open ports — the attack surface is minimal.

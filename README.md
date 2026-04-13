@@ -14,13 +14,13 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 
 ### Security & Admin Controls
 
-- **Read-only mode** — block all writes with a single flag (`--read-only`)
+- **Safe by default** — read-only, no free SQL, no table preview, no transports out of the box. Use `--profile developer` or explicit flags to enable capabilities
 - **Operation allowlists/denylists** — control exactly which operation types (read, write, search, query, activate, transport) are permitted
 - **Package restrictions** — limit AI write operations (create, update, delete) to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`). Read operations are not restricted by package — use SAP's native authorization for read-level access control
-- **Data access control** — block table data preview (`--block-data`) or free-form SQL (`--block-free-sql`)
+- **Data access control** — enable table data preview (`--block-data=false`) or free-form SQL (`--block-free-sql=false`)
 - **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only. Update/delete operations auto-use the lock correction number when no explicit transport is provided
 - **Safety profiles** — preconfigured roles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
-- **Writes restricted to `$TMP` by default** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
+- **Writes restricted to `$TMP` when enabled** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
 ### Authentication
 

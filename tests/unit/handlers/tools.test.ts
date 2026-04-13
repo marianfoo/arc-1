@@ -16,7 +16,12 @@ describe('Tool Definitions', () => {
   });
 
   it('registers all implemented tools', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, enableTransports: true });
+    const tools = getToolDefinitions({
+      ...DEFAULT_CONFIG,
+      readOnly: false,
+      blockFreeSQL: false,
+      enableTransports: true,
+    });
     const names = tools.map((t) => t.name);
     // All implemented tools should be registered
     expect(names).toContain('SAPRead');
@@ -79,10 +84,16 @@ describe('Tool Definitions', () => {
     }
   });
 
-  it('includes SAPLint and SAPQuery', () => {
+  it('includes SAPLint but hides SAPQuery by default (blockFreeSQL=true)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPLint');
+    expect(names).not.toContain('SAPQuery');
+  });
+
+  it('shows SAPQuery when blockFreeSQL=false', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
+    const names = tools.map((t) => t.name);
     expect(names).toContain('SAPQuery');
   });
 
@@ -202,9 +213,9 @@ describe('Tool Definitions', () => {
   // ─── BTP System Type Adaptation ─────────────────────────────────
 
   describe('BTP system type adaptation', () => {
-    const btpConfig = { ...DEFAULT_CONFIG, systemType: 'btp' as const };
-    const onpremConfig = { ...DEFAULT_CONFIG, systemType: 'onprem' as const };
-    const autoConfig = { ...DEFAULT_CONFIG, systemType: 'auto' as const };
+    const btpConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'btp' as const };
+    const onpremConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'onprem' as const };
+    const autoConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'auto' as const };
 
     it('removes PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS from SAPRead on BTP', () => {
       const tools = getToolDefinitions(btpConfig);

@@ -465,42 +465,44 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
     });
   }
 
-  tools.push(
-    {
-      name: 'SAPNavigate',
-      description: btp
-        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
-        : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            enum: ['definition', 'references', 'completion', 'hierarchy'],
-            description: 'Navigation action',
-          },
-          uri: {
-            type: 'string',
-            description: 'Source URI of the object. Optional for references if type+name are provided.',
-          },
-          type: {
-            type: 'string',
-            description: 'Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to uri for references.',
-          },
-          name: { type: 'string', description: 'Object name — alternative to uri for references.' },
-          objectType: {
-            type: 'string',
-            description:
-              'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
-          },
-          line: { type: 'number', description: 'Line number (1-based)' },
-          column: { type: 'number', description: 'Column number (1-based)' },
-          source: { type: 'string', description: 'Current source code (for definition/completion)' },
+  tools.push({
+    name: 'SAPNavigate',
+    description: btp
+      ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
+      : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['definition', 'references', 'completion', 'hierarchy'],
+          description: 'Navigation action',
         },
-        required: ['action'],
+        uri: {
+          type: 'string',
+          description: 'Source URI of the object. Optional for references if type+name are provided.',
+        },
+        type: {
+          type: 'string',
+          description: 'Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to uri for references.',
+        },
+        name: { type: 'string', description: 'Object name — alternative to uri for references.' },
+        objectType: {
+          type: 'string',
+          description:
+            'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
+        },
+        line: { type: 'number', description: 'Line number (1-based)' },
+        column: { type: 'number', description: 'Column number (1-based)' },
+        source: { type: 'string', description: 'Current source code (for definition/completion)' },
       },
+      required: ['action'],
     },
-    {
+  });
+
+  // SAPQuery — only registered when free SQL is allowed
+  if (!config.blockFreeSQL) {
+    tools.push({
       name: 'SAPQuery',
       description: btp ? SAPQUERY_DESC_BTP : SAPQUERY_DESC_ONPREM,
       inputSchema: {
@@ -511,7 +513,10 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         },
         required: ['sql'],
       },
-    },
+    });
+  }
+
+  tools.push(
     {
       name: 'SAPLint',
       description:

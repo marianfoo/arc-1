@@ -25,7 +25,9 @@ describe('parseArgs', () => {
     expect(config.client).toBe('100');
     expect(config.language).toBe('EN');
     expect(config.transport).toBe('stdio');
-    expect(config.readOnly).toBe(false);
+    expect(config.readOnly).toBe(true);
+    expect(config.blockFreeSQL).toBe(true);
+    expect(config.blockData).toBe(true);
     expect(config.verbose).toBe(false);
   });
 
@@ -257,9 +259,9 @@ describe('parseArgs', () => {
     expect(config.blockData).toBe(true);
   });
 
-  it('defaults blockData to false without profile', () => {
+  it('defaults blockData to true without profile', () => {
     const config = parseArgs([]);
-    expect(config.blockData).toBe(false);
+    expect(config.blockData).toBe(true);
   });
 
   // --- Profile ---

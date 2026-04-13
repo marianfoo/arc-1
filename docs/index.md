@@ -157,10 +157,14 @@ Full reference: **[tools.md](tools.md)**
 
 ## Admin Controls (Safety)
 
+Safe by default — read-only, no SQL, no data preview, no transports. Enable capabilities explicitly:
+
 ```bash
-arc1 --read-only                              # block all writes
-arc1 --allowed-packages "ZPROD*,$TMP"        # restrict packages
-arc1 --block-free-sql                         # block RunQuery
+arc1 --profile developer                      # enable writes + transports
+arc1 --profile developer-sql                  # enable writes + SQL + data + transports
+arc1 --read-only=false                        # enable writes only
+arc1 --block-free-sql=false                   # enable free SQL only
+arc1 --allowed-packages "ZPROD*,$TMP"         # restrict write packages
 arc1 --allowed-ops "RSQ"                      # whitelist operations
 ```
 

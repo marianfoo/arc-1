@@ -93,7 +93,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
 }
 ```
 
-With safety controls (read-only, restricted packages):
+With write access enabled (developer profile):
 
 ```json
 {
@@ -105,13 +105,15 @@ With safety controls (read-only, restricted packages):
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "SAP_READ_ONLY": "true"
+        "ARC1_PROFILE": "developer"
       }
     }
   }
 }
 ```
 
+With full access (writes + SQL + data):
+
 ```json
 {
   "mcpServers": {
@@ -122,8 +124,7 @@ With safety controls (read-only, restricted packages):
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "SAP_ALLOWED_PACKAGES": "Z*,$TMP",
-        "SAP_BLOCK_FREE_SQL": "true"
+        "ARC1_PROFILE": "developer-sql"
       }
     }
   }
@@ -150,7 +151,7 @@ Add `.mcp.json` to your project root:
 }
 ```
 
-With read-only mode:
+With developer access (writes enabled):
 
 ```json
 {
@@ -162,8 +163,7 @@ With read-only mode:
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "SAP_READ_ONLY": "true",
-        "SAP_BLOCK_FREE_SQL": "true"
+        "ARC1_PROFILE": "developer"
       }
     }
   }
@@ -179,12 +179,12 @@ npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
-With safety controls:
+With developer access (writes enabled):
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
   --transport http-streamable --http-addr 0.0.0.0:3000 \
-  --read-only --block-free-sql
+  --profile developer
 ```
 
 Then add to VS Code MCP settings:
@@ -438,24 +438,33 @@ Full authentication reference: **[enterprise-auth.md](enterprise-auth.md)**
 
 ## Safety Controls
 
-Always configure safety controls before exposing arc1 to users, especially in shared deployments.
+ARC-1 is safe by default — read-only, no free SQL, no table preview, no transports. Use profiles or explicit flags to enable capabilities.
 
 ```bash
-# Read-only — no writes, no activations, no transport operations
---read-only
+# Default: read-only, no SQL, no data preview (safe for production)
+npx arc-1@latest --url https://host:44300 --user dev --password secret
+
+# Developer profile: enables writes + transports (to $TMP only)
+--profile developer
+
+# Full access: writes + SQL + data preview + transports
+--profile developer-sql
+
+# Or use individual flags to enable specific capabilities
+--read-only=false            # Enable writes
+--block-free-sql=false       # Enable free SQL
+--block-data=false           # Enable table preview
+--enable-transports          # Enable transport management
 
 # Restrict to specific packages (wildcards supported)
 --allowed-packages "ZPROD*,$TMP"
-
-# Block free-form SQL queries
---block-free-sql
 
 # Whitelist specific operation types only
 # R=Read, S=Search, Q=Query, W=Write, C=Create, D=Delete, U=Activate, A=Analyze
 --allowed-ops "RSQ"
 ```
 
-**Recommendation for shared/production deployments:** Start with `--read-only` and relax as needed.
+**Recommendation:** Use `--profile developer` for development and default (no profile) for shared/production deployments.
 
 ---
 
@@ -628,8 +637,8 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | `--transport` | `SAP_TRANSPORT` | stdio | `stdio` or `http-streamable` |
 | `--http-addr` | `SAP_HTTP_ADDR` | 0.0.0.0:8080 | HTTP listen address |
 | `--insecure` | `SAP_INSECURE` | false | Skip TLS certificate verification |
-| `--read-only` | `SAP_READ_ONLY` | false | Block all write operations |
-| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | false | Block SQL query execution |
+| `--read-only` | `SAP_READ_ONLY` | **true** | Block all write operations (default: safe) |
+| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | **true** | Block SQL query execution (default: safe) |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | (all) | Whitelist operation types |
 | `--disallowed-ops` | `SAP_DISALLOWED_OPS` | (none) | Blacklist operation types |
 | `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Restrict to packages (default: `$TMP` local objects only) |
@@ -638,7 +647,7 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | `--oidc-audience` | `SAP_OIDC_AUDIENCE` | — | OIDC audience |
 | `--api-keys` | `ARC1_API_KEYS` | — | Multi-key with profiles (e.g. `key1:viewer,key2:developer`) |
 | `--profile` | `ARC1_PROFILE` | — | Safety profile shortcut (`viewer`, `developer`, etc.) |
-| `--block-data` | `SAP_BLOCK_DATA` | false | Block table preview |
+| `--block-data` | `SAP_BLOCK_DATA` | **true** | Block table preview (default: safe) |
 | `--btp-service-key` | `SAP_BTP_SERVICE_KEY` | — | Inline BTP service key JSON |
 | `--btp-service-key-file` | `SAP_BTP_SERVICE_KEY_FILE` | — | BTP service key file path |
 | `--pp-enabled` | `SAP_PP_ENABLED` | false | Enable principal propagation |

@@ -162,7 +162,7 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
 
 **Transport behavior:** For `update` and `delete` actions on transportable packages, ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport. For `create` and `batch_create`, an explicit transport may still be required depending on the target package and system configuration.
 
-**Note:** Blocked when `--read-only` is active. By default, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
+**Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 
 ---
 
@@ -186,7 +186,7 @@ SAPActivate(type="CLAS", name="ZCL_ORDER")
 SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}])
 ```
 
-**Note:** Blocked when `--read-only` is active.
+**Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`.
 
 ---
 
@@ -209,7 +209,7 @@ Navigate code: find definitions, references (where-used), code completion, and c
 
 **References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
 
-**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--block-free-sql=false`).
+**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--block-free-sql=false` or `--profile viewer-sql`/`developer-sql`).
 
 **Examples:**
 ```
@@ -245,7 +245,7 @@ SAPQuery(sql="SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER 
 SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 ```
 
-**Note:** Blocked when `--block-free-sql` is active.
+**Note:** Not available by default (free SQL blocked). Enable with `--block-free-sql=false` or `--profile viewer-sql`/`developer-sql`.
 
 ---
 
