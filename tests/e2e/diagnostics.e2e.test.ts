@@ -115,7 +115,8 @@ describe('E2E Diagnostics Tests', () => {
 
       // Verify structure
       expect(detail.error).toBeTruthy();
-      expect(detail.exception).toBeTruthy();
+      // exception may be empty for system-level dumps (not all dumps are ABAP exceptions)
+      expect(typeof detail.exception).toBe('string');
       expect(detail.program).toBeTruthy();
       expect(detail.user).toBeTruthy();
       expect(detail.timestamp).toBeTruthy();

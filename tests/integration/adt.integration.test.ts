@@ -481,7 +481,8 @@ describe('ADT Integration Tests', () => {
         }
         const detail = await getDump(client.http, unrestrictedSafetyConfig(), dumps[0]!.id);
         expect(detail.error).toBeTruthy();
-        expect(detail.exception).toBeTruthy();
+        // exception may be empty for system-level dumps (not all dumps are ABAP exceptions)
+        expect(typeof detail.exception).toBe('string');
         expect(detail.program).toBeTruthy();
         expect(detail.formattedText).toBeTruthy();
         expect(detail.formattedText).toContain(detail.error);
