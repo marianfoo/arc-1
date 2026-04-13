@@ -64,10 +64,8 @@ The fastest way to get started. No install, no config files needed.
 **Prerequisites:** Node.js 20+, network access to your SAP system.
 
 ```bash
-# Interactive — prompts for password
-npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
-
-# Or pass everything
+# --password is required. arc-1 does not prompt interactively.
+# Default SAP client is 100. Add --client YOUR_CLIENT if your system uses a different number.
 npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER --password YOUR_PASS
 ```
 
@@ -76,6 +74,8 @@ This starts an MCP server on **stdio** — the default transport for Claude Desk
 #### Connect Claude Desktop
 
 Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+> **SAP Client:** The default SAP client is `100`. If your system uses a different client number (e.g. `200` or `400`), add `"SAP_CLIENT": "YOUR_CLIENT"` to the `env` block.
 
 **Read-only** (default — no extra config needed):
 
@@ -88,7 +88,8 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
-        "SAP_PASSWORD": "YOUR_PASS"
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100"
       }
     }
   }
@@ -107,6 +108,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100",
         "ARC1_PROFILE": "developer",
         "SAP_ALLOWED_PACKAGES": "Z*,$TMP"
       }
@@ -127,6 +129,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100",
         "ARC1_PROFILE": "developer-sql",
         "SAP_ALLOWED_PACKAGES": "*"
       }
@@ -139,6 +142,8 @@ Add to `~/.config/claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claud
 
 Add `.mcp.json` to your project root:
 
+> **SAP Client:** The default SAP client is `100`. If your system uses a different client number, add `"SAP_CLIENT": "YOUR_CLIENT"` to the `env` block.
+
 **Read-only** (default):
 
 ```json
@@ -150,7 +155,8 @@ Add `.mcp.json` to your project root:
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
-        "SAP_PASSWORD": "YOUR_PASS"
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100"
       }
     }
   }
@@ -169,6 +175,7 @@ Add `.mcp.json` to your project root:
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100",
         "ARC1_PROFILE": "developer",
         "SAP_ALLOWED_PACKAGES": "Z*,$TMP"
       }
@@ -189,6 +196,7 @@ Add `.mcp.json` to your project root:
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100",
         "ARC1_PROFILE": "developer-sql",
         "SAP_ALLOWED_PACKAGES": "*"
       }
@@ -201,10 +209,13 @@ Add `.mcp.json` to your project root:
 
 VS Code and Copilot use HTTP Streamable transport, not stdio. Start arc1 as an HTTP server first:
 
+> **SAP Client:** Default is `100`. Add `--client YOUR_CLIENT` if your system uses a different client number.
+
 **Read-only** (default):
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
+  --client 100 \
   --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
@@ -212,6 +223,7 @@ npx arc-1@latest --url https://host:44300 --user dev --password secret \
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
+  --client 100 \
   --transport http-streamable --http-addr 0.0.0.0:3000 \
   --profile developer --allowed-packages "Z*,$TMP"
 ```
@@ -220,6 +232,7 @@ npx arc-1@latest --url https://host:44300 --user dev --password secret \
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
+  --client 100 \
   --transport http-streamable --http-addr 0.0.0.0:3000 \
   --profile developer-sql --allowed-packages "*"
 ```
@@ -240,6 +253,8 @@ Then add to VS Code MCP settings:
 
 For stdio mode, add to Cursor MCP settings:
 
+> **SAP Client:** Default is `100`. Change `SAP_CLIENT` if your system uses a different client number.
+
 ```json
 {
   "mcpServers": {
@@ -249,7 +264,8 @@ For stdio mode, add to Cursor MCP settings:
       "env": {
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
-        "SAP_PASSWORD": "YOUR_PASS"
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100"
       }
     }
   }
@@ -263,13 +279,15 @@ For HTTP mode (same as VS Code), start the server first and point Cursor to `htt
 All MCP clients that support **stdio** work out of the box:
 
 ```bash
-npx arc-1@latest --url https://host:44300 --user dev --password secret
+# Default SAP client is 100. Add --client YOUR_CLIENT if yours differs.
+npx arc-1@latest --url https://host:44300 --user dev --password secret --client 100
 ```
 
 For clients that support **HTTP Streamable**, start the server and connect to the URL:
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \
+  --client 100 \
   --transport http-streamable --http-addr 0.0.0.0:3000
 # Connect your client to http://localhost:3000/mcp
 ```
@@ -295,7 +313,8 @@ Same as npx but installs globally for faster startup:
 
 ```bash
 npm install -g arc-1
-arc1 --url https://your-sap-host:44300 --user YOUR_USER
+# Default SAP client is 100. Add --client YOUR_CLIENT if yours differs.
+arc1 --url https://your-sap-host:44300 --user YOUR_USER --password YOUR_PASS --client 100
 ```
 
 ### Local: Docker
@@ -303,17 +322,21 @@ arc1 --url https://your-sap-host:44300 --user YOUR_USER
 Run arc1 in a container. Defaults to HTTP Streamable on port 8080.
 
 ```bash
+# Default SAP client is 100. Change SAP_CLIENT if your system uses a different number.
 docker run -d --name arc1 \
   -p 8080:8080 \
   -e SAP_URL=https://your-sap-host:44300 \
   -e SAP_USER=YOUR_USER \
   -e SAP_PASSWORD=YOUR_PASS \
+  -e SAP_CLIENT=100 \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
 Connect any MCP client to `http://localhost:8080/mcp`.
 
 For stdio mode (e.g., Claude Desktop):
+
+> **SAP Client:** Default is `100`. Change `SAP_CLIENT` if your system uses a different client number.
 
 ```json
 {
@@ -325,6 +348,7 @@ For stdio mode (e.g., Claude Desktop):
         "-e", "SAP_URL=https://your-sap-host:44300",
         "-e", "SAP_USER=YOUR_USER",
         "-e", "SAP_PASSWORD=YOUR_PASS",
+        "-e", "SAP_CLIENT=100",
         "-e", "SAP_TRANSPORT=stdio",
         "ghcr.io/marianfoo/arc-1:latest"
       ]
@@ -343,11 +367,11 @@ cd arc-1
 npm ci
 npm run build
 
-# Run directly
-SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret npm start
+# Run directly. Default SAP client is 100; set SAP_CLIENT if yours differs.
+SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret SAP_CLIENT=100 npm start
 
 # Or dev mode (auto-rebuild)
-SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret npm run dev
+SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret SAP_CLIENT=100 npm run dev
 ```
 
 ---
@@ -377,11 +401,13 @@ When arc1 is accessible over a network, you need **MCP client authentication** t
 Simplest auth for a shared server. All clients share one token.
 
 ```bash
+# Default SAP client is 100. Change SAP_CLIENT if your system uses a different number.
 docker run -d --name arc1 \
   -p 8080:8080 \
   -e SAP_URL=https://your-sap-host:44300 \
   -e SAP_USER=YOUR_USER \
   -e SAP_PASSWORD=YOUR_PASS \
+  -e SAP_CLIENT=100 \
   -e ARC1_API_KEY=your-secret-api-key \
   ghcr.io/marianfoo/arc-1:latest
 ```
@@ -408,11 +434,13 @@ Full guide: **[api-key-setup.md](api-key-setup.md)**
 Per-user identity via JWT tokens from an identity provider (EntraID, Cognito, Keycloak, etc.). Each user authenticates with their own token, but all requests use a shared SAP connection.
 
 ```bash
+# Default SAP client is 100. Change SAP_CLIENT if your system uses a different number.
 docker run -d --name arc1 \
   -p 8080:8080 \
   -e SAP_URL=https://your-sap-host:44300 \
   -e SAP_USER=YOUR_USER \
   -e SAP_PASSWORD=YOUR_PASS \
+  -e SAP_CLIENT=100 \
   -e SAP_OIDC_ISSUER=https://login.microsoftonline.com/{tenant}/v2.0 \
   -e SAP_OIDC_AUDIENCE=your-app-client-id \
   ghcr.io/marianfoo/arc-1:latest
@@ -479,7 +507,8 @@ ARC-1 is safe by default — read-only, no free SQL, no table preview, no transp
 
 ```bash
 # Default: read-only, no SQL, no data preview (safe for production)
-npx arc-1@latest --url https://host:44300 --user dev --password secret
+# Default SAP client is 100. Add --client YOUR_CLIENT if your system uses a different number.
+npx arc-1@latest --url https://host:44300 --user dev --password secret --client 100
 
 # Developer profile: enables writes + transports (to $TMP only)
 --profile developer
@@ -669,7 +698,7 @@ Priority: CLI flags > environment variables > `.env` file > defaults.
 | `--url` | `SAP_URL` | — | SAP system URL (required) |
 | `--user` | `SAP_USER` | — | SAP username |
 | `--password` | `SAP_PASSWORD` | — | SAP password |
-| `--client` | `SAP_CLIENT` | 001 | SAP client number |
+| `--client` | `SAP_CLIENT` | 100 | SAP client number |
 | `--language` | `SAP_LANGUAGE` | EN | SAP logon language |
 | `--transport` | `SAP_TRANSPORT` | stdio | `stdio` or `http-streamable` |
 | `--http-addr` | `SAP_HTTP_ADDR` | 0.0.0.0:8080 | HTTP listen address |
