@@ -223,8 +223,11 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
 function getTransportHint(err: AdtApiError): string | undefined {
   const body = (err.responseBody ?? '').toLowerCase();
-  const msg = err.message.toLowerCase();
-  const combined = `${msg} ${body}`;
+  // Use the clean SAP error message, NOT err.message which includes the URL path.
+  // The URL path contains `corrNr=<id>` when a transport IS provided, causing false positives
+  // if we check for "corrnr" in the full message string.
+  const cleanMsg = AdtApiError.extractCleanMessage(err.responseBody ?? '').toLowerCase();
+  const combined = `${cleanMsg} ${body}`;
 
   // Missing or invalid transport/correction number
   if (

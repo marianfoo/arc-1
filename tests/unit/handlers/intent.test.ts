@@ -2541,6 +2541,69 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('$TMP');
     });
 
+    it('no false positive when corrNr appears in URL path but error is unrelated', async () => {
+      // When a transport IS provided, the URL contains ?corrNr=A4HK900502.
+      // The error message includes the URL path: "ADT API error: status 400 at /sap/bc/adt/ddic/ddl/sources?corrNr=A4HK900502: ..."
+      // The transport hint must NOT fire just because "corrnr" appears in the URL.
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          '<exc:exception><exc:localizedMessage>Resource Data Definition ZA_TEST does already exist.</exc:localizedMessage></exc:exception>',
+          400,
+          '/sap/bc/adt/ddic/ddl/sources?corrNr=A4HK900502',
+          '<exc:exception><exc:localizedMessage>Resource Data Definition ZA_TEST does already exist.</exc:localizedMessage></exc:exception>',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      expect(result.isError).toBe(true);
+      // The hint should NOT appear — the error is "already exists", not a transport issue
+      expect(result.content[0]?.text).not.toContain('transport/correction number is required');
+      expect(result.content[0]?.text).toContain('does already exist');
+    });
+
+    it('no false positive on syntax error when corrNr in URL', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          '<exc:exception><exc:localizedMessage>Syntax error in ZD_TEST: DDL source could not be saved</exc:localizedMessage></exc:exception>',
+          400,
+          '/sap/bc/adt/ddic/ddl/sources/ZD_TEST/source/main?lockHandle=ABC&corrNr=A4HK900502',
+          '<exc:exception><exc:localizedMessage>Syntax error in ZD_TEST: DDL source could not be saved</exc:localizedMessage></exc:exception>',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      expect(result.isError).toBe(true);
+      // Syntax error — no transport hint
+      expect(result.content[0]?.text).not.toContain('transport/correction number is required');
+      expect(result.content[0]?.text).toContain('Syntax error');
+    });
+
+    it('no false positive on 409 lock conflict when corrNr in URL', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          '<exc:exception><exc:localizedMessage>Request A4HK900502 is currently being edited by user MARIAN</exc:localizedMessage></exc:exception>',
+          409,
+          '/sap/bc/adt/ddic/ddl/sources?corrNr=A4HK900502',
+          '<exc:exception><exc:localizedMessage>Request A4HK900502 is currently being edited by user MARIAN</exc:localizedMessage></exc:exception>',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZPROG',
+      });
+      expect(result.isError).toBe(true);
+      // Lock conflict — no transport hint
+      expect(result.content[0]?.text).not.toContain('transport/correction number is required');
+      expect(result.content[0]?.text).toContain('currently being edited');
+    });
+
     it('non-transport errors remain unchanged', async () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(
