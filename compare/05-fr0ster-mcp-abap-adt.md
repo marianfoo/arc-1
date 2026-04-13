@@ -2,7 +2,7 @@
 
 > **Repository**: https://github.com/fr0ster/mcp-abap-adt
 > **Language**: TypeScript | **License**: MIT | **Stars**: 26
-> **Status**: Very Active (v5.0.1, 90+ releases in 5 months, 799+ commits)
+> **Status**: Very Active (v5.0.8, 90+ releases in 5 months, 803+ commits)
 > **NPM**: `@mcp-abap-adt/core` — 3,625 monthly downloads
 > **Relationship**: Independent TypeScript ADT MCP server with most advanced auth system
 
@@ -10,7 +10,7 @@
 
 ## Project Overview
 
-A multi-package monorepo MCP server for SAP ADT with 289 tools organized across 4 exposition tiers (read-only 55, high-level 113, low-level 122, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
+A multi-package monorepo MCP server for SAP ADT with 303 tools organized across 4 exposition tiers (read-only 55, high-level 127, low-level 122, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools (1 group + 1 low-level + 12 per-type). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
 
 Key differentiator: "AI Pairing, Not Vibing (AIPNV)" philosophy — positioned as pair programming assistant, not autopilot.
 
@@ -34,13 +34,13 @@ Design principles: Interface-Only Communication (IOC), Dependency Inversion, sin
 - **fr0ster/mcp-abap-adt-clients** — 449 commits, ADT client library with batch operations, lock registry, WebSocket facade
 - **fr0ster/mcp-abap-adt-auth-broker** — JWT authentication broker for multi-destination token management
 
-## Tool Inventory (287 tools across 4 tiers)
+## Tool Inventory (303 tools across 4 tiers)
 
 ### Read-Only Tier (52 tools)
 ReadClass, ReadProgram, ReadInterface, ReadDomain, ReadDataElement, ReadStructure, ReadTable, ReadView, ReadFunctionGroup, ReadFunctionModule, ReadBehaviorDefinition, ReadBehaviorImplementation, ReadMetadataExtension, ReadServiceDefinition, ReadServiceBinding, ReadPackage, GetProgFullCode, GetInclude, GetIncludesList, GetPackageContents, SearchObject, GetObjectsByType, GetObjectsList, GetWhereUsed, GetObjectInfo, GetObjectStructure, GetObjectNodeFromCache, GetAbapAST, GetAbapSemanticAnalysis, GetAbapSystemSymbols, GetAdtTypes, GetInactiveObjects, GetSession, GetSqlQuery, GetTransaction, GetTypeInfo, DescribeByList, GetTransport, ListTransports, GetEnhancements, GetEnhancementSpot, GetEnhancementImpl, RuntimeListDumps, RuntimeGetDumpById, RuntimeAnalyzeDump, RuntimeListProfilerTraceFiles, RuntimeGetProfilerTraceData, RuntimeAnalyzeProfilerTrace, RuntimeCreateProfilerTraceParameters, RuntimeRunClassWithProfiling, RuntimeRunProgramWithProfiling
 
-### High-Level Tier (113 tools)
-Full CRUD with automatic lock/activate for 16+ object types: Classes (including local definitions, types, macros, test classes), Programs, Interfaces, Domains, Data Elements, Structures, Tables, Views (CDS), Function Groups/Modules, Service Definitions/Bindings, Behavior Definitions/Implementations, Metadata Extensions (DDLX), Packages, Transports, Unit Tests (ABAP + CDS)
+### High-Level Tier (127 tools)
+Full CRUD with automatic lock/activate for 16+ object types: Classes (including local definitions, types, macros, test classes), Programs, Interfaces, Domains, Data Elements, Structures, Tables, Views (CDS), Function Groups/Modules, Service Definitions/Bindings, Behavior Definitions/Implementations, Metadata Extensions (DDLX), Packages, Transports, Unit Tests (ABAP + CDS). v5.0.7: Added ActivateObjects (group activation) + 12 per-type Activate handlers (ActivateDomain, ActivateClass, etc.)
 
 ### Low-Level Tier (122 tools)
 Fine-grained per-operation-per-object: Lock/Unlock/Check/Activate/Validate/Create/Update/Delete + generic variants
@@ -121,6 +121,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| v5.0.6-5.0.8 | Apr 13, 2026 | ActivateObjects group activation tool + 12 per-type Activate handlers + ActivateObjectLow. Post-merge fix: renamed low-level handler names/descriptions for LLM discoverability. [Eval](fr0ster/evaluations/feat-49-activate-objects.md) |
 | v5.0.0-5.0.1 | Apr 11-12, 2026 | RuntimeListFeeds (unified ADT feed reader), RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG with detail view), adt-clients 4.0 factory API migration. Removed compact wrappers in v5.0.1 (LLM confusion). [Deep dive](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
 | v4.9.0 | Apr 9, 2026 | Minor release between v4.8.x and v5.0.0 |
 | v4.8.0-4.8.7 | Apr 2-8, 2026 | Structured dump list, dump lookup by datetime+user, from/to time filters, search TSV format |
@@ -156,6 +157,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Feature | Priority | Effort | Notes |
 |---------|----------|--------|-------|
+| **GetInactiveObjects** (list pending activations) | Medium | 0.5d | `GET /sap/bc/adt/activation/inactive` — shows what needs activation. Natural LLM workflow: list inactive → batch activate. |
 | **SM02 system messages** (RuntimeListSystemMessages) | Medium | 0.5d | AI agent situational awareness (maintenance windows, system announcements) |
 | **Gateway error log** (RuntimeGetGatewayErrorLog) | Medium | 1d | /IWFND/ERROR_LOG with detail view — essential for OData debugging. On-prem only. |
 | **Unified ADT feed reader** (RuntimeListFeeds) | Low | 0.5d | Feed descriptor/variant discovery. ARC-1 already has dump + trace feeds. |
@@ -205,6 +207,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-13 | v5.0.7-5.0.8 — ActivateObjects group activation + 12 per-type Activate handlers (289→303 tools) | **No action** | ARC-1 already has SAPActivate with batch_activate. Gap: GetInactiveObjects endpoint (P2). Post-merge naming fix validates ARC-1's intent-based approach. | [Eval](fr0ster/evaluations/feat-49-activate-objects.md) |
 | 2026-04-12 | v5.0.1 — Removed compact feed wrappers (LLM confusion, 292→289 tools) | Lesson | Validates ARC-1's intent-based approach — duplicate tools confuse LLMs | Done |
 | 2026-04-11 | v5.0.0 — RuntimeListFeeds, RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG), adt-clients 4.0 factory API | **Medium** | Add `system_messages` + `gateway_errors` actions to SAPDiagnose | [Eval](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
 | 2026-04-09 | v4.9.0 — Minor release | No | — | — |
@@ -226,6 +229,6 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
 | 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-12_
+_Last updated: 2026-04-13_
 
 > **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

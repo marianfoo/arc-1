@@ -80,10 +80,41 @@ export async function connectClient(): Promise<Client> {
 }
 
 /**
+ * Reconnect an MCP client after a transport failure (timeout, fetch failed, etc.).
+ * Closes the old client and returns a fresh one.
+ */
+export async function reconnectClient(oldClient: Client): Promise<Client> {
+  try {
+    await oldClient.close();
+  } catch {
+    // best-effort-cleanup — the transport is likely already broken
+  }
+  console.log('    [reconnect] Transport broken — creating fresh MCP connection...');
+  return connectClient();
+}
+
+/**
+ * Detect if an error indicates a broken transport that requires reconnection.
+ * These errors cascade: once the transport breaks, ALL subsequent calls fail.
+ */
+function isTransportError(message: string): boolean {
+  return /fetch failed|ECONNREFUSED|ECONNRESET|socket hang up|aborted/i.test(message);
+}
+
+/**
  * Call an MCP tool with rich error context on failure.
  * Logs every call for debugging (visible in vitest verbose output).
+ *
+ * If the transport is broken (fetch failed after a timeout), attempts to
+ * reconnect and retry once. The reconnected client is returned via the
+ * optional `clientRef` parameter so subsequent calls use the fresh client.
  */
-export async function callTool(client: Client, name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
+export async function callTool(
+  client: Client,
+  name: string,
+  args: Record<string, unknown> = {},
+  clientRef?: { current: Client },
+): Promise<ToolResult> {
   const start = Date.now();
   try {
     const result = (await client.callTool({ name, arguments: args })) as ToolResult;
@@ -98,6 +129,29 @@ export async function callTool(client: Client, name: string, args: Record<string
     const duration = Date.now() - start;
     const message = err instanceof Error ? err.message : String(err);
     console.error(`    -> ${name}(${JSON.stringify(args)}) [${duration}ms] THREW: ${message}`);
+
+    // If the transport is broken and we have a clientRef, reconnect and retry once
+    if (isTransportError(message) && clientRef) {
+      try {
+        const freshClient = await reconnectClient(client);
+        clientRef.current = freshClient;
+
+        const retryStart = Date.now();
+        const result = (await freshClient.callTool({ name, arguments: args })) as ToolResult;
+        const retryDuration = Date.now() - retryStart;
+
+        const status = result.isError ? 'ERROR' : 'OK';
+        const preview = result.content?.[0]?.text?.slice(0, 100) ?? '(empty)';
+        console.log(
+          `    -> ${name}(${JSON.stringify(args)}) [${retryDuration}ms] ${status} (after reconnect): ${preview}...`,
+        );
+
+        return result;
+      } catch (retryErr) {
+        const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        console.error(`    -> ${name} retry after reconnect also failed: ${retryMessage}`);
+      }
+    }
 
     throw new Error(
       `Tool call failed: ${name}(${JSON.stringify(args)})\n` +

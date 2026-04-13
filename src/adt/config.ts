@@ -22,6 +22,7 @@ export interface FeatureConfig {
   ui5: FeatureMode;
   transport: FeatureMode;
   ui5repo: FeatureMode;
+  flp: FeatureMode;
 }
 
 /** Default feature config: all auto-detect */
@@ -34,6 +35,7 @@ export function defaultFeatureConfig(): FeatureConfig {
     ui5: 'auto',
     transport: 'auto',
     ui5repo: 'auto',
+    flp: 'auto',
   };
 }
 

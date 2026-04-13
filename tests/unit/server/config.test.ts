@@ -25,7 +25,9 @@ describe('parseArgs', () => {
     expect(config.client).toBe('100');
     expect(config.language).toBe('EN');
     expect(config.transport).toBe('stdio');
-    expect(config.readOnly).toBe(false);
+    expect(config.readOnly).toBe(true);
+    expect(config.blockFreeSQL).toBe(true);
+    expect(config.blockData).toBe(true);
     expect(config.verbose).toBe(false);
   });
 
@@ -119,9 +121,10 @@ describe('parseArgs', () => {
   });
 
   it('parses feature toggles', () => {
-    const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off']);
+    const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off', '--feature-flp', 'on']);
     expect(config.featureAbapGit).toBe('on');
     expect(config.featureRap).toBe('off');
+    expect(config.featureFlp).toBe('on');
   });
 
   it('defaults unknown feature toggle to auto', () => {
@@ -257,9 +260,9 @@ describe('parseArgs', () => {
     expect(config.blockData).toBe(true);
   });
 
-  it('defaults blockData to false without profile', () => {
+  it('defaults blockData to true without profile', () => {
     const config = parseArgs([]);
-    expect(config.blockData).toBe(false);
+    expect(config.blockData).toBe(true);
   });
 
   // --- Profile ---

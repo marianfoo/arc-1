@@ -59,6 +59,9 @@ SAP_INSECURE=true \
 SAP_TRANSPORT=http-streamable \
 SAP_HTTP_ADDR="0.0.0.0:${MCP_PORT}" \
 SAP_VERBOSE=true \
+SAP_READ_ONLY=false \
+SAP_BLOCK_FREE_SQL=false \
+SAP_BLOCK_DATA=false \
 SAP_ENABLE_TRANSPORTS=true \
 ARC1_CACHE=memory \
 nohup node dist/index.js >> /tmp/arc1-e2e.log 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &

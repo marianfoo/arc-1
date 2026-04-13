@@ -78,7 +78,7 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL}`, () => {
     }
 
     // Get tool definitions from ARC-1 (reusing production code!)
-    const arcTools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
+    const arcTools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false });
     tools = toOpenAITools(arcTools);
 
     console.log(`\n  Provider: ${PROVIDER_NAME}/${MODEL}`);

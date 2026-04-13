@@ -16,7 +16,12 @@ describe('Tool Definitions', () => {
   });
 
   it('registers all implemented tools', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, enableTransports: true });
+    const tools = getToolDefinitions({
+      ...DEFAULT_CONFIG,
+      readOnly: false,
+      blockFreeSQL: false,
+      enableTransports: true,
+    });
     const names = tools.map((t) => t.name);
     // All implemented tools should be registered
     expect(names).toContain('SAPRead');
@@ -79,10 +84,32 @@ describe('Tool Definitions', () => {
     }
   });
 
-  it('includes SAPLint and SAPQuery', () => {
+  it('SAPManage exposes FLP actions', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
+    const sapManage = tools.find((t) => t.name === 'SAPManage')!;
+    const schema = sapManage.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toContain('flp_list_catalogs');
+    expect(actionEnum).toContain('flp_list_groups');
+    expect(actionEnum).toContain('flp_list_tiles');
+    expect(actionEnum).toContain('flp_create_catalog');
+    expect(actionEnum).toContain('flp_create_group');
+    expect(actionEnum).toContain('flp_create_tile');
+    expect(actionEnum).toContain('flp_add_tile_to_group');
+    expect(actionEnum).toContain('flp_delete_catalog');
+  });
+
+  it('includes SAPLint but hides SAPQuery by default (blockFreeSQL=true)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPLint');
+    expect(names).not.toContain('SAPQuery');
+  });
+
+  it('shows SAPQuery when blockFreeSQL=false', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
+    const names = tools.map((t) => t.name);
     expect(names).toContain('SAPQuery');
   });
 
@@ -202,9 +229,9 @@ describe('Tool Definitions', () => {
   // ─── BTP System Type Adaptation ─────────────────────────────────
 
   describe('BTP system type adaptation', () => {
-    const btpConfig = { ...DEFAULT_CONFIG, systemType: 'btp' as const };
-    const onpremConfig = { ...DEFAULT_CONFIG, systemType: 'onprem' as const };
-    const autoConfig = { ...DEFAULT_CONFIG, systemType: 'auto' as const };
+    const btpConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'btp' as const };
+    const onpremConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'onprem' as const };
+    const autoConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'auto' as const };
 
     it('removes PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS from SAPRead on BTP', () => {
       const tools = getToolDefinitions(btpConfig);
@@ -252,7 +279,7 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('SRVB');
     });
 
-    it('includes DDLS, DDLX, BDEF, SRVD in SAPWrite types on both BTP and on-prem', () => {
+    it('includes DDLS, DDLX, BDEF, SRVD, DOMA, DTEL in SAPWrite types on both BTP and on-prem', () => {
       for (const config of [btpConfig, onpremConfig]) {
         const tools = getToolDefinitions(config);
         const sapWrite = tools.find((t) => t.name === 'SAPWrite')!;
@@ -263,6 +290,8 @@ describe('Tool Definitions', () => {
         expect(typeEnum).toContain('DDLX');
         expect(typeEnum).toContain('BDEF');
         expect(typeEnum).toContain('SRVD');
+        expect(typeEnum).toContain('DOMA');
+        expect(typeEnum).toContain('DTEL');
       }
     });
 
@@ -300,6 +329,8 @@ describe('Tool Definitions', () => {
       expect(typeEnum).not.toContain('FUNC');
       expect(typeEnum).toContain('CLAS');
       expect(typeEnum).toContain('INTF');
+      expect(typeEnum).toContain('DOMA');
+      expect(typeEnum).toContain('DTEL');
     });
 
     it('removes PROG and FUNC from SAPContext on BTP', () => {

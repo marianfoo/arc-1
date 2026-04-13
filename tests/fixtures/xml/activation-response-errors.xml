@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chkl:messages xmlns:chkl="http://www.sap.com/adt/checklistsresults">
+  <msg type="E" severity="error" shortText="Type ZI_TRAVEL is not active" uri="/sap/bc/adt/ddic/ddl/sources/zi_travel" line="42"/>
+  <msg type="E" severity="error" line="10">
+    <shortText><txt>Activation was cancelled.</txt><txt>&quot;DTEL Z_STATUS was not activated&quot; (D0 408)</txt></shortText>
+  </msg>
+  <msg type="W" severity="warning" shortText="Consider using CDS view entity instead of CDS view" uri="/sap/bc/adt/ddic/ddl/sources/zi_travel"/>
+</chkl:messages>

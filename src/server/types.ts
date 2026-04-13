@@ -51,6 +51,7 @@ export interface ServerConfig {
   featureTransport: FeatureToggle;
   featureHana: FeatureToggle;
   featureUi5Repo: FeatureToggle;
+  featureFlp: FeatureToggle;
 
   // --- System Type Detection ---
   /** System type: 'auto' (detect from components), 'btp', or 'onprem' */
@@ -114,9 +115,9 @@ export const DEFAULT_CONFIG: ServerConfig = {
   insecure: false,
   transport: 'stdio',
   httpAddr: '0.0.0.0:8080',
-  readOnly: false,
-  blockFreeSQL: false,
-  blockData: false,
+  readOnly: true,
+  blockFreeSQL: true,
+  blockData: true,
   allowedOps: '',
   disallowedOps: '',
   allowedPackages: ['$TMP'],
@@ -128,6 +129,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureTransport: 'auto',
   featureHana: 'auto',
   featureUi5Repo: 'auto',
+  featureFlp: 'auto',
   systemType: 'auto',
   xsuaaAuth: false,
   btpOAuthCallbackPort: 0,

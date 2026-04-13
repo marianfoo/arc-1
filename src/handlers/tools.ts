@@ -63,6 +63,7 @@ const SAPREAD_TYPES_ONPREM = [
   'BSP',
   'BSP_DEPLOY',
   'API_STATE',
+  'INACTIVE_OBJECTS',
 ];
 
 /** SAPRead types available on BTP ABAP Environment (no PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS) */
@@ -88,27 +89,30 @@ const SAPREAD_TYPES_BTP = [
   'BSP',
   'BSP_DEPLOY',
   'API_STATE',
+  'INACTIVE_OBJECTS',
 ];
 
 const SAPREAD_DESC_ONPREM =
-  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method implementation (95% fewer tokens than full source). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / S/4HANA Clean Core; returns contract states C0-C4, successor info; use objectType param for non-class objects).';
+  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method implementation (95% fewer tokens than full source). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / S/4HANA Clean Core; returns contract states C0-C4, successor info; use objectType param for non-class objects). INACTIVE_OBJECTS (list all objects pending activation — no name param needed; use before SAPActivate batch_activate to see what needs activating).';
 
 const SAPREAD_DESC_BTP =
-  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method (95% fewer tokens). Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / Clean Core; returns contract states C0-C4, successor info; essential for cloud development; use objectType param for non-class objects).';
+  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method (95% fewer tokens). Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / Clean Core; returns contract states C0-C4, successor info; essential for cloud development; use objectType param for non-class objects). INACTIVE_OBJECTS (list all objects pending activation — no name param needed; use before SAPActivate batch_activate to see what needs activating).';
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'];
+const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks. Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks.';
@@ -206,12 +210,21 @@ const SAPTRANSPORT_DESC_BTP =
 
 const SAPMANAGE_DESC_ONPREM =
   'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
-  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports).\n\n' +
+  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports, FLP customization).\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
-  '- "probe": Re-probe the SAP system now (makes 7 parallel requests, ~1-2s). ' +
-  'Use this on first use or if you suspect feature availability has changed.\n\n' +
+  '- "probe": Re-probe the SAP system now (makes 8 parallel requests, ~1-2s). ' +
+  'Use this on first use or if you suspect feature availability has changed.\n' +
+  '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- "flp_list_catalogs": List FLP business catalogs.\n' +
+  '- "flp_list_groups": List FLP groups.\n' +
+  '- "flp_list_tiles": List tiles in a catalog (requires "catalogId").\n' +
+  '- "flp_create_catalog": Create a business catalog (requires "domainId", "title").\n' +
+  '- "flp_create_group": Create a group (requires "groupId", "title").\n' +
+  '- "flp_create_tile": Create a tile in a catalog (requires "catalogId", "tile").\n' +
+  '- "flp_add_tile_to_group": Add a catalog tile to a group (requires "groupId", "catalogId", "tileInstanceId").\n' +
+  '- "flp_delete_catalog": Delete a business catalog (requires "catalogId").\n\n' +
   'Returns JSON with features, each having: id, available (bool), mode, message, and probedAt timestamp. ' +
   'Also returns systemType ("btp" or "onprem") for understanding available capabilities. ' +
   '"available: false" means do NOT attempt operations that depend on it.';
@@ -221,9 +234,11 @@ const SAPMANAGE_DESC_BTP =
   'Returns feature status and system type.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe.\n' +
-  '- "probe": Re-probe the SAP system now.\n\n' +
+  '- "probe": Re-probe the SAP system now.\n' +
+  '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.\n\n' +
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
-  'abapGit, AMDP, UI5/BSP may not be available depending on the BTP ABAP configuration.';
+  'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
 
 // ─── SAPSearch Builder ─────────────────────────────────────────────
 
@@ -399,6 +414,43 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           },
           package: { type: 'string', description: 'Package for new objects (default $TMP)' },
           transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
+          dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type (e.g., CHAR, NUMC, DEC)' },
+          length: { type: 'number', description: 'DOMA/DTEL: data type length' },
+          decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
+          outputLength: { type: 'number', description: 'DOMA: output length' },
+          conversionExit: { type: 'string', description: 'DOMA: conversion exit (e.g., ALPHA)' },
+          signExists: { type: 'boolean', description: 'DOMA: signed values allowed' },
+          lowercase: { type: 'boolean', description: 'DOMA: lowercase characters allowed' },
+          fixedValues: {
+            type: 'array',
+            description: 'DOMA: fixed value ranges',
+            items: {
+              type: 'object',
+              properties: {
+                low: { type: 'string', description: 'Low value (required)' },
+                high: { type: 'string', description: 'High value for ranges (optional)' },
+                description: { type: 'string', description: 'Value description (optional)' },
+              },
+              required: ['low'],
+            },
+          },
+          valueTable: { type: 'string', description: 'DOMA: value table reference (e.g., T001)' },
+          typeKind: {
+            type: 'string',
+            enum: ['domain', 'predefinedAbapType'],
+            description: 'DTEL: type source (domain reference or predefined ABAP type)',
+          },
+          typeName: { type: 'string', description: 'DTEL: domain/type name reference (for typeKind=domain)' },
+          domainName: { type: 'string', description: 'DTEL: alias for typeName when referencing a domain' },
+          shortLabel: { type: 'string', description: 'DTEL: short field label' },
+          mediumLabel: { type: 'string', description: 'DTEL: medium field label' },
+          longLabel: { type: 'string', description: 'DTEL: long field label' },
+          headingLabel: { type: 'string', description: 'DTEL: heading field label' },
+          searchHelp: { type: 'string', description: 'DTEL: search help name' },
+          searchHelpParameter: { type: 'string', description: 'DTEL: search help parameter' },
+          setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
+          defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
+          changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
           objects: {
             type: 'array',
             items: {
@@ -412,6 +464,39 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
                 description: { type: 'string', description: 'Object description (defaults to name if omitted)' },
+                dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type' },
+                length: { type: 'number', description: 'DOMA/DTEL: data type length' },
+                decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
+                outputLength: { type: 'number', description: 'DOMA: output length' },
+                conversionExit: { type: 'string', description: 'DOMA: conversion exit' },
+                signExists: { type: 'boolean', description: 'DOMA: signed values allowed' },
+                lowercase: { type: 'boolean', description: 'DOMA: lowercase allowed' },
+                fixedValues: {
+                  type: 'array',
+                  description: 'DOMA: fixed value ranges',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      low: { type: 'string' },
+                      high: { type: 'string' },
+                      description: { type: 'string' },
+                    },
+                    required: ['low'],
+                  },
+                },
+                valueTable: { type: 'string', description: 'DOMA: value table' },
+                typeKind: { type: 'string', enum: ['domain', 'predefinedAbapType'], description: 'DTEL: type mode' },
+                typeName: { type: 'string', description: 'DTEL: domain/type name reference' },
+                domainName: { type: 'string', description: 'DTEL: alias for typeName' },
+                shortLabel: { type: 'string', description: 'DTEL: short field label' },
+                mediumLabel: { type: 'string', description: 'DTEL: medium field label' },
+                longLabel: { type: 'string', description: 'DTEL: long field label' },
+                headingLabel: { type: 'string', description: 'DTEL: heading field label' },
+                searchHelp: { type: 'string', description: 'DTEL: search help' },
+                searchHelpParameter: { type: 'string', description: 'DTEL: search help parameter' },
+                setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
+                defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
+                changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
               },
               required: ['type', 'name'],
             },
@@ -429,8 +514,9 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       name: 'SAPActivate',
       description:
         'Activate (publish) ABAP objects. Supports single object or batch activation.\n' +
-        'For batch: pass "objects" array with {type, name} entries to activate multiple objects in one call. ' +
-        'Essential for RAP stacks where DDLS, BDEF, SRVD, DDLX, and SRVB depend on each other and must be activated together.\n' +
+        'ALWAYS prefer batch activation when activating 2+ objects — pass "objects" array with {type, name} entries. ' +
+        'Batch activation is more efficient (one SAP round-trip) and works for ANY combination of objects, not just dependent ones. ' +
+        'It is required for RAP stacks where DDLS, BDEF, SRVD depend on each other, but equally useful for unrelated objects like multiple DTELs or DOMAs.\n' +
         'For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption.',
       inputSchema: {
         type: 'object',
@@ -446,6 +532,13 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           name: { type: 'string', description: 'Object name (for single activation or publish/unpublish)' },
           type: { type: 'string', description: 'Object type (PROG, CLAS, DDLS, DDLX, BDEF, SRVD, SRVB, etc.)' },
           version: { type: 'string', description: 'Service version for publish/unpublish (default: "0001")' },
+          preaudit: {
+            type: 'boolean',
+            description:
+              'Request pre-activation audit from SAP (default: true). ' +
+              'When true, SAP checks for issues before activating and returns warnings/errors. ' +
+              'Set to false to skip pre-audit for faster activation when confident the code is correct.',
+          },
           objects: {
             type: 'array',
             items: {
@@ -457,50 +550,52 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               required: ['type', 'name'],
             },
             description:
-              'For batch activation: array of objects to activate together. ' +
-              'Use for RAP stacks: [{type:"DDLS",name:"ZI_TRAVEL"},{type:"CLAS",name:"ZBP_I_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"DDLS",name:"ZC_TRAVEL"},{type:"BDEF",name:"ZC_TRAVEL"},{type:"DDLX",name:"ZC_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]',
+              'Batch activation: array of objects to activate in one call. Use whenever activating 2+ objects. ' +
+              'Works for any mix of types — e.g., [{type:"DOMA",name:"Z_DOM"},{type:"DTEL",name:"Z_DEL"}] or RAP stacks like [{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}].',
           },
         },
       },
     });
   }
 
-  tools.push(
-    {
-      name: 'SAPNavigate',
-      description: btp
-        ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
-        : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            enum: ['definition', 'references', 'completion', 'hierarchy'],
-            description: 'Navigation action',
-          },
-          uri: {
-            type: 'string',
-            description: 'Source URI of the object. Optional for references if type+name are provided.',
-          },
-          type: {
-            type: 'string',
-            description: 'Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to uri for references.',
-          },
-          name: { type: 'string', description: 'Object name — alternative to uri for references.' },
-          objectType: {
-            type: 'string',
-            description:
-              'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
-          },
-          line: { type: 'number', description: 'Line number (1-based)' },
-          column: { type: 'number', description: 'Column number (1-based)' },
-          source: { type: 'string', description: 'Current source code (for definition/completion)' },
+  tools.push({
+    name: 'SAPNavigate',
+    description: btp
+      ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
+      : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['definition', 'references', 'completion', 'hierarchy'],
+          description: 'Navigation action',
         },
-        required: ['action'],
+        uri: {
+          type: 'string',
+          description: 'Source URI of the object. Optional for references if type+name are provided.',
+        },
+        type: {
+          type: 'string',
+          description: 'Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to uri for references.',
+        },
+        name: { type: 'string', description: 'Object name — alternative to uri for references.' },
+        objectType: {
+          type: 'string',
+          description:
+            'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
+        },
+        line: { type: 'number', description: 'Line number (1-based)' },
+        column: { type: 'number', description: 'Column number (1-based)' },
+        source: { type: 'string', description: 'Current source code (for definition/completion)' },
       },
+      required: ['action'],
     },
-    {
+  });
+
+  // SAPQuery — only registered when free SQL is allowed
+  if (!config.blockFreeSQL) {
+    tools.push({
       name: 'SAPQuery',
       description: btp ? SAPQUERY_DESC_BTP : SAPQUERY_DESC_ONPREM,
       inputSchema: {
@@ -511,7 +606,10 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         },
         required: ['sql'],
       },
-    },
+    });
+  }
+
+  tools.push(
     {
       name: 'SAPLint',
       description:
@@ -642,9 +740,57 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['features', 'probe', 'cache_stats'],
+            enum: [
+              'features',
+              'probe',
+              'cache_stats',
+              'flp_list_catalogs',
+              'flp_list_groups',
+              'flp_list_tiles',
+              'flp_create_catalog',
+              'flp_create_group',
+              'flp_create_tile',
+              'flp_add_tile_to_group',
+              'flp_delete_catalog',
+            ],
             description:
-              'Action: "features" for cached status, "probe" to re-check SAP system, "cache_stats" for object cache statistics',
+              'Action to execute. FLP actions manage catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+          },
+          catalogId: {
+            type: 'string',
+            description:
+              'FLP catalog identifier — accepts either full ID (X-SAP-UI2-CATALOGPAGE:MY_CAT) or domain ID (MY_CAT). Required for flp_list_tiles, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.',
+          },
+          groupId: {
+            type: 'string',
+            description: 'FLP group/page identifier (required for flp_create_group, flp_add_tile_to_group).',
+          },
+          title: {
+            type: 'string',
+            description: 'Title for FLP catalog/group creation.',
+          },
+          domainId: {
+            type: 'string',
+            description: 'Domain ID for FLP catalog creation (e.g., ZARC1_SALES).',
+          },
+          tileInstanceId: {
+            type: 'string',
+            description: 'Tile instance ID in the source catalog (required for flp_add_tile_to_group).',
+          },
+          tile: {
+            type: 'object',
+            description: 'Tile definition for flp_create_tile.',
+            properties: {
+              id: { type: 'string', description: 'Tile ID (client-side logical id).' },
+              title: { type: 'string', description: 'Display title.' },
+              icon: { type: 'string', description: 'Optional icon URI.' },
+              semanticObject: { type: 'string', description: 'Semantic object for intent navigation.' },
+              semanticAction: { type: 'string', description: 'Semantic action for intent navigation.' },
+              url: { type: 'string', description: 'Optional target URL.' },
+              subtitle: { type: 'string', description: 'Optional subtitle text.' },
+              info: { type: 'string', description: 'Optional info text.' },
+            },
+            required: ['id', 'title', 'semanticObject', 'semanticAction'],
           },
         },
         required: ['action'],

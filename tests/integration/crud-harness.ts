@@ -67,15 +67,23 @@ export interface RetryDeleteResult {
 }
 
 /**
- * Attempt to delete an object with retries on lock conflicts.
+ * Check if an error is transient and worth retrying.
+ * Covers lock conflicts, SAP work process exhaustion, and connectivity blips.
+ */
+function isRetryableError(message: string): boolean {
+  return /locked|enqueue|service cannot be reached|connection reset|ECONNRESET|socket hang up|timeout/i.test(message);
+}
+
+/**
+ * Attempt to delete an object with retries on lock conflicts and transient errors.
  * Uses exponential backoff between retries.
  */
 export async function retryDelete(
   http: AdtHttpClient,
   safety: SafetyConfig,
   objectUrl: string,
-  maxRetries = 3,
-  delayMs = 500,
+  maxRetries = 5,
+  delayMs = 1000,
 ): Promise<RetryDeleteResult> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -86,9 +94,8 @@ export async function retryDelete(
       return { success: true, attempts: attempt };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      const isLockConflict = /locked|enqueue/i.test(message);
 
-      if (!isLockConflict || attempt === maxRetries) {
+      if (!isRetryableError(message) || attempt === maxRetries) {
         return { success: false, attempts: attempt, lastError: message };
       }
 

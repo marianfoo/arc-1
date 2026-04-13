@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<blue:wbobj adtcore:responsible="DEVELOPER" adtcore:masterLanguage="EN" adtcore:masterSystem="H00" adtcore:abapLanguageVersion="standard" adtcore:name="ZARC1_DTEL" adtcore:type="DTEL/DE" adtcore:changedAt="2026-04-12T12:00:00Z" adtcore:version="inactive" adtcore:changedBy="DEVELOPER" adtcore:createdBy="DEVELOPER" adtcore:description="ARC-1 data element create response" adtcore:language="EN" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/$tmp" adtcore:type="DEVC/K" adtcore:name="$TMP"/>
+  <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
+    <dtel:typeKind>domain</dtel:typeKind>
+    <dtel:typeName>ZARC1_DOMA</dtel:typeName>
+    <dtel:dataType>CHAR</dtel:dataType>
+    <dtel:dataTypeLength>000001</dtel:dataTypeLength>
+    <dtel:dataTypeDecimals>000000</dtel:dataTypeDecimals>
+    <dtel:shortFieldLabel>Status</dtel:shortFieldLabel>
+    <dtel:shortFieldLength>06</dtel:shortFieldLength>
+    <dtel:shortFieldMaxLength>10</dtel:shortFieldMaxLength>
+    <dtel:mediumFieldLabel>Status</dtel:mediumFieldLabel>
+    <dtel:mediumFieldLength>06</dtel:mediumFieldLength>
+    <dtel:mediumFieldMaxLength>20</dtel:mediumFieldMaxLength>
+    <dtel:longFieldLabel>Status</dtel:longFieldLabel>
+    <dtel:longFieldLength>06</dtel:longFieldLength>
+    <dtel:longFieldMaxLength>40</dtel:longFieldMaxLength>
+    <dtel:headingFieldLabel>Status</dtel:headingFieldLabel>
+    <dtel:headingFieldLength>06</dtel:headingFieldLength>
+    <dtel:headingFieldMaxLength>55</dtel:headingFieldMaxLength>
+    <dtel:searchHelp/>
+    <dtel:searchHelpParameter/>
+    <dtel:setGetParameter/>
+    <dtel:defaultComponentName/>
+    <dtel:deactivateInputHistory>false</dtel:deactivateInputHistory>
+    <dtel:changeDocument>false</dtel:changeDocument>
+    <dtel:leftToRightDirection>false</dtel:leftToRightDirection>
+    <dtel:deactivateBIDIFiltering>false</dtel:deactivateBIDIFiltering>
+  </dtel:dataElement>
+</blue:wbobj>

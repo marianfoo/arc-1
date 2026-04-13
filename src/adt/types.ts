@@ -44,6 +44,7 @@ export interface ResolvedFeatures {
   ui5: FeatureStatus;
   transport: FeatureStatus;
   ui5repo: FeatureStatus;
+  flp: FeatureStatus;
   /** Detected SAP_BASIS release (e.g. "750", "757"). Populated during probe. */
   abapRelease?: string;
   /** Detected system type: 'btp' (SAP_CLOUD component present) or 'onprem'. */
@@ -328,6 +329,40 @@ export interface BspDeployInfo {
   info: string;
 }
 
+/** FLP catalog from PAGE_BUILDER_CUST OData (entity: Catalog) */
+export interface FlpCatalog {
+  id: string;
+  domainId: string;
+  title: string;
+  type: string;
+  scope: string;
+  chipCount: string;
+}
+
+/** FLP group (page) from PAGE_BUILDER_CUST OData (entity: Page) */
+export interface FlpGroup {
+  id: string;
+  title: string;
+  catalogId: string;
+  layout: string;
+}
+
+/** FLP tile/target mapping instance from PAGE_BUILDER_CUST OData (entity: PageChipInstance) */
+export interface FlpTileInstance {
+  instanceId: string;
+  chipId: string;
+  pageId: string;
+  title: string;
+  configuration: Record<string, unknown> | null;
+}
+
+/** FLP tile listing result — includes backend error flag for ASSERTION_FAILED */
+export interface FlpTileResult {
+  tiles: FlpTileInstance[];
+  /** Set when backend returned ASSERTION_FAILED instead of data */
+  backendError?: string;
+}
+
 /** Transaction code metadata */
 export interface TransactionInfo {
   code: string;
@@ -366,4 +401,12 @@ export interface ApiReleaseStateInfo {
   contracts: ApiReleaseContract[];
   isAnyContractReleased: boolean;
   isAnyAssignmentPossible: boolean;
+}
+
+/** An object pending activation from /sap/bc/adt/activation/inactive */
+export interface InactiveObject {
+  name: string;
+  type: string;
+  uri: string;
+  description?: string;
 }

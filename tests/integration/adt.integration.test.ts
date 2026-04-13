@@ -10,6 +10,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
 import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
+import { AdtApiError } from '../../src/adt/errors.js';
+import {
+  createCatalog,
+  deleteCatalog,
+  FLP_SERVICE_PATH,
+  listCatalogs,
+  listGroups,
+  listTiles,
+} from '../../src/adt/flp.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
@@ -53,6 +62,78 @@ describe('ADT Integration Tests', () => {
         expect(typeof comp.description).toBe('string');
       }
     });
+  });
+
+  // ─── FLP (PAGE_BUILDER_CUST) ────────────────────────────────────
+
+  describe('FLP (PAGE_BUILDER_CUST)', () => {
+    let serviceAvailable: true | undefined;
+
+    beforeAll(async () => {
+      try {
+        await client.http.get(`${FLP_SERVICE_PATH}/`, { Accept: 'application/json' });
+        serviceAvailable = true;
+      } catch (err) {
+        if (err instanceof AdtApiError && err.statusCode === 404) {
+          serviceAvailable = undefined;
+          return;
+        }
+        throw err;
+      }
+    });
+
+    it('probes FLP service availability', async (ctx) => {
+      requireOrSkip(ctx, serviceAvailable, SkipReason.BACKEND_UNSUPPORTED);
+      expect(serviceAvailable).toBe(true);
+    });
+
+    it('lists catalogs', async (ctx) => {
+      requireOrSkip(ctx, serviceAvailable, SkipReason.BACKEND_UNSUPPORTED);
+      const catalogs = await listCatalogs(client.http, unrestrictedSafetyConfig());
+      expect(Array.isArray(catalogs)).toBe(true);
+      expect(catalogs.length).toBeGreaterThan(0);
+      expect(catalogs.some((c) => c.id.length > 0 && c.domainId.length > 0)).toBe(true);
+    }, 60000);
+
+    it('lists groups', async (ctx) => {
+      requireOrSkip(ctx, serviceAvailable, SkipReason.BACKEND_UNSUPPORTED);
+      const groups = await listGroups(client.http, unrestrictedSafetyConfig());
+      expect(Array.isArray(groups)).toBe(true);
+      for (const group of groups) {
+        expect(group.catalogId).toBe('/UI2/FLPD_CATALOG');
+      }
+    }, 60000);
+
+    it('lists tiles for a catalog (returns array, may be empty)', async (ctx) => {
+      requireOrSkip(ctx, serviceAvailable, SkipReason.BACKEND_UNSUPPORTED);
+      const catalogs = await listCatalogs(client.http, unrestrictedSafetyConfig());
+      const catalogWithPrefix = catalogs.find((c) => c.id.startsWith('X-SAP-UI2-CATALOGPAGE:'));
+      requireOrSkip(ctx, catalogWithPrefix, SkipReason.NO_FIXTURE);
+      // Use full ID to verify normalization handles it correctly
+      const result = await listTiles(client.http, unrestrictedSafetyConfig(), catalogWithPrefix.id);
+      expect(Array.isArray(result.tiles)).toBe(true);
+    }, 60000);
+
+    it('CRUD lifecycle — create and delete catalog', async (ctx) => {
+      requireOrSkip(ctx, serviceAvailable, SkipReason.BACKEND_UNSUPPORTED);
+      const domainId = `ZARC1_INTTEST_${Date.now().toString(36).toUpperCase()}`.slice(0, 30);
+      let createdCatalogId: string | undefined;
+
+      try {
+        const created = await createCatalog(
+          client.http,
+          unrestrictedSafetyConfig(),
+          domainId,
+          'ARC1 Integration Catalog',
+        );
+        createdCatalogId = created.id;
+        expect(created.id.startsWith('X-SAP-UI2-CATALOGPAGE:')).toBe(true);
+      } finally {
+        if (createdCatalogId) {
+          await deleteCatalog(client.http, unrestrictedSafetyConfig(), createdCatalogId);
+        }
+      }
+    }, 120000);
   });
 
   // ─── Search ─────────────────────────────────────────────────────

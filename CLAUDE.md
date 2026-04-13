@@ -54,6 +54,44 @@ Husky runs `lint-staged` on commit, which auto-fixes lint/format via Biome on st
 ### Configuration
 
 Config priority: CLI flags > environment variables > `.env` file > defaults. Copy `.env.example` to `.env` for local development. All config options are defined in `src/server/config.ts` (parser) and `src/server/types.ts` (ServerConfig type with defaults).
+| Variable / Flag | Description |
+|-----------------|-------------|
+| `SAP_URL` / `--url` | SAP system URL (e.g., `http://host:50000`) |
+| `SAP_USER` / `--user` | SAP username |
+| `SAP_PASSWORD` / `--password` | SAP password |
+| `SAP_CLIENT` / `--client` | SAP client number (default: 100) |
+| `SAP_LANGUAGE` / `--language` | SAP language (default: EN) |
+| `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
+| `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
+| `ARC1_PORT` / `--port` | HTTP server port (default: `8080`). Simpler alternative to `ARC1_HTTP_ADDR` when only the port needs to change |
+| `ARC1_HTTP_ADDR` / `--http-addr` | HTTP server bind address (default: `0.0.0.0:8080`). Use when you need to change both host and port |
+| `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: **true**) |
+| `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: **true**) |
+| `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: **true**) |
+| `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
+| `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
+| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: "Z*"). Reads are not restricted by package. |
+| `SAP_ENABLE_TRANSPORTS` / `--enable-transports` | Enable CTS transport management (default: false) |
+| `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
+| `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`) |
+| `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
+| `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
+| `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | BTP ABAP service key JSON (direct connection) |
+| `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
+| `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
+| `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
+| `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (11 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
+| `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
+| `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
+| `ARC1_CACHE` / `--cache` | Cache mode: `auto` (default), `memory`, `sqlite`, `none` |
+| `ARC1_CACHE_FILE` / `--cache-file` | SQLite cache file path (default: `.arc1-cache.db`) |
+| `ARC1_CACHE_WARMUP` / `--cache-warmup` | Pre-warm cache on startup via TADIR scan (default: false) |
+| `ARC1_CACHE_WARMUP_PACKAGES` / `--cache-warmup-packages` | Package filter for warmup (e.g., "Z*,Y*") |
+| `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
+| `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
+| `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
+| `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
+| `ARC1_PROFILE` / `--profile` | Safety profile shortcut: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql` |
 
 ## Codebase Structure
 
@@ -87,10 +125,12 @@ src/
 │   ├── btp.ts                  # BTP Destination Service + Connectivity proxy
 │   ├── cookies.ts, oauth.ts    # Cookie parsing, OAuth 2.0 for BTP ABAP
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
+│   ├── ddic-xml.ts             # DDIC metadata XML builders (DOMA/DTEL create/update payloads)
 │   ├── devtools.ts             # Syntax check, activate, publish SRVB, unit tests
 │   ├── diagnostics.ts          # Short dumps (ST22), ABAP profiler traces
 │   ├── codeintel.ts            # Find def, refs, where-used, completion
 │   ├── ui5-repository.ts       # UI5 ABAP Repository OData client
+│   ├── flp.ts                  # FLP PAGE_BUILDER_CUST OData client
 │   └── transport.ts            # CTS transport management
 ├── context/
 │   ├── deps.ts, cds-deps.ts    # AST-based dependency extraction
@@ -126,8 +166,10 @@ tests/
 |------|-------|
 | Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` (for structured format, also `src/adt/xml-parser.ts`, `src/adt/types.ts`) |
 | Add OData-based read (non-ADT) | `src/adt/ui5-repository.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
+| Add FLP operation | `src/adt/flp.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
+| Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |
 | Add method-level surgery | `src/context/method-surgery.ts` |
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
 | Add XML response parser | `src/adt/xml-parser.ts` |
@@ -146,6 +188,7 @@ tests/
 | Add/modify auth scopes | `xs-security.json`, `src/server/xsuaa.ts`, `src/server/http.ts`, `src/handlers/intent.ts` |
 | Add safety config option | `src/adt/safety.ts`, `src/server/config.ts`, `src/server/types.ts` |
 | Add feature probe | `src/adt/features.ts` |
+| Add feature-gated write guard | `src/handlers/intent.ts` (checkRapAvailable pattern), `src/adt/features.ts` |
 | Add E2E test | `tests/e2e/`, helpers in `tests/e2e/helpers.ts`, fixtures in `tests/e2e/fixtures.ts` |
 | Add/modify E2E fixture | `tests/e2e/fixtures.ts` (define object), `tests/fixtures/abap/` (source file), `tests/e2e/setup.ts` (sync logic) |
 | Modify object caching | `src/cache/caching-layer.ts`, `src/cache/cache.ts` |
@@ -362,6 +405,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 
 - Integration: `TEST_SAP_*` env vars, `getTestClient()` factory, sequential execution, CRUD uses `generateUniqueName()`
 - E2E: MCP SDK client, `connectClient()`/`callTool()`/`expectToolSuccess()` helpers, 120s timeout, sequential
+- E2E RAP lifecycle: `tests/e2e/rap-write.e2e.test.ts` — DDLS/BDEF/SRVD create+activate+delete (skips gracefully when `rap.available=false`)
 - BTP: local only (not CI), needs `TEST_BTP_SERVICE_KEY_FILE`, interactive browser login
 - CI telemetry: `scripts/ci/` aggregates JSON reports into GitHub step summaries. Coverage is informational only.
 

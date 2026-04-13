@@ -2,6 +2,8 @@
 
 Generate a complete RAP OData UI service from a natural language description of a business object. Creates the full artifact stack: database table, CDS views, behavior definitions, metadata extension, service definition, and behavior pool class.
 
+This is the **"vibe code"** mode — starts creating immediately with sensible defaults. For production-quality services that need deep system research, existing code analysis, architecture decisions, and user-approved plans first, use `generate-rap-service-researched` instead.
+
 This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
 **v1 Guardrails** (matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
@@ -13,7 +15,7 @@ The user provides a natural language description of the business object (e.g., "
 - **Business object description** (required) — what the entity represents and its key business fields
 - **Entity name prefix** (optional — default: auto-generate Z namespace, e.g., `ZTRAVEL`)
 - **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+- **Transport request** (optional — explicit transport recommended for create actions in transportable packages; ARC-1 auto-propagates lock `corrNr` for subsequent updates when omitted)
 - **Draft enabled** (optional — default: yes on BTP, no on-prem)
 - **OData version** (optional — default: V4)
 
@@ -24,10 +26,12 @@ If the user provides just a description, use defaults and proceed.
 Verify the SAP system supports RAP/CDS and detect the system type.
 
 ```
-SAPManage(action="features")
+SAPManage(action="probe")
 ```
 
-Check for RAP/CDS availability. Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
+**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
+
+Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
 
 ### BTP vs On-Prem Differences
 
@@ -124,7 +128,28 @@ search("CDS annotation Fiori Elements list report")
 
 Use the returned documentation to inform correct annotation patterns, draft handling, and behavior definition syntax.
 
-## Step 4: Create Database Table
+## Batch Creation (Preferred)
+
+Instead of creating each artifact individually in Steps 4-13, you can use batch creation to create all RAP artifacts in a single tool call:
+
+```
+SAPWrite(action="batch_create", objects=[
+  {type: "DDLS", name: "<table_name>", description: "<Entity> Table", source: "<table_ddl>"},
+  {type: "DDLS", name: "ZI_<entity>", description: "<Entity> Interface View", source: "<interface_view_ddl>"},
+  {type: "DDLS", name: "ZC_<entity>", description: "<Entity> Projection View", source: "<projection_view_ddl>"},
+  {type: "BDEF", name: "ZI_<entity>", description: "<Entity> Interface Behavior", source: "<interface_bdef>"},
+  {type: "BDEF", name: "ZC_<entity>", description: "<Entity> Projection Behavior", source: "<projection_bdef>"},
+  {type: "DDLX", name: "ZC_<entity>", description: "<Entity> Metadata Extension", source: "<ddlx_source>"},
+  {type: "SRVD", name: "ZSD_<entity>", description: "<Entity> Service Definition", source: "<srvd_source>"},
+  {type: "CLAS", name: "ZBP_I_<entity>", description: "<Entity> Behavior Pool", source: "<class_source>"}
+], package="<package>", transport="<transport>")
+```
+
+Objects are created and activated in array order — put dependencies first (table before CDS views, CDS views before BDEFs, behavior pool before interface BDEF). The batch stops on the first failure and reports which objects succeeded and which failed.
+
+If batch creation fails, fall back to the sequential approach below (Steps 4-13).
+
+## Step 4: Create Database Table (Sequential Fallback)
 
 Create the table entity via CDS DDL.
 
@@ -531,6 +556,14 @@ SAPActivate(type="CLAS", name="ZBP_I_<entity>")
 
 ## Step 12: Batch Activate All Artifacts
 
+First, optionally check for any lingering inactive objects that might interfere:
+
+```
+SAPRead(type="INACTIVE_OBJECTS")
+```
+
+**Note:** This may return 404 on some systems where the `/sap/bc/adt/activation/inactive` endpoint is not available. If so, skip this check and proceed.
+
 Activate all artifacts together to resolve cross-dependencies:
 
 ```
@@ -545,6 +578,8 @@ SAPActivate(objects=[
   {type:"SRVD", name:"ZSD_<entity>"}
 ])
 ```
+
+**Note:** Activation returns structured responses with detailed error/warning messages including line numbers and URIs. Errors block activation; warnings allow it but should be reviewed.
 
 If batch activation fails, activate sequentially in dependency order:
 1. Table entity
@@ -575,7 +610,6 @@ ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
 5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
 6. **Service Definition**: `ZSD_<ENTITY>`
 7. **Finish** and **Activate**
-
 
 After the service binding is created and activated, publish it:
 
@@ -617,12 +651,14 @@ Created artifacts:
   [ ] Service binding published (publish after creating — see Step 13)
 
 Next steps:
-  - Create the service binding and publish it
+  - Create the service binding and publish it (use SAPActivate with action publish_srvb)
   - Add validations and determinations (use generate-rap-logic skill)
   - Add value helps for business fields
   - Add access control (DCLS)
   - Add custom actions if needed
   - Generate unit tests (use generate-abap-unit-test skill)
+  - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
+  - Create proper DOMA/DTEL for reusable typing (use SAPWrite with type=DOMA/DTEL)
 ```
 
 ## Error Handling
@@ -631,6 +667,7 @@ Next steps:
 
 | Error | Cause | Fix |
 |---|---|---|
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
 | Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
 | Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
@@ -654,8 +691,11 @@ Next steps:
 - **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
 - **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
-- **Access control (DCLS)**: No authorization objects. Add manually.
+- **Access control (DCL)**: ARC-1 does not yet support DCL read/write (FEAT-37). Create manually in ADT.
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
+- **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
+- **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.
+- **Service binding creation**: SRVB must be created manually in ADT (not supported by ADT write API).
 
 ### When to Use This Skill
 

@@ -180,6 +180,34 @@ describe('DevTools', () => {
       expect(result.messages).toEqual([]);
     });
 
+    it('parses shortText from child <txt> elements (DDIC activation format)', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+        <chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">
+          <chkl:properties checkExecuted="true" activationExecuted="true" generationExecuted="false"/>
+          <msg type="E" line="0">
+            <shortText><txt>Activation was cancelled.</txt><txt>"DTEL X was not activated" (D0 408)</txt></shortText>
+          </msg>
+          <msg type="E" line="1">
+            <shortText><txt>No domain or data type was defined</txt></shortText>
+          </msg>
+        </chkl:messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.success).toBe(false);
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[0]).toContain('Activation was cancelled');
+      expect(result.messages[0]).toContain('DTEL X was not activated');
+      expect(result.messages[1]).toBe('No domain or data type was defined');
+    });
+
+    it('parses shortText from attribute (classic format)', () => {
+      const xml = `<chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">
+        <msg type="E" shortText="Some error"/>
+      </chkl:messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.success).toBe(false);
+      expect(result.messages).toEqual(['Some error']);
+    });
+
     it('sends activation request to correct endpoint with method param', async () => {
       const http = mockHttp('<activation/>');
       await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
@@ -189,6 +217,91 @@ describe('DevTools', () => {
         'application/xml',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
+    });
+
+    it('sends preauditRequested=false when preaudit option is false', async () => {
+      const http = mockHttp('<activation/>');
+      await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST', { preaudit: false });
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/activation?method=activate&preauditRequested=false',
+        expect.stringContaining('objectReference'),
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('defaults preauditRequested=true when preaudit option is omitted', async () => {
+      const http = mockHttp('<activation/>');
+      await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(http.post).toHaveBeenCalledWith(
+        expect.stringContaining('preauditRequested=true'),
+        expect.any(String),
+        expect.any(String),
+        expect.any(Object),
+      );
+    });
+
+    it('returns structured details with severity, uri, and line', async () => {
+      const xml = `<messages>
+        <msg type="E" severity="error" shortText="Type ZI_TRAVEL is not active" uri="/sap/bc/adt/ddic/ddl/sources/zi_travel" line="42"/>
+        <msg type="W" severity="warning" shortText="Consider CDS view entity" uri="/sap/bc/adt/ddic/ddl/sources/zi_travel"/>
+      </messages>`;
+      const http = mockHttp(xml);
+      const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.details).toHaveLength(2);
+      expect(result.details[0]).toEqual({
+        severity: 'error',
+        text: 'Type ZI_TRAVEL is not active',
+        uri: '/sap/bc/adt/ddic/ddl/sources/zi_travel',
+        line: 42,
+      });
+      expect(result.details[1]).toEqual({
+        severity: 'warning',
+        text: 'Consider CDS view entity',
+        uri: '/sap/bc/adt/ddic/ddl/sources/zi_travel',
+      });
+    });
+
+    it('returns empty details array for empty response', () => {
+      const result = parseActivationResult('');
+      expect(result.details).toEqual([]);
+    });
+
+    it('warnings do not set success to false', () => {
+      const xml = `<messages>
+        <msg type="W" severity="warning" shortText="Warning only"/>
+        <msg type="I" severity="info" shortText="Info message"/>
+      </messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.success).toBe(true);
+      expect(result.details).toHaveLength(2);
+      expect(result.details[0]!.severity).toBe('warning');
+      expect(result.details[1]!.severity).toBe('info');
+    });
+
+    it('parses line numbers as numbers, ignores line=0', () => {
+      const xml = `<messages>
+        <msg type="E" shortText="Error at line 10" line="10"/>
+        <msg type="E" shortText="Error no line" line="0"/>
+      </messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.details[0]!.line).toBe(10);
+      expect(result.details[1]!.line).toBeUndefined();
+    });
+
+    it('mixed errors and warnings parse correctly with backward-compat messages', () => {
+      const xml = `<messages>
+        <msg type="E" severity="error" shortText="Cannot activate" uri="/sap/bc/adt/programs/programs/ZTEST" line="5"/>
+        <msg type="W" severity="warning" shortText="Deprecation warning"/>
+      </messages>`;
+      const result = parseActivationResult(xml);
+      expect(result.success).toBe(false);
+      expect(result.messages).toEqual(['Cannot activate', 'Deprecation warning']);
+      expect(result.details).toHaveLength(2);
+      expect(result.details[0]!.severity).toBe('error');
+      expect(result.details[0]!.line).toBe(5);
+      expect(result.details[1]!.severity).toBe('warning');
+      expect(result.details[1]!.line).toBeUndefined();
     });
   });
 
@@ -230,6 +343,22 @@ describe('DevTools', () => {
       ]);
       expect(http.post).toHaveBeenCalledWith(
         '/sap/bc/adt/activation?method=activate&preauditRequested=true',
+        expect.any(String),
+        'application/xml',
+        expect.objectContaining({ Accept: 'application/xml' }),
+      );
+    });
+
+    it('passes preaudit=false to endpoint URL', async () => {
+      const http = mockHttp('<activation/>');
+      await activateBatch(
+        http,
+        unrestrictedSafetyConfig(),
+        [{ url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' }],
+        { preaudit: false },
+      );
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/activation?method=activate&preauditRequested=false',
         expect.any(String),
         'application/xml',
         expect.objectContaining({ Accept: 'application/xml' }),

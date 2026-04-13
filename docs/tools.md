@@ -56,6 +56,7 @@ Read any SAP ABAP object.
 | `MESSAGES` | Message class texts |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
+| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed) |
 
 **Structured format (CLAS only):**
 
@@ -91,6 +92,7 @@ SAPRead(type="API_STATE", name="IF_HTTP_CLIENT")              — check interfac
 SAPRead(type="API_STATE", name="MARA", objectType="TABL")     — check table with explicit type
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
 SAPRead(type="SYSTEM")
+SAPRead(type="INACTIVE_OBJECTS")                 — list objects pending activation
 ```
 
 ---
@@ -136,18 +138,40 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `DOMA`, `DTEL` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
 | `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number. For `update` and `delete`, if omitted ARC-1 auto-uses the correction number returned by the SAP lock (if any). Explicit value takes precedence. |
+| `dataType` | string | No | DOMA/DTEL: ABAP data type (`CHAR`, `NUMC`, `DEC`, ...) |
+| `length` | number | No | DOMA/DTEL: data type length |
+| `decimals` | number | No | DOMA/DTEL: decimal places |
+| `outputLength` | number | No | DOMA: output length |
+| `conversionExit` | string | No | DOMA: conversion exit (e.g., `ALPHA`) |
+| `signExists` | boolean | No | DOMA: whether signed values are allowed |
+| `lowercase` | boolean | No | DOMA: whether lowercase characters are allowed |
+| `fixedValues` | array | No | DOMA: fixed value entries (`[{low, high?, description?}]`) |
+| `valueTable` | string | No | DOMA: value table reference (e.g., `T001`) |
+| `typeKind` | string | No | DTEL: `domain` or `predefinedAbapType` |
+| `typeName` | string | No | DTEL: referenced domain/type name (for `typeKind="domain"`) |
+| `shortLabel` | string | No | DTEL: short field label |
+| `mediumLabel` | string | No | DTEL: medium field label |
+| `longLabel` | string | No | DTEL: long field label |
+| `headingLabel` | string | No | DTEL: heading field label |
+| `searchHelp` | string | No | DTEL: search help name |
+| `searchHelpParameter` | string | No | DTEL: search help parameter |
+| `setGetParameter` | string | No | DTEL: SET/GET parameter ID |
+| `defaultComponentName` | string | No | DTEL: default component name |
+| `changeDocument` | boolean | No | DTEL: change document flag |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
+
+**DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
 
 **Batch creation:**
 
-`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional).
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
 
@@ -158,11 +182,19 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
 ])
+
+SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
+  dataType="CHAR", length=1,
+  fixedValues=[{low:"A",description:"Active"},{low:"I",description:"Inactive"}])
+
+SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
+  typeKind="domain", typeName="ZSTATUS",
+  shortLabel="Status", mediumLabel="Order Status")
 ```
 
 **Transport behavior:** For `update` and `delete` actions on transportable packages, ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport. For `create` and `batch_create`, an explicit transport may still be required depending on the target package and system configuration.
 
-**Note:** Blocked when `--read-only` is active. By default, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
+**Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 
 ---
 
@@ -176,6 +208,7 @@ Activate (publish) ABAP objects. Supports single object or batch activation.
 |-----------|------|----------|-------------|
 | `name` | string | No | Object name (for single activation) |
 | `type` | string | No | Object type (`PROG`, `CLAS`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, etc.) |
+| `preaudit` | boolean | No | Request pre-activation audit from SAP (default: `true`). Set `false` to skip pre-audit for faster activation. |
 | `objects` | array | No | For batch: array of `{type, name}` objects to activate together |
 
 Use batch activation for RAP stacks where objects depend on each other (DDLS, BDEF, SRVD, DDLX, SRVB must be activated together).
@@ -186,7 +219,7 @@ SAPActivate(type="CLAS", name="ZCL_ORDER")
 SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}])
 ```
 
-**Note:** Blocked when `--read-only` is active.
+**Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`.
 
 ---
 
@@ -209,7 +242,7 @@ Navigate code: find definitions, references (where-used), code completion, and c
 
 **References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
 
-**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--block-free-sql=false`).
+**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--block-free-sql=false` or `--profile viewer-sql`/`developer-sql`).
 
 **Examples:**
 ```
@@ -245,7 +278,7 @@ SAPQuery(sql="SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER 
 SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 ```
 
-**Note:** Blocked when `--block-free-sql` is active.
+**Note:** Not available by default (free SQL blocked). Enable with `--block-free-sql=false` or `--profile viewer-sql`/`developer-sql`.
 
 ---
 
@@ -482,17 +515,30 @@ SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
 Probe and report SAP system capabilities, and inspect the object cache state.
 
 **Actions:**
-- `probe` — Re-probe the SAP system now (makes 6 parallel HEAD requests, ~1-2s). Detects optional features.
+- `probe` — Re-probe the SAP system now (makes 8 parallel HEAD requests, ~1-2s). Detects optional features.
 - `features` — Get cached feature status from last probe (fast, no SAP round-trip).
 - `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
+- `flp_list_catalogs` — List FLP business catalogs.
+- `flp_list_groups` — List FLP groups (`Pages`) from `/UI2/FLPD_CATALOG`.
+- `flp_list_tiles` — List tiles/target mappings in a catalog.
+- `flp_create_catalog` — Create an FLP business catalog.
+- `flp_create_group` — Create an FLP group.
+- `flp_create_tile` — Create a tile in an FLP catalog.
+- `flp_add_tile_to_group` — Assign a catalog tile instance into a group.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `probe`, `features`, or `cache_stats` |
+| `action` | string | Yes | `probe`, `features`, `cache_stats`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `catalogId` | string | No | Required for `flp_list_tiles`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `groupId` | string | No | Required for `flp_create_group`, `flp_add_tile_to_group` |
+| `domainId` | string | No | Required for `flp_create_catalog` |
+| `title` | string | No | Required for `flp_create_catalog`, `flp_create_group` |
+| `tileInstanceId` | string | No | Required for `flp_add_tile_to_group` |
+| `tile` | object | No | Required for `flp_create_tile`. Fields: `id`, `title`, `semanticObject`, `semanticAction`, optional `icon`, `url`, `subtitle`, `info` |
 
-**Probed features:** `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `transport`. Each returns `available` (bool), `mode` (auto/on/off), `message`, and `probedAt` timestamp.
+**Probed features:** `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `transport`, `ui5repo`, `flp`. Each returns `available` (bool), `mode` (auto/on/off), `message`, and `probedAt` timestamp.
 
 **cache_stats output:**
 ```json
@@ -521,6 +567,13 @@ Probe and report SAP system capabilities, and inspect the object cache state.
 SAPManage(action="probe")       → discover system capabilities
 SAPManage(action="features")    → get cached results (no SAP call)
 SAPManage(action="cache_stats") → check cache state and warmup status
+SAPManage(action="flp_list_catalogs")
+SAPManage(action="flp_list_groups")
+SAPManage(action="flp_list_tiles", catalogId="ZARC1_SALES")
+SAPManage(action="flp_create_catalog", domainId="ZARC1_SALES", title="Sales Catalog")
+SAPManage(action="flp_create_group", groupId="ZARC1_SALES_GRP", title="Sales Group")
+SAPManage(action="flp_create_tile", catalogId="ZARC1_SALES", tile={"id":"tile_sales","title":"Sales","semanticObject":"SalesOrder","semanticAction":"display"})
+SAPManage(action="flp_add_tile_to_group", groupId="ZARC1_SALES_GRP", catalogId="ZARC1_SALES", tileInstanceId="00O2TO3741QLWH4GV74AHMWQE")
 ```
 
 **Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work regardless of `--read-only` mode. In HTTP auth mode, SAPManage requires `write` scope.

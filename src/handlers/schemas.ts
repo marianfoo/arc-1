@@ -43,6 +43,7 @@ const SAPREAD_TYPES_ONPREM = [
   'BSP',
   'BSP_DEPLOY',
   'API_STATE',
+  'INACTIVE_OBJECTS',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [
@@ -67,6 +68,7 @@ const SAPREAD_TYPES_BTP = [
   'BSP',
   'BSP_DEPLOY',
   'API_STATE',
+  'INACTIVE_OBJECTS',
 ] as const;
 
 export const SAPReadSchema = z.object({
@@ -118,14 +120,53 @@ export const SAPQuerySchema = z.object({
 
 // ─── SAPWrite ───────────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD'] as const;
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD'] as const;
+const SAPWRITE_TYPES_ONPREM = [
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'INCL',
+  'DDLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'DOMA',
+  'DTEL',
+] as const;
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'] as const;
+
+const ddicFixedValueSchema = z.object({
+  low: z.string(),
+  high: z.string().optional(),
+  description: z.string().optional(),
+});
 
 const batchObjectSchemaOnprem = z.object({
   type: z.enum(SAPWRITE_TYPES_ONPREM),
   name: z.string(),
   source: z.string().optional(),
   description: z.string().optional(),
+  dataType: z.string().optional(),
+  length: z.coerce.number().optional(),
+  decimals: z.coerce.number().optional(),
+  outputLength: z.coerce.number().optional(),
+  conversionExit: z.string().optional(),
+  signExists: z.coerce.boolean().optional(),
+  lowercase: z.coerce.boolean().optional(),
+  fixedValues: z.array(ddicFixedValueSchema).optional(),
+  valueTable: z.string().optional(),
+  typeKind: z.enum(['domain', 'predefinedAbapType']).optional(),
+  typeName: z.string().optional(),
+  domainName: z.string().optional(),
+  shortLabel: z.string().optional(),
+  mediumLabel: z.string().optional(),
+  longLabel: z.string().optional(),
+  headingLabel: z.string().optional(),
+  searchHelp: z.string().optional(),
+  searchHelpParameter: z.string().optional(),
+  setGetParameter: z.string().optional(),
+  defaultComponentName: z.string().optional(),
+  changeDocument: z.coerce.boolean().optional(),
 });
 
 const batchObjectSchemaBtp = z.object({
@@ -133,6 +174,27 @@ const batchObjectSchemaBtp = z.object({
   name: z.string(),
   source: z.string().optional(),
   description: z.string().optional(),
+  dataType: z.string().optional(),
+  length: z.coerce.number().optional(),
+  decimals: z.coerce.number().optional(),
+  outputLength: z.coerce.number().optional(),
+  conversionExit: z.string().optional(),
+  signExists: z.coerce.boolean().optional(),
+  lowercase: z.coerce.boolean().optional(),
+  fixedValues: z.array(ddicFixedValueSchema).optional(),
+  valueTable: z.string().optional(),
+  typeKind: z.enum(['domain', 'predefinedAbapType']).optional(),
+  typeName: z.string().optional(),
+  domainName: z.string().optional(),
+  shortLabel: z.string().optional(),
+  mediumLabel: z.string().optional(),
+  longLabel: z.string().optional(),
+  headingLabel: z.string().optional(),
+  searchHelp: z.string().optional(),
+  searchHelpParameter: z.string().optional(),
+  setGetParameter: z.string().optional(),
+  defaultComponentName: z.string().optional(),
+  changeDocument: z.coerce.boolean().optional(),
 });
 
 export const SAPWriteSchema = z.object({
@@ -144,6 +206,27 @@ export const SAPWriteSchema = z.object({
   description: z.string().optional(),
   package: z.string().optional(),
   transport: z.string().optional(),
+  dataType: z.string().optional(),
+  length: z.coerce.number().optional(),
+  decimals: z.coerce.number().optional(),
+  outputLength: z.coerce.number().optional(),
+  conversionExit: z.string().optional(),
+  signExists: z.coerce.boolean().optional(),
+  lowercase: z.coerce.boolean().optional(),
+  fixedValues: z.array(ddicFixedValueSchema).optional(),
+  valueTable: z.string().optional(),
+  typeKind: z.enum(['domain', 'predefinedAbapType']).optional(),
+  typeName: z.string().optional(),
+  domainName: z.string().optional(),
+  shortLabel: z.string().optional(),
+  mediumLabel: z.string().optional(),
+  longLabel: z.string().optional(),
+  headingLabel: z.string().optional(),
+  searchHelp: z.string().optional(),
+  searchHelpParameter: z.string().optional(),
+  setGetParameter: z.string().optional(),
+  defaultComponentName: z.string().optional(),
+  changeDocument: z.coerce.boolean().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
@@ -156,6 +239,27 @@ export const SAPWriteSchemaBtp = z.object({
   description: z.string().optional(),
   package: z.string().optional(),
   transport: z.string().optional(),
+  dataType: z.string().optional(),
+  length: z.coerce.number().optional(),
+  decimals: z.coerce.number().optional(),
+  outputLength: z.coerce.number().optional(),
+  conversionExit: z.string().optional(),
+  signExists: z.coerce.boolean().optional(),
+  lowercase: z.coerce.boolean().optional(),
+  fixedValues: z.array(ddicFixedValueSchema).optional(),
+  valueTable: z.string().optional(),
+  typeKind: z.enum(['domain', 'predefinedAbapType']).optional(),
+  typeName: z.string().optional(),
+  domainName: z.string().optional(),
+  shortLabel: z.string().optional(),
+  mediumLabel: z.string().optional(),
+  longLabel: z.string().optional(),
+  headingLabel: z.string().optional(),
+  searchHelp: z.string().optional(),
+  searchHelpParameter: z.string().optional(),
+  setGetParameter: z.string().optional(),
+  defaultComponentName: z.string().optional(),
+  changeDocument: z.coerce.boolean().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
@@ -166,6 +270,7 @@ export const SAPActivateSchema = z.object({
   name: z.string().optional(),
   type: z.string().optional(),
   version: z.string().optional(),
+  preaudit: z.coerce.boolean().optional(),
   objects: z
     .array(
       z.object({
@@ -250,8 +355,37 @@ export const SAPContextSchemaBtp = z.object({
 
 // ─── SAPManage ──────────────────────────────────────────────────────
 
+const flpTileSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  icon: z.string().optional(),
+  semanticObject: z.string(),
+  semanticAction: z.string(),
+  url: z.string().optional(),
+  subtitle: z.string().optional(),
+  info: z.string().optional(),
+});
+
 export const SAPManageSchema = z.object({
-  action: z.enum(['features', 'probe', 'cache_stats']),
+  action: z.enum([
+    'features',
+    'probe',
+    'cache_stats',
+    'flp_list_catalogs',
+    'flp_list_groups',
+    'flp_list_tiles',
+    'flp_create_catalog',
+    'flp_create_group',
+    'flp_create_tile',
+    'flp_add_tile_to_group',
+    'flp_delete_catalog',
+  ]),
+  catalogId: z.string().optional(),
+  groupId: z.string().optional(),
+  title: z.string().optional(),
+  domainId: z.string().optional(),
+  tileInstanceId: z.string().optional(),
+  tile: flpTileSchema.optional(),
 });
 
 // ─── Hyperfocused SAP ───────────────────────────────────────────────

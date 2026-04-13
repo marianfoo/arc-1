@@ -792,4 +792,30 @@ describe('AdtClient', () => {
       expect(pkg).toBe('ZPACKAGE');
     });
   });
+
+  describe('getInactiveObjects', () => {
+    it('returns parsed inactive objects from ADT response', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0"?>
+          <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects" xmlns:adtcore="http://www.sap.com/adt/core">
+            <ioc:entry><ioc:object>
+              <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Test class"/>
+            </ioc:object></ioc:entry>
+          </ioc:inactiveObjects>`,
+        ),
+      );
+      const client = createClient();
+      const objects = await client.getInactiveObjects();
+      expect(objects).toHaveLength(1);
+      expect(objects[0]).toEqual({
+        name: 'ZCL_TEST',
+        type: 'CLAS/OC',
+        uri: '/sap/bc/adt/oo/classes/zcl_test',
+        description: 'Test class',
+      });
+    });
+  });
 });

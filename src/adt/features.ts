@@ -19,6 +19,7 @@
 
 import { Version } from '@abaplint/core';
 import type { FeatureConfig, FeatureMode } from './config.js';
+import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import type { AuthProbeResult, FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
 import { parseInstalledComponents } from './xml-parser.js';
@@ -38,6 +39,11 @@ const PROBES: FeatureProbe[] = [
   { id: 'ui5', endpoint: '/sap/bc/adt/filestore/ui5-bsp', description: 'UI5/Fiori BSP' },
   { id: 'transport', endpoint: '/sap/bc/adt/cts/transportrequests', description: 'CTS transport management' },
   { id: 'ui5repo', endpoint: '/sap/opu/odata/UI5/ABAP_REPOSITORY_SRV', description: 'UI5 ABAP Repository Deploy' },
+  {
+    id: 'flp',
+    endpoint: '/sap/opu/odata/UI2/PAGE_BUILDER_CUST/',
+    description: 'FLP customization (PAGE_BUILDER_CUST)',
+  },
 ];
 
 /** Resolve a single feature based on its mode */
@@ -78,6 +84,7 @@ export async function probeFeatures(
     ui5: config.ui5,
     transport: config.transport,
     ui5repo: config.ui5repo,
+    flp: config.flp,
   };
 
   // Only probe features that are in "auto" mode
@@ -88,9 +95,18 @@ export async function probeFeatures(
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
-          const response = await client.get(probe.endpoint);
-          return { id: probe.id, available: response.statusCode < 400 };
-        } catch {
+          // GET on collection endpoints may return 4xx/5xx when the feature is available
+          // (e.g. /ddic/ddl/sources returns 400 without an object name, transport returns 200).
+          // handleResponse() throws AdtApiError for all status >= 400, so we catch here:
+          // - 404 = ICF service not activated / endpoint doesn't exist → unavailable
+          // - any other HTTP error (400, 403, 405, 500) = endpoint exists → available
+          // - network-level error (no AdtApiError) → unavailable
+          await client.get(probe.endpoint);
+          return { id: probe.id, available: true };
+        } catch (err) {
+          if (err instanceof AdtApiError && err.statusCode !== 404) {
+            return { id: probe.id, available: true };
+          }
           return { id: probe.id, available: false };
         }
       }),
@@ -334,6 +350,7 @@ export function resolveWithoutProbing(config: FeatureConfig): ResolvedFeatures {
     ui5: 'UI5/Fiori BSP',
     transport: 'CTS transport management',
     ui5repo: 'UI5 ABAP Repository Deploy',
+    flp: 'FLP customization (PAGE_BUILDER_CUST)',
   };
 
   for (const [id, mode] of Object.entries(config)) {

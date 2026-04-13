@@ -38,15 +38,18 @@ Research the target system thoroughly before designing anything. Every finding i
 Detect what the system supports — this determines available RAP features, syntax, and patterns.
 
 ```
-SAPManage(action="features")
+SAPManage(action="probe")
 ```
+
+**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
 
 Extract and note:
 - **System type**: BTP ABAP Environment vs. On-Premise (and release level: 7.52, 7.54, 7.57, S/4HANA 2020+, etc.)
 - **ABAP language version**: Cloud (strict, released APIs only) vs. Standard (full ABAP)
 - **RAP support level**: Managed, unmanaged, abstract BOs? Draft support? Late numbering? Determination on modify vs. save?
 - **CDS capabilities**: View entities vs. classic views? Table entities? Metadata extensions? Access control?
-- **Available features**: ATC, syntax check, unit test runner, transport management
+- **Available features**: ATC, syntax check, unit test runner, transport management, FLP customization
+- **FLP support**: If `flp` feature is available, the service can be registered in the Fiori Launchpad after creation
 
 ### 1b. Existing RAP Projects — Pattern Mining
 
@@ -120,6 +123,20 @@ SAPSearch(query="<domain_keyword>", maxResults=10)
 ```
 
 Check if there are existing CDS views or tables the new service should build on rather than duplicating data.
+
+If building on existing objects on a BTP system, check their API release state for Clean Core compliance:
+
+```
+SAPRead(type="API_STATE", name="<found_table_or_view>", objectType="TABL")
+```
+
+If an object is deprecated (C2) or not released, avoid building on it — search for its released successor instead.
+
+To understand what already depends on a found object (reverse dependency):
+
+```
+SAPContext(type="DDLS", name="<found_view>", action="usages")
+```
 
 ### 1d. Code Guidelines & Quality Standards
 
@@ -298,6 +315,16 @@ For each question, lead with a concrete recommendation based on the user's spec 
 > [If tables/views were found in research]
 > Should this service read from existing table `<TABLE>` or create a new table?
 
+**7b. Proper DDIC typing (production services)**
+> For production-quality services, I can create **proper domains (DOMA) and data elements (DTEL)** instead of using inline types. This enables:
+> - Reusable field types across multiple tables/views
+> - Fixed value lists on domains (e.g., status domain with A=Active, I=Inactive)
+> - Consistent field labels (short/medium/long/heading) across all UIs
+> - Search help attachments on data elements
+>
+> For `$TMP` prototypes, inline types are fine. For transportable packages, proper DOMA/DTEL is recommended.
+> Want me to create dedicated domains and data elements for the business fields?
+
 ### Naming Questions
 
 **8. Entity naming**
@@ -395,7 +422,7 @@ Create a comprehensive design table:
 | 7 | BDEF | ZC_<Entity> | Projection behavior definition | #5, #6 |
 | 8 | DDLX | ZC_<Entity> | Metadata extension | #6 |
 | 9 | SRVD | ZSD_<Entity> | Service definition | #6 |
-| 10 | SRVB | ZSB_<Entity>_V4 | Service binding | #9 |
+| 10 | SRVB | ZSB_<Entity>_V4 | Service binding (manual in ADT) | #9 |
 
 ### Field Definitions
 | Field | DB Column | CDS Alias | Type | Annotations | Notes |
@@ -461,6 +488,40 @@ Do NOT proceed until the user explicitly approves.
 
 After approval, create the artifacts. Use batch creation when possible.
 
+**Fail fast:** If the first DDLS/BDEF write fails with 415 or 500, stop all further CDS writes immediately. Do not retry with different types — the underlying issue is system-level, not object-specific. Run `SAPManage(action="probe")` to verify `rap.available` status.
+
+### 4-pre. Pre-Implementation Check
+
+Before creating artifacts, optionally check for lingering inactive objects that might cause conflicts:
+
+```
+SAPRead(type="INACTIVE_OBJECTS")
+```
+
+**Note:** This may return 404 on some systems where the `/sap/bc/adt/activation/inactive` endpoint is not available. If so, skip this check and proceed — it's a convenience check, not a requirement.
+
+If inactive objects with conflicting names exist, resolve them first (activate or delete).
+
+### 4-doma. Create Domains and Data Elements (if approved in Phase 2)
+
+If the user opted for proper DDIC typing, create domains and data elements before the table entity:
+
+```
+SAPWrite(action="create", type="DOMA", name="Z<DOMAIN>", package="<package>", transport="<transport>",
+  dataType="CHAR", length=1, fixedValues=[{low:"A", description:"Active"}, {low:"I", description:"Inactive"}])
+```
+
+```
+SAPWrite(action="create", type="DTEL", name="Z<DATAELEMENT>", package="<package>", transport="<transport>",
+  typeKind="domain", dataType="Z<DOMAIN>", labels={short:"Status", medium:"Object Status", long:"Object Status", heading:"Status"})
+```
+
+```
+SAPActivate(objects=[{type:"DOMA", name:"Z<DOMAIN>"}, {type:"DTEL", name:"Z<DATAELEMENT>"}])
+```
+
+Then reference the data elements in the table entity DDL instead of inline types (e.g., `status : z<dataelement>` instead of `status : abap.char(1)`).
+
 ### 4a. Batch Creation (Preferred)
 
 If the system supports it and the artifact stack is straightforward:
@@ -504,6 +565,8 @@ SAPActivate(objects=[
 ])
 ```
 
+**Note:** Activation returns structured responses with detailed error/warning messages including line numbers and URIs. Errors block activation; warnings allow it but should be reviewed. Use this information to pinpoint exact issues rather than re-reading full source.
+
 ### 4c. Source Code Templates
 
 Use the source code templates from the plan. Adapt them based on research findings:
@@ -527,7 +590,12 @@ After all artifacts are created and activated:
    SAPDiagnose(action="atc", type="BDEF", name="ZI_<entity>")
    ```
 
-3. **Read back** key artifacts to confirm they're correct:
+3. **Verify no inactive objects remain** (may return 404 on some systems — skip if so):
+   ```
+   SAPRead(type="INACTIVE_OBJECTS")
+   ```
+
+4. **Read back** key artifacts to confirm they're correct:
    ```
    SAPRead(type="BDEF", name="ZI_<entity>")
    SAPRead(type="DDLS", name="ZI_<entity>")
@@ -543,17 +611,19 @@ Fix any issues found. Re-activate if needed.
 
 ### 4e. Service Binding
 
-Create the service binding:
+ARC-1 cannot create service bindings (SRVB) via the ADT API — SRVB is not a writable type. Instruct the user to create it manually:
 
-```
-SAPWrite(action="create", type="SRVB", name="ZSB_<entity>_V4", package="<package>", transport="<transport>", source="<srvb_source>")
-```
+**"The service binding must be created manually in ADT:**
 
-Activate and publish the service binding:
+1. **Right-click on the package** > New > Other ABAP Repository Object
+2. **Search for "Service Binding"** > Next
+3. **Name**: `ZSB_<ENTITY>_V4` (or `ZUI_<Entity>_O4` if using SAP naming)
+4. **Description**: `<Entity> OData V4 Service`
+5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
+6. **Service Definition**: `ZSD_<ENTITY>` (or `ZUI_<Entity>`)
+7. **Finish** and **Activate**"
 
-```
-SAPActivate(type="SRVB", name="ZSB_<entity>_V4")
-```
+After the user creates and activates the binding, publish it:
 
 ```
 SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
@@ -599,8 +669,8 @@ RAP Service Generation Complete!
   [x] Metadata extension: ZC_<Entity>
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
-  [x] Service binding: ZSB_<Entity>_V4
-  [x] Service binding published
+  [ ] Service binding: ZSB_<Entity>_V4 (create manually in ADT — see Phase 4e)
+  [ ] Service binding published (publish after creating — use SAPActivate publish_srvb)
 
 ## Quality Checks
   [x] All artifacts activated successfully
@@ -626,10 +696,17 @@ Offer follow-up actions based on the plan:
    - Determinations: [list from plan]
    - Validations: [list from plan]
 3. **Add value helps** for reference fields
-4. **Add access control** (DCLS) for authorization
+4. **Add access control (DCL)** for authorization — must be created manually in ADT (ARC-1 DCL support pending FEAT-37)
 5. **Add custom actions** if needed (e.g., Approve, Release)
 6. **Generate unit tests** → use `generate-abap-unit-test` skill
 7. **Add compositions** for child entities (if multi-entity scenario planned for Phase 2)
+8. **Register in FLP** (if FLP feature available) → use SAPManage:
+   - `SAPManage(action="flp_create_catalog", catalogId="Z_<ENTITY>_C", title="<Entity> Catalog")`
+   - `SAPManage(action="flp_create_tile", catalogId="Z_<ENTITY>_C", tile={id:"Z_<ENTITY>_T", title:"<Entity>", semanticObject:"<Entity>", semanticAction:"manage"})`
+   - `SAPManage(action="flp_create_group", groupId="Z_<ENTITY>_G", title="<Entity>")`
+   - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileId="Z_<ENTITY>_T")`
+9. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
+10. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", transport="<TR>")` to release tasks and parent in one step
 ```
 
 ---
@@ -658,6 +735,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 
 | Error | Cause | Fix |
 |---|---|---|
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
 | Object already exists | Name collision | Search existing object, propose different name or offer to update |
 | Feature not supported | System version too old | Adapt plan to available features |
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |
@@ -683,6 +761,8 @@ This skill prioritizes **correctness and consistency** over speed. The extra res
 - **Unmanaged save** implementation (plan it, implement the managed wrapper, note the save handler as a follow-up)
 - **Custom CDS functions/actions** (plan them, implement standard CRUD, add as follow-up)
 - **Fiori app generation** (generates the OData service; Fiori Elements app is auto-generated from annotations)
+- **Access control (DCL)** — ARC-1 does not yet support DCL read/write (FEAT-37). Create manually in ADT. This is the main gap for a fully automated e2e RAP stack.
+- **Service binding creation (SRVB)** — SRVB is not a writable type via ADT API. Must be created manually in ADT.
 
 ### Relationship to Other Skills
 

@@ -148,18 +148,27 @@ describe('hyperfocused mode', () => {
       expect(tools[0]!.name).toBe('SAP');
     });
 
-    it('returns 11+ tools in standard mode with transports enabled', () => {
-      const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const, enableTransports: true };
+    it('returns 11 tools in standard mode with all capabilities enabled', () => {
+      const config = {
+        ...DEFAULT_CONFIG,
+        toolMode: 'standard' as const,
+        readOnly: false,
+        blockFreeSQL: false,
+        enableTransports: true,
+      };
       const tools = getToolDefinitions(config);
       expect(tools.length).toBeGreaterThanOrEqual(11);
       expect(tools.find((t) => t.name === 'SAPRead')).toBeDefined();
     });
 
-    it('returns 10 tools in standard mode without transports', () => {
+    it('returns 6 tools in standard mode with safe defaults', () => {
       const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const };
       const tools = getToolDefinitions(config);
-      expect(tools.length).toBe(10);
+      // Safe defaults: no SAPWrite, SAPActivate, SAPManage, SAPQuery, SAPTransport
+      expect(tools.length).toBe(6);
       expect(tools.find((t) => t.name === 'SAPTransport')).toBeUndefined();
+      expect(tools.find((t) => t.name === 'SAPWrite')).toBeUndefined();
+      expect(tools.find((t) => t.name === 'SAPQuery')).toBeUndefined();
     });
   });
 });

@@ -24,6 +24,8 @@ Read the behavior definition, CDS view, and behavior pool to understand the comp
 SAPRead(type="BDEF", name="<bdef_name>")
 ```
 
+**Note:** If the BDEF read fails with 404 or 415, RAP may not be available on this system. Run `SAPManage(action="probe")` to verify — check that `rap.available = true`. If RAP is unavailable, inform the user and stop.
+
 Parse the BDEF source to identify:
 - **Scenario**: managed / unmanaged / abstract
 - **Determinations**: `determination <Name> on (modify|save) { ... }`
@@ -45,7 +47,7 @@ Understand the data model: field names, types, aliases, associations. This is ne
 ### 1c. Get dependency context
 
 ```
-SAPContext(type="DDLS", name="<interface_view>")
+SAPContext(type="DDLS", name="<interface_view>", action="deps")
 ```
 
 Understand underlying tables, associations, and related entities. Useful for cross-entity validations or determinations that read associated data.
@@ -179,11 +181,19 @@ If the user wants edits, incorporate them before proceeding.
 
 ## Step 5: Write and Validate
 
+Before writing, optionally lint-check the generated code to catch issues before acquiring SAP locks:
+
+```
+SAPLint(action="lint", source="<generated_method_code>", name="<bp_class>")
+```
+
 Write each method implementation using method-level surgery:
 
 ```
 SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method_name>", source="<generated_code>", transport="<transport>")
 ```
+
+**Note:** The `transport` parameter is recommended but not always required for edit_method. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied. Pre-write lint validation runs automatically when enabled (default: on).
 
 After writing all methods, run a syntax check:
 
@@ -204,6 +214,8 @@ Activate the behavior pool and behavior definition together:
 ```
 SAPActivate(objects=[{type:"BDEF", name:"<bdef>"}, {type:"CLAS", name:"<bp_class>"}])
 ```
+
+**Note:** Activation returns structured responses with detailed error/warning messages including line numbers and URIs. Use this to pinpoint exact issues rather than re-reading full source.
 
 Optionally, if a test class exists, run the unit tests:
 
@@ -412,6 +424,7 @@ ENDMETHOD.
 
 | Error | Cause | Fix |
 |---|---|---|
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
 | Method not found in behavior pool | Class name in BDEF doesn't match actual class | Check `implementation in class` in BDEF source, verify class exists |
 | Syntax error: `<entity>` unknown in `READ ENTITIES` | Wrong entity name or alias | Use the exact alias from the BDEF `define behavior for ... alias <Alias>` |
 | Syntax error: field `<Field>` unknown | Field alias doesn't match CDS view | Check CDS view field aliases — BDEF uses CDS aliases, not table field names |

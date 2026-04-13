@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-11
+**Last Updated:** 2026-04-12
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -47,7 +47,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~4~~ | ~~FEAT-14~~ | ~~401 Session Timeout Auto-Retry~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | ~~5~~ | ~~FEAT-15~~ | ~~Namespace URL Encoding Audit~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | 6 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | P1 | S | Features |
-| 7 | FEAT-13 | DDIC Domain/Data Element Write | P1 | S | Features |
+| ~~7~~ | ~~FEAT-13~~ | ~~DDIC Domain/Data Element Write~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-12~~ |
 | 8 | FEAT-16 | Error Intelligence (Actionable Hints) | P1 | S | Features |
 | 9 | FEAT-17 | Type Auto-Mappings for SAPWrite | P1 | XS | Features |
 | 10 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
@@ -58,7 +58,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 15 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
 | 16 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 17 | FEAT-10 | PrettyPrint (Code Formatting) | P2 | XS | Features |
-| 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features |
+| 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features | ✅ Completed |
 | 19 | FEAT-19 | Transport Contents (E071 List) | P2 | XS | Features | ✅ Completed (subsumed by FEAT-39) |
 | 20 | FEAT-20 | Source Version / Revision History | P2 | S | Features |
 | 21 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
@@ -80,7 +80,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
 | 38 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | P0 | S | Features |
 | 39 | FEAT-39 | Transport Enhancements (delete, reassign, types) | P2 | S | Features | ✅ Completed (K/W/T types; S/R deferred) |
-| 40 | FEAT-40 | FLP Launchpad Management (OData) | P1 | M | Features |
+| ~~40~~ | ~~FEAT-40~~ | ~~FLP Launchpad Management (OData)~~ | ~~P1~~ | ~~M~~ | ~~Completed 2026-04-12~~ |
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
@@ -94,9 +94,12 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| — | RAP Write Guard (feature-aware) | 2026-04-13 | Features |
+| FEAT-13 | DDIC Domain/Data Element Write | 2026-04-12 | Features |
 | FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
 | FEAT-14 | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
 | FEAT-15 | Namespace URL Encoding Audit | 2026-04-12 | Features |
+| FEAT-40 | FLP Launchpad Management (OData) | 2026-04-12 | Features |
 | SEC-08 | OAuth Security Hardening (RFC 9700) | 2026-04-08 | Security |
 | — | AFF Structured Class Read | 2026-04-08 |  Features |
 | — | AFF Batch Object Creation | 2026-04-08 | Features |
@@ -149,11 +152,11 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ### Phase B: Core Value Features (P1)
 7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
-8. **FEAT-40** FLP Launchpad Management (M) — OData-based Fiori Launchpad customization (catalogs, groups, tiles). sapcli has full implementation via `/sap/opu/odata/UI2/PAGE_BUILDER_CUST`. High value for enterprise Fiori rollout automation.
+8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
 9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
 10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
-12. **FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow
+12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
 13. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
 14. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 15. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
@@ -230,7 +233,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Low — most deployments use reverse proxy for TLS termination |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-12) |
 | **Source** | [fr0ster tracker: TLS evaluation](../compare/fr0ster/evaluations/tls-https-support.md) |
 
 **What:** Add native TLS support to the HTTP Streamable transport. fr0ster added this in v4.6.0 with `--tls-cert`/`--tls-key` flags. Currently ARC-1 requires a reverse proxy (nginx, CF router) for HTTPS.
@@ -338,14 +341,19 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — completes AI-assisted data modeling |
-| **Status** | Not started |
+| **Status** | Complete (2026-04-12) |
 | **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/646bb9b-dtel-doma-write.md) |
 
 **What:** ARC-1 reads DOMA/DTEL but can't write properties or fixed values. The `abap-adt-api` library (v7.1.1) added `createDomainDefinition`, `createDataElement`, and `createStructure` with full property support. Add write support for these in SAPWrite.
 
 **Why:** Blocks full AI-assisted data modeling workflows. A developer asking the LLM to "create a domain ZSTATUS with values A=Active, I=Inactive" currently can't be fulfilled end-to-end.
 
-**Why not:** DDIC objects have massive property surfaces (domains: 15+ properties including datatype, length, decimals, conversion exit, fixed values, range tables, sign behavior; data elements: semantic properties, labels in 4 lengths, documentation). The ADT API for DDIC writes is not fully documented, and PATCH/PUT semantics are unclear. DDIC objects have complex interdependencies (domain value table must exist, fixed values must match domain type) — ARC-1 has no DDIC validation layer and would need to implement one or accept server-side rejections. DDIC changes ripple across hundreds of tables and programs, making LLM-driven changes inherently risky for data modeling.
+**Implementation (2026-04-12):**
+- Added DDIC metadata XML builders in `src/adt/ddic-xml.ts` (`buildDomainXml`, `buildDataElementXml`) with fixed value support and strict DTEL field ordering.
+- Added `updateObject` + `safeUpdateObject` in `src/adt/crud.ts` for lock/PUT/unlock metadata writes.
+- Enabled `DOMA`/`DTEL` in SAPWrite schemas and tool definitions (`src/handlers/schemas.ts`, `src/handlers/tools.ts`), including DDIC-specific parameters.
+- Wired SAPWrite create/update/batch_create in `src/handlers/intent.ts` to use DDIC v2 content types (`application/vnd.sap.adt.domains.v2+xml`, `application/vnd.sap.adt.dataelements.v2+xml`) and metadata write flow (no `/source/main`).
+- Added unit tests, integration CRUD lifecycle tests, and E2E tests for DOMA/DTEL write paths.
 
 ---
 
@@ -517,7 +525,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Medium — development workflow improvement |
-| **Status** | Not started |
+| **Status** | Done (via SAPRead type=INACTIVE_OBJECTS) |
 | **Source** | [Feature matrix #19](../compare/00-feature-matrix.md) |
 
 **What:** List inactive objects system-wide. VSP and fr0ster both have this. Uses `/sap/bc/adt/activation/inactive`.
@@ -1002,7 +1010,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | M (3-5 days) |
 | **Risk** | Medium — OData API, different from ADT REST |
 | **Usefulness** | Very High — enterprise Fiori rollout automation |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-12) |
 | **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli `sap/cli/flp.py` + `sap/odata/` |
 
 **What:** Manage Fiori Launchpad configuration: catalogs, groups, target mappings, and tile assignments. Uses OData service `/sap/opu/odata/UI2/PAGE_BUILDER_CUST` (on-prem) or equivalent BTP API.
@@ -1010,12 +1018,11 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 **Why:** Fiori Launchpad configuration is a major pain point in SAP projects. Automating catalog/group/tile setup via LLM saves hours of manual work per role. This is the kind of high-value enterprise automation that differentiates ARC-1 from developer-only tools.
 
 **Implementation:**
-- New `src/adt/flp.ts` module — OData client for PAGE_BUILDER_CUST
-- Operations: list catalogs, list groups, list target mappings, create/assign tiles, create catalog/group entries
-- New `SAPManage` action: `flp_catalog_list`, `flp_group_list`, `flp_assign_tile`, etc.
-- Alternatively: new FLP-specific tool if operations are complex enough
-- Safety: gated by write permissions; read operations always allowed
-- Consider pyodata-style OData parsing or use existing `src/adt/ui5-repository.ts` pattern
+- `src/adt/flp.ts` — OData client for PAGE_BUILDER_CUST with double-JSON tile config handling
+- SAPManage actions: `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group`, `flp_delete_catalog`
+- Feature-gated via `featureFlp` config (auto-probed at startup)
+- Write ops use `OperationType.Workflow` — blocked by `readOnly: true`
+- Graceful ASSERTION_FAILED handling for problematic catalogs
 
 ---
 
@@ -1329,7 +1336,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 |-------|-------|
 | **Status** | Complete (2026-04-01) |
 
-**Implemented:** Read support for domains (DOMA), data elements (DTEL), structures (STRU), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite.
+**Implemented:** Read support for domains (DOMA), data elements (DTEL), structures (STRU), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite (plus DOMA/DTEL metadata writes completed under FEAT-13).
 
 ---
 
@@ -1462,6 +1469,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Method-Level Surgery | `edit_method`, `list_methods`, `get_method` — 95% token reduction | Complete (2026-04-01) |
 | Runtime Diagnostics | SAPDiagnose — short dumps (ST22), ABAP profiler traces | Complete (2026-04-01) |
 | DDIC Completeness | FEAT-04: DOMA, DTEL, STRU, DDLX, TRAN, BOR, T100, variants | Complete (2026-04-01) |
+| DDIC Domain/Data Element Write | FEAT-13: DOMA/DTEL create, update, delete, batch_create in SAPWrite | Complete (2026-04-12) |
 | RAP CRUD | DDLS/DDLX/BDEF/SRVD write, SRVB read, batch activation | Complete (2026-04-01) |
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | Complete (2026-04-01) |
 | MCP Elicitation | Interactive confirmations for destructive operations | Complete (2026-04-01) |

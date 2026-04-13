@@ -32,21 +32,38 @@ export async function syntaxCheck(
   return parseSyntaxCheckResult(resp.body);
 }
 
+/** Structured message from an activation response */
+export interface ActivationMessage {
+  severity: 'error' | 'warning' | 'info';
+  text: string;
+  uri?: string;
+  line?: number;
+}
+
+/** Result of an activation operation */
+export interface ActivationResult {
+  success: boolean;
+  messages: string[];
+  details: ActivationMessage[];
+}
+
 /** Activate (publish) ABAP objects */
 export async function activate(
   http: AdtHttpClient,
   safety: SafetyConfig,
   objectUrl: string,
-): Promise<{ success: boolean; messages: string[] }> {
+  options?: { preaudit?: boolean },
+): Promise<ActivationResult> {
   checkOperation(safety, OperationType.Activate, 'Activate');
 
+  const preaudit = options?.preaudit !== false;
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"/>
 </adtcore:objectReferences>`;
 
   const resp = await http.post(
-    '/sap/bc/adt/activation?method=activate&preauditRequested=true',
+    `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
     body,
     'application/xml',
     { Accept: 'application/xml' },
@@ -66,9 +83,11 @@ export async function activateBatch(
   http: AdtHttpClient,
   safety: SafetyConfig,
   objects: Array<{ url: string; name: string }>,
-): Promise<{ success: boolean; messages: string[] }> {
+  options?: { preaudit?: boolean },
+): Promise<ActivationResult> {
   checkOperation(safety, OperationType.Activate, 'ActivateBatch');
 
+  const preaudit = options?.preaudit !== false;
   const refs = objects
     .map(
       (o) =>
@@ -82,7 +101,7 @@ ${refs}
 </adtcore:objectReferences>`;
 
   const resp = await http.post(
-    '/sap/bc/adt/activation?method=activate&preauditRequested=true',
+    `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
     body,
     'application/xml',
     { Accept: 'application/xml' },
@@ -264,25 +283,63 @@ export interface AtcFinding {
 }
 
 /** Parse activation response XML to detect errors via proper XML parsing */
-export function parseActivationResult(xml: string): { success: boolean; messages: string[] } {
-  if (!xml.trim()) return { success: true, messages: [] };
+export function parseActivationResult(xml: string): ActivationResult {
+  if (!xml.trim()) return { success: true, messages: [], details: [] };
 
   const parsed = parseXml(xml);
   const msgs = findDeepNodes(parsed, 'msg');
   const messages: string[] = [];
+  const details: ActivationMessage[] = [];
   let hasErrors = false;
 
   for (const m of msgs) {
-    const severity = String(m['@_severity'] ?? '');
+    const rawSeverity = String(m['@_severity'] ?? '');
     const type = String(m['@_type'] ?? '');
-    if (severity === 'error' || severity === 'fatal' || type === 'E' || type === 'A') {
-      hasErrors = true;
-    }
-    const shortText = String(m['@_shortText'] ?? '');
+    const isError = rawSeverity === 'error' || rawSeverity === 'fatal' || type === 'E' || type === 'A';
+    if (isError) hasErrors = true;
+
+    const shortText = extractShortText(m);
     if (shortText) messages.push(shortText);
+
+    const severity: ActivationMessage['severity'] = isError
+      ? 'error'
+      : type === 'W' || rawSeverity === 'warning'
+        ? 'warning'
+        : 'info';
+
+    const rawUri = m['@_uri'];
+    const rawLine = m['@_line'];
+    const detail: ActivationMessage = { severity, text: shortText };
+    if (rawUri) detail.uri = String(rawUri);
+    if (rawLine != null) {
+      const parsed = Number.parseInt(String(rawLine), 10);
+      if (!Number.isNaN(parsed) && parsed > 0) detail.line = parsed;
+    }
+    details.push(detail);
   }
 
-  return { success: !hasErrors, messages };
+  return { success: !hasErrors, messages, details };
+}
+
+/** Extract shortText from an activation message node.
+ *  Format 1 (attribute): <msg shortText="..."/>
+ *  Format 2 (element):   <msg><shortText><txt>line1</txt><txt>line2</txt></shortText></msg>
+ */
+function extractShortText(m: Record<string, unknown>): string {
+  // Try attribute first (older SAP systems / some message types)
+  const attr = m['@_shortText'];
+  if (attr) return String(attr);
+
+  // Try child element with <txt> sub-elements
+  const shortTextNode = m.shortText;
+  if (!shortTextNode || typeof shortTextNode !== 'object') return '';
+
+  const record = shortTextNode as Record<string, unknown>;
+  const txt = record.txt ?? record['#text'];
+  if (typeof txt === 'string') return txt;
+  if (Array.isArray(txt)) return txt.map((t) => String(t)).join(' — ');
+  if (txt != null) return String(txt);
+  return '';
 }
 
 function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {

@@ -113,6 +113,11 @@ export class AdtHttpClient {
     return this.request('GET', path, undefined, undefined, headers);
   }
 
+  /** HEAD request — lightweight probe, no response body */
+  async head(path: string, headers?: Record<string, string>): Promise<AdtResponse> {
+    return this.request('HEAD', path, undefined, undefined, headers);
+  }
+
   /** POST request (includes CSRF token) */
   async post(
     path: string,

@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools analysis)_
+_Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 
 ## Legend
 - ✅ = Supported
@@ -17,12 +17,12 @@ _Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools a
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
 | Language | TypeScript | Go 1.24 | TypeScript | TypeScript | Python 3.12 | TypeScript | TypeScript | JavaScript (compiled TS) | Python 3.10+ |
-| Tool count | 11 intent-based | 1-99 (3 modes) | ~15 | 13 | 15 | 287 (4 tiers) | 3 (hierarchical) | 25 | 28+ CLI commands (not MCP) |
+| Tool count | 11 intent-based | 1-99 (3 modes) | ~15 | 13 | 15 | 303 (4 tiers) | 3 (hierarchical) | 25 | 28+ CLI commands (not MCP) |
 | ADT client | Custom (undici/fetch) | Custom (Go) | abap-adt-api | Custom (axios) | Custom (aiohttp) | Custom (axios) | SAP Cloud SDK | abap-adt-api | Custom (requests) |
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) | N/A (Python, git install) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Stars | — | 242 | 109 | 103 | 29 | 26 | 119 | 0 (new) | 77 |
-| Active development | ✅ | ✅ Very (v2.39.0+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v4.8.7) | ⚠️ Moderate | ✅ New (Mar 2026) | ✅ Very (since 2018) |
+| Active development | ✅ | ✅ Very (v2.39.0+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v5.0.8) | ⚠️ Moderate | ✅ New (Mar 2026) | ✅ Very (since 2018) |
 | Release count | — | 32+ | — | — | — | 85+ (5 months) | — | 1 | rolling "latest" |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A | N/A |
 
@@ -114,6 +114,8 @@ _Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools a
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (abap run) |
 | RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
+| Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ⚠️ (PR #149 in progress) |
+| Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (ADTObjectType) |
@@ -160,7 +162,7 @@ _Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools a
 | Transport contents | ⚠️ (parsed when available) | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (-rrr objects) |
 | Transport assign | ✅ (reassign owner) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (reassign owner) |
 | Transport gating | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
-| Inactive objects list | ❌ | ✅ | ��� | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
+| Inactive objects list | ✅ | ✅ | ��� | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 
 ## 10. Diagnostics & Runtime
 
@@ -187,7 +189,7 @@ _Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools a
 | BTP Destination Service | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Cloud Connector proxy | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Multi-system support | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ (kubeconfig contexts) |
-| OData bridge | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ (BSP, FLP via OData) |
+| OData bridge | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ (BSP, FLP via OData) |
 | Lua scripting engine | ❌ | ✅ (50+ bindings) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | WASM-to-ABAP compiler | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | MCP client configurator | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (11 clients) | ❌ | ❌ | ❌ |
@@ -205,7 +207,7 @@ _Last updated: 2026-04-12 (added sapcli column, post fr0ster v5.0.0 feed tools a
 
 | Feature | ARC-1 | vibing-steampunk | fr0ster | sapcli |
 |---------|-------|-----------------|---------|--------|
-| Schema token cost | ~200 (hyperfocused) / ~moderate (11 tools) | ~200 (hyperfocused) / ~14K (focused) / ~40K (expert) | ~high (287 tools) | N/A (CLI) |
+| Schema token cost | ~200 (hyperfocused) / ~moderate (11 tools) | ~200 (hyperfocused) / ~14K (focused) / ~40K (expert) | ~high (303 tools) | N/A (CLI) |
 | Context compression | ✅ SAPContext (7-30x) | ✅ Auto-append (7-30x) | ❌ | N/A |
 | Method-level surgery | ✅ (95% source reduction) | ✅ (95% source reduction) | ❌ | N/A |
 | Hyperfocused mode (1 tool) | ✅ (~200 tokens) | ✅ (~200 tokens) | ❌ | N/A |
@@ -251,13 +253,14 @@ The following items were incorrectly marked in the previous version and have sin
 | VSP HTTP Streamable | ❌ | ✅ (v2.38.0, mcp-go v0.47.0) | ARC-1 no longer unique on HTTP transport |
 | VSP version | v2.32.0 | v2.39.0+ | Massive feature sprint Apr 2-8 (40+ commits) |
 | fr0ster version | v4.8.1 | v4.8.7 | Continued iteration |
+| fr0ster version | v4.8.7 | v5.0.8 (303 tools) | v5.0.7: 14 activation tools (+14), post-merge naming fix in v5.0.8 |
 
 ---
 
 ## Competitive Positioning Summary
 
 ### ARC-1 Unique Strengths (no other project has all of these)
-1. **Intent-based routing** — 11 tools vs 25-287. Simplest LLM decision surface.
+1. **Intent-based routing** — 11 tools vs 25-303. Simplest LLM decision surface.
 2. **Declarative safety system** — Read-only, op filter, pkg filter, SQL blocking, transport gating, dry-run. Most comprehensive.
 3. **MCP scope system** — OAuth scope-gated tool access (read/write/admin).
 4. **BTP ABAP Environment** — Full OAuth 2.0 browser login, direct connectivity.
@@ -269,7 +272,7 @@ The following items were incorrectly marked in the previous version and have sin
 
 ### Biggest Competitive Threats
 1. **vibing-steampunk** (242 stars) — Community favorite. Now has Streamable HTTP (v2.38.0), SAML SSO (v2.39.0+, PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening. Now defaults to hyperfocused mode (1 tool). Still lacks BTP OAuth / Destination Service but adding auth options.
-2. **fr0ster** (v5.0.1, 90+ releases) — Closest enterprise competitor. 289 tools, 9 auth providers, TLS, RFC, embeddable. v5.0.0 added unified feed tools (SM02, gateway errors), adt-clients 4.0 factory API. Complex multi-repo but ambitious.
+2. **fr0ster** (v5.0.8, 90+ releases) — Closest enterprise competitor. 303 tools, 9 auth providers, TLS, RFC, embeddable. v5.0.7 added 14 activation tools (group + per-type). v5.0.0 added unified feed tools (SM02, gateway errors), adt-clients 4.0 factory API. Complex multi-repo but ambitious.
 3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
 
 ### Key Gaps to Close
@@ -288,14 +291,14 @@ The following items were incorrectly marked in the previous version and have sin
 
 **P1 — high-value gaps:**
 - Where-Used analysis, fix proposals
-- DDIC write (DOMA/DTEL), ~~namespace encoding audit~~, error intelligence
+- ~~DDIC write (DOMA/DTEL)~~, ~~namespace encoding audit~~, error intelligence
 - Type auto-mappings, function group bulk fetch
 - Documentation (Copilot Studio guide, Basis Admin guide)
 
 **P2+ — future gaps:**
 - System messages (SM02) — AI agent situational awareness. fr0ster v5.0.0 added this.
 - Gateway error log (IWFND) — OData/Gateway debugging with source code + call stack. fr0ster v5.0.0, on-prem only.
-- SQL traces, PrettyPrint, inactive objects, transport contents, source versions
+- SQL traces, PrettyPrint, transport contents, source versions
 - Cloud readiness assessment, gCTS/abapGit, enhancement framework
 - Multi-system routing, rate limiting
 

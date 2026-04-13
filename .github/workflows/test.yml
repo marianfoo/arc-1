@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Only one SAP-hitting workflow at a time — prevents parallel runs from
+# different PRs/pushes from exhausting SAP work processes.
+concurrency:
+  group: sap-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -107,13 +113,17 @@ jobs:
         continue-on-error: true
 
   # Run on push (main) and internal PRs; skip external fork PRs (no secrets)
+  # Runs AFTER integration to avoid both jobs hitting SAP simultaneously.
+  # Uses always() so e2e still runs even if integration fails (SAP flakes).
   e2e:
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
-    needs: test
+      always() &&
+      needs.test.result == 'success' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
+    needs: [test, integration]
     timeout-minutes: 15
 
     steps:

@@ -24,6 +24,7 @@ import type {
   ClassMetadata,
   DataElementInfo,
   DomainInfo,
+  InactiveObject,
   SourceSearchResult,
   TransactionInfo,
 } from './types.js';
@@ -380,7 +381,7 @@ export function parseDomainMetadata(xml: string): DomainInfo {
       fixedValues.push({
         low: String(fv.low ?? fv['@_low'] ?? ''),
         high: String(fv.high ?? fv['@_high'] ?? ''),
-        description: String(fv.description ?? fv['@_description'] ?? ''),
+        description: String(fv.text ?? fv.description ?? fv['@_text'] ?? fv['@_description'] ?? ''),
       });
     }
   }
@@ -736,4 +737,26 @@ function getDeepArray(obj: Record<string, unknown>, path: string[]): Array<Recor
     if (arr && typeof arr === 'object') return [arr as Record<string, unknown>];
   }
   return [];
+}
+
+/** Parse inactive objects response from /sap/bc/adt/activation/inactive */
+export function parseInactiveObjects(xml: string): InactiveObject[] {
+  if (!xml.trim()) return [];
+  const parsed = parseXml(xml);
+  // Each inactive object is in its own entry → objectReference is nested per-entry.
+  // findDeepNodes returns early on first match, so we iterate entries instead.
+  const entries = findDeepNodes(parsed, 'entry');
+  const results: InactiveObject[] = [];
+  for (const entry of entries) {
+    const refs = findDeepNodes(entry, 'objectReference');
+    for (const ref of refs) {
+      results.push({
+        name: String(ref['@_name'] ?? ''),
+        type: String(ref['@_type'] ?? ''),
+        uri: String(ref['@_uri'] ?? ''),
+        ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
+      });
+    }
+  }
+  return results;
 }
