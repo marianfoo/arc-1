@@ -75,7 +75,9 @@ flowchart TD
     RTYPE -->|Find objects| SS[SAPSearch]
     RTYPE -->|System info| SR3[SAPRead type=SYSTEM]
 
-    READ -->|Write| SW[SAPWrite]
+    READ -->|Write| WTYPE{Local or transportable package?}
+    WTYPE -->|Local $TMP| SW[SAPWrite]
+    WTYPE -->|Transportable| ST[SAPTransport check → SAPWrite with transport]
     READ -->|Activate| SA[SAPActivate]
     READ -->|Navigate| SN[SAPNavigate]
     READ -->|Diagnose| SD[SAPDiagnose]
@@ -114,7 +116,9 @@ flowchart TD
 
 | Task | Tool | Parameters |
 |------|------|------------|
-| Create new object | `SAPWrite` | `action=create, type=PROG, name=ZTEST, source=...` |
+| Create new object (local) | `SAPWrite` | `action=create, type=PROG, name=ZTEST, source=...` |
+| Create in transport package | `SAPWrite` | `action=create, type=PROG, name=ZTEST, source=..., package=ZDEV, transport=A4HK900123` |
+| Check transport requirement | `SAPTransport` | `action=check, type=CLAS, name=ZCL_TEST, package=ZDEV` |
 | Update existing | `SAPWrite` | `action=update, type=CLAS, name=ZCL_TEST, source=...` |
 | Delete object | `SAPWrite` | `action=delete, type=PROG, name=ZTEST` |
 | Activate | `SAPActivate` | `name=ZCL_TEST, type=CLAS` |
@@ -161,7 +165,37 @@ Step 1: SAPRead(type="MESSAGES", name="ZRAY_00")
         → Returns JSON with all messages
 ```
 
-### 4. Investigate Runtime Errors
+### 4. Create Objects in Transportable Packages
+
+When creating objects in non-`$TMP` packages, a transport number is required. ARC-1 detects this automatically and returns guidance, but the optimal workflow is:
+
+```
+Step 1: SAPTransport(action="check", type="CLAS", name="ZCL_ORDER", package="ZDEV")
+        → Returns whether a transport is needed, existing transports, any locked transport
+
+Step 2: (if transport needed) SAPTransport(action="list")
+        → Returns modifiable transports for the current user
+        OR
+        SAPTransport(action="create", description="Create ZCL_ORDER class")
+        → Creates a new transport and returns the transport ID
+
+Step 3: SAPWrite(action="create", type="CLAS", name="ZCL_ORDER", source="...", package="ZDEV", transport="A4HK900123")
+        → Creates the object in the transportable package with the transport number
+```
+
+**Shortcut:** If you skip the check step, ARC-1's pre-flight check will detect the missing transport and return an actionable error with existing transports listed — you can then pick one and retry.
+
+**Batch creation:** The same flow applies to `batch_create`. Provide the `transport` parameter at the top level — all objects in the batch use the same transport.
+
+```
+SAPWrite(action="batch_create", package="ZDEV", transport="A4HK900123", objects=[
+  {type:"DDLS", name:"ZI_TRAVEL", source:"..."},
+  {type:"BDEF", name:"ZI_TRAVEL", source:"..."},
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"..."}
+])
+```
+
+### 5. Investigate Runtime Errors
 
 ```
 Step 1: SAPDiagnose(action="dumps", user="DEVELOPER")
@@ -182,6 +216,13 @@ Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
 | `"DESC" is not allowed` | Used SQL `DESC` | Use `DESCENDING` instead |
 | `"ASC" is not allowed` | Used SQL `ASC` | Use `ASCENDING` instead |
 | `LIMIT not recognized` | Used SQL `LIMIT` | Use `maxRows` parameter |
+
+### SAPWrite Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Package requires transport | Non-`$TMP` package, no transport provided | Use `SAPTransport(action="list")` or `SAPTransport(action="create")` to get a transport ID, then pass it via `transport` parameter |
+| Package not in allowed list | Package not in `--allowed-packages` | Admin must add the package to the allow list |
 
 ### SAPRead Errors
 

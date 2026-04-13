@@ -192,7 +192,14 @@ SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
   shortLabel="Status", mediumLabel="Order Status")
 ```
 
-**Transport behavior:** For `update` and `delete` actions on transportable packages, ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport. For `create` and `batch_create`, an explicit transport may still be required depending on the target package and system configuration.
+**Transport behavior:**
+
+- **`update` and `delete`**: ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport.
+- **`create` and `batch_create`**: ARC-1 performs a **transport pre-flight check** for non-`$TMP` packages when no transport is provided. This calls the SAP transport checks endpoint to determine whether a transport number is required:
+  - If the object is already locked in a transport, ARC-1 auto-uses that transport.
+  - If the package is local (e.g., `$TMP`), no transport is needed — creation proceeds.
+  - If a transport IS required but none was provided, ARC-1 returns an actionable error message listing existing transports and guiding the caller to use `SAPTransport(action="list")` or `SAPTransport(action="create")` first.
+  - If the pre-flight check fails (older system, permissions), ARC-1 proceeds and lets SAP handle the error.
 
 **Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 
@@ -284,26 +291,53 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release.
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, and check transport requirements.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, or `release_recursive` |
+| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`, or `check` |
 | `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Transport description text (required for create) |
+| `name` | string | No | Object name (for check action, e.g. `ZCL_ORDER`) |
+| `package` | string | No | Package name (for check action, e.g. `ZDEV`) |
 | `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
 | `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
-| `type` | string | No | Transport type for create: `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies) |
+| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
 | `owner` | string | No | New owner SAP username (required for reassign) |
 | `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
+
+**Actions:**
+
+- **`list`** — List transport requests. Defaults to current user, modifiable (status D), all types (Workbench, Customizing, Transport of Copies).
+- **`get`** — Get transport details including tasks and objects.
+- **`create`** — Create a new transport request. Requires `description`. Optional `type` (K/W/T).
+- **`release`** — Release a single transport or task.
+- **`delete`** — Delete a transport. Use `recursive=true` to delete tasks first.
+- **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.
+- **`release_recursive`** — Release all unreleased tasks first, then the transport itself.
+- **`check`** — Check if a transport number is required for creating an object in a specific package. Requires `type`, `name`, and `package`. Returns whether transport recording is required, whether the package is local, existing transports, and any locked transport. **Does NOT require `--enable-transports`** — this is a read-only pre-flight check.
+
+**Check action output:**
+```json
+{
+  "package": "ZDEV",
+  "transportRequired": true,
+  "isLocal": false,
+  "deliveryUnit": "HOME",
+  "existingTransports": [
+    { "id": "A4HK900123", "description": "My transport", "owner": "DEVELOPER" }
+  ],
+  "summary": "Package \"ZDEV\" requires a transport for object creation."
+}
+```
 
 **List defaults:** Without parameters, `list` returns modifiable transports (status D) for the current SAP user, across all transport types (Workbench, Customizing, Transport of Copies). Query params follow sapcli's `workbench_params()` pattern (`requestType=KWT`, `requestStatus`).
 
 **Protocol compatibility:** ARC-1 uses endpoint-specific CTS media types and includes a one-retry content negotiation fallback (406/415) for SAP version variance.
 
-**Note:** Only available when `--enable-transports` is set.
+**Note:** Most actions require `--enable-transports`. The `check` action works without it (read-only).
 
 ---
 
