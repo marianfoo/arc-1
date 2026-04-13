@@ -38,8 +38,10 @@ Research the target system thoroughly before designing anything. Every finding i
 Detect what the system supports — this determines available RAP features, syntax, and patterns.
 
 ```
-SAPManage(action="features")
+SAPManage(action="probe")
 ```
+
+**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
 
 Extract and note:
 - **System type**: BTP ABAP Environment vs. On-Premise (and release level: 7.52, 7.54, 7.57, S/4HANA 2020+, etc.)
@@ -486,13 +488,17 @@ Do NOT proceed until the user explicitly approves.
 
 After approval, create the artifacts. Use batch creation when possible.
 
+**Fail fast:** If the first DDLS/BDEF write fails with 415 or 500, stop all further CDS writes immediately. Do not retry with different types — the underlying issue is system-level, not object-specific. Run `SAPManage(action="probe")` to verify `rap.available` status.
+
 ### 4-pre. Pre-Implementation Check
 
-Before creating artifacts, check for lingering inactive objects that might cause conflicts:
+Before creating artifacts, optionally check for lingering inactive objects that might cause conflicts:
 
 ```
 SAPRead(type="INACTIVE_OBJECTS")
 ```
+
+**Note:** This may return 404 on some systems where the `/sap/bc/adt/activation/inactive` endpoint is not available. If so, skip this check and proceed — it's a convenience check, not a requirement.
 
 If inactive objects with conflicting names exist, resolve them first (activate or delete).
 
@@ -584,7 +590,7 @@ After all artifacts are created and activated:
    SAPDiagnose(action="atc", type="BDEF", name="ZI_<entity>")
    ```
 
-3. **Verify no inactive objects remain**:
+3. **Verify no inactive objects remain** (may return 404 on some systems — skip if so):
    ```
    SAPRead(type="INACTIVE_OBJECTS")
    ```
@@ -729,6 +735,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 
 | Error | Cause | Fix |
 |---|---|---|
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
 | Object already exists | Name collision | Search existing object, propose different name or offer to update |
 | Feature not supported | System version too old | Adapt plan to available features |
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |

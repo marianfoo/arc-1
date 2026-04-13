@@ -1399,8 +1399,28 @@ async function handleSAPWrite(
     return pkg;
   }
 
+  // RAP feature guard — block DDLS/BDEF/DDLX/SRVD writes when rap.available === false.
+  // If features haven't been probed yet (cachedFeatures === undefined), allow the request
+  // (the SAP system will validate). Same pattern as FLP guard in handleSAPManage.
+  // NOTE: In PP mode, per-user probes don't update the global cachedFeatures cache
+  // (only shared-client probes do). This means the shared/startup probe result gates all
+  // users — same limitation as the FLP guards. Acceptable because: (1) if the shared client
+  // sees rap.available=false, the ADT endpoint likely isn't active system-wide, and (2) if
+  // no probe has run yet, the guard allows the request through.
+  const RAP_DEPENDENT_TYPES = ['DDLS', 'BDEF', 'DDLX', 'SRVD'];
+  function checkRapAvailable(objType: string): string | undefined {
+    if (!RAP_DEPENDENT_TYPES.includes(objType.toUpperCase())) return undefined;
+    if (cachedFeatures?.rap && !cachedFeatures.rap.available) {
+      return `RAP/CDS feature is not available on this system (probed endpoint: /sap/bc/adt/ddic/ddl/sources). Cannot create/modify ${objType.toUpperCase()} objects via SAPWrite. Create them manually in ADT, or check your SAP system configuration. Run SAPManage(action="probe") to re-check availability.`;
+    }
+    return undefined;
+  }
+
   switch (action) {
     case 'update': {
+      const rapErr = checkRapAvailable(type);
+      if (rapErr) return errorResult(rapErr);
+
       const existingPackage = await enforcePackageForExistingObject();
 
       if (isDdicMetadataType(type)) {
@@ -1427,6 +1447,9 @@ async function handleSAPWrite(
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
     }
     case 'create': {
+      const rapErr = checkRapAvailable(type);
+      if (rapErr) return errorResult(rapErr);
+
       const pkg = String(args.package ?? '$TMP');
       checkPackage(client.safety, pkg);
       const description = String(args.description ?? name);
@@ -1522,6 +1545,9 @@ async function handleSAPWrite(
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
     }
     case 'delete': {
+      const rapErr = checkRapAvailable(type);
+      if (rapErr) return errorResult(rapErr);
+
       await enforcePackageForExistingObject();
       // Lock, delete, unlock pattern — auto-propagate lock corrNr if no explicit transport
       await client.http.withStatefulSession(async (session) => {
@@ -1544,6 +1570,13 @@ async function handleSAPWrite(
       const objects = args.objects as Array<Record<string, unknown>> | undefined;
       if (!objects || !Array.isArray(objects) || objects.length === 0) {
         return errorResult('"objects" array is required and must be non-empty for batch_create action.');
+      }
+
+      // RAP guard: check if any object in the batch has a RAP-dependent type
+      const rapTypesInBatch = objects.filter((o) => RAP_DEPENDENT_TYPES.includes(String(o.type ?? '').toUpperCase()));
+      if (rapTypesInBatch.length > 0) {
+        const rapErr = checkRapAvailable(String(rapTypesInBatch[0].type));
+        if (rapErr) return errorResult(rapErr);
       }
 
       const pkg = String(args.package ?? '$TMP');
