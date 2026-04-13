@@ -110,8 +110,8 @@ describe('ADT Integration Tests', () => {
       const catalogWithPrefix = catalogs.find((c) => c.id.startsWith('X-SAP-UI2-CATALOGPAGE:'));
       requireOrSkip(ctx, catalogWithPrefix, SkipReason.NO_FIXTURE);
       // Use full ID to verify normalization handles it correctly
-      const tiles = await listTiles(client.http, unrestrictedSafetyConfig(), catalogWithPrefix.id);
-      expect(Array.isArray(tiles)).toBe(true);
+      const result = await listTiles(client.http, unrestrictedSafetyConfig(), catalogWithPrefix.id);
+      expect(Array.isArray(result.tiles)).toBe(true);
     }, 60000);
 
     it('CRUD lifecycle — create and delete catalog', async (ctx) => {
