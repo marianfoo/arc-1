@@ -195,14 +195,16 @@ const SAPTRANSPORT_DESC_ONPREM =
   'Manage CTS transport requests (SE09/SE10 equivalent). ' +
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
-  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent). ' +
+  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
+  'check (check if a package requires a transport — provide type, name, package). ' +
   'Transport IDs look like A4HK900123. Status: D=modifiable, R=released.';
 
 const SAPTRANSPORT_DESC_BTP =
   'Manage transport requests (BTP ABAP Environment, SE09/SE10 equivalent). ' +
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
-  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent). ' +
+  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
+  'check (check if a package requires a transport — provide type, name, package). ' +
   'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
   'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
 
@@ -412,8 +414,15 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             description:
               'Object description for create action (defaults to name if omitted). Max 60 chars for most types.',
           },
-          package: { type: 'string', description: 'Package for new objects (default $TMP)' },
-          transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
+          package: {
+            type: 'string',
+            description: 'Package for new objects (default $TMP). Non-$TMP packages require a transport number.',
+          },
+          transport: {
+            type: 'string',
+            description:
+              'Transport request number. Required for non-$TMP packages. Use SAPTransport(action="list") to find or SAPTransport(action="create") to create one.',
+          },
           dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type (e.g., CHAR, NUMC, DEC)' },
           length: { type: 'number', description: 'DOMA/DTEL: data type length' },
           decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
@@ -808,7 +817,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive'],
+            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check'],
             description:
               'list: show transports (defaults to current user, modifiable only). ' +
               'get: fetch transport details including tasks and objects. ' +
@@ -816,7 +825,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'release: release a single transport or task. ' +
               'delete: delete a transport (use recursive=true to delete tasks first). ' +
               'reassign: change transport owner (use recursive=true for tasks too). ' +
-              'release_recursive: release all unreleased tasks first, then the transport itself.',
+              'release_recursive: release all unreleased tasks first, then the transport itself. ' +
+              'check: check if a transport is needed for a package/object (requires type, name, package).',
           },
           id: {
             type: 'string',
@@ -824,6 +834,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'Transport request ID, e.g. A4HK900123 (required for get/release/delete/reassign/release_recursive)',
           },
           description: { type: 'string', description: 'Transport description text (required for create)' },
+          name: { type: 'string', description: 'Object name (for check action)' },
+          package: { type: 'string', description: 'Package name (for check action)' },
           user: {
             type: 'string',
             description:
@@ -835,8 +847,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           },
           type: {
             type: 'string',
-            enum: ['K', 'W', 'T'],
-            description: 'Transport type for create: K=Workbench (default), W=Customizing, T=Transport of Copies',
+            description:
+              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check: object type (PROG, CLAS, DDLS, etc.)',
           },
           owner: { type: 'string', description: 'New owner SAP username (required for reassign)' },
           recursive: {

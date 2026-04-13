@@ -9,6 +9,7 @@ import {
   createTransport,
   deleteTransport,
   getTransport,
+  getTransportInfo,
   listTransports,
   reassignTransport,
   releaseTransport,
@@ -632,6 +633,183 @@ describe('Transport Management', () => {
       expect(CTS_ACCEPT_TREE).toBe('application/vnd.sap.adt.transportorganizertree.v1+xml');
       expect(CTS_CONTENT_TYPE_ORGANIZER).toBe('application/vnd.sap.adt.transportorganizer.v1+xml');
       expect(CTS_NAMESPACE_TM).toBe('http://www.sap.com/cts/adt/tm');
+    });
+  });
+
+  // ─── getTransportInfo ─────────────────────────────────────────────
+
+  describe('getTransportInfo', () => {
+    it('posts to /sap/bc/adt/cts/transportchecks endpoint', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+        <asx:values><DATA>
+          <RECORDING/>
+          <DLVUNIT>LOCAL</DLVUNIT>
+          <DEVCLASS>$TMP</DEVCLASS>
+        </DATA></asx:values>
+      </asx:abap>`;
+      const http = mockHttp(xml);
+      await getTransportInfo(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test', '$TMP');
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toBe('/sap/bc/adt/cts/transportchecks');
+    });
+
+    it('sends correct content type and accept headers', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING/>
+        <DLVUNIT>LOCAL</DLVUNIT>
+        <DEVCLASS>$TMP</DEVCLASS>
+      </DATA></asx:values></asx:abap>`;
+      const http = mockHttp(xml);
+      await getTransportInfo(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test', '$TMP');
+      const calls = (http.post as ReturnType<typeof vi.fn>).mock.calls[0];
+      const contentType = calls?.[2] as string;
+      expect(contentType).toContain('application/vnd.sap.as+xml');
+      expect(contentType).toContain('dataname=com.sap.adt.transport.service.checkData');
+    });
+
+    it('includes object URI and devclass in request body', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING/>
+        <DLVUNIT>LOCAL</DLVUNIT>
+        <DEVCLASS>$TMP</DEVCLASS>
+      </DATA></asx:values></asx:abap>`;
+      const http = mockHttp(xml);
+      await getTransportInfo(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test', 'Z_MY_PKG');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<URI>/sap/bc/adt/oo/classes/zcl_test</URI>');
+      expect(body).toContain('<DEVCLASS>Z_MY_PKG</DEVCLASS>');
+      expect(body).toContain('<OPERATION>I</OPERATION>');
+    });
+
+    it('parses local package response (no transport needed)', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+        <asx:values><DATA>
+          <PGMID>R3TR</PGMID>
+          <OBJECT>CLAS</OBJECT>
+          <OBJECTNAME>ZCL_TEST</OBJECTNAME>
+          <DEVCLASS>$TMP</DEVCLASS>
+          <DLVUNIT>LOCAL</DLVUNIT>
+          <RECORDING/>
+          <KORRFLAG/>
+        </DATA></asx:values>
+      </asx:abap>`;
+      const http = mockHttp(xml);
+      const info = await getTransportInfo(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test', '$TMP');
+      expect(info.isLocal).toBe(true);
+      expect(info.recording).toBe(false);
+      expect(info.deliveryUnit).toBe('LOCAL');
+      expect(info.devclass).toBe('$TMP');
+      expect(info.existingTransports).toEqual([]);
+      expect(info.lockedTransport).toBeUndefined();
+    });
+
+    it('parses transportable package response (transport required)', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+        <asx:values><DATA>
+          <PGMID>R3TR</PGMID>
+          <OBJECT>DDLS</OBJECT>
+          <OBJECTNAME>ZI_TRAVEL</OBJECTNAME>
+          <DEVCLASS>Z_RAP_VB_1</DEVCLASS>
+          <DLVUNIT>SAP</DLVUNIT>
+          <RECORDING>X</RECORDING>
+          <KORRFLAG>X</KORRFLAG>
+          <TRANSPORTS>
+            <headers>
+              <TRKORR>A4HK900502</TRKORR>
+              <AS4TEXT>RAP development</AS4TEXT>
+              <AS4USER>DEVELOPER</AS4USER>
+            </headers>
+            <headers>
+              <TRKORR>A4HK900503</TRKORR>
+              <AS4TEXT>CDS views</AS4TEXT>
+              <AS4USER>DEVELOPER</AS4USER>
+            </headers>
+          </TRANSPORTS>
+        </DATA></asx:values>
+      </asx:abap>`;
+      const http = mockHttp(xml);
+      const info = await getTransportInfo(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/ddic/ddl/sources/zi_travel',
+        'Z_RAP_VB_1',
+      );
+      expect(info.isLocal).toBe(false);
+      expect(info.recording).toBe(true);
+      expect(info.deliveryUnit).toBe('SAP');
+      expect(info.devclass).toBe('Z_RAP_VB_1');
+      expect(info.existingTransports).toHaveLength(2);
+      expect(info.existingTransports[0]).toEqual({
+        id: 'A4HK900502',
+        description: 'RAP development',
+        owner: 'DEVELOPER',
+      });
+    });
+
+    it('parses locked transport from response', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+        <asx:values><DATA>
+          <DEVCLASS>Z_MY_PKG</DEVCLASS>
+          <DLVUNIT>SAP</DLVUNIT>
+          <RECORDING>X</RECORDING>
+          <LOCKS>
+            <HEADER>
+              <TRKORR>A4HK900999</TRKORR>
+              <AS4TEXT>Locked transport</AS4TEXT>
+            </HEADER>
+          </LOCKS>
+        </DATA></asx:values>
+      </asx:abap>`;
+      const http = mockHttp(xml);
+      const info = await getTransportInfo(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/zcl_test',
+        'Z_MY_PKG',
+      );
+      expect(info.lockedTransport).toBe('A4HK900999');
+    });
+
+    it('does not require enableTransports flag (read-only check)', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING/>
+        <DLVUNIT>LOCAL</DLVUNIT>
+        <DEVCLASS>$TMP</DEVCLASS>
+      </DATA></asx:values></asx:abap>`;
+      const http = mockHttp(xml);
+      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
+      // Should NOT throw — transportInfo is a read operation
+      const info = await getTransportInfo(http, safety, '/sap/bc/adt/oo/classes/zcl_test', '$TMP');
+      expect(info.isLocal).toBe(true);
+    });
+
+    it('defaults operation to I (insert)', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING/>
+        <DLVUNIT>LOCAL</DLVUNIT>
+        <DEVCLASS>$TMP</DEVCLASS>
+      </DATA></asx:values></asx:abap>`;
+      const http = mockHttp(xml);
+      await getTransportInfo(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test', '$TMP');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<OPERATION>I</OPERATION>');
+    });
+
+    it('handles empty transport list', async () => {
+      const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <DEVCLASS>Z_MY_PKG</DEVCLASS>
+        <DLVUNIT>SAP</DLVUNIT>
+        <RECORDING>X</RECORDING>
+      </DATA></asx:values></asx:abap>`;
+      const http = mockHttp(xml);
+      const info = await getTransportInfo(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/zcl_test',
+        'Z_MY_PKG',
+      );
+      expect(info.existingTransports).toEqual([]);
+      expect(info.recording).toBe(true);
     });
   });
 });

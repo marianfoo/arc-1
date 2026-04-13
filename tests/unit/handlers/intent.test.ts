@@ -4096,6 +4096,184 @@ ENDCLASS.`;
     });
   });
 
+  // ─── SAPWrite transport pre-flight check ───────────────────────────
+
+  describe('SAPWrite transport pre-flight check', () => {
+    const transportInfoResponse = (recording: boolean, isLocal: boolean, transports: string[] = []) => {
+      const transportEntries = transports
+        .map((t) => `<headers><TRKORR>${t}</TRKORR><AS4TEXT>Transport ${t}</AS4TEXT><AS4USER>DEV</AS4USER></headers>`)
+        .join('');
+      return `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING>${recording ? 'X' : ''}</RECORDING>
+        <DLVUNIT>${isLocal ? 'LOCAL' : 'SAP'}</DLVUNIT>
+        <DEVCLASS>Z_MY_PKG</DEVCLASS>
+        ${transports.length > 0 ? `<TRANSPORTS>${transportEntries}</TRANSPORTS>` : ''}
+      </DATA></asx:values></asx:abap>`;
+    };
+
+    it('returns guidance error when creating in transportable package without transport', async () => {
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: String(url), method: opts?.method ?? 'GET' });
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(
+            mockResponse(200, transportInfoResponse(true, false, ['A4HK900502']), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZTEST',
+        package: 'Z_MY_PKG',
+        source: 'REPORT ztest.',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('requires a transport number');
+      expect(result.content[0]?.text).toContain('SAPTransport');
+      expect(result.content[0]?.text).toContain('A4HK900502');
+    });
+
+    it('proceeds without transport for $TMP packages (no transportInfo call)', async () => {
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: String(url), method: opts?.method ?? 'GET' });
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZTEST',
+        package: '$TMP',
+        source: 'REPORT ztest.',
+      });
+
+      expect(result.isError).toBeUndefined();
+      // No call to transportchecks for $TMP
+      expect(calls.some((c) => c.url.includes('/cts/transportchecks'))).toBe(false);
+    });
+
+    it('proceeds when transport is explicitly provided (no transportInfo call)', async () => {
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: String(url), method: opts?.method ?? 'GET' });
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZTEST',
+        package: 'Z_MY_PKG',
+        transport: 'A4HK900502',
+        source: 'REPORT ztest.',
+      });
+
+      expect(result.isError).toBeUndefined();
+      // No call to transportchecks when transport is explicitly provided
+      expect(calls.some((c) => c.url.includes('/cts/transportchecks'))).toBe(false);
+    });
+
+    it('auto-uses locked transport from transportInfo response', async () => {
+      const lockedResponse = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING>X</RECORDING>
+        <DLVUNIT>SAP</DLVUNIT>
+        <DEVCLASS>Z_MY_PKG</DEVCLASS>
+        <LOCKS><HEADER><TRKORR>A4HK900999</TRKORR></HEADER></LOCKS>
+      </DATA></asx:values></asx:abap>`;
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        calls.push({ url: String(url), method: opts?.method ?? 'GET' });
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(mockResponse(200, lockedResponse, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZTEST',
+        package: 'Z_MY_PKG',
+        source: 'REPORT ztest.',
+      });
+
+      expect(result.isError).toBeUndefined();
+      // Create call should include the locked transport as corrNr
+      const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/programs/programs'));
+      expect(createCall?.url).toContain('corrNr=A4HK900999');
+    });
+
+    it('proceeds if transportInfo check fails (graceful fallback)', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(mockResponse(500, 'Internal Error', { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZTEST',
+        package: 'Z_MY_PKG',
+        source: 'REPORT ztest.',
+      });
+
+      // Should proceed without blocking — SAP will return its own error if needed
+      // (may still fail later for other reasons, but transport check itself should not block)
+      expect(result.content[0]?.text).not.toContain('requires a transport number');
+    });
+
+    it('returns guidance error for batch_create in transportable package without transport', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(
+            mockResponse(200, transportInfoResponse(true, false, ['A4HK900502']), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'Z_MY_PKG',
+        objects: [
+          { type: 'DDLS', name: 'ZI_TRAVEL', source: '@EndUserText.label: "Travel"\ndefine view entity ZI_TRAVEL ...' },
+        ],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('requires a transport number');
+      expect(result.content[0]?.text).toContain('SAPTransport');
+    });
+
+    it('proceeds for local package response even if DLVUNIT is not LOCAL', async () => {
+      // Some packages might not require recording even if not strictly "LOCAL"
+      mockFetch.mockImplementation((url: string) => {
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(mockResponse(200, transportInfoResponse(false, false), { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'PROG',
+        name: 'ZTEST',
+        package: 'Z_MY_PKG',
+        source: 'REPORT ztest.',
+      });
+
+      // recording=false → no transport needed, proceed
+      expect(result.content[0]?.text).not.toContain('requires a transport number');
+    });
+  });
+
   // ─── SAPTransport handler routing ─────────────────────────────────
 
   describe('SAPTransport handler routing', () => {

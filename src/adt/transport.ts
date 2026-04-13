@@ -6,7 +6,7 @@
  */
 
 import type { AdtHttpClient } from './http.js';
-import { checkTransport, type SafetyConfig } from './safety.js';
+import { checkOperation, checkTransport, OperationType, type SafetyConfig } from './safety.js';
 import type { TransportObject, TransportRequest, TransportTask } from './types.js';
 import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
@@ -203,6 +203,131 @@ async function reassignSingle(http: AdtHttpClient, transportId: string, newOwner
     CTS_CONTENT_TYPE_ORGANIZER,
     { Accept: CTS_CONTENT_TYPE_ORGANIZER },
   );
+}
+
+// ─── Transport Info (pre-flight check) ──────────────────────────────
+
+/** Transport requirement info returned by the CTS transport checks endpoint */
+export interface TransportInfo {
+  /** Whether transport recording is required ('X' = required, '' = not needed) */
+  recording: boolean;
+  /** Whether the package is a local package (no transport needed) */
+  isLocal: boolean;
+  /** Delivery unit: 'LOCAL' for local packages, transport layer name otherwise */
+  deliveryUnit: string;
+  /** Package name */
+  devclass: string;
+  /** Available existing transports the object could be added to */
+  existingTransports: Array<{ id: string; description: string; owner: string }>;
+  /** If the object is already locked in a transport */
+  lockedTransport?: string;
+}
+
+/**
+ * Check transport requirements for an object URL and package.
+ *
+ * Calls POST /sap/bc/adt/cts/transportchecks to determine whether a
+ * transport number is needed for object creation/modification. This is the
+ * same endpoint used by ADT Eclipse and abap-adt-api's `transportInfo()`.
+ *
+ * @param objectUrl - ADT object URL (e.g., `/sap/bc/adt/oo/classes/zcl_foo`)
+ * @param devclass - Package name (e.g., `$TMP`, `Z_RAP_VB_1`)
+ * @param operation - `I` for insert/create, empty string for modify (default: `I`)
+ */
+export async function getTransportInfo(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objectUrl: string,
+  devclass: string,
+  operation = 'I',
+): Promise<TransportInfo> {
+  // Transport info is a read operation — doesn't require enableTransports
+  checkOperation(safety, OperationType.Read, 'TransportInfo');
+
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <DEVCLASS>${escapeXmlAttr(devclass)}</DEVCLASS>
+      <URI>${escapeXmlAttr(objectUrl)}</URI>
+      <OPERATION>${escapeXmlAttr(operation)}</OPERATION>
+    </DATA>
+  </asx:values>
+</asx:abap>`;
+
+  const resp = await http.post(
+    '/sap/bc/adt/cts/transportchecks',
+    body,
+    'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.transport.service.checkData',
+    { Accept: 'application/vnd.sap.as+xml' },
+  );
+
+  return parseTransportInfo(resp.body);
+}
+
+/** Parse transport check response XML */
+function parseTransportInfo(xml: string): TransportInfo {
+  const parsed = parseXml(xml);
+
+  // Extract flat fields from DATA element
+  const recording = String(findDeepValue(parsed, 'RECORDING') ?? '') === 'X';
+  const isLocal = String(findDeepValue(parsed, 'DLVUNIT') ?? '') === 'LOCAL';
+  const deliveryUnit = String(findDeepValue(parsed, 'DLVUNIT') ?? '');
+  const devclass = String(findDeepValue(parsed, 'DEVCLASS') ?? '');
+
+  // Extract locked transport from LOCKS/HEADER
+  const locks = findDeepNodes(parsed, 'LOCKS');
+  let lockedTransport: string | undefined;
+  if (locks.length > 0) {
+    const headers = findDeepNodes(locks[0], 'HEADER');
+    if (headers.length > 0) {
+      const trkorr = String((headers[0] as Record<string, unknown>).TRKORR ?? '');
+      if (trkorr) lockedTransport = trkorr;
+    }
+  }
+
+  // Extract available transports
+  const transportNodes = findDeepNodes(parsed, 'TRANSPORTS');
+  const existingTransports: TransportInfo['existingTransports'] = [];
+  if (transportNodes.length > 0) {
+    // TRANSPORTS contains an array of transport header elements
+    const headers = findDeepNodes(transportNodes[0], 'headers');
+    for (const h of headers) {
+      const rec = h as Record<string, unknown>;
+      const id = String(rec.TRKORR ?? '');
+      const description = String(rec.AS4TEXT ?? '');
+      const owner = String(rec.AS4USER ?? '');
+      if (id) existingTransports.push({ id, description, owner });
+    }
+  }
+
+  return {
+    recording,
+    isLocal,
+    deliveryUnit,
+    devclass,
+    existingTransports,
+    ...(lockedTransport ? { lockedTransport } : {}),
+  };
+}
+
+/** Deep value finder for flat XML structures */
+function findDeepValue(obj: unknown, key: string): unknown {
+  if (!obj || typeof obj !== 'object') return undefined;
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findDeepValue(item, key);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  if (key in record) return record[key];
+  for (const val of Object.values(record)) {
+    const found = findDeepValue(val, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 // ─── Parsers ────────────────────────────────────────────────────────

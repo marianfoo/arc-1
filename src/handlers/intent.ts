@@ -71,6 +71,7 @@ import {
   createTransport,
   deleteTransport,
   getTransport,
+  getTransportInfo,
   listTransports,
   reassignTransport,
   releaseTransport,
@@ -1435,6 +1436,42 @@ async function handleSAPWrite(
       checkPackage(client.safety, pkg);
       const description = String(args.description ?? name);
 
+      // Pre-flight: check transport requirements for non-$TMP packages when no transport provided.
+      // SAP requires a transport number for objects in transportable packages.
+      // Instead of letting SAP return a cryptic error, we detect this early and return
+      // an actionable error message guiding the LLM to use SAPTransport first.
+      let effectiveTransport = transport;
+      if (!transport && pkg.toUpperCase() !== '$TMP') {
+        try {
+          const transportInfo = await getTransportInfo(client.http, client.safety, objectUrl, pkg, 'I');
+          if (transportInfo.lockedTransport) {
+            // Object is already locked in a transport — use it automatically
+            effectiveTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            // Transport IS required but none provided — return guidance
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${pkg}" requires a transport number for object creation, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPWrite(action="create", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+          // isLocal=true or recording=false → no transport needed, proceed without one
+        } catch {
+          // If transportInfo check fails (older system, permissions, etc.), proceed without it.
+          // SAP will return its own error if a transport is actually needed.
+        }
+      }
+
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
       if (!affResult.valid) {
@@ -1455,7 +1492,7 @@ async function handleSAPWrite(
       // 'application/*' — the wildcard lets the SAP server resolve the correct
       // handler (matching how ADT Eclipse and abap-adt-api send requests).
       const contentType = isDdicMetadataType(type) ? ddicContentTypeForType(type) : 'application/*';
-      const result = await createObject(client.http, client.safety, createUrl, body, contentType, transport);
+      const result = await createObject(client.http, client.safety, createUrl, body, contentType, effectiveTransport);
 
       if (isDdicMetadataType(type)) {
         // SAP's DTEL POST ignores labels, searchHelp, etc. — they require a follow-up PUT.
@@ -1465,9 +1502,9 @@ async function handleSAPWrite(
           const ct = ddicContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
             const lock = await lockObject(session, client.safety, objectUrl);
-            const effectiveTransport = transport ?? (lock.corrNr || undefined);
+            const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
             try {
-              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, effectiveTransport);
+              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
             } finally {
               await unlockObject(session, objectUrl, lock.lockHandle);
             }
@@ -1487,7 +1524,7 @@ async function handleSAPWrite(
           );
         }
 
-        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
+        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
         cachingLayer?.invalidate(type, name);
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
         return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
@@ -1558,6 +1595,38 @@ async function handleSAPWrite(
       // Check package is allowed before starting any creates
       checkPackage(client.safety, pkg);
 
+      // Pre-flight transport check for batch_create (same logic as single create)
+      let batchTransport = transport;
+      if (!transport && pkg.toUpperCase() !== '$TMP') {
+        try {
+          // Use first object's URL for the transport check
+          const firstObj = objects[0];
+          const firstUrl = objectUrlForType(String(firstObj.type ?? ''), String(firstObj.name ?? ''));
+          const transportInfo = await getTransportInfo(client.http, client.safety, firstUrl, pkg, 'I');
+          if (transportInfo.lockedTransport) {
+            batchTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${pkg}" requires a transport number for object creation, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPWrite(action="batch_create", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+        } catch {
+          // If transportInfo check fails, proceed — SAP will return its own error if needed.
+        }
+      }
+
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
 
       for (const obj of objects) {
@@ -1601,23 +1670,15 @@ async function handleSAPWrite(
           const objDdicProps = getDdicWriteProperties(obj);
           const body = buildCreateXml(objType, objName, pkg, objDescription, objDdicProps);
           const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/*';
-          await createObject(client.http, client.safety, createUrl, body, contentType, transport);
+          await createObject(client.http, client.safety, createUrl, body, contentType, batchTransport);
 
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
           if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objDdicProps)) {
             await client.http.withStatefulSession(async (session) => {
               const lock = await lockObject(session, client.safety, objUrl);
-              const effectiveTransport = transport ?? (lock.corrNr || undefined);
+              const lockTransport = batchTransport ?? (lock.corrNr || undefined);
               try {
-                await updateObject(
-                  session,
-                  client.safety,
-                  objUrl,
-                  body,
-                  lock.lockHandle,
-                  contentType,
-                  effectiveTransport,
-                );
+                await updateObject(session, client.safety, objUrl, body, lock.lockHandle, contentType, lockTransport);
               } finally {
                 await unlockObject(session, objUrl, lock.lockHandle);
               }
@@ -1627,7 +1688,7 @@ async function handleSAPWrite(
           // Step 2: Write source if provided
           if (!metadataObject && objSource) {
             const srcUrl = sourceUrlForType(objType, objName);
-            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, transport);
+            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, batchTransport);
           }
 
           // Step 3: Activate the object
@@ -2194,9 +2255,43 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
       const result = await releaseTransportRecursive(client.http, client.safety, id);
       return textResult(JSON.stringify(result, null, 2));
     }
+    case 'check': {
+      // Check transport requirements for an object/package combination.
+      // Does NOT require enableTransports — this is a read-only check.
+      const objectType = String(args.type ?? '');
+      const objectName = String(args.name ?? '');
+      const pkg = String(args.package ?? '');
+      if (!objectType || !objectName) return errorResult('"type" and "name" are required for "check" action.');
+      if (!pkg) return errorResult('"package" is required for "check" action.');
+
+      const objectUrl = objectUrlForType(objectType, objectName);
+      const info = await getTransportInfo(client.http, client.safety, objectUrl, pkg, 'I');
+
+      const summary = info.isLocal
+        ? `Package "${pkg}" is local — no transport required.`
+        : info.recording
+          ? `Package "${pkg}" requires a transport for object creation.`
+          : `Package "${pkg}" does not require transport recording.`;
+
+      return textResult(
+        JSON.stringify(
+          {
+            package: pkg,
+            transportRequired: !info.isLocal && info.recording,
+            isLocal: info.isLocal,
+            deliveryUnit: info.deliveryUnit,
+            existingTransports: info.existingTransports,
+            ...(info.lockedTransport ? { lockedTransport: info.lockedTransport } : {}),
+            summary,
+          },
+          null,
+          2,
+        ),
+      );
+    }
     default:
       return errorResult(
-        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive`,
+        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check`,
       );
   }
 }
