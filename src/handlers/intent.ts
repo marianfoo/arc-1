@@ -1014,7 +1014,10 @@ function ddicContentTypeForType(type: string): string {
     case 'DTEL':
       return DATAELEMENT_V2_CONTENT_TYPE;
     default:
-      return 'application/xml';
+      // Wildcard lets the SAP server resolve the correct handler.
+      // Sending 'application/xml' causes 415 on DDL-based endpoints
+      // (DDLS, BDEF, SRVD, DDLX) whose resource classes reject that literal type.
+      return 'application/*';
   }
 }
 
@@ -1206,19 +1209,20 @@ export function buildCreateXml(
 </bdef:behaviorDefinition>`;
     case 'SRVD':
       return `<?xml version="1.0" encoding="UTF-8"?>
-<srvd:srvdSource xmlns:srvd="http://www.sap.com/adt/ddic/srvd/sources"
+<srvd:srvdSource xmlns:srvd="http://www.sap.com/adt/ddic/srvdsources"
                  xmlns:adtcore="http://www.sap.com/adt/core"
                  adtcore:description="${escapeXml(description)}"
                  adtcore:name="${escapeXml(name)}"
                  adtcore:type="SRVD/SRV"
                  adtcore:masterLanguage="EN"
                  adtcore:masterSystem="H00"
-                 adtcore:responsible="DEVELOPER">
+                 adtcore:responsible="DEVELOPER"
+                 srvd:srvdSourceType="S">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </srvd:srvdSource>`;
     case 'DDLX':
       return `<?xml version="1.0" encoding="UTF-8"?>
-<ddlx:ddlxSource xmlns:ddlx="http://www.sap.com/adt/ddic/ddlx/sources"
+<ddlx:ddlxSource xmlns:ddlx="http://www.sap.com/adt/ddic/ddlxsources"
                  xmlns:adtcore="http://www.sap.com/adt/core"
                  adtcore:description="${escapeXml(description)}"
                  adtcore:name="${escapeXml(name)}"
@@ -1447,7 +1451,10 @@ async function handleSAPWrite(
 
       // Step 1: Create the object (metadata only)
       const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
-      const contentType = isDdicMetadataType(type) ? ddicContentTypeForType(type) : 'application/xml';
+      // DOMA/DTEL require vendor-specific v2 content types; all other types use
+      // 'application/*' — the wildcard lets the SAP server resolve the correct
+      // handler (matching how ADT Eclipse and abap-adt-api send requests).
+      const contentType = isDdicMetadataType(type) ? ddicContentTypeForType(type) : 'application/*';
       const result = await createObject(client.http, client.safety, createUrl, body, contentType, transport);
 
       if (isDdicMetadataType(type)) {
@@ -1593,7 +1600,7 @@ async function handleSAPWrite(
           const createUrl = objUrl.replace(/\/[^/]+$/, '');
           const objDdicProps = getDdicWriteProperties(obj);
           const body = buildCreateXml(objType, objName, pkg, objDescription, objDdicProps);
-          const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/xml';
+          const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/*';
           await createObject(client.http, client.safety, createUrl, body, contentType, transport);
 
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session

@@ -421,12 +421,18 @@ export class AdtHttpClient {
           }
           // If Accept is already */* and no inferred type, no useful fallback — skip retry
         } else {
-          // 415: Server rejected our Content-Type — try application/xml fallback
-          if (contentType && contentType !== 'application/xml') {
+          // 415: Server rejected our Content-Type — try fallbacks:
+          // 1. Specific type → application/xml (common for vendor-type mismatches)
+          // 2. application/xml → application/* (DDL-based endpoints reject the literal
+          //    type but accept the wildcard, matching how ADT Eclipse sends requests)
+          if (contentType && contentType !== 'application/xml' && contentType !== 'application/*') {
             fallbackHeaders['Content-Type'] = 'application/xml';
             headersChanged = true;
+          } else if (contentType === 'application/xml') {
+            fallbackHeaders['Content-Type'] = 'application/*';
+            headersChanged = true;
           }
-          // If Content-Type is already application/xml or absent, no useful fallback — skip retry
+          // If Content-Type is already application/* or absent, no useful fallback — skip retry
         }
 
         if (headersChanged) {

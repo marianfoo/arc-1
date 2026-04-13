@@ -735,14 +735,33 @@ describe('AdtHttpClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(4);
     });
 
-    it('415 skips retry when Content-Type is already application/xml', async () => {
+    it('415 retries with application/* when Content-Type is application/xml', async () => {
       // CSRF fetch
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
-      // POST with application/xml → 415 (no useful fallback, should throw without retry)
+      // POST with application/xml → 415
+      mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported'));
+      // Retry with application/* → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'created'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const resp = await client.post('/path', '<d/>', 'application/xml');
+
+      expect(resp.statusCode).toBe(200);
+      // CSRF fetch + initial POST + retry POST
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // Verify retry used application/* content type
+      const retryCall = mockFetch.mock.calls[2];
+      expect(retryCall[1].headers['Content-Type']).toBe('application/*');
+    });
+
+    it('415 skips retry when Content-Type is already application/*', async () => {
+      // CSRF fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // POST with application/* → 415 (no useful fallback, should throw without retry)
       mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported'));
 
       const client = new AdtHttpClient(getDefaultConfig());
-      await expect(client.post('/path', '<d/>', 'application/xml')).rejects.toThrow();
+      await expect(client.post('/path', '<d/>', 'application/*')).rejects.toThrow();
 
       // CSRF fetch + one POST — no retry
       expect(mockFetch).toHaveBeenCalledTimes(2);

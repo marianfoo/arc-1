@@ -214,7 +214,7 @@ describe('DevTools', () => {
       expect(http.post).toHaveBeenCalledWith(
         '/sap/bc/adt/activation?method=activate&preauditRequested=true',
         expect.stringContaining('objectReference'),
-        'application/xml',
+        'application/*',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
     });
@@ -225,7 +225,7 @@ describe('DevTools', () => {
       expect(http.post).toHaveBeenCalledWith(
         '/sap/bc/adt/activation?method=activate&preauditRequested=false',
         expect.stringContaining('objectReference'),
-        'application/xml',
+        'application/*',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
     });
@@ -344,7 +344,7 @@ describe('DevTools', () => {
       expect(http.post).toHaveBeenCalledWith(
         '/sap/bc/adt/activation?method=activate&preauditRequested=true',
         expect.any(String),
-        'application/xml',
+        'application/*',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
     });
@@ -360,7 +360,7 @@ describe('DevTools', () => {
       expect(http.post).toHaveBeenCalledWith(
         '/sap/bc/adt/activation?method=activate&preauditRequested=false',
         expect.any(String),
-        'application/xml',
+        'application/*',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
     });

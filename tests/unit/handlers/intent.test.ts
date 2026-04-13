@@ -3925,17 +3925,18 @@ ENDCLASS.`;
     it('returns correct XML for SRVD', () => {
       const xml = buildCreateXml('SRVD', 'ZSD_TRAVEL', 'ZPACKAGE', 'Travel Service Def');
       expect(xml).toContain('<srvd:srvdSource');
-      expect(xml).toContain('xmlns:srvd="http://www.sap.com/adt/ddic/srvd/sources"');
+      expect(xml).toContain('xmlns:srvd="http://www.sap.com/adt/ddic/srvdsources"');
       expect(xml).toContain('adtcore:type="SRVD/SRV"');
       expect(xml).toContain('adtcore:name="ZSD_TRAVEL"');
       expect(xml).toContain('adtcore:description="Travel Service Def"');
+      expect(xml).toContain('srvd:srvdSourceType="S"');
       expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('returns correct XML for DDLX', () => {
       const xml = buildCreateXml('DDLX', 'ZC_TRAVEL', 'ZPACKAGE', 'Travel Metadata Ext');
       expect(xml).toContain('<ddlx:ddlxSource');
-      expect(xml).toContain('xmlns:ddlx="http://www.sap.com/adt/ddic/ddlx/sources"');
+      expect(xml).toContain('xmlns:ddlx="http://www.sap.com/adt/ddic/ddlxsources"');
       expect(xml).toContain('adtcore:type="DDLX/EX"');
       expect(xml).toContain('adtcore:name="ZC_TRAVEL"');
       expect(xml).toContain('adtcore:description="Travel Metadata Ext"');
