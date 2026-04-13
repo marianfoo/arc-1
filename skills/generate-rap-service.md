@@ -26,10 +26,12 @@ If the user provides just a description, use defaults and proceed.
 Verify the SAP system supports RAP/CDS and detect the system type.
 
 ```
-SAPManage(action="features")
+SAPManage(action="probe")
 ```
 
-Check for RAP/CDS availability. Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
+**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
+
+Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
 
 ### BTP vs On-Prem Differences
 
@@ -560,6 +562,8 @@ First, optionally check for any lingering inactive objects that might interfere:
 SAPRead(type="INACTIVE_OBJECTS")
 ```
 
+**Note:** This may return 404 on some systems where the `/sap/bc/adt/activation/inactive` endpoint is not available. If so, skip this check and proceed.
+
 Activate all artifacts together to resolve cross-dependencies:
 
 ```
@@ -663,6 +667,7 @@ Next steps:
 
 | Error | Cause | Fix |
 |---|---|---|
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
 | Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
 | Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
