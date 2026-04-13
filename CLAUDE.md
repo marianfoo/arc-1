@@ -51,9 +51,18 @@ TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test
 
 Husky runs `lint-staged` on commit, which auto-fixes lint/format via Biome on staged `*.{ts,js,json}` files.
 
-### Configuration
+### Configuration (Priority: CLI > Env > .env > Defaults)
 
-Config priority: CLI flags > environment variables > `.env` file > defaults. Copy `.env.example` to `.env` for local development. All config options are defined in `src/server/config.ts` (parser) and `src/server/types.ts` (ServerConfig type with defaults).
+```bash
+# Using environment variables
+SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass npm run dev
+
+# Using .env file (copy .env.example to .env)
+npm run dev
+```
+
+Copy `.env.example` to `.env` for local development. All config options are defined in `src/server/config.ts` (parser) and `src/server/types.ts` (ServerConfig type with defaults).
+
 | Variable / Flag | Description |
 |-----------------|-------------|
 | `SAP_URL` / `--url` | SAP system URL (e.g., `http://host:50000`) |
