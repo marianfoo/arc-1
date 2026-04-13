@@ -501,8 +501,9 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       name: 'SAPActivate',
       description:
         'Activate (publish) ABAP objects. Supports single object or batch activation.\n' +
-        'For batch: pass "objects" array with {type, name} entries to activate multiple objects in one call. ' +
-        'Essential for RAP stacks where DDLS, BDEF, SRVD, DDLX, and SRVB depend on each other and must be activated together.\n' +
+        'ALWAYS prefer batch activation when activating 2+ objects — pass "objects" array with {type, name} entries. ' +
+        'Batch activation is more efficient (one SAP round-trip) and works for ANY combination of objects, not just dependent ones. ' +
+        'It is required for RAP stacks where DDLS, BDEF, SRVD depend on each other, but equally useful for unrelated objects like multiple DTELs or DOMAs.\n' +
         'For publish_srvb/unpublish_srvb: publish or unpublish an OData service binding (SRVB) — makes the OData service available for consumption.',
       inputSchema: {
         type: 'object',
@@ -529,8 +530,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               required: ['type', 'name'],
             },
             description:
-              'For batch activation: array of objects to activate together. ' +
-              'Use for RAP stacks: [{type:"DDLS",name:"ZI_TRAVEL"},{type:"CLAS",name:"ZBP_I_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"DDLS",name:"ZC_TRAVEL"},{type:"BDEF",name:"ZC_TRAVEL"},{type:"DDLX",name:"ZC_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}]',
+              'Batch activation: array of objects to activate in one call. Use whenever activating 2+ objects. ' +
+              'Works for any mix of types — e.g., [{type:"DOMA",name:"Z_DOM"},{type:"DTEL",name:"Z_DEL"}] or RAP stacks like [{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}].',
           },
         },
       },
