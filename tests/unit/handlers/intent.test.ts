@@ -2218,9 +2218,10 @@ ENDCLASS.`;
       });
 
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].id).toBe('/UI2/CATALOG_ALL');
+      const text = result.content[0]!.text;
+      expect(text).toContain('1 catalogs');
+      expect(text).toContain('/UI2/CATALOG_ALL');
+      expect(text).toContain('Catalog with all Chips');
     });
 
     it('flp_list_tiles requires catalogId', async () => {

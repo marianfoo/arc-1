@@ -8,7 +8,7 @@ import { logger } from '../server/logger.js';
 import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import type { FlpCatalog, FlpGroup, FlpTileInstance } from './types.js';
+import type { FlpCatalog, FlpGroup, FlpTileInstance, FlpTileResult } from './types.js';
 
 export const FLP_SERVICE_PATH = '/sap/opu/odata/UI2/PAGE_BUILDER_CUST';
 
@@ -208,11 +208,7 @@ export async function listGroups(http: AdtHttpClient, safety: SafetyConfig): Pro
   return parseODataCollection<FlpGroupEntity>(resp.body).map(mapGroup);
 }
 
-export async function listTiles(
-  http: AdtHttpClient,
-  safety: SafetyConfig,
-  catalogId: string,
-): Promise<FlpTileInstance[]> {
+export async function listTiles(http: AdtHttpClient, safety: SafetyConfig, catalogId: string): Promise<FlpTileResult> {
   checkOperation(safety, OperationType.Read, 'ListFlpTiles');
 
   const domain = normalizeCatalogId(catalogId);
@@ -223,11 +219,17 @@ export async function listTiles(
 
   try {
     const resp = await http.get(path, { Accept: 'application/json' });
-    return parseODataCollection<FlpTileEntity>(resp.body).map(mapTile);
+    return { tiles: parseODataCollection<FlpTileEntity>(resp.body).map(mapTile) };
   } catch (err) {
     if (isAssertionFailedError(err)) {
       logger.warn('FLP tile listing hit backend ASSERTION_FAILED; returning empty result', { catalogId });
-      return [];
+      return {
+        tiles: [],
+        backendError:
+          'ASSERTION_FAILED — the SAP backend crashed while reading this catalog. ' +
+          'This is a known SAP issue with certain catalogs. The chipCount in the catalog metadata may show tiles exist, ' +
+          'but they cannot be read via the OData API. Do NOT attempt alternative queries — this is a backend limitation.',
+      };
     }
     throw err;
   }

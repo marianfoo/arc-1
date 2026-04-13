@@ -114,8 +114,8 @@ describe('FLP OData client', () => {
 
       const result = await listTiles(http, unrestrictedSafetyConfig(), 'MY_CATALOG');
 
-      expect(result).toHaveLength(1);
-      expect(result[0]?.configuration).toMatchObject({
+      expect(result.tiles).toHaveLength(1);
+      expect(result.tiles[0]?.configuration).toMatchObject({
         semantic_object: 'DataAgingObjectGroup',
         display_title_text: 'Manage Data Aging Groups',
       });
@@ -136,7 +136,7 @@ describe('FLP OData client', () => {
 
       const result = await listTiles(http, unrestrictedSafetyConfig(), 'MY_CATALOG');
 
-      expect(result[0]?.configuration).toBeNull();
+      expect(result.tiles[0]?.configuration).toBeNull();
     });
 
     it('listTiles handles ASSERTION_FAILED error gracefully', async () => {
@@ -145,7 +145,8 @@ describe('FLP OData client', () => {
 
       const result = await listTiles(http, unrestrictedSafetyConfig(), 'BROKEN_CATALOG');
 
-      expect(result).toEqual([]);
+      expect(result.tiles).toEqual([]);
+      expect(result.backendError).toContain('ASSERTION_FAILED');
     });
 
     it('listCatalogs throws on safety check when Read is blocked', async () => {

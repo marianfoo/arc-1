@@ -2349,19 +2349,41 @@ async function handleSAPManage(
 
     case 'flp_list_catalogs': {
       const catalogs = await listCatalogs(client.http, client.safety);
-      return textResult(JSON.stringify(catalogs, null, 2));
+      const customCount = catalogs.filter((c) => /^(Z|Y)/i.test(c.domainId)).length;
+      const lines = [
+        `${catalogs.length} catalogs (${customCount} custom Z/Y). Columns: domainId | title | type | scope | chips`,
+        ...catalogs.map(
+          (c) => `${c.domainId} | ${c.title || '(no title)'} | ${c.type || '-'} | ${c.scope || '-'} | ${c.chipCount}`,
+        ),
+      ];
+      return textResult(lines.join('\n'));
     }
 
     case 'flp_list_groups': {
       const groups = await listGroups(client.http, client.safety);
-      return textResult(JSON.stringify(groups, null, 2));
+      const lines = [
+        `${groups.length} groups. Columns: id | title`,
+        ...groups.map((g) => `${g.id} | ${g.title || '(no title)'}`),
+      ];
+      return textResult(lines.join('\n'));
     }
 
     case 'flp_list_tiles': {
       const catalogId = String(args.catalogId ?? '');
       if (!catalogId) return errorResult('"catalogId" is required for flp_list_tiles action.');
-      const tiles = await listTiles(client.http, client.safety, catalogId);
-      return textResult(JSON.stringify(tiles, null, 2));
+      const result = await listTiles(client.http, client.safety, catalogId);
+      if (result.backendError) {
+        return textResult(`⚠ Backend error for catalog "${catalogId}": ${result.backendError}\n\nReturned 0 tiles.`);
+      }
+      const lines = [
+        `${result.tiles.length} tiles in catalog "${catalogId}". Columns: instanceId | title | chipId | semanticObject | semanticAction`,
+        ...result.tiles.map((t) => {
+          const so = (t.configuration as Record<string, unknown> | null)?.semantic_object ?? '';
+          const sa = (t.configuration as Record<string, unknown> | null)?.semantic_action ?? '';
+          return `${t.instanceId} | ${t.title || '(no title)'} | ${t.chipId} | ${so} | ${sa}`;
+        }),
+      ];
+      return textResult(lines.join('\n'));
     }
 
     case 'flp_create_catalog': {
