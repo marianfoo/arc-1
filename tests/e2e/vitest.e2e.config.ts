@@ -8,7 +8,11 @@ export default defineConfig({
     testTimeout: 120_000,
     // Hook timeout — setup/teardown may create objects on SAP
     hookTimeout: 120_000,
-    // Run E2E tests sequentially — one SAP system, avoid session conflicts
+    // Run test files one at a time — all E2E tests share a single MCP server
+    // backed by one SAP connection. Parallel files cause request queuing,
+    // timeouts, and cascade failures when the transport breaks.
+    fileParallelism: false,
+    // Run tests within each file sequentially
     sequence: {
       concurrent: false,
     },
