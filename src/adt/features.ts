@@ -19,6 +19,7 @@
 
 import { Version } from '@abaplint/core';
 import type { FeatureConfig, FeatureMode } from './config.js';
+import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import type { AuthProbeResult, FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
 import { parseInstalledComponents } from './xml-parser.js';
@@ -94,12 +95,18 @@ export async function probeFeatures(
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
-          // HEAD is lightweight — just checks if the endpoint exists (2xx/3xx = available).
-          // GET on collection endpoints like /ddic/ddl/sources can return 4xx/5xx even when
-          // the feature is available, because they expect a specific object name or parameters.
-          const response = await client.head(probe.endpoint);
-          return { id: probe.id, available: response.statusCode < 400 };
-        } catch {
+          // GET on collection endpoints may return 4xx/5xx when the feature is available
+          // (e.g. /ddic/ddl/sources returns 400 without an object name, transport returns 200).
+          // handleResponse() throws AdtApiError for all status >= 400, so we catch here:
+          // - 404 = ICF service not activated / endpoint doesn't exist → unavailable
+          // - any other HTTP error (400, 403, 405, 500) = endpoint exists → available
+          // - network-level error (no AdtApiError) → unavailable
+          await client.get(probe.endpoint);
+          return { id: probe.id, available: true };
+        } catch (err) {
+          if (err instanceof AdtApiError && err.statusCode !== 404) {
+            return { id: probe.id, available: true };
+          }
           return { id: probe.id, available: false };
         }
       }),
