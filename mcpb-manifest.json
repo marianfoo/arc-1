@@ -1,0 +1,107 @@
+{
+  "$schema": "https://unpkg.com/@anthropic-ai/mcpb@latest/schemas/mcpb-manifest-v0.3.schema.json",
+  "manifest_version": "0.3",
+  "name": "arc-1",
+  "display_name": "ARC-1 - SAP ABAP MCP Server",
+  "version": "0.6.1",
+  "description": "MCP server for SAP ABAP Development Tools (ADT). Read, write, search, activate, and manage ABAP objects in SAP systems.",
+  "long_description": "ARC-1 connects Claude to SAP ABAP systems via the ABAP Development Tools (ADT) REST API. Provides 11 intent-based tools covering the full ABAP development lifecycle: read source code, create/update objects, search, activate, navigate references, run SQL queries, manage transports, lint, and diagnose runtime issues. Read-only by default with configurable safety gates. Supports on-premise SAP and BTP ABAP Environment.",
+  "author": {
+    "name": "Marian Zeis",
+    "url": "https://github.com/marianfoo"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marianfoo/arc-1.git"
+  },
+  "homepage": "https://marianfoo.github.io/arc-1/",
+  "documentation": "https://marianfoo.github.io/arc-1/setup-guide/",
+  "support": "https://github.com/marianfoo/arc-1/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "SAP_URL": "${user_config.sap_url}",
+        "SAP_USER": "${user_config.sap_user}",
+        "SAP_PASSWORD": "${user_config.sap_password}",
+        "SAP_CLIENT": "${user_config.sap_client}",
+        "SAP_LANGUAGE": "${user_config.sap_language}",
+        "SAP_INSECURE": "${user_config.sap_insecure}",
+        "SAP_READ_ONLY": "${user_config.sap_read_only}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "SAPRead", "description": "Read SAP ABAP objects (programs, classes, interfaces, functions, CDS, DDIC, etc.)" },
+    { "name": "SAPWrite", "description": "Create or update ABAP source code and DDIC metadata" },
+    { "name": "SAPSearch", "description": "Search for ABAP objects by name, pattern, or content" },
+    { "name": "SAPActivate", "description": "Activate ABAP objects, run syntax checks, unit tests, and ATC checks" },
+    { "name": "SAPNavigate", "description": "Navigate code: find definitions, references, where-used, completions" },
+    { "name": "SAPQuery", "description": "Preview table data or run SQL queries" },
+    { "name": "SAPTransport", "description": "Manage CTS transport requests" },
+    { "name": "SAPContext", "description": "Get compressed dependency context for ABAP objects (7-30x token savings)" },
+    { "name": "SAPLint", "description": "Lint ABAP source code with abaplint rules" },
+    { "name": "SAPDiagnose", "description": "Analyze short dumps, profiler traces, and runtime diagnostics" },
+    { "name": "SAPManage", "description": "Delete ABAP objects or manage object lifecycle" }
+  ],
+  "keywords": ["sap", "abap", "adt", "erp", "s4hana", "btp", "development"],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=22.0.0"
+    }
+  },
+  "user_config": {
+    "sap_url": {
+      "type": "string",
+      "title": "SAP System URL",
+      "description": "URL of your SAP system (e.g., http://host:50000 or https://host:44300)",
+      "required": true
+    },
+    "sap_user": {
+      "type": "string",
+      "title": "SAP Username",
+      "description": "Your SAP user ID for authentication",
+      "required": true
+    },
+    "sap_password": {
+      "type": "string",
+      "title": "SAP Password",
+      "description": "Your SAP password",
+      "sensitive": true,
+      "required": true
+    },
+    "sap_client": {
+      "type": "string",
+      "title": "SAP Client",
+      "description": "SAP client number",
+      "default": "100",
+      "required": false
+    },
+    "sap_language": {
+      "type": "string",
+      "title": "SAP Language",
+      "description": "SAP logon language",
+      "default": "EN",
+      "required": false
+    },
+    "sap_insecure": {
+      "type": "boolean",
+      "title": "Skip TLS Verification",
+      "description": "Skip TLS certificate verification (for self-signed certificates)",
+      "default": false,
+      "required": false
+    },
+    "sap_read_only": {
+      "type": "boolean",
+      "title": "Read-Only Mode",
+      "description": "Block all write operations (recommended for safety)",
+      "default": true,
+      "required": false
+    }
+  }
+}

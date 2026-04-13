@@ -5,6 +5,7 @@
   "description": "ARC-1 — MCP Server for SAP ABAP Systems",
   "author": "Marian Zeis",
   "license": "MIT",
+  "mcpName": "io.github.marianfoo/arc-1",
   "repository": {
     "type": "git",
     "url": "https://github.com/marianfoo/arc-1"
