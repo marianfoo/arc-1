@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chkl:messages xmlns:chkl="http://www.sap.com/adt/checklistsresults">
+  <msg type="W" severity="warning" shortText="Object was activated successfully with warnings" uri="/sap/bc/adt/oo/classes/zcl_test"/>
+  <msg type="I" severity="info" shortText="Generated proxy class ZCL_TEST_PROXY"/>
+</chkl:messages>

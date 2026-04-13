@@ -367,3 +367,11 @@ export interface ApiReleaseStateInfo {
   isAnyContractReleased: boolean;
   isAnyAssignmentPossible: boolean;
 }
+
+/** An object pending activation from /sap/bc/adt/activation/inactive */
+export interface InactiveObject {
+  name: string;
+  type: string;
+  uri: string;
+  description?: string;
+}

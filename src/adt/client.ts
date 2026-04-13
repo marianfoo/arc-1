@@ -29,6 +29,7 @@ import type {
   ClassMetadata,
   DataElementInfo,
   DomainInfo,
+  InactiveObject,
   SourceSearchResult,
   StructuredClassResponse,
   TransactionInfo,
@@ -41,6 +42,7 @@ import {
   parseDataElementMetadata,
   parseDomainMetadata,
   parseFunctionGroup,
+  parseInactiveObjects,
   parseInstalledComponents,
   parsePackageContents,
   parseSearchResults,
@@ -324,6 +326,15 @@ export class AdtClient {
       Accept: 'application/vnd.sap.adt.apirelease.v10+xml',
     });
     return parseApiReleaseState(resp.body);
+  }
+
+  /** List objects pending activation (inactive objects) */
+  async getInactiveObjects(): Promise<InactiveObject[]> {
+    checkOperation(this.safety, OperationType.Read, 'GetInactiveObjects');
+    const resp = await this.http.get('/sap/bc/adt/activation/inactive', {
+      Accept: 'application/xml',
+    });
+    return parseInactiveObjects(resp.body);
   }
 
   // ─── Search Operations ─────────────────────────────────────────────

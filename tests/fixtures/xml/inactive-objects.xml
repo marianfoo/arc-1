@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects" xmlns:adtcore="http://www.sap.com/adt/core">
+  <ioc:entry>
+    <ioc:object>
+      <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Test class"/>
+    </ioc:object>
+  </ioc:entry>
+  <ioc:entry>
+    <ioc:object>
+      <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/domains/ztest_domain" adtcore:type="DOMA/DD" adtcore:name="ZTEST_DOMAIN" adtcore:description="Test domain"/>
+    </ioc:object>
+  </ioc:entry>
+  <ioc:entry>
+    <ioc:object>
+      <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ztest_prog" adtcore:type="PROG/P" adtcore:name="ZTEST_PROG"/>
+    </ioc:object>
+  </ioc:entry>
+</ioc:inactiveObjects>

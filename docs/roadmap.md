@@ -58,7 +58,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 15 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
 | 16 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 17 | FEAT-10 | PrettyPrint (Code Formatting) | P2 | XS | Features |
-| 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features |
+| 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features | ✅ Completed |
 | 19 | FEAT-19 | Transport Contents (E071 List) | P2 | XS | Features | ✅ Completed (subsumed by FEAT-39) |
 | 20 | FEAT-20 | Source Version / Revision History | P2 | S | Features |
 | 21 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
@@ -523,7 +523,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Medium — development workflow improvement |
-| **Status** | Not started |
+| **Status** | Done (via SAPRead type=INACTIVE_OBJECTS) |
 | **Source** | [Feature matrix #19](../compare/00-feature-matrix.md) |
 
 **What:** List inactive objects system-wide. VSP and fr0ster both have this. Uses `/sap/bc/adt/activation/inactive`.
