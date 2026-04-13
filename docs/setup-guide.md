@@ -64,7 +64,6 @@ The fastest way to get started. No install, no config files needed.
 **Prerequisites:** Node.js 20+, network access to your SAP system.
 
 ```bash
-# --password is required. arc-1 does not prompt interactively.
 # Default SAP client is 100. Add --client YOUR_CLIENT if your system uses a different number.
 npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER --password YOUR_PASS
 ```
