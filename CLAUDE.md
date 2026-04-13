@@ -1,6 +1,6 @@
-# CLAUDE.md - AI Assistant Guidelines
+# CLAUDE.md
 
-This file provides context for AI assistants (Claude, etc.) working on this project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -28,70 +28,32 @@ Distributed as an npm package (`arc-1`) and Docker image (`ghcr.io/marianfoo/arc
 
 ```bash
 npm ci                          # Install dependencies
-npm run build                   # TypeScript → dist/
-npm test                        # Unit tests
+npm run build                   # TypeScript → dist/ (also copies AFF schemas)
+npm test                        # Unit tests (all)
 npm run test:watch              # Unit tests (watch mode)
-npm run typecheck               # Type check
-npm run lint                    # Lint
-npm run test:integration        # Integration tests (needs SAP credentials)
-npm run test:integration:crud   # CRUD lifecycle tests (needs SAP credentials)
-npm run test:coverage           # Unit tests with coverage (informational)
-npm run test:coverage-report    # Coverage summary (Markdown)
+npx vitest run tests/unit/adt/client.test.ts   # Run a single test file
+npx vitest run -t "getProgram"  # Run tests matching a name pattern
+npm run typecheck               # Type check (tsc --noEmit)
+npm run lint                    # Lint (biome check)
+npm run lint:fix                # Lint + auto-fix (biome check --write)
+npm run format                  # Format (biome format --write)
 npm run dev                     # Dev mode (stdio)
 npm run dev:http                # Dev mode (HTTP Streamable)
+npm run test:integration        # Integration tests (needs SAP credentials)
+npm run test:integration:crud   # CRUD lifecycle tests (needs SAP credentials)
+npm run test:e2e                # E2E tests (syncs fixtures first, needs running MCP server)
 # BTP tests (local only — needs service key + browser login):
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:smoke
 ```
 
-### Configuration (Priority: CLI > Env > .env > Defaults)
+### Pre-commit Hook
 
-```bash
-# Using environment variables
-SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass npm run dev
+Husky runs `lint-staged` on commit, which auto-fixes lint/format via Biome on staged `*.{ts,js,json}` files.
 
-# Using .env file (copy .env.example to .env)
-npm run dev
-```
+### Configuration
 
-| Variable / Flag | Description |
-|-----------------|-------------|
-| `SAP_URL` / `--url` | SAP system URL (e.g., `http://host:50000`) |
-| `SAP_USER` / `--user` | SAP username |
-| `SAP_PASSWORD` / `--password` | SAP password |
-| `SAP_CLIENT` / `--client` | SAP client number (default: 100) |
-| `SAP_LANGUAGE` / `--language` | SAP language (default: EN) |
-| `SAP_INSECURE` / `--insecure` | Skip TLS verification (default: false) |
-| `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
-| `ARC1_PORT` / `--port` | HTTP server port (default: `8080`). Simpler alternative to `ARC1_HTTP_ADDR` when only the port needs to change |
-| `ARC1_HTTP_ADDR` / `--http-addr` | HTTP server bind address (default: `0.0.0.0:8080`). Use when you need to change both host and port |
-| `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: false) |
-| `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: false) |
-| `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: false) |
-| `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
-| `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
-| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: "Z*"). Reads are not restricted by package. |
-| `SAP_ENABLE_TRANSPORTS` / `--enable-transports` | Enable CTS transport management (default: false) |
-| `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
-| `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`) |
-| `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
-| `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
-| `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | BTP ABAP service key JSON (direct connection) |
-| `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
-| `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
-| `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
-| `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (11 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
-| `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
-| `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
-| `ARC1_CACHE` / `--cache` | Cache mode: `auto` (default), `memory`, `sqlite`, `none` |
-| `ARC1_CACHE_FILE` / `--cache-file` | SQLite cache file path (default: `.arc1-cache.db`) |
-| `ARC1_CACHE_WARMUP` / `--cache-warmup` | Pre-warm cache on startup via TADIR scan (default: false) |
-| `ARC1_CACHE_WARMUP_PACKAGES` / `--cache-warmup-packages` | Package filter for warmup (e.g., "Z*,Y*") |
-| `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
-| `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
-| `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
-| `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
-| `ARC1_PROFILE` / `--profile` | Safety profile shortcut: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql` |
+Config priority: CLI flags > environment variables > `.env` file > defaults. Copy `.env.example` to `.env` for local development. All config options are defined in `src/server/config.ts` (parser) and `src/server/types.ts` (ServerConfig type with defaults).
 
 ## Codebase Structure
 
@@ -402,6 +364,13 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 - E2E: MCP SDK client, `connectClient()`/`callTool()`/`expectToolSuccess()` helpers, 120s timeout, sequential
 - BTP: local only (not CI), needs `TEST_BTP_SERVICE_KEY_FILE`, interactive browser login
 - CI telemetry: `scripts/ci/` aggregates JSON reports into GitHub step summaries. Coverage is informational only.
+
+## Code Style & Module Conventions
+
+- **ESM-only** (`"type": "module"`). All local imports must use `.js` extensions: `import { foo } from './bar.js'`
+- **Formatting** (Biome): 2-space indent, single quotes, semicolons, trailing commas, 120-char line width
+- **TypeScript**: strict mode, `noUnusedLocals`, `noUnusedParameters`, Node16 module resolution
+- **Logging**: All logging to stderr via `src/server/logger.ts`. Never use `console.log` — it corrupts MCP JSON-RPC on stdout.
 
 ## Technology Stack
 

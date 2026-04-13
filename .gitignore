@@ -92,6 +92,9 @@ node_modules/
 # Test result artifacts (root only, not test fixtures)
 /test-results/
 
+# MTA build artifacts
+mta_archives/
+
 # TypeScript / Node.js
 dist/
 node_modules/
