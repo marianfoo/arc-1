@@ -30,17 +30,25 @@ export async function listTransports(
 ): Promise<TransportRequest[]> {
   checkTransport(safety, '', 'ListTransports', false);
 
-  // Only send user as query param — status filtering is done client-side
-  // because SAP's CTS ADT endpoint doesn't reliably support a status param.
-  let url = '/sap/bc/adt/cts/transportrequests';
+  // Build query params following sapcli's pattern:
+  //   user={user}&target=true&requestType=KWT&requestStatus=DR
+  // requestType=KWT covers Workbench, Customizing, Transport of Copies.
+  // requestStatus is sent server-side; we also filter client-side as a fallback.
+  const params = new URLSearchParams();
   if (user && user !== '*') {
-    url += `?user=${encodeURIComponent(user)}`;
+    params.set('user', user);
   }
+  params.set('target', 'true');
+  params.set('requestType', 'KWT');
+  // Server-side: request both D and R, then filter client-side for reliability
+  params.set('requestStatus', status && status !== '*' ? status : 'DR');
+
+  const url = `/sap/bc/adt/cts/transportrequests?${params.toString()}`;
 
   const resp = await http.get(url, { Accept: CTS_ACCEPT_TREE });
   let transports = parseTransportList(resp.body);
 
-  // Client-side status filter: D=modifiable, R=released
+  // Client-side status filter as fallback (some systems ignore requestStatus)
   if (status && status !== '*') {
     transports = transports.filter((t) => t.status === status);
   }
