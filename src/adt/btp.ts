@@ -347,6 +347,7 @@ export async function lookupDestinationWithUserToken(
     User: sdkDest.username ?? '',
     Password: sdkDest.password ?? '',
     'sap-client': sdkDest.sapClient ?? undefined,
+    CloudConnectorLocationId: sdkDest.cloudConnectorLocationId ?? undefined,
   };
 
   const tokens: PerUserAuthTokens = {};

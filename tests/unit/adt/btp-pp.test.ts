@@ -165,6 +165,33 @@ describe('lookupDestinationWithUserToken', () => {
     expect(result.authTokens.bearerToken).toBeUndefined();
   });
 
+  it('maps cloudConnectorLocationId from SDK destination', async () => {
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'SAP_PP_LOC2',
+      url: 'http://sap:50000',
+      authentication: 'PrincipalPropagation',
+      proxyType: 'OnPremise',
+      username: '',
+      password: '',
+      cloudConnectorLocationId: 'LOC2',
+      authTokens: [
+        {
+          type: 'PrincipalPropagationToken',
+          value: 'saml-assertion',
+          error: null,
+          http_header: {
+            key: 'SAP-Connectivity-Authentication',
+            value: 'Bearer saml-assertion',
+          },
+        },
+      ],
+    });
+
+    const result = await lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_PP_LOC2', 'user-jwt');
+
+    expect(result.destination.CloudConnectorLocationId).toBe('LOC2');
+  });
+
   it('falls back to jwt-bearer exchange when SDK returns no auth tokens for PP destination', async () => {
     // SDK returns PP destination with no authTokens
     mockGetDestination.mockResolvedValueOnce({
