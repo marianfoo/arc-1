@@ -21,7 +21,7 @@ export const CTS_CONTENT_TYPE_ORGANIZER = 'application/vnd.sap.adt.transportorga
 /** XML namespace for CTS ADT transport manager payloads */
 export const CTS_NAMESPACE_TM = 'http://www.sap.com/cts/adt/tm';
 
-/** List transport requests for a user */
+/** List transport requests for a user, optionally filtered by status (client-side) */
 export async function listTransports(
   http: AdtHttpClient,
   safety: SafetyConfig,
@@ -30,22 +30,22 @@ export async function listTransports(
 ): Promise<TransportRequest[]> {
   checkTransport(safety, '', 'ListTransports', false);
 
-  const params = new URLSearchParams();
-  if (user && user !== '*') {
-    params.set('user', user);
-  }
-  if (status) {
-    params.set('status', status);
-  }
-
+  // Only send user as query param — status filtering is done client-side
+  // because SAP's CTS ADT endpoint doesn't reliably support a status param.
   let url = '/sap/bc/adt/cts/transportrequests';
-  const qs = params.toString();
-  if (qs) {
-    url += `?${qs}`;
+  if (user && user !== '*') {
+    url += `?user=${encodeURIComponent(user)}`;
   }
 
   const resp = await http.get(url, { Accept: CTS_ACCEPT_TREE });
-  return parseTransportList(resp.body);
+  let transports = parseTransportList(resp.body);
+
+  // Client-side status filter: D=modifiable, R=released
+  if (status && status !== '*') {
+    transports = transports.filter((t) => t.status === status);
+  }
+
+  return transports;
 }
 
 /** Get details of a specific transport request */
