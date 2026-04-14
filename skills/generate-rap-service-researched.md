@@ -93,6 +93,21 @@ SAPSearch(query="SRVD Z*", maxResults=20)
 SAPSearch(query="SRVB Z*", maxResults=20)
 ```
 
+**If NO Z* BDEFs are found**, you MUST still ground yourself in at least one real system example before writing any code. Use this deterministic fallback:
+
+```
+SAPRead(type="TABL", name="SCARR")
+```
+
+This shows you the system's actual TABL annotation pattern (enhancement category, delivery class, data maintenance, client handling). Then read one activated CDS view:
+
+```
+SAPSearch(query="DDLS I_*", maxResults=5)
+SAPRead(type="DDLS", name="<first_result>")
+```
+
+This shows CDS conventions (client field handling, alias style, annotation patterns). **Do NOT proceed to Phase 4 until at least one real system table and one CDS view are in context.** Writing from memory of documentation alone is the #1 cause of wasted retries.
+
 If results are found, read 2-3 representative RAP stacks to extract the team's patterns:
 
 ```
@@ -500,6 +515,28 @@ After approval, create the artifacts. Use batch creation when possible.
 
 **Fail fast:** If the first DDLS/BDEF write fails with 415 or 500, stop all further CDS writes immediately. Do not retry with different types — the underlying issue is system-level, not object-specific. Run `SAPManage(action="probe")` to verify `rap.available` status.
 
+### MANDATORY: Error Recovery Protocol
+
+**On ANY save failure (400, 007, syntax error) — follow this protocol, no exceptions:**
+
+1. **STOP.** Do NOT retry with small variations. Do NOT delete and recreate.
+2. **Read back** the object to see what actually saved: `SAPRead(type=X, name=Y)`
+3. **Isolate the cause** by trying the absolute minimum source (just key fields + all required annotations). If minimum works → add fields one at a time. If minimum fails → the problem is annotations or object type, not your fields.
+4. **Change only ONE thing** between retries. Never vary both annotations and fields simultaneously.
+5. **After 3 failures on the same object**: STOP. Report the exact error text to the user and ask for guidance. Do NOT continue improvising.
+
+**Key principle:** The problem is almost always your source content, never the object's state. Deleting and recreating with the same source will produce the same error. Fix the source first.
+
+### MANDATORY: Use batch_create First
+
+**ALWAYS try `batch_create` first.** Do not start with sequential creates. `batch_create` creates all objects in one call — put dependencies first in the array (tables → views → class → BDEFs → service definition).
+
+```
+SAPWrite(action="batch_create", objects=[...], package="<package>", transport="<transport>")
+```
+
+Only fall back to sequential creation (Phase 4b) if `batch_create` returns an error. If batch fails: read the error, fix the SPECIFIC failing object's source, and retry `batch_create`. Do NOT switch to sequential mode after one batch failure.
+
 ### 4-pre. Pre-Implementation Check
 
 Before creating artifacts, optionally check for lingering inactive objects that might cause conflicts:
@@ -722,6 +759,61 @@ Offer follow-up actions based on the plan:
 9. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
 10. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", transport="<TR>")` to release tasks and parent in one step
 ```
+
+---
+
+## On-Prem 7.5x RAP Quick Reference (read before Phase 4)
+
+This section covers common pitfalls that cause repeated save failures on on-prem ABAP 7.5x systems. Every rule here was learned from real failures — violating any one produces a generic `SBD_MESSAGES 007` error with no detail about what went wrong.
+
+### TABL (transparent table) — required annotations
+
+Without ALL of these annotations, the table save **always fails** with 007:
+
+```
+@EndUserText.label : '<description>'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table <name> {
+  key client    : abap.clnt not null;
+  key <uuid_key> : sysuuid_x16 not null;
+  ...
+}
+```
+
+### TABL field types — use qualified names
+
+| Correct | Wrong (causes 007) |
+|---------|-------------------|
+| `abap.int4` | `int4` |
+| `abap.char(N)` | `char(N)` |
+| `abap.numc(N)` | `numc(N)` |
+| `abap.dec(N,M)` | `dec(N,M)` |
+| `abap.clnt` | `clnt` |
+| `sysuuid_x16` | `raw(16)` for UUID |
+| `timestampl` | (correct as-is) |
+| `dats` | (correct as-is) |
+
+### Client handling
+
+- **TABL**: Include `key client : abap.clnt not null;` as the **first key field**
+- **CDS view entity**: **OMIT** client from the select list entirely. SAP handles client filtering implicitly. Do NOT add `@ClientHandling` annotation — it is rejected on view entities.
+
+### Composition and association rules
+
+- **Composition**: NO `on` clause. Write `composition [0..*] of ChildView as _Child` — the framework resolves by key automatically. Adding `on` causes "On conditions are not allowed in compositions."
+- **Association `on` conditions**: Use CamelCase **aliases** from the select list, NOT the DB column name. Write `$projection.ClubUuid = _Club.ClubUuid`, NOT `$projection.club_uuid`. Using the DB column name causes "The referenced select list name is obscured by an alias."
+- **FK relationship**: Express via CDS composition/association in the view entity. Do NOT add `foreign key` clauses in the TABL definition — keep tables simple.
+
+### Activation order for parent-child
+
+Activate the **child view entity first**, then the root. The root's `composition` references the child, so the child must be active. Use batch activation with both: `SAPActivate(objects=[{type:"DDLS",name:"<child>"},{type:"DDLS",name:"<root>"}])` — the activation engine resolves the order.
+
+### Lint and non-ABAP types
+
+The pre-write lint (abaplint) only understands ABAP statements. It automatically skips DDLS, BDEF, SRVD, TABL, DDLX, DOMA, DTEL. For ABAP types (PROG, CLAS, INTF), lint runs by default. If lint blocks a valid ABAP program, use `lintBeforeWrite: false` in the SAPWrite call to override for that specific call.
 
 ---
 
