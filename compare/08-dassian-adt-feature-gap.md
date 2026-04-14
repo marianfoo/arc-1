@@ -1,17 +1,19 @@
 # Dassian ADT vs ARC-1: Feature Gap Analysis
 
-> **Origin:** PR report from 2026-03-28, autoclosed. Updated 2026-04-02 against current ARC-1 main.
-> **Repo:** https://github.com/DassianInc/dassian-adt (v2.0.0)
-> **Successor:** https://github.com/albanleong/abap-mcpb (MCPB repackaging)
-> **Compared against:** ARC-1 main (fef9afc, 2026-04-02)
+> **Origin:** PR report from 2026-03-28, autoclosed. Updated 2026-04-14 against current ARC-1 main.
+> **Repo:** https://github.com/DassianInc/dassian-adt (53 tools, 32 stars)
+> **MCPB:** https://github.com/albanleong/abap-mcpb (MCPB repackaging)
+> **Compared against:** ARC-1 main (29e6685, 2026-04-14)
 
 ---
 
 ## Executive Summary
 
-Dassian ADT is a fork of `mcp-abap-abap-adt-api` wrapping Marcello Urbani's `abap-adt-api` npm library. It exposes **25 individual tools** vs ARC-1's **11 intent-based tools**. Its strength: practitioner-focused features from daily internal use with Claude Code.
+Dassian ADT has undergone **explosive growth** since the last analysis — from 25 tools to **53 tools** in 2 weeks, adding OAuth/XSUAA auth, multi-system support, fix proposals, unit tests, traces, revisions, inactive objects, and more. Now at **32 stars** (from 0) with 7 forks. Wraps `abap-adt-api` npm library.
 
-Since the original analysis (2026-03-28), ARC-1 has closed several gaps: MCP elicitation, session management, DDLX/SRVB/DOMA/DTEL types, error hints, and batch activation are all implemented. This updated report focuses on **remaining gaps** worth adopting.
+**Many gaps have closed in both directions:** Dassian added features ARC-1 already had (find definition, method editing, batch activation), while ARC-1 has closed former gaps (transport contents, transport assign, elicitation). The remaining gaps are narrower but more strategic.
+
+ARC-1 still leads significantly in: safety system, BTP-native deployment, token efficiency (11 vs 53 tools), context compression, caching, audit logging, test maturity (1315 vs 163 tests), MCP scope system, and professional distribution.
 
 ---
 
@@ -49,26 +51,48 @@ Dassian classifies SAP errors with remediation guidance:
 
 **ARC-1 status:** `formatErrorForLLM()` in `intent.ts` has basic hints for 404/401/403/network errors. **Gap: no SAP-domain-specific classification** (SM12, SPAU, L-prefix includes, activation deps). The dassian-level hints would significantly improve AI self-correction.
 
-### 3. Transport Contents (`transport_contents`)
-**Priority: MEDIUM**
+### 3. Fix Proposals / Auto-Fix from ATC (NEW)
+**Priority: HIGH** (FEAT-12 on roadmap)
 
-Queries table E071 to list all objects on a transport request (PGMID, object type, name).
+Dassian now has `abap_fix_proposals` tool — retrieves auto-fix suggestions from ATC/syntax findings. High value for AI workflows: run ATC → get fix proposals → apply automatically.
 
-**ARC-1 status:** `getTransport` returns transport metadata but doesn't list contained objects. Straightforward addition to `SAPTransport`.
+**ARC-1 status:** Not implemented. On roadmap as FEAT-12 (P1). The abap-adt-api library has `fixProposals` + `fixEdits` methods — implementation reference available.
 
-### 4. Transport Assignment (`transport_assign`)
-**Priority: MEDIUM**
+### 4. Source Version History / Revisions (NEW)
+**Priority: MEDIUM** (FEAT-20 on roadmap)
 
-Assigns existing objects to transports via no-op save cycle: lock -> read -> write unchanged with transport -> unlock. For metadata types (VIEW, TABL, DOMA), uses `transportReference` instead.
+Dassian added `abap_get_revisions` tool — source version history for any object. Enables diff comparisons and rollback recommendations.
 
-**ARC-1 status:** Not implemented. ARC-1 has create/list/get/release but no assign.
+**ARC-1 status:** Not implemented. On roadmap as FEAT-20 (P2).
 
-### 5. Function Group Bulk Fetch
-**Priority: MEDIUM**
+### 5. Pretty Print / Code Formatting (NEW)
+**Priority: MEDIUM** (FEAT-10 on roadmap)
+
+Dassian added `abap_pretty_print` tool — server-side code formatting.
+
+**ARC-1 status:** Not implemented. On roadmap as FEAT-10 (P2, XS effort).
+
+### ~~6. Transport Contents~~ — CLOSED
+~~Queries table E071 to list objects on transport.~~
+**ARC-1 status:** ✅ Implemented — SAPTransport `get` action returns transport contents. FEAT-39 completed.
+
+### ~~7. Transport Assignment~~ — CLOSED
+~~Assigns existing objects to transports.~~
+**ARC-1 status:** ✅ Implemented — SAPTransport `reassign` action.
+
+### 8. Function Group Bulk Fetch
+**Priority: MEDIUM** (FEAT-18 on roadmap)
 
 Fetches ALL includes + FMs in one call via parallel requests. Reduces LLM round trips.
 
-**ARC-1 status:** `getFunctionGroup()` fetches one at a time. Could add a `bulk` flag to return all includes in a single response.
+**ARC-1 status:** Not implemented. On roadmap as FEAT-18 (P1).
+
+### 9. Multi-System Support (NEW — Unique)
+**Priority: MEDIUM**
+
+SAP UI Landscape XML auto-discovery — reads system landscape configuration to connect to multiple SAP systems from one instance. Pragmatic for on-premise environments.
+
+**ARC-1 status:** Not implemented. ARC-1 uses one-instance-per-system model. Multi-system routing is on roadmap as OPS-03 (P3).
 
 ---
 
@@ -76,26 +100,41 @@ Fetches ALL includes + FMs in one call via parallel requests. Reduces LLM round 
 
 These were flagged in the original report but have since been implemented in ARC-1.
 
-### ~~MCP Elicitation~~ -- IMPLEMENTED
+### ~~MCP Elicitation~~ — IMPLEMENTED
 - `src/server/elicit.ts`: `confirmDestructive()`, `selectOption()`, `promptString()`
 - Graceful fallback when client doesn't support elicitation
 - Audit logging of all elicitation events
 
-### ~~Session Auto-Recovery~~ -- IMPLEMENTED
+### ~~Session Auto-Recovery~~ — IMPLEMENTED
 - `src/adt/http.ts`: `withStatefulSession()` ensures lock/modify/unlock share same session cookies
 - Automatic CSRF token refresh on 403
 - Cookie persistence via internal `cookieJar` Map
 
-### ~~Object Type Expansion~~ -- IMPLEMENTED
-- DDLX, SRVB, DOMA, DTEL, STRU, TRAN all added in PRs #21-#22
-- Still missing: DCLS (access control), ENHO/ENHS (enhancements), SQLT (table types), SHLP (search helps)
+### ~~Object Type Expansion~~ — IMPLEMENTED
+- DDLX, SRVB, DOMA, DTEL, STRU, TRAN all added
+- Still missing: DCLS (access control, FEAT-37), ENHO/ENHS (enhancements), SQLT (table types), SHLP (search helps)
 
-### ~~Error Hints for LLM~~ -- PARTIALLY IMPLEMENTED
+### ~~Error Hints for LLM~~ — PARTIALLY IMPLEMENTED
 - `formatErrorForLLM()` provides HTTP-level hints (404, 401, network)
 - Missing: SAP-domain-specific hints (see Category A item #2 above)
 
-### ~~Batch Activation~~ -- IMPLEMENTED
-- `SAPActivate` supports `objects` array for batch activation (PR #22)
+### ~~Batch Activation~~ — IMPLEMENTED
+- `SAPActivate` supports `objects` array for batch activation
+
+### ~~Transport Contents~~ — IMPLEMENTED
+- `SAPTransport` `get` action returns transport objects (FEAT-39)
+
+### ~~Transport Assign / Reassign~~ — IMPLEMENTED
+- `SAPTransport` `reassign` action for owner reassignment
+
+### ~~Find Definition~~ — IMPLEMENTED
+- `SAPNavigate` `find_definition` action
+
+### ~~Method-Level Editing~~ — IMPLEMENTED
+- `SAPWrite` `edit_method` action with surgical replacement
+
+### ~~Inactive Objects List~~ — IMPLEMENTED
+- `SAPActivate` `preaudit` returns inactive objects
 
 ---
 
@@ -103,14 +142,17 @@ These were flagged in the original report but have since been implemented in ARC
 
 | Feature | Dassian | ARC-1 Status | Priority |
 |---------|---------|-------------|----------|
-| `raw_http` escape hatch | Arbitrary ADT requests | Not implemented (all ops gated) | Low -- security concern |
+| `raw_http` escape hatch | Arbitrary ADT requests | Not implemented (all ops gated) | Low — security concern |
 | gCTS (git_repos, git_pull) | Yes | Feature flag exists, no tools | Low |
-| 16 type auto-mappings (CLAS->CLAS/OC) | Yes | Not implemented | Low |
+| 16 type auto-mappings (CLAS→CLAS/OC) | Yes | Not implemented | Low |
 | ATC ciCheckFlavour workaround | Yes | Not implemented | Low |
 | Per-user browser login (HTTP) | `/login` page | OIDC/XSUAA covers this better | Low |
 | Smart parameter redirects | Error-based hints | Not implemented | Low |
 | SAP release auto-detection | For `abap_run` | Not needed unless code exec added | Low |
 | AI self-test prompt | scripts/ai-selftest.md | Interesting idea, not critical | Low |
+| Annotation definitions read | Yes (new) | Not implemented | Low |
+| Test include read | Yes (new) | ARC-1 reads test classes via structured decomposition | Low |
+| Transport admin tools | Yes (new) | ARC-1 has transport CRUD | Low |
 
 ---
 
@@ -119,18 +161,26 @@ These were flagged in the original report but have since been implemented in ARC
 | ARC-1 Feature | Detail |
 |---|---|
 | Safety system | Read-only, op filter, pkg filter, SQL blocking, transport gating, dry-run |
-| BTP ABAP Environment | Full OAuth 2.0, Destination Service, Cloud Connector, Principal Propagation |
-| OIDC / XSUAA / API key / MCP scope auth | 4 auth methods vs 2 |
+| BTP Destination Service + Cloud Connector | Per-user SAP identity via PP — Dassian has OAuth but not BTP-native |
+| Principal Propagation | Maps MCP user to SAP user — Dassian lacks this |
+| OIDC / XSUAA / API key / MCP scope auth | 4 auth methods vs 3 (Dassian now has OAuth/XSUAA but no OIDC/API key) |
+| MCP scope system (2D) | Scope-gated tool access (read/write/admin) — no Dassian equivalent |
 | Feature auto-detection | 6 probes for SAP capabilities |
 | ABAP Lint (abaplint/core) | Local offline linting |
-| Code intelligence | Find definition, references, completion |
+| Code completion | Dassian has find_definition but not completion |
 | Cache (SQLite + memory) | Reduces SAP round trips |
 | Context compression (SAPContext) | AST-based, 7-30x reduction |
 | Method-level surgery | 95% source reduction |
 | Hyperfocused mode | Single tool, ~200 tokens |
+| Token efficiency | 11 intent tools vs 53 individual tools |
 | npm + Docker + release-please | Professional distribution |
-| 707+ unit tests | vs 163 |
-| MCP elicitation with audit | Elicitation + compliance logging |
+| BTP CF deployment (MTA) | Cloud-native deployment — Dassian targets Azure |
+| 1315+ unit tests | vs 163 — 8x more test coverage |
+| AFF schema validation | Pre-create validation against SAP schemas |
+| Multi-object batch creation | Single call creates multiple objects |
+| CDS dependency extraction | AST-based dependency graph |
+| API release state / clean core | S/4HANA ABAP Cloud API compatibility check |
+| Audit logging (multi-sink) | stderr + file + BTP Audit Log Service |
 | Structured JSON logging | Stderr, sensitive field redaction |
 
 ---
@@ -138,16 +188,18 @@ These were flagged in the original report but have since been implemented in ARC
 ## Recommended Next Steps (aligned with ARC-1 goals)
 
 ### Quick Wins (< 1 day each)
-1. **SAP-domain error hints** -- Extend `formatErrorForLLM()` with SM12/SPAU/L-prefix/activation-dep patterns. High impact, low effort.
-2. **Transport contents** -- Add `contents` action to `SAPTransport` querying E071. Straightforward.
+1. **SAP-domain error hints** (FEAT-16) — Extend `formatErrorForLLM()` with SM12/SPAU/L-prefix/activation-dep patterns. High impact, low effort. Dassian's implementation is a good reference.
+2. **Pretty print** (FEAT-10) — Simple ADT endpoint, XS effort.
 
 ### Medium Effort (1-3 days)
-3. **Transport assign** -- No-op save cycle with metadata-type awareness.
-4. **Function group bulk fetch** -- Parallel include fetching, return combined response.
+3. **Fix proposals / auto-fix** (FEAT-12) — High value for AI workflows. abap-adt-api has `fixProposals` + `fixEdits` methods.
+4. **Function group bulk fetch** (FEAT-18) — Parallel include fetching, return combined response.
+5. **Source version history** (FEAT-20) — Revisions endpoint, enables diff and rollback.
 
 ### Deferred (needs design)
-5. **ABAP code execution** -- Significant security implications. Needs `OperationType.Execute`, elicitation, cleanup. Defer until safety framework review.
+6. **ABAP code execution** — Significant security implications. Needs `OperationType.Execute`, elicitation, cleanup. Both dassian-adt, vibing-steampunk, and sapcli have this — increasing market pressure.
+7. **Multi-system routing** (OPS-03) — Dassian's SAP UI Landscape XML approach is interesting but ARC-1's one-instance-per-system model is more aligned with BTP-native deployment.
 
 ---
 
-_Last updated: 2026-04-02_
+_Last updated: 2026-04-14_

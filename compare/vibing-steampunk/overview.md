@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (ARC-1's upstream) for features and bug fixes worth adopting.
 
-_Last updated: 2026-04-12_
+_Last updated: 2026-04-14_
 
 ## Approach
 
@@ -16,7 +16,7 @@ _Last updated: 2026-04-12_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 495 | 42 |
+| Total | 495+ | 42 |
 | Tracked | 95 | 42 |
 | Evaluated | 90 | 42 |
 | Pending evaluation | 0 | 0 |

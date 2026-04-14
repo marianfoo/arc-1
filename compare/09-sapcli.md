@@ -1,7 +1,7 @@
 # jfilak/sapcli
 
 > **Repository**: https://github.com/jfilak/sapcli
-> **Language**: Python 3.10+ | **License**: Apache-2.0 | **Stars**: 78 | **Forks**: 28
+> **Language**: Python 3.10+ | **License**: Apache-2.0 | **Stars**: 79 | **Forks**: 28
 > **Status**: Very active — latest commit 2026-04-12 (daily activity in April 2026)
 > **Type**: CLI tool (not MCP), CI/CD-focused ABAP development automation
 
@@ -99,7 +99,9 @@ sap/
 | `dataelement` | DTEL |
 | `structure` | STRU |
 | `table` | TABL |
-| `authorizationfield` | AUTH (read, where-used, activate — new Apr 2026) |
+| `dataelement` | DTEL (HUMAN format support — new Apr 2026) |
+| `domain` | DOMA (read — PR #149, merged Apr 2026) |
+| `authorizationfield` | AUTH (read, where-used, activate — PR #147, merged Apr 2026) |
 
 ### DevOps / Quality
 | Command | Description |
@@ -272,7 +274,7 @@ The most comprehensive open-source ADT endpoint coverage:
 
 ### GitHub issue radar (open + closed)
 
-Issue snapshot (GitHub API, 2026-04-12): **13 open / 26 closed** issues (excluding PRs).
+Issue snapshot (GitHub API, 2026-04-14): **15 open / 26 closed** issues (excluding PRs).
 
 #### Open issues with ARC-1 relevance
 
@@ -414,10 +416,12 @@ MCP protocol (LLM integration), safety system (read-only, op filter, pkg filter,
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
-| 2026-04-12 | `de9c13d` + `a606f05` + `198bd7d`: ADT connection error hardening + ADT object model docs | Medium | Re-check ARC-1 network error hint quality (`AdtNetworkError` / `formatErrorForLLM`). | Evaluated |
-| 2026-04-11 | `c014f0b` merged (PR [#149](https://github.com/jfilak/sapcli/pull/149)): tree-wide domain support (DOMA) | Low | ARC-1 already supports DOMA read; watch for create/delete edge cases only. | Done |
-| 2026-04-11 | `c20d795` major HTTP refactor: extracted shared HTTP/CSRF/auth module | Medium | Track for additional resilient retry/connection patterns. | Evaluated |
-| 2026-04-10 | `2ec4228` authorization fields support (`/sap/bc/adt/authorizationfields`) | Medium | Add AUTH read path if demand appears. | TODO |
+| 2026-04-12 | `a606f05` ADT Object class anatomy documentation — "Because AI agents are always trying to access object metadata the wrong way" | Medium | Insightful: AI agents commonly misuse ADT metadata access. Review ARC-1's object metadata patterns. | Evaluated |
+| 2026-04-12 | `de9c13d` + `198bd7d`: ADT connection error hardening + HTTP exception handler comments | Medium | Re-check ARC-1 network error hint quality (`AdtNetworkError` / `formatErrorForLLM`). | Evaluated |
+| 2026-04-11 | `a04fc91` CLI: Data element HUMAN format support | Low | ARC-1 already returns structured DTEL data. | Done |
+| 2026-04-11 | `c014f0b` merged (PR [#149](https://github.com/jfilak/sapcli/pull/149)): tree-wide domain support (DOMA) | Low | ARC-1 already supports DOMA read+write. | Done |
+| 2026-04-11 | `c20d795` major HTTP refactor: extracted shared HTTP/CSRF/auth module (PR [#148](https://github.com/jfilak/sapcli/pull/148)) | Medium | Track for additional resilient retry/connection patterns. | Evaluated |
+| 2026-04-10 | PR [#147](https://github.com/jfilak/sapcli/pull/147): Authorization fields support (`/sap/bc/adt/authorizationfields`) | Medium | Add AUTH read path if demand appears (FEAT-43). | TODO |
 | 2026-03-23 | `bf93296` function module auto-group-resolution | Low | Optional SAPRead UX improvement for FUMO. | TODO |
 | 2023-09-08 | Issue [#14](https://github.com/jfilak/sapcli/issues/14) + [#116](https://github.com/jfilak/sapcli/issues/116) closed: class include generation/checkin include cleanup | Medium | If ARC-1 adds abapGit round-trip, include lifecycle handling is mandatory. | Tracked |
 | 2023-08-03 | Issue [#22](https://github.com/jfilak/sapcli/issues/22) + [#26](https://github.com/jfilak/sapcli/issues/26) closed: AUnit coverage + Sonar output | **High** | Add coverage and optional CI formatter output. | [Eval](sapcli/evaluations/issue-22-aunit-coverage.md) |
@@ -428,6 +432,6 @@ MCP protocol (LLM integration), safety system (read-only, op filter, pkg filter,
 | 2020-02-12 | Issue [#16](https://github.com/jfilak/sapcli/issues/16) closed: activation result parsing + force activation metadata | **High** | Improve activation message parsing and guidance in SAPActivate. | [Eval](sapcli/evaluations/issue-16-activation-force-supported.md) |
 | 2019-12-19 | Issue [#20](https://github.com/jfilak/sapcli/issues/20) closed: CTS release via `newreleasejobs` | Medium | Keep compatibility coverage for release endpoint behavior. | [Eval](sapcli/evaluations/issue-20-newreleasejobs.md) |
 
-_Last updated: 2026-04-12_
+_Last updated: 2026-04-14_
 
 > **Detailed issue/commit tracking**: See [sapcli/issues.json](sapcli/issues.json), [sapcli/commits.json](sapcli/commits.json), and [sapcli/evaluations/](sapcli/evaluations/).

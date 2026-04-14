@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-14
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -57,10 +57,10 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 14 | FEAT-03 | Enhancement Framework (BAdI) | P2 | M | Features |
 | 15 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
 | 16 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
-| 17 | FEAT-10 | PrettyPrint (Code Formatting) | P2 | XS | Features |
+| 17 | FEAT-10 | PrettyPrint (Code Formatting) | P1 ↑ | XS | Features |
 | 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features | ✅ Completed |
 | 19 | FEAT-19 | Transport Contents (E071 List) | P2 | XS | Features | ✅ Completed (subsumed by FEAT-39) |
-| 20 | FEAT-20 | Source Version / Revision History | P2 | S | Features |
+| 20 | FEAT-20 | Source Version / Revision History | P1 ↑ | S | Features |
 | 21 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
 | 22 | FEAT-22 | gCTS/abapGit Integration | P2 | M | Features |
 | 23 | FEAT-23 | GetProgFullCode (Include Traversal) | P2 | S | Features |
@@ -143,7 +143,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ## Prioritized Execution Order
 
-> Priorities are assigned based on which [core design principle](#vision) a feature serves. Sourced from 3 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
+> Priorities are assigned based on which [core design principle](#vision) a feature serves. Sourced from 4 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md), [dassian-adt](../compare/07-dassian-adt.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
+>
+> **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
 
 ### Phase A: Production Blockers (P0)
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
@@ -158,18 +160,20 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
 8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
 9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
-10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
-11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
+10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes. **↑ Priority increased:** dassian-adt now has `abap_fix_proposals` tool (Apr 2026). abap-adt-api has `fixProposals` + `fixEdits` methods as implementation reference.
+11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03). **↑ Priority increased:** dassian-adt has extensive SAP-domain error classification (SM12, SPAU, L-prefix, activation deps, session timeout detection). High impact for AI self-correction.
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
-13. **FEAT-44** TABL (Database Table) Create (S) — blocks RAP stack creation; 4 competitors have this. Uses existing CRUD framework + `/sap/bc/adt/ddic/tables/` endpoint.
-14. **FEAT-45** DEVC (Package) Create (S) — blocks any greenfield development; 4 competitors have this. Endpoint: `/sap/bc/adt/packages`.
-15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
-16. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
-17. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
+13. **FEAT-44** TABL (Database Table) Create (S) — blocks RAP stack creation; 5 competitors have this. Uses existing CRUD framework + `/sap/bc/adt/ddic/tables/` endpoint.
+14. **FEAT-45** DEVC (Package) Create (S) — blocks any greenfield development; 5 competitors have this. Endpoint: `/sap/bc/adt/packages`.
+15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings. dassian-adt has parallel fetch.
+16. **FEAT-10** PrettyPrint (XS) — **↑ Upgraded from P2:** dassian-adt and VSP both have this. XS effort, high visibility.
+17. **FEAT-20** Source Version / Revision History (S) — **↑ Upgraded from P2:** dassian-adt added `abap_get_revisions`. Enables diff and rollback workflows.
+18. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
+19. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
 13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
-14. **FEAT-10** PrettyPrint (XS) — code formatting, VSP and abap-adt-api have it
+14. ~~**FEAT-10** PrettyPrint (XS) — **promoted to P1/Phase B** (dassian-adt + VSP have it)~~
 15. **FEAT-11** Inactive Objects List (XS) — development workflow
 16. **FEAT-19** Transport Contents (XS) — review objects before release
 17. **FEAT-21** ABAP Documentation / F1 Help (XS) — real docs instead of hallucination
@@ -185,7 +189,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
 24. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
 25. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
-26. **FEAT-20** Source Version / Revision History (S) — version comparison, rollback (VSP + abap-adt-api have it)
+26. ~~**FEAT-20** Source Version / Revision History (S) — **promoted to P1/Phase B** (dassian-adt added revisions tool)~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
 28. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
 25. **FEAT-24** CompareSource / Diff (S) — code review workflows
@@ -211,6 +215,17 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 37. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress) for TLS termination; in-app TLS is edge case
 38. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
 39. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
+
+### Strategic Context: SAP Official ABAP MCP Server (Q2 2026)
+
+SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI powered by official ABAP MCP Server in Q2 2026. Initial scope: RAP UI service development. Key implications for ARC-1:
+
+1. **SAP's MCP server will be ABAP Cloud only** — ARC-1's on-premise + BTP support remains a differentiator
+2. **SAP will re-offer Joule capabilities as MCP tools** — creates a baseline expectation for MCP tooling quality
+3. **SAP is making local MCP servers available for SAP Build** — enables Cursor, Claude Code, Cline, Windsurf to use SAP frameworks
+4. **ARC-1's safety system, multi-client support, and enterprise auth are not in SAP's scope** — the managed gateway model remains unique
+5. **Risk**: SAP's official server may reduce demand for community alternatives for ABAP Cloud customers
+6. **Opportunity**: ARC-1 serves the vast on-premise + RISE customer base that SAP's cloud-only offering won't reach
 
 ---
 
