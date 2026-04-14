@@ -1667,6 +1667,7 @@ async function handleSAPWrite(
   const name = String(args.name ?? '');
   const source = String(args.source ?? '');
   const transport = args.transport as string | undefined;
+  const lintOverride = args.lintBeforeWrite as boolean | undefined;
 
   // type and name are required for all actions except batch_create
   if (action !== 'batch_create' && (!type || !name)) {
@@ -1708,7 +1709,7 @@ async function handleSAPWrite(
       if (cdsGuardUpdate) return cdsGuardUpdate;
 
       // Pre-write lint validation
-      const lintWarnings = runPreWriteLint(source, type, name, config);
+      const lintWarnings = runPreWriteLint(source, type, name, config, lintOverride);
       if (lintWarnings.blocked) return lintWarnings.result!;
 
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
@@ -1823,7 +1824,7 @@ async function handleSAPWrite(
       // Step 2: Write source code if provided
       if (source) {
         // Pre-write lint validation
-        const lintWarnings = runPreWriteLint(source, type, name, config);
+        const lintWarnings = runPreWriteLint(source, type, name, config, lintOverride);
         if (lintWarnings.blocked) {
           return textResult(
             `Created ${type} ${name} in package ${pkg}, but source was rejected by lint:\n${lintWarnings.result!.content[0].text}`,
@@ -1862,7 +1863,7 @@ async function handleSAPWrite(
       }
 
       // Pre-write lint validation on the full spliced source
-      const lintWarnings = runPreWriteLint(spliced.newSource, type, name, config);
+      const lintWarnings = runPreWriteLint(spliced.newSource, type, name, config, lintOverride);
       if (lintWarnings.blocked) return lintWarnings.result!;
 
       // Write the full source back (existing lock/modify/unlock flow)
@@ -1958,7 +1959,7 @@ async function handleSAPWrite(
           // Pre-validate source with lint BEFORE creating the object to avoid orphaned objects.
           // Metadata objects (DOMA/DTEL) are XML-only and intentionally skip source lint.
           if (!metadataObject && objSource) {
-            const lintWarnings = runPreWriteLint(objSource, objType, objName, config);
+            const lintWarnings = runPreWriteLint(objSource, objType, objName, config, lintOverride);
             if (lintWarnings.blocked) {
               results.push({
                 type: objType,
@@ -2081,8 +2082,26 @@ interface PreWriteLintResult {
  * If lint itself throws (e.g., abaplint bug on unusual syntax), we don't block
  * the write — we let the SAP server-side syntax check handle it instead.
  */
-function runPreWriteLint(source: string, type: string, name: string, config: ServerConfig): PreWriteLintResult {
-  if (!config.lintBeforeWrite || !source) {
+function runPreWriteLint(
+  source: string,
+  type: string,
+  name: string,
+  config: ServerConfig,
+  perCallOverride?: boolean,
+): PreWriteLintResult {
+  // Per-call override takes precedence over server config
+  const enabled = perCallOverride ?? config.lintBeforeWrite;
+  if (!enabled || !source) {
+    return { blocked: false };
+  }
+
+  // abaplint is an ABAP statement parser — it cannot parse CDS DDL, BDL (behavior
+  // definitions), or service definitions. Sending non-ABAP source through it produces
+  // false positives like "Expected CLASSDEFINITION" on perfectly valid `define table`,
+  // `projection;`, or `define service` syntax. Skip lint entirely for these types and
+  // let the SAP server-side compiler handle validation.
+  const ABAP_ONLY_TYPES = new Set(['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL']);
+  if (!ABAP_ONLY_TYPES.has(type)) {
     return { blocked: false };
   }
 

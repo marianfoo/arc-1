@@ -495,6 +495,11 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             description: 'SRVB: binding category (0=UI, 1=Web API; default: 0)',
           },
           version: { type: 'string', description: 'SRVB: service version (default: 0001)' },
+          lintBeforeWrite: {
+            type: 'boolean',
+            description:
+              'Override server lint-before-write setting for this call. Set false to skip pre-write ABAP lint validation. Lint only applies to ABAP types (PROG, CLAS, INTF, FUNC) — CDS/BDEF/SRVD are always skipped automatically.',
+          },
           objects: {
             type: 'array',
             items: {

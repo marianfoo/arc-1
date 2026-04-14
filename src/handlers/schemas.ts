@@ -262,6 +262,7 @@ export const SAPWriteSchema = z.object({
   bindingType: z.string().optional(),
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
+  lintBeforeWrite: z.coerce.boolean().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
@@ -300,6 +301,7 @@ export const SAPWriteSchemaBtp = z.object({
   bindingType: z.string().optional(),
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
+  lintBeforeWrite: z.coerce.boolean().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
