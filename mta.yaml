@@ -1,6 +1,6 @@
 _schema-version: "3.1"
 ID: arc1-mcp
-version: 0.6.4 # x-release-please-version
+version: 0.6.5 # x-release-please-version
 description: ARC-1 — MCP Server for SAP ABAP Systems
 
 # ──────────────────────────────────────────────────────────────────────
@@ -49,8 +49,8 @@ modules:
     type: nodejs
     path: .
     parameters:
-      memory: 512M
-      disk-quota: 1024M
+      memory: 256M
+      disk-quota: 512M
       instances: 1
       health-check-type: http
       health-check-http-endpoint: /health
@@ -85,8 +85,8 @@ modules:
       # PrincipalPropagation destination for per-user requests (with JWT)
       SAP_BTP_PP_DESTINATION: ex1
       SAP_PP_ENABLED: "true"
-      SAP_READ_ONLY: "false"
-      SAP_BLOCK_FREE_SQL: "false"
+      SAP_READ_ONLY: "true"
+      SAP_BLOCK_FREE_SQL: "true"
     requires:
       - name: arc1-xsuaa
       - name: arc1-destination

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.5](https://github.com/marianfoo/arc-1/compare/v0.6.4...v0.6.5) (2026-04-14)
+
+
+### Features
+
+* add quickfix proposals and auto-fix from ATC findings ([#123](https://github.com/marianfoo/arc-1/issues/123)) ([e3c4233](https://github.com/marianfoo/arc-1/commit/e3c4233ee7b00c1b2717a337d96f61dfffc53074))
+* add SAP object type auto-normalization ([#122](https://github.com/marianfoo/arc-1/issues/122)) ([750c835](https://github.com/marianfoo/arc-1/commit/750c8353961530773d2bf5389e8f3cb5b9a7ab50))
+* extend abaplint CDS lint support for DDLS pre-write validation ([#121](https://github.com/marianfoo/arc-1/issues/121)) ([b2324cc](https://github.com/marianfoo/arc-1/commit/b2324cc90e9a56ee4ae22c1784fdc693ea1d2f37))
+
+
+### Bug Fixes
+
+* add structured DDIC diagnostics, inactive syntax check, and BDEF package handling ([#119](https://github.com/marianfoo/arc-1/issues/119)) ([20c7ddb](https://github.com/marianfoo/arc-1/commit/20c7ddb92d2c6fe35123bf48ffef688877cec3d3))
+* CF buildpack deployment fixes and BTP write tool support ([#107](https://github.com/marianfoo/arc-1/issues/107)) ([5fb05e0](https://github.com/marianfoo/arc-1/commit/5fb05e05b2c227e5a725bbc417fbdb699915f25e))
+* normalize SRVB bindingType and support OData V4 bindings ([#120](https://github.com/marianfoo/arc-1/issues/120)) ([6e1735c](https://github.com/marianfoo/arc-1/commit/6e1735c099b9c5c39144a6024bffeeb2ae9d5b93))
+* skip abaplint for non-ABAP types and add per-call lintBeforeWrite ([#117](https://github.com/marianfoo/arc-1/issues/117)) ([362e429](https://github.com/marianfoo/arc-1/commit/362e42966b22c77649b93f266d85f5d5a9c82013))
+
 ## [0.6.4](https://github.com/marianfoo/arc-1/compare/v0.6.3...v0.6.4) (2026-04-14)
 
 
