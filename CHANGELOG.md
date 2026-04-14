@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/marianfoo/arc-1/compare/v0.6.3...v0.6.4) (2026-04-14)
+
+
+### Bug Fixes
+
+* add MCP Registry OCI annotation to Dockerfile ([#115](https://github.com/marianfoo/arc-1/issues/115)) ([15c4354](https://github.com/marianfoo/arc-1/commit/15c43542fc2780c30ee6969a4f29f11978a213b1))
+
 ## [0.6.3](https://github.com/marianfoo/arc-1/compare/v0.6.2...v0.6.3) (2026-04-14)
 
 

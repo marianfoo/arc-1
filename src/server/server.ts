@@ -30,7 +30,7 @@ import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
 /** ARC-1 version */
-export const VERSION = '0.6.3'; // x-release-please-version
+export const VERSION = '0.6.4'; // x-release-please-version
 
 /** Build the base ADT client config (without per-user auth) */
 function buildAdtConfig(
