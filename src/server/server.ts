@@ -91,7 +91,17 @@ async function createPerUserClient(
 
   const { destination, authTokens } = await lookupDestinationWithUserToken(btpConfig, destName, userJwt);
 
-  const adtConfig = buildAdtConfig(config, btpProxy);
+  // Build an effective proxy that uses the PP destination's Location ID, not the
+  // startup destination's. In dual-destination setups, SAP_BTP_DESTINATION and
+  // SAP_BTP_PP_DESTINATION may point to different Cloud Connectors (different
+  // Location IDs). If we blindly reuse the startup proxy, PP requests route to
+  // the wrong SCC instance — causing 401/403/404 errors that are hard to debug.
+  const effectiveProxy =
+    btpProxy && destination.CloudConnectorLocationId !== undefined
+      ? { ...btpProxy, locationId: destination.CloudConnectorLocationId }
+      : btpProxy;
+
+  const adtConfig = buildAdtConfig(config, effectiveProxy);
   // Override URL from destination (in case it differs from startup-resolved URL)
   adtConfig.baseUrl = destination.URL;
   // Set per-user auth for principal propagation.

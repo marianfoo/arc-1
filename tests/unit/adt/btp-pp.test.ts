@@ -1,18 +1,24 @@
 /**
  * Tests for BTP principal propagation (per-user destination lookup).
  *
- * Tests the lookupDestinationWithUserToken function which calls the
- * BTP Destination Service "Find Destination" API with X-User-Token header
- * for per-user SAP authentication via Cloud Connector.
+ * Tests the lookupDestinationWithUserToken function which uses
+ * SAP Cloud SDK's getDestination() to resolve destinations with
+ * per-user JWT for principal propagation via Cloud Connector.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock fetch globally
+// Mock the SAP Cloud SDK's getDestination
+const mockGetDestination = vi.fn();
+vi.mock('@sap-cloud-sdk/connectivity', () => ({
+  getDestination: mockGetDestination,
+}));
+
+// Mock fetch for the jwt-bearer fallback path (which still uses direct fetch)
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Must import AFTER mocking fetch
+// Must import AFTER mocking
 const { lookupDestinationWithUserToken } = await import('../../../src/adt/btp.js');
 
 import type { BTPConfig } from '../../../src/adt/btp.js';
@@ -34,6 +40,7 @@ const TEST_BTP_CONFIG: BTPConfig = {
 
 describe('lookupDestinationWithUserToken', () => {
   beforeEach(() => {
+    mockGetDestination.mockReset();
     mockFetch.mockReset();
   });
 
@@ -41,39 +48,35 @@ describe('lookupDestinationWithUserToken', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends X-User-Token header and returns PrincipalPropagation auth tokens', async () => {
-    // Mock token endpoint
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ access_token: 'service-token-123', expires_in: 3600 }),
-    });
-
-    // Mock destination lookup with per-user auth tokens
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        destinationConfiguration: {
-          Name: 'SAP_TRIAL',
-          URL: 'http://sap:50000',
-          Authentication: 'PrincipalPropagation',
-          ProxyType: 'OnPremise',
-          User: '',
-          Password: '',
-        },
-        authTokens: [
-          {
-            type: 'PrincipalPropagationToken',
-            value: 'saml-assertion-encoded',
-            http_header: {
-              key: 'SAP-Connectivity-Authentication',
-              value: 'Bearer saml-assertion-encoded',
-            },
+  it('resolves destination via SDK and returns PrincipalPropagation auth tokens', async () => {
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'SAP_TRIAL',
+      url: 'http://sap:50000',
+      authentication: 'PrincipalPropagation',
+      proxyType: 'OnPremise',
+      username: '',
+      password: '',
+      authTokens: [
+        {
+          type: 'PrincipalPropagationToken',
+          value: 'saml-assertion-encoded',
+          error: null,
+          http_header: {
+            key: 'SAP-Connectivity-Authentication',
+            value: 'Bearer saml-assertion-encoded',
           },
-        ],
-      }),
+        },
+      ],
     });
 
     const result = await lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_TRIAL', 'user-jwt-token');
+
+    // Verify SDK was called with correct args
+    expect(mockGetDestination).toHaveBeenCalledWith({
+      destinationName: 'SAP_TRIAL',
+      jwt: 'user-jwt-token',
+      useCache: true,
+    });
 
     // Verify destination was resolved
     expect(result.destination.Name).toBe('SAP_TRIAL');
@@ -81,37 +84,27 @@ describe('lookupDestinationWithUserToken', () => {
 
     // Verify auth tokens were extracted
     expect(result.authTokens.sapConnectivityAuth).toBe('Bearer saml-assertion-encoded');
-
-    // Verify X-User-Token header was sent
-    const destCallArgs = mockFetch.mock.calls[1];
-    expect(destCallArgs[1].headers['X-user-token']).toBe('user-jwt-token');
-    expect(destCallArgs[1].headers.Authorization).toBe('Bearer service-token-123');
   });
 
   it('returns Bearer token for OAuth2SAMLBearerAssertion destinations', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ access_token: 'svc-token', expires_in: 3600 }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        destinationConfiguration: {
-          Name: 'S4_CLOUD',
-          URL: 'https://s4.cloud.sap',
-          Authentication: 'OAuth2SAMLBearerAssertion',
-          ProxyType: 'Internet',
-          User: '',
-          Password: '',
-        },
-        authTokens: [
-          {
-            type: 'Bearer',
-            value: 'oauth-access-token-for-user',
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'S4_CLOUD',
+      url: 'https://s4.cloud.sap',
+      authentication: 'OAuth2SAMLBearerAssertion',
+      proxyType: 'Internet',
+      username: '',
+      password: '',
+      authTokens: [
+        {
+          type: 'Bearer',
+          value: 'oauth-access-token-for-user',
+          error: null,
+          http_header: {
+            key: 'Authorization',
+            value: 'Bearer oauth-access-token-for-user',
           },
-        ],
-      }),
+        },
+      ],
     });
 
     const result = await lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'S4_CLOUD', 'user-jwt');
@@ -121,30 +114,24 @@ describe('lookupDestinationWithUserToken', () => {
   });
 
   it('throws on auth token error from Destination Service', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ access_token: 'svc-token', expires_in: 3600 }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        destinationConfiguration: {
-          Name: 'SAP_TRIAL',
-          URL: 'http://sap:50000',
-          Authentication: 'PrincipalPropagation',
-          ProxyType: 'OnPremise',
-          User: '',
-          Password: '',
-        },
-        authTokens: [
-          {
-            type: 'PrincipalPropagationToken',
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'SAP_TRIAL',
+      url: 'http://sap:50000',
+      authentication: 'PrincipalPropagation',
+      proxyType: 'OnPremise',
+      username: '',
+      password: '',
+      authTokens: [
+        {
+          type: 'PrincipalPropagationToken',
+          value: '',
+          error: 'User token validation failed: token expired',
+          http_header: {
+            key: 'SAP-Connectivity-Authentication',
             value: '',
-            error: 'User token validation failed: token expired',
           },
-        ],
-      }),
+        },
+      ],
     });
 
     await expect(lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_TRIAL', 'expired-jwt')).rejects.toThrow(
@@ -152,42 +139,23 @@ describe('lookupDestinationWithUserToken', () => {
     );
   });
 
-  it('throws on HTTP error from Destination Service', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ access_token: 'svc-token', expires_in: 3600 }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      text: async () => 'Destination not found',
-    });
+  it('throws when SDK returns null (destination not found)', async () => {
+    mockGetDestination.mockResolvedValueOnce(null);
 
     await expect(lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'NONEXISTENT', 'user-jwt')).rejects.toThrow(
-      'HTTP 404',
+      "no destination for 'NONEXISTENT'",
     );
   });
 
   it('handles destinations with no authTokens array', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ access_token: 'svc-token', expires_in: 3600 }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        destinationConfiguration: {
-          Name: 'SAP_BASIC',
-          URL: 'http://sap:50000',
-          Authentication: 'BasicAuthentication',
-          ProxyType: 'OnPremise',
-          User: 'DEVELOPER',
-          Password: 'pass123',
-        },
-        // No authTokens for BasicAuthentication
-      }),
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'SAP_BASIC',
+      url: 'http://sap:50000',
+      authentication: 'BasicAuthentication',
+      proxyType: 'OnPremise',
+      username: 'DEVELOPER',
+      password: 'pass123',
+      // No authTokens for BasicAuthentication
     });
 
     const result = await lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_BASIC', 'user-jwt');
@@ -195,5 +163,64 @@ describe('lookupDestinationWithUserToken', () => {
     expect(result.destination.Authentication).toBe('BasicAuthentication');
     expect(result.authTokens.sapConnectivityAuth).toBeUndefined();
     expect(result.authTokens.bearerToken).toBeUndefined();
+  });
+
+  it('maps cloudConnectorLocationId from SDK destination', async () => {
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'SAP_PP_LOC2',
+      url: 'http://sap:50000',
+      authentication: 'PrincipalPropagation',
+      proxyType: 'OnPremise',
+      username: '',
+      password: '',
+      cloudConnectorLocationId: 'LOC2',
+      authTokens: [
+        {
+          type: 'PrincipalPropagationToken',
+          value: 'saml-assertion',
+          error: null,
+          http_header: {
+            key: 'SAP-Connectivity-Authentication',
+            value: 'Bearer saml-assertion',
+          },
+        },
+      ],
+    });
+
+    const result = await lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_PP_LOC2', 'user-jwt');
+
+    expect(result.destination.CloudConnectorLocationId).toBe('LOC2');
+  });
+
+  it('falls back to jwt-bearer exchange when SDK returns no auth tokens for PP destination', async () => {
+    // SDK returns PP destination with no authTokens
+    mockGetDestination.mockResolvedValueOnce({
+      name: 'SAP_PP',
+      url: 'http://sap:50000',
+      authentication: 'PrincipalPropagation',
+      proxyType: 'OnPremise',
+      username: '',
+      password: '',
+      authTokens: null,
+    });
+
+    // Mock the jwt-bearer exchange fetch call
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: 'exchanged-token', expires_in: 3600 }),
+    });
+
+    const userJwt = 'user-jwt-for-pp';
+    const result = await lookupDestinationWithUserToken(TEST_BTP_CONFIG, 'SAP_PP', userJwt);
+
+    // Verify jwt-bearer exchange was attempted
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const [fetchUrl, fetchOpts] = mockFetch.mock.calls[0];
+    expect(fetchUrl).toBe(TEST_BTP_CONFIG.connectivityTokenUrl);
+    expect(fetchOpts.body).toContain('grant_type=urn');
+    expect(fetchOpts.body).toContain('assertion=user-jwt-for-pp');
+
+    // Verify Option 2: original JWT used as SAP-Connectivity-Authentication
+    expect(result.authTokens.sapConnectivityAuth).toBe(`Bearer ${userJwt}`);
   });
 });

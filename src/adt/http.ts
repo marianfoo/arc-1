@@ -743,6 +743,12 @@ export class AdtHttpClient {
       'Proxy-Authorization': proxyAuth,
     };
 
+    // Cloud Connector Location ID — required when multiple Cloud Connectors
+    // are connected to the same subaccount with different Location IDs.
+    if (proxy.locationId) {
+      proxyHeaders['SAP-Connectivity-SCC-Location_ID'] = proxy.locationId;
+    }
+
     const client = new Client(proxyOrigin);
     try {
       const resp = await client.request({

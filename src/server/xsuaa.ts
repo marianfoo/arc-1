@@ -89,6 +89,26 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
     });
   }
 
+  /**
+   * Dynamically add a redirect URI to the pre-registered XSUAA client.
+   *
+   * The MCP SDK validates redirect_uri with exact matching (no wildcards),
+   * but XSUAA itself validates redirect URIs against xs-security.json patterns
+   * (which DO support wildcards). For the pre-registered XSUAA client, we
+   * auto-register redirect URIs on-the-fly from authorize requests, relying
+   * on XSUAA as the authoritative redirect URI validator.
+   *
+   * Only applies to the pre-registered XSUAA client — DCR clients keep their
+   * registration-time redirect_uris unchanged.
+   */
+  ensureRedirectUri(clientId: string, uri: string): void {
+    const client = this.clients.get(clientId);
+    if (!client || client.client_id.startsWith('arc1-')) return; // Only for pre-registered client
+    if (client.redirect_uris.includes(uri)) return;
+    client.redirect_uris.push(uri);
+    logger.debug('Dynamic redirect_uri registered for XSUAA client', { clientId, uri });
+  }
+
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
     const client = this.clients.get(clientId);
     // Lazy TTL eviction: expire dynamically registered clients after 24 hours
@@ -412,11 +432,16 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
     },
     res: { redirect(url: string): void },
   ): Promise<void> {
+    // XSUAA only allows http://localhost for redirect URIs, never http://127.0.0.1.
+    // Some MCP clients (e.g., MCP Inspector) use 127.0.0.1, so rewrite to localhost
+    // before forwarding to XSUAA. The token exchange must use the same rewritten URI.
+    const xsuaaRedirectUri = params.redirectUri.replace('://127.0.0.1:', '://localhost:');
+
     const targetUrl = new URL(this.xsuaaAuthUrl);
     const searchParams = new URLSearchParams({
       client_id: this.xsuaaClientId, // Use XSUAA client, not local DCR client
       response_type: 'code',
-      redirect_uri: params.redirectUri,
+      redirect_uri: xsuaaRedirectUri,
       code_challenge: params.codeChallenge,
       code_challenge_method: 'S256',
     });
@@ -466,7 +491,8 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
       client_secret: this.xsuaaClientSecret,
     });
     if (codeVerifier) params.set('code_verifier', codeVerifier);
-    if (redirectUri) params.set('redirect_uri', redirectUri);
+    // Must match the rewritten redirect_uri sent during authorize
+    if (redirectUri) params.set('redirect_uri', redirectUri.replace('://127.0.0.1:', '://localhost:'));
 
     const response = await fetch(this.xsuaaTokenUrl, {
       method: 'POST',

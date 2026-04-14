@@ -10,6 +10,11 @@
           "type": "generic",
           "path": "src/server/server.ts",
           "glob": false
+        },
+        {
+          "type": "generic",
+          "path": "mta.yaml",
+          "glob": false
         }
       ],
       "changelog-sections": [

@@ -34,15 +34,20 @@ The included `xs-security.json` defines:
 
 | Scope | Description | Tools |
 |-------|-------------|-------|
-| `read` | Read SAP objects | SAPRead, SAPSearch, SAPQuery, SAPNavigate, SAPContext, SAPLint, SAPDiagnose |
-| `write` | Write SAP objects | SAPWrite, SAPActivate, SAPManage |
-| `admin` | Administrative access | SAPTransport, system management |
+| `read` | Read SAP objects | SAPRead, SAPSearch, SAPNavigate, SAPContext, SAPLint, SAPDiagnose |
+| `write` | Write SAP objects | SAPWrite, SAPActivate, SAPManage, SAPTransport |
+| `data` | Preview named table contents | SAPQuery (table preview) |
+| `sql` | Execute freestyle SQL queries | SAPQuery (freestyle SQL) |
+| `admin` | Administrative access | System management |
 
 | Role Collection | Scopes | Use Case |
 |-----------------|--------|----------|
 | ARC-1 Viewer | read | Read-only SAP access |
-| ARC-1 Editor | read, write | Development access |
-| ARC-1 Admin | read, write, admin | Full administrative access |
+| ARC-1 Developer | read, write | Development access |
+| ARC-1 Data Viewer | read, data | Read-only with table preview |
+| ARC-1 Developer + Data | read, write, data | Development + table preview |
+| ARC-1 Developer + SQL | read, write, data, sql | Development + freestyle SQL |
+| ARC-1 Admin | read, write, data, sql, admin | Full administrative access |
 
 ## Step 2: Bind Service and Configure
 
@@ -133,6 +138,28 @@ https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/mcp
 
 The inspector will perform OAuth discovery and redirect to XSUAA login.
 
+**Note:** MCP Inspector may use `http://127.0.0.1:6274` as its callback URL. ARC-1 automatically rewrites this to `http://localhost:6274` because XSUAA only allows `http://localhost` for redirect URIs, never `http://127.0.0.1`.
+
+### Copilot Studio (Manual OAuth — recommended)
+
+Copilot Studio does not re-register via DCR after server restarts, so use **Manual** OAuth mode instead of Dynamic Discovery.
+
+1. In Copilot Studio, add an MCP server connection
+2. Select **Manual** OAuth type
+3. Fill in:
+   - **Client ID:** XSUAA `clientid` from `cf env <app-name>` (e.g. `sb-arc1-mcp!t627062`)
+   - **Client secret:** XSUAA `clientsecret` from `cf env <app-name>`
+   - **Authorization URL:** `https://<app-route>/authorize`
+   - **Token URL template:** `https://<app-route>/token`
+   - **Refresh URL:** `https://<app-route>/token`
+   - **Scopes:** `read write` (ARC-1 auto-qualifies these with the XSUAA xsappname prefix)
+4. Save — Copilot Studio generates a redirect URL
+5. ARC-1 automatically accepts the redirect URL (dynamic redirect URI registration for the XSUAA client)
+
+**Why Manual mode:** Dynamic Discovery uses DCR (Dynamic Client Registration) with in-memory storage. Every deploy/restart clears registrations, breaking Copilot Studio connections. Manual mode uses the permanent XSUAA service binding credentials.
+
+**Redirect URI:** Copilot Studio uses `https://global.consent.azure-apim.net/redirect/*` — this pattern is already in `xs-security.json`. ARC-1's dynamic redirect URI registration handles the MCP SDK's exact-match requirement automatically.
+
 ## Updating xs-security.json
 
 If you need to add redirect URIs or change scopes:
@@ -163,9 +190,9 @@ When XSUAA auth is enabled, the chained token verifier tries three methods in or
 3. **API Key** — simple string match against `ARC1_API_KEY`
 
 The first successful validation wins. This means:
-- Copilot Studio (Entra ID OIDC) continues to work
-- API key auth continues to work for testing
-- MCP-native clients use XSUAA OAuth
+- MCP-native clients (Claude Desktop, Cursor, MCP Inspector) use XSUAA OAuth via auto-discovery
+- Copilot Studio uses XSUAA OAuth via Manual mode (or Entra ID OIDC if configured separately)
+- API key auth continues to work for testing and Joule Studio
 
 ## Troubleshooting
 
@@ -185,11 +212,19 @@ API key tokens now include a synthetic expiration (1 year). If you see this erro
 ### "XSUAA credentials not found"
 Ensure the XSUAA service is bound: `cf services` should show `arc1-xsuaa` bound to your app. If not: `cf bind-service arc1-mcp-server arc1-xsuaa && cf restage arc1-mcp-server`.
 
-### "Insufficient scope"
+### "Insufficient scope" / "invalid_scope"
 The user doesn't have the required role collection assigned. Go to BTP Cockpit → Security → Role Collections and assign the appropriate collection to the user.
 
+**IdP matters:** If the subaccount has a custom IAS tenant (trust configuration shows `sap.custom`), role collections must be assigned with the correct IdP origin. Assigning via `sap.default` when the user logs in via `sap.custom` will result in `invalid_scope`.
+
+### "Invalid client_id" (Copilot Studio)
+DCR registrations are in-memory and lost on restart. Switch to **Manual** OAuth mode (see above) to avoid this.
+
 ### OAuth flow hangs or returns 400
-Check that the XSUAA client ID matches. Run `cf env arc1-mcp-server` and look for the `clientid` in the XSUAA binding credentials.
+Check that the XSUAA client ID matches. Run `cf env <app-name>` and look for the `clientid` in the XSUAA binding credentials.
+
+### "Authorization Request Error" / XSUAA login fails
+If using MCP Inspector with `http://127.0.0.1:6274`, XSUAA rejects the redirect URI (only `http://localhost` is allowed). ARC-1 handles this automatically by rewriting `127.0.0.1` → `localhost`.
 
 ## Architecture
 

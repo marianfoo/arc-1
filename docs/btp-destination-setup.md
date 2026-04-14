@@ -148,9 +148,21 @@ This destination is resolved at startup and used as the fallback for API key aut
 
 This destination is used per-request when an authenticated user's JWT is available.
 
-> **Why two destinations?** A PrincipalPropagation destination has no User/Password. If ARC-1 only had one PP destination, API key users and unauthenticated health checks would fail because the shared client has no credentials. The dual-destination approach ensures backward compatibility.
+> **Why two destinations?** A PrincipalPropagation destination has no User/Password. At startup, there is no user JWT — the SAP Cloud SDK's `getDestination()` would fail for PP destinations. The BasicAuth destination provides a fallback for system-level operations (feature probing, cache warmup) and API key users.
 
 > **Why port 50001 for PP?** The Cloud Connector needs an HTTPS system mapping with `X509_GENERAL` auth mode for PP. Port 50001 is the SAP HTTPS port. The HTTP mapping (50000) uses `NONE_RESTRICTED` auth which doesn't support PP.
+
+#### Cloud Connector Location ID
+
+If you have **multiple Cloud Connectors connected to the same BTP subaccount** (each with a different Location ID), add the `CloudConnectorLocationId` property to your destinations:
+
+| Property | Value |
+|----------|-------|
+| `CloudConnectorLocationId` | `LOC1` (must match the Location ID configured in the Cloud Connector) |
+
+ARC-1 propagates this as the `SAP-Connectivity-SCC-Location_ID` header to route requests to the correct Cloud Connector instance. If you only have one Cloud Connector, leave this empty.
+
+**Important:** Each destination in a dual-destination setup can have a different Location ID. ARC-1 correctly uses the PP destination's Location ID for per-user requests and the startup destination's Location ID for system requests.
 
 ### Step 2: Configure Cloud Connector
 
@@ -329,6 +341,35 @@ When `SAP_PP_ENABLED=true`:
 
 This means you can enable PP without breaking existing API key users.
 
+### How ARC-1 Resolves PP Destinations
+
+ARC-1 uses the [SAP Cloud SDK](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/destinations) `getDestination()` for per-user destination resolution. The SDK handles:
+
+1. **Service token acquisition** — obtains a client_credentials token for the Destination Service
+2. **X-User-Token header** — passes the user's JWT to the Destination Service
+3. **Per-user caching** — caches resolved destinations keyed by destination name + user JWT
+4. **Auth token extraction** — returns `authTokens` array with PP tokens or Bearer tokens
+
+The startup path (`SAP_BTP_DESTINATION`) uses direct REST API calls instead of the SDK, because no user JWT is available at startup.
+
+### Principal Propagation: Option 1 vs Option 2
+
+SAP documents two ways to propagate user identity through the Cloud Connector ([reference](https://help.sap.com/docs/CP_CONNECTIVITY/cca91383641e40ffbe03bdc78f00f681/39f538ad62e144c58c056ebc34bb6890.html)):
+
+| | Option 1 (Recommended) | Option 2 (Backward compat) |
+|---|---|---|
+| **Headers** | 1 header: `Proxy-Authorization: Bearer <exchanged-token>` | 2 headers: `SAP-Connectivity-Authentication: Bearer <user-JWT>` + `Proxy-Authorization: Bearer <client-credentials-token>` |
+| **Token in Proxy-Authorization** | jwt-bearer exchanged token (contains user identity) | Client credentials token (no user identity) |
+| **SAP-Connectivity-Authentication** | Not used | Original user JWT |
+| **How CC extracts user** | From the exchanged token in Proxy-Authorization | From the original JWT in SAP-Connectivity-Authentication |
+
+**ARC-1's behavior:**
+
+1. First, ARC-1 tries to get auth tokens from the SDK response (the Destination Service returns a `SAP-Connectivity-Authentication` header value for PP destinations).
+2. If the Destination Service returns **no auth tokens** (a known issue — the service sometimes omits them), ARC-1 falls back to a **jwt-bearer token exchange** with the Connectivity Service XSUAA, then uses **Option 2**: the original user JWT is sent as `SAP-Connectivity-Authentication`.
+
+This fallback is documented in the code at `src/adt/btp.ts` with detailed comments explaining why Option 2 was chosen over Option 1 (the Cloud Connector couldn't extract the principal from the exchanged token in testing).
+
 ---
 
 ## Using Principal Propagation from MCP Clients
@@ -459,12 +500,15 @@ ARC-1 uses two URL path prefixes. Add both as resources with **Path and all sub-
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `Destination Service (per-user) returned HTTP 401` | User JWT invalid or expired | Re-authenticate in your MCP client |
+| `Destination Service (per-user) returned no destination` | SDK couldn't resolve destination | Check destination name, VCAP_SERVICES binding, and user JWT validity |
 | `auth token error: User token validation failed` | BTP doesn't trust the IdP that issued the JWT | Add IdP to BTP Trust Configuration |
 | `SAP returns 403 on ADT call` | SAP user exists but lacks `S_DEVELOP` authorization | Grant via `PFCG` role assignment |
 | `CERTRULE mapping not found` | Cloud Connector sends cert but SAP can't map CN to user | Check `SM30` view `VUSREXTID` |
 | PP falls back to shared client | Destination auth type is still `BasicAuthentication` | Change to `PrincipalPropagation` in BTP Cockpit |
 | `SAP_PP_ENABLED is true but btpConfig is null` | `VCAP_SERVICES` not available | Ensure Destination + Connectivity services are bound |
+| PP requests hit wrong SAP system | `CloudConnectorLocationId` mismatch between startup and PP destination | Set correct `CloudConnectorLocationId` on each destination in BTP Cockpit |
+| `jwt-bearer exchange: failed` with 401 | Connectivity Service doesn't trust the user's JWT issuer | Ensure IdP trust is configured in BTP subaccount |
+| `Destination Service returned no authTokens` (warn) | Known Destination Service behavior for PP destinations | ARC-1 handles this automatically via jwt-bearer fallback — no action needed |
 
 ---
 
@@ -482,4 +526,11 @@ ARC-1 uses two URL path prefixes. Add both as resources with **Path and all sub-
 
 **Priority:** PP per-user > BTP Destination > env vars.
 
-**SAP Reference:** [Authenticating Users against On-Premise Systems](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/authenticating-users-against-on-premise-systems)
+## SAP Documentation References
+
+- [Authenticating Users against On-Premise Systems](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/authenticating-users-against-on-premise-systems) — PP overview
+- [Configure PP via User Exchange Token](https://help.sap.com/docs/CP_CONNECTIVITY/cca91383641e40ffbe03bdc78f00f681/39f538ad62e144c58c056ebc34bb6890.html) — Option 1 vs Option 2
+- [HTTP Proxy for On-Premise Connectivity](https://help.sap.com/docs/CP_CONNECTIVITY/b865ed651e414196b39f8922db2122c7/d872cfb4801c4b54896816df4b75c75d.html) — Proxy headers, Location ID
+- [SAP Cloud SDK — Destinations](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/destinations) — SDK destination resolution
+- [SAP Cloud SDK — On-Premise Connectivity](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/on-premise) — Cloud Connector proxy
+- [Destination Authentication Methods](https://help.sap.com/docs/btp/best-practices/destination-authentication-methods) — BTP Best Practices

@@ -1,6 +1,6 @@
-# CLAUDE.md - AI Assistant Guidelines
+# CLAUDE.md
 
-This file provides context for AI assistants (Claude, etc.) working on this project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -28,21 +28,28 @@ Distributed as an npm package (`arc-1`) and Docker image (`ghcr.io/marianfoo/arc
 
 ```bash
 npm ci                          # Install dependencies
-npm run build                   # TypeScript → dist/
-npm test                        # Unit tests
+npm run build                   # TypeScript → dist/ (also copies AFF schemas)
+npm test                        # Unit tests (all)
 npm run test:watch              # Unit tests (watch mode)
-npm run typecheck               # Type check
-npm run lint                    # Lint
-npm run test:integration        # Integration tests (needs SAP credentials)
-npm run test:integration:crud   # CRUD lifecycle tests (needs SAP credentials)
-npm run test:coverage           # Unit tests with coverage (informational)
-npm run test:coverage-report    # Coverage summary (Markdown)
+npx vitest run tests/unit/adt/client.test.ts   # Run a single test file
+npx vitest run -t "getProgram"  # Run tests matching a name pattern
+npm run typecheck               # Type check (tsc --noEmit)
+npm run lint                    # Lint (biome check)
+npm run lint:fix                # Lint + auto-fix (biome check --write)
+npm run format                  # Format (biome format --write)
 npm run dev                     # Dev mode (stdio)
 npm run dev:http                # Dev mode (HTTP Streamable)
+npm run test:integration        # Integration tests (needs SAP credentials)
+npm run test:integration:crud   # CRUD lifecycle tests (needs SAP credentials)
+npm run test:e2e                # E2E tests (syncs fixtures first, needs running MCP server)
 # BTP tests (local only — needs service key + browser login):
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:smoke
 ```
+
+### Pre-commit Hook
+
+Husky runs `lint-staged` on commit, which auto-fixes lint/format via Biome on staged `*.{ts,js,json}` files.
 
 ### Configuration (Priority: CLI > Env > .env > Defaults)
 
@@ -53,6 +60,8 @@ SAP_URL=http://host:50000 SAP_USER=user SAP_PASSWORD=pass npm run dev
 # Using .env file (copy .env.example to .env)
 npm run dev
 ```
+
+Copy `.env.example` to `.env` for local development. All config options are defined in `src/server/config.ts` (parser) and `src/server/types.ts` (ServerConfig type with defaults).
 
 | Variable / Flag | Description |
 |-----------------|-------------|
@@ -408,6 +417,13 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 - E2E RAP lifecycle: `tests/e2e/rap-write.e2e.test.ts` — DDLS/BDEF/SRVD create+activate+delete (skips gracefully when `rap.available=false`)
 - BTP: local only (not CI), needs `TEST_BTP_SERVICE_KEY_FILE`, interactive browser login
 - CI telemetry: `scripts/ci/` aggregates JSON reports into GitHub step summaries. Coverage is informational only.
+
+## Code Style & Module Conventions
+
+- **ESM-only** (`"type": "module"`). All local imports must use `.js` extensions: `import { foo } from './bar.js'`
+- **Formatting** (Biome): 2-space indent, single quotes, semicolons, trailing commas, 120-char line width
+- **TypeScript**: strict mode, `noUnusedLocals`, `noUnusedParameters`, Node16 module resolution
+- **Logging**: All logging to stderr via `src/server/logger.ts`. Never use `console.log` — it corrupts MCP JSON-RPC on stdout.
 
 ## Technology Stack
 
