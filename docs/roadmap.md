@@ -49,7 +49,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~6~~ | ~~FEAT-12~~ | ~~Fix Proposals / Auto-Fix from ATC~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~7~~ | ~~FEAT-13~~ | ~~DDIC Domain/Data Element Write~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-12~~ |
 | 8 | FEAT-16 | Error Intelligence (Actionable Hints) | P1 | S | Features |
-| 9 | FEAT-17 | Type Auto-Mappings for SAPWrite | P1 | XS | Features |
+| ~~9~~ | ~~FEAT-17~~ | ~~Type Auto-Mappings for SAPWrite~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-14~~ |
 | 10 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
 | 11 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
 | 12 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
@@ -168,7 +168,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### Phase B: Core Value Features (P1)
 7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
 8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
-9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
+9. ~~**FEAT-17** Type Auto-Mappings for SAPWrite (XS)~~ — **completed 2026-04-14**
 10. ~~**FEAT-12** Fix Proposals / Auto-Fix (S)~~ — **completed 2026-04-14** (`SAPDiagnose` actions: `quickfix`, `apply_quickfix`; ATC enriched with `hasQuickfix`).
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03). **↑ Priority increased:** dassian-adt has extensive SAP-domain error classification (SM12, SPAU, L-prefix, activation deps, session timeout detection). High impact for AI self-correction.
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
@@ -421,7 +421,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Medium — reduces LLM confusion |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-14) |
 | **Source** | Dassian pattern |
 
 **What:** Auto-map friendly type codes to ADT internal codes: `CLAS` -> `CLAS/OC`, `INTF` -> `INTF/OI`, `PROG` -> `PROG/P`, etc. LLMs shouldn't need to know ADT's internal type code suffixes.

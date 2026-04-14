@@ -23,6 +23,7 @@ const {
   buildCreateXml,
   transliterateQuery,
   looksLikeFieldName,
+  normalizeObjectType,
   warnCdsReservedKeywords,
 } = await import('../../../src/handlers/intent.js');
 
@@ -4680,6 +4681,96 @@ ENDCLASS.`;
       // Should mention the field path and constraint
       expect(text).toContain('/header/description');
       expect(text).toContain('Fix the metadata and retry');
+    });
+  });
+
+  describe('normalizeObjectType', () => {
+    it('normalizes all supported slash-type mappings', () => {
+      const mappings: Array<[string, string]> = [
+        ['PROG/P', 'PROG'],
+        ['PROG/I', 'INCL'],
+        ['CLAS/OC', 'CLAS'],
+        ['CLAS/LI', 'CLAS'],
+        ['INTF/OI', 'INTF'],
+        ['FUNC/FM', 'FUNC'],
+        ['FUGR/F', 'FUGR'],
+        ['FUGR/FF', 'FUGR'],
+        ['DDLS/DF', 'DDLS'],
+        ['BDEF/BDO', 'BDEF'],
+        ['SRVD/SRV', 'SRVD'],
+        ['SRVB/SVB', 'SRVB'],
+        ['DDLX/EX', 'DDLX'],
+        ['TABL/DT', 'TABL'],
+        ['STRU/DS', 'STRU'],
+        ['DOMA/DD', 'DOMA'],
+        ['DTEL/DE', 'DTEL'],
+        ['MSAG/N', 'MSAG'],
+        ['DEVC/K', 'DEVC'],
+        ['TRAN/O', 'TRAN'],
+        ['VIEW/V', 'VIEW'],
+      ];
+
+      for (const [input, expected] of mappings) {
+        expect(normalizeObjectType(input)).toBe(expected);
+      }
+    });
+
+    it('is case-insensitive for friendly and slash types', () => {
+      expect(normalizeObjectType('clas')).toBe('CLAS');
+      expect(normalizeObjectType('Prog/P')).toBe('PROG');
+    });
+
+    it('passes through already-correct types', () => {
+      expect(normalizeObjectType('CLAS')).toBe('CLAS');
+      expect(normalizeObjectType('PROG')).toBe('PROG');
+    });
+
+    it('passes through unknown types', () => {
+      expect(normalizeObjectType('UNKNOWN')).toBe('UNKNOWN');
+    });
+
+    it('returns empty string for empty or whitespace input', () => {
+      expect(normalizeObjectType('')).toBe('');
+      expect(normalizeObjectType('   ')).toBe('');
+    });
+  });
+
+  describe('type auto-mappings wiring', () => {
+    it('normalizes SAPWrite create type "CLAS/OC" to class endpoint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'CLAS/OC',
+        name: 'ZCL_NORMALIZED',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = mockFetch.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/oo/classes') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      expect(createCall).toBeDefined();
+    });
+
+    it('normalizes SAPRead type "clas" to class read endpoint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, 'CLASS zcl_test DEFINITION.\nENDCLASS.', { 'x-csrf-token': 'T' }));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'clas',
+        name: 'ZCL_TEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const readCall = mockFetch.mock.calls.find(
+        (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('/sap/bc/adt/oo/classes/'),
+      );
+      expect(readCall).toBeDefined();
     });
   });
 
