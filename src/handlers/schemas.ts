@@ -130,15 +130,35 @@ const SAPWRITE_TYPES_ONPREM = [
   'DDLX',
   'BDEF',
   'SRVD',
+  'SRVB',
+  'TABL',
   'DOMA',
   'DTEL',
+  'MSAG',
 ] as const;
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'] as const;
+const SAPWRITE_TYPES_BTP = [
+  'CLAS',
+  'INTF',
+  'DDLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'TABL',
+  'DOMA',
+  'DTEL',
+  'MSAG',
+] as const;
 
 const ddicFixedValueSchema = z.object({
   low: z.string(),
   high: z.string().optional(),
   description: z.string().optional(),
+});
+
+const messageClassMessageSchema = z.object({
+  number: z.string(),
+  shortText: z.string(),
 });
 
 const batchObjectSchemaOnprem = z.object({
@@ -167,6 +187,11 @@ const batchObjectSchemaOnprem = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
 });
 
 const batchObjectSchemaBtp = z.object({
@@ -195,6 +220,11 @@ const batchObjectSchemaBtp = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
 });
 
 export const SAPWriteSchema = z.object({
@@ -227,6 +257,11 @@ export const SAPWriteSchema = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
@@ -260,6 +295,11 @@ export const SAPWriteSchemaBtp = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
@@ -319,12 +359,14 @@ export const SAPDiagnoseSchema = z.object({
 // ─── SAPTransport ───────────────────────────────────────────────────
 
 export const SAPTransportSchema = z.object({
-  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive']),
+  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check']),
   id: z.string().optional(),
   description: z.string().optional(),
+  name: z.string().optional(),
+  package: z.string().optional(),
   user: z.string().optional(),
   status: z.string().optional(),
-  type: z.enum(['K', 'W', 'T']).optional(),
+  type: z.string().optional(),
   owner: z.string().optional(),
   recursive: z.boolean().optional(),
 });
@@ -371,6 +413,8 @@ export const SAPManageSchema = z.object({
     'features',
     'probe',
     'cache_stats',
+    'create_package',
+    'delete_package',
     'flp_list_catalogs',
     'flp_list_groups',
     'flp_list_tiles',
@@ -386,6 +430,13 @@ export const SAPManageSchema = z.object({
   domainId: z.string().optional(),
   tileInstanceId: z.string().optional(),
   tile: flpTileSchema.optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  superPackage: z.string().optional(),
+  softwareComponent: z.string().optional(),
+  transportLayer: z.string().optional(),
+  packageType: z.enum(['development', 'structure', 'main']).optional(),
+  transport: z.string().optional(),
 });
 
 // ─── Hyperfocused SAP ───────────────────────────────────────────────

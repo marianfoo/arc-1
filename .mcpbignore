@@ -1,0 +1,36 @@
+# Development source
+src/
+tests/
+*.test.ts
+*.test.js
+tsconfig*.json
+vitest*.ts
+biome.json
+
+# Build artifacts
+*.map
+*.d.ts
+
+# Config/CI
+.github/
+.claude/
+.claude-plugin/
+.cursor-plugin/
+scripts/
+docs/
+
+# Environment/secrets
+.env*
+.arc1*
+cookies.txt
+
+# Documentation (not needed in bundle)
+CLAUDE.md
+CONTRIBUTING.md
+CHANGELOG.md
+
+# Registry files (not needed in bundle)
+server.json
+mcp.json
+mcpb-manifest.json
+glama.json

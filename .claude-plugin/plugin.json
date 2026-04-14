@@ -1,0 +1,7 @@
+{
+  "name": "arc-1",
+  "description": "SAP ABAP Development Tools (ADT) MCP integration. Read, write, search, activate, and manage ABAP objects, run syntax checks, unit tests, and manage CTS transports.",
+  "author": {
+    "name": "Marian Zeis"
+  }
+}

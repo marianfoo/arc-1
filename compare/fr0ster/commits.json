@@ -1,17 +1,139 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-13",
-  "lastCheckedSha": "c358481",
+  "lastUpdated": "2026-04-14",
+  "lastCheckedSha": "1b39a24",
   "stats": {
-    "totalCommits": 803,
+    "totalCommits": 828,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 80,
-    "evaluated": 42,
+    "totalTracked": 97,
+    "evaluated": 55,
     "pending": 0,
-    "skipped": 38
+    "skipped": 42
   },
   "releases": [
+    {
+      "version": "v5.0.9-v5.1.1",
+      "date": "2026-04-13",
+      "commits": [
+        {
+          "sha": "1b39a24",
+          "date": "2026-04-13",
+          "message": "fix: wrap lock/unlock in try/finally to prevent stale locks (#57)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Lock leak fix via try/finally — ARC-1 already uses try/finally in crud.ts. Issue #57 still open, suggesting ongoing lock leak problems in their codebase. Validates ARC-1's existing pattern."
+        },
+        {
+          "sha": "dcc958d",
+          "date": "2026-04-13",
+          "message": "chore: bump version to 5.1.0",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "d4df6c2",
+          "date": "2026-04-13",
+          "message": "feat: add test configuration and integration tests for high-level Check handlers (#54)",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Test infrastructure for their check handlers — not relevant to ARC-1"
+        },
+        {
+          "sha": "4f95094",
+          "date": "2026-04-13",
+          "message": "feat: register 13 high-level Check handlers in HighLevelHandlersGroup (#54)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "no-action",
+          "relevance": "13 new Check handlers (CheckClass, CheckProgram, CheckDomain, etc.) — per-type syntax/semantic validation tools. ARC-1 already has SAPDiagnose syntax_check action that handles all types via single tool. Token cost: 13 additional tools vs ARC-1's 0."
+        },
+        {
+          "sha": "db53dba",
+          "date": "2026-04-13",
+          "message": "feat: add 13 high-level Check handlers (#54)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "no-action",
+          "relevance": "Implementation of 13 Check handlers. Interesting: they use normalizeCheckResponse utility — ARC-1 could consider standardizing check output format. Total fr0ster tools now 316."
+        },
+        {
+          "sha": "87ac467",
+          "date": "2026-04-13",
+          "message": "feat: add normalizeCheckResponse utility for high-level check tools (#54)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Response normalization utility for check tools. ARC-1 already formats syntax check results in intent.ts."
+        },
+        {
+          "sha": "99b1d10",
+          "date": "2026-04-13",
+          "message": "chore: bump version to 5.0.11",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "34c86fa",
+          "date": "2026-04-13",
+          "message": "fix: use IAbapConnection.connect() instead of unsafe cast",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal TypeScript type safety fix"
+        },
+        {
+          "sha": "92fa33b",
+          "date": "2026-04-13",
+          "message": "chore: drop Node 20 support, minimum is now Node 22",
+          "type": "chore",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Node 22 minimum — ARC-1 already targets Node 22+. Market signal that Node 20 can be safely dropped."
+        },
+        {
+          "sha": "843b0a5",
+          "date": "2026-04-13",
+          "message": "fix: skip syntax check when saving without activation (closes #52)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Skip syntax check on save-only (no activate). ARC-1 doesn't auto-check on save. Relevant pattern if ARC-1 adds lint-before-write checks."
+        },
+        {
+          "sha": "37b1f5e",
+          "date": "2026-04-13",
+          "message": "fix: prevent log output from leaking into stdio transport (closes #46)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Critical bug: logging was leaking into stdio (corrupts MCP JSON-RPC). ARC-1 uses stderr-only logging in logger.ts — verify no code paths accidentally write to stdout."
+        },
+        {
+          "sha": "5a87a5a",
+          "date": "2026-04-13",
+          "message": "fix: remove resolveSystemContext from handler connection to prevent CSRF cookie corruption (closes #45)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "CSRF token errors when creating multiple objects in sequence — system context resolution was corrupting shared cookie jar. ARC-1 uses withStatefulSession() for isolation — verify concurrent operations don't corrupt CSRF state."
+        }
+      ]
+    },
     {
       "version": "v5.0.6-v5.0.8",
       "date": "2026-04-13",

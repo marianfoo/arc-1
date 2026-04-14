@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildDataElementXml, buildDomainXml } from '../../../src/adt/ddic-xml.js';
+import {
+  buildDataElementXml,
+  buildDomainXml,
+  buildMessageClassXml,
+  buildPackageXml,
+  buildServiceBindingXml,
+} from '../../../src/adt/ddic-xml.js';
 
 describe('ddic-xml builders', () => {
   describe('buildDomainXml', () => {
@@ -190,6 +196,175 @@ describe('ddic-xml builders', () => {
     });
   });
 
+  describe('buildMessageClassXml', () => {
+    it('builds empty message class XML', () => {
+      const xml = buildMessageClassXml({
+        name: 'ZCM_TRAVEL',
+        description: 'Travel messages',
+        package: '$TMP',
+      });
+
+      expect(xml).toContain('<mc:messageClass');
+      expect(xml).toContain('xmlns:mc="http://www.sap.com/adt/MessageClass"');
+      expect(xml).toContain('adtcore:name="ZCM_TRAVEL"');
+      expect(xml).toContain('adtcore:description="Travel messages"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="$TMP"/>');
+      expect(xml).not.toContain('<mc:messages');
+    });
+
+    it('builds message class with messages', () => {
+      const xml = buildMessageClassXml({
+        name: 'ZCM_TRAVEL',
+        description: 'Travel messages',
+        package: '$TMP',
+        messages: [
+          { number: '001', shortText: 'Booking &1 created' },
+          { number: '002', shortText: 'Flight not found' },
+        ],
+      });
+
+      expect(xml).toContain('mc:msgno="001"');
+      expect(xml).toContain('mc:msgtext="Booking &amp;1 created"');
+      expect(xml).toContain('mc:msgno="002"');
+      expect(xml).toContain('mc:msgtext="Flight not found"');
+      expect(xml).toContain('mc:selfexplainatory="true"');
+      expect(xml).toContain('mc:documented="false"');
+    });
+
+    it('escapes special characters in message text', () => {
+      const xml = buildMessageClassXml({
+        name: 'ZTEST',
+        description: 'Test "class" <msgs>',
+        package: '$TMP',
+        messages: [{ number: '001', shortText: 'Error: &1 < &2 "quoted"' }],
+      });
+
+      expect(xml).toContain('adtcore:description="Test &quot;class&quot; &lt;msgs&gt;"');
+      expect(xml).toContain('mc:msgtext="Error: &amp;1 &lt; &amp;2 &quot;quoted&quot;"');
+    });
+  });
+
+  describe('buildPackageXml', () => {
+    it('builds basic package XML with name and description', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_TEST',
+        description: 'Test package',
+      });
+
+      expect(xml).toContain('<pak:package');
+      expect(xml).toContain('adtcore:type="DEVC/K"');
+      expect(xml).toContain('adtcore:name="ZPKG_TEST"');
+      expect(xml).toContain('adtcore:description="Test package"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPKG_TEST"/>');
+    });
+
+    it('includes superPackage when provided', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_CHILD',
+        description: 'Child package',
+        superPackage: 'ZPKG_PARENT',
+      });
+
+      expect(xml).toContain('<pak:superPackage adtcore:name="ZPKG_PARENT"/>');
+    });
+
+    it('includes softwareComponent and transportLayer when provided', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_TR',
+        description: 'Transport package',
+        softwareComponent: 'HOME',
+        transportLayer: 'HOME',
+      });
+
+      expect(xml).toContain('<pak:softwareComponent pak:name="HOME"/>');
+      expect(xml).toContain('<pak:transportLayer pak:name="HOME"/>');
+    });
+
+    it('supports packageType structure', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_STR',
+        description: 'Structure package',
+        packageType: 'structure',
+      });
+
+      expect(xml).toContain('<pak:attributes pak:packageType="structure"/>');
+    });
+
+    it('uses defaults for packageType and superPackage', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_DEFAULT',
+        description: 'Defaults',
+      });
+
+      expect(xml).toContain('<pak:attributes pak:packageType="development"/>');
+      expect(xml).toContain('<pak:superPackage adtcore:name=""/>');
+    });
+
+    it('escapes XML special characters', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_ESC',
+        description: 'Package "A&B" <test> \'quote\'',
+        superPackage: 'ZPARENT&A',
+      });
+
+      expect(xml).toContain('Package &quot;A&amp;B&quot; &lt;test&gt; &apos;quote&apos;');
+      expect(xml).toContain('<pak:superPackage adtcore:name="ZPARENT&amp;A"/>');
+    });
+  });
+
+  describe('buildServiceBindingXml', () => {
+    it('builds basic service binding XML with SRVB/SVB type', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_TRAVEL_O4',
+        description: 'Travel service binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_TRAVEL',
+      });
+
+      expect(xml).toContain('<srvb:serviceBinding');
+      expect(xml).toContain('xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"');
+      expect(xml).toContain('adtcore:type="SRVB/SVB"');
+      expect(xml).toContain('adtcore:name="ZSB_TRAVEL_O4"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="$TMP"/>');
+    });
+
+    it('includes nested service definition reference', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_TRAVEL_O4',
+        description: 'Travel service binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_TRAVEL',
+      });
+
+      expect(xml).toContain('<srvb:services srvb:name="ZSB_TRAVEL_O4">');
+      expect(xml).toContain('<srvb:content srvb:version="0001">');
+      expect(xml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>');
+    });
+
+    it('uses default category=0 and bindingType=ODATA', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_DEFAULTS',
+        description: 'Defaults',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_DEFAULTS',
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="0" srvb:type="ODATA" srvb:version="V2">');
+    });
+
+    it('supports category=1 for alternate binding category', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_UI',
+        description: 'UI binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_UI',
+        category: '1',
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="1" srvb:type="ODATA" srvb:version="V2">');
+    });
+  });
+
   it('escapes XML special characters', () => {
     const domainXml = buildDomainXml({
       name: 'ZDOMA',
@@ -205,11 +380,21 @@ describe('ddic-xml builders', () => {
       package: '$TMP',
       shortLabel: 'A&B',
     });
+    const srvbXml = buildServiceBindingXml({
+      name: 'ZSB_XML',
+      description: 'Service "A&B" <binding>',
+      package: '$TMP',
+      serviceDefinition: 'ZSD_<TEST>&',
+      bindingType: 'ODATA"&',
+    });
 
     expect(domainXml).toContain('&quot;A&amp;B&quot; &lt;test&gt; &apos;apostrophe&apos;');
     expect(domainXml).toContain('<doma:low>A&amp;B</doma:low>');
     expect(domainXml).toContain('<doma:text>A &lt; B</doma:text>');
     expect(dtelXml).toContain('Data &quot;element&quot;');
     expect(dtelXml).toContain('<dtel:shortFieldLabel>A&amp;B</dtel:shortFieldLabel>');
+    expect(srvbXml).toContain('Service &quot;A&amp;B&quot; &lt;binding&gt;');
+    expect(srvbXml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_&lt;TEST&gt;&amp;"/>');
+    expect(srvbXml).toContain('srvb:type="ODATA&quot;&amp;"');
   });
 });

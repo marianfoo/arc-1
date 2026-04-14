@@ -1,0 +1,113 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.marianfoo/arc-1",
+  "title": "ARC-1",
+  "description": "MCP server for SAP ABAP systems",
+  "version": "0.6.3",
+  "websiteUrl": "https://marianfoo.github.io/arc-1/",
+  "repository": {
+    "url": "https://github.com/marianfoo/arc-1.git",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "arc-1",
+      "version": "0.6.3",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SAP_URL",
+          "description": "SAP system URL (e.g., http://host:50000)",
+          "isRequired": true
+        },
+        {
+          "name": "SAP_USER",
+          "description": "SAP username",
+          "isRequired": true
+        },
+        {
+          "name": "SAP_PASSWORD",
+          "description": "SAP password",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "SAP_CLIENT",
+          "description": "SAP client number",
+          "default": "100"
+        },
+        {
+          "name": "SAP_LANGUAGE",
+          "description": "SAP logon language",
+          "default": "EN"
+        },
+        {
+          "name": "SAP_INSECURE",
+          "description": "Skip TLS certificate verification",
+          "default": "false"
+        },
+        {
+          "name": "SAP_READ_ONLY",
+          "description": "Block all write operations (safe default)",
+          "default": "true"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/marianfoo/arc-1:0.6.3",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SAP_URL",
+          "description": "SAP system URL (e.g., http://host:50000)",
+          "isRequired": true
+        },
+        {
+          "name": "SAP_USER",
+          "description": "SAP username",
+          "isRequired": true
+        },
+        {
+          "name": "SAP_PASSWORD",
+          "description": "SAP password",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "SAP_CLIENT",
+          "description": "SAP client number",
+          "default": "100"
+        },
+        {
+          "name": "SAP_LANGUAGE",
+          "description": "SAP logon language",
+          "default": "EN"
+        },
+        {
+          "name": "SAP_INSECURE",
+          "description": "Skip TLS certificate verification",
+          "default": "false"
+        },
+        {
+          "name": "SAP_READ_ONLY",
+          "description": "Block all write operations (safe default)",
+          "default": "true"
+        },
+        {
+          "name": "SAP_TRANSPORT",
+          "description": "MCP transport (Docker defaults to http-streamable, set to stdio for local MCP clients)",
+          "default": "stdio"
+        }
+      ]
+    }
+  ]
+}

@@ -53,10 +53,10 @@ Read any SAP ABAP object.
 | `DEVC` | Package contents |
 | `SYSTEM` | System info (SID, release, kernel) |
 | `COMPONENTS` | Installed software components |
-| `MESSAGES` | Message class texts |
+| `MESSAGES` | Message class texts (structured JSON with `number`, `shortText`, `longText` per message) |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
-| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed) |
+| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed). Returns 404-friendly fallback on systems where the endpoint is unavailable. |
 
 **Structured format (CLAS only):**
 
@@ -138,7 +138,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `DOMA`, `DTEL` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
@@ -165,23 +165,43 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `setGetParameter` | string | No | DTEL: SET/GET parameter ID |
 | `defaultComponentName` | string | No | DTEL: default component name |
 | `changeDocument` | boolean | No | DTEL: change document flag |
+| `messages` | array | No | MSAG: message entries (`[{number, shortText, longText?}]`) — `number` is a 3-digit string (e.g., `"001"`), `shortText` is the message text (max 73 chars) |
+| `serviceDefinition` | string | No | SRVB: referenced service definition name (SRVD). Required for SRVB create. |
+| `bindingType` | string | No | SRVB: binding type (default `ODATA`) |
+| `category` | string | No | SRVB: binding category (`0` = UI, `1` = Web API; default `0`) |
+| `version` | string | No | SRVB: service version for binding metadata (default `0001`) |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
 
-**DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
+**DDIC metadata writes:** `DOMA`, `DTEL`, `MSAG`, and `SRVB` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. `SRVB` create uses wildcard content type (`application/*`) and SRVB update uses vendor type (`application/vnd.sap.adt.businessservices.servicebinding.v2+xml`).
+
+**TABL writes:** `TABL` is source-based (like DDLS/BDEF/SRVD). ARC-1 creates the table shell, then writes table source via `/source/main`.
+
+**BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
+
+**CDS pre-write validation:**
+
+- **Table entity version guard:** `define table entity` syntax requires ABAP Cloud (BTP) or S/4HANA on-premise with SAP_BASIS >= 757. On older systems, ARC-1 rejects the write early with an actionable message instead of letting SAP fail with a generic error.
+- **Reserved keyword warnings:** CDS field names like `position`, `value`, `type`, `data` etc. may be CDS reserved keywords that cause silent DDL save failures. ARC-1 detects these and includes an advisory warning (non-blocking) suggesting renamed alternatives.
+- **Empty DDLS source:** When reading a DDLS that exists but has no stored source, ARC-1 returns an explicit warning instead of silent empty content.
 
 **Batch creation:**
 
-`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
 
 ```
 SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
+  {type:"TABL", name:"ZTRAVEL", source:"define table ztravel {...}"},
   {type:"DDLS", name:"ZI_TRAVEL", source:"define root view..."},
   {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
-  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."},
+  {type:"SRVB", name:"ZSB_TRAVEL_O4", serviceDefinition:"ZSD_TRAVEL", category:"0"}
 ])
+
+SAPWrite(action="create", type="TABL", name="ZTRAVEL", package="$TMP",
+  source="@EndUserText.label : 'Travel'\ndefine table ztravel {\n  key client : abap.clnt;\n  key travel_id : abap.numc(8);\n  description : abap.char(256);\n}")
 
 SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
   dataType="CHAR", length=1,
@@ -190,9 +210,19 @@ SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
 SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
   typeKind="domain", typeName="ZSTATUS",
   shortLabel="Status", mediumLabel="Order Status")
+
+SAPWrite(action="create", type="SRVB", name="ZSB_TRAVEL_O4", package="$TMP",
+  serviceDefinition="ZSD_TRAVEL", category="0")
 ```
 
-**Transport behavior:** For `update` and `delete` actions on transportable packages, ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport. For `create` and `batch_create`, an explicit transport may still be required depending on the target package and system configuration.
+**Transport behavior:**
+
+- **`update` and `delete`**: ARC-1 automatically reuses the correction number from the SAP object lock when no explicit `transport` is provided. This means writes to transportable objects often succeed without manually specifying a transport.
+- **`create` and `batch_create`**: ARC-1 performs a **transport pre-flight check** for non-`$TMP` packages when no transport is provided. This calls the SAP transport checks endpoint to determine whether a transport number is required:
+  - If the object is already locked in a transport, ARC-1 auto-uses that transport.
+  - If the package is local (e.g., `$TMP`), no transport is needed — creation proceeds.
+  - If a transport IS required but none was provided, ARC-1 returns an actionable error message listing existing transports and guiding the caller to use `SAPTransport(action="list")` or `SAPTransport(action="create")` first.
+  - If the pre-flight check fails (older system, permissions), ARC-1 proceeds and lets SAP handle the error.
 
 **Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `"Z*,$TMP"`).
 
@@ -284,26 +314,53 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, and recursive release.
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, and check transport requirements.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, or `release_recursive` |
+| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`, or `check` |
 | `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Transport description text (required for create) |
+| `name` | string | No | Object name (for check action, e.g. `ZCL_ORDER`) |
+| `package` | string | No | Package name (for check action, e.g. `ZDEV`) |
 | `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
 | `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
-| `type` | string | No | Transport type for create: `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies) |
+| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
 | `owner` | string | No | New owner SAP username (required for reassign) |
 | `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
+
+**Actions:**
+
+- **`list`** — List transport requests. Defaults to current user, modifiable (status D), all types (Workbench, Customizing, Transport of Copies).
+- **`get`** — Get transport details including tasks and objects.
+- **`create`** — Create a new transport request. Requires `description`. Optional `type` (K/W/T).
+- **`release`** — Release a single transport or task.
+- **`delete`** — Delete a transport. Use `recursive=true` to delete tasks first.
+- **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.
+- **`release_recursive`** — Release all unreleased tasks first, then the transport itself.
+- **`check`** — Check if a transport number is required for creating an object in a specific package. Requires `type`, `name`, and `package`. Returns whether transport recording is required, whether the package is local, existing transports, and any locked transport. **Does NOT require `--enable-transports`** — this is a read-only pre-flight check.
+
+**Check action output:**
+```json
+{
+  "package": "ZDEV",
+  "transportRequired": true,
+  "isLocal": false,
+  "deliveryUnit": "HOME",
+  "existingTransports": [
+    { "id": "A4HK900123", "description": "My transport", "owner": "DEVELOPER" }
+  ],
+  "summary": "Package \"ZDEV\" requires a transport for object creation."
+}
+```
 
 **List defaults:** Without parameters, `list` returns modifiable transports (status D) for the current SAP user, across all transport types (Workbench, Customizing, Transport of Copies). Query params follow sapcli's `workbench_params()` pattern (`requestType=KWT`, `requestStatus`).
 
 **Protocol compatibility:** ARC-1 uses endpoint-specific CTS media types and includes a one-retry content negotiation fallback (406/415) for SAP version variance.
 
-**Note:** Only available when `--enable-transports` is set.
+**Note:** Most actions require `--enable-transports`. The `check` action works without it (read-only).
 
 ---
 
@@ -489,7 +546,7 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 
 **Actions:**
 
-- **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message.
+- **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message. **Important:** Syntax check runs against the *active* (on-system) source, not proposed new source. After writing/updating an object, activate it first, then run syntax check.
 - **`unittest`** — Run ABAP unit tests. Returns results per test class/method with status, alert messages, and execution time.
 - **`atc`** — Run ATC (ABAP Test Cockpit) checks. Returns findings with priority, check title, message, URI, and line number. Optional `variant` parameter for custom check variants.
 - **`dumps`** — List short dumps (ST22). Without `id`: returns recent dumps (filterable by `user`, `maxResults`). With `id`: returns full dump detail including error type, exception, program, stack trace, and formatted output.
@@ -512,12 +569,14 @@ SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
 
 ## SAPManage
 
-Probe and report SAP system capabilities, and inspect the object cache state.
+Probe and report SAP system capabilities, inspect the object cache state, and manage package (DEVC) lifecycle operations.
 
 **Actions:**
 - `probe` — Re-probe the SAP system now (makes 8 parallel HEAD requests, ~1-2s). Detects optional features.
 - `features` — Get cached feature status from last probe (fast, no SAP round-trip).
 - `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
+- `create_package` — Create a package (`DEVC`) via `/sap/bc/adt/packages`.
+- `delete_package` — Delete a package via lock/delete/unlock.
 - `flp_list_catalogs` — List FLP business catalogs.
 - `flp_list_groups` — List FLP groups (`Pages`) from `/UI2/FLPD_CATALOG`.
 - `flp_list_tiles` — List tiles/target mappings in a catalog.
@@ -530,7 +589,14 @@ Probe and report SAP system capabilities, and inspect the object cache state.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `probe`, `features`, `cache_stats`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `action` | string | Yes | `probe`, `features`, `cache_stats`, `create_package`, `delete_package`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `name` | string | No | Required for `create_package` and `delete_package` (package name) |
+| `description` | string | No | Required for `create_package` (package description) |
+| `superPackage` | string | No | Optional parent package for `create_package` (use `$TMP` for local packages) |
+| `softwareComponent` | string | No | Optional software component for `create_package` (default: `LOCAL`) |
+| `transportLayer` | string | No | Optional transport layer for `create_package` |
+| `packageType` | string | No | Optional package type for `create_package`: `development`, `structure`, `main` (default: `development`) |
+| `transport` | string | No | Optional transport request ID (`corrNr`) for `create_package`/`delete_package` |
 | `catalogId` | string | No | Required for `flp_list_tiles`, `flp_create_tile`, `flp_add_tile_to_group` |
 | `groupId` | string | No | Required for `flp_create_group`, `flp_add_tile_to_group` |
 | `domainId` | string | No | Required for `flp_create_catalog` |
@@ -567,6 +633,9 @@ Probe and report SAP system capabilities, and inspect the object cache state.
 SAPManage(action="probe")       → discover system capabilities
 SAPManage(action="features")    → get cached results (no SAP call)
 SAPManage(action="cache_stats") → check cache state and warmup status
+SAPManage(action="create_package", name="ZRAP_TRAVEL", description="RAP Travel Demo")
+SAPManage(action="create_package", name="ZRAP_TRAVEL", description="RAP Travel Demo", superPackage="ZRAP", softwareComponent="HOME", transportLayer="HOME", packageType="development", transport="K900123")
+SAPManage(action="delete_package", name="ZRAP_TRAVEL")
 SAPManage(action="flp_list_catalogs")
 SAPManage(action="flp_list_groups")
 SAPManage(action="flp_list_tiles", catalogId="ZARC1_SALES")

@@ -4,16 +4,28 @@ Generate ABAP Unit tests for classes with dependency analysis, test doubles, and
 
 This skill replicates SAP Joule's "Unit Test Generation" capability for ABAP classes by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices). Unlike the CDS unit test skill which targets CDS entities, this skill targets ABAP classes and uses interface-based test doubles instead of CDS Test Double Framework.
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Test class name | `ZCL_TEST_<CLASS>` | Standard convention |
+| Methods to test | All public methods | User can narrow after seeing the list |
+| Package | `$TMP` | Fast prototyping |
+| Risk level | `HARMLESS` | Test doubles don't modify real data |
+| Duration | `SHORT` | Unit tests should be fast |
+| Mock strategy | Interface-based test doubles | Cleanest pattern for dependency injection |
+
 ## Input
 
-The user provides an ABAP class to test. Ask the user for:
-- **Class name** (required, e.g., `ZCL_TRAVEL_HANDLER`, `ZCL_SALES_ORDER_SRV`)
-- **Test class name** (optional — default: `ZCL_TEST_<CLASS>`)
-- **Methods to test** (optional — default: all public methods)
-- **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — explicit transport recommended for transportable packages; ARC-1 auto-propagates lock `corrNr` for updates when omitted)
+The user provides an ABAP class to test (e.g., `ZCL_TRAVEL_HANDLER`).
 
-If the user provides just a class name, use defaults and proceed.
+Only the **class name** is required. If the user provides just a class name, apply Smart Defaults and proceed immediately.
+
+Optionally, the user may specify:
+- **Test class name** (default: `ZCL_TEST_<CLASS>`)
+- **Methods to test** (default: all public methods)
+- **Package** (default: `$TMP`)
+- **Transport request** (only needed for non-`$TMP` packages)
 
 ## Step 1: Gather Class Context
 
@@ -373,4 +385,4 @@ If tests fail:
 - When the class uses dependency injection (constructor parameters with interfaces) — ideal for mocking
 - When the user wants test coverage as a starting point for TDD
 - When refactoring a class and wanting regression tests before making changes
-- NOT for classes with no public methods or pure data containers (structures/constants)
+- NOT for classes with no public methods or pure data containers (structures/constants) — if analysis in Step 2 finds no testable scenarios (no branches, no error paths, no meaningful return values), warn the user: *"This class has no non-trivial public methods to test. Consider whether unit tests add value here."*

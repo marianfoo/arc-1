@@ -2,24 +2,36 @@
 
 Generate a complete RAP OData UI service from a natural language description of a business object. Creates the full artifact stack: database table, CDS views, behavior definitions, metadata extension, service definition, and behavior pool class.
 
-This is the **"vibe code"** mode — starts creating immediately with sensible defaults. For production-quality services that need deep system research, existing code analysis, architecture decisions, and user-approved plans first, use `generate-rap-service-researched` instead.
-
 This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
 **v1 Guardrails** (matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Package | User's Z* package with transport | Production-ready; only use `$TMP` if user explicitly asks |
+| Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
+| Behavior scenario | Managed | Framework handles CRUD |
+| OData version | V4 | Current SAP standard |
+| Draft | Yes on BTP, No on-prem | BTP Fiori Elements expects draft |
+| Admin fields | `syuname`/`timestampl` (on-prem) or `abp_*` types (BTP) | System-appropriate |
+| Strict mode | `strict ( 2 )` | Current RAP best practice |
+| Entity prefix | `Z` + entity name (e.g., `ZTRAVEL`) | SAP standard Z namespace |
+| Naming | SAP standard: `ZI_`, `ZC_`, `ZSD_`, `ZSB_`, `ZBP_I_` | Consistent with SAP docs |
+
 ## Input
 
-The user provides a natural language description of the business object (e.g., "a travel booking app with fields for agency, customer, destination, begin/end date, total price, currency, status"). Ask the user for:
+The user provides a natural language description of the business object (e.g., "a travel booking app with fields for agency, customer, destination, begin/end date, total price, currency, status").
 
-- **Business object description** (required) — what the entity represents and its key business fields
-- **Entity name prefix** (optional — default: auto-generate Z namespace, e.g., `ZTRAVEL`)
-- **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — explicit transport recommended for create actions in transportable packages; ARC-1 auto-propagates lock `corrNr` for subsequent updates when omitted)
-- **Draft enabled** (optional — default: yes on BTP, no on-prem)
-- **OData version** (optional — default: V4)
+Only the **business object description** is required. If the user provides just a description, apply Smart Defaults and proceed immediately.
 
-If the user provides just a description, use defaults and proceed.
+Optionally, the user may specify:
+- **Entity name prefix** (default: auto-generate from description)
+- **Package** (required — ask if not provided; only default to `$TMP` if user explicitly says so)
+- **Transport request** (only needed for non-`$TMP` packages — see Step 1b)
+- **Draft enabled** (default: yes on BTP, no on-prem)
+- **OData version** (default: V4)
 
 ## Step 1: Check System Capabilities
 
@@ -29,9 +41,28 @@ Verify the SAP system supports RAP/CDS and detect the system type.
 SAPManage(action="probe")
 ```
 
-**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
+**Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
 
 Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
+
+### Step 1b: Resolve Package and Transport
+
+Ask the user for their target package if not provided. Then resolve the transport request (skip only if package is `$TMP`):
+
+```
+SAPTransport(action="check", objectType="DDLS", objectName="<first_object_name>", package="<package>")
+```
+
+This checks if a transport is required and returns existing transports for the package. If a transport is required:
+
+1. **User provided a transport**: Use it for all creates
+2. **Existing transport found**: Present the list and ask the user to pick one
+3. **No transport available**: Create one:
+   ```
+   SAPTransport(action="create", description="RAP Service: <Entity>", package="<package>")
+   ```
+
+**If transport is required but unavailable, STOP** — all write operations will fail without a valid transport for non-`$TMP` packages.
 
 ### BTP vs On-Prem Differences
 
@@ -93,7 +124,7 @@ Proposed artifact stack for "Travel Booking":
 
 | # | Type | Name | Description |
 |---|------|------|-------------|
-| 1 | DDLS | ZTRAVEL_D | Database table entity |
+| 1 | TABL | ZTRAVEL_D | Database table entity |
 | 2 | DDLS | ZI_TRAVEL | Interface CDS view entity |
 | 3 | BDEF | ZI_TRAVEL | Interface behavior definition |
 | 4 | DDLS | ZC_TRAVEL | Projection CDS view entity |
@@ -101,7 +132,7 @@ Proposed artifact stack for "Travel Booking":
 | 6 | DDLX | ZC_TRAVEL | Metadata extension (UI annotations) |
 | 7 | SRVD | ZSD_TRAVEL | Service definition |
 | 8 | CLAS | ZBP_I_TRAVEL | Behavior pool class |
-| 9 | SRVB | ZSB_TRAVEL_V4 | Service binding (manual) |
+| 9 | SRVB | ZSB_TRAVEL_V4 | Service binding |
 
 Fields: key_uuid, agency_id, customer_id, destination, begin_date, end_date,
         total_price, currency_code, status, created_by, created_at,
@@ -134,14 +165,15 @@ Instead of creating each artifact individually in Steps 4-13, you can use batch 
 
 ```
 SAPWrite(action="batch_create", objects=[
-  {type: "DDLS", name: "<table_name>", description: "<Entity> Table", source: "<table_ddl>"},
+  {type: "TABL", name: "<table_name>", description: "<Entity> Table", source: "<table_ddl>"},
   {type: "DDLS", name: "ZI_<entity>", description: "<Entity> Interface View", source: "<interface_view_ddl>"},
   {type: "DDLS", name: "ZC_<entity>", description: "<Entity> Projection View", source: "<projection_view_ddl>"},
   {type: "BDEF", name: "ZI_<entity>", description: "<Entity> Interface Behavior", source: "<interface_bdef>"},
   {type: "BDEF", name: "ZC_<entity>", description: "<Entity> Projection Behavior", source: "<projection_bdef>"},
   {type: "DDLX", name: "ZC_<entity>", description: "<Entity> Metadata Extension", source: "<ddlx_source>"},
   {type: "SRVD", name: "ZSD_<entity>", description: "<Entity> Service Definition", source: "<srvd_source>"},
-  {type: "CLAS", name: "ZBP_I_<entity>", description: "<Entity> Behavior Pool", source: "<class_source>"}
+  {type: "CLAS", name: "ZBP_I_<entity>", description: "<Entity> Behavior Pool", source: "<class_source>"},
+  {type: "SRVB", name: "ZSB_<entity>_V4", description: "<Entity> Service Binding", serviceDefinition: "ZSD_<entity>", bindingType: "ODataV4-UI"}
 ], package="<package>", transport="<transport>")
 ```
 
@@ -154,7 +186,7 @@ If batch creation fails, fall back to the sequential approach below (Steps 4-13)
 Create the table entity via CDS DDL.
 
 ```
-SAPWrite(action="create", type="DDLS", name="<table_name>", package="<package>", transport="<transport>", source="<ddl_source>")
+SAPWrite(action="create", type="TABL", name="<table_name>", package="<package>", transport="<transport>", source="<ddl_source>")
 ```
 
 ### Table Entity DDL Template
@@ -182,7 +214,7 @@ define table <table_name> {
 Activate the table:
 
 ```
-SAPActivate(type="DDLS", name="<table_name>")
+SAPActivate(type="TABL", name="<table_name>")
 ```
 
 **Fallback**: If table entity creation fails (e.g., on older on-prem systems), instruct the user to create the table manually via SE11 or ADT, providing the field list and types.
@@ -234,7 +266,7 @@ SAPActivate(type="DDLS", name="ZI_<entity>")
 If draft is enabled, create the draft table entity before creating the behavior definition that references it. The RAP framework manages runtime persistence of draft data to this table, but the table itself must be created explicitly.
 
 ```
-SAPWrite(action="create", type="DDLS", name="<draft_table>", package="<package>", transport="<transport>", source="<ddl_source>")
+SAPWrite(action="create", type="TABL", name="<draft_table>", package="<package>", transport="<transport>", source="<ddl_source>")
 ```
 
 ### Draft Table Entity DDL Template
@@ -262,7 +294,7 @@ define table <draft_table> {
 Activate the draft table:
 
 ```
-SAPActivate(type="DDLS", name="<draft_table>")
+SAPActivate(type="TABL", name="<draft_table>")
 ```
 
 **Note**: On BTP ABAP Environment, the draft table must still be explicitly created — the framework manages draft data persistence at runtime, not the table's existence.
@@ -568,7 +600,7 @@ Activate all artifacts together to resolve cross-dependencies:
 
 ```
 SAPActivate(objects=[
-  {type:"DDLS", name:"<table_name>"},
+  {type:"TABL", name:"<table_name>"},
   {type:"DDLS", name:"ZI_<entity>"},
   {type:"CLAS", name:"ZBP_I_<entity>"},
   {type:"BDEF", name:"ZI_<entity>"},
@@ -597,30 +629,34 @@ For any failing object, run syntax check to identify the issue:
 SAPDiagnose(action="syntax", type="<type>", name="<name>")
 ```
 
-## Step 13: Service Binding
+## Step 13: Create and Publish Service Binding
 
-ARC-1 cannot create service bindings (SRVB) via ADT API. Instruct the user:
+Create the service binding:
 
-**"The service binding must be created manually. In ADT:**
+```
+SAPWrite(action="create", type="SRVB", name="ZSB_<entity>_V4", package="<package>", transport="<transport>",
+  serviceDefinition="ZSD_<entity>", bindingType="ODataV4-UI", description="<Entity> OData V4 Service")
+```
 
-1. **Right-click on the package** > New > Other ABAP Repository Object
-2. **Search for "Service Binding"** > Next
-3. **Name**: `ZSB_<ENTITY>_V4`
-4. **Description**: `<Entity> OData V4 Service`
-5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
-6. **Service Definition**: `ZSD_<ENTITY>`
-7. **Finish** and **Activate**
+Activate the service binding:
 
-After the service binding is created and activated, publish it:
+```
+SAPActivate(type="SRVB", name="ZSB_<entity>_V4")
+```
+
+Publish the service binding (makes the OData service available):
 
 ```
 SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
 ```
 
-Then verify the publish status and service URL:
+Verify the publish status and service URL:
+
 ```
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
+
+⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true` and a service URL. If not published, retry `publish_srvb`.
 
 ## Step 14: Verify Complete Service
 
@@ -647,11 +683,10 @@ Created artifacts:
   [x] Metadata extension: ZC_<Entity>
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
-  [ ] Service binding: ZSB_<Entity>_V4 (create manually — see Step 13)
-  [ ] Service binding published (publish after creating — see Step 13)
+  [x] Service binding: ZSB_<Entity>_V4
+  [x] Service binding published
 
 Next steps:
-  - Create the service binding and publish it (use SAPActivate with action publish_srvb)
   - Add validations and determinations (use generate-rap-logic skill)
   - Add value helps for business fields
   - Add access control (DCLS)
@@ -667,7 +702,7 @@ Next steps:
 
 | Error | Cause | Fix |
 |---|---|---|
-| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
 | Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
@@ -677,6 +712,8 @@ Next steps:
 | BDEF creation fails | Generic XML template issue | Try creating with minimal source, then update with full source |
 | Lint blocks write | Generated code has lint warnings | Review lint findings, adjust code patterns to pass lint rules |
 | Table entity creation not supported | Older on-prem system | Create table via SE11 manually, provide field list |
+| Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Step 1b |
+| Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
 
 ## Notes
 
@@ -695,7 +732,6 @@ Next steps:
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
 - **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
 - **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.
-- **Service binding creation**: SRVB must be created manually in ADT (not supported by ADT write API).
 
 ### When to Use This Skill
 

@@ -33,8 +33,14 @@ import {
 import {
   buildDataElementXml,
   buildDomainXml,
+  buildMessageClassXml,
+  buildPackageXml,
+  buildServiceBindingXml,
   type DataElementCreateParams,
   type DomainCreateParams,
+  type MessageClassCreateParams,
+  type PackageCreateParams,
+  type ServiceBindingCreateParams,
 } from '../adt/ddic-xml.js';
 import {
   type ActivationResult,
@@ -66,11 +72,12 @@ import {
   listGroups,
   listTiles,
 } from '../adt/flp.js';
-import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
+import { checkOperation, checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
   createTransport,
   deleteTransport,
   getTransport,
+  getTransportInfo,
   listTransports,
   reassignTransport,
   releaseTransport,
@@ -193,23 +200,30 @@ export function looksLikeFieldName(query: string): boolean {
   return true;
 }
 
-/** Classify error type for audit logging */
 /** Format error messages with LLM-friendly remediation hints */
 function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
   if (err instanceof AdtApiError) {
+    // Append additional SAP messages (line numbers, secondary errors) if available
+    const enriched = enrichWithSapDetails(err, message);
+
     if (err.isNotFound) {
       const name = String(args.name ?? '');
       const type = String(args.type ?? '');
-      return `${message}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
+      return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
     }
     if (err.isUnauthorized || err.isForbidden) {
-      return `${message}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
+      return `${enriched}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
     }
     // Transport / corrNr specific hints
     const transportHint = getTransportHint(err);
     if (transportHint) {
-      return `${message}\n\nHint: ${transportHint}`;
+      return `${enriched}\n\nHint: ${transportHint}`;
     }
+    // Server errors (500, 502, 503, etc.)
+    if (err.isServerError) {
+      return `${enriched}\n\nHint: SAP application server error (${err.statusCode}). This is often transient — wait 10-30 seconds and retry. If the error persists, check SAPDiagnose(action="dumps") for short dumps, or verify the SAP system is responding via SAPRead(type="SYSTEM").`;
+    }
+    return enriched;
   }
 
   if (err instanceof AdtNetworkError) {
@@ -219,11 +233,40 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
   return message;
 }
 
+/** Enrich error message with additional SAP XML diagnostic detail (extra messages, properties) */
+function enrichWithSapDetails(err: AdtApiError, message: string): string {
+  if (!err.responseBody) return message;
+
+  const extraMessages = AdtApiError.extractAllMessages(err.responseBody);
+  const props = AdtApiError.extractProperties(err.responseBody);
+
+  const parts: string[] = [message];
+
+  if (extraMessages.length > 0) {
+    parts.push(`\nAdditional detail:\n${extraMessages.map((m) => `  - ${m}`).join('\n')}`);
+  }
+
+  // Surface line/column info from properties if present
+  const lineInfo = props.LINE || props['T100KEY-NO'];
+  if (lineInfo || Object.keys(props).length > 0) {
+    const propStr = Object.entries(props)
+      .slice(0, 5) // Limit to avoid overwhelming output
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+    if (propStr) parts.push(`Properties: ${propStr}`);
+  }
+
+  return parts.join('\n');
+}
+
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
 function getTransportHint(err: AdtApiError): string | undefined {
   const body = (err.responseBody ?? '').toLowerCase();
-  const msg = err.message.toLowerCase();
-  const combined = `${msg} ${body}`;
+  // Use the clean SAP error message, NOT err.message which includes the URL path.
+  // The URL path contains `corrNr=<id>` when a transport IS provided, causing false positives
+  // if we check for "corrnr" in the full message string.
+  const cleanMsg = AdtApiError.extractCleanMessage(err.responseBody ?? '').toLowerCase();
+  const combined = `${cleanMsg} ${body}`;
 
   // Missing or invalid transport/correction number
   if (
@@ -610,6 +653,12 @@ async function handleSAPRead(
     }
     case 'DDLS': {
       const { source: ddlSource, cacheHit } = await cachedGet('DDLS', name, () => client.getDdls(name));
+      if (ddlSource.trim() === '') {
+        return textResult(
+          `DDLS ${name} exists in the object directory but has no source code stored. ` +
+            `The DDL source may need to be written via SAPWrite(action="create" or "update", type="DDLS", name="${name}", source="...").`,
+        );
+      }
       if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
         // Elements extraction is derived from source — no cache indicator
         return textResult(extractCdsElements(ddlSource, name));
@@ -746,8 +795,15 @@ async function handleSAPRead(
       const components = await client.getInstalledComponents();
       return textResult(JSON.stringify(components, null, 2));
     }
-    case 'MESSAGES':
-      return textResult(await client.getMessages(name));
+    case 'MESSAGES': {
+      try {
+        const mcInfo = await client.getMessageClassInfo(name);
+        return textResult(JSON.stringify(mcInfo, null, 2));
+      } catch {
+        // Fall back to legacy endpoint if messageclass endpoint unavailable
+        return textResult(await client.getMessages(name));
+      }
+    }
     case 'TEXT_ELEMENTS':
       return textResult(await client.getTextElements(name));
     case 'VARIANTS':
@@ -792,8 +848,19 @@ async function handleSAPRead(
       return textResult(JSON.stringify(info, null, 2));
     }
     case 'INACTIVE_OBJECTS': {
-      const objects = await client.getInactiveObjects();
-      return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
+      try {
+        const objects = await client.getInactiveObjects();
+        return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            'Inactive objects listing is not available on this SAP system ' +
+              '(the /sap/bc/adt/activation/inactive endpoint returned 404). ' +
+              'Use SAPDiagnose(action="syntax", type="...", name="...") to check specific objects instead.',
+          );
+        }
+        throw err;
+      }
     }
     default:
       return errorResult(
@@ -983,9 +1050,24 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
 
 const DOMAIN_V2_CONTENT_TYPE = 'application/vnd.sap.adt.domains.v2+xml; charset=utf-8';
 const DATAELEMENT_V2_CONTENT_TYPE = 'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8';
+const SERVICEBINDING_V2_CONTENT_TYPE = 'application/vnd.sap.adt.businessservices.servicebinding.v2+xml; charset=utf-8';
+const BDEF_CONTENT_TYPE = 'application/vnd.sap.adt.blues.v1+xml';
+const MESSAGECLASS_CONTENT_TYPE = 'application/vnd.sap.adt.mc.messageclass+xml';
 
-function isDdicMetadataType(type: string): boolean {
-  return type === 'DOMA' || type === 'DTEL';
+function isMetadataWriteType(type: string): boolean {
+  return type === 'DOMA' || type === 'DTEL' || type === 'MSAG' || type === 'SRVB';
+}
+
+/** Types that require a specific vendor content type for creation (not application/*) */
+function needsVendorContentType(type: string): boolean {
+  return type === 'DOMA' || type === 'DTEL' || type === 'BDEF' || type === 'MSAG';
+}
+
+/** Content type used for create POST */
+function createContentTypeForType(type: string): string {
+  // SRVB creation works with wildcard content type; updates use vendor v2 type.
+  if (type === 'SRVB') return 'application/*';
+  return needsVendorContentType(type) ? vendorContentTypeForType(type) : 'application/*';
 }
 
 /**
@@ -1007,14 +1089,23 @@ function dtelNeedsPostCreateUpdate(props: Record<string, unknown>): boolean {
   );
 }
 
-function ddicContentTypeForType(type: string): string {
+function vendorContentTypeForType(type: string): string {
   switch (type) {
     case 'DOMA':
       return DOMAIN_V2_CONTENT_TYPE;
     case 'DTEL':
       return DATAELEMENT_V2_CONTENT_TYPE;
+    case 'SRVB':
+      return SERVICEBINDING_V2_CONTENT_TYPE;
+    case 'BDEF':
+      return BDEF_CONTENT_TYPE;
+    case 'MSAG':
+      return MESSAGECLASS_CONTENT_TYPE;
     default:
-      return 'application/xml';
+      // Wildcard lets the SAP server resolve the correct handler.
+      // Sending 'application/xml' causes 415 on DDL-based endpoints
+      // (DDLS, SRVD, DDLX) whose resource classes reject that literal type.
+      return 'application/*';
   }
 }
 
@@ -1029,7 +1120,7 @@ function toBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function getDdicWriteProperties(input: Record<string, unknown>): Record<string, unknown> {
+function getMetadataWriteProperties(input: Record<string, unknown>): Record<string, unknown> {
   const props: Record<string, unknown> = {
     dataType: input.dataType,
     length: input.length,
@@ -1052,6 +1143,11 @@ function getDdicWriteProperties(input: Record<string, unknown>): Record<string, 
     setGetParameter: input.setGetParameter,
     defaultComponentName: input.defaultComponentName,
     changeDocument: input.changeDocument,
+    messages: input.messages,
+    serviceDefinition: input.serviceDefinition,
+    bindingType: input.bindingType,
+    category: input.category,
+    version: input.version,
   };
 
   return props;
@@ -1066,13 +1162,27 @@ function getDdicWriteProperties(input: Record<string, unknown>): Record<string, 
  * Internal _description and _package fields carry the existing values
  * for the caller to use as fallbacks.
  */
-async function mergeDdicProperties(
+function normalizeSrvbCategory(value: unknown): '0' | '1' | undefined {
+  if (value === '0' || value === 0 || value === 'UI') return '0';
+  if (value === '1' || value === 1 || value === 'Web API') return '1';
+  return undefined;
+}
+
+async function mergeMetadataWriteProperties(
   client: AdtClient,
   type: string,
   name: string,
   provided: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   try {
+    if (type === 'MSAG') {
+      const existing = await client.getMessageClassInfo(name);
+      return {
+        _description: existing.description,
+        _package: existing.package,
+        messages: provided.messages ?? existing.messages,
+      };
+    }
     if (type === 'DOMA') {
       const existing = await client.getDomain(name);
       return {
@@ -1111,6 +1221,18 @@ async function mergeDdicProperties(
         changeDocument: provided.changeDocument,
       };
     }
+    if (type === 'SRVB') {
+      const existingRaw = await client.getSrvb(name);
+      const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+      return {
+        _description: existing.description,
+        _package: existing.package,
+        serviceDefinition: provided.serviceDefinition ?? existing.serviceDefinition,
+        bindingType: provided.bindingType ?? existing.bindingType,
+        category: provided.category ?? normalizeSrvbCategory(existing.bindingCategory),
+        version: provided.version ?? existing.serviceVersion,
+      };
+    }
   } catch {
     // If we can't read existing metadata (e.g., object is new/inactive), fall through
   }
@@ -1124,6 +1246,116 @@ async function mergeDdicProperties(
  * Using a generic body (e.g. adtcore:objectReferences) returns 400:
  *   "System expected the element '{http://www.sap.com/adt/programs/programs}abapProgram'"
  */
+
+// ─── CDS Pre-Write Validation ──────────────────────────────────────
+
+/** Common CDS reserved/function keywords that cause silent DDL save failures when used as field names */
+const CDS_RESERVED_KEYWORDS = new Set([
+  'position',
+  'value',
+  'type',
+  'data',
+  'timestamp',
+  'language',
+  'text',
+  'source',
+  'target',
+  'name',
+  'description',
+  'concat',
+  'replace',
+  'substring',
+  'length',
+  'left',
+  'right',
+  'round',
+  'abs',
+  'floor',
+  'ceiling',
+  'division',
+  'mod',
+  'case',
+  'when',
+  'then',
+  'else',
+  'end',
+  'cast',
+  'coalesce',
+  'uuid',
+]);
+
+/**
+ * Guard CDS syntax against known version-dependent features.
+ * Returns an error result if the source uses unsupported syntax, or undefined to proceed.
+ * Best-effort: if cachedFeatures is not available (no probe yet), always proceeds.
+ */
+function guardCdsSyntax(
+  type: string,
+  source: string,
+  features: ResolvedFeatures | undefined,
+): ReturnType<typeof errorResult> | undefined {
+  if (type !== 'DDLS' || !source) return undefined;
+
+  // Guard: "define table entity" requires ABAP Cloud (BTP) or SAP_BASIS >= 757
+  if (/\bdefine\s+table\s+(entity|function)\b/i.test(source)) {
+    const release = features?.abapRelease;
+    const isBtp = features?.systemType === 'btp';
+    if (!isBtp && release) {
+      const releaseNum = Number.parseInt(release.replace(/\D/g, ''), 10);
+      if (releaseNum > 0 && releaseNum < 757) {
+        return errorResult(
+          `"define table entity" syntax requires ABAP Cloud (BTP) or S/4HANA on-premise with SAP_BASIS >= 757. ` +
+            `This system reports SAP_BASIS ${release}. ` +
+            `Use DDIC transparent tables (SAPWrite type="TABL" or SE11) + CDS view entities ("define [root] view entity") instead.`,
+        );
+      }
+    }
+  }
+
+  // Advisory: warn about CDS reserved keywords used as field names
+  const keywordWarning = warnCdsReservedKeywords(source);
+  if (keywordWarning) {
+    // Non-blocking — return undefined to proceed, but the warning will be
+    // appended to the success message by the caller if needed.
+    // For now we return it as an advisory error only when the keyword is
+    // highly likely to cause issues (position is the most common).
+    // We don't block the write — just append it as advisory context.
+  }
+
+  return undefined;
+}
+
+/**
+ * Detect CDS reserved keywords used as field names in DDL source.
+ * Returns a warning string listing suspicious field names, or undefined if none found.
+ */
+export function warnCdsReservedKeywords(source: string): string | undefined {
+  // Extract field-name-like tokens: lines inside { } that define fields
+  // Pattern: whitespace + identifier + colon (field definitions)
+  const fieldNames: string[] = [];
+  const braceStart = source.indexOf('{');
+  const braceEnd = source.lastIndexOf('}');
+  if (braceStart === -1 || braceEnd === -1) return undefined;
+
+  const body = source.slice(braceStart + 1, braceEnd);
+  // Match field definitions: leading whitespace, optional "key", then identifier before ":"
+  const fieldPattern = /^\s*(?:key\s+)?(\w+)\s*:/gim;
+  let match: RegExpExecArray | null;
+  while ((match = fieldPattern.exec(body)) !== null) {
+    const fieldName = match[1]?.toLowerCase();
+    if (fieldName && CDS_RESERVED_KEYWORDS.has(fieldName)) {
+      fieldNames.push(match[1]!);
+    }
+  }
+
+  if (fieldNames.length === 0) return undefined;
+
+  return (
+    `Warning: field name(s) ${fieldNames.map((f) => `'${f}'`).join(', ')} may be CDS reserved keywords. ` +
+    `If the DDL save fails with a generic syntax error, rename them (e.g., 'position' → 'playing_position', 'type' → 'obj_type').`
+  );
+}
+
 export function buildCreateXml(
   type: string,
   name: string,
@@ -1189,36 +1421,70 @@ export function buildCreateXml(
                adtcore:type="DDLS/DF"
                adtcore:masterLanguage="EN"
                adtcore:masterSystem="H00"
-               adtcore:responsible="DEVELOPER">
+                 adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </ddl:ddlSource>`;
-    case 'BDEF':
+    case 'TABL':
+      // TABL creation also uses SAP's "blue" framework envelope, then source is written via /source/main.
       return `<?xml version="1.0" encoding="UTF-8"?>
-<bdef:behaviorDefinition xmlns:bdef="http://www.sap.com/adt/bo/behaviordefinitions"
-                         xmlns:adtcore="http://www.sap.com/adt/core"
-                         adtcore:description="${escapeXml(description)}"
-                         adtcore:name="${escapeXml(name)}"
-                         adtcore:type="BDEF/BDO"
-                         adtcore:masterLanguage="EN"
-                         adtcore:masterSystem="H00"
-                         adtcore:responsible="DEVELOPER">
+<blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="TABL/DT"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
-</bdef:behaviorDefinition>`;
+</blue:blueSource>`;
+    case 'BDEF':
+      // BDEF uses SAP's "blue" framework — blue:blueSource with http://www.sap.com/wbobj/blue namespace.
+      // Confirmed by vibing-steampunk (Go) and fr0ster (TypeScript) reference implementations.
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="BDEF/BDO"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</blue:blueSource>`;
     case 'SRVD':
       return `<?xml version="1.0" encoding="UTF-8"?>
-<srvd:srvdSource xmlns:srvd="http://www.sap.com/adt/ddic/srvd/sources"
+<srvd:srvdSource xmlns:srvd="http://www.sap.com/adt/ddic/srvdsources"
                  xmlns:adtcore="http://www.sap.com/adt/core"
                  adtcore:description="${escapeXml(description)}"
                  adtcore:name="${escapeXml(name)}"
                  adtcore:type="SRVD/SRV"
                  adtcore:masterLanguage="EN"
                  adtcore:masterSystem="H00"
-                 adtcore:responsible="DEVELOPER">
+                 adtcore:responsible="DEVELOPER"
+                 srvd:srvdSourceType="S">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </srvd:srvdSource>`;
+    case 'SRVB': {
+      const serviceDefinition = String(properties?.serviceDefinition ?? '').trim();
+      if (!serviceDefinition) {
+        throw new Error('SRVB create/update requires "serviceDefinition" (referenced SRVD name).');
+      }
+      const categoryRaw = properties?.category;
+      const category = categoryRaw === '1' || categoryRaw === 1 ? '1' : '0';
+      const params: ServiceBindingCreateParams = {
+        name,
+        description,
+        package: pkg,
+        serviceDefinition,
+        bindingType: properties?.bindingType ? String(properties.bindingType) : undefined,
+        category,
+        version: properties?.version ? String(properties.version) : undefined,
+      };
+      return buildServiceBindingXml(params);
+    }
     case 'DDLX':
       return `<?xml version="1.0" encoding="UTF-8"?>
-<ddlx:ddlxSource xmlns:ddlx="http://www.sap.com/adt/ddic/ddlx/sources"
+<ddlx:ddlxSource xmlns:ddlx="http://www.sap.com/adt/ddic/ddlxsources"
                  xmlns:adtcore="http://www.sap.com/adt/core"
                  adtcore:description="${escapeXml(description)}"
                  adtcore:name="${escapeXml(name)}"
@@ -1280,6 +1546,22 @@ export function buildCreateXml(
       };
       return buildDataElementXml(params);
     }
+    case 'MSAG': {
+      const messagesRaw = Array.isArray(properties?.messages) ? properties.messages : [];
+      const messages = messagesRaw
+        .filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null)
+        .map((m) => ({
+          number: String(m.number ?? ''),
+          shortText: String(m.shortText ?? ''),
+        }));
+      const params: MessageClassCreateParams = {
+        name,
+        description,
+        package: pkg,
+        messages: messages.length > 0 ? messages : undefined,
+      };
+      return buildMessageClassXml(params);
+    }
     default:
       // Fallback — generic objectReferences using the correct URL for the type
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1334,6 +1616,10 @@ function objectBasePath(type: string): string {
       return '/sap/bc/adt/ddic/domains/';
     case 'DTEL':
       return '/sap/bc/adt/ddic/dataelements/';
+    case 'MSAG':
+      return '/sap/bc/adt/messageclass/';
+    case 'DEVC':
+      return '/sap/bc/adt/packages/';
     case 'TRAN':
       return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
     default:
@@ -1403,19 +1689,23 @@ async function handleSAPWrite(
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
 
-      if (isDdicMetadataType(type)) {
-        // DDIC updates are full-XML-replace — we must fetch existing metadata
+      if (isMetadataWriteType(type)) {
+        // Metadata updates are full-XML-replace — we must fetch existing metadata
         // and merge with provided fields so omitted fields keep their current values.
         // Without this, updating just labels would reset dataType/typeKind to defaults.
-        const ddicProps = getDdicWriteProperties(args);
-        const mergedProps = await mergeDdicProperties(client, type, name, ddicProps);
+        const metadataProps = getMetadataWriteProperties(args);
+        const mergedProps = await mergeMetadataWriteProperties(client, type, name, metadataProps);
         const description = String(args.description ?? mergedProps._description ?? name);
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
-        await safeUpdateObject(client.http, client.safety, objectUrl, body, ddicContentTypeForType(type), transport);
+        await safeUpdateObject(client.http, client.safety, objectUrl, body, vendorContentTypeForType(type), transport);
         cachingLayer?.invalidate(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
       }
+
+      // CDS pre-write validation: reject unsupported syntax early
+      const cdsGuardUpdate = guardCdsSyntax(type, source, cachedFeatures);
+      if (cdsGuardUpdate) return cdsGuardUpdate;
 
       // Pre-write lint validation
       const lintWarnings = runPreWriteLint(source, type, name, config);
@@ -1431,6 +1721,46 @@ async function handleSAPWrite(
       checkPackage(client.safety, pkg);
       const description = String(args.description ?? name);
 
+      // Pre-flight: check transport requirements for non-$TMP packages when no transport provided.
+      // SAP requires a transport number for objects in transportable packages.
+      // Instead of letting SAP return a cryptic error, we detect this early and return
+      // an actionable error message guiding the LLM to use SAPTransport first.
+      let effectiveTransport = transport;
+      if (!transport && pkg.toUpperCase() !== '$TMP') {
+        try {
+          const transportInfo = await getTransportInfo(client.http, client.safety, objectUrl, pkg, 'I');
+          if (transportInfo.lockedTransport) {
+            // Object is already locked in a transport — use it automatically
+            effectiveTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            // Transport IS required but none provided — return guidance
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${pkg}" requires a transport number for object creation, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPWrite(action="create", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+          // isLocal=true or recording=false → no transport needed, proceed without one
+        } catch {
+          // If transportInfo check fails (older system, permissions, etc.), proceed without it.
+          // SAP will return its own error if a transport is actually needed.
+        }
+      }
+
+      // CDS pre-write validation: reject unsupported syntax early
+      const cdsGuard = guardCdsSyntax(type, source, cachedFeatures);
+      if (cdsGuard) return cdsGuard;
+
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
       if (!affResult.valid) {
@@ -1442,32 +1772,52 @@ async function handleSAPWrite(
       // Build type-specific creation XML body.
       // SAP ADT requires the root element to match the object type —
       // a generic objectReferences body returns 400 "System expected the element ...".
-      const ddicProperties = getDdicWriteProperties(args);
-      const body = buildCreateXml(type, name, pkg, description, ddicProperties);
+      const metadataProperties = getMetadataWriteProperties(args);
+      const body = buildCreateXml(type, name, pkg, description, metadataProperties);
 
       // Step 1: Create the object (metadata only)
       const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
-      const contentType = isDdicMetadataType(type) ? ddicContentTypeForType(type) : 'application/xml';
-      const result = await createObject(client.http, client.safety, createUrl, body, contentType, transport);
+      // DOMA/DTEL/BDEF require vendor-specific content types; all other types use
+      // 'application/*' — the wildcard lets the SAP server resolve the correct
+      // handler (matching how ADT Eclipse and abap-adt-api send requests).
+      const contentType = createContentTypeForType(type);
+      const result = await createObject(client.http, client.safety, createUrl, body, contentType, effectiveTransport);
 
-      if (isDdicMetadataType(type)) {
+      if (isMetadataWriteType(type)) {
         // SAP's DTEL POST ignores labels, searchHelp, etc. — they require a follow-up PUT.
         // Use withStatefulSession directly (not safeUpdateObject) to keep the lock cycle
         // on the main client's session, avoiding lock contention with subsequent operations.
-        if (type === 'DTEL' && dtelNeedsPostCreateUpdate(ddicProperties)) {
-          const ct = ddicContentTypeForType(type);
+        if (type === 'DTEL' && dtelNeedsPostCreateUpdate(metadataProperties)) {
+          const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
             const lock = await lockObject(session, client.safety, objectUrl);
-            const effectiveTransport = transport ?? (lock.corrNr || undefined);
+            const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
             try {
-              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, effectiveTransport);
+              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
+            } finally {
+              await unlockObject(session, objectUrl, lock.lockHandle);
+            }
+          });
+        }
+        // MSAG: POST creates empty container — follow-up PUT to write messages
+        if (type === 'MSAG' && Array.isArray(metadataProperties.messages) && metadataProperties.messages.length > 0) {
+          const ct = vendorContentTypeForType(type);
+          await client.http.withStatefulSession(async (session) => {
+            const lock = await lockObject(session, client.safety, objectUrl);
+            const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
+            try {
+              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
             } finally {
               await unlockObject(session, objectUrl, lock.lockHandle);
             }
           });
         }
         cachingLayer?.invalidate(type, name);
-        return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
+        const followUpHint =
+          type === 'SRVB'
+            ? `\n\nNext steps:\n1. SAPActivate(type="SRVB", name="${name}")\n2. SAPActivate(action="publish_srvb", name="${name}")`
+            : '';
+        return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}${followUpHint}`);
       }
 
       // Step 2: Write source code if provided
@@ -1480,7 +1830,7 @@ async function handleSAPWrite(
           );
         }
 
-        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
+        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
         cachingLayer?.invalidate(type, name);
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
         return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
@@ -1551,12 +1901,44 @@ async function handleSAPWrite(
       // Check package is allowed before starting any creates
       checkPackage(client.safety, pkg);
 
+      // Pre-flight transport check for batch_create (same logic as single create)
+      let batchTransport = transport;
+      if (!transport && pkg.toUpperCase() !== '$TMP') {
+        try {
+          // Use first object's URL for the transport check
+          const firstObj = objects[0];
+          const firstUrl = objectUrlForType(String(firstObj.type ?? ''), String(firstObj.name ?? ''));
+          const transportInfo = await getTransportInfo(client.http, client.safety, firstUrl, pkg, 'I');
+          if (transportInfo.lockedTransport) {
+            batchTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${pkg}" requires a transport number for object creation, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPWrite(action="batch_create", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+        } catch {
+          // If transportInfo check fails, proceed — SAP will return its own error if needed.
+        }
+      }
+
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
 
       for (const obj of objects) {
         const objType = String(obj.type ?? '');
         const objName = String(obj.name ?? '');
-        const metadataObject = isDdicMetadataType(objType);
+        const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
 
@@ -1591,26 +1973,18 @@ async function handleSAPWrite(
           // Step 1: Create the object
           const objUrl = objectUrlForType(objType, objName);
           const createUrl = objUrl.replace(/\/[^/]+$/, '');
-          const objDdicProps = getDdicWriteProperties(obj);
-          const body = buildCreateXml(objType, objName, pkg, objDescription, objDdicProps);
-          const contentType = metadataObject ? ddicContentTypeForType(objType) : 'application/xml';
-          await createObject(client.http, client.safety, createUrl, body, contentType, transport);
+          const objMetadataProps = getMetadataWriteProperties(obj);
+          const body = buildCreateXml(objType, objName, pkg, objDescription, objMetadataProps);
+          const contentType = createContentTypeForType(objType);
+          await createObject(client.http, client.safety, createUrl, body, contentType, batchTransport);
 
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
-          if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objDdicProps)) {
+          if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objMetadataProps)) {
             await client.http.withStatefulSession(async (session) => {
               const lock = await lockObject(session, client.safety, objUrl);
-              const effectiveTransport = transport ?? (lock.corrNr || undefined);
+              const lockTransport = batchTransport ?? (lock.corrNr || undefined);
               try {
-                await updateObject(
-                  session,
-                  client.safety,
-                  objUrl,
-                  body,
-                  lock.lockHandle,
-                  contentType,
-                  effectiveTransport,
-                );
+                await updateObject(session, client.safety, objUrl, body, lock.lockHandle, contentType, lockTransport);
               } finally {
                 await unlockObject(session, objUrl, lock.lockHandle);
               }
@@ -1620,7 +1994,7 @@ async function handleSAPWrite(
           // Step 2: Write source if provided
           if (!metadataObject && objSource) {
             const srcUrl = sourceUrlForType(objType, objName);
-            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, transport);
+            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, batchTransport);
           }
 
           // Step 3: Activate the object
@@ -2187,9 +2561,43 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
       const result = await releaseTransportRecursive(client.http, client.safety, id);
       return textResult(JSON.stringify(result, null, 2));
     }
+    case 'check': {
+      // Check transport requirements for an object/package combination.
+      // Does NOT require enableTransports — this is a read-only check.
+      const objectType = String(args.type ?? '');
+      const objectName = String(args.name ?? '');
+      const pkg = String(args.package ?? '');
+      if (!objectType || !objectName) return errorResult('"type" and "name" are required for "check" action.');
+      if (!pkg) return errorResult('"package" is required for "check" action.');
+
+      const objectUrl = objectUrlForType(objectType, objectName);
+      const info = await getTransportInfo(client.http, client.safety, objectUrl, pkg, 'I');
+
+      const summary = info.isLocal
+        ? `Package "${pkg}" is local — no transport required.`
+        : info.recording
+          ? `Package "${pkg}" requires a transport for object creation.`
+          : `Package "${pkg}" does not require transport recording.`;
+
+      return textResult(
+        JSON.stringify(
+          {
+            package: pkg,
+            transportRequired: !info.isLocal && info.recording,
+            isLocal: info.isLocal,
+            deliveryUnit: info.deliveryUnit,
+            existingTransports: info.existingTransports,
+            ...(info.lockedTransport ? { lockedTransport: info.lockedTransport } : {}),
+            summary,
+          },
+          null,
+          2,
+        ),
+      );
+    }
     default:
       return errorResult(
-        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive`,
+        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check`,
       );
   }
 }
@@ -2345,6 +2753,100 @@ async function handleSAPManage(
         );
       }
       return textResult(JSON.stringify(cachedFeatures, null, 2));
+    }
+
+    case 'create_package': {
+      const name = String(args.name ?? '').trim();
+      const description = String(args.description ?? '').trim();
+      const superPackage = String(args.superPackage ?? '').trim();
+      const softwareComponent = String(args.softwareComponent ?? '').trim();
+      const transportLayer = String(args.transportLayer ?? '').trim();
+      const transport = String(args.transport ?? '').trim();
+
+      if (!name) return errorResult('"name" is required for create_package action.');
+      if (!description) return errorResult('"description" is required for create_package action.');
+
+      checkOperation(client.safety, OperationType.Create, 'CreatePackage');
+
+      // Package allowlist is enforced on the parent package, not the new package name.
+      // This enables creating children in allowed parents like $TMP.
+      if (superPackage) {
+        checkPackage(client.safety, superPackage);
+      }
+
+      let effectiveTransport = transport || undefined;
+      const packageUrl = `/sap/bc/adt/packages/${encodeURIComponent(name)}`;
+
+      // Transport pre-flight for non-local parent packages when no transport is provided.
+      if (!effectiveTransport && superPackage && superPackage.toUpperCase() !== '$TMP') {
+        try {
+          const transportInfo = await getTransportInfo(client.http, client.safety, packageUrl, superPackage, 'I');
+          if (transportInfo.lockedTransport) {
+            effectiveTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${superPackage}" requires a transport number for package creation, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPManage(action="create_package", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+        } catch {
+          // Graceful fallback: let SAP enforce transport requirements if the pre-check fails.
+        }
+      }
+
+      const packageTypeRaw = String(args.packageType ?? '').trim();
+      const packageType: PackageCreateParams['packageType'] =
+        packageTypeRaw === 'development' || packageTypeRaw === 'structure' || packageTypeRaw === 'main'
+          ? packageTypeRaw
+          : undefined;
+
+      const xml = buildPackageXml({
+        name,
+        description,
+        superPackage: superPackage || undefined,
+        softwareComponent: softwareComponent || undefined,
+        transportLayer: transportLayer || undefined,
+        packageType,
+      });
+
+      await createObject(client.http, client.safety, '/sap/bc/adt/packages', xml, 'application/*', effectiveTransport);
+      return textResult(`Created package ${name}.`);
+    }
+
+    case 'delete_package': {
+      const name = String(args.name ?? '').trim();
+      const transport = String(args.transport ?? '').trim();
+      if (!name) return errorResult('"name" is required for delete_package action.');
+
+      checkOperation(client.safety, OperationType.Delete, 'DeletePackage');
+
+      const packageUrl = `/sap/bc/adt/packages/${encodeURIComponent(name)}`;
+      await client.http.withStatefulSession(async (session) => {
+        const lock = await lockObject(session, client.safety, packageUrl);
+        const effectiveTransport = transport || lock.corrNr || undefined;
+        try {
+          await deleteObject(session, client.safety, packageUrl, lock.lockHandle, effectiveTransport);
+        } finally {
+          try {
+            await unlockObject(session, packageUrl, lock.lockHandle);
+          } catch {
+            // Object may already be deleted — unlock failure is expected.
+          }
+        }
+      });
+
+      return textResult(`Deleted package ${name}.`);
     }
 
     case 'flp_list_catalogs': {
@@ -2524,7 +3026,7 @@ async function handleSAPManage(
 
     default:
       return errorResult(
-        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
       );
   }
 }

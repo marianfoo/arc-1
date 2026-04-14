@@ -31,7 +31,9 @@ export async function lockObject(
   }
 
   const resp = await http.post(`${objectUrl}?_action=LOCK&accessMode=${accessMode}`, undefined, undefined, {
-    Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result',
+    // Dual Accept: vendor-specific type for structured lock result parsing,
+    // plus wildcard fallback for SAP versions that don't support the vendor type.
+    Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result, application/*;q=0.8',
   });
 
   // Parse lock response (asx:abap format) — simple regex extraction
@@ -53,7 +55,7 @@ export async function createObject(
   safety: SafetyConfig,
   objectUrl: string,
   body: string,
-  contentType = 'application/xml',
+  contentType = 'application/*',
   transport?: string,
 ): Promise<string> {
   checkOperation(safety, OperationType.Create, 'CreateObject');

@@ -15,6 +15,16 @@
           "type": "generic",
           "path": "mta.yaml",
           "glob": false
+        },
+        {
+          "type": "json",
+          "path": "server.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "mcpb-manifest.json",
+          "jsonpath": "$.version"
         }
       ],
       "changelog-sections": [

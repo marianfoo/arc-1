@@ -1,31 +1,57 @@
 # Generate RAP OData Service — Research-First
 
-Generate a production-quality RAP OData service through deep system research, best-practice analysis, and iterative planning before writing a single line of code. This is the "measure twice, cut once" counterpart to the vibe-coding `generate-rap-service` skill.
+Generate a production-quality RAP OData service through deep system research, best-practice analysis, and iterative planning before writing a single line of code.
 
-This skill produces an A+ implementation plan informed by the target SAP system's actual capabilities, existing code patterns, SAP documentation, and user requirements — then executes it only after explicit user approval.
+This skill produces an implementation plan informed by the target SAP system's actual capabilities, existing code patterns, SAP documentation, and user requirements — then executes it only after explicit user approval.
 
-## When to Use This Skill vs. `generate-rap-service`
+## Smart Defaults (apply silently, do NOT ask before research)
 
-| Use `generate-rap-service` (vibe code) | Use THIS skill (research-first) |
-|---|---|
-| Quick prototyping / proof of concept | Production-quality service |
-| Simple CRUD with standard patterns | Complex domain with specific requirements |
-| User knows exactly what they want | User has a high-level idea, needs guidance |
-| `$TMP` / throwaway package | Transportable / long-lived code |
-| Single root entity, managed, UUID | May need unmanaged, compositions, custom keys |
+| Setting | Default | Rationale |
+|---|---|---|
+| Package | User's Z* package with transport | Production-ready; only use `$TMP` if user explicitly asks |
+| Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
+| Behavior scenario | Managed | Framework handles CRUD, most common |
+| OData version | V4 | Current SAP standard |
+| Draft | Yes on BTP, No on-prem | BTP Fiori Elements expects draft |
+| Strict mode | `strict ( 2 )` | Current RAP best practice |
+| Naming | SAP standard (see reference section) | Overridden by existing system patterns if found |
+| Admin fields | System-appropriate (`syuname`/`timestampl` or `abp_*`) | Detected from system type |
+
+These defaults are starting points — research in Phase 1 may override them based on existing system patterns.
 
 ## Input
 
 The user provides a natural language description of the business requirement. This can range from vague ("I need something to track maintenance orders") to detailed ("REST API for plant maintenance with equipment hierarchy, work orders, and time recording").
 
-Gather initial context — do NOT over-interview at this stage. Research will surface the right questions later.
+Only the **business requirement** is required. Gather initial context — do NOT over-interview at this stage. Research will surface the right questions later.
 
-- **Business requirement** (required) — what the service should do
-- **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — explicit transport recommended for create actions in transportable packages; ARC-1 auto-propagates lock `corrNr` for subsequent updates when omitted)
-- **Any known constraints** (optional — e.g., "must use existing table ZMAINT_ORDER", "needs to integrate with PM module")
+Optionally, the user may specify:
+- **Package** (required — ask if not provided; only default to `$TMP` if user explicitly says so)
+- **Transport request** (only needed for non-`$TMP` packages — resolved in Phase 1-pre)
+- **Any known constraints** (e.g., "must use existing table ZMAINT_ORDER", "needs to integrate with PM module")
 
 If the user provides just a description, proceed directly to research. Questions come AFTER research, when you know enough to ask the right ones.
+
+---
+
+## Phase 1-pre: Resolve Package and Transport
+
+Ask the user for their target package if not provided. Then resolve the transport request (skip only if package is `$TMP`):
+
+```
+SAPTransport(action="check", objectType="DDLS", objectName="<placeholder_name>", package="<package>")
+```
+
+This checks if a transport is required and returns existing transports for the package. If a transport is required:
+
+1. **User provided a transport**: Use it for all creates
+2. **Existing transport found**: Present the list and ask the user to pick one
+3. **No transport available**: Create one:
+   ```
+   SAPTransport(action="create", description="RAP Service: <Entity>", package="<package>")
+   ```
+
+**If transport is required but unavailable, STOP** — all write operations will fail without a valid transport for non-`$TMP` packages.
 
 ---
 
@@ -41,7 +67,7 @@ Detect what the system supports — this determines available RAP features, synt
 SAPManage(action="probe")
 ```
 
-**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
+**Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
 
 Extract and note:
 - **System type**: BTP ABAP Environment vs. On-Premise (and release level: 7.52, 7.54, 7.57, S/4HANA 2020+, etc.)
@@ -156,56 +182,40 @@ This reveals what lint rules and strictness levels are enforced.
 
 ### 1e. Best Practices Research — SAP Documentation
 
-Use the SAP documentation MCP server to research current RAP best practices relevant to the user's request.
+Use the SAP documentation MCP server to research current RAP best practices relevant to the user's request. The search terms below are **starting suggestions** — adapt them based on the user's specific business requirement and the architecture decisions that need to be made. Craft search queries that target the gaps in your knowledge for this particular service.
 
-**Core RAP patterns:**
+**Example search terms** (adapt to the user's spec):
 
 ```
 search("RAP managed business object implementation best practices")
-```
-
-```
 search("RAP behavior definition managed scenario CDS view entity")
 ```
 
-**Domain-specific patterns** (based on user's business requirement):
+**Domain-specific** — tailor to the user's business domain:
 
 ```
 search("<business_domain> RAP example SAP")
 ```
 
-For example, if the user wants a travel app:
-```
-search("RAP travel booking managed scenario example")
-```
+For example, if the user wants a travel app: `search("RAP travel booking managed scenario example")`
 
-**Architecture decisions:**
+**Architecture decisions** — search only for topics relevant to this service:
 
 ```
 search("RAP managed vs unmanaged scenario when to use")
-```
-
-```
 search("RAP draft handling best practices Fiori Elements")
-```
-
-```
 search("RAP compositions parent child entity")
 ```
 
-**If the requirement suggests specific patterns:**
+**Specific patterns** — search if the requirement suggests them:
 
 ```
 search("RAP custom actions determination validation")
-```
-
-```
 search("RAP value help CDS annotation")
-```
-
-```
 search("RAP access control authorization")
 ```
+
+**Important:** Don't just run these searches verbatim. Analyze the user's spec and craft targeted queries that fill specific knowledge gaps. If the user asks for something unusual (e.g., integration with a specific SAP module, specific field types, custom numbering), search for those specifics.
 
 No need to research naming conventions at runtime — the official SAP naming schema is documented below in the "SAP Official Naming Conventions" reference section. Use it directly as the default.
 
@@ -528,14 +538,15 @@ If the system supports it and the artifact stack is straightforward:
 
 ```
 SAPWrite(action="batch_create", objects=[
-  {type: "DDLS", name: "<table>", description: "<desc>", source: "<ddl>"},
+  {type: "TABL", name: "<table>", description: "<desc>", source: "<ddl>"},
   {type: "DDLS", name: "ZI_<entity>", description: "<desc>", source: "<ddl>"},
   {type: "DDLS", name: "ZC_<entity>", description: "<desc>", source: "<ddl>"},
   {type: "BDEF", name: "ZI_<entity>", description: "<desc>", source: "<bdef>"},
   {type: "BDEF", name: "ZC_<entity>", description: "<desc>", source: "<bdef>"},
   {type: "DDLX", name: "ZC_<entity>", description: "<desc>", source: "<ddlx>"},
   {type: "SRVD", name: "ZSD_<entity>", description: "<desc>", source: "<srvd>"},
-  {type: "CLAS", name: "ZBP_I_<entity>", description: "<desc>", source: "<class>"}
+  {type: "CLAS", name: "ZBP_I_<entity>", description: "<desc>", source: "<class>"},
+  {type: "SRVB", name: "ZSB_<entity>_V4", description: "<desc>", serviceDefinition: "ZSD_<entity>", bindingType: "ODataV4-UI"}
 ], package="<package>", transport="<transport>")
 ```
 
@@ -609,21 +620,22 @@ After all artifacts are created and activated:
 
 Fix any issues found. Re-activate if needed.
 
-### 4e. Service Binding
+### 4e. Create and Publish Service Binding
 
-ARC-1 cannot create service bindings (SRVB) via the ADT API — SRVB is not a writable type. Instruct the user to create it manually:
+Create the service binding:
 
-**"The service binding must be created manually in ADT:**
+```
+SAPWrite(action="create", type="SRVB", name="ZSB_<entity>_V4", package="<package>", transport="<transport>",
+  serviceDefinition="ZSD_<entity>", bindingType="ODataV4-UI", description="<Entity> OData V4 Service")
+```
 
-1. **Right-click on the package** > New > Other ABAP Repository Object
-2. **Search for "Service Binding"** > Next
-3. **Name**: `ZSB_<ENTITY>_V4` (or `ZUI_<Entity>_O4` if using SAP naming)
-4. **Description**: `<Entity> OData V4 Service`
-5. **Binding Type**: OData V4 - UI (or OData V2 - UI if V2 was chosen)
-6. **Service Definition**: `ZSD_<ENTITY>` (or `ZUI_<Entity>`)
-7. **Finish** and **Activate**"
+Activate the service binding:
 
-After the user creates and activates the binding, publish it:
+```
+SAPActivate(type="SRVB", name="ZSB_<entity>_V4")
+```
+
+Publish the service binding (makes the OData service available):
 
 ```
 SAPActivate(action="publish_srvb", name="ZSB_<entity>_V4")
@@ -634,6 +646,8 @@ Verify the publish status and service URL:
 ```
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
+
+⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true` and a service URL. If not published, retry `publish_srvb`.
 
 ### 4f. Preview the Service
 
@@ -669,8 +683,8 @@ RAP Service Generation Complete!
   [x] Metadata extension: ZC_<Entity>
   [x] Service definition: ZSD_<Entity>
   [x] Behavior pool class: ZBP_I_<Entity>
-  [ ] Service binding: ZSB_<Entity>_V4 (create manually in ADT — see Phase 4e)
-  [ ] Service binding published (publish after creating — use SAPActivate publish_srvb)
+  [x] Service binding: ZSB_<Entity>_V4
+  [x] Service binding published
 
 ## Quality Checks
   [x] All artifacts activated successfully
@@ -735,12 +749,14 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 
 | Error | Cause | Fix |
 |---|---|---|
-| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Object already exists | Name collision | Search existing object, propose different name or offer to update |
 | Feature not supported | System version too old | Adapt plan to available features |
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |
 | Lint blocks write | Code doesn't match lint rules | Adjust generated code to pass lint, or check if lint config is too strict |
 | BDEF syntax error | Wrong field aliases or entity references | Cross-check CDS aliases with BDEF field references |
+| Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Phase 1-pre |
+| Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
 
 ---
 
@@ -762,7 +778,6 @@ This skill prioritizes **correctness and consistency** over speed. The extra res
 - **Custom CDS functions/actions** (plan them, implement standard CRUD, add as follow-up)
 - **Fiori app generation** (generates the OData service; Fiori Elements app is auto-generated from annotations)
 - **Access control (DCL)** — ARC-1 does not yet support DCL read/write (FEAT-37). Create manually in ADT. This is the main gap for a fully automated e2e RAP stack.
-- **Service binding creation (SRVB)** — SRVB is not a writable type via ADT API. Must be created manually in ADT.
 
 ### Relationship to Other Skills
 

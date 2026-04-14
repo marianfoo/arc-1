@@ -29,6 +29,8 @@ RUN npm prune --omit=dev
 # --- Runtime Stage -----------------------------------------------------------
 FROM node:22-alpine
 
+LABEL io.modelcontextprotocol.server.name="io.github.marianfoo/arc-1"
+
 # tini: proper PID 1 init (handles SIGTERM gracefully)
 # ca-certificates: needed for HTTPS connections to SAP systems
 RUN apk add --no-cache tini ca-certificates

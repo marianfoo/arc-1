@@ -4,15 +4,24 @@ Generate RAP determination and validation implementations for an existing behavi
 
 This skill replicates SAP Joule's "RAP Logic Prediction" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Entity access | `IN LOCAL MODE` always | Inside behavior pool, no auth check needed |
+| Message style | Hardcoded text via `new_message_with_text()` | Simplest for prototyping; use MSAG for production (see Notes) |
+| Scope | All empty methods | User can narrow after seeing the list |
+| Error handling | `FAILED` + `REPORTED` structures | Standard RAP error propagation |
+
 ## Input
 
-The user provides a behavior definition name (e.g., `ZI_TRAVEL`). Ask the user for:
+The user provides a behavior definition name (e.g., `ZI_TRAVEL`).
 
-- **Behavior definition name** (required) — the interface BDEF name (e.g., `ZI_TRAVEL`)
-- **Specific determination/validation** (optional — if omitted, list all and let user choose)
-- **Behavior description** (optional) — natural language description of desired logic (e.g., "calculate total price from line items", "validate status transitions")
+Only the **behavior definition name** is required. If the user provides just a BDEF name, apply Smart Defaults and proceed to read the stack and present available methods.
 
-If the user provides just a BDEF name, proceed to read the stack and present available methods.
+Optionally, the user may specify:
+- **Specific determination/validation** (default: list all and let user choose)
+- **Behavior description** — natural language description of desired logic (e.g., "calculate total price from line items", "validate status transitions")
 
 ## Step 1: Read the RAP Stack
 
@@ -24,7 +33,7 @@ Read the behavior definition, CDS view, and behavior pool to understand the comp
 SAPRead(type="BDEF", name="<bdef_name>")
 ```
 
-**Note:** If the BDEF read fails with 404 or 415, RAP may not be available on this system. Run `SAPManage(action="probe")` to verify — check that `rap.available = true`. If RAP is unavailable, inform the user and stop.
+⚠️ **FAIL-FAST GATE**: If the BDEF read fails with 404, the object may not exist — verify the name via `SAPSearch`. If it fails with 415, check `SAPManage(action="probe")` for system info and inform the user about the issue.
 
 Parse the BDEF source to identify:
 - **Scenario**: managed / unmanaged / abstract
@@ -424,7 +433,7 @@ ENDMETHOD.
 
 | Error | Cause | Fix |
 |---|---|---|
-| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Method not found in behavior pool | Class name in BDEF doesn't match actual class | Check `implementation in class` in BDEF source, verify class exists |
 | Syntax error: `<entity>` unknown in `READ ENTITIES` | Wrong entity name or alias | Use the exact alias from the BDEF `define behavior for ... alias <Alias>` |
 | Syntax error: field `<Field>` unknown | Field alias doesn't match CDS view | Check CDS view field aliases — BDEF uses CDS aliases, not table field names |
@@ -448,6 +457,7 @@ ENDMETHOD.
 - **Feature control**: No dynamic feature control (`instance_features`). Add manually.
 - **Authorization**: No `authorization master` implementation. Add authorization checks manually.
 - **Cross-BO logic**: No inter-business-object operations. Each determination/validation operates within its own BO.
+- **Message class creation**: Uses hardcoded text for messages. For production services, create a message class afterward: `SAPWrite(action="create", type="MSAG", name="Z<MSG_CLASS>", ...)` and replace `new_message_with_text()` with `new_message()` referencing the message class.
 
 ### When to Use This Skill
 

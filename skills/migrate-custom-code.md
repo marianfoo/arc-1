@@ -4,15 +4,25 @@ ATC-driven S/4HANA custom code migration assistant with automated fix proposals.
 
 This skill replicates SAP Joule's "Custom Code Migration" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices). It runs ATC readiness checks, groups and explains findings, and generates replacement code following modern ABAP patterns.
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Object type | Auto-detect via SAPSearch | Don't make user look up the type |
+| ATC variant | System default | Use what's configured on the system |
+| Scope | `fix` (explain + fix proposals) | Most actionable output |
+| Priority filter | All priorities (start with Priority 1 errors) | Don't miss anything, but fix most critical first |
+
 ## Input
 
-The user provides an object or package to check for S/4HANA migration readiness. Ask the user for:
-- **Object name** (required, e.g., `ZCL_SALES_HANDLER`, `Z_REPORT_POSTING`, `ZSALES_PKG`)
-- **Object type** (required — PROG, CLAS, FUNC, FUGR, or DEVC for package-level checks)
-- **Target release variant** (optional — e.g., `S4HANA_2023`, `S4HANA_READINESS`; default: system default ATC variant)
-- **Scope** (optional — `explain` for findings explanation only, `fix` for explanation + fix proposals; default: `fix`)
+The user provides an object or package to check (e.g., `ZCL_SALES_HANDLER`, `Z_REPORT_POSTING`, `ZSALES_PKG`).
 
-If the user provides just an object name, auto-detect the type via SAPSearch and proceed with the default variant and fix scope.
+Only the **object name** is required. If the user provides just an object name, auto-detect the type and proceed with the default variant and fix scope.
+
+Optionally, the user may specify:
+- **Object type** (default: auto-detect via SAPSearch)
+- **Target release variant** (e.g., `S4HANA_2023`, `S4HANA_READINESS`; default: system default)
+- **Scope** — `explain` (findings only) or `fix` (explain + fix proposals; default: `fix`)
 
 ## Step 1: Run ATC Readiness Check
 

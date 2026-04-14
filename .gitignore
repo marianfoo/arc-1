@@ -16,8 +16,10 @@ INFRASTRUCTURE.md
 MEMORY.md
 
 # MCP config (contains credentials)
-.mcp.json
+# Note: root .mcp.json is excluded from this rule — it's the Claude Code plugin
+# config and contains no credentials (uses env var references only).
 .mcp*.json
+!/.mcp.json
 ./claude/abap-adt-api-lib/
 
 # Binaries

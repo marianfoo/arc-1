@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
+_Last updated: 2026-04-14 (fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAuth, multi-system; SAP Joule Q2 2026 GA announced)_
 
 ## Legend
 - ✅ = Supported
@@ -17,13 +17,13 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
 | Language | TypeScript | Go 1.24 | TypeScript | TypeScript | Python 3.12 | TypeScript | TypeScript | JavaScript (compiled TS) | Python 3.10+ |
-| Tool count | 11 intent-based | 1-99 (3 modes) | ~15 | 13 | 15 | 303 (4 tiers) | 3 (hierarchical) | 25 | 28+ CLI commands (not MCP) |
+| Tool count | 11 intent-based | 1-99 (3 modes) | ~15 | 13 | 15 | 316 (4 tiers) | 3 (hierarchical) | 53 | 28+ CLI commands (not MCP) |
 | ADT client | Custom (undici/fetch) | Custom (Go) | abap-adt-api | Custom (axios) | Custom (aiohttp) | Custom (axios) | SAP Cloud SDK | abap-adt-api | Custom (requests) |
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) | N/A (Python, git install) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Stars | — | 242 | 109 | 103 | 29 | 26 | 119 | 0 (new) | 77 |
-| Active development | ✅ | ✅ Very (v2.39.0+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Jan 2025) | ✅ Very (v5.0.8) | ⚠️ Moderate | ✅ New (Mar 2026) | ✅ Very (since 2018) |
-| Release count | — | 32+ | — | — | — | 85+ (5 months) | — | 1 | rolling "latest" |
+| Stars | — | 273 | 109 | 103 | 33 | 29 | 120 | 32 | 79 |
+| Active development | ✅ | ✅ Very (v2.38.1) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v5.1.1) | ⚠️ Dormant (Jan 2026) | ✅ Very (53 tools, daily commits) | ✅ Very (since 2018) |
+| Release count | — | 32+ | — | — | — | 95+ (5 months) | — | rolling | rolling "latest" |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A | N/A |
 
 ## 2. MCP Transport
@@ -43,14 +43,15 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Cookie-based | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ (requests.Session) |
 | API Key (MCP) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A |
 | OIDC/JWT (MCP) | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| XSUAA OAuth | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| XSUAA OAuth | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ (Apr 2026) | ❌ |
 | BTP Service Key | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Principal Propagation | ✅ | ❌ | ❌ | ❌ | ✅ (X.509) | ✅ | ✅ | ❌ | ❌ |
+| MCP OAuth 2.0 per-user | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (Apr 2026) | ❌ |
 | SAML | ❌ | ✅ (v2.39.0+, PR #97) | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | X.509 Certificates | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Device Flow (OIDC) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Browser login page | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| Auth providers total | 4 | 2 | 1 | 1 | 5+ | 9 | 2 | 2 | 1 (Basic) |
+| Auth providers total | 4 | 2 | 1 | 1 | 5+ | 9 | 2 | 4 | 1 (Basic) |
 
 ## 4. Safety & Security
 
@@ -64,7 +65,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Dry-run mode | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Audit logging | ✅ | ❌ | ❌ | ❌ | ✅ (CloudWatch) | ❌ | ❌ | ❌ | ❌ |
 | Input sanitization | ✅ (Zod) | ✅ | ❌ | ⚠️ | ✅ (defusedxml) | ✅ (Zod) | ✅ (Zod) | ⚠️ | ⚠️ (argparse) |
-| MCP elicitation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (7 flows) | N/A |
+| MCP elicitation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (10+ flows) | N/A |
 | Try-finally lock safety | ✅ | ✅ | ❌ | N/A | ✅ | ✅ (v4.5.0) | N/A | ⚠️ (abap-adt-api) | ✅ |
 | MCP scope system (OAuth) | ✅ (2D: scopes+roles+safety) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A |
 
@@ -113,13 +114,19 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ (edit_method, Apr 2026) | ❌ |
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (abap run) |
-| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
-| Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ⚠️ (PR #149 in progress) |
+| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD, SRVB write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ⚠️ (BDEF create, SRVB publish) | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
+| Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ (PR #149 merged) |
 | Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (ADTObjectType) |
 | Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ (class write test_classes) |
+| Table write (TABL) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
+| Package create (DEVC) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
+| Service binding create (SRVB) | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
+| Message class write (MSAG) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
+| Message class write (MSAG) | ❌ (FEAT-47) | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
+| DCL write (DCLS) | ❌ (FEAT-37) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ |
 
 ## 7. Code Intelligence
 
@@ -143,11 +150,11 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Syntax check | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ | ✅ |
 | ATC checks | ✅ | ✅ | ✅ | ❌ | ✅ (with summary) | ❌ | N/A | ✅ (severity grouping) | ✅ (checkstyle/codeclimate) |
 | abaplint (local offline) | ✅ | ✅ (native Go port, 8 rules) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
-| Unit tests | ✅ | ✅ | ✅ | ❌ | ✅ (with coverage) | ✅ | N/A | ❌ | ✅ (with coverage + JUnit4/sonar) |
+| Unit tests | ✅ | ✅ | ✅ | ❌ | ✅ (with coverage) | ✅ | N/A | ✅ (Apr 2026) | ✅ (with coverage + JUnit4/sonar) |
 | CDS unit tests | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ❌ |
 | API release state (clean core) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
-| Fix proposals | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
-| PrettyPrint | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| Fix proposals | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ (Apr 2026) | ❌ |
+| PrettyPrint | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ (Apr 2026) | ❌ |
 | Migration analysis | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | N/A | ❌ | ❌ |
 
 ## 9. Transport / CTS
@@ -169,7 +176,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
 | Short dumps (ST22) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ❌ |
-| ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ❌ |
+| ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ (Apr 2026) | ❌ |
 | System messages (SM02) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0) | N/A | ❌ | ❌ |
 | Gateway error log (IWFND) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, on-prem) | N/A | ❌ | ❌ |
 | ADT feed reader (unified) | ⚠️ (dumps+traces) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, 5 types) | N/A | ❌ | ❌ |
@@ -188,7 +195,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | abapGit/gCTS | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (full gCTS + checkout/checkin) |
 | BTP Destination Service | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Cloud Connector proxy | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Multi-system support | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ (kubeconfig contexts) |
+| Multi-system support | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ (SAP UI Landscape XML, Apr 2026) | ✅ (kubeconfig contexts) |
 | OData bridge | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ (BSP, FLP via OData) |
 | Lua scripting engine | ❌ | ✅ (50+ bindings) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | WASM-to-ABAP compiler | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -201,7 +208,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Batch HTTP operations | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (multipart/mixed) | ❌ | ❌ | ❌ |
 | RAG-optimized tool descriptions | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v4.4.0) | ❌ | ❌ | ❌ |
 | Embeddable server (library mode) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Error intelligence (hints) | ⚠️ (LLM hints) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ (typed error hierarchy) |
+| Error intelligence (hints) | ⚠️ (LLM hints) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (extensive) | ✅ (typed error hierarchy) |
 
 ## 12. Token Efficiency
 
@@ -254,6 +261,9 @@ The following items were incorrectly marked in the previous version and have sin
 | VSP version | v2.32.0 | v2.39.0+ | Massive feature sprint Apr 2-8 (40+ commits) |
 | fr0ster version | v4.8.1 | v4.8.7 | Continued iteration |
 | fr0ster version | v4.8.7 | v5.0.8 (303 tools) | v5.0.7: 14 activation tools (+14), post-merge naming fix in v5.0.8 |
+| fr0ster version | v5.0.8 (303 tools) | v5.1.1 (316 tools) | v5.1.0: 13 Check handlers, Node 22 minimum, stdio log fix, CSRF fix |
+| dassian-adt | 0 stars, 25 tools, no OAuth | 32 stars, 53 tools, OAuth/XSUAA, multi-system | Explosive growth: 28 new tools, OAuth, multi-system in 2 weeks |
+| sapcli stars | 77 | 79 | PR #149 merged (domain support), PR #147 (auth fields), HTTP refactor |
 
 ---
 
@@ -271,9 +281,11 @@ The following items were incorrectly marked in the previous version and have sin
 9. **npm + Docker + release-please** — Most professional distribution pipeline.
 
 ### Biggest Competitive Threats
-1. **vibing-steampunk** (242 stars) — Community favorite. Now has Streamable HTTP (v2.38.0), SAML SSO (v2.39.0+, PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening. Now defaults to hyperfocused mode (1 tool). Still lacks BTP OAuth / Destination Service but adding auth options.
-2. **fr0ster** (v5.0.8, 90+ releases) — Closest enterprise competitor. 303 tools, 9 auth providers, TLS, RFC, embeddable. v5.0.7 added 14 activation tools (group + per-type). v5.0.0 added unified feed tools (SM02, gateway errors), adt-clients 4.0 factory API. Complex multi-repo but ambitious.
-3. **btp-odata-mcp** (119 stars) — Different category (OData not ADT) but high adoption. Could expand into ADT territory.
+1. **vibing-steampunk** (273 stars) — Community favorite. Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening. Defaults to hyperfocused mode (1 tool). Still lacks BTP OAuth / Destination Service. Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (#91, #98).
+2. **fr0ster** (v5.1.1, 95+ releases, 29 stars) — Closest enterprise competitor. 316 tools, 9 auth providers, TLS, RFC, embeddable. v5.1.0 added 13 Check handlers. Ongoing bug fixes reveal complexity cost of 316-tool surface area (stdio log leaks, CSRF corruption, lock leaks).
+3. **dassian-adt** (32 stars, 53 tools) — **Fastest-growing threat.** Went from 0 to 32 stars in 2 weeks. Added OAuth/XSUAA, multi-system support, 28 new tools (fix proposals, unit tests, traces, revisions, pretty print). Azure-focused. Still lacks safety system, BTP Destination/PP, caching, linting.
+4. **SAP Joule / Official ABAP MCP Server** — SAP announced Q2 2026 GA for ABAP Cloud Extension for VS Code with built-in agentic AI. Initial scope: RAP UI service development. Will reshape landscape — community servers become complementary.
+5. **btp-odata-mcp** (120 stars) — Different category (OData not ADT). Dormant since Jan 2026. High stars but no recent development.
 
 ### Key Gaps to Close
 

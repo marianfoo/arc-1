@@ -100,22 +100,43 @@ const SAPREAD_DESC_BTP =
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
+const SAPWRITE_TYPES_ONPREM = [
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'INCL',
+  'DDLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'TABL',
+  'DOMA',
+  'DTEL',
+  'MSAG',
+];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB', 'TABL', 'DOMA', 'DTEL', 'MSAG'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL, MSAG. ' +
+  'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
+  'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
+  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name) plus optional bindingType/category. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
-  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks. Pass "objects" array with dependency order.';
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD). Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL, MSAG. ' +
+  'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
+  'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
+  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name) plus optional bindingType/category. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
-  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks.';
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD).';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -195,14 +216,16 @@ const SAPTRANSPORT_DESC_ONPREM =
   'Manage CTS transport requests (SE09/SE10 equivalent). ' +
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
-  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent). ' +
+  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
+  'check (check if a package requires a transport — provide type, name, package). ' +
   'Transport IDs look like A4HK900123. Status: D=modifiable, R=released.';
 
 const SAPTRANSPORT_DESC_BTP =
   'Manage transport requests (BTP ABAP Environment, SE09/SE10 equivalent). ' +
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
-  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent). ' +
+  'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
+  'check (check if a package requires a transport — provide type, name, package). ' +
   'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
   'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
 
@@ -210,13 +233,15 @@ const SAPTRANSPORT_DESC_BTP =
 
 const SAPMANAGE_DESC_ONPREM =
   'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
-  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports, FLP customization).\n\n' +
+  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports, FLP customization). Also handles package (DEVC) lifecycle operations.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
   '- "probe": Re-probe the SAP system now (makes 8 parallel requests, ~1-2s). ' +
   'Use this on first use or if you suspect feature availability has changed.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
+  '- "delete_package": Delete an existing package.\n' +
   '- "flp_list_catalogs": List FLP business catalogs.\n' +
   '- "flp_list_groups": List FLP groups.\n' +
   '- "flp_list_tiles": List tiles in a catalog (requires "catalogId").\n' +
@@ -231,11 +256,13 @@ const SAPMANAGE_DESC_ONPREM =
 
 const SAPMANAGE_DESC_BTP =
   'Probe and report SAP system capabilities (BTP ABAP Environment). ' +
-  'Returns feature status and system type.\n\n' +
+  'Returns feature status and system type. Also handles package (DEVC) lifecycle operations.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe.\n' +
   '- "probe": Re-probe the SAP system now.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
+  '- "delete_package": Delete an existing package.\n' +
   '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.\n\n' +
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
@@ -399,7 +426,9 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           type: {
             type: 'string',
             enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
-            description: 'Object type (for create/update/delete/edit_method)',
+            description: btp
+              ? 'Object type (for create/update/delete/edit_method). Supported: CLAS, INTF, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL.'
+              : 'Object type (for create/update/delete/edit_method). Supported: PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL.',
           },
           name: { type: 'string', description: 'Object name (for create/update/delete/edit_method)' },
           source: { type: 'string', description: 'ABAP source code (for create/update/edit_method)' },
@@ -412,8 +441,15 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             description:
               'Object description for create action (defaults to name if omitted). Max 60 chars for most types.',
           },
-          package: { type: 'string', description: 'Package for new objects (default $TMP)' },
-          transport: { type: 'string', description: 'Transport request number (for transportable packages)' },
+          package: {
+            type: 'string',
+            description: 'Package for new objects (default $TMP). Non-$TMP packages require a transport number.',
+          },
+          transport: {
+            type: 'string',
+            description:
+              'Transport request number. Required for non-$TMP packages. Use SAPTransport(action="list") to find or SAPTransport(action="create") to create one.',
+          },
           dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type (e.g., CHAR, NUMC, DEC)' },
           length: { type: 'number', description: 'DOMA/DTEL: data type length' },
           decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
@@ -451,6 +487,14 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
           defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
           changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
+          serviceDefinition: { type: 'string', description: 'SRVB: service definition name (SRVD) to bind to' },
+          bindingType: { type: 'string', description: 'SRVB: binding type (default: ODATA)' },
+          category: {
+            type: 'string',
+            enum: ['0', '1'],
+            description: 'SRVB: binding category (0=UI, 1=Web API; default: 0)',
+          },
+          version: { type: 'string', description: 'SRVB: service version (default: 0001)' },
           objects: {
             type: 'array',
             items: {
@@ -459,7 +503,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 type: {
                   type: 'string',
                   enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
-                  description: 'Object type',
+                  description: 'Object type (includes TABL for RAP stack bootstrapping)',
                 },
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
@@ -497,13 +541,21 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
                 defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
                 changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
+                serviceDefinition: { type: 'string', description: 'SRVB: service definition (SRVD)' },
+                bindingType: { type: 'string', description: 'SRVB: binding type (default ODATA)' },
+                category: {
+                  type: 'string',
+                  enum: ['0', '1'],
+                  description: 'SRVB: binding category (0=UI, 1=Web API)',
+                },
+                version: { type: 'string', description: 'SRVB: service version (default 0001)' },
               },
               required: ['type', 'name'],
             },
             description:
               'For batch_create: ordered list of objects to create and activate. Each object needs type, name, and source (if applicable). ' +
-              'Objects are created and activated in array order — put dependencies first (e.g., CDS view before projection, BDEF after CDS views). ' +
-              'Example: [{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
+              'Objects are created and activated in array order — put dependencies first (e.g., TABL before DDLS, BDEF after DDLS). ' +
+              'Example: [{type:"TABL",name:"ZTRAVEL",source:"..."},{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
           },
         },
         required: ['action'],
@@ -744,6 +796,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'features',
               'probe',
               'cache_stats',
+              'create_package',
+              'delete_package',
               'flp_list_catalogs',
               'flp_list_groups',
               'flp_list_tiles',
@@ -754,7 +808,36 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'flp_delete_catalog',
             ],
             description:
-              'Action to execute. FLP actions manage catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+              'Action to execute. Includes package lifecycle (create/delete) and FLP actions for catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+          },
+          name: {
+            type: 'string',
+            description: 'Package name (required for create_package and delete_package).',
+          },
+          description: {
+            type: 'string',
+            description: 'Package description (required for create_package).',
+          },
+          superPackage: {
+            type: 'string',
+            description: 'Parent package for create_package (defaults to empty root package).',
+          },
+          softwareComponent: {
+            type: 'string',
+            description: 'Software component for create_package (default: LOCAL).',
+          },
+          transportLayer: {
+            type: 'string',
+            description: 'Transport layer for create_package (optional; required by some transportable landscapes).',
+          },
+          packageType: {
+            type: 'string',
+            enum: ['development', 'structure', 'main'],
+            description: 'Package type for create_package (default: development).',
+          },
+          transport: {
+            type: 'string',
+            description: 'Optional transport request (corrNr) for create_package or delete_package.',
           },
           catalogId: {
             type: 'string',
@@ -808,7 +891,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive'],
+            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check'],
             description:
               'list: show transports (defaults to current user, modifiable only). ' +
               'get: fetch transport details including tasks and objects. ' +
@@ -816,7 +899,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'release: release a single transport or task. ' +
               'delete: delete a transport (use recursive=true to delete tasks first). ' +
               'reassign: change transport owner (use recursive=true for tasks too). ' +
-              'release_recursive: release all unreleased tasks first, then the transport itself.',
+              'release_recursive: release all unreleased tasks first, then the transport itself. ' +
+              'check: check if a transport is needed for a package/object (requires type, name, package).',
           },
           id: {
             type: 'string',
@@ -824,6 +908,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'Transport request ID, e.g. A4HK900123 (required for get/release/delete/reassign/release_recursive)',
           },
           description: { type: 'string', description: 'Transport description text (required for create)' },
+          name: { type: 'string', description: 'Object name (for check action)' },
+          package: { type: 'string', description: 'Package name (for check action)' },
           user: {
             type: 'string',
             description:
@@ -835,8 +921,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           },
           type: {
             type: 'string',
-            enum: ['K', 'W', 'T'],
-            description: 'Transport type for create: K=Workbench (default), W=Customizing, T=Transport of Copies',
+            description:
+              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check: object type (PROG, CLAS, DDLS, etc.)',
           },
           owner: { type: 'string', description: 'New owner SAP username (required for reassign)' },
           recursive: {

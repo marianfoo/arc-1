@@ -2,9 +2,9 @@
 
 > **Products**: ABAP Cloud Extension for VS Code + ABAP MCP Server + ABAP Language Server
 > **Vendor**: SAP SE
-> **Status**: Pre-GA — announced TechEd 2025, GA planned Q2 2026 (April–June 2026)
+> **Status**: Pre-GA — announced TechEd 2025, **GA confirmed Q2 2026** (2026 roadmap blog published Apr 2026)
 > **Impact**: High — this is SAP's official entry into the MCP/agentic ABAP development space
-> **Last updated**: 2026-04-04
+> **Last updated**: 2026-04-14
 
 ---
 

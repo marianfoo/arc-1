@@ -75,7 +75,9 @@ flowchart TD
     RTYPE -->|Find objects| SS[SAPSearch]
     RTYPE -->|System info| SR3[SAPRead type=SYSTEM]
 
-    READ -->|Write| SW[SAPWrite]
+    READ -->|Write| WTYPE{Local or transportable package?}
+    WTYPE -->|Local $TMP| SW[SAPWrite]
+    WTYPE -->|Transportable| ST[SAPTransport check → SAPWrite with transport]
     READ -->|Activate| SA[SAPActivate]
     READ -->|Navigate| SN[SAPNavigate]
     READ -->|Diagnose| SD[SAPDiagnose]
@@ -114,7 +116,9 @@ flowchart TD
 
 | Task | Tool | Parameters |
 |------|------|------------|
-| Create new object | `SAPWrite` | `action=create, type=PROG, name=ZTEST, source=...` |
+| Create new object (local) | `SAPWrite` | `action=create, type=PROG, name=ZTEST, source=...` |
+| Create in transport package | `SAPWrite` | `action=create, type=PROG, name=ZTEST, source=..., package=ZDEV, transport=A4HK900123` |
+| Check transport requirement | `SAPTransport` | `action=check, type=CLAS, name=ZCL_TEST, package=ZDEV` |
 | Update existing | `SAPWrite` | `action=update, type=CLAS, name=ZCL_TEST, source=...` |
 | Delete object | `SAPWrite` | `action=delete, type=PROG, name=ZTEST` |
 | Activate | `SAPActivate` | `name=ZCL_TEST, type=CLAS` |
@@ -161,7 +165,37 @@ Step 1: SAPRead(type="MESSAGES", name="ZRAY_00")
         → Returns JSON with all messages
 ```
 
-### 4. Investigate Runtime Errors
+### 4. Create Objects in Transportable Packages
+
+When creating objects in non-`$TMP` packages, a transport number is required. ARC-1 detects this automatically and returns guidance, but the optimal workflow is:
+
+```
+Step 1: SAPTransport(action="check", type="CLAS", name="ZCL_ORDER", package="ZDEV")
+        → Returns whether a transport is needed, existing transports, any locked transport
+
+Step 2: (if transport needed) SAPTransport(action="list")
+        → Returns modifiable transports for the current user
+        OR
+        SAPTransport(action="create", description="Create ZCL_ORDER class")
+        → Creates a new transport and returns the transport ID
+
+Step 3: SAPWrite(action="create", type="CLAS", name="ZCL_ORDER", source="...", package="ZDEV", transport="A4HK900123")
+        → Creates the object in the transportable package with the transport number
+```
+
+**Shortcut:** If you skip the check step, ARC-1's pre-flight check will detect the missing transport and return an actionable error with existing transports listed — you can then pick one and retry.
+
+**Batch creation:** The same flow applies to `batch_create`. Provide the `transport` parameter at the top level — all objects in the batch use the same transport.
+
+```
+SAPWrite(action="batch_create", package="ZDEV", transport="A4HK900123", objects=[
+  {type:"DDLS", name:"ZI_TRAVEL", source:"..."},
+  {type:"BDEF", name:"ZI_TRAVEL", source:"..."},
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"..."}
+])
+```
+
+### 5. Investigate Runtime Errors
 
 ```
 Step 1: SAPDiagnose(action="dumps", user="DEVELOPER")
@@ -169,6 +203,47 @@ Step 1: SAPDiagnose(action="dumps", user="DEVELOPER")
 
 Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
         → Returns full dump with stack trace
+```
+
+### 6. RAP Stack Creation (CDS + BDEF + SRVD)
+
+Create a RAP (RESTful ABAP Programming) business object stack. Order matters — dependencies first.
+
+**Version consideration:** `define table entity` syntax requires ABAP Cloud (BTP) or SAP_BASIS >= 757. On older on-premise systems (7.50-7.56), use DDIC transparent tables + CDS view entities instead.
+
+```
+Step 1: Check system capabilities
+        SAPRead(type="SYSTEM")
+        → Check SAP_BASIS release for syntax support
+
+Step 2: Create database tables (on-prem < 757) OR use define table entity (BTP / >= 757)
+        SAPWrite(action="create", type="DDLS", name="ZI_TRAVEL",
+          source="define root view entity ZI_Travel as select from ztravel { ... }")
+
+Step 3: Create behavior definition
+        SAPWrite(action="create", type="BDEF", name="ZI_TRAVEL",
+          source="managed implementation in class ZBP_I_TRAVEL unique;\ndefine behavior for ZI_TRAVEL\n{ ... }")
+
+Step 4: Create service definition
+        SAPWrite(action="create", type="SRVD", name="ZSD_TRAVEL",
+          source="define service ZSD_Travel { expose ZI_Travel; }")
+
+Step 5: Create behavior implementation class
+        SAPWrite(action="create", type="CLAS", name="ZBP_I_TRAVEL",
+          source="CLASS zbp_i_travel DEFINITION PUBLIC ABSTRACT FINAL...")
+
+Step 6: Activate all objects
+        SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"},{type:"CLAS",name:"ZBP_I_TRAVEL"}])
+```
+
+**Or use batch creation for simpler workflow:**
+```
+SAPWrite(action="batch_create", package="$TMP", objects=[
+  {type:"DDLS", name:"ZI_TRAVEL", source:"define root view entity..."},
+  {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
+  {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
+])
 ```
 
 ---
@@ -183,12 +258,30 @@ Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
 | `"ASC" is not allowed` | Used SQL `ASC` | Use `ASCENDING` instead |
 | `LIMIT not recognized` | Used SQL `LIMIT` | Use `maxRows` parameter |
 
+### SAPWrite Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Package requires transport | Non-`$TMP` package, no transport provided | Use `SAPTransport(action="list")` or `SAPTransport(action="create")` to get a transport ID, then pass it via `transport` parameter |
+| Package not in allowed list | Package not in `--allowed-packages` | Admin must add the package to the allow list |
+| "define table entity" rejected | Syntax requires SAP_BASIS >= 757 | Use DDIC tables + CDS view entities on older systems |
+| CDS reserved keyword | Field name like `position`, `value`, `type` | Rename field (e.g., `playing_position`, `field_value`) |
+
 ### SAPRead Errors
 
 | Error | Cause | Solution |
 |-------|-------|----------|
 | 404 Not Found | Object doesn't exist | Check name with SAPSearch first |
 | Missing `group` | FUNC without function group | Provide `group` parameter |
+| Empty DDLS source | DDLS exists but has no source | Write source via SAPWrite |
+
+### Server Errors (5xx)
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| 500 Internal Server Error | SAP application error | Wait 10-30 seconds and retry. Check `SAPDiagnose(action="dumps")` for short dumps |
+| 502 Bad Gateway | Proxy/gateway issue | Check SAP system availability via `SAPRead(type="SYSTEM")` |
+| 503 Service Unavailable | Server overloaded or restarting | Wait and retry. Common after heavy write/delete cycles |
 
 ---
 

@@ -62,10 +62,12 @@ export async function activate(
   <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"/>
 </adtcore:objectReferences>`;
 
+  // Use application/* wildcard for Content-Type — matches how ADT Eclipse
+  // and abap-adt-api send activation requests. More resilient across SAP versions.
   const resp = await http.post(
     `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
     body,
-    'application/xml',
+    'application/*',
     { Accept: 'application/xml' },
   );
 
@@ -103,7 +105,7 @@ ${refs}
   const resp = await http.post(
     `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
     body,
-    'application/xml',
+    'application/*',
     { Accept: 'application/xml' },
   );
 

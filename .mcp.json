@@ -1,0 +1,6 @@
+{
+  "arc-1": {
+    "command": "npx",
+    "args": ["-y", "arc-1@latest"]
+  }
+}

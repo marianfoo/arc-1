@@ -208,6 +208,27 @@ describe('SAPWriteSchema', () => {
     }
   });
 
+  it('accepts SRVB fields and validates category enum', () => {
+    const srvb = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'SRVB',
+      name: 'ZSB_TRAVEL_O4',
+      serviceDefinition: 'ZSD_TRAVEL',
+      bindingType: 'ODATA',
+      category: '0',
+    });
+    expect(srvb.success).toBe(true);
+
+    const invalidCategory = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'SRVB',
+      name: 'ZSB_TRAVEL_O4',
+      serviceDefinition: 'ZSD_TRAVEL',
+      category: '2',
+    });
+    expect(invalidCategory.success).toBe(false);
+  });
+
   it('accepts edit_method with all fields', () => {
     const result = SAPWriteSchema.safeParse({
       action: 'edit_method',
@@ -216,6 +237,16 @@ describe('SAPWriteSchema', () => {
       method: 'get_name',
       source: 'METHOD get_name.\nENDMETHOD.',
       transport: 'DEVK900001',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts TABL for source-based writes', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'TABL',
+      name: 'ZTABL_TEST',
+      source: 'define table ztabl_test { key client : abap.clnt; key id : abap.numc(8); }',
     });
     expect(result.success).toBe(true);
   });
@@ -278,6 +309,10 @@ describe('SAPWriteSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'CLAS', name: 'Z' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DDLS', name: 'Z' }).success).toBe(true);
+    expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'TABL', name: 'ZTABL' }).success).toBe(true);
+    expect(
+      SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'SRVB', name: 'ZSB', serviceDefinition: 'ZSD' }).success,
+    ).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DOMA', name: 'ZDOMAIN' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DTEL', name: 'ZDELEM' }).success).toBe(true);
   });
@@ -460,6 +495,15 @@ describe('SAPManageSchema', () => {
     expect(SAPManageSchema.safeParse({ action: 'features' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'probe' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'cache_stats' }).success).toBe(true);
+    expect(
+      SAPManageSchema.safeParse({
+        action: 'create_package',
+        name: 'ZPKG',
+        description: 'Package',
+        superPackage: '$TMP',
+      }).success,
+    ).toBe(true);
+    expect(SAPManageSchema.safeParse({ action: 'delete_package', name: 'ZPKG' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_catalogs' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_groups' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_tiles', catalogId: 'ZCAT' }).success).toBe(true);

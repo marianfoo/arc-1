@@ -97,6 +97,47 @@ export class AdtApiError extends AdtError {
       msg.includes('icmenosession') || msg.includes('session timed out') || msg.includes('session no longer exists')
     );
   }
+
+  get isServerError(): boolean {
+    return this.statusCode >= 500;
+  }
+
+  /**
+   * Extract ALL localized messages from SAP's XML error response.
+   * SAP DDL save errors often return multiple messages with line/column detail.
+   * Returns only messages beyond the first (which is already in err.message).
+   */
+  static extractAllMessages(xml: string): string[] {
+    if (!xml) return [];
+    const matches = xml.matchAll(/<(?:\w+:)?localizedMessage[^>]*>([^<]+)</g);
+    const messages: string[] = [];
+    let first = true;
+    for (const match of matches) {
+      if (first) {
+        first = false;
+        continue; // Skip the first — it's already in extractCleanMessage
+      }
+      const text = match[1]?.trim();
+      if (text) messages.push(text);
+    }
+    return messages;
+  }
+
+  /**
+   * Extract key-value properties from SAP's XML error response.
+   * Properties often contain line numbers, message IDs, and other diagnostic detail.
+   */
+  static extractProperties(xml: string): Record<string, string> {
+    if (!xml) return {};
+    const props: Record<string, string> = {};
+    const matches = xml.matchAll(/<entry\s+key="([^"]+)">([^<]*)<\/entry>/g);
+    for (const match of matches) {
+      const key = match[1]?.trim();
+      const value = match[2]?.trim();
+      if (key && value) props[key] = value;
+    }
+    return props;
+  }
 }
 
 /** Network-level error (DNS, connection refused, timeout) */

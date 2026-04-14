@@ -4,15 +4,26 @@ Generate an ABAP Unit test class for a CDS entity using the CDS Test Double Fram
 
 This skill replicates SAP Joule's "CDS Unit Test Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Test class name | `ZCL_TEST_<entity_name>` | Standard convention |
+| Package | `$TMP` | Fast prototyping |
+| Test scope | All testable semantics | User can narrow after seeing the list |
+| Risk level | `HARMLESS` | CDS test doubles don't modify real data |
+| Duration | `SHORT` | Unit tests should be fast |
+
 ## Input
 
-The user provides a CDS entity name (e.g., `ZI_SALESORDER`, `ZC_TRAVEL`). Ask the user for:
-- **CDS entity name** (required)
-- **Test class name** (optional — default: `ZCL_TEST_<entity_name>`)
-- **Package** (optional — default: `$TMP`)
-- **Transport request** (optional — only if package is transportable)
+The user provides a CDS entity name (e.g., `ZI_SALESORDER`, `ZC_TRAVEL`).
 
-If the user provides just an entity name, use defaults and proceed.
+Only the **CDS entity name** is required. If the user provides just an entity name, apply Smart Defaults and proceed immediately.
+
+Optionally, the user may specify:
+- **Test class name** (default: `ZCL_TEST_<entity_name>`)
+- **Package** (default: `$TMP`)
+- **Transport request** (only needed for non-`$TMP` packages)
 
 ## Step 1: Gather CDS Entity Context
 
@@ -304,4 +315,4 @@ If tests fail:
 - When a CDS entity has non-trivial logic (calculations, CASE, filters, joins)
 - When the user wants basic test coverage as a starting point
 - When refactoring CDS logic and wanting regression tests
-- NOT for trivial projections that just rename fields
+- NOT for trivial projections that just rename fields — if analysis in Step 2 finds no testable semantics (just field renames with no calculations, CASE, WHERE, JOINs, or aggregations), warn the user: *"This CDS view is a simple projection with no testable logic. Unit tests would only verify that fields are correctly aliased, which provides minimal value. Consider testing the underlying view instead."*

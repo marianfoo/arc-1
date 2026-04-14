@@ -10,18 +10,18 @@ This folder contains detailed analysis documents for each SAP ADT / MCP project 
 
 | # | Project | Type | Language | Status |
 |---|---------|------|----------|--------|
-| 1 | [oisee/vibing-steampunk](01-vibing-steampunk.md) | ADT MCP Server (upstream) | Go | Active |
-| 2 | [mario-andreschak/mcp-abap-abap-adt-api](02-mcp-abap-abap-adt-api.md) | ADT MCP Server (abap-adt-api wrapper) | TypeScript | Dormant |
-| 3 | [mario-andreschak/mcp-abap-adt](03-mcp-abap-adt.md) | ADT MCP Server (read-only) | TypeScript | Dormant |
-| 4 | [AWS ABAP Accelerator](04-aws-abap-accelerator.md) | ADT MCP Server (Amazon Q) | Python | Active |
-| 5 | [fr0ster/mcp-abap-adt](05-fr0ster-mcp-abap-adt.md) | ADT MCP Server (monorepo) | TypeScript | Very Active |
-| 6 | [lemaiwo/btp-sap-odata-to-mcp-server](06-btp-odata-mcp.md) | OData-to-MCP Bridge | TypeScript | Moderate |
-| 7 | [DassianInc/dassian-adt](07-dassian-adt.md) | ADT MCP Server (abap-adt-api fork) | TypeScript | New/Active |
-| 8 | [Dassian ADT Gap Analysis](08-dassian-adt-feature-gap.md) | Feature gap deep-dive (from autoclosed PR) | — | Updated 2026-04-02 |
-| 9 | [jfilak/sapcli](09-sapcli.md) | Python CLI for ADT (CI/CD automation, oldest OSS ADT client) | Python | Very Active |
-| 9 | [SAP Joule for Developers (J4D)](J4D/01-joule-for-developers.md) | SAP's native AI copilot for ABAP — 12 capabilities mapped, skill coverage analysis | — | Updated 2026-04-04 |
-| 10 | [SAP ABAP MCP Server & ADT for VS Code](J4D/02-sap-abap-mcp-server-vscode.md) | SAP's official ABAP MCP server, Language Server, VS Code extension — strategic threat/opportunity analysis | — | Updated 2026-04-04 |
-| 11 | [ABAP File Formats (AFF) Opportunity](J4D/03-abap-file-formats-opportunity.md) | How SAP's open-source file format spec could enhance ARC-1 — 7 opportunities analyzed | — | Updated 2026-04-04 |
+| 1 | [oisee/vibing-steampunk](01-vibing-steampunk.md) (273★) | ADT MCP Server (upstream) | Go | Active (v2.38.1) |
+| 2 | [mario-andreschak/mcp-abap-abap-adt-api](02-mcp-abap-abap-adt-api.md) (109★) | ADT MCP Server (abap-adt-api wrapper) | TypeScript | Dormant |
+| 3 | [mario-andreschak/mcp-abap-adt](03-mcp-abap-adt.md) (103★) | ADT MCP Server (read-only) | TypeScript | Dormant |
+| 4 | [AWS ABAP Accelerator](04-aws-abap-accelerator.md) (33★) | ADT MCP Server (Amazon Q) | Python | Stale (Mar 2026) |
+| 5 | [fr0ster/mcp-abap-adt](05-fr0ster-mcp-abap-adt.md) (29★) | ADT MCP Server (316 tools, monorepo) | TypeScript | Very Active (v5.1.1) |
+| 6 | [lemaiwo/btp-sap-odata-to-mcp-server](06-btp-odata-mcp.md) (120★) | OData-to-MCP Bridge | TypeScript | Dormant (Jan 2026) |
+| 7 | [DassianInc/dassian-adt](07-dassian-adt.md) (32★) | ADT MCP Server (53 tools, OAuth, multi-system) | TypeScript | **Very Active** (fastest-growing) |
+| 8 | [Dassian ADT Gap Analysis](08-dassian-adt-feature-gap.md) | Feature gap deep-dive — extensively updated 2026-04-14 | — | Updated 2026-04-14 |
+| 9 | [jfilak/sapcli](09-sapcli.md) (79★) | Python CLI for ADT (CI/CD automation, oldest OSS ADT client) | Python | Very Active |
+| 10 | [SAP Joule for Developers (J4D)](J4D/01-joule-for-developers.md) | SAP's native AI copilot for ABAP — **Q2 2026 GA announced** for VS Code extension | — | Updated 2026-04-14 |
+| 11 | [SAP ABAP MCP Server & ADT for VS Code](J4D/02-sap-abap-mcp-server-vscode.md) | SAP's official ABAP MCP server — GA target Q2 2026, RAP UI service scope | — | Updated 2026-04-14 |
+| 12 | [ABAP File Formats (AFF) Opportunity](J4D/03-abap-file-formats-opportunity.md) | How SAP's open-source file format spec could enhance ARC-1 — 7 opportunities analyzed | — | Updated 2026-04-04 |
 
 ## How to Update
 

@@ -65,6 +65,40 @@ jobs:
       - name: Publish to npm
         run: npm publish --provenance --access public
 
+  # Publish server metadata to the Official MCP Registry.
+  # This makes ARC-1 discoverable in VS Code (@mcp search), GitHub MCP Registry,
+  # and other MCP clients that consume the registry API.
+  publish-mcp-registry:
+    needs: [release-please, publish-npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install mcp-publisher
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Update version in server.json
+        run: |
+          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          jq --arg v "$VERSION" '
+            .version = $v |
+            .packages[0].version = $v |
+            .packages[1].identifier = "ghcr.io/marianfoo/arc-1:" + $v
+          ' server.json > server.tmp && mv server.tmp server.json
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate server.json
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish
+
   # Build Docker images natively per architecture (no QEMU emulation).
   # better-sqlite3 has no Node.js prebuilds — it always compiles via node-gyp,
   # which crashes under QEMU arm64 emulation (signal 4: Illegal instruction).

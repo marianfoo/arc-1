@@ -1,5 +1,5 @@
 /**
- * XML builders for DDIC metadata objects (DOMA, DTEL).
+ * XML builders for DDIC metadata objects (DOMA, DTEL, MSAG).
  *
  * Unlike source-based objects, these ADT object types are fully defined by
  * structured XML payloads on create/update.
@@ -45,6 +45,25 @@ export interface DataElementCreateParams {
   setGetParameter?: string;
   defaultComponentName?: string;
   changeDocument?: boolean;
+}
+
+export interface PackageCreateParams {
+  name: string;
+  description: string;
+  superPackage?: string;
+  softwareComponent?: string;
+  transportLayer?: string;
+  packageType?: 'development' | 'structure' | 'main';
+}
+
+export interface ServiceBindingCreateParams {
+  name: string;
+  description: string;
+  package: string;
+  serviceDefinition: string;
+  bindingType?: string;
+  category?: '0' | '1';
+  version?: string;
 }
 
 const DTEL_MAX_LABEL_LENGTHS = {
@@ -139,6 +158,40 @@ ${fixValuesXml}
 </doma:domain>`;
 }
 
+export interface MessageClassMessage {
+  number: string;
+  shortText: string;
+}
+
+export interface MessageClassCreateParams {
+  name: string;
+  description: string;
+  package: string;
+  messages?: MessageClassMessage[];
+}
+
+export function buildMessageClassXml(params: MessageClassCreateParams): string {
+  const messages = params.messages ?? [];
+  const messagesXml =
+    messages.length === 0
+      ? ''
+      : '\n' +
+        messages
+          .map(
+            (m) =>
+              `  <mc:messages mc:msgno="${escapeXml(m.number)}" mc:msgtext="${escapeXml(m.shortText)}" mc:selfexplainatory="true" mc:documented="false"/>`,
+          )
+          .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(params.description)}"
+                 adtcore:name="${escapeXml(params.name)}">
+  <adtcore:packageRef adtcore:name="${escapeXml(params.package)}"/>${messagesXml}
+</mc:messageClass>`;
+}
+
 export function buildDataElementXml(params: DataElementCreateParams): string {
   const typeKind = params.typeKind ?? (params.dataType ? 'predefinedAbapType' : 'domain');
   const shortLabel = params.shortLabel ?? '';
@@ -185,4 +238,59 @@ export function buildDataElementXml(params: DataElementCreateParams): string {
     <dtel:deactivateBIDIFiltering>false</dtel:deactivateBIDIFiltering>
   </dtel:dataElement>
 </blue:wbobj>`;
+}
+
+export function buildPackageXml(params: PackageCreateParams): string {
+  const packageType = params.packageType ?? 'development';
+  const superPackage = params.superPackage ?? '';
+  const softwareComponent = params.softwareComponent ?? 'LOCAL';
+  const transportLayer = params.transportLayer ?? '';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<pak:package xmlns:pak="http://www.sap.com/adt/packages"
+             xmlns:adtcore="http://www.sap.com/adt/core"
+             adtcore:description="${escapeXml(params.description)}"
+             adtcore:name="${escapeXml(params.name)}"
+             adtcore:type="DEVC/K"
+             adtcore:version="active"
+             adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(params.name)}"/>
+  <pak:attributes pak:packageType="${escapeXml(packageType)}"/>
+  <pak:superPackage adtcore:name="${escapeXml(superPackage)}"/>
+  <pak:applicationComponent/>
+  <pak:transport>
+    <pak:softwareComponent pak:name="${escapeXml(softwareComponent)}"/>
+    <pak:transportLayer pak:name="${escapeXml(transportLayer)}"/>
+  </pak:transport>
+  <pak:translation/>
+  <pak:useAccesses/>
+  <pak:packageInterfaces/>
+  <pak:subPackages/>
+</pak:package>`;
+}
+
+export function buildServiceBindingXml(params: ServiceBindingCreateParams): string {
+  const bindingType = params.bindingType?.trim() || 'ODATA';
+  const category = params.category === '1' ? '1' : '0';
+  const serviceVersion = params.version?.trim() || '0001';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
+                     xmlns:adtcore="http://www.sap.com/adt/core"
+                     adtcore:description="${escapeXml(params.description)}"
+                     adtcore:name="${escapeXml(params.name)}"
+                     adtcore:type="SRVB/SVB"
+                     adtcore:language="EN"
+                     adtcore:masterLanguage="EN"
+                     adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(params.package)}"/>
+  <srvb:services srvb:name="${escapeXml(params.name)}">
+    <srvb:content srvb:version="${escapeXml(serviceVersion)}">
+      <srvb:serviceDefinition adtcore:name="${escapeXml(params.serviceDefinition)}"/>
+    </srvb:content>
+  </srvb:services>
+  <srvb:binding srvb:category="${category}" srvb:type="${escapeXml(bindingType)}" srvb:version="V2">
+    <srvb:implementation adtcore:name=""/>
+  </srvb:binding>
+</srvb:serviceBinding>`;
 }
