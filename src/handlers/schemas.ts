@@ -384,6 +384,8 @@ export const SAPManageSchema = z.object({
     'features',
     'probe',
     'cache_stats',
+    'create_package',
+    'delete_package',
     'flp_list_catalogs',
     'flp_list_groups',
     'flp_list_tiles',
@@ -399,6 +401,13 @@ export const SAPManageSchema = z.object({
   domainId: z.string().optional(),
   tileInstanceId: z.string().optional(),
   tile: flpTileSchema.optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  superPackage: z.string().optional(),
+  softwareComponent: z.string().optional(),
+  transportLayer: z.string().optional(),
+  packageType: z.enum(['development', 'structure', 'main']).optional(),
+  transport: z.string().optional(),
 });
 
 // ─── Hyperfocused SAP ───────────────────────────────────────────────

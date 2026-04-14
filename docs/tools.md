@@ -561,12 +561,14 @@ SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
 
 ## SAPManage
 
-Probe and report SAP system capabilities, and inspect the object cache state.
+Probe and report SAP system capabilities, inspect the object cache state, and manage package (DEVC) lifecycle operations.
 
 **Actions:**
 - `probe` — Re-probe the SAP system now (makes 8 parallel HEAD requests, ~1-2s). Detects optional features.
 - `features` — Get cached feature status from last probe (fast, no SAP round-trip).
 - `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
+- `create_package` — Create a package (`DEVC`) via `/sap/bc/adt/packages`.
+- `delete_package` — Delete a package via lock/delete/unlock.
 - `flp_list_catalogs` — List FLP business catalogs.
 - `flp_list_groups` — List FLP groups (`Pages`) from `/UI2/FLPD_CATALOG`.
 - `flp_list_tiles` — List tiles/target mappings in a catalog.
@@ -579,7 +581,14 @@ Probe and report SAP system capabilities, and inspect the object cache state.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `probe`, `features`, `cache_stats`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `action` | string | Yes | `probe`, `features`, `cache_stats`, `create_package`, `delete_package`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `name` | string | No | Required for `create_package` and `delete_package` (package name) |
+| `description` | string | No | Required for `create_package` (package description) |
+| `superPackage` | string | No | Optional parent package for `create_package` (use `$TMP` for local packages) |
+| `softwareComponent` | string | No | Optional software component for `create_package` (default: `LOCAL`) |
+| `transportLayer` | string | No | Optional transport layer for `create_package` |
+| `packageType` | string | No | Optional package type for `create_package`: `development`, `structure`, `main` (default: `development`) |
+| `transport` | string | No | Optional transport request ID (`corrNr`) for `create_package`/`delete_package` |
 | `catalogId` | string | No | Required for `flp_list_tiles`, `flp_create_tile`, `flp_add_tile_to_group` |
 | `groupId` | string | No | Required for `flp_create_group`, `flp_add_tile_to_group` |
 | `domainId` | string | No | Required for `flp_create_catalog` |
@@ -616,6 +625,9 @@ Probe and report SAP system capabilities, and inspect the object cache state.
 SAPManage(action="probe")       → discover system capabilities
 SAPManage(action="features")    → get cached results (no SAP call)
 SAPManage(action="cache_stats") → check cache state and warmup status
+SAPManage(action="create_package", name="ZRAP_TRAVEL", description="RAP Travel Demo")
+SAPManage(action="create_package", name="ZRAP_TRAVEL", description="RAP Travel Demo", superPackage="ZRAP", softwareComponent="HOME", transportLayer="HOME", packageType="development", transport="K900123")
+SAPManage(action="delete_package", name="ZRAP_TRAVEL")
 SAPManage(action="flp_list_catalogs")
 SAPManage(action="flp_list_groups")
 SAPManage(action="flp_list_tiles", catalogId="ZARC1_SALES")

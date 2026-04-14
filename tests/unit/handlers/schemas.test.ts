@@ -471,6 +471,15 @@ describe('SAPManageSchema', () => {
     expect(SAPManageSchema.safeParse({ action: 'features' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'probe' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'cache_stats' }).success).toBe(true);
+    expect(
+      SAPManageSchema.safeParse({
+        action: 'create_package',
+        name: 'ZPKG',
+        description: 'Package',
+        superPackage: '$TMP',
+      }).success,
+    ).toBe(true);
+    expect(SAPManageSchema.safeParse({ action: 'delete_package', name: 'ZPKG' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_catalogs' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_groups' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_tiles', catalogId: 'ZCAT' }).success).toBe(true);

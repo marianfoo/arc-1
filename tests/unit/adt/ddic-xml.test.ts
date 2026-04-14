@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildDataElementXml, buildDomainXml, buildMessageClassXml } from '../../../src/adt/ddic-xml.js';
+import {
+  buildDataElementXml,
+  buildDomainXml,
+  buildMessageClassXml,
+  buildPackageXml,
+} from '../../../src/adt/ddic-xml.js';
 
 describe('ddic-xml builders', () => {
   describe('buildDomainXml', () => {
@@ -235,6 +240,74 @@ describe('ddic-xml builders', () => {
 
       expect(xml).toContain('adtcore:description="Test &quot;class&quot; &lt;msgs&gt;"');
       expect(xml).toContain('mc:msgtext="Error: &amp;1 &lt; &amp;2 &quot;quoted&quot;"');
+    });
+  });
+
+  describe('buildPackageXml', () => {
+    it('builds basic package XML with name and description', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_TEST',
+        description: 'Test package',
+      });
+
+      expect(xml).toContain('<pak:package');
+      expect(xml).toContain('adtcore:type="DEVC/K"');
+      expect(xml).toContain('adtcore:name="ZPKG_TEST"');
+      expect(xml).toContain('adtcore:description="Test package"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPKG_TEST"/>');
+    });
+
+    it('includes superPackage when provided', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_CHILD',
+        description: 'Child package',
+        superPackage: 'ZPKG_PARENT',
+      });
+
+      expect(xml).toContain('<pak:superPackage adtcore:name="ZPKG_PARENT"/>');
+    });
+
+    it('includes softwareComponent and transportLayer when provided', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_TR',
+        description: 'Transport package',
+        softwareComponent: 'HOME',
+        transportLayer: 'HOME',
+      });
+
+      expect(xml).toContain('<pak:softwareComponent pak:name="HOME"/>');
+      expect(xml).toContain('<pak:transportLayer pak:name="HOME"/>');
+    });
+
+    it('supports packageType structure', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_STR',
+        description: 'Structure package',
+        packageType: 'structure',
+      });
+
+      expect(xml).toContain('<pak:attributes pak:packageType="structure"/>');
+    });
+
+    it('uses defaults for packageType and superPackage', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_DEFAULT',
+        description: 'Defaults',
+      });
+
+      expect(xml).toContain('<pak:attributes pak:packageType="development"/>');
+      expect(xml).toContain('<pak:superPackage adtcore:name=""/>');
+    });
+
+    it('escapes XML special characters', () => {
+      const xml = buildPackageXml({
+        name: 'ZPKG_ESC',
+        description: 'Package "A&B" <test> \'quote\'',
+        superPackage: 'ZPARENT&A',
+      });
+
+      expect(xml).toContain('Package &quot;A&amp;B&quot; &lt;test&gt; &apos;quote&apos;');
+      expect(xml).toContain('<pak:superPackage adtcore:name="ZPARENT&amp;A"/>');
     });
   });
 
