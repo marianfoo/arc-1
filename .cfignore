@@ -1,0 +1,30 @@
+# Claude Code worktrees and session data
+.claude/
+.git/
+
+# Source and tests — only dist/ is needed at runtime
+src/
+tests/
+docs/
+scripts/
+skills/
+compare/
+
+# Dev config
+.env
+.env.*
+.github/
+.husky/
+*.md
+!README.md
+tsconfig.json
+vitest*.config.ts
+biome.json
+mta.yaml
+release-please-config.json
+.release-please-manifest.json
+xs-security.json
+CLAUDE.md
+
+# Let buildpack do a clean production install
+node_modules/
