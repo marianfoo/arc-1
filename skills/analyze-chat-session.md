@@ -23,16 +23,25 @@ After generating the report, remind the user: **"Please review this report for a
 
 ---
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Output format | `issue` (GitHub issue-ready) | Most actionable format |
+| Severity filter | All levels | Don't miss anything |
+| Focus area | Entire session | Comprehensive analysis |
+| Sensitive data | Redact all (see Privacy Notice) | Safe by default |
+
+Proceed immediately with Smart Defaults when triggered. No questions needed.
+
 ## Input
 
-The user triggers this skill at any point during (or after) a conversation. No additional input is required — the LLM analyzes the current chat context.
+The user triggers this skill at any point during (or after) a conversation. No additional input is required — the LLM analyzes the current chat context. Proceed immediately with Smart Defaults.
 
 Optionally, the user may specify:
 - **Focus area** — e.g., "focus on the write operations" or "focus on the search failures"
 - **Output format** — `issue` (GitHub issue-ready), `internal` (detailed, for internal review), or `summary` (brief, 1 paragraph)
 - **Severity filter** — only report issues above a threshold (e.g., "only blockers")
-
-If no options are given, default to `issue` format with all severity levels.
 
 ---
 

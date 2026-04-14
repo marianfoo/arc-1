@@ -4,15 +4,25 @@ Explain ABAP objects with full dependency context and optional ATC code quality 
 
 This skill replicates SAP Joule's "Explain Code" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices). It goes beyond J4D by providing compressed dependency graphs via SAPContext.
 
+## Smart Defaults (apply silently, do NOT ask)
+
+| Setting | Default | Rationale |
+|---|---|---|
+| Object type | Auto-detect via SAPSearch | Don't make user look up the type |
+| Depth | Overview | Start high-level, user can ask for detail |
+| ATC | No | Only run if user asks about code quality |
+| Dependencies | Fetch via SAPContext | Always get the dependency graph |
+
 ## Input
 
-The user provides an ABAP object to explain. Ask the user for:
-- **Object name** (required, e.g., `ZCL_TRAVEL_HANDLER`, `ZI_SALESORDER`, `Z_REPORT_POSTING`)
-- **Object type** (optional — if omitted, auto-detect via SAPSearch)
-- **Explain ATC findings?** (optional — default: no)
-- **Depth of explanation** (optional — "overview" for high-level, "detailed" for method-by-method; default: overview)
+The user provides an ABAP object name (e.g., `ZCL_TRAVEL_HANDLER`, `ZI_SALESORDER`, `Z_REPORT_POSTING`).
 
-If the user provides just an object name, auto-detect the type and proceed with an overview explanation.
+Only the **object name** is required. If the user provides just an object name, auto-detect the type and proceed immediately with an overview explanation.
+
+Optionally, the user may specify:
+- **Object type** (default: auto-detect)
+- **Explain ATC findings?** (default: no)
+- **Depth** — "overview" or "detailed" (default: overview)
 
 ## Step 1: Read the Object
 
