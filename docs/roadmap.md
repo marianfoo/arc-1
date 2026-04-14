@@ -58,8 +58,8 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 15 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
 | 16 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 17 | FEAT-10 | PrettyPrint (Code Formatting) | P1 ↑ | XS | Features |
-| 18 | FEAT-11 | Inactive Objects List | P2 | XS | Features | ✅ Completed |
-| 19 | FEAT-19 | Transport Contents (E071 List) | P2 | XS | Features | ✅ Completed (subsumed by FEAT-39) |
+| ~~18~~ | ~~FEAT-11~~ | ~~Inactive Objects List~~ | ~~P2~~ | ~~XS~~ | ~~Completed~~ |
+| ~~19~~ | ~~FEAT-19~~ | ~~Transport Contents (E071 List)~~ | ~~P2~~ | ~~XS~~ | ~~Completed (subsumed by FEAT-39)~~ |
 | 20 | FEAT-20 | Source Version / Revision History | P1 ↑ | S | Features |
 | 21 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
 | 22 | FEAT-22 | gCTS/abapGit Integration | P2 | M | Features |
@@ -79,15 +79,15 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 36 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
 | 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
 | 38 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | P0 | S | Features |
-| 39 | FEAT-39 | Transport Enhancements (delete, reassign, types) | P2 | S | Features | ✅ Completed (K/W/T types; S/R deferred) |
+| ~~39~~ | ~~FEAT-39~~ | ~~Transport Enhancements (delete, reassign, types)~~ | ~~P2~~ | ~~S~~ | ~~Completed (K/W/T types; S/R deferred)~~ |
 | ~~40~~ | ~~FEAT-40~~ | ~~FLP Launchpad Management (OData)~~ | ~~P1~~ | ~~M~~ | ~~Completed 2026-04-12~~ |
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
-| 44 | FEAT-44 | TABL (Database Table) Create | P1 | S | Features |
-| 45 | FEAT-45 | DEVC (Package) Create | P1 | S | Features | ✅ Completed (2026-04-14) |
+| ~~44~~ | ~~FEAT-44~~ | ~~TABL (Database Table) Create~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
+| ~~45~~ | ~~FEAT-45~~ | ~~DEVC (Package) Create~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~46~~ | ~~FEAT-46~~ | ~~SRVB (Service Binding) Create~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
-| 47 | FEAT-47 | MSAG (Message Class) Read/Write | P2 | S | Features |
+| ~~47~~ | ~~FEAT-47~~ | ~~MSAG (Message Class) Read/Write~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | 48 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
 | 49 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
 | 50 | OPS-03 | Multi-System Routing | P3 | L | Ops |
@@ -98,13 +98,19 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-47 | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
+| FEAT-45 | DEVC (Package) Create | 2026-04-14 | Features |
+| FEAT-44 | TABL (Database Table) Create | 2026-04-14 | Features |
 | — | RAP DDIC save diagnostics (structured errors + inactive syntax check) | 2026-04-14 | Features |
+| — | Abaplint type-gating + per-call lintBeforeWrite | 2026-04-14 | Features |
 | FEAT-46 | SRVB (Service Binding) Create | 2026-04-14 | Features |
+| FEAT-39 | Transport Enhancements (K/W/T types; S/R deferred) | 2026-04-13 | Features |
 | — | RAP Write Guard (feature-aware) | 2026-04-13 | Features |
 | FEAT-13 | DDIC Domain/Data Element Write | 2026-04-12 | Features |
 | FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
 | FEAT-14 | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
 | FEAT-15 | Namespace URL Encoding Audit | 2026-04-12 | Features |
+| FEAT-11 | Inactive Objects List | 2026-04-12 | Features |
 | FEAT-40 | FLP Launchpad Management (OData) | 2026-04-12 | Features |
 | SEC-08 | OAuth Security Hardening (RFC 9700) | 2026-04-08 | Security |
 | — | AFF Structured Class Read | 2026-04-08 |  Features |
@@ -176,16 +182,16 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
 13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
 14. ~~**FEAT-10** PrettyPrint (XS) — **promoted to P1/Phase B** (dassian-adt + VSP have it)~~
-15. **FEAT-11** Inactive Objects List (XS) — development workflow
-16. **FEAT-19** Transport Contents (XS) — review objects before release
+15. ~~**FEAT-11** Inactive Objects List (XS)~~ — **completed** (via SAPRead type=INACTIVE_OBJECTS)
+16. ~~**FEAT-19** Transport Contents (XS)~~ — **completed** (subsumed by FEAT-39)
 17. **FEAT-21** ABAP Documentation / F1 Help (XS) — real docs instead of hallucination
 18. **FEAT-28** SAP Compatibility Hardening (S) — 7 compat fixes bundled (expanded Apr 8)
 19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
 ### Phase D: ADT Feature Parity (P2) — Larger Items
 20. ~~**FEAT-46** SRVB (Service Binding) Create (S)~~ — **completed 2026-04-14** (SAPWrite now supports SRVB create/update/delete + batch_create; create guidance points to activate + publish flow).
-21. **FEAT-47** MSAG (Message Class) Read/Write (S) — used in RAP for exception classes and validation messages. Endpoint: `/sap/bc/adt/messageclass/`.
-22. **FEAT-39** Transport Enhancements (S) — delete, reassign owner, transport type selection (K/W/T/S/R), recursive release. sapcli has full CTS lifecycle.
+21. ~~**FEAT-47** MSAG (Message Class) Read/Write (S)~~ — **completed 2026-04-14** (SAPRead type=MSAG + SAPWrite/SAPManage MSAG create/update/delete)
+22. ~~**FEAT-39** Transport Enhancements (S)~~ — **completed 2026-04-13** (K/W/T types; S/R deferred). sapcli has full CTS lifecycle.
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
 23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
@@ -258,7 +264,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Low — most deployments use reverse proxy for TLS termination |
-| **Status** | Completed (2026-04-12) |
+| **Status** | Not started |
 | **Source** | [fr0ster tracker: TLS evaluation](../compare/fr0ster/evaluations/tls-https-support.md) |
 
 **What:** Add native TLS support to the HTTP Streamable transport. fr0ster added this in v4.6.0 with `--tls-cert`/`--tls-key` flags. Currently ARC-1 requires a reverse proxy (nginx, CF router) for HTTPS.
@@ -348,7 +354,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — safer than LLM-guessed fixes |
-| **Status** | Completed (2026-04-14) |
+| **Status** | Not started |
 | **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-37-quickfix.md) |
 
 **What:** When ATC or syntax check finds an issue, SAP's fix proposal API (`/sap/bc/adt/quickfixes`) suggests the exact correction. Expose this via SAPDiagnose or SAPWrite so the LLM can apply verified fixes instead of guessing.
@@ -389,10 +395,12 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — directly improves admin control and LLM UX |
-| **Status** | Not started |
+| **Status** | Partially implemented (2026-04-14) |
 | **Source** | Dassian pattern, Roadmap SEC-03 |
 
 **What:** When SAP returns common errors (409 locked, 423 enqueued, 403 auth, 415 content type), return actionable hints: "Object locked by user X — check SM12", "Authorization failed — check SU53/PFCG", "Transport required — check SE09". Subsumes SEC-03 (S_DEVELOP awareness).
+
+**Partial implementation (2026-04-14):** PR #119 added structured DDIC diagnostics (`extractDdicDiagnostics`, `formatDdicDiagnostics` in `src/adt/errors.ts`) with T100KEY parsing, line-number extraction, and deduplication. The `formatErrorForLLM()` function in `src/handlers/intent.ts` now provides DDIC-specific hints for 400/409 save errors. Remaining: broader error classification for 409/423/403 with SAP transaction hints (SM12, SU53, SE09).
 
 **Why:** Supports **centralized admin control** — admins and LLMs get clear guidance instead of raw SAP error HTML. Dassian does this well with its error intelligence pattern.
 
@@ -1157,12 +1165,12 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — blocks greenfield development workflows |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-14) |
 | **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
 
 **What:** Add package creation via SAPManage. Packages are the container for all ABAP development objects.
 
-**Current state:** Implemented in SAPManage (`create_package`, `delete_package`) with ADT endpoint `/sap/bc/adt/packages`.
+**Implemented (2026-04-14):** SAPManage actions `create_package` and `delete_package` with ADT endpoint `/sap/bc/adt/packages`.
 
 **Competitor support:**
 - **sapcli:** `POST /sap/bc/adt/packages` with full XML body (name, description, superPackage, softwareComponent, transportLayer). Accepts explicit `corrNr` for transport.
@@ -1206,7 +1214,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - **vibing-steampunk:** No create, only publish/unpublish.
 - **dassian-adt:** No SRVB create.
 
-**Note:** SRVB creation is now covered end-to-end; remaining RAP lifecycle gaps are DCL and TABL/package bootstrapping items (FEAT-37 / FEAT-44 / FEAT-45).
+**Note:** SRVB creation is now covered end-to-end; remaining RAP lifecycle gap is DCL (FEAT-37). TABL (FEAT-44), DEVC (FEAT-45), and MSAG (FEAT-47) were completed 2026-04-14.
 
 ---
 
