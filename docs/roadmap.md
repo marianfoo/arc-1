@@ -98,6 +98,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| — | RAP DDIC save diagnostics (structured errors + inactive syntax check) | 2026-04-14 | Features |
 | FEAT-46 | SRVB (Service Binding) Create | 2026-04-14 | Features |
 | — | RAP Write Guard (feature-aware) | 2026-04-13 | Features |
 | FEAT-13 | DDIC Domain/Data Element Write | 2026-04-12 | Features |

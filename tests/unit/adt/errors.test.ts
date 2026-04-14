@@ -138,6 +138,106 @@ describe('AdtApiError', () => {
     });
   });
 
+  describe('extractDdicDiagnostics', () => {
+    it('extracts structured diagnostics from SBD_MESSAGES-style response', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Can&apos;t save due to errors in source</exc:localizedMessage>
+  <exc:localizedMessage lang="EN">Missing required annotation @AbapCatalog.enhancement.category</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SBD_MESSAGES</entry>
+    <entry key="T100KEY-MSGNO">007</entry>
+    <entry key="T100KEY-V1">ZI_TRAVEL</entry>
+    <entry key="T100KEY-V2">FIELD_NAME</entry>
+    <entry key="LINE">5</entry>
+    <entry key="COLUMN">12</entry>
+  </exc:properties>
+</exc:exception>`;
+      const diagnostics = AdtApiError.extractDdicDiagnostics(xml);
+      expect(diagnostics.length).toBeGreaterThan(0);
+      expect(diagnostics[0]?.messageId).toBe('SBD_MESSAGES');
+      expect(diagnostics[0]?.messageNumber).toBe('007');
+      expect(diagnostics[0]?.variables).toEqual(['ZI_TRAVEL', 'FIELD_NAME']);
+      expect(diagnostics[0]?.lineNumber).toBe(5);
+    });
+
+    it('extracts V1-V4 message variables when present', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Generic DDIC failure</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SBD</entry>
+    <entry key="T100KEY-MSGNO">007</entry>
+    <entry key="T100KEY-V1">V1</entry>
+    <entry key="T100KEY-V2">V2</entry>
+    <entry key="T100KEY-V3">V3</entry>
+    <entry key="T100KEY-V4">V4</entry>
+  </exc:properties>
+</exc:exception>`;
+      const diagnostics = AdtApiError.extractDdicDiagnostics(xml);
+      expect(diagnostics[0]?.variables).toEqual(['V1', 'V2', 'V3', 'V4']);
+    });
+
+    it('parses line number from line/column properties and message text', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Field "POSITION" invalid at line 17</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SBD</entry>
+    <entry key="T100KEY-MSGNO">007</entry>
+    <entry key="LINE">17</entry>
+  </exc:properties>
+</exc:exception>`;
+      const diagnostics = AdtApiError.extractDdicDiagnostics(xml);
+      expect(diagnostics[0]?.lineNumber).toBe(17);
+    });
+
+    it('returns empty array for empty XML', () => {
+      expect(AdtApiError.extractDdicDiagnostics('')).toEqual([]);
+    });
+
+    it('returns empty array for non-DDIC XML with single localizedMessage', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Object not found</exc:localizedMessage>
+</exc:exception>`;
+      expect(AdtApiError.extractDdicDiagnostics(xml)).toEqual([]);
+    });
+
+    it('extracts diagnostics from multiple localized messages even without properties', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Can&apos;t save due to errors in source</exc:localizedMessage>
+  <exc:localizedMessage lang="EN">Line 9: Unknown type ABAP.XXX</exc:localizedMessage>
+</exc:exception>`;
+      const diagnostics = AdtApiError.extractDdicDiagnostics(xml);
+      expect(diagnostics).toHaveLength(2);
+      expect(diagnostics[1]?.lineNumber).toBe(9);
+    });
+  });
+
+  describe('formatDdicDiagnostics', () => {
+    it('formats structured DDIC diagnostics as bullet list', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Can&apos;t save due to errors in source</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SBD_MESSAGES</entry>
+    <entry key="T100KEY-MSGNO">007</entry>
+    <entry key="T100KEY-V1">FIELD_A</entry>
+    <entry key="LINE">5</entry>
+  </exc:properties>
+</exc:exception>`;
+      const formatted = AdtApiError.formatDdicDiagnostics(xml);
+      expect(formatted).toContain('DDIC diagnostics:');
+      expect(formatted).toContain('[SBD_MESSAGES/007]');
+      expect(formatted).toContain('V1=FIELD_A');
+      expect(formatted).toContain('Line 5');
+    });
+
+    it('returns empty string when no DDIC diagnostics exist', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Object not found</exc:localizedMessage>
+</exc:exception>`;
+      expect(AdtApiError.formatDdicDiagnostics(xml)).toBe('');
+    });
+  });
+
   describe('isServerError', () => {
     it('returns true for 500', () => {
       const err = new AdtApiError('Server error', 500, '/sap/bc/adt/test');

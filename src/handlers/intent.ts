@@ -159,6 +159,9 @@ function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+const DDIC_SAVE_HINT_TYPES = new Set(['TABL', 'DDLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX', 'DOMA', 'DTEL']);
+const DDIC_POST_SAVE_CHECK_TYPES = new Set(['TABL', 'DDLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX']);
+
 // ─── Search Helpers ─────────────────────────────────────────────────
 
 /**
@@ -205,6 +208,7 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
+    const argType = String(args.type ?? '').toUpperCase();
 
     if (err.isNotFound) {
       const name = String(args.name ?? '');
@@ -218,6 +222,12 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     const transportHint = getTransportHint(err);
     if (transportHint) {
       return `${enriched}\n\nHint: ${transportHint}`;
+    }
+    if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType)) {
+      return (
+        `${enriched}\n\nHint: DDIC save failed. Check the diagnostic details above for specific field or annotation errors. ` +
+        'Common fixes: add missing @AbapCatalog annotations, fix field type names, check key field definitions.'
+      );
     }
     // Server errors (500, 502, 503, etc.)
     if (err.isServerError) {
@@ -246,17 +256,48 @@ function enrichWithSapDetails(err: AdtApiError, message: string): string {
     parts.push(`\nAdditional detail:\n${extraMessages.map((m) => `  - ${m}`).join('\n')}`);
   }
 
-  // Surface line/column info from properties if present
-  const lineInfo = props.LINE || props['T100KEY-NO'];
-  if (lineInfo || Object.keys(props).length > 0) {
-    const propStr = Object.entries(props)
-      .slice(0, 5) // Limit to avoid overwhelming output
-      .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
-    if (propStr) parts.push(`Properties: ${propStr}`);
+  const ddicDiagnostics = AdtApiError.formatDdicDiagnostics(err.responseBody);
+  if (ddicDiagnostics) {
+    parts.push(ddicDiagnostics);
+    // Skip raw Properties dump — DDIC diagnostics already include the structured
+    // T100KEY details (message ID, number, variables, line). Showing both would
+    // triplicate the same information.
+  } else {
+    // Surface line/column info from properties if present (non-DDIC errors only)
+    const lineInfo = props.LINE || props['T100KEY-NO'];
+    if (lineInfo || Object.keys(props).length > 0) {
+      const propStr = Object.entries(props)
+        .slice(0, 5) // Limit to avoid overwhelming output
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ');
+      if (propStr) parts.push(`Properties: ${propStr}`);
+    }
   }
 
   return parts.join('\n');
+}
+
+async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
+  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
+
+  try {
+    const checkResult = await syntaxCheck(client.http, client.safety, objectUrlForType(type, name), {
+      version: 'inactive',
+    });
+    if (!checkResult.hasErrors) return '';
+
+    const errors = checkResult.messages.filter((msg) => msg.severity === 'error');
+    if (errors.length === 0) return '';
+
+    const lines = errors.map((msg) => {
+      const line = msg.line ? `Line ${msg.line}` : 'Line ?';
+      return `  - ${line}: ${msg.text}`;
+    });
+
+    return `\nServer syntax check (inactive):\n${lines.join('\n')}`;
+  } catch {
+    return '';
+  }
 }
 
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
@@ -1782,7 +1823,27 @@ async function handleSAPWrite(
       // 'application/*' — the wildcard lets the SAP server resolve the correct
       // handler (matching how ADT Eclipse and abap-adt-api send requests).
       const contentType = createContentTypeForType(type);
-      const result = await createObject(client.http, client.safety, createUrl, body, contentType, effectiveTransport);
+      const needsPackageParam = type === 'BDEF' || type === 'TABL';
+      let result: string;
+      try {
+        result = await createObject(
+          client.http,
+          client.safety,
+          createUrl,
+          body,
+          contentType,
+          effectiveTransport,
+          needsPackageParam ? pkg : undefined,
+        );
+      } catch (createErr) {
+        if (createErr instanceof AdtApiError && (createErr.statusCode === 400 || createErr.statusCode === 409)) {
+          const syntaxDetail = await tryPostSaveSyntaxCheck(client, type, name);
+          if (syntaxDetail) {
+            createErr.message += syntaxDetail;
+          }
+        }
+        throw createErr;
+      }
 
       if (isMetadataWriteType(type)) {
         // SAP's DTEL POST ignores labels, searchHelp, etc. — they require a follow-up PUT.
@@ -1977,7 +2038,26 @@ async function handleSAPWrite(
           const objMetadataProps = getMetadataWriteProperties(obj);
           const body = buildCreateXml(objType, objName, pkg, objDescription, objMetadataProps);
           const contentType = createContentTypeForType(objType);
-          await createObject(client.http, client.safety, createUrl, body, contentType, batchTransport);
+          const needsPackageParam = objType === 'BDEF' || objType === 'TABL';
+          try {
+            await createObject(
+              client.http,
+              client.safety,
+              createUrl,
+              body,
+              contentType,
+              batchTransport,
+              needsPackageParam ? pkg : undefined,
+            );
+          } catch (createErr) {
+            if (createErr instanceof AdtApiError && (createErr.statusCode === 400 || createErr.statusCode === 409)) {
+              const syntaxDetail = await tryPostSaveSyntaxCheck(client, objType, objName);
+              if (syntaxDetail) {
+                createErr.message += syntaxDetail;
+              }
+            }
+            throw createErr;
+          }
 
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
           if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objMetadataProps)) {

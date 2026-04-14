@@ -23,6 +23,14 @@ export class AdtError extends Error {
   }
 }
 
+export interface DdicDiagnostic {
+  messageId?: string;
+  messageNumber?: string;
+  variables: string[];
+  lineNumber?: number;
+  text: string;
+}
+
 /** HTTP-level API error from SAP ADT */
 export class AdtApiError extends AdtError {
   constructor(
@@ -138,6 +146,102 @@ export class AdtApiError extends AdtError {
     }
     return props;
   }
+
+  /**
+   * Extract structured DDIC diagnostics from SAP XML error responses.
+   *
+   * DDIC save failures often include T100KEY entries (MSGID, MSGNO, V1-V4)
+   * and line/column information in <entry> property nodes.
+   */
+  static extractDdicDiagnostics(xml: string): DdicDiagnostic[] {
+    if (!xml) return [];
+
+    const props = AdtApiError.extractProperties(xml);
+    const localizedMessages = [...xml.matchAll(/<(?:\w+:)?localizedMessage[^>]*>([^<]+)</g)]
+      .map((match) => match[1]?.trim())
+      .filter((text): text is string => Boolean(text));
+
+    const messageId = props['T100KEY-MSGID'];
+    const messageNumber = props['T100KEY-MSGNO'] ?? props['T100KEY-NO'];
+    const variables = [props['T100KEY-V1'], props['T100KEY-V2'], props['T100KEY-V3'], props['T100KEY-V4']].filter(
+      (value): value is string => Boolean(value),
+    );
+    const lineNumber = parseOptionalInt(props.LINE ?? props['T100KEY-LINE']);
+    const hasDdicProperties = Object.keys(props).some(
+      (key) => key.startsWith('T100KEY-') || key === 'LINE' || key === 'COLUMN',
+    );
+
+    // Avoid false positives for generic API errors.
+    if (!hasDdicProperties && localizedMessages.length <= 1) {
+      return [];
+    }
+
+    const diagnostics: DdicDiagnostic[] = [];
+    const seen = new Set<string>();
+
+    const addDiagnostic = (diag: DdicDiagnostic): void => {
+      const key = `${diag.messageId ?? ''}|${diag.messageNumber ?? ''}|${diag.lineNumber ?? ''}|${diag.text}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      diagnostics.push(diag);
+    };
+
+    if (hasDdicProperties) {
+      addDiagnostic({
+        messageId,
+        messageNumber,
+        variables,
+        lineNumber,
+        text: localizedMessages[0] ?? 'DDIC save failed due to source errors.',
+      });
+    }
+
+    for (const text of localizedMessages) {
+      const inlineLine = extractInlineLineNumber(text);
+      addDiagnostic({
+        messageId,
+        messageNumber,
+        variables,
+        lineNumber: inlineLine ?? lineNumber,
+        text,
+      });
+    }
+
+    return diagnostics;
+  }
+
+  /**
+   * Format DDIC diagnostics in a compact, LLM-friendly multi-line block.
+   * Returns empty string when no DDIC diagnostics are present.
+   */
+  static formatDdicDiagnostics(xml: string): string {
+    const diagnostics = AdtApiError.extractDdicDiagnostics(xml);
+    if (diagnostics.length === 0) return '';
+
+    const lines = diagnostics.map((diag) => {
+      const idPart =
+        diag.messageId || diag.messageNumber ? `[${diag.messageId ?? '?'}/${diag.messageNumber ?? '?'}] ` : '';
+      const varsPart =
+        diag.variables.length > 0
+          ? `${diag.variables.map((value, index) => `V${index + 1}=${value}`).join(', ')}: `
+          : '';
+      const linePart = diag.lineNumber ? `Line ${diag.lineNumber}: ` : '';
+      return `  - ${idPart}${linePart}${varsPart}${diag.text}`;
+    });
+
+    return `DDIC diagnostics:\n${lines.join('\n')}`;
+  }
+}
+
+function parseOptionalInt(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function extractInlineLineNumber(text: string): number | undefined {
+  const match = text.match(/\bline\s+(\d+)\b/i);
+  return match?.[1] ? parseOptionalInt(match[1]) : undefined;
 }
 
 /** Network-level error (DNS, connection refused, timeout) */

@@ -520,10 +520,11 @@ After approval, create the artifacts. Use batch creation when possible.
 **On ANY save failure (400, 007, syntax error) — follow this protocol, no exceptions:**
 
 1. **STOP.** Do NOT retry with small variations. Do NOT delete and recreate.
-2. **Read back** the object to see what actually saved: `SAPRead(type=X, name=Y)`
-3. **Isolate the cause** by trying the absolute minimum source (just key fields + all required annotations). If minimum works → add fields one at a time. If minimum fails → the problem is annotations or object type, not your fields.
-4. **Change only ONE thing** between retries. Never vary both annotations and fields simultaneously.
-5. **After 3 failures on the same object**: STOP. Report the exact error text to the user and ask for guidance. Do NOT continue improvising.
+2. **Read the full error text first.** ARC-1 now returns structured DDIC diagnostics (`SBD...` message IDs, `V1..V4` variables, and line-aware details; for source-based DDIC creates it may also append inactive syntax-check results). Use these details to identify the exact failing field/annotation.
+3. **Read back** the object to see what actually saved: `SAPRead(type=X, name=Y)`
+4. **Isolate the cause** by trying the absolute minimum source (just key fields + all required annotations). If minimum works → add fields one at a time. If minimum fails → the problem is annotations or object type, not your fields.
+5. **Change only ONE thing** between retries. Never vary both annotations and fields simultaneously.
+6. **After 3 failures on the same object**: STOP. Report the exact error text to the user and ask for guidance. Do NOT continue improvising.
 
 **Key principle:** The problem is almost always your source content, never the object's state. Deleting and recreating with the same source will produce the same error. Fix the source first.
 
@@ -764,7 +765,7 @@ Offer follow-up actions based on the plan:
 
 ## On-Prem 7.5x RAP Quick Reference (read before Phase 4)
 
-This section covers common pitfalls that cause repeated save failures on on-prem ABAP 7.5x systems. Every rule here was learned from real failures — violating any one produces a generic `SBD_MESSAGES 007` error with no detail about what went wrong.
+This section covers common pitfalls that cause repeated save failures on on-prem ABAP 7.5x systems. Every rule here was learned from real failures — violating any one often returns `SBD_MESSAGES 007` save errors. ARC-1 surfaces more detail now, but these pitfalls remain the root causes.
 
 ### TABL (transparent table) — required annotations
 
