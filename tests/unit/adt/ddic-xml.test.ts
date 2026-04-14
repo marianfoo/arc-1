@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDataElementXml, buildDomainXml } from '../../../src/adt/ddic-xml.js';
+import { buildDataElementXml, buildDomainXml, buildMessageClassXml } from '../../../src/adt/ddic-xml.js';
 
 describe('ddic-xml builders', () => {
   describe('buildDomainXml', () => {
@@ -187,6 +187,54 @@ describe('ddic-xml builders', () => {
       expect(xml).toContain('<dtel:longFieldLength>40</dtel:longFieldLength>');
       expect(xml).toContain('<dtel:headingFieldLength>55</dtel:headingFieldLength>');
       expect(xml).toContain('<dtel:changeDocument>false</dtel:changeDocument>');
+    });
+  });
+
+  describe('buildMessageClassXml', () => {
+    it('builds empty message class XML', () => {
+      const xml = buildMessageClassXml({
+        name: 'ZCM_TRAVEL',
+        description: 'Travel messages',
+        package: '$TMP',
+      });
+
+      expect(xml).toContain('<mc:messageClass');
+      expect(xml).toContain('xmlns:mc="http://www.sap.com/adt/MessageClass"');
+      expect(xml).toContain('adtcore:name="ZCM_TRAVEL"');
+      expect(xml).toContain('adtcore:description="Travel messages"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="$TMP"/>');
+      expect(xml).not.toContain('<mc:messages');
+    });
+
+    it('builds message class with messages', () => {
+      const xml = buildMessageClassXml({
+        name: 'ZCM_TRAVEL',
+        description: 'Travel messages',
+        package: '$TMP',
+        messages: [
+          { number: '001', shortText: 'Booking &1 created' },
+          { number: '002', shortText: 'Flight not found' },
+        ],
+      });
+
+      expect(xml).toContain('mc:msgno="001"');
+      expect(xml).toContain('mc:msgtext="Booking &amp;1 created"');
+      expect(xml).toContain('mc:msgno="002"');
+      expect(xml).toContain('mc:msgtext="Flight not found"');
+      expect(xml).toContain('mc:selfexplainatory="true"');
+      expect(xml).toContain('mc:documented="false"');
+    });
+
+    it('escapes special characters in message text', () => {
+      const xml = buildMessageClassXml({
+        name: 'ZTEST',
+        description: 'Test "class" <msgs>',
+        package: '$TMP',
+        messages: [{ number: '001', shortText: 'Error: &1 < &2 "quoted"' }],
+      });
+
+      expect(xml).toContain('adtcore:description="Test &quot;class&quot; &lt;msgs&gt;"');
+      expect(xml).toContain('mc:msgtext="Error: &amp;1 &lt; &amp;2 &quot;quoted&quot;"');
     });
   });
 

@@ -515,4 +515,67 @@ describe('E2E RAP write lifecycle tests', () => {
       await bestEffortDelete(client, 'TABL', tableName);
     }
   });
+
+  // ─── Test 6: MSAG message class create → read → update → delete ──
+  it('SAPWrite create MSAG, read, update with messages, delete', async () => {
+    const msagName = uniqueName('ZARC1MC').slice(0, 20);
+
+    try {
+      // Step 1: Create empty message class
+      const createResult = await callTool(client, 'SAPWrite', {
+        action: 'create',
+        type: 'MSAG',
+        name: msagName,
+        package: '$TMP',
+        description: 'ARC-1 test message class',
+      });
+      const createText = expectToolSuccess(createResult);
+      expect(createText).toContain(`Created MSAG ${msagName}`);
+
+      // Step 2: Read the message class — should return structured JSON
+      const readResult = await callTool(client, 'SAPRead', {
+        type: 'MESSAGES',
+        name: msagName,
+      });
+      const readText = expectToolSuccess(readResult);
+      const readData = JSON.parse(readText);
+      expect(readData.name).toBe(msagName);
+      expect(readData.messages).toEqual([]);
+
+      // Step 3: Update with messages
+      const updateResult = await callTool(client, 'SAPWrite', {
+        action: 'update',
+        type: 'MSAG',
+        name: msagName,
+        messages: [
+          { number: '001', shortText: 'Test message &1' },
+          { number: '002', shortText: 'Another message' },
+        ],
+      });
+      const updateText = expectToolSuccess(updateResult);
+      expect(updateText).toContain(`updated MSAG ${msagName}`);
+
+      // Step 4: Read again — should have messages
+      const readResult2 = await callTool(client, 'SAPRead', {
+        type: 'MESSAGES',
+        name: msagName,
+      });
+      const readText2 = expectToolSuccess(readResult2);
+      const readData2 = JSON.parse(readText2);
+      expect(readData2.messages).toHaveLength(2);
+      expect(readData2.messages[0].number).toBe('001');
+      expect(readData2.messages[0].shortText).toContain('Test message');
+
+      // Step 5: Delete
+      const deleteResult = await callTool(client, 'SAPWrite', {
+        action: 'delete',
+        type: 'MSAG',
+        name: msagName,
+      });
+      const deleteText = expectToolSuccess(deleteResult);
+      expect(deleteText).toContain(`Deleted MSAG ${msagName}`);
+    } finally {
+      await bestEffortDelete(client, 'MSAG', msagName);
+    }
+  });
 });

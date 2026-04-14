@@ -25,6 +25,7 @@ import type {
   DataElementInfo,
   DomainInfo,
   InactiveObject,
+  MessageClassInfo,
   SourceSearchResult,
   TransactionInfo,
 } from './types.js';
@@ -78,6 +79,7 @@ const parser = new XMLParser({
       'dbAccess',
       'access',
       'successor',
+      'messages',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings
@@ -574,6 +576,33 @@ export function parseServiceBinding(xml: string): string {
   return JSON.stringify(result, null, 2);
 }
 
+/**
+ * Parse message class metadata XML from /sap/bc/adt/messageclass/{name}.
+ *
+ * Message classes are metadata-only (no /source/main). The XML contains
+ * the message class attributes and individual messages as mc:messages elements.
+ *
+ * Expected root: <mc:messageClass> (after NS strip: messageClass).
+ */
+export function parseMessageClass(xml: string): MessageClassInfo {
+  const parsed = parseXml(xml);
+  const mc = (parsed.messageClass ?? {}) as Record<string, unknown>;
+  const pkgRef = (mc.packageRef ?? {}) as Record<string, unknown>;
+
+  const msgNodes = Array.isArray(mc.messages) ? (mc.messages as Array<Record<string, unknown>>) : [];
+  const messages = msgNodes.map((m) => ({
+    number: String(m['@_msgno'] ?? ''),
+    shortText: decodeXmlEntities(String(m['@_msgtext'] ?? '')),
+  }));
+
+  return {
+    name: String(mc['@_name'] ?? ''),
+    description: String(mc['@_description'] ?? ''),
+    messages,
+    package: String(pkgRef['@_name'] ?? ''),
+  };
+}
+
 // ─── BSP / UI5 Filestore Parsers ────────────────────────────────────
 
 /**
@@ -635,6 +664,20 @@ export function parseBspFolderListing(xml: string, appName: string): BspFileNode
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Decode standard XML entities in attribute values.
+ * fast-xml-parser with processEntities:false + parseAttributeValue:false
+ * keeps raw encoded strings — we decode them for human-readable output.
+ */
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
 
 /** Safely get a nested array from parsed XML */
 function getNestedArray(obj: Record<string, unknown>, parent: string, child: string): Array<Record<string, unknown>> {

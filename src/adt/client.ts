@@ -30,6 +30,7 @@ import type {
   DataElementInfo,
   DomainInfo,
   InactiveObject,
+  MessageClassInfo,
   SourceSearchResult,
   StructuredClassResponse,
   TransactionInfo,
@@ -44,6 +45,7 @@ import {
   parseFunctionGroup,
   parseInactiveObjects,
   parseInstalledComponents,
+  parseMessageClass,
   parsePackageContents,
   parseSearchResults,
   parseServiceBinding,
@@ -419,11 +421,18 @@ export class AdtClient {
     return parseInstalledComponents(resp.body);
   }
 
-  /** Get message class messages */
+  /** Get message class messages (legacy endpoint — may fail for some classes) */
   async getMessages(messageClass: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetMessages');
     const resp = await this.http.get(`/sap/bc/adt/msg/messages/${encodeURIComponent(messageClass)}`);
     return resp.body;
+  }
+
+  /** Get structured message class info from /sap/bc/adt/messageclass/{name} */
+  async getMessageClassInfo(name: string): Promise<MessageClassInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetMessageClassInfo');
+    const resp = await this.http.get(`/sap/bc/adt/messageclass/${encodeURIComponent(name)}`);
+    return parseMessageClass(resp.body);
   }
 
   /** Get program text elements */

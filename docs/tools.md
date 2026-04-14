@@ -53,7 +53,7 @@ Read any SAP ABAP object.
 | `DEVC` | Package contents |
 | `SYSTEM` | System info (SID, release, kernel) |
 | `COMPONENTS` | Installed software components |
-| `MESSAGES` | Message class texts |
+| `MESSAGES` | Message class texts (structured JSON with `number`, `shortText`, `longText` per message) |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
 | `INACTIVE_OBJECTS` | List all objects pending activation (no name needed). Returns 404-friendly fallback on systems where the endpoint is unavailable. |
@@ -138,7 +138,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `TABL`, `DOMA`, `DTEL` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
@@ -165,9 +165,10 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `setGetParameter` | string | No | DTEL: SET/GET parameter ID |
 | `defaultComponentName` | string | No | DTEL: default component name |
 | `changeDocument` | boolean | No | DTEL: change document flag |
+| `messages` | array | No | MSAG: message entries (`[{number, shortText, longText?}]`) — `number` is a 3-digit string (e.g., `"001"`), `shortText` is the message text (max 73 chars) |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
 
-**DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
+**DDIC metadata writes:** `DOMA`, `DTEL`, and `MSAG` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. Use `create` to create a new message class (with or without initial messages) and `update` to replace all messages.
 
 **TABL writes:** `TABL` is source-based (like DDLS/BDEF/SRVD). ARC-1 creates the table shell, then writes table source via `/source/main`.
 

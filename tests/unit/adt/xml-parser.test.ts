@@ -13,6 +13,7 @@ import {
   parseFunctionGroup,
   parseInactiveObjects,
   parseInstalledComponents,
+  parseMessageClass,
   parsePackageContents,
   parseSearchResults,
   parseServiceBinding,
@@ -913,6 +914,60 @@ describe('XML Parser', () => {
     it('returns empty array when no objectReference nodes', () => {
       const xml = '<?xml version="1.0"?><root><empty/></root>';
       expect(parseInactiveObjects(xml)).toEqual([]);
+    });
+  });
+
+  describe('parseMessageClass', () => {
+    it('parses message class with messages', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:name="ZCM_TRAVEL" adtcore:type="MSAG/N"
+                 adtcore:description="Travel messages">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+  <mc:messages mc:msgno="001" mc:msgtext="Booking &amp;1 created" mc:selfexplainatory="true" mc:documented="false"/>
+  <mc:messages mc:msgno="002" mc:msgtext="Flight not found" mc:selfexplainatory="true" mc:documented="false"/>
+  <mc:messages mc:msgno="003" mc:msgtext="Error &amp;1 &amp;2" mc:selfexplainatory="true" mc:documented="false"/>
+</mc:messageClass>`;
+
+      const result = parseMessageClass(xml);
+      expect(result.name).toBe('ZCM_TRAVEL');
+      expect(result.description).toBe('Travel messages');
+      expect(result.package).toBe('$TMP');
+      expect(result.messages).toHaveLength(3);
+      expect(result.messages[0]).toEqual({ number: '001', shortText: 'Booking &1 created' });
+      expect(result.messages[1]).toEqual({ number: '002', shortText: 'Flight not found' });
+      expect(result.messages[2]).toEqual({ number: '003', shortText: 'Error &1 &2' });
+    });
+
+    it('parses empty message class', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:name="ZCM_EMPTY" adtcore:type="MSAG/N"
+                 adtcore:description="Empty MC">
+  <adtcore:packageRef adtcore:name="ZDEV"/>
+</mc:messageClass>`;
+
+      const result = parseMessageClass(xml);
+      expect(result.name).toBe('ZCM_EMPTY');
+      expect(result.description).toBe('Empty MC');
+      expect(result.package).toBe('ZDEV');
+      expect(result.messages).toEqual([]);
+    });
+
+    it('handles XML with special characters in message text', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:name="ZTEST" adtcore:type="MSAG/N"
+                 adtcore:description="Test">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+  <mc:messages mc:msgno="001" mc:msgtext="Value &amp;1 &lt; &amp;2" mc:selfexplainatory="true" mc:documented="false"/>
+</mc:messageClass>`;
+
+      const result = parseMessageClass(xml);
+      expect(result.messages[0]!.shortText).toBe('Value &1 < &2');
     });
   });
 

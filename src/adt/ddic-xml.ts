@@ -1,5 +1,5 @@
 /**
- * XML builders for DDIC metadata objects (DOMA, DTEL).
+ * XML builders for DDIC metadata objects (DOMA, DTEL, MSAG).
  *
  * Unlike source-based objects, these ADT object types are fully defined by
  * structured XML payloads on create/update.
@@ -137,6 +137,40 @@ ${fixValuesXml}
     </doma:valueInformation>
   </doma:content>
 </doma:domain>`;
+}
+
+export interface MessageClassMessage {
+  number: string;
+  shortText: string;
+}
+
+export interface MessageClassCreateParams {
+  name: string;
+  description: string;
+  package: string;
+  messages?: MessageClassMessage[];
+}
+
+export function buildMessageClassXml(params: MessageClassCreateParams): string {
+  const messages = params.messages ?? [];
+  const messagesXml =
+    messages.length === 0
+      ? ''
+      : '\n' +
+        messages
+          .map(
+            (m) =>
+              `  <mc:messages mc:msgno="${escapeXml(m.number)}" mc:msgtext="${escapeXml(m.shortText)}" mc:selfexplainatory="true" mc:documented="false"/>`,
+          )
+          .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(params.description)}"
+                 adtcore:name="${escapeXml(params.name)}">
+  <adtcore:packageRef adtcore:name="${escapeXml(params.package)}"/>${messagesXml}
+</mc:messageClass>`;
 }
 
 export function buildDataElementXml(params: DataElementCreateParams): string {
