@@ -83,6 +83,40 @@ describe('DevTools', () => {
       );
     });
 
+    it('uses active version by default in check payload', async () => {
+      const http = mockHttp('<checkMessages/>');
+      await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      const payload = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(payload).toContain('chkrun:version="active"');
+    });
+
+    it('uses inactive version when requested', async () => {
+      const http = mockHttp('<checkMessages/>');
+      await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST', {
+        version: 'inactive',
+      });
+      const payload = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(payload).toContain('chkrun:version="inactive"');
+    });
+
+    it('parses response identically for active and inactive versions', async () => {
+      const xml = '<checkMessages><msg type="E" line="7" col="2" shortText="Syntax error"/></checkMessages>';
+      const activeHttp = mockHttp(xml);
+      const inactiveHttp = mockHttp(xml);
+      const activeResult = await syntaxCheck(
+        activeHttp,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/Z1',
+      );
+      const inactiveResult = await syntaxCheck(
+        inactiveHttp,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/Z1',
+        { version: 'inactive' },
+      );
+      expect(inactiveResult).toEqual(activeResult);
+    });
+
     it('handles reversed attribute order (Issue #3)', async () => {
       const xml = '<checkMessages><msg line="5" col="1" type="E" shortText="Error found"/></checkMessages>';
       const http = mockHttp(xml);

@@ -178,6 +178,15 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 **BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
 
+**DDIC save diagnostics:** On `SAPWrite` save failures for DDIC/RAP artifacts (`TABL`, `DDLS`, `BDEF`, `SRVD`, `SRVB`, `DDLX`, `DOMA`, `DTEL`), ARC-1 enriches errors with structured diagnostics:
+- T100 message identifiers/variables (e.g., `SBD_MESSAGES/007`, `V1..V4`)
+- Line-aware details when available
+- Best-effort inactive syntax-check output for source-based DDIC creates (`TABL`, `DDLS`, `BDEF`, `SRVD`, `SRVB`, `DDLX`)
+
+This helps pinpoint the exact failing field/annotation instead of retrying blindly.
+
+**Blue framework package handling:** `TABL` and `BDEF` create calls now pass package in both the XML (`packageRef`) and URL query (`_package=<pkg>`), alongside transport (`corrNr`) when provided.
+
 **CDS pre-write validation:**
 
 - **Table entity version guard:** `define table entity` syntax requires ABAP Cloud (BTP) or S/4HANA on-premise with SAP_BASIS >= 757. On older systems, ARC-1 rejects the write early with an actionable message instead of letting SAP fail with a generic error.

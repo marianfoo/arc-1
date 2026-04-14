@@ -5250,7 +5250,7 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('reserved keyword');
     });
 
-    it('includes properties from SAP XML error response', async () => {
+    it('includes DDIC diagnostics instead of raw properties for T100KEY errors', async () => {
       const xmlResponse = `<?xml version="1.0" encoding="utf-8"?>
 <exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
   <exc:localizedMessage lang="EN">Syntax error in DDL source</exc:localizedMessage>
@@ -5267,8 +5267,113 @@ ENDCLASS.`;
         name: 'ZTEST',
       });
       expect(result.isError).toBe(true);
+      // DDIC diagnostics replace raw Properties when T100KEY entries are present
+      expect(result.content[0]?.text).toContain('DDIC diagnostics:');
+      expect(result.content[0]?.text).toContain('Line 15');
+      expect(result.content[0]?.text).not.toContain('Properties:');
+    });
+
+    it('includes raw properties for non-DDIC errors without T100KEY entries', async () => {
+      const xmlResponse = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Some generic error</exc:localizedMessage>
+  <exc:properties>
+    <entry key="MSG_ID">CL</entry>
+    <entry key="SEVERITY">E</entry>
+  </exc:properties>
+</exc:exception>`;
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(400, xmlResponse, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Properties:');
-      expect(result.content[0]?.text).toContain('LINE=15');
+      expect(result.content[0]?.text).toContain('MSG_ID=CL');
+      expect(result.content[0]?.text).not.toContain('DDIC diagnostics:');
+    });
+
+    it('includes DDIC diagnostics block when T100KEY entries are present', async () => {
+      const xmlResponse = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Can't save due to errors in source</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SBD_MESSAGES</entry>
+    <entry key="T100KEY-MSGNO">007</entry>
+    <entry key="T100KEY-V1">FIELD_X</entry>
+    <entry key="LINE">5</entry>
+  </exc:properties>
+</exc:exception>`;
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(400, xmlResponse, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('DDIC diagnostics:');
+      expect(result.content[0]?.text).toContain('[SBD_MESSAGES/007]');
+    });
+
+    it('does not add DDIC diagnostics block when no DDIC details are present', async () => {
+      const xmlResponse = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Object not found</exc:localizedMessage>
+</exc:exception>`;
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(400, xmlResponse, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('DDIC diagnostics:');
+    });
+
+    it('adds DDIC save hint for 400 with TABL type', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(400, 'Bad Request', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Hint: DDIC save failed.');
+    });
+
+    it('adds DDIC save hint for 409 with BDEF type', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(409, 'Conflict', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BDEF',
+        name: 'ZI_TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Hint: DDIC save failed.');
+    });
+
+    it('does not add DDIC hint for 404 not-found path', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('was not found');
+      expect(result.content[0]?.text).not.toContain('Hint: DDIC save failed.');
+    });
+
+    it('does not add DDIC hint for non-DDIC types', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(400, 'Bad Request', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('Hint: DDIC save failed.');
     });
   });
 
@@ -5367,6 +5472,144 @@ ENDCLASS.`;
           'application/vnd.sap.adt.blues.v1+xml',
         );
       }
+    });
+
+    it('passes _package query parameter for BDEF create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'BDEF',
+        name: 'ZI_TRAVEL',
+        source: 'managed implementation in class ZBP_I_TRAVEL unique;\ndefine behavior for ZI_TRAVEL\n{}',
+        package: 'ZRAP_TEST',
+      });
+
+      const createCall = mockFetch.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/bo/behaviordefinitions') &&
+          c[0].includes('_package=ZRAP_TEST') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      expect(createCall).toBeDefined();
+    });
+
+    it('does not pass _package query parameter for DDLS create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'ZI_TRAVEL',
+        source: 'define view entity ZI_TRAVEL as select from sflight { key carrid }',
+        package: 'ZRAP_TEST',
+      });
+
+      const ddlsCreateCalls = mockFetch.mock.calls.filter(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/ddic/ddl/sources') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      const callWithPackage = ddlsCreateCalls.find((c: unknown[]) => String(c[0]).includes('_package='));
+      expect(callWithPackage).toBeUndefined();
+    });
+
+    it('passes _package query parameter for TABL in batch_create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'ZRAP_TEST',
+        objects: [
+          {
+            type: 'TABL',
+            name: 'ZTABL_TEST',
+            source:
+              "@EndUserText.label : 'T'\n@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE\n@AbapCatalog.tableCategory : #TRANSPARENT\n@AbapCatalog.deliveryClass : #A\n@AbapCatalog.dataMaintenance : #RESTRICTED\ndefine table ZTABL_TEST { key client : abap.clnt not null; }",
+          },
+        ],
+      });
+
+      const createCall = mockFetch.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/ddic/tables') &&
+          c[0].includes('_package=ZRAP_TEST') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      expect(createCall).toBeDefined();
+    });
+
+    it('passes _package query parameter for BDEF in batch_create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'ZRAP_TEST',
+        objects: [
+          {
+            type: 'BDEF',
+            name: 'ZI_TRAVEL',
+            source: 'managed implementation in class ZBP_I_TRAVEL unique;\ndefine behavior for ZI_TRAVEL\n{}',
+          },
+        ],
+      });
+
+      const createCall = mockFetch.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/bo/behaviordefinitions') &&
+          c[0].includes('_package=ZRAP_TEST') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      expect(createCall).toBeDefined();
+    });
+
+    it('appends inactive syntax-check detail to TABL create errors', async () => {
+      const createErrorXml = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Can't save due to errors in source</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SBD_MESSAGES</entry>
+    <entry key="T100KEY-MSGNO">007</entry>
+  </exc:properties>
+</exc:exception>`;
+      const syntaxResultXml =
+        '<checkMessages><msg type="E" line="5" col="1" shortText="Unknown annotation"/></checkMessages>';
+
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (input: unknown, init?: { method?: string }) => {
+        const url = typeof input === 'string' ? input : String(input);
+        const method = (init?.method ?? 'GET').toUpperCase();
+        if (method === 'POST' && url.includes('/sap/bc/adt/checkruns')) {
+          return mockResponse(200, syntaxResultXml, { 'x-csrf-token': 'T' });
+        }
+        if (method === 'POST' && url.includes('/sap/bc/adt/ddic/tables')) {
+          return mockResponse(400, createErrorXml, { 'x-csrf-token': 'T' });
+        }
+        return mockResponse(200, '', { 'x-csrf-token': 'T' });
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'TABL',
+        name: 'ZTABL_FAIL',
+        source: 'define table ztabl_fail { key client : abap.clnt not null; }',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Server syntax check (inactive):');
+      expect(result.content[0]?.text).toContain('Line 5: Unknown annotation');
     });
   });
 });

@@ -157,6 +157,67 @@ describe('CRUD Operations', () => {
       expect(http.post).toHaveBeenCalledWith(expect.stringContaining('corrNr=DEVK900001'), '<xml/>', 'application/xml');
     });
 
+    it('adds _package query parameter when packageName is provided', async () => {
+      const http = mockHttp();
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/bo/behaviordefinitions',
+        '<xml/>',
+        'application/xml',
+        undefined,
+        'ZPKG',
+      );
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('_package=ZPKG');
+    });
+
+    it('adds both corrNr and _package when transport and packageName are provided', async () => {
+      const http = mockHttp();
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/bo/behaviordefinitions',
+        '<xml/>',
+        'application/xml',
+        'DEVK900001',
+        'ZPKG',
+      );
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('corrNr=DEVK900001');
+      expect(url).toContain('_package=ZPKG');
+    });
+
+    it('encodes packageName when it contains special characters', async () => {
+      const http = mockHttp();
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/bo/behaviordefinitions',
+        '<xml/>',
+        'application/xml',
+        undefined,
+        '/ABC/PKG SPACE',
+      );
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).toContain('_package=%2FABC%2FPKG%20SPACE');
+    });
+
+    it('treats empty packageName as absent', async () => {
+      const http = mockHttp();
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/bo/behaviordefinitions',
+        '<xml/>',
+        'application/xml',
+        undefined,
+        '',
+      );
+      const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(url).not.toContain('_package=');
+    });
+
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), readOnly: true };

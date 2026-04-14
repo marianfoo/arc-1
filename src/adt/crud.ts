@@ -57,10 +57,18 @@ export async function createObject(
   body: string,
   contentType = 'application/*',
   transport?: string,
+  packageName?: string,
 ): Promise<string> {
   checkOperation(safety, OperationType.Create, 'CreateObject');
 
-  const url = transport ? `${objectUrl}?corrNr=${encodeURIComponent(transport)}` : objectUrl;
+  const params: string[] = [];
+  if (transport) {
+    params.push(`corrNr=${encodeURIComponent(transport)}`);
+  }
+  if (packageName) {
+    params.push(`_package=${encodeURIComponent(packageName)}`);
+  }
+  const url = params.length > 0 ? `${objectUrl}?${params.join('&')}` : objectUrl;
 
   const resp = await http.post(url, body, contentType);
   return resp.body;

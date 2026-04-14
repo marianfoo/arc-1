@@ -17,12 +17,14 @@ export async function syntaxCheck(
   http: AdtHttpClient,
   safety: SafetyConfig,
   objectUrl: string,
+  options?: { version?: 'active' | 'inactive' },
 ): Promise<SyntaxCheckResult> {
   checkOperation(safety, OperationType.Read, 'SyntaxCheck');
 
+  const version = options?.version ?? 'active';
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" xmlns:adtcore="http://www.sap.com/adt/core">
-  <chkrun:checkObject adtcore:uri="${escapeXmlAttr(objectUrl)}" chkrun:version="active"/>
+  <chkrun:checkObject adtcore:uri="${escapeXmlAttr(objectUrl)}" chkrun:version="${version}"/>
 </chkrun:checkObjectList>`;
 
   const resp = await http.post('/sap/bc/adt/checkruns', body, 'application/vnd.sap.adt.checkobjects+xml', {
