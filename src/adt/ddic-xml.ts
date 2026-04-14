@@ -64,6 +64,43 @@ export interface ServiceBindingCreateParams {
   bindingType?: string;
   category?: '0' | '1';
   version?: string;
+  odataVersion?: string;
+}
+
+/**
+ * Normalize LLM-friendly binding type strings into SAP ADT values.
+ *
+ * SAP ADT expects:
+ *   - `srvb:type`     = "ODATA" (always)
+ *   - `srvb:version`  = "V2" | "V4" (OData protocol version on <srvb:binding>)
+ *   - `srvb:category` = "0" (UI) | "1" (Web API)
+ *
+ * LLMs commonly send human-readable values like "ODataV4-UI", "ODATA_V2_WEB_API",
+ * "OData V4 - Web API", etc. This function parses them into the correct triple.
+ */
+export function normalizeSrvbBindingType(input?: string): {
+  type: string;
+  odataVersion: string;
+  category?: '0' | '1';
+} {
+  if (!input?.trim()) return { type: 'ODATA', odataVersion: 'V2' };
+
+  const normalized = input
+    .trim()
+    .toUpperCase()
+    .replace(/[\s_-]+/g, '');
+
+  // Extract OData version: look for V4 or V2 in the string
+  let odataVersion = 'V2'; // default
+  if (normalized.includes('V4')) odataVersion = 'V4';
+  else if (normalized.includes('V2')) odataVersion = 'V2';
+
+  // Extract category hint from the string
+  let category: '0' | '1' | undefined;
+  if (normalized.includes('WEBAPI') || normalized.includes('API')) category = '1';
+  else if (normalized.includes('UI')) category = '0';
+
+  return { type: 'ODATA', odataVersion, category };
 }
 
 const DTEL_MAX_LABEL_LENGTHS = {
@@ -270,8 +307,11 @@ export function buildPackageXml(params: PackageCreateParams): string {
 }
 
 export function buildServiceBindingXml(params: ServiceBindingCreateParams): string {
-  const bindingType = params.bindingType?.trim() || 'ODATA';
-  const category = params.category === '1' ? '1' : '0';
+  const normalized = normalizeSrvbBindingType(params.bindingType);
+  // Explicit category from params takes precedence, then hint from bindingType string, then default '0'
+  const category = params.category ?? normalized.category ?? '0';
+  // Explicit odataVersion from params takes precedence, then parsed from bindingType
+  const odataVersion = params.odataVersion?.trim().toUpperCase() || normalized.odataVersion;
   const serviceVersion = params.version?.trim() || '0001';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -289,7 +329,7 @@ export function buildServiceBindingXml(params: ServiceBindingCreateParams): stri
       <srvb:serviceDefinition adtcore:name="${escapeXml(params.serviceDefinition)}"/>
     </srvb:content>
   </srvb:services>
-  <srvb:binding srvb:category="${category}" srvb:type="${escapeXml(bindingType)}" srvb:version="V2">
+  <srvb:binding srvb:category="${category}" srvb:type="${escapeXml(normalized.type)}" srvb:version="${escapeXml(odataVersion)}">
     <srvb:implementation adtcore:name=""/>
   </srvb:binding>
 </srvb:serviceBinding>`;

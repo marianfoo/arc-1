@@ -123,7 +123,8 @@ const SAPWRITE_DESC_ONPREM =
   'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
-  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name) plus optional bindingType/category. ' +
+  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name), odataVersion ("V2"/"V4"), optional category (0=UI, 1=Web API). ' +
+  'bindingType accepts human-readable values like "ODataV4-UI" which are auto-normalized. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD). Pass "objects" array with dependency order.';
@@ -133,7 +134,8 @@ const SAPWRITE_DESC_BTP =
   'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
-  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name) plus optional bindingType/category. ' +
+  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name), odataVersion ("V2"/"V4"), optional category (0=UI, 1=Web API). ' +
+  'bindingType accepts human-readable values like "ODataV4-UI" which are auto-normalized. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD).';
@@ -488,13 +490,23 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
           changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
           serviceDefinition: { type: 'string', description: 'SRVB: service definition name (SRVD) to bind to' },
-          bindingType: { type: 'string', description: 'SRVB: binding type (default: ODATA)' },
+          bindingType: {
+            type: 'string',
+            description:
+              'SRVB: binding type — accepts human-readable values like "ODataV4-UI", "OData V2 - Web API", "ODATA_V4" which are auto-normalized to SAP ADT values (type=ODATA, correct odataVersion + category)',
+          },
+          odataVersion: {
+            type: 'string',
+            enum: ['V2', 'V4'],
+            description: 'SRVB: OData protocol version (default: V2). Overrides version inferred from bindingType.',
+          },
           category: {
             type: 'string',
             enum: ['0', '1'],
-            description: 'SRVB: binding category (0=UI, 1=Web API; default: 0)',
+            description:
+              'SRVB: binding category (0=UI, 1=Web API; default: 0). Overrides category inferred from bindingType.',
           },
-          version: { type: 'string', description: 'SRVB: service version (default: 0001)' },
+          version: { type: 'string', description: 'SRVB: service version number (default: 0001)' },
           lintBeforeWrite: {
             type: 'boolean',
             description:
@@ -547,13 +559,21 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
                 changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
                 serviceDefinition: { type: 'string', description: 'SRVB: service definition (SRVD)' },
-                bindingType: { type: 'string', description: 'SRVB: binding type (default ODATA)' },
+                bindingType: {
+                  type: 'string',
+                  description: 'SRVB: binding type — accepts human-readable values like "ODataV4-UI" (auto-normalized)',
+                },
+                odataVersion: {
+                  type: 'string',
+                  enum: ['V2', 'V4'],
+                  description: 'SRVB: OData protocol version (default: V2)',
+                },
                 category: {
                   type: 'string',
                   enum: ['0', '1'],
                   description: 'SRVB: binding category (0=UI, 1=Web API)',
                 },
-                version: { type: 'string', description: 'SRVB: service version (default 0001)' },
+                version: { type: 'string', description: 'SRVB: service version number (default 0001)' },
               },
               required: ['type', 'name'],
             },

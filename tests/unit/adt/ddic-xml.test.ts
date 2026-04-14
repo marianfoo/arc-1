@@ -5,6 +5,7 @@ import {
   buildMessageClassXml,
   buildPackageXml,
   buildServiceBindingXml,
+  normalizeSrvbBindingType,
 } from '../../../src/adt/ddic-xml.js';
 
 describe('ddic-xml builders', () => {
@@ -312,6 +313,50 @@ describe('ddic-xml builders', () => {
     });
   });
 
+  describe('normalizeSrvbBindingType', () => {
+    it('defaults to ODATA V2 when no input', () => {
+      expect(normalizeSrvbBindingType()).toEqual({ type: 'ODATA', odataVersion: 'V2' });
+      expect(normalizeSrvbBindingType('')).toEqual({ type: 'ODATA', odataVersion: 'V2' });
+      expect(normalizeSrvbBindingType(undefined)).toEqual({ type: 'ODATA', odataVersion: 'V2' });
+    });
+
+    it('normalizes "ODataV4-UI" to ODATA V4 category 0', () => {
+      expect(normalizeSrvbBindingType('ODataV4-UI')).toEqual({ type: 'ODATA', odataVersion: 'V4', category: '0' });
+    });
+
+    it('normalizes "OData V4 - UI" to ODATA V4 category 0', () => {
+      expect(normalizeSrvbBindingType('OData V4 - UI')).toEqual({ type: 'ODATA', odataVersion: 'V4', category: '0' });
+    });
+
+    it('normalizes "OData V2 - Web API" to ODATA V2 category 1', () => {
+      expect(normalizeSrvbBindingType('OData V2 - Web API')).toEqual({
+        type: 'ODATA',
+        odataVersion: 'V2',
+        category: '1',
+      });
+    });
+
+    it('normalizes "ODATA_V4" to ODATA V4', () => {
+      expect(normalizeSrvbBindingType('ODATA_V4')).toEqual({ type: 'ODATA', odataVersion: 'V4' });
+    });
+
+    it('normalizes "ODATA_V4_WEB_API" to ODATA V4 category 1', () => {
+      expect(normalizeSrvbBindingType('ODATA_V4_WEB_API')).toEqual({
+        type: 'ODATA',
+        odataVersion: 'V4',
+        category: '1',
+      });
+    });
+
+    it('normalizes plain "ODATA" to V2', () => {
+      expect(normalizeSrvbBindingType('ODATA')).toEqual({ type: 'ODATA', odataVersion: 'V2' });
+    });
+
+    it('is case insensitive', () => {
+      expect(normalizeSrvbBindingType('odatav4-ui')).toEqual({ type: 'ODATA', odataVersion: 'V4', category: '0' });
+    });
+  });
+
   describe('buildServiceBindingXml', () => {
     it('builds basic service binding XML with SRVB/SVB type', () => {
       const xml = buildServiceBindingXml({
@@ -341,7 +386,7 @@ describe('ddic-xml builders', () => {
       expect(xml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>');
     });
 
-    it('uses default category=0 and bindingType=ODATA', () => {
+    it('uses default category=0, bindingType=ODATA, odataVersion=V2', () => {
       const xml = buildServiceBindingXml({
         name: 'ZSB_DEFAULTS',
         description: 'Defaults',
@@ -352,7 +397,7 @@ describe('ddic-xml builders', () => {
       expect(xml).toContain('<srvb:binding srvb:category="0" srvb:type="ODATA" srvb:version="V2">');
     });
 
-    it('supports category=1 for alternate binding category', () => {
+    it('supports category=1 for Web API binding', () => {
       const xml = buildServiceBindingXml({
         name: 'ZSB_UI',
         description: 'UI binding',
@@ -362,6 +407,56 @@ describe('ddic-xml builders', () => {
       });
 
       expect(xml).toContain('<srvb:binding srvb:category="1" srvb:type="ODATA" srvb:version="V2">');
+    });
+
+    it('normalizes "ODataV4-UI" bindingType to ODATA V4 category 0', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_V4',
+        description: 'V4 UI binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_V4',
+        bindingType: 'ODataV4-UI',
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="0" srvb:type="ODATA" srvb:version="V4">');
+    });
+
+    it('normalizes "OData V4 - Web API" bindingType', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_V4_API',
+        description: 'V4 Web API binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_V4_API',
+        bindingType: 'OData V4 - Web API',
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="1" srvb:type="ODATA" srvb:version="V4">');
+    });
+
+    it('explicit category overrides bindingType hint', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_OVERRIDE',
+        description: 'Override test',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_OVERRIDE',
+        bindingType: 'ODataV4-UI', // hints category=0
+        category: '1', // explicit override to Web API
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="1" srvb:type="ODATA" srvb:version="V4">');
+    });
+
+    it('explicit odataVersion overrides bindingType hint', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_OVER_VER',
+        description: 'Override version test',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_OVER_VER',
+        bindingType: 'ODataV4-UI', // hints V4
+        odataVersion: 'V2', // explicit override to V2
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="0" srvb:type="ODATA" srvb:version="V2">');
     });
   });
 
@@ -385,7 +480,6 @@ describe('ddic-xml builders', () => {
       description: 'Service "A&B" <binding>',
       package: '$TMP',
       serviceDefinition: 'ZSD_<TEST>&',
-      bindingType: 'ODATA"&',
     });
 
     expect(domainXml).toContain('&quot;A&amp;B&quot; &lt;test&gt; &apos;apostrophe&apos;');
@@ -395,6 +489,7 @@ describe('ddic-xml builders', () => {
     expect(dtelXml).toContain('<dtel:shortFieldLabel>A&amp;B</dtel:shortFieldLabel>');
     expect(srvbXml).toContain('Service &quot;A&amp;B&quot; &lt;binding&gt;');
     expect(srvbXml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_&lt;TEST&gt;&amp;"/>');
-    expect(srvbXml).toContain('srvb:type="ODATA&quot;&amp;"');
+    // bindingType is normalized — srvb:type is always "ODATA"
+    expect(srvbXml).toContain('srvb:type="ODATA"');
   });
 });

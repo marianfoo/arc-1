@@ -190,6 +190,7 @@ const batchObjectSchemaOnprem = z.object({
   messages: z.array(messageClassMessageSchema).optional(),
   serviceDefinition: z.string().optional(),
   bindingType: z.string().optional(),
+  odataVersion: z.enum(['V2', 'V4']).optional(),
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
 });
@@ -223,6 +224,7 @@ const batchObjectSchemaBtp = z.object({
   messages: z.array(messageClassMessageSchema).optional(),
   serviceDefinition: z.string().optional(),
   bindingType: z.string().optional(),
+  odataVersion: z.enum(['V2', 'V4']).optional(),
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
 });
@@ -260,6 +262,7 @@ export const SAPWriteSchema = z.object({
   messages: z.array(messageClassMessageSchema).optional(),
   serviceDefinition: z.string().optional(),
   bindingType: z.string().optional(),
+  odataVersion: z.enum(['V2', 'V4']).optional(),
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
@@ -299,6 +302,7 @@ export const SAPWriteSchemaBtp = z.object({
   messages: z.array(messageClassMessageSchema).optional(),
   serviceDefinition: z.string().optional(),
   bindingType: z.string().optional(),
+  odataVersion: z.enum(['V2', 'V4']).optional(),
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),

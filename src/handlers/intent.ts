@@ -1189,6 +1189,7 @@ function getMetadataWriteProperties(input: Record<string, unknown>): Record<stri
     bindingType: input.bindingType,
     category: input.category,
     version: input.version,
+    odataVersion: input.odataVersion,
   };
 
   return props;
@@ -1272,6 +1273,7 @@ async function mergeMetadataWriteProperties(
         bindingType: provided.bindingType ?? existing.bindingType,
         category: provided.category ?? normalizeSrvbCategory(existing.bindingCategory),
         version: provided.version ?? existing.serviceVersion,
+        odataVersion: provided.odataVersion ?? existing.odataVersion,
       };
     }
   } catch {
@@ -1511,7 +1513,8 @@ export function buildCreateXml(
         throw new Error('SRVB create/update requires "serviceDefinition" (referenced SRVD name).');
       }
       const categoryRaw = properties?.category;
-      const category = categoryRaw === '1' || categoryRaw === 1 ? '1' : '0';
+      const category =
+        categoryRaw === '1' || categoryRaw === 1 ? '1' : categoryRaw === '0' || categoryRaw === 0 ? '0' : undefined;
       const params: ServiceBindingCreateParams = {
         name,
         description,
@@ -1520,6 +1523,7 @@ export function buildCreateXml(
         bindingType: properties?.bindingType ? String(properties.bindingType) : undefined,
         category,
         version: properties?.version ? String(properties.version) : undefined,
+        odataVersion: properties?.odataVersion ? String(properties.odataVersion) : undefined,
       };
       return buildServiceBindingXml(params);
     }

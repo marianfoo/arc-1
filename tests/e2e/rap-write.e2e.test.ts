@@ -619,6 +619,7 @@ describe('E2E RAP write lifecycle tests', () => {
           name: srvbName,
           package: '$TMP',
           serviceDefinition: srvdName,
+          odataVersion: 'V4',
           category: '0',
         }),
       );
