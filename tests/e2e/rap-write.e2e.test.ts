@@ -54,12 +54,13 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 1: DDLS table entity lifecycle ─────────────────────────────
+  // ── Test 1: TABL table entity lifecycle (via TABL endpoint) ─────────
 
-  it('SAPWrite create DDLS table entity, activate, read, delete', async (ctx) => {
+  it('SAPWrite create TABL table entity, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
 
-    const tableName = uniqueName('ZARC1_RT_');
+    // Table entity name = underlying DB table name, max 16 chars
+    const tableName = uniqueName('ZART').slice(0, 16);
 
     const ddlSource = [
       "@EndUserText.label: 'ARC1 RAP test table'",
@@ -76,7 +77,7 @@ describe('E2E RAP write lifecycle tests', () => {
 
     const createResult = await callTool(client, 'SAPWrite', {
       action: 'create',
-      type: 'DDLS',
+      type: 'TABL',
       name: tableName,
       source: ddlSource,
       package: '$TMP',
@@ -86,21 +87,21 @@ describe('E2E RAP write lifecycle tests', () => {
     try {
       // Activate the table entity
       const activateResult = await callTool(client, 'SAPActivate', {
-        type: 'DDLS',
+        type: 'TABL',
         name: tableName,
       });
       expectToolSuccess(activateResult);
 
       // Read back and verify
       const readResult = await callTool(client, 'SAPRead', {
-        type: 'DDLS',
+        type: 'TABL',
         name: tableName,
       });
       const readText = expectToolSuccess(readResult);
       expect(readText.toLowerCase()).toContain('define table');
       expect(readText.toLowerCase()).toContain(tableName.toLowerCase());
     } finally {
-      await bestEffortDelete(client, 'DDLS', tableName);
+      await bestEffortDelete(client, 'TABL', tableName);
     }
   });
 
@@ -186,7 +187,8 @@ describe('E2E RAP write lifecycle tests', () => {
   it('SAPWrite create DDLS CDS view entity + BDEF, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
 
-    const tableName = uniqueName('ZARC1_RV_');
+    // DDLS table entity name = underlying DB table name, max 16 chars
+    const tableName = uniqueName('ZARV').slice(0, 16);
     const viewName = uniqueName('ZARC1_RI_');
     const bdefName = viewName; // BDEF name must match the root CDS view entity
     const bpClassName = uniqueName('ZBP_ARC1_R');
@@ -207,7 +209,7 @@ describe('E2E RAP write lifecycle tests', () => {
 
     const createTableResult = await callTool(client, 'SAPWrite', {
       action: 'create',
-      type: 'DDLS',
+      type: 'TABL',
       name: tableName,
       source: tableSource,
       package: '$TMP',
@@ -216,7 +218,7 @@ describe('E2E RAP write lifecycle tests', () => {
 
     // Activate the table before building on top of it
     const activateTableResult = await callTool(client, 'SAPActivate', {
-      type: 'DDLS',
+      type: 'TABL',
       name: tableName,
     });
     expectToolSuccess(activateTableResult);
@@ -327,7 +329,7 @@ describe('E2E RAP write lifecycle tests', () => {
       await bestEffortDelete(client, 'BDEF', bdefName);
       await bestEffortDelete(client, 'CLAS', bpClassName);
       await bestEffortDelete(client, 'DDLS', viewName);
-      await bestEffortDelete(client, 'DDLS', tableName);
+      await bestEffortDelete(client, 'TABL', tableName);
     }
   });
 
@@ -336,7 +338,8 @@ describe('E2E RAP write lifecycle tests', () => {
   it('SAPWrite create SRVD service definition, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
 
-    const tableName = uniqueName('ZARC1_RS_');
+    // DDLS table entity name = underlying DB table name, max 16 chars
+    const tableName = uniqueName('ZARS').slice(0, 16);
     const viewName = uniqueName('ZARC1_RX_');
     const srvdName = uniqueName('ZARC1_SD_');
 
@@ -356,7 +359,7 @@ describe('E2E RAP write lifecycle tests', () => {
 
     const createTableResult = await callTool(client, 'SAPWrite', {
       action: 'create',
-      type: 'DDLS',
+      type: 'TABL',
       name: tableName,
       source: tableSource,
       package: '$TMP',
@@ -364,7 +367,7 @@ describe('E2E RAP write lifecycle tests', () => {
     expectToolSuccess(createTableResult);
 
     const activateTableResult = await callTool(client, 'SAPActivate', {
-      type: 'DDLS',
+      type: 'TABL',
       name: tableName,
     });
     expectToolSuccess(activateTableResult);
@@ -433,7 +436,7 @@ describe('E2E RAP write lifecycle tests', () => {
       // Cleanup in reverse dependency order: SRVD -> view -> table
       await bestEffortDelete(client, 'SRVD', srvdName);
       await bestEffortDelete(client, 'DDLS', viewName);
-      await bestEffortDelete(client, 'DDLS', tableName);
+      await bestEffortDelete(client, 'TABL', tableName);
     }
   });
 
@@ -442,7 +445,8 @@ describe('E2E RAP write lifecycle tests', () => {
   it('SAPWrite batch_create for table entity + CDS view', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
 
-    const tableName = uniqueName('ZARC1_RB_');
+    // DDLS table entity name = underlying DB table name, max 16 chars
+    const tableName = uniqueName('ZARB').slice(0, 16);
     const viewName = uniqueName('ZARC1_RC_');
 
     const tableSource = [
@@ -475,7 +479,7 @@ describe('E2E RAP write lifecycle tests', () => {
       package: '$TMP',
       objects: [
         {
-          type: 'DDLS',
+          type: 'TABL',
           name: tableName,
           source: tableSource,
         },
@@ -491,7 +495,7 @@ describe('E2E RAP write lifecycle tests', () => {
     try {
       // Verify both objects were created by reading them back
       const readTableResult = await callTool(client, 'SAPRead', {
-        type: 'DDLS',
+        type: 'TABL',
         name: tableName,
       });
       const tableText = expectToolSuccess(readTableResult);
@@ -508,7 +512,7 @@ describe('E2E RAP write lifecycle tests', () => {
     } finally {
       // Cleanup in reverse dependency order: view -> table
       await bestEffortDelete(client, 'DDLS', viewName);
-      await bestEffortDelete(client, 'DDLS', tableName);
+      await bestEffortDelete(client, 'TABL', tableName);
     }
   });
 });
