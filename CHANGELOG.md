@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/marianfoo/arc-1/compare/v0.6.5...v0.6.6) (2026-04-14)
+
+
+### Bug Fixes
+
+* wait for Docker image before publishing to MCP Registry ([#125](https://github.com/marianfoo/arc-1/issues/125)) ([cab65bc](https://github.com/marianfoo/arc-1/commit/cab65bce68940ba2a6b335fed84674cb79a43098))
+
 ## [0.6.5](https://github.com/marianfoo/arc-1/compare/v0.6.4...v0.6.5) (2026-04-14)
 
 
