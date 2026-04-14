@@ -577,6 +577,39 @@ describe('AdtHttpClient', () => {
 
       expect(fetchHeaders(0)['SAP-Connectivity-Authentication']).toBeUndefined();
     });
+
+    it('sends SAP-Connectivity-Authentication on the CSRF fetch so the token binds to the user session', async () => {
+      const ppConfig: AdtHttpConfig = {
+        ...getDefaultConfig(),
+        sapConnectivityAuth: 'Bearer saml-assertion-for-user',
+      };
+      // CSRF fetch (HEAD) → token returned
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'PP_TOKEN' }));
+      // POST → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(ppConfig);
+      await client.post('/sap/bc/adt/repository/informationsystem/search', 'body', 'application/xml');
+
+      expect(fetchHeaders(0)['SAP-Connectivity-Authentication']).toBe('Bearer saml-assertion-for-user');
+      expect(fetchHeaders(1)['SAP-Connectivity-Authentication']).toBe('Bearer saml-assertion-for-user');
+    });
+
+    it('omits SAP-Connectivity-Authentication on CSRF fetch when ppProxyAuth (Option 1) is used', async () => {
+      const ppConfig: AdtHttpConfig = {
+        ...getDefaultConfig(),
+        sapConnectivityAuth: 'Bearer saml-assertion-for-user',
+        ppProxyAuth: 'Bearer exchanged-token',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'PP_TOKEN' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(ppConfig);
+      await client.post('/sap/bc/adt/repository/informationsystem/search', 'body', 'application/xml');
+
+      expect(fetchHeaders(0)['SAP-Connectivity-Authentication']).toBeUndefined();
+      expect(fetchHeaders(1)['SAP-Connectivity-Authentication']).toBeUndefined();
+    });
   });
 
   // ─── 406/415 Content Negotiation Retry ─────────────────────────────
