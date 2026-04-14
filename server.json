@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.marianfoo/arc-1",
   "title": "ARC-1",
-  "description": "MCP server for SAP ABAP systems with 11 intent-based tools",
-  "version": "0.6.1",
+  "description": "MCP server for SAP ABAP systems",
+  "version": "0.6.3",
   "websiteUrl": "https://marianfoo.github.io/arc-1/",
   "repository": {
     "url": "https://github.com/marianfoo/arc-1.git",
@@ -14,7 +14,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "arc-1",
-      "version": "0.6.1",
+      "version": "0.6.3",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -60,7 +60,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/marianfoo/arc-1:0.6.1",
+      "identifier": "ghcr.io/marianfoo/arc-1:0.6.3",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"
@@ -88,13 +88,23 @@
           "default": "100"
         },
         {
+          "name": "SAP_LANGUAGE",
+          "description": "SAP logon language",
+          "default": "EN"
+        },
+        {
+          "name": "SAP_INSECURE",
+          "description": "Skip TLS certificate verification",
+          "default": "false"
+        },
+        {
           "name": "SAP_READ_ONLY",
           "description": "Block all write operations (safe default)",
           "default": "true"
         },
         {
           "name": "SAP_TRANSPORT",
-          "description": "Override default HTTP transport to stdio for MCP",
+          "description": "MCP transport (Docker defaults to http-streamable, set to stdio for local MCP clients)",
           "default": "stdio"
         }
       ]
