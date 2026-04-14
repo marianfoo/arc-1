@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.6.2](https://github.com/marianfoo/arc-1/compare/v0.6.1...v0.6.2) (2026-04-14)
+
+
+### Features
+
+* add 401 session timeout auto-retry and XML attribute escaping ([#85](https://github.com/marianfoo/arc-1/issues/85)) ([37f8839](https://github.com/marianfoo/arc-1/commit/37f8839297e6ea7ebbac36015e33793ed211140b))
+* Add DOMA/DTEL write support to SAPWrite ([#86](https://github.com/marianfoo/arc-1/issues/86)) ([252d048](https://github.com/marianfoo/arc-1/commit/252d0489b8f417134b5b167972022f5c99d86c09))
+* add FLP launchpad management via SAPManage ([#87](https://github.com/marianfoo/arc-1/issues/87)) ([8026a84](https://github.com/marianfoo/arc-1/commit/8026a84adbbcd84b9a342a491f2285cd1bfd1890))
+* BTP Cloud Foundry deployment with SAP Cloud SDK and MTA support ([#97](https://github.com/marianfoo/arc-1/issues/97)) ([29e6685](https://github.com/marianfoo/arc-1/commit/29e6685749a2325833b55e802b9aea1f81a9b536))
+* CDS write robustness and error handling improvements ([#101](https://github.com/marianfoo/arc-1/issues/101)) ([c06d884](https://github.com/marianfoo/arc-1/commit/c06d884707726bd150fda56fa94beaca9aec2464))
+* DEVC package create/delete via SAPManage ([#110](https://github.com/marianfoo/arc-1/issues/110)) ([72478d3](https://github.com/marianfoo/arc-1/commit/72478d38e2f9a43dac9a1e7d891f3314f3696169))
+* improve activation structured responses, inactive objects, preaudit ([#90](https://github.com/marianfoo/arc-1/issues/90)) ([b8d5db0](https://github.com/marianfoo/arc-1/commit/b8d5db09bb63aa8e120cb80efd98516b18c36631))
+* MSAG (message class) read/write support ([#109](https://github.com/marianfoo/arc-1/issues/109)) ([9a80416](https://github.com/marianfoo/arc-1/commit/9a8041608aadaad0ba72ae152e6f79146ebc20ec))
+* safe by default — read-only, no SQL, no data preview out of the box ([#89](https://github.com/marianfoo/arc-1/issues/89)) ([5a46c9c](https://github.com/marianfoo/arc-1/commit/5a46c9c7aae08ae2ff885a0b1865b063c696f301))
+* SRVB (Service Binding) create/update/delete via SAPWrite ([#111](https://github.com/marianfoo/arc-1/issues/111)) ([3e135a8](https://github.com/marianfoo/arc-1/commit/3e135a84d2aee385e823a7bdb59f2a689cfff6f7))
+* TABL create/update/delete support ([#104](https://github.com/marianfoo/arc-1/issues/104)) ([03f1ece](https://github.com/marianfoo/arc-1/commit/03f1ecea4eb365d94b53c97901a01dc9131dc993))
+* transport enhancements — delete, reassign, types, recursive release (FEAT-39) ([#88](https://github.com/marianfoo/arc-1/issues/88)) ([0f7ac83](https://github.com/marianfoo/arc-1/commit/0f7ac8345a4914d05935f8ced359378c4840093c))
+* transport pre-flight check for non-$TMP package writes ([#99](https://github.com/marianfoo/arc-1/issues/99)) ([36d7787](https://github.com/marianfoo/arc-1/commit/36d7787213b2c1e715b05f273efe32e4b7b9cc9f))
+
+
+### Bug Fixes
+
+* align ADT API patterns with reference abap-adt-api implementation ([#98](https://github.com/marianfoo/arc-1/issues/98)) ([9607510](https://github.com/marianfoo/arc-1/commit/9607510d0bb886d46e70bf2c620e014c37420dd9))
+* enforce allowedPackages on all SAPWrite operations ([#81](https://github.com/marianfoo/arc-1/issues/81)) ([5de8b44](https://github.com/marianfoo/arc-1/commit/5de8b4443b4d090a6920cdee7c917d41bb282ab6))
+* feature probe only treats 404 as unavailable, not all HTTP errors ([#95](https://github.com/marianfoo/arc-1/issues/95)) ([5119615](https://github.com/marianfoo/arc-1/commit/51196153b9a1889a5d572e31d6e15438e2bd09ca))
+* RAP write guard, block CDS writes when RAP unavailable ([#93](https://github.com/marianfoo/arc-1/issues/93)) ([dea0099](https://github.com/marianfoo/arc-1/commit/dea009926d93f76301e1824bc46ee164db9bb23b))
+* remove RAP write guard that blocked all CDS/DDLS writes ([#96](https://github.com/marianfoo/arc-1/issues/96)) ([5ffef19](https://github.com/marianfoo/arc-1/commit/5ffef19b3586d0c0cd9bfb3134d34d0303430398))
+* transport hint false positive when corrNr present in URL path ([#100](https://github.com/marianfoo/arc-1/issues/100)) ([2026702](https://github.com/marianfoo/arc-1/commit/202670259e7e379548eb29f6a05bc360c055f4fb))
+* use HEAD instead of GET for feature probing ([#94](https://github.com/marianfoo/arc-1/issues/94)) ([4a8a156](https://github.com/marianfoo/arc-1/commit/4a8a1565ecb9a56c7137003153b7f1359deef491))
+
 ## [0.6.1](https://github.com/marianfoo/arc-1/compare/v0.6.0...v0.6.1) (2026-04-10)
 
 
