@@ -510,7 +510,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           lintBeforeWrite: {
             type: 'boolean',
             description:
-              'Override server lint-before-write setting for this call. Set false to skip pre-write ABAP lint validation. Lint only applies to ABAP types (PROG, CLAS, INTF, FUNC) — CDS/BDEF/SRVD are always skipped automatically.',
+              'Override server lint-before-write setting for this call. Set false to skip pre-write lint validation. Lint applies to ABAP types (PROG, CLAS, INTF, FUNC) and CDS views (DDLS). BDEF/SRVD/SRVB/DDLX/TABL are skipped (not supported by offline linter).',
           },
           objects: {
             type: 'array',
@@ -690,9 +690,9 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
     {
       name: 'SAPLint',
       description:
-        'Run local abaplint rules on ABAP source code. System-aware: auto-selects cloud or on-prem rules based on detected system type.\n\n' +
+        'Run local abaplint rules on ABAP and CDS source code. System-aware: auto-selects cloud or on-prem rules based on detected system type.\n\n' +
         'Actions:\n' +
-        '- "lint": Check ABAP source for issues. Returns errors and warnings.\n' +
+        '- "lint": Check source for issues. Returns errors and warnings. Works for ABAP (PROG, CLAS, INTF, FUNC) and CDS views (DDLS) — catches syntax errors, naming conventions, field order, legacy view patterns.\n' +
         '- "lint_and_fix": Lint + auto-fix all fixable issues (keyword case, obsolete statements, etc.). Returns fixed source.\n' +
         '- "list_rules": List all available rules with current config. No source needed.\n\n' +
         'For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.',
@@ -704,7 +704,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             enum: ['lint', 'lint_and_fix', 'list_rules'],
             description: 'Check type',
           },
-          source: { type: 'string', description: 'ABAP source code to lint (not needed for list_rules)' },
+          source: { type: 'string', description: 'ABAP or CDS source code to lint (not needed for list_rules)' },
           name: { type: 'string', description: 'Object name (used for filename detection)' },
           rules: {
             type: 'object',

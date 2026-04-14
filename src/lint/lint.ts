@@ -167,15 +167,40 @@ export function detectFilename(source: string, objectName: string): string {
   // Strip leading comment lines ("! doc comments, * comments) and blank lines to find the first keyword
   const stripped = source.replace(/^(\s*(["*!].*)?[\r\n]*)*/m, '');
   const upper = stripped.toUpperCase().trimStart();
-  if (upper.startsWith('CLASS')) return `${objectName.toLowerCase()}.clas.abap`;
-  if (upper.startsWith('INTERFACE')) return `${objectName.toLowerCase()}.intf.abap`;
-  if (upper.startsWith('FUNCTION-POOL') || upper.startsWith('FUNCTION')) return `${objectName.toLowerCase()}.fugr.abap`;
-  if (upper.startsWith('REPORT') || upper.startsWith('PROGRAM')) return `${objectName.toLowerCase()}.prog.abap`;
-  if (upper.startsWith('DEFINE VIEW') || upper.startsWith('@')) return `${objectName.toLowerCase()}.ddls.asddls`;
-  if (upper.startsWith('MANAGED') || upper.startsWith('UNMANAGED') || upper.startsWith('ABSTRACT'))
-    return `${objectName.toLowerCase()}.bdef.asbdef`;
+  const name = objectName.toLowerCase();
+
+  // ABAP types — check first keyword
+  if (upper.startsWith('CLASS')) return `${name}.clas.abap`;
+  if (upper.startsWith('INTERFACE')) return `${name}.intf.abap`;
+  if (upper.startsWith('FUNCTION-POOL') || upper.startsWith('FUNCTION')) return `${name}.fugr.abap`;
+  if (upper.startsWith('REPORT') || upper.startsWith('PROGRAM')) return `${name}.prog.abap`;
+
+  // CDS/DDL types — check the first structural keyword (may be preceded by annotations)
+  // Strip leading annotations (@...\n) to find the actual define/annotate keyword
+  const afterAnnotations = upper.replace(/^(\s*@[^\n]*\n)*/m, '').trimStart();
+  if (afterAnnotations.startsWith('DEFINE TABLE')) return `${name}.tabl.astabl`;
+  if (afterAnnotations.startsWith('DEFINE SERVICE')) return `${name}.srvd.asrvd`;
+  if (afterAnnotations.startsWith('ANNOTATE VIEW') || afterAnnotations.startsWith('ANNOTATE ENTITY'))
+    return `${name}.ddlx.asddlx`;
+  if (afterAnnotations.startsWith('DEFINE VIEW') || afterAnnotations.startsWith('DEFINE ROOT VIEW'))
+    return `${name}.ddls.asddls`;
+  // Fallback: source starts with @ but keyword not matched — assume CDS view (most common)
+  if (upper.startsWith('@')) return `${name}.ddls.asddls`;
+
+  // BDEF types — behavior definitions
+  if (
+    upper.startsWith('MANAGED') ||
+    upper.startsWith('UNMANAGED') ||
+    upper.startsWith('ABSTRACT') ||
+    upper.startsWith('PROJECTION;') ||
+    upper.startsWith('PROJECTION\n') ||
+    upper.startsWith('PROJECTION\r') ||
+    upper.startsWith('PROJECTION ')
+  )
+    return `${name}.bdef.asbdef`;
+
   // Default to class (enables most rules)
-  return `${objectName.toLowerCase()}.clas.abap`;
+  return `${name}.clas.abap`;
 }
 
 /** Map abaplint severity to our severity levels */

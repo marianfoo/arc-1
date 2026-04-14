@@ -18,6 +18,10 @@ export const CLOUD_ERROR_RULES: RuleOverrides = {
   unreachable_code: { severity: 'Error' },
   identical_conditions: { severity: 'Error' },
 
+  // --- CDS correctness ---
+  cds_parser_error: { severity: 'Error' },
+  cds_legacy_view: { severity: 'Error' },
+
   // --- Cloud-specific constraints ---
   cloud_types: { severity: 'Error' },
   strict_sql: { severity: 'Error' },
@@ -59,6 +63,11 @@ export const CLOUD_ERROR_RULES: RuleOverrides = {
 
 /** Rules that produce warnings on cloud systems (advisory) */
 export const CLOUD_WARNING_RULES: RuleOverrides = {
+  // --- CDS style (advisory) ---
+  cds_association_name: { severity: 'Warning' },
+  cds_comment_style: { severity: 'Warning' },
+  cds_field_order: { severity: 'Warning' },
+
   prefer_inline: { severity: 'Warning' },
   keyword_case: {
     severity: 'Warning',
@@ -87,6 +96,8 @@ export const CLOUD_WARNING_RULES: RuleOverrides = {
 
 /** Rules explicitly disabled for cloud preset */
 export const CLOUD_DISABLED_RULES: string[] = [
+  // VDM naming prefixes (ZI_, ZC_, ZR_, etc.) are project-specific
+  'cds_naming',
   // Too noisy for MCP context — LLM generates code without doc comments
   'abapdoc',
   'description_empty',

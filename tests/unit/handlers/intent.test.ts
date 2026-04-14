@@ -1440,6 +1440,66 @@ ENDCLASS.`,
     });
   });
 
+  describe('SAPWrite pre-write lint gate for DDLS', () => {
+    it('blocks DDLS write with CDS syntax errors', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'DDLS',
+        name: 'ZI_TEST',
+        source: `define view entity ZI_TEST as select from ztable {
+  key field1
+  field2
+}`,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Pre-write lint check failed');
+      expect(result.content[0]?.text).toContain('cds_parser_error');
+    });
+
+    it('allows valid DDLS through the gate', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'DDLS',
+        name: 'ZI_TEST',
+        source: `define view entity ZI_TEST as select from ztable {
+  key field1,
+  field2
+}`,
+      });
+      if (result.content[0]?.text) {
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
+
+    it('still skips BDEF for pre-write lint', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'BDEF',
+        name: 'ZI_TEST',
+        source: 'this is total garbage that should not trigger lint',
+      });
+      if (result.content[0]?.text) {
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
+
+    it('still skips SRVD for pre-write lint', async () => {
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'SRVD',
+        name: 'ZSD_TEST',
+        source: 'this is total garbage that should not trigger lint',
+      });
+      if (result.content[0]?.text) {
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
+  });
+
   // ─── Unknown Tool ──────────────────────────────────────────────────
 
   describe('unknown tool', () => {

@@ -1,5 +1,6 @@
+import { Config, Version } from '@abaplint/core';
 import { describe, expect, it } from 'vitest';
-import { detectFilename, lintAbapSource } from '../../../src/lint/lint.js';
+import { detectFilename, lintAbapSource, validateBeforeWrite } from '../../../src/lint/lint.js';
 
 describe('ABAP Lint', () => {
   describe('lintAbapSource', () => {
@@ -76,8 +77,142 @@ ENDCLASS.`;
       expect(detectFilename('managed implementation in class zbp_test', 'Z_TEST')).toBe('z_test.bdef.asbdef');
     });
 
+    it('detects BDEF projection as .bdef.asbdef', () => {
+      expect(detectFilename('projection;\ndefine behavior for ZC_TRAVEL', 'ZC_TRAVEL')).toBe('zc_travel.bdef.asbdef');
+    });
+
+    it('detects SRVD (define service) as .srvd.asrvd', () => {
+      expect(
+        detectFilename(
+          "@EndUserText.label: 'My Service'\ndefine service ZSD_TRAVEL {\n  expose ZI_TRAVEL;\n}",
+          'ZSD_TRAVEL',
+        ),
+      ).toBe('zsd_travel.srvd.asrvd');
+    });
+
+    it('detects SRVD without annotation as .srvd.asrvd', () => {
+      expect(detectFilename('define service ZSD_TRAVEL {\n  expose ZI_TRAVEL;\n}', 'ZSD_TRAVEL')).toBe(
+        'zsd_travel.srvd.asrvd',
+      );
+    });
+
+    it('detects TABL (define table) as .tabl.astabl', () => {
+      expect(
+        detectFilename(
+          "@EndUserText.label: 'Test'\n@AbapCatalog.tableCategory: #TRANSPARENT\ndefine table ztable {\n  key f1 : abap.char(10);\n}",
+          'ZTABLE',
+        ),
+      ).toBe('ztable.tabl.astabl');
+    });
+
+    it('detects DDLX (annotate view) as .ddlx.asddlx', () => {
+      expect(
+        detectFilename(
+          '@Metadata.layer: #CUSTOMER\nannotate view ZI_TRAVEL with {\n  @UI.lineItem: [{ position: 10 }]\n  TravelId;\n}',
+          'ZI_TRAVEL',
+        ),
+      ).toBe('zi_travel.ddlx.asddlx');
+    });
+
+    it('detects DDLX (annotate entity) as .ddlx.asddlx', () => {
+      expect(detectFilename('annotate entity ZI_TRAVEL with {\n  TravelId;\n}', 'ZI_TRAVEL')).toBe(
+        'zi_travel.ddlx.asddlx',
+      );
+    });
+
+    it('detects CDS root view as .ddls.asddls', () => {
+      expect(detectFilename('define root view entity ZR_TRAVEL as select from ztravel { key id }', 'ZR_TRAVEL')).toBe(
+        'zr_travel.ddls.asddls',
+      );
+    });
+
     it('defaults to .clas.abap for unknown', () => {
       expect(detectFilename('DATA lv_test TYPE string.', 'UNKNOWN')).toBe('unknown.clas.abap');
+    });
+  });
+
+  describe('CDS Lint', () => {
+    it('returns no cds_parser_error for valid CDS view', () => {
+      const source = `define view entity ZI_TEST as select from ztable {
+  key field1,
+  field2
+}`;
+      const results = lintAbapSource(source, 'zi_test.ddls.asddls');
+      const parserErrors = results.filter((r) => r.rule === 'cds_parser_error');
+      expect(parserErrors).toHaveLength(0);
+    });
+
+    it('returns cds_parser_error for invalid CDS (missing comma)', () => {
+      const source = `define view entity ZI_TEST as select from ztable {
+  key field1
+  field2
+}`;
+      const results = lintAbapSource(source, 'zi_test.ddls.asddls');
+      const parserErrors = results.filter((r) => r.rule === 'cds_parser_error');
+      expect(parserErrors.length).toBeGreaterThan(0);
+      expect(parserErrors[0].severity).toBe('error');
+    });
+
+    it('returns cds_association_name for bad association name', () => {
+      const source = `define view entity ZI_TEST as select from ztable
+  association [0..*] to zi_other as BadName on BadName.id = ztable.id {
+  key field1
+}`;
+      const results = lintAbapSource(source, 'zi_test.ddls.asddls');
+      const nameErrors = results.filter((r) => r.rule === 'cds_association_name');
+      expect(nameErrors.length).toBeGreaterThan(0);
+      expect(nameErrors[0].message).toContain('underscore');
+    });
+
+    it('returns cds_field_order for associations before key fields', () => {
+      const source = `define view entity ZI_TEST as select from ztable
+  association [0..*] to zi_other as _Other on _Other.id = ztable.id {
+  _Other,
+  key field1
+}`;
+      const results = lintAbapSource(source, 'zi_test.ddls.asddls');
+      const orderErrors = results.filter((r) => r.rule === 'cds_field_order');
+      expect(orderErrors.length).toBeGreaterThan(0);
+    });
+
+    it('returns cds_legacy_view for view without entity keyword (Cloud version)', () => {
+      const source = `@AbapCatalog.sqlViewName: 'ZSQL_TEST'
+define view ZI_TEST as select from ztable {
+  key field1
+}`;
+      // cds_legacy_view only fires with Cloud version (legacy views not supported on BTP)
+      const cloudConfig = Config.getDefault(Version.Cloud);
+      const results = lintAbapSource(source, 'zi_test.ddls.asddls', cloudConfig);
+      const legacyErrors = results.filter((r) => r.rule === 'cds_legacy_view');
+      expect(legacyErrors.length).toBeGreaterThan(0);
+    });
+
+    it('returns no issues for BDEF source (abaplint does not parse BDEF)', () => {
+      const source = 'this is total garbage that abaplint silently ignores for BDEF';
+      const results = lintAbapSource(source, 'zi_test.bdef.asbdef');
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('CDS validateBeforeWrite', () => {
+    it('passes for valid CDS view', () => {
+      const source = `define view entity ZI_TEST as select from ztable {
+  key field1,
+  field2
+}`;
+      const result = validateBeforeWrite(source, 'zi_test.ddls.asddls');
+      expect(result.pass).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('fails for CDS view with syntax error', () => {
+      const source = `define view entity ZI_TEST as select from ztable {
+  key field1
+  field2
+}`;
+      const result = validateBeforeWrite(source, 'zi_test.ddls.asddls');
+      expect(result.pass).toBe(false);
+      expect(result.errors.some((e) => e.rule === 'cds_parser_error')).toBe(true);
     });
   });
 });

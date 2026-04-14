@@ -2179,13 +2179,14 @@ function runPreWriteLint(
     return { blocked: false };
   }
 
-  // abaplint is an ABAP statement parser — it cannot parse CDS DDL, BDL (behavior
-  // definitions), or service definitions. Sending non-ABAP source through it produces
-  // false positives like "Expected CLASSDEFINITION" on perfectly valid `define table`,
-  // `projection;`, or `define service` syntax. Skip lint entirely for these types and
-  // let the SAP server-side compiler handle validation.
-  const ABAP_ONLY_TYPES = new Set(['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL']);
-  if (!ABAP_ONLY_TYPES.has(type)) {
+  // abaplint supports ABAP source (PROG/CLAS/INTF/FUNC/INCL) and CDS views (DDLS) via
+  // its CDS parser. DDLS lint catches syntax errors (cds_parser_error) like missing commas,
+  // wrong keywords, and invalid DDL constructs. BDEF/SRVD/SRVB/DDLX are silently ignored
+  // by abaplint (no parser for those types — garbage passes without errors). TABL (define
+  // table syntax) is not supported by the CDS parser and produces false cds_parser_error.
+  // For unsupported types, SAP server-side compilation handles validation.
+  const LINTABLE_TYPES = new Set(['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS']);
+  if (!LINTABLE_TYPES.has(type)) {
     return { blocked: false };
   }
 

@@ -146,6 +146,55 @@ describe('Config Builder', () => {
       expect(rules.cloud_types).toBe(false);
       expect(rules.strict_sql).toBe(false);
     });
+
+    it('includes cds_parser_error for all system types', () => {
+      for (const systemType of ['btp', 'onprem'] as const) {
+        const config = buildPreWriteConfig({ systemType });
+        const rules = config.get().rules as Record<string, unknown>;
+        expect(rules.cds_parser_error).toBeTruthy();
+        expect((rules.cds_parser_error as Record<string, unknown>).severity).toBe('Error');
+      }
+    });
+  });
+
+  describe('CDS rules in presets', () => {
+    it('enables cds_parser_error as Error for both presets', () => {
+      for (const systemType of ['btp', 'onprem'] as const) {
+        const config = buildLintConfig({ systemType });
+        const rules = config.get().rules as Record<string, unknown>;
+        expect(rules.cds_parser_error).toBeTruthy();
+        expect((rules.cds_parser_error as Record<string, unknown>).severity).toBe('Error');
+      }
+    });
+
+    it('disables cds_naming for both presets', () => {
+      for (const systemType of ['btp', 'onprem'] as const) {
+        const config = buildLintConfig({ systemType });
+        const rules = config.get().rules as Record<string, unknown>;
+        expect(rules.cds_naming).toBe(false);
+      }
+    });
+
+    it('sets cds_legacy_view as Error on BTP, Warning on on-prem', () => {
+      const btpConfig = buildLintConfig({ systemType: 'btp' });
+      const btpRules = btpConfig.get().rules as Record<string, unknown>;
+      expect((btpRules.cds_legacy_view as Record<string, unknown>).severity).toBe('Error');
+
+      const onpremConfig = buildLintConfig({ systemType: 'onprem' });
+      const onpremRules = onpremConfig.get().rules as Record<string, unknown>;
+      expect((onpremRules.cds_legacy_view as Record<string, unknown>).severity).toBe('Warning');
+    });
+
+    it('sets CDS style rules as Warning for both presets', () => {
+      for (const systemType of ['btp', 'onprem'] as const) {
+        const config = buildLintConfig({ systemType });
+        const rules = config.get().rules as Record<string, unknown>;
+        for (const rule of ['cds_association_name', 'cds_comment_style', 'cds_field_order']) {
+          expect(rules[rule]).toBeTruthy();
+          expect((rules[rule] as Record<string, unknown>).severity).toBe('Warning');
+        }
+      }
+    });
   });
 
   describe('listRulesFromConfig', () => {

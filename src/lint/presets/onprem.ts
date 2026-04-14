@@ -18,10 +18,19 @@ export const ONPREM_ERROR_RULES: RuleOverrides = {
   begin_end_names: { severity: 'Error' },
   unreachable_code: { severity: 'Error' },
   identical_conditions: { severity: 'Error' },
+
+  // --- CDS correctness ---
+  cds_parser_error: { severity: 'Error' },
 };
 
 /** Rules that produce warnings on on-premise systems (advisory) */
 export const ONPREM_WARNING_RULES: RuleOverrides = {
+  // --- CDS style (advisory) ---
+  cds_legacy_view: { severity: 'Warning' },
+  cds_association_name: { severity: 'Warning' },
+  cds_comment_style: { severity: 'Warning' },
+  cds_field_order: { severity: 'Warning' },
+
   obsolete_statement: {
     severity: 'Warning',
     refresh: true,
@@ -53,6 +62,8 @@ export const ONPREM_WARNING_RULES: RuleOverrides = {
 
 /** Rules explicitly disabled for on-premise preset */
 export const ONPREM_DISABLED_RULES: string[] = [
+  // VDM naming prefixes (ZI_, ZC_, ZR_, etc.) are project-specific
+  'cds_naming',
   // Cloud-only constraints (not applicable on-prem)
   'cloud_types',
   'strict_sql',
