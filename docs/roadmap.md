@@ -84,9 +84,13 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
-| 44 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
-| 45 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
-| 46 | OPS-03 | Multi-System Routing | P3 | L | Ops |
+| 44 | FEAT-44 | TABL (Database Table) Create | P1 | S | Features |
+| 45 | FEAT-45 | DEVC (Package) Create | P1 | S | Features |
+| 46 | FEAT-46 | SRVB (Service Binding) Create | P2 | S | Features |
+| 47 | FEAT-47 | MSAG (Message Class) Read/Write | P2 | S | Features |
+| 48 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
+| 49 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
+| 50 | OPS-03 | Multi-System Routing | P3 | L | Ops |
 
 ---
 
@@ -157,9 +161,11 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
-13. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
-14. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
-15. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
+13. **FEAT-44** TABL (Database Table) Create (S) — blocks RAP stack creation; 4 competitors have this. Uses existing CRUD framework + `/sap/bc/adt/ddic/tables/` endpoint.
+14. **FEAT-45** DEVC (Package) Create (S) — blocks any greenfield development; 4 competitors have this. Endpoint: `/sap/bc/adt/packages`.
+15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
+16. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
+17. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
 13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
@@ -171,7 +177,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
 ### Phase D: ADT Feature Parity (P2) — Larger Items
-20. **FEAT-39** Transport Enhancements (S) — delete, reassign owner, transport type selection (K/W/T/S/R), recursive release. sapcli has full CTS lifecycle.
+20. **FEAT-46** SRVB (Service Binding) Create (S) — completes RAP stack lifecycle; sapcli + fr0ster have this. Vendor content type: `application/vnd.sap.adt.businessservices.v1+xml`.
+21. **FEAT-47** MSAG (Message Class) Read/Write (S) — used in RAP for exception classes and validation messages. Endpoint: `/sap/bc/adt/messageclass/`.
+22. **FEAT-39** Transport Enhancements (S) — delete, reassign owner, transport type selection (K/W/T/S/R), recursive release. sapcli has full CTS lifecycle.
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
 23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
@@ -1090,6 +1098,129 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - Add `getFeatureToggle(name)` to `src/adt/client.ts`
 - Add both types to SAPRead handler
 - XML parsing in `src/adt/xml-parser.ts` for the `auth:auth` namespace
+
+---
+
+### FEAT-44: TABL (Database Table) Create
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Very High — blocks RAP stack creation from scratch |
+| **Status** | Not started |
+| **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
+
+**What:** Add create/update/delete support for traditional DDIC database tables (TABL) via SAPWrite. Tables are a prerequisite for CDS-based RAP development — root views reference persistent tables, and draft tables are required for managed BOs with draft.
+
+**Current gap:** ARC-1 can read tables (`SAPRead type=TABL`) and has the URL mapping (`/sap/bc/adt/ddic/tables/`), but `buildCreateXml()` has no TABL case and TABL is not in `SAPWRITE_TYPES_ONPREM`/`SAPWRITE_TYPES_BTP`. Two real-world RAP projects ([Xexer/abap_rap_blog](https://github.com/Xexer/abap_rap_blog) with 8 tables, [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap) with 15 tables) cannot be created end-to-end.
+
+**Competitor support:**
+- **sapcli:** Full TABL CRUD via `POST /sap/bc/adt/ddic/tables/` + batch activation. XML serialization with `OrderedClassMembers` preserves element order.
+- **vibing-steampunk:** CreateTable tool in Focused mode with batch activation.
+- **fr0ster:** `HandlerCreate` routes to tables URL; auto-activates post-create (v5.0.7+).
+- **dassian-adt:** `abap_create` with 16 type auto-mappings including TABL.
+
+**Implementation:**
+- Add `'TABL'` to `SAPWRITE_TYPES_ONPREM` and `SAPWRITE_TYPES_BTP` in `src/handlers/tools.ts`
+- Add TABL case to `buildCreateXml()` in `src/handlers/intent.ts` — TABL is a DDIC metadata type (XML-only, no `/source/main`), similar to DOMA/DTEL
+- Add TABL to `isDdicMetadataType()` so updates use XML PUT (not source PUT)
+- Content-Type: `application/vnd.sap.adt.ddic.tables.v2+xml` (vendor-specific, like DOMA/DTEL)
+- Build XML with `<asx:abap>` envelope containing table fields, key definitions, and table properties
+- TABL requires activation after create (already supported via `SAPActivate`)
+- Add unit tests with XML fixtures from real SAP systems
+- **Note:** On BTP ABAP Cloud, prefer `define table entity` in DDLS over traditional TABL. Guard with feature detection if needed.
+
+---
+
+### FEAT-45: DEVC (Package) Create
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — blocks greenfield development workflows |
+| **Status** | Not started |
+| **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
+
+**What:** Add package creation via SAPWrite or SAPManage. Packages are the container for all ABAP development objects — without package creation, LLMs cannot set up greenfield projects.
+
+**Current gap:** ARC-1 can read packages but not create them. The feature matrix shows 6 of 8 competitors support package creation.
+
+**Competitor support:**
+- **sapcli:** `POST /sap/bc/adt/packages` with full XML body (name, description, superPackage, softwareComponent, transportLayer). Accepts explicit `corrNr` for transport.
+- **vibing-steampunk:** CreatePackage tool in Focused mode. Note: package safety bypass bug #101 (SAP_ALLOWED_PACKAGES not enforced on create) — ARC-1 should avoid this.
+- **fr0ster:** Generic `HandlerCreate` routes to packages URL.
+- **dassian-adt:** `abap_create` with auto-derived software component + transport layer.
+
+**Implementation:**
+- Add `DEVC` to `objectBasePath()` → `/sap/bc/adt/packages/`
+- Add `buildCreateXml()` case for DEVC with fields: name, description, superPackage, softwareComponent, transportLayer, packageType (development/structure)
+- XML namespace: `http://www.sap.com/adt/packages` with `pak:package` root element
+- Transport handling: non-local packages require transport (reuse existing pre-flight check pattern)
+- Safety: enforce `checkPackage()` on the *parent* package (superPackage), not the new package name
+- No activation needed — packages are active on creation
+- Add to SAPManage or SAPWrite (TBD — SAPManage may be more appropriate since DEVC is infrastructure, not source code)
+
+---
+
+### FEAT-46: SRVB (Service Binding) Create
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — completes RAP stack lifecycle (ARC-1 already has publish/unpublish) |
+| **Status** | Not started |
+| **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
+
+**What:** Add SRVB object creation to SAPWrite. ARC-1 already reads SRVB and can publish/unpublish via SAPManage, but cannot create the binding object itself. This is the last missing piece for a fully automated RAP stack lifecycle.
+
+**Current gap:** `objectBasePath()` already maps `SRVB` → `/sap/bc/adt/businessservices/bindings/`, but SRVB is not in `SAPWRITE_TYPES` and has no `buildCreateXml()` case.
+
+**Competitor support:**
+- **sapcli:** Full SRVB CRUD via `POST /sap/bc/adt/businessservices/bindings/` with vendor-specific content type.
+- **fr0ster:** `HandlerCreate` supports SRVB creation (v5.0.0+).
+- **vibing-steampunk:** No create, only publish/unpublish (same as ARC-1 today).
+- **dassian-adt:** No SRVB create.
+
+**Implementation:**
+- Add `'SRVB'` to `SAPWRITE_TYPES_ONPREM` and `SAPWRITE_TYPES_BTP` in `src/handlers/tools.ts`
+- Add SRVB case to `buildCreateXml()` — needs binding type (OData V2/V4), service version, referenced SRVD
+- Content-Type: `application/vnd.sap.adt.businessservices.v1+xml` (version-specific — newer SAP may need v2+; use FEAT-38 discovery if available)
+- Add to `needsVendorContentType()` and `vendorContentTypeForType()`
+- SRVB requires activation, then publish step (guide LLM to use SAPManage publish_srvb after create+activate)
+- **Note:** SRVB creation is the least critical gap — many teams create the binding once in ADT and then only interact via publish/unpublish.
+
+---
+
+### FEAT-47: MSAG (Message Class) Read/Write
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — used in RAP exception classes and validation messages |
+| **Status** | Not started |
+| **Source** | [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
+
+**What:** Add read and write support for ABAP message classes (MSAG / T100). ARC-1 can already read T100 messages via `SAPRead type=MSAG` (message class listing), but cannot create message classes or add/update individual messages.
+
+**Current gap:** Message classes are used in RAP for structured error messages in exception classes (`zdmo_cx_rap_generator` → `zdmo_cm_rap_gen_msg`). Without MSAG write, LLMs must use hardcoded text in RAISEs instead of proper message classes.
+
+**Competitor support:**
+- **sapcli:** Full message class CRUD. Read via `/sap/bc/adt/messageclass/{name}`, individual messages via `/sap/bc/adt/messageclass/{name}/messages/{number}`.
+- **vibing-steampunk:** Message class read (T100 listing).
+- **fr0ster:** Message class read via `adt-clients` factory.
+- **dassian-adt:** No message class support.
+
+**Implementation:**
+- Add `MSAG` to `objectBasePath()` → `/sap/bc/adt/messageclass/`
+- Add `MSAG` to `SAPWRITE_TYPES_ONPREM` and `SAPWRITE_TYPES_BTP`
+- MSAG is a DDIC metadata type (XML-only, no source code)
+- XML body includes message class name, description, and message entries (number, type, short text, long text)
+- Add to `isDdicMetadataType()` for XML PUT updates
+- Content-Type: likely `application/vnd.sap.adt.messageclass.v2+xml` (vendor-specific)
 
 ---
 
