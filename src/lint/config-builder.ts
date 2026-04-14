@@ -97,6 +97,8 @@ export function buildPreWriteConfig(options: LintConfigOptions = {}): Config {
     begin_end_names: { severity: 'Error' },
     unreachable_code: { severity: 'Error' },
     identical_conditions: { severity: 'Error' },
+    // CDS syntax errors (catches missing commas, wrong keywords, invalid DDL constructs)
+    cds_parser_error: { severity: 'Error' },
   };
 
   // Add cloud-specific blocking rules
