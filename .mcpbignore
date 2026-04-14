@@ -31,6 +31,6 @@ CHANGELOG.md
 
 # Registry files (not needed in bundle)
 server.json
-cursor-mcp.json
+mcp.json
 mcpb-manifest.json
 glama.json

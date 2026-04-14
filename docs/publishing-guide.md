@@ -20,7 +20,7 @@ This document describes how to publish ARC-1 to various MCP server registries, m
 |------|---------|
 | `server.json` | Official MCP Registry server metadata |
 | `glama.json` | Glama.ai ownership claim |
-| `cursor-mcp.json` | Cursor plugin MCP server config |
+| `mcp.json` | Cursor plugin MCP server config |
 | `.cursor-plugin/plugin.json` | Cursor Marketplace plugin manifest |
 | `mcpb-manifest.json` | Claude Desktop Extension (MCPB) manifest |
 | `.mcpbignore` | Files excluded from MCPB bundle |

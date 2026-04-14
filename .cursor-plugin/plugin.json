@@ -11,5 +11,5 @@
   "license": "MIT",
   "keywords": ["sap", "abap", "adt", "mcp", "erp", "s4hana", "btp"],
   "category": "developer-tools",
-  "mcpServers": "cursor-mcp.json"
+  "mcpServers": "mcp.json"
 }
