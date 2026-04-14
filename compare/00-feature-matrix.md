@@ -113,7 +113,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ (edit_method, Apr 2026) | ❌ |
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (abap run) |
-| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
+| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD, SRVB write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ❌ | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
 | Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ⚠️ (PR #149 in progress) |
 | Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
@@ -122,7 +122,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ (class write test_classes) |
 | Table write (TABL) | ❌ (FEAT-44) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Package create (DEVC) | ❌ (FEAT-45) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
-| Service binding create (SRVB) | ❌ (FEAT-46) | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
+| Service binding create (SRVB) | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
 | Message class write (MSAG) | ❌ (FEAT-47) | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | DCL write (DCLS) | ❌ (FEAT-37) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ |
 

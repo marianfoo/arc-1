@@ -125,7 +125,7 @@ src/
 │   ├── btp.ts                  # BTP Destination Service + Connectivity proxy
 │   ├── cookies.ts, oauth.ts    # Cookie parsing, OAuth 2.0 for BTP ABAP
 │   ├── crud.ts                 # CRUD operations (lock, create, update, delete)
-│   ├── ddic-xml.ts             # DDIC metadata XML builders (DOMA/DTEL create/update payloads)
+│   ├── ddic-xml.ts             # Metadata XML builders (DOMA/DTEL/SRVB create/update payloads)
 │   ├── devtools.ts             # Syntax check, activate, publish SRVB, unit tests
 │   ├── diagnostics.ts          # Short dumps (ST22), ABAP profiler traces
 │   ├── codeintel.ts            # Find def, refs, where-used, completion
@@ -405,7 +405,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 
 - Integration: `TEST_SAP_*` env vars, `getTestClient()` factory, sequential execution, CRUD uses `generateUniqueName()`
 - E2E: MCP SDK client, `connectClient()`/`callTool()`/`expectToolSuccess()` helpers, 120s timeout, sequential
-- E2E RAP lifecycle: `tests/e2e/rap-write.e2e.test.ts` — DDLS/BDEF/SRVD create+activate+delete (skips gracefully when `rap.available=false`)
+- E2E RAP lifecycle: `tests/e2e/rap-write.e2e.test.ts` — DDLS/BDEF/SRVD/SRVB create+activate+publish+delete (skips gracefully when `rap.available=false`)
 - BTP: local only (not CI), needs `TEST_BTP_SERVICE_KEY_FILE`, interactive browser login
 - CI telemetry: `scripts/ci/` aggregates JSON reports into GitHub step summaries. Coverage is informational only.
 

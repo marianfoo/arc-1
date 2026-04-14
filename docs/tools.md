@@ -138,7 +138,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `DOMA`, `DTEL` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `DOMA`, `DTEL` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
@@ -165,9 +165,13 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `setGetParameter` | string | No | DTEL: SET/GET parameter ID |
 | `defaultComponentName` | string | No | DTEL: default component name |
 | `changeDocument` | boolean | No | DTEL: change document flag |
+| `serviceDefinition` | string | No | SRVB: referenced service definition name (SRVD). Required for SRVB create. |
+| `bindingType` | string | No | SRVB: binding type (default `ODATA`) |
+| `category` | string | No | SRVB: binding category (`0` = UI, `1` = Web API; default `0`) |
+| `version` | string | No | SRVB: service version for binding metadata (default `0001`) |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
 
-**DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
+**Metadata XML writes:** `DOMA`, `DTEL`, and `SRVB` use structured XML payloads and do **not** use `/source/main`. `SRVB` create uses wildcard content type (`application/*`) and SRVB update uses vendor type (`application/vnd.sap.adt.businessservices.servicebinding.v2+xml`).
 
 **BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
 
@@ -188,7 +192,8 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"DDLS", name:"ZI_TRAVEL", source:"define root view..."},
   {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
-  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."},
+  {type:"SRVB", name:"ZSB_TRAVEL_O4", serviceDefinition:"ZSD_TRAVEL", category:"0"}
 ])
 
 SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
@@ -198,6 +203,9 @@ SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
 SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
   typeKind="domain", typeName="ZSTATUS",
   shortLabel="Status", mediumLabel="Order Status")
+
+SAPWrite(action="create", type="SRVB", name="ZSB_TRAVEL_O4", package="$TMP",
+  serviceDefinition="ZSD_TRAVEL", category="0")
 ```
 
 **Transport behavior:**

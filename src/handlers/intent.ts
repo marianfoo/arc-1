@@ -33,8 +33,10 @@ import {
 import {
   buildDataElementXml,
   buildDomainXml,
+  buildServiceBindingXml,
   type DataElementCreateParams,
   type DomainCreateParams,
+  type ServiceBindingCreateParams,
 } from '../adt/ddic-xml.js';
 import {
   type ActivationResult,
@@ -1037,15 +1039,23 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
 
 const DOMAIN_V2_CONTENT_TYPE = 'application/vnd.sap.adt.domains.v2+xml; charset=utf-8';
 const DATAELEMENT_V2_CONTENT_TYPE = 'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8';
+const SERVICEBINDING_V2_CONTENT_TYPE = 'application/vnd.sap.adt.businessservices.servicebinding.v2+xml; charset=utf-8';
 const BDEF_CONTENT_TYPE = 'application/vnd.sap.adt.blues.v1+xml';
 
-function isDdicMetadataType(type: string): boolean {
-  return type === 'DOMA' || type === 'DTEL';
+function isMetadataWriteType(type: string): boolean {
+  return type === 'DOMA' || type === 'DTEL' || type === 'SRVB';
 }
 
 /** Types that require a specific vendor content type for creation (not application/*) */
 function needsVendorContentType(type: string): boolean {
   return type === 'DOMA' || type === 'DTEL' || type === 'BDEF';
+}
+
+/** Content type used for create POST */
+function createContentTypeForType(type: string): string {
+  // SRVB creation works with wildcard content type; updates use vendor v2 type.
+  if (type === 'SRVB') return 'application/*';
+  return needsVendorContentType(type) ? vendorContentTypeForType(type) : 'application/*';
 }
 
 /**
@@ -1073,6 +1083,8 @@ function vendorContentTypeForType(type: string): string {
       return DOMAIN_V2_CONTENT_TYPE;
     case 'DTEL':
       return DATAELEMENT_V2_CONTENT_TYPE;
+    case 'SRVB':
+      return SERVICEBINDING_V2_CONTENT_TYPE;
     case 'BDEF':
       return BDEF_CONTENT_TYPE;
     default:
@@ -1094,7 +1106,7 @@ function toBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function getDdicWriteProperties(input: Record<string, unknown>): Record<string, unknown> {
+function getMetadataWriteProperties(input: Record<string, unknown>): Record<string, unknown> {
   const props: Record<string, unknown> = {
     dataType: input.dataType,
     length: input.length,
@@ -1117,6 +1129,10 @@ function getDdicWriteProperties(input: Record<string, unknown>): Record<string, 
     setGetParameter: input.setGetParameter,
     defaultComponentName: input.defaultComponentName,
     changeDocument: input.changeDocument,
+    serviceDefinition: input.serviceDefinition,
+    bindingType: input.bindingType,
+    category: input.category,
+    version: input.version,
   };
 
   return props;
@@ -1131,7 +1147,13 @@ function getDdicWriteProperties(input: Record<string, unknown>): Record<string, 
  * Internal _description and _package fields carry the existing values
  * for the caller to use as fallbacks.
  */
-async function mergeDdicProperties(
+function normalizeSrvbCategory(value: unknown): '0' | '1' | undefined {
+  if (value === '0' || value === 0 || value === 'UI') return '0';
+  if (value === '1' || value === 1 || value === 'Web API') return '1';
+  return undefined;
+}
+
+async function mergeMetadataWriteProperties(
   client: AdtClient,
   type: string,
   name: string,
@@ -1174,6 +1196,18 @@ async function mergeDdicProperties(
         setGetParameter: provided.setGetParameter,
         defaultComponentName: provided.defaultComponentName ?? existing.defaultComponentName,
         changeDocument: provided.changeDocument,
+      };
+    }
+    if (type === 'SRVB') {
+      const existingRaw = await client.getSrvb(name);
+      const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+      return {
+        _description: existing.description,
+        _package: existing.package,
+        serviceDefinition: provided.serviceDefinition ?? existing.serviceDefinition,
+        bindingType: provided.bindingType ?? existing.bindingType,
+        category: provided.category ?? normalizeSrvbCategory(existing.bindingCategory),
+        version: provided.version ?? existing.serviceVersion,
       };
     }
   } catch {
@@ -1394,6 +1428,24 @@ export function buildCreateXml(
                  srvd:srvdSourceType="S">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </srvd:srvdSource>`;
+    case 'SRVB': {
+      const serviceDefinition = String(properties?.serviceDefinition ?? '').trim();
+      if (!serviceDefinition) {
+        throw new Error('SRVB create/update requires "serviceDefinition" (referenced SRVD name).');
+      }
+      const categoryRaw = properties?.category;
+      const category = categoryRaw === '1' || categoryRaw === 1 ? '1' : '0';
+      const params: ServiceBindingCreateParams = {
+        name,
+        description,
+        package: pkg,
+        serviceDefinition,
+        bindingType: properties?.bindingType ? String(properties.bindingType) : undefined,
+        category,
+        version: properties?.version ? String(properties.version) : undefined,
+      };
+      return buildServiceBindingXml(params);
+    }
     case 'DDLX':
       return `<?xml version="1.0" encoding="UTF-8"?>
 <ddlx:ddlxSource xmlns:ddlx="http://www.sap.com/adt/ddic/ddlxsources"
@@ -1581,12 +1633,12 @@ async function handleSAPWrite(
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
 
-      if (isDdicMetadataType(type)) {
-        // DDIC updates are full-XML-replace — we must fetch existing metadata
+      if (isMetadataWriteType(type)) {
+        // Metadata updates are full-XML-replace — we must fetch existing metadata
         // and merge with provided fields so omitted fields keep their current values.
         // Without this, updating just labels would reset dataType/typeKind to defaults.
-        const ddicProps = getDdicWriteProperties(args);
-        const mergedProps = await mergeDdicProperties(client, type, name, ddicProps);
+        const metadataProps = getMetadataWriteProperties(args);
+        const mergedProps = await mergeMetadataWriteProperties(client, type, name, metadataProps);
         const description = String(args.description ?? mergedProps._description ?? name);
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
@@ -1664,22 +1716,22 @@ async function handleSAPWrite(
       // Build type-specific creation XML body.
       // SAP ADT requires the root element to match the object type —
       // a generic objectReferences body returns 400 "System expected the element ...".
-      const ddicProperties = getDdicWriteProperties(args);
-      const body = buildCreateXml(type, name, pkg, description, ddicProperties);
+      const metadataProperties = getMetadataWriteProperties(args);
+      const body = buildCreateXml(type, name, pkg, description, metadataProperties);
 
       // Step 1: Create the object (metadata only)
       const createUrl = objectUrl.replace(/\/[^/]+$/, ''); // parent collection URL
       // DOMA/DTEL/BDEF require vendor-specific content types; all other types use
       // 'application/*' — the wildcard lets the SAP server resolve the correct
       // handler (matching how ADT Eclipse and abap-adt-api send requests).
-      const contentType = needsVendorContentType(type) ? vendorContentTypeForType(type) : 'application/*';
+      const contentType = createContentTypeForType(type);
       const result = await createObject(client.http, client.safety, createUrl, body, contentType, effectiveTransport);
 
-      if (isDdicMetadataType(type)) {
+      if (isMetadataWriteType(type)) {
         // SAP's DTEL POST ignores labels, searchHelp, etc. — they require a follow-up PUT.
         // Use withStatefulSession directly (not safeUpdateObject) to keep the lock cycle
         // on the main client's session, avoiding lock contention with subsequent operations.
-        if (type === 'DTEL' && dtelNeedsPostCreateUpdate(ddicProperties)) {
+        if (type === 'DTEL' && dtelNeedsPostCreateUpdate(metadataProperties)) {
           const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
             const lock = await lockObject(session, client.safety, objectUrl);
@@ -1692,7 +1744,11 @@ async function handleSAPWrite(
           });
         }
         cachingLayer?.invalidate(type, name);
-        return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
+        const followUpHint =
+          type === 'SRVB'
+            ? `\n\nNext steps:\n1. SAPActivate(type="SRVB", name="${name}")\n2. SAPActivate(action="publish_srvb", name="${name}")`
+            : '';
+        return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}${followUpHint}`);
       }
 
       // Step 2: Write source code if provided
@@ -1813,7 +1869,7 @@ async function handleSAPWrite(
       for (const obj of objects) {
         const objType = String(obj.type ?? '');
         const objName = String(obj.name ?? '');
-        const metadataObject = isDdicMetadataType(objType);
+        const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
 
@@ -1848,14 +1904,13 @@ async function handleSAPWrite(
           // Step 1: Create the object
           const objUrl = objectUrlForType(objType, objName);
           const createUrl = objUrl.replace(/\/[^/]+$/, '');
-          const objDdicProps = getDdicWriteProperties(obj);
-          const body = buildCreateXml(objType, objName, pkg, objDescription, objDdicProps);
-          const contentType =
-            metadataObject || needsVendorContentType(objType) ? vendorContentTypeForType(objType) : 'application/*';
+          const objMetadataProps = getMetadataWriteProperties(obj);
+          const body = buildCreateXml(objType, objName, pkg, objDescription, objMetadataProps);
+          const contentType = createContentTypeForType(objType);
           await createObject(client.http, client.safety, createUrl, body, contentType, batchTransport);
 
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
-          if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objDdicProps)) {
+          if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objMetadataProps)) {
             await client.http.withStatefulSession(async (session) => {
               const lock = await lockObject(session, client.safety, objUrl);
               const lockTransport = batchTransport ?? (lock.corrNr || undefined);
