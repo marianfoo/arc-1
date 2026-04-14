@@ -47,6 +47,15 @@ export interface DataElementCreateParams {
   changeDocument?: boolean;
 }
 
+export interface PackageCreateParams {
+  name: string;
+  description: string;
+  superPackage?: string;
+  softwareComponent?: string;
+  transportLayer?: string;
+  packageType?: 'development' | 'structure' | 'main';
+}
+
 const DTEL_MAX_LABEL_LENGTHS = {
   short: 10,
   medium: 20,
@@ -185,4 +194,33 @@ export function buildDataElementXml(params: DataElementCreateParams): string {
     <dtel:deactivateBIDIFiltering>false</dtel:deactivateBIDIFiltering>
   </dtel:dataElement>
 </blue:wbobj>`;
+}
+
+export function buildPackageXml(params: PackageCreateParams): string {
+  const packageType = params.packageType ?? 'development';
+  const superPackage = params.superPackage ?? '';
+  const softwareComponent = params.softwareComponent ?? 'LOCAL';
+  const transportLayer = params.transportLayer ?? '';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<pak:package xmlns:pak="http://www.sap.com/adt/packages"
+             xmlns:adtcore="http://www.sap.com/adt/core"
+             adtcore:description="${escapeXml(params.description)}"
+             adtcore:name="${escapeXml(params.name)}"
+             adtcore:type="DEVC/K"
+             adtcore:version="active"
+             adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(params.name)}"/>
+  <pak:attributes pak:packageType="${escapeXml(packageType)}"/>
+  <pak:superPackage adtcore:name="${escapeXml(superPackage)}"/>
+  <pak:applicationComponent/>
+  <pak:transport>
+    <pak:softwareComponent pak:name="${escapeXml(softwareComponent)}"/>
+    <pak:transportLayer pak:name="${escapeXml(transportLayer)}"/>
+  </pak:transport>
+  <pak:translation/>
+  <pak:useAccesses/>
+  <pak:packageInterfaces/>
+  <pak:subPackages/>
+</pak:package>`;
 }

@@ -212,13 +212,15 @@ const SAPTRANSPORT_DESC_BTP =
 
 const SAPMANAGE_DESC_ONPREM =
   'Probe and report SAP system capabilities. Use this BEFORE attempting operations that depend on optional ' +
-  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports, FLP customization).\n\n' +
+  'features (abapGit, RAP/CDS, AMDP, HANA, UI5/Fiori, CTS transports, FLP customization). Also handles package (DEVC) lifecycle operations.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
   '- "probe": Re-probe the SAP system now (makes 8 parallel requests, ~1-2s). ' +
   'Use this on first use or if you suspect feature availability has changed.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
+  '- "delete_package": Delete an existing package.\n' +
   '- "flp_list_catalogs": List FLP business catalogs.\n' +
   '- "flp_list_groups": List FLP groups.\n' +
   '- "flp_list_tiles": List tiles in a catalog (requires "catalogId").\n' +
@@ -233,11 +235,13 @@ const SAPMANAGE_DESC_ONPREM =
 
 const SAPMANAGE_DESC_BTP =
   'Probe and report SAP system capabilities (BTP ABAP Environment). ' +
-  'Returns feature status and system type.\n\n' +
+  'Returns feature status and system type. Also handles package (DEVC) lifecycle operations.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe.\n' +
   '- "probe": Re-probe the SAP system now.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
+  '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
+  '- "delete_package": Delete an existing package.\n' +
   '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.\n\n' +
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
@@ -753,6 +757,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'features',
               'probe',
               'cache_stats',
+              'create_package',
+              'delete_package',
               'flp_list_catalogs',
               'flp_list_groups',
               'flp_list_tiles',
@@ -763,7 +769,36 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'flp_delete_catalog',
             ],
             description:
-              'Action to execute. FLP actions manage catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+              'Action to execute. Includes package lifecycle (create/delete) and FLP actions for catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+          },
+          name: {
+            type: 'string',
+            description: 'Package name (required for create_package and delete_package).',
+          },
+          description: {
+            type: 'string',
+            description: 'Package description (required for create_package).',
+          },
+          superPackage: {
+            type: 'string',
+            description: 'Parent package for create_package (defaults to empty root package).',
+          },
+          softwareComponent: {
+            type: 'string',
+            description: 'Software component for create_package (default: LOCAL).',
+          },
+          transportLayer: {
+            type: 'string',
+            description: 'Transport layer for create_package (optional; required by some transportable landscapes).',
+          },
+          packageType: {
+            type: 'string',
+            enum: ['development', 'structure', 'main'],
+            description: 'Package type for create_package (default: development).',
+          },
+          transport: {
+            type: 'string',
+            description: 'Optional transport request (corrNr) for create_package or delete_package.',
           },
           catalogId: {
             type: 'string',

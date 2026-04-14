@@ -85,7 +85,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
 | 44 | FEAT-44 | TABL (Database Table) Create | P1 | S | Features |
-| 45 | FEAT-45 | DEVC (Package) Create | P1 | S | Features |
+| 45 | FEAT-45 | DEVC (Package) Create | P1 | S | Features | ✅ Completed (2026-04-14) |
 | 46 | FEAT-46 | SRVB (Service Binding) Create | P2 | S | Features |
 | 47 | FEAT-47 | MSAG (Message Class) Read/Write | P2 | S | Features |
 | 48 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
@@ -162,7 +162,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
 13. **FEAT-44** TABL (Database Table) Create (S) — blocks RAP stack creation; 4 competitors have this. Uses existing CRUD framework + `/sap/bc/adt/ddic/tables/` endpoint.
-14. **FEAT-45** DEVC (Package) Create (S) — blocks any greenfield development; 4 competitors have this. Endpoint: `/sap/bc/adt/packages`.
+14. ~~**FEAT-45** DEVC (Package) Create (S)~~ — **completed 2026-04-14**. Endpoint: `/sap/bc/adt/packages`.
 15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
 16. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 17. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
@@ -331,7 +331,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — safer than LLM-guessed fixes |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-14) |
 | **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-37-quickfix.md) |
 
 **What:** When ATC or syntax check finds an issue, SAP's fix proposal API (`/sap/bc/adt/quickfixes`) suggests the exact correction. Expose this via SAPDiagnose or SAPWrite so the LLM can apply verified fixes instead of guessing.
@@ -1143,9 +1143,9 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Status** | Not started |
 | **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
 
-**What:** Add package creation via SAPWrite or SAPManage. Packages are the container for all ABAP development objects — without package creation, LLMs cannot set up greenfield projects.
+**What:** Add package creation via SAPManage. Packages are the container for all ABAP development objects.
 
-**Current gap:** ARC-1 can read packages but not create them. The feature matrix shows 6 of 8 competitors support package creation.
+**Current state:** Implemented in SAPManage (`create_package`, `delete_package`) with ADT endpoint `/sap/bc/adt/packages`.
 
 **Competitor support:**
 - **sapcli:** `POST /sap/bc/adt/packages` with full XML body (name, description, superPackage, softwareComponent, transportLayer). Accepts explicit `corrNr` for transport.
@@ -1154,13 +1154,12 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - **dassian-adt:** `abap_create` with auto-derived software component + transport layer.
 
 **Implementation:**
-- Add `DEVC` to `objectBasePath()` → `/sap/bc/adt/packages/`
-- Add `buildCreateXml()` case for DEVC with fields: name, description, superPackage, softwareComponent, transportLayer, packageType (development/structure)
-- XML namespace: `http://www.sap.com/adt/packages` with `pak:package` root element
-- Transport handling: non-local packages require transport (reuse existing pre-flight check pattern)
-- Safety: enforce `checkPackage()` on the *parent* package (superPackage), not the new package name
-- No activation needed — packages are active on creation
-- Add to SAPManage or SAPWrite (TBD — SAPManage may be more appropriate since DEVC is infrastructure, not source code)
+- Added `buildPackageXml()` (`pak:package` root, `DEVC/K`) in `src/adt/ddic-xml.ts`
+- Added SAPManage actions: `create_package`, `delete_package`
+- Added transport pre-flight guidance for non-local parent packages
+- Enforced package allowlist on the parent package (`superPackage`)
+- Implemented delete via lock/delete/unlock flow
+- Updated schemas/tool definitions, tests, and docs/feature matrix
 
 ---
 

@@ -33,8 +33,10 @@ import {
 import {
   buildDataElementXml,
   buildDomainXml,
+  buildPackageXml,
   type DataElementCreateParams,
   type DomainCreateParams,
+  type PackageCreateParams,
 } from '../adt/ddic-xml.js';
 import {
   type ActivationResult,
@@ -66,7 +68,7 @@ import {
   listGroups,
   listTiles,
 } from '../adt/flp.js';
-import { checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
+import { checkOperation, checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
   createTransport,
   deleteTransport,
@@ -1512,6 +1514,8 @@ function objectBasePath(type: string): string {
       return '/sap/bc/adt/ddic/domains/';
     case 'DTEL':
       return '/sap/bc/adt/ddic/dataelements/';
+    case 'DEVC':
+      return '/sap/bc/adt/packages/';
     case 'TRAN':
       return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
     default:
@@ -2631,6 +2635,100 @@ async function handleSAPManage(
       return textResult(JSON.stringify(cachedFeatures, null, 2));
     }
 
+    case 'create_package': {
+      const name = String(args.name ?? '').trim();
+      const description = String(args.description ?? '').trim();
+      const superPackage = String(args.superPackage ?? '').trim();
+      const softwareComponent = String(args.softwareComponent ?? '').trim();
+      const transportLayer = String(args.transportLayer ?? '').trim();
+      const transport = String(args.transport ?? '').trim();
+
+      if (!name) return errorResult('"name" is required for create_package action.');
+      if (!description) return errorResult('"description" is required for create_package action.');
+
+      checkOperation(client.safety, OperationType.Create, 'CreatePackage');
+
+      // Package allowlist is enforced on the parent package, not the new package name.
+      // This enables creating children in allowed parents like $TMP.
+      if (superPackage) {
+        checkPackage(client.safety, superPackage);
+      }
+
+      let effectiveTransport = transport || undefined;
+      const packageUrl = `/sap/bc/adt/packages/${encodeURIComponent(name)}`;
+
+      // Transport pre-flight for non-local parent packages when no transport is provided.
+      if (!effectiveTransport && superPackage && superPackage.toUpperCase() !== '$TMP') {
+        try {
+          const transportInfo = await getTransportInfo(client.http, client.safety, packageUrl, superPackage, 'I');
+          if (transportInfo.lockedTransport) {
+            effectiveTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${superPackage}" requires a transport number for package creation, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPManage(action="create_package", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+        } catch {
+          // Graceful fallback: let SAP enforce transport requirements if the pre-check fails.
+        }
+      }
+
+      const packageTypeRaw = String(args.packageType ?? '').trim();
+      const packageType: PackageCreateParams['packageType'] =
+        packageTypeRaw === 'development' || packageTypeRaw === 'structure' || packageTypeRaw === 'main'
+          ? packageTypeRaw
+          : undefined;
+
+      const xml = buildPackageXml({
+        name,
+        description,
+        superPackage: superPackage || undefined,
+        softwareComponent: softwareComponent || undefined,
+        transportLayer: transportLayer || undefined,
+        packageType,
+      });
+
+      await createObject(client.http, client.safety, '/sap/bc/adt/packages', xml, 'application/*', effectiveTransport);
+      return textResult(`Created package ${name}.`);
+    }
+
+    case 'delete_package': {
+      const name = String(args.name ?? '').trim();
+      const transport = String(args.transport ?? '').trim();
+      if (!name) return errorResult('"name" is required for delete_package action.');
+
+      checkOperation(client.safety, OperationType.Delete, 'DeletePackage');
+
+      const packageUrl = `/sap/bc/adt/packages/${encodeURIComponent(name)}`;
+      await client.http.withStatefulSession(async (session) => {
+        const lock = await lockObject(session, client.safety, packageUrl);
+        const effectiveTransport = transport || lock.corrNr || undefined;
+        try {
+          await deleteObject(session, client.safety, packageUrl, lock.lockHandle, effectiveTransport);
+        } finally {
+          try {
+            await unlockObject(session, packageUrl, lock.lockHandle);
+          } catch {
+            // Object may already be deleted — unlock failure is expected.
+          }
+        }
+      });
+
+      return textResult(`Deleted package ${name}.`);
+    }
+
     case 'flp_list_catalogs': {
       const catalogs = await listCatalogs(client.http, client.safety);
       const customCount = catalogs.filter((c) => /^(Z|Y)/i.test(c.domainId)).length;
@@ -2808,7 +2906,7 @@ async function handleSAPManage(
 
     default:
       return errorResult(
-        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
       );
   }
 }

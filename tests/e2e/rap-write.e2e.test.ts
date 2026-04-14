@@ -30,6 +30,15 @@ async function bestEffortDelete(client: Client, type: string, name: string): Pro
   }
 }
 
+/** Best-effort package delete helper. Swallows all errors. */
+async function bestEffortDeletePackage(client: Client, name: string): Promise<void> {
+  try {
+    await callTool(client, 'SAPManage', { action: 'delete_package', name });
+  } catch {
+    // best-effort-cleanup
+  }
+}
+
 describe('E2E RAP write lifecycle tests', () => {
   let client: Client;
   // true when RAP is available, undefined when not (so requireOrSkip can skip on undefined)
@@ -55,6 +64,36 @@ describe('E2E RAP write lifecycle tests', () => {
   });
 
   // ── Test 1: DDLS table entity lifecycle ─────────────────────────────
+
+  it('SAPManage create_package, verify, delete', async () => {
+    const packageName = uniqueName('ZARC1T_');
+
+    const createResult = await callTool(client, 'SAPManage', {
+      action: 'create_package',
+      name: packageName,
+      description: 'ARC-1 E2E test package',
+      superPackage: '$TMP',
+    });
+    expectToolSuccess(createResult);
+
+    try {
+      const readResult = await callTool(client, 'SAPRead', {
+        type: 'DEVC',
+        name: packageName,
+      });
+      const readText = expectToolSuccess(readResult);
+      const parsed = JSON.parse(readText);
+      expect(Array.isArray(parsed)).toBe(true);
+
+      const deleteResult = await callTool(client, 'SAPManage', {
+        action: 'delete_package',
+        name: packageName,
+      });
+      expectToolSuccess(deleteResult);
+    } finally {
+      await bestEffortDeletePackage(client, packageName);
+    }
+  });
 
   it('SAPWrite create DDLS table entity, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
