@@ -33,8 +33,10 @@ import {
 import {
   buildDataElementXml,
   buildDomainXml,
+  buildMessageClassXml,
   type DataElementCreateParams,
   type DomainCreateParams,
+  type MessageClassCreateParams,
 } from '../adt/ddic-xml.js';
 import {
   type ActivationResult,
@@ -789,8 +791,15 @@ async function handleSAPRead(
       const components = await client.getInstalledComponents();
       return textResult(JSON.stringify(components, null, 2));
     }
-    case 'MESSAGES':
-      return textResult(await client.getMessages(name));
+    case 'MESSAGES': {
+      try {
+        const mcInfo = await client.getMessageClassInfo(name);
+        return textResult(JSON.stringify(mcInfo, null, 2));
+      } catch {
+        // Fall back to legacy endpoint if messageclass endpoint unavailable
+        return textResult(await client.getMessages(name));
+      }
+    }
     case 'TEXT_ELEMENTS':
       return textResult(await client.getTextElements(name));
     case 'VARIANTS':
@@ -1038,14 +1047,15 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
 const DOMAIN_V2_CONTENT_TYPE = 'application/vnd.sap.adt.domains.v2+xml; charset=utf-8';
 const DATAELEMENT_V2_CONTENT_TYPE = 'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8';
 const BDEF_CONTENT_TYPE = 'application/vnd.sap.adt.blues.v1+xml';
+const MESSAGECLASS_CONTENT_TYPE = 'application/vnd.sap.adt.mc.messageclass+xml';
 
 function isDdicMetadataType(type: string): boolean {
-  return type === 'DOMA' || type === 'DTEL';
+  return type === 'DOMA' || type === 'DTEL' || type === 'MSAG';
 }
 
 /** Types that require a specific vendor content type for creation (not application/*) */
 function needsVendorContentType(type: string): boolean {
-  return type === 'DOMA' || type === 'DTEL' || type === 'BDEF';
+  return type === 'DOMA' || type === 'DTEL' || type === 'BDEF' || type === 'MSAG';
 }
 
 /**
@@ -1075,6 +1085,8 @@ function vendorContentTypeForType(type: string): string {
       return DATAELEMENT_V2_CONTENT_TYPE;
     case 'BDEF':
       return BDEF_CONTENT_TYPE;
+    case 'MSAG':
+      return MESSAGECLASS_CONTENT_TYPE;
     default:
       // Wildcard lets the SAP server resolve the correct handler.
       // Sending 'application/xml' causes 415 on DDL-based endpoints
@@ -1117,6 +1129,7 @@ function getDdicWriteProperties(input: Record<string, unknown>): Record<string, 
     setGetParameter: input.setGetParameter,
     defaultComponentName: input.defaultComponentName,
     changeDocument: input.changeDocument,
+    messages: input.messages,
   };
 
   return props;
@@ -1138,6 +1151,14 @@ async function mergeDdicProperties(
   provided: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   try {
+    if (type === 'MSAG') {
+      const existing = await client.getMessageClassInfo(name);
+      return {
+        _description: existing.description,
+        _package: existing.package,
+        messages: provided.messages ?? existing.messages,
+      };
+    }
     if (type === 'DOMA') {
       const existing = await client.getDomain(name);
       return {
@@ -1471,6 +1492,22 @@ export function buildCreateXml(
       };
       return buildDataElementXml(params);
     }
+    case 'MSAG': {
+      const messagesRaw = Array.isArray(properties?.messages) ? properties.messages : [];
+      const messages = messagesRaw
+        .filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null)
+        .map((m) => ({
+          number: String(m.number ?? ''),
+          shortText: String(m.shortText ?? ''),
+        }));
+      const params: MessageClassCreateParams = {
+        name,
+        description,
+        package: pkg,
+        messages: messages.length > 0 ? messages : undefined,
+      };
+      return buildMessageClassXml(params);
+    }
     default:
       // Fallback — generic objectReferences using the correct URL for the type
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1525,6 +1562,8 @@ function objectBasePath(type: string): string {
       return '/sap/bc/adt/ddic/domains/';
     case 'DTEL':
       return '/sap/bc/adt/ddic/dataelements/';
+    case 'MSAG':
+      return '/sap/bc/adt/messageclass/';
     case 'TRAN':
       return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
     default:
@@ -1693,6 +1732,19 @@ async function handleSAPWrite(
         // Use withStatefulSession directly (not safeUpdateObject) to keep the lock cycle
         // on the main client's session, avoiding lock contention with subsequent operations.
         if (type === 'DTEL' && dtelNeedsPostCreateUpdate(ddicProperties)) {
+          const ct = vendorContentTypeForType(type);
+          await client.http.withStatefulSession(async (session) => {
+            const lock = await lockObject(session, client.safety, objectUrl);
+            const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
+            try {
+              await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
+            } finally {
+              await unlockObject(session, objectUrl, lock.lockHandle);
+            }
+          });
+        }
+        // MSAG: POST creates empty container — follow-up PUT to write messages
+        if (type === 'MSAG' && Array.isArray(ddicProperties.messages) && ddicProperties.messages.length > 0) {
           const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
             const lock = await lockObject(session, client.safety, objectUrl);

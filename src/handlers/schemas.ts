@@ -133,13 +133,19 @@ const SAPWRITE_TYPES_ONPREM = [
   'TABL',
   'DOMA',
   'DTEL',
+  'MSAG',
 ] as const;
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'TABL', 'DOMA', 'DTEL'] as const;
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'TABL', 'DOMA', 'DTEL', 'MSAG'] as const;
 
 const ddicFixedValueSchema = z.object({
   low: z.string(),
   high: z.string().optional(),
   description: z.string().optional(),
+});
+
+const messageClassMessageSchema = z.object({
+  number: z.string(),
+  shortText: z.string(),
 });
 
 const batchObjectSchemaOnprem = z.object({
@@ -168,6 +174,7 @@ const batchObjectSchemaOnprem = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
 });
 
 const batchObjectSchemaBtp = z.object({
@@ -196,6 +203,7 @@ const batchObjectSchemaBtp = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
 });
 
 export const SAPWriteSchema = z.object({
@@ -228,6 +236,7 @@ export const SAPWriteSchema = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
@@ -261,6 +270,7 @@ export const SAPWriteSchemaBtp = z.object({
   setGetParameter: z.string().optional(),
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
+  messages: z.array(messageClassMessageSchema).optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 

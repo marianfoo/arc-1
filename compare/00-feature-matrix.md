@@ -124,7 +124,7 @@ _Last updated: 2026-04-14 (fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAu
 | Table write (TABL) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Package create (DEVC) | ❌ (FEAT-45) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Service binding create (SRVB) | ❌ (FEAT-46) | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
-| Message class write (MSAG) | ❌ (FEAT-47) | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
+| Message class write (MSAG) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | DCL write (DCLS) | ❌ (FEAT-37) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ |
 
 ## 7. Code Intelligence

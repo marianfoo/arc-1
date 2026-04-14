@@ -1216,7 +1216,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — used in RAP exception classes and validation messages |
-| **Status** | Not started |
+| **Status** | Completed |
 | **Source** | [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
 
 **What:** Add read and write support for ABAP message classes (MSAG / T100). ARC-1 can already read T100 messages via `SAPRead type=MSAG` (message class listing), but cannot create message classes or add/update individual messages.

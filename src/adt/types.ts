@@ -246,6 +246,19 @@ export interface TraceDbAccess {
   accessTime: number;
 }
 
+// ─── Message Class Types ────────────────────────────────────────────
+
+/** Message class metadata from /sap/bc/adt/messageclass/{name} */
+export interface MessageClassInfo {
+  name: string;
+  description: string;
+  messages: Array<{
+    number: string;
+    shortText: string;
+  }>;
+  package: string;
+}
+
 // ─── DDIC Types ─────────────────────────────────────────────────────
 
 /** Domain metadata from /sap/bc/adt/ddic/domains/{name} */
