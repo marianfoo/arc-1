@@ -1364,9 +1364,22 @@ export function buildCreateXml(
                adtcore:type="DDLS/DF"
                adtcore:masterLanguage="EN"
                adtcore:masterSystem="H00"
-               adtcore:responsible="DEVELOPER">
+                 adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </ddl:ddlSource>`;
+    case 'TABL':
+      // TABL creation also uses SAP's "blue" framework envelope, then source is written via /source/main.
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
+                 xmlns:adtcore="http://www.sap.com/adt/core"
+                 adtcore:description="${escapeXml(description)}"
+                 adtcore:name="${escapeXml(name)}"
+                 adtcore:type="TABL/DT"
+                 adtcore:masterLanguage="EN"
+                 adtcore:masterSystem="H00"
+                 adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</blue:blueSource>`;
     case 'BDEF':
       // BDEF uses SAP's "blue" framework — blue:blueSource with http://www.sap.com/wbobj/blue namespace.
       // Confirmed by vibing-steampunk (Go) and fr0ster (TypeScript) reference implementations.

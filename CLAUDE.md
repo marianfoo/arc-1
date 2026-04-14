@@ -405,7 +405,7 @@ import { mockResponse } from '../../helpers/mock-fetch.js';
 
 - Integration: `TEST_SAP_*` env vars, `getTestClient()` factory, sequential execution, CRUD uses `generateUniqueName()`
 - E2E: MCP SDK client, `connectClient()`/`callTool()`/`expectToolSuccess()` helpers, 120s timeout, sequential
-- E2E RAP lifecycle: `tests/e2e/rap-write.e2e.test.ts` — DDLS/BDEF/SRVD create+activate+delete (skips gracefully when `rap.available=false`)
+- E2E RAP lifecycle: `tests/e2e/rap-write.e2e.test.ts` — TABL/DDLS/BDEF/SRVD create+activate+delete (skips gracefully when `rap.available=false`)
 - BTP: local only (not CI), needs `TEST_BTP_SERVICE_KEY_FILE`, interactive browser login
 - CI telemetry: `scripts/ci/` aggregates JSON reports into GitHub step summaries. Coverage is informational only.
 

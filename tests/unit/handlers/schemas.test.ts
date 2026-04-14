@@ -220,6 +220,16 @@ describe('SAPWriteSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts TABL for source-based writes', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'TABL',
+      name: 'ZTABL_TEST',
+      source: 'define table ztabl_test { key client : abap.clnt; key id : abap.numc(8); }',
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('rejects missing action', () => {
     expect(SAPWriteSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST' }).success).toBe(false);
   });
@@ -278,6 +288,7 @@ describe('SAPWriteSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'CLAS', name: 'Z' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DDLS', name: 'Z' }).success).toBe(true);
+    expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'TABL', name: 'ZTABL' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DOMA', name: 'ZDOMAIN' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DTEL', name: 'ZDELEM' }).success).toBe(true);
   });

@@ -161,7 +161,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03)
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
-13. **FEAT-44** TABL (Database Table) Create (S) — blocks RAP stack creation; 4 competitors have this. Uses existing CRUD framework + `/sap/bc/adt/ddic/tables/` endpoint.
+13. ~~**FEAT-44** TABL (Database Table) Create (S)~~ — **completed 2026-04-14** (source-based TABL create/update/delete + batch_create support in SAPWrite)
 14. **FEAT-45** DEVC (Package) Create (S) — blocks any greenfield development; 4 competitors have this. Endpoint: `/sap/bc/adt/packages`.
 15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings
 16. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
@@ -1108,12 +1108,12 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Very High — blocks RAP stack creation from scratch |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-14) |
 | **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
 
 **What:** Add create/update/delete support for traditional DDIC database tables (TABL) via SAPWrite. Tables are a prerequisite for CDS-based RAP development — root views reference persistent tables, and draft tables are required for managed BOs with draft.
 
-**Current gap:** ARC-1 can read tables (`SAPRead type=TABL`) and has the URL mapping (`/sap/bc/adt/ddic/tables/`), but `buildCreateXml()` has no TABL case and TABL is not in `SAPWRITE_TYPES_ONPREM`/`SAPWRITE_TYPES_BTP`. Two real-world RAP projects ([Xexer/abap_rap_blog](https://github.com/Xexer/abap_rap_blog) with 8 tables, [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap) with 15 tables) cannot be created end-to-end.
+**Current gap:** Closed in 2026-04-14 implementation.
 
 **Competitor support:**
 - **sapcli:** Full TABL CRUD via `POST /sap/bc/adt/ddic/tables/` + batch activation. XML serialization with `OrderedClassMembers` preserves element order.
@@ -1123,13 +1123,13 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 **Implementation:**
 - Add `'TABL'` to `SAPWRITE_TYPES_ONPREM` and `SAPWRITE_TYPES_BTP` in `src/handlers/tools.ts`
-- Add TABL case to `buildCreateXml()` in `src/handlers/intent.ts` — TABL is a DDIC metadata type (XML-only, no `/source/main`), similar to DOMA/DTEL
-- Add TABL to `isDdicMetadataType()` so updates use XML PUT (not source PUT)
-- Content-Type: `application/vnd.sap.adt.ddic.tables.v2+xml` (vendor-specific, like DOMA/DTEL)
-- Build XML with `<asx:abap>` envelope containing table fields, key definitions, and table properties
+- Add `'TABL'` to SAPWrite schema enums in `src/handlers/schemas.ts` (single + batch object schemas)
+- Add TABL case to `buildCreateXml()` in `src/handlers/intent.ts` using `blue:blueSource` and `adtcore:type="TABL/DT"` (same shell pattern as BDEF)
+- Keep TABL source-based (not DDIC metadata type): create shell with POST, then write source via `/source/main` using existing `safeUpdateSource` flow
+- Keep content-type as `application/*` for create (same behavior as DDLS/SRVD)
 - TABL requires activation after create (already supported via `SAPActivate`)
-- Add unit tests with XML fixtures from real SAP systems
-- **Note:** On BTP ABAP Cloud, prefer `define table entity` in DDLS over traditional TABL. Guard with feature detection if needed.
+- Add unit tests for TABL create/update/delete/batch_create routing and create-XML output
+- Add E2E lifecycle test (`tests/e2e/rap-write.e2e.test.ts`) for TABL create/read/activate/update/delete
 
 ---
 

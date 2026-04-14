@@ -120,7 +120,7 @@ _Last updated: 2026-04-13 (fr0ster v5.0.8: 14 activation tools, 303 total)_
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (ADTObjectType) |
 | Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ (class write test_classes) |
-| Table write (TABL) | ❌ (FEAT-44) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
+| Table write (TABL) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Package create (DEVC) | ❌ (FEAT-45) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Service binding create (SRVB) | ❌ (FEAT-46) | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
 | Message class write (MSAG) | ❌ (FEAT-47) | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |

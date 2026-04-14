@@ -138,7 +138,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `DOMA`, `DTEL` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `TABL`, `DOMA`, `DTEL` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
@@ -169,6 +169,8 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 **DDIC metadata writes:** `DOMA` and `DTEL` use structured XML payloads (content-type `application/vnd.sap.adt.*.v2+xml`) and do **not** use `/source/main`.
 
+**TABL writes:** `TABL` is source-based (like DDLS/BDEF/SRVD). ARC-1 creates the table shell, then writes table source via `/source/main`.
+
 **BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
 
 **CDS pre-write validation:**
@@ -179,17 +181,21 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 **Batch creation:**
 
-`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, CDS view before projection, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
 
 ```
 SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
+  {type:"TABL", name:"ZTRAVEL", source:"define table ztravel {...}"},
   {type:"DDLS", name:"ZI_TRAVEL", source:"define root view..."},
   {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
 ])
+
+SAPWrite(action="create", type="TABL", name="ZTRAVEL", package="$TMP",
+  source="@EndUserText.label : 'Travel'\ndefine table ztravel {\n  key client : abap.clnt;\n  key travel_id : abap.numc(8);\n  description : abap.char(256);\n}")
 
 SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
   dataType="CHAR", length=1,

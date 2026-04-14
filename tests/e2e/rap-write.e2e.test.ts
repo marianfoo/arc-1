@@ -1,5 +1,5 @@
 /**
- * E2E Tests for RAP Object Write Lifecycle (DDLS + BDEF + SRVD)
+ * E2E Tests for RAP Object Write Lifecycle (TABL + DDLS + BDEF + SRVD)
  *
  * Creates, reads, activates, and deletes RAP-dependent objects on a real SAP system.
  * Requires rap.available = true on the test system. Skips gracefully if RAP is unavailable.
@@ -104,7 +104,84 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 2: CDS view entity + BDEF lifecycle ───────────────────────
+  // ── Test 2: TABL lifecycle ──────────────────────────────────────────
+
+  it('SAPWrite create TABL, read, update, activate, delete', async (ctx) => {
+    requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
+
+    const tableName = uniqueName('ZTAB').slice(0, 16);
+
+    const createSource = [
+      "@EndUserText.label : 'ARC1 TABL lifecycle'",
+      '@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE',
+      '@AbapCatalog.tableCategory : #TRANSPARENT',
+      '@AbapCatalog.deliveryClass : #A',
+      '@AbapCatalog.dataMaintenance : #RESTRICTED',
+      `define table ${tableName.toLowerCase()} {`,
+      '  key client : abap.clnt not null;',
+      '  key id     : abap.numc(8) not null;',
+      '  descr      : abap.char(40);',
+      '}',
+    ].join('\n');
+
+    const updateSource = [
+      "@EndUserText.label : 'ARC1 TABL lifecycle updated'",
+      '@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE',
+      '@AbapCatalog.tableCategory : #TRANSPARENT',
+      '@AbapCatalog.deliveryClass : #A',
+      '@AbapCatalog.dataMaintenance : #RESTRICTED',
+      `define table ${tableName.toLowerCase()} {`,
+      '  key client : abap.clnt not null;',
+      '  key id     : abap.numc(8) not null;',
+      '  descr      : abap.char(40);',
+      '  note       : abap.char(80);',
+      '}',
+    ].join('\n');
+
+    const createResult = await callTool(client, 'SAPWrite', {
+      action: 'create',
+      type: 'TABL',
+      name: tableName,
+      package: '$TMP',
+      source: createSource,
+    });
+    expectToolSuccess(createResult);
+
+    try {
+      const readCreatedResult = await callTool(client, 'SAPRead', {
+        type: 'TABL',
+        name: tableName,
+      });
+      const readCreatedText = expectToolSuccess(readCreatedResult).toLowerCase();
+      expect(readCreatedText).toContain('define table');
+      expect(readCreatedText).toContain('descr');
+
+      const activateResult = await callTool(client, 'SAPActivate', {
+        type: 'TABL',
+        name: tableName,
+      });
+      expectToolSuccess(activateResult);
+
+      const updateResult = await callTool(client, 'SAPWrite', {
+        action: 'update',
+        type: 'TABL',
+        name: tableName,
+        source: updateSource,
+      });
+      expectToolSuccess(updateResult);
+
+      const readUpdatedResult = await callTool(client, 'SAPRead', {
+        type: 'TABL',
+        name: tableName,
+      });
+      const readUpdatedText = expectToolSuccess(readUpdatedResult).toLowerCase();
+      expect(readUpdatedText).toContain('note');
+    } finally {
+      await bestEffortDelete(client, 'TABL', tableName);
+    }
+  });
+
+  // ── Test 3: CDS view entity + BDEF lifecycle ───────────────────────
 
   it('SAPWrite create DDLS CDS view entity + BDEF, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
@@ -254,7 +331,7 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 3: SRVD service definition lifecycle ──────────────────────
+  // ── Test 4: SRVD service definition lifecycle ──────────────────────
 
   it('SAPWrite create SRVD service definition, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
@@ -360,7 +437,7 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 4: batch_create for RAP stack ─────────────────────────────
+  // ── Test 5: batch_create for RAP stack ─────────────────────────────
 
   it('SAPWrite batch_create for table entity + CDS view', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
