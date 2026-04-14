@@ -69,7 +69,7 @@ jobs:
   # This makes ARC-1 discoverable in VS Code (@mcp search), GitHub MCP Registry,
   # and other MCP clients that consume the registry API.
   publish-mcp-registry:
-    needs: [release-please, publish-npm]
+    needs: [release-please, publish-npm, publish-docker-merge]
     runs-on: ubuntu-latest
     permissions:
       contents: read
