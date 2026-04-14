@@ -2172,6 +2172,18 @@ ENDCLASS.`;
   // ─── SAPManage ─────────────────────────────────────────────────────
 
   describe('SAPManage', () => {
+    const transportInfoResponse = (recording: boolean, isLocal: boolean, transports: string[] = []) => {
+      const transportEntries = transports
+        .map((t) => `<headers><TRKORR>${t}</TRKORR><AS4TEXT>Transport ${t}</AS4TEXT><AS4USER>DEV</AS4USER></headers>`)
+        .join('');
+      return `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING>${recording ? 'X' : ''}</RECORDING>
+        <DLVUNIT>${isLocal ? 'LOCAL' : 'SAP'}</DLVUNIT>
+        <DEVCLASS>Z_PARENT</DEVCLASS>
+        ${transports.length > 0 ? `<TRANSPORTS>${transportEntries}</TRANSPORTS>` : ''}
+      </DATA></asx:values></asx:abap>`;
+    };
+
     it('returns message when features not yet probed', async () => {
       const { resetCachedFeatures } = await import('../../../src/handlers/intent.js');
       resetCachedFeatures();
@@ -2189,6 +2201,173 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Invalid arguments for SAPManage');
+    });
+
+    it('create_package creates DEVC via ADT packages endpoint', async () => {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url), body: opts?.body });
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'create_package',
+        name: 'ZPKG_TEST',
+        description: 'Test package',
+        superPackage: '$TMP',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Created package ZPKG_TEST');
+      const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/packages'));
+      expect(createCall).toBeDefined();
+      expect(createCall?.body).toContain('<pak:package');
+      expect(createCall?.body).toContain('adtcore:type="DEVC/K"');
+      expect(createCall?.body).toContain('<pak:superPackage adtcore:name="$TMP"/>');
+    });
+
+    it('create_package appends corrNr when transport is provided', async () => {
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url) });
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'create_package',
+        name: 'ZPKG_TR',
+        description: 'Transported package',
+        superPackage: 'Z_PARENT',
+        transport: 'A4HK900777',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/packages'));
+      expect(createCall?.url).toContain('corrNr=A4HK900777');
+    });
+
+    it('create_package returns error when name is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'create_package',
+        description: 'Missing name',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"name" is required');
+    });
+
+    it('create_package is blocked by read-only safety mode', async () => {
+      const readOnlyClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+
+      const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
+        action: 'create_package',
+        name: 'ZPKG_RO',
+        description: 'Read-only package',
+        superPackage: '$TMP',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('delete_package deletes package via lock/delete/unlock', async () => {
+      const calls: Array<{ method: string; url: string }> = [];
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'delete_package',
+        name: 'ZPKG_DEL',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Deleted package ZPKG_DEL');
+      expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('/sap/bc/adt/packages/ZPKG_DEL'))).toBe(true);
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'))).toBe(true);
+    });
+
+    it('delete_package is blocked by read-only safety mode', async () => {
+      const readOnlyClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+
+      const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
+        action: 'delete_package',
+        name: 'ZPKG_RO',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('create_package returns transport guidance when parent package requires transport', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(
+            mockResponse(200, transportInfoResponse(true, false, ['A4HK900502']), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'create_package',
+        name: 'ZPKG_NEEDS_TR',
+        description: 'Transport-required package',
+        superPackage: 'Z_PARENT',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('requires a transport number');
+      expect(result.content[0]?.text).toContain('SAPTransport');
+      expect(result.content[0]?.text).toContain('A4HK900502');
+    });
+
+    it('create_package includes optional fields in XML payload', async () => {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url), body: opts?.body });
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'create_package',
+        name: 'ZPKG_FULL',
+        description: 'Full options package',
+        superPackage: 'Z_PARENT',
+        softwareComponent: 'HOME',
+        transportLayer: 'HOME',
+        packageType: 'structure',
+        transport: 'A4HK900701',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/packages'));
+      expect(createCall?.body).toContain('<pak:attributes pak:packageType="structure"/>');
+      expect(createCall?.body).toContain('<pak:superPackage adtcore:name="Z_PARENT"/>');
+      expect(createCall?.body).toContain('<pak:softwareComponent pak:name="HOME"/>');
+      expect(createCall?.body).toContain('<pak:transportLayer pak:name="HOME"/>');
     });
 
     it('flp_list_catalogs returns catalog list', async () => {

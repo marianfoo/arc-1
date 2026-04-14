@@ -84,12 +84,14 @@ describe('Tool Definitions', () => {
     }
   });
 
-  it('SAPManage exposes FLP actions', () => {
+  it('SAPManage exposes package and FLP actions', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
     const sapManage = tools.find((t) => t.name === 'SAPManage')!;
     const schema = sapManage.inputSchema as Record<string, any>;
     const actionEnum: string[] = schema.properties.action.enum;
 
+    expect(actionEnum).toContain('create_package');
+    expect(actionEnum).toContain('delete_package');
     expect(actionEnum).toContain('flp_list_catalogs');
     expect(actionEnum).toContain('flp_list_groups');
     expect(actionEnum).toContain('flp_list_tiles');
