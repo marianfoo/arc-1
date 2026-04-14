@@ -56,6 +56,16 @@ export interface PackageCreateParams {
   packageType?: 'development' | 'structure' | 'main';
 }
 
+export interface ServiceBindingCreateParams {
+  name: string;
+  description: string;
+  package: string;
+  serviceDefinition: string;
+  bindingType?: string;
+  category?: '0' | '1';
+  version?: string;
+}
+
 const DTEL_MAX_LABEL_LENGTHS = {
   short: 10,
   medium: 20,
@@ -257,4 +267,30 @@ export function buildPackageXml(params: PackageCreateParams): string {
   <pak:packageInterfaces/>
   <pak:subPackages/>
 </pak:package>`;
+}
+
+export function buildServiceBindingXml(params: ServiceBindingCreateParams): string {
+  const bindingType = params.bindingType?.trim() || 'ODATA';
+  const category = params.category === '1' ? '1' : '0';
+  const serviceVersion = params.version?.trim() || '0001';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"
+                     xmlns:adtcore="http://www.sap.com/adt/core"
+                     adtcore:description="${escapeXml(params.description)}"
+                     adtcore:name="${escapeXml(params.name)}"
+                     adtcore:type="SRVB/SVB"
+                     adtcore:language="EN"
+                     adtcore:masterLanguage="EN"
+                     adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(params.package)}"/>
+  <srvb:services srvb:name="${escapeXml(params.name)}">
+    <srvb:content srvb:version="${escapeXml(serviceVersion)}">
+      <srvb:serviceDefinition adtcore:name="${escapeXml(params.serviceDefinition)}"/>
+    </srvb:content>
+  </srvb:services>
+  <srvb:binding srvb:category="${category}" srvb:type="${escapeXml(bindingType)}" srvb:version="V2">
+    <srvb:implementation adtcore:name=""/>
+  </srvb:binding>
+</srvb:serviceBinding>`;
 }

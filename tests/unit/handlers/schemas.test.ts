@@ -208,6 +208,27 @@ describe('SAPWriteSchema', () => {
     }
   });
 
+  it('accepts SRVB fields and validates category enum', () => {
+    const srvb = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'SRVB',
+      name: 'ZSB_TRAVEL_O4',
+      serviceDefinition: 'ZSD_TRAVEL',
+      bindingType: 'ODATA',
+      category: '0',
+    });
+    expect(srvb.success).toBe(true);
+
+    const invalidCategory = SAPWriteSchema.safeParse({
+      action: 'create',
+      type: 'SRVB',
+      name: 'ZSB_TRAVEL_O4',
+      serviceDefinition: 'ZSD_TRAVEL',
+      category: '2',
+    });
+    expect(invalidCategory.success).toBe(false);
+  });
+
   it('accepts edit_method with all fields', () => {
     const result = SAPWriteSchema.safeParse({
       action: 'edit_method',
@@ -289,6 +310,9 @@ describe('SAPWriteSchemaBtp', () => {
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'CLAS', name: 'Z' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DDLS', name: 'Z' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'TABL', name: 'ZTABL' }).success).toBe(true);
+    expect(
+      SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'SRVB', name: 'ZSB', serviceDefinition: 'ZSD' }).success,
+    ).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DOMA', name: 'ZDOMAIN' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DTEL', name: 'ZDELEM' }).success).toBe(true);
   });

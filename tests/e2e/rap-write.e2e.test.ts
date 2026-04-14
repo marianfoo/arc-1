@@ -481,6 +481,170 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
+  // ── Test 4: SRVB lifecycle (create -> activate -> publish) ────────
+
+  it('SAPWrite create SRVB, activate, publish, unpublish, delete', async (ctx) => {
+    requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
+
+    const tableName = uniqueName('ZART').slice(0, 16);
+    const viewName = uniqueName('ZARC1_SV_');
+    const bdefName = viewName;
+    const bpClassName = uniqueName('ZBP_ARC1_S');
+    const srvdName = uniqueName('ZARC1_SD_');
+    const srvbName = uniqueName('ZARC1_SB_');
+
+    const tableSource = [
+      `@EndUserText.label: 'ARC1 SRVB stack table'`,
+      '@AbapCatalog.enhancement.category: #NOT_EXTENSIBLE',
+      '@AbapCatalog.tableCategory: #TRANSPARENT',
+      '@AbapCatalog.deliveryClass: #A',
+      '@AbapCatalog.dataMaintenance: #RESTRICTED',
+      `define table ${tableName.toLowerCase()} {`,
+      '  key client : abap.clnt not null;',
+      '  key id     : sysuuid_x16 not null;',
+      '  name       : abap.char(40);',
+      '}',
+    ].join('\n');
+
+    const viewSource = [
+      `@EndUserText.label: 'ARC1 SRVB stack view'`,
+      '@AccessControl.authorizationCheck: #NOT_ALLOWED',
+      `define root view entity ${viewName}`,
+      `  as select from ${tableName.toLowerCase()}`,
+      '{',
+      '  key id   as Id,',
+      '  name     as Name',
+      '}',
+    ].join('\n');
+
+    const bpClassSource = [
+      `CLASS ${bpClassName.toLowerCase()} DEFINITION`,
+      '  PUBLIC ABSTRACT FINAL',
+      `  FOR BEHAVIOR OF ${viewName.toLowerCase()}.`,
+      'ENDCLASS.',
+      '',
+      `CLASS ${bpClassName.toLowerCase()} IMPLEMENTATION.`,
+      'ENDCLASS.',
+    ].join('\n');
+
+    const bdefSource = [
+      `managed implementation in class ${bpClassName.toLowerCase()} unique;`,
+      'strict;',
+      '',
+      `define behavior for ${viewName} alias ${viewName.slice(-10)}`,
+      `persistent table ${tableName.toLowerCase()}`,
+      'lock master',
+      'authorization master ( instance )',
+      '{',
+      '  field ( readonly ) Id;',
+      '  create;',
+      '  update;',
+      '  delete;',
+      '}',
+    ].join('\n');
+
+    const srvdSource = [
+      `@EndUserText.label: 'ARC1 SRVB stack service definition'`,
+      `define service ${srvdName} {`,
+      `  expose ${viewName} as TestEntity;`,
+      '}',
+    ].join('\n');
+
+    try {
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'TABL',
+          name: tableName,
+          source: tableSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'TABL', name: tableName }));
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'DDLS',
+          name: viewName,
+          source: viewSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'DDLS', name: viewName }));
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'CLAS',
+          name: bpClassName,
+          source: bpClassSource,
+          package: '$TMP',
+        }),
+      );
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'BDEF',
+          name: bdefName,
+          source: bdefSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(
+        await callTool(client, 'SAPActivate', {
+          objects: [
+            { type: 'CLAS', name: bpClassName },
+            { type: 'BDEF', name: bdefName },
+          ],
+        }),
+      );
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'SRVD',
+          name: srvdName,
+          source: srvdSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'SRVD', name: srvdName }));
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'SRVB',
+          name: srvbName,
+          package: '$TMP',
+          serviceDefinition: srvdName,
+          category: '0',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'SRVB', name: srvbName }));
+
+      const readSrvbResult = await callTool(client, 'SAPRead', {
+        type: 'SRVB',
+        name: srvbName,
+      });
+      const srvbText = expectToolSuccess(readSrvbResult);
+      const parsed = JSON.parse(srvbText);
+      expect(parsed.name).toBe(srvbName);
+      expect(parsed.serviceDefinition).toBe(srvdName);
+
+      expectToolSuccess(await callTool(client, 'SAPActivate', { action: 'publish_srvb', name: srvbName }));
+      expectToolSuccess(await callTool(client, 'SAPActivate', { action: 'unpublish_srvb', name: srvbName }));
+    } finally {
+      await bestEffortDelete(client, 'SRVB', srvbName);
+      await bestEffortDelete(client, 'SRVD', srvdName);
+      await bestEffortDelete(client, 'BDEF', bdefName);
+      await bestEffortDelete(client, 'CLAS', bpClassName);
+      await bestEffortDelete(client, 'DDLS', viewName);
+      await bestEffortDelete(client, 'TABL', tableName);
+    }
+  });
+
   // ── Test 5: batch_create for RAP stack ─────────────────────────────
 
   it('SAPWrite batch_create for table entity + CDS view', async (ctx) => {

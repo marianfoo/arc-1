@@ -110,27 +110,30 @@ const SAPWRITE_TYPES_ONPREM = [
   'DDLX',
   'BDEF',
   'SRVD',
+  'SRVB',
   'TABL',
   'DOMA',
   'DTEL',
   'MSAG',
 ];
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'TABL', 'DOMA', 'DTEL', 'MSAG'];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB', 'TABL', 'DOMA', 'DTEL', 'MSAG'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL, MSAG. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL, MSAG. ' +
   'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
+  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name) plus optional bindingType/category. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD). Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL, MSAG. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL, MSAG. ' +
   'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
+  'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name) plus optional bindingType/category. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD).';
@@ -484,6 +487,14 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
           defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
           changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
+          serviceDefinition: { type: 'string', description: 'SRVB: service definition name (SRVD) to bind to' },
+          bindingType: { type: 'string', description: 'SRVB: binding type (default: ODATA)' },
+          category: {
+            type: 'string',
+            enum: ['0', '1'],
+            description: 'SRVB: binding category (0=UI, 1=Web API; default: 0)',
+          },
+          version: { type: 'string', description: 'SRVB: service version (default: 0001)' },
           objects: {
             type: 'array',
             items: {
@@ -530,6 +541,14 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
                 defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
                 changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
+                serviceDefinition: { type: 'string', description: 'SRVB: service definition (SRVD)' },
+                bindingType: { type: 'string', description: 'SRVB: binding type (default ODATA)' },
+                category: {
+                  type: 'string',
+                  enum: ['0', '1'],
+                  description: 'SRVB: binding category (0=UI, 1=Web API)',
+                },
+                version: { type: 'string', description: 'SRVB: service version (default 0001)' },
               },
               required: ['type', 'name'],
             },

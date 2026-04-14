@@ -114,7 +114,7 @@ _Last updated: 2026-04-14 (fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAu
 | EditSource (surgical) | ✅ (edit_method) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ (edit_method, Apr 2026) | ❌ |
 | CloneObject | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Execute ABAP | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (abap run) |
-| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ⚠️ (BDEF create, SRVB publish) | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
+| RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, BDEF, SRVD, SRVB write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ⚠️ (BDEF create, SRVB publish) | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
 | Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ (PR #149 merged) |
 | Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
@@ -123,8 +123,9 @@ _Last updated: 2026-04-14 (fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAu
 | Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ (class write test_classes) |
 | Table write (TABL) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Package create (DEVC) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
-| Service binding create (SRVB) | ❌ (FEAT-46) | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
+| Service binding create (SRVB) | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
 | Message class write (MSAG) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
+| Message class write (MSAG) | ❌ (FEAT-47) | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | DCL write (DCLS) | ❌ (FEAT-37) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ |
 
 ## 7. Code Intelligence

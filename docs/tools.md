@@ -138,7 +138,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions) |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions) |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
@@ -166,9 +166,13 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `defaultComponentName` | string | No | DTEL: default component name |
 | `changeDocument` | boolean | No | DTEL: change document flag |
 | `messages` | array | No | MSAG: message entries (`[{number, shortText, longText?}]`) — `number` is a 3-digit string (e.g., `"001"`), `shortText` is the message text (max 73 chars) |
+| `serviceDefinition` | string | No | SRVB: referenced service definition name (SRVD). Required for SRVB create. |
+| `bindingType` | string | No | SRVB: binding type (default `ODATA`) |
+| `category` | string | No | SRVB: binding category (`0` = UI, `1` = Web API; default `0`) |
+| `version` | string | No | SRVB: service version for binding metadata (default `0001`) |
 | `objects` | array | No | For `batch_create`: ordered list of objects (see below) |
 
-**DDIC metadata writes:** `DOMA`, `DTEL`, and `MSAG` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. Use `create` to create a new message class (with or without initial messages) and `update` to replace all messages.
+**DDIC metadata writes:** `DOMA`, `DTEL`, `MSAG`, and `SRVB` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. `SRVB` create uses wildcard content type (`application/*`) and SRVB update uses vendor type (`application/vnd.sap.adt.businessservices.servicebinding.v2+xml`).
 
 **TABL writes:** `TABL` is source-based (like DDLS/BDEF/SRVD). ARC-1 creates the table shell, then writes table source via `/source/main`.
 
@@ -192,7 +196,8 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"DDLS", name:"ZI_TRAVEL", source:"define root view..."},
   {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
-  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."}
+  {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."},
+  {type:"SRVB", name:"ZSB_TRAVEL_O4", serviceDefinition:"ZSD_TRAVEL", category:"0"}
 ])
 
 SAPWrite(action="create", type="TABL", name="ZTRAVEL", package="$TMP",
@@ -205,6 +210,9 @@ SAPWrite(action="create", type="DOMA", name="ZSTATUS", package="$TMP",
 SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
   typeKind="domain", typeName="ZSTATUS",
   shortLabel="Status", mediumLabel="Order Status")
+
+SAPWrite(action="create", type="SRVB", name="ZSB_TRAVEL_O4", package="$TMP",
+  serviceDefinition="ZSD_TRAVEL", category="0")
 ```
 
 **Transport behavior:**

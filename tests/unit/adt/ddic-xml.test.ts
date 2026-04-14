@@ -4,6 +4,7 @@ import {
   buildDomainXml,
   buildMessageClassXml,
   buildPackageXml,
+  buildServiceBindingXml,
 } from '../../../src/adt/ddic-xml.js';
 
 describe('ddic-xml builders', () => {
@@ -311,6 +312,59 @@ describe('ddic-xml builders', () => {
     });
   });
 
+  describe('buildServiceBindingXml', () => {
+    it('builds basic service binding XML with SRVB/SVB type', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_TRAVEL_O4',
+        description: 'Travel service binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_TRAVEL',
+      });
+
+      expect(xml).toContain('<srvb:serviceBinding');
+      expect(xml).toContain('xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings"');
+      expect(xml).toContain('adtcore:type="SRVB/SVB"');
+      expect(xml).toContain('adtcore:name="ZSB_TRAVEL_O4"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="$TMP"/>');
+    });
+
+    it('includes nested service definition reference', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_TRAVEL_O4',
+        description: 'Travel service binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_TRAVEL',
+      });
+
+      expect(xml).toContain('<srvb:services srvb:name="ZSB_TRAVEL_O4">');
+      expect(xml).toContain('<srvb:content srvb:version="0001">');
+      expect(xml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>');
+    });
+
+    it('uses default category=0 and bindingType=ODATA', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_DEFAULTS',
+        description: 'Defaults',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_DEFAULTS',
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="0" srvb:type="ODATA" srvb:version="V2">');
+    });
+
+    it('supports category=1 for alternate binding category', () => {
+      const xml = buildServiceBindingXml({
+        name: 'ZSB_UI',
+        description: 'UI binding',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_UI',
+        category: '1',
+      });
+
+      expect(xml).toContain('<srvb:binding srvb:category="1" srvb:type="ODATA" srvb:version="V2">');
+    });
+  });
+
   it('escapes XML special characters', () => {
     const domainXml = buildDomainXml({
       name: 'ZDOMA',
@@ -326,11 +380,21 @@ describe('ddic-xml builders', () => {
       package: '$TMP',
       shortLabel: 'A&B',
     });
+    const srvbXml = buildServiceBindingXml({
+      name: 'ZSB_XML',
+      description: 'Service "A&B" <binding>',
+      package: '$TMP',
+      serviceDefinition: 'ZSD_<TEST>&',
+      bindingType: 'ODATA"&',
+    });
 
     expect(domainXml).toContain('&quot;A&amp;B&quot; &lt;test&gt; &apos;apostrophe&apos;');
     expect(domainXml).toContain('<doma:low>A&amp;B</doma:low>');
     expect(domainXml).toContain('<doma:text>A &lt; B</doma:text>');
     expect(dtelXml).toContain('Data &quot;element&quot;');
     expect(dtelXml).toContain('<dtel:shortFieldLabel>A&amp;B</dtel:shortFieldLabel>');
+    expect(srvbXml).toContain('Service &quot;A&amp;B&quot; &lt;binding&gt;');
+    expect(srvbXml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_&lt;TEST&gt;&amp;"/>');
+    expect(srvbXml).toContain('srvb:type="ODATA&quot;&amp;"');
   });
 });

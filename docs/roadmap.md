@@ -86,7 +86,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
 | 44 | FEAT-44 | TABL (Database Table) Create | P1 | S | Features |
 | 45 | FEAT-45 | DEVC (Package) Create | P1 | S | Features | ✅ Completed (2026-04-14) |
-| 46 | FEAT-46 | SRVB (Service Binding) Create | P2 | S | Features |
+| ~~46~~ | ~~FEAT-46~~ | ~~SRVB (Service Binding) Create~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | 47 | FEAT-47 | MSAG (Message Class) Read/Write | P2 | S | Features |
 | 48 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
 | 49 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
@@ -98,6 +98,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-46 | SRVB (Service Binding) Create | 2026-04-14 | Features |
 | — | RAP Write Guard (feature-aware) | 2026-04-13 | Features |
 | FEAT-13 | DDIC Domain/Data Element Write | 2026-04-12 | Features |
 | FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
@@ -181,7 +182,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
 ### Phase D: ADT Feature Parity (P2) — Larger Items
-20. **FEAT-46** SRVB (Service Binding) Create (S) — completes RAP stack lifecycle; sapcli + fr0ster have this. Vendor content type: `application/vnd.sap.adt.businessservices.v1+xml`.
+20. ~~**FEAT-46** SRVB (Service Binding) Create (S)~~ — **completed 2026-04-14** (SAPWrite now supports SRVB create/update/delete + batch_create; create guidance points to activate + publish flow).
 21. **FEAT-47** MSAG (Message Class) Read/Write (S) — used in RAP for exception classes and validation messages. Endpoint: `/sap/bc/adt/messageclass/`.
 22. **FEAT-39** Transport Enhancements (S) — delete, reassign owner, transport type selection (K/W/T/S/R), recursive release. sapcli has full CTS lifecycle.
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
@@ -1185,26 +1186,26 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — completes RAP stack lifecycle (ARC-1 already has publish/unpublish) |
-| **Status** | Not started |
+| **Status** | Complete (2026-04-14) |
 | **Source** | [RAP project analysis](https://github.com/Xexer/abap_rap_blog), [SAP-samples/cloud-abap-rap](https://github.com/SAP-samples/cloud-abap-rap), [feature matrix](../compare/00-feature-matrix.md) |
 
-**What:** Add SRVB object creation to SAPWrite. ARC-1 already reads SRVB and can publish/unpublish via SAPManage, but cannot create the binding object itself. This is the last missing piece for a fully automated RAP stack lifecycle.
+**What:** Add SRVB object creation to SAPWrite. ARC-1 already reads SRVB and can publish/unpublish via SAPActivate.
 
-**Current gap:** `objectBasePath()` already maps `SRVB` → `/sap/bc/adt/businessservices/bindings/`, but SRVB is not in `SAPWRITE_TYPES` and has no `buildCreateXml()` case.
+**Implemented (2026-04-14):**
+- Added `SRVB` to SAPWrite type enums and input schemas (on-prem + BTP).
+- Added SRVB XML builder (`srvb:serviceBinding`) with `serviceDefinition`, `bindingType`, `category`, `version`.
+- Added `buildCreateXml()` SRVB case and metadata-write routing (XML PUT update path, no `/source/main`).
+- Added vendor content type for SRVB updates: `application/vnd.sap.adt.businessservices.servicebinding.v2+xml`.
+- Added SAPWrite create response hint to run activation then `publish_srvb`.
+- Added unit + E2E coverage for create/update/delete/batch_create and publish lifecycle.
 
-**Competitor support:**
+**Competitor support (reference):**
 - **sapcli:** Full SRVB CRUD via `POST /sap/bc/adt/businessservices/bindings/` with vendor-specific content type.
 - **fr0ster:** `HandlerCreate` supports SRVB creation (v5.0.0+).
-- **vibing-steampunk:** No create, only publish/unpublish (same as ARC-1 today).
+- **vibing-steampunk:** No create, only publish/unpublish.
 - **dassian-adt:** No SRVB create.
 
-**Implementation:**
-- Add `'SRVB'` to `SAPWRITE_TYPES_ONPREM` and `SAPWRITE_TYPES_BTP` in `src/handlers/tools.ts`
-- Add SRVB case to `buildCreateXml()` — needs binding type (OData V2/V4), service version, referenced SRVD
-- Content-Type: `application/vnd.sap.adt.businessservices.v1+xml` (version-specific — newer SAP may need v2+; use FEAT-38 discovery if available)
-- Add to `needsVendorContentType()` and `vendorContentTypeForType()`
-- SRVB requires activation, then publish step (guide LLM to use SAPManage publish_srvb after create+activate)
-- **Note:** SRVB creation is the least critical gap — many teams create the binding once in ADT and then only interact via publish/unpublish.
+**Note:** SRVB creation is now covered end-to-end; remaining RAP lifecycle gaps are DCL and TABL/package bootstrapping items (FEAT-37 / FEAT-44 / FEAT-45).
 
 ---
 
@@ -1581,7 +1582,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Method-Level Surgery | `edit_method` in SAPWrite, `list_methods`/`get_method` in SAPContext (95% token reduction) |
 | Runtime Diagnostics | SAPDiagnose — short dumps (ST22), ABAP profiler traces |
 | DDIC Completeness | Structures, domains, data elements, DDLX, transactions, BOR objects, T100 messages |
-| RAP CRUD | DDLS, DDLX, BDEF, SRVD write + SRVB read |
+| RAP CRUD | DDLS, DDLX, BDEF, SRVD, SRVB write |
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) |
 | Where-Used Analysis | Scope-based where-used in SAPNavigate (#38) |
 | Class Hierarchy | SAPNavigate hierarchy action via SEOMETAREL SQL |
@@ -1615,7 +1616,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Runtime Diagnostics | SAPDiagnose — short dumps (ST22), ABAP profiler traces | Complete (2026-04-01) |
 | DDIC Completeness | FEAT-04: DOMA, DTEL, STRU, DDLX, TRAN, BOR, T100, variants | Complete (2026-04-01) |
 | DDIC Domain/Data Element Write | FEAT-13: DOMA/DTEL create, update, delete, batch_create in SAPWrite | Complete (2026-04-12) |
-| RAP CRUD | DDLS/DDLX/BDEF/SRVD write, SRVB read, batch activation | Complete (2026-04-01) |
+| RAP CRUD | DDLS/DDLX/BDEF/SRVD/SRVB write, batch activation | Complete (2026-04-14) |
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | Complete (2026-04-01) |
 | MCP Elicitation | Interactive confirmations for destructive operations | Complete (2026-04-01) |
 | BTP ABAP Environment | OAuth 2.0 browser login, direct BTP connectivity | Complete (2026-04-01) |

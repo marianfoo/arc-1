@@ -3535,7 +3535,7 @@ ENDCLASS.`;
     });
   });
 
-  describe('SAPWrite DOMA/DTEL metadata writes', () => {
+  describe('SAPWrite metadata writes (DOMA/DTEL/SRVB)', () => {
     it('creates DOMA with v2 content type and no source PUT', async () => {
       mockFetch.mockReset();
       const calls: Array<{ method: string; url: string; contentType?: string }> = [];
@@ -3753,6 +3753,180 @@ ENDCLASS.`;
       expect(calls.some((c) => c.method === 'PUT')).toBe(false);
     });
 
+    it('creates SRVB with service binding XML and publish hint', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; headers?: Record<string, string>; body?: string | Buffer | null },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({
+            method,
+            url: String(url),
+            contentType: headers['content-type'] ?? headers['Content-Type'],
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
+          return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SRVB',
+        name: 'ZSB_TRAVEL_O4',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_TRAVEL',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Created SRVB ZSB_TRAVEL_O4');
+      expect(result.content[0]?.text).toContain('SAPActivate(type="SRVB", name="ZSB_TRAVEL_O4")');
+      expect(result.content[0]?.text).toContain('SAPActivate(action="publish_srvb", name="ZSB_TRAVEL_O4")');
+      const createCall = calls.find(
+        (c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/businessservices/bindings'),
+      );
+      expect(createCall?.contentType).toContain('application/*');
+      expect(createCall?.body).toContain('<srvb:serviceBinding');
+      expect(createCall?.body).toContain('adtcore:type="SRVB/SVB"');
+      expect(createCall?.body).toContain('<srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>');
+      expect(calls.some((c) => c.method === 'PUT' && c.url.includes('/source/main'))).toBe(false);
+    });
+
+    it('fails SRVB create when serviceDefinition is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SRVB',
+        name: 'ZSB_TRAVEL_O4',
+        package: '$TMP',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('serviceDefinition');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('updates SRVB via metadata PUT with vendor content type (no source/main)', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      const srvbReadXml = `<?xml version="1.0" encoding="utf-8"?>
+<srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" xmlns:adtcore="http://www.sap.com/adt/core"
+  adtcore:name="ZSB_TRAVEL_O4" adtcore:type="SRVB/SVB" adtcore:description="Travel binding" srvb:published="false" srvb:bindingCreated="true">
+  <adtcore:packageRef adtcore:name="$TMP"/>
+  <srvb:services srvb:name="ZSB_TRAVEL_O4">
+    <srvb:content srvb:version="0001">
+      <srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>
+    </srvb:content>
+  </srvb:services>
+  <srvb:binding srvb:type="ODATA" srvb:version="V4" srvb:category="0">
+    <srvb:implementation adtcore:name="ZSB_TRAVEL_O4"/>
+  </srvb:binding>
+</srvb:serviceBinding>`;
+
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; headers?: Record<string, string>; body?: string | Buffer | null },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          const urlStr = String(url);
+          calls.push({
+            method,
+            url: urlStr,
+            contentType: headers['content-type'] ?? headers['Content-Type'],
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/businessservices/bindings/ZSB_TRAVEL_O4')) {
+            return Promise.resolve(mockResponse(200, srvbReadXml, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+            return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'SRVB',
+        name: 'ZSB_TRAVEL_O4',
+        package: '$TMP',
+        bindingType: 'ODATA',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const putCall = calls.find((c) => c.method === 'PUT');
+      expect(putCall?.url).toContain('/sap/bc/adt/businessservices/bindings/ZSB_TRAVEL_O4?lockHandle=');
+      expect(putCall?.url).not.toContain('/source/main');
+      expect(putCall?.contentType).toContain('application/vnd.sap.adt.businessservices.servicebinding.v2+xml');
+      expect(putCall?.body).toContain('<srvb:serviceBinding');
+    });
+
+    it('deletes SRVB via lock/delete/unlock sequence', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'SRVB',
+        name: 'ZSB_TRAVEL_O4',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('_action=LOCK'))).toBe(true);
+      expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('/sap/bc/adt/businessservices/bindings/'))).toBe(
+        true,
+      );
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'))).toBe(true);
+    });
+
+    it('batch_create supports SRVB as metadata object', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url) });
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          { type: 'SRVD', name: 'ZSD_TRAVEL', source: 'define service ZSD_TRAVEL {}' },
+          { type: 'SRVB', name: 'ZSB_TRAVEL_O4', serviceDefinition: 'ZSD_TRAVEL', category: '0' },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('ZSD_TRAVEL (SRVD) ✓');
+      expect(result.content[0]?.text).toContain('ZSB_TRAVEL_O4 (SRVB) ✓');
+      expect(
+        calls.some(
+          (c) =>
+            c.method === 'PUT' &&
+            c.url.includes('/sap/bc/adt/businessservices/bindings/') &&
+            c.url.includes('/source/main'),
+        ),
+      ).toBe(false);
+    });
+
     it('respects package restrictions for DOMA create', async () => {
       const restrictedClient = new AdtClient({
         baseUrl: 'http://sap:8000',
@@ -3787,6 +3961,24 @@ ENDCLASS.`;
         typeKind: 'predefinedAbapType',
         dataType: 'CHAR',
         length: 10,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked');
+    });
+
+    it('blocks SRVB create in read-only mode', async () => {
+      const readOnlyClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+      const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SRVB',
+        name: 'ZSB_TRAVEL_O4',
+        package: '$TMP',
+        serviceDefinition: 'ZSD_TRAVEL',
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('blocked');
@@ -4349,6 +4541,23 @@ ENDCLASS.`;
       expect(xml).toContain('adtcore:name="ZC_TRAVEL"');
       expect(xml).toContain('adtcore:description="Travel Metadata Ext"');
       expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
+    });
+
+    it('returns correct XML for SRVB', () => {
+      const xml = buildCreateXml('SRVB', 'ZSB_TRAVEL_O4', 'ZPACKAGE', 'Travel service binding', {
+        serviceDefinition: 'ZSD_TRAVEL',
+        category: '0',
+      });
+      expect(xml).toContain('<srvb:serviceBinding');
+      expect(xml).toContain('adtcore:type="SRVB/SVB"');
+      expect(xml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_TRAVEL"/>');
+      expect(xml).toContain('<srvb:binding srvb:category="0" srvb:type="ODATA" srvb:version="V2">');
+    });
+
+    it('throws for SRVB when serviceDefinition is missing', () => {
+      expect(() => buildCreateXml('SRVB', 'ZSB_TRAVEL_O4', 'ZPACKAGE', 'Travel service binding')).toThrow(
+        'serviceDefinition',
+      );
     });
 
     it('returns domain metadata XML for DOMA', () => {

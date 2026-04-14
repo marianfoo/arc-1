@@ -130,12 +130,25 @@ const SAPWRITE_TYPES_ONPREM = [
   'DDLX',
   'BDEF',
   'SRVD',
+  'SRVB',
   'TABL',
   'DOMA',
   'DTEL',
   'MSAG',
 ] as const;
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'TABL', 'DOMA', 'DTEL', 'MSAG'] as const;
+const SAPWRITE_TYPES_BTP = [
+  'CLAS',
+  'INTF',
+  'DDLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'TABL',
+  'DOMA',
+  'DTEL',
+  'MSAG',
+] as const;
 
 const ddicFixedValueSchema = z.object({
   low: z.string(),
@@ -175,6 +188,10 @@ const batchObjectSchemaOnprem = z.object({
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
   messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
 });
 
 const batchObjectSchemaBtp = z.object({
@@ -204,6 +221,10 @@ const batchObjectSchemaBtp = z.object({
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
   messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
 });
 
 export const SAPWriteSchema = z.object({
@@ -237,6 +258,10 @@ export const SAPWriteSchema = z.object({
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
   messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
@@ -271,6 +296,10 @@ export const SAPWriteSchemaBtp = z.object({
   defaultComponentName: z.string().optional(),
   changeDocument: z.coerce.boolean().optional(),
   messages: z.array(messageClassMessageSchema).optional(),
+  serviceDefinition: z.string().optional(),
+  bindingType: z.string().optional(),
+  category: z.enum(['0', '1']).optional(),
+  version: z.string().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
