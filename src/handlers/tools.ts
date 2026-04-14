@@ -100,22 +100,37 @@ const SAPREAD_DESC_BTP =
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = ['PROG', 'CLAS', 'INTF', 'FUNC', 'INCL', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'];
+const SAPWRITE_TYPES_ONPREM = [
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'INCL',
+  'DDLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'TABL',
+  'DOMA',
+  'DTEL',
+];
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'TABL', 'DOMA', 'DTEL'];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL. ' +
+  'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
-  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks. Pass "objects" array with dependency order.';
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD). Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL. ' +
+  'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
-  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks.';
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → BDEF → SRVD).';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -401,7 +416,9 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           type: {
             type: 'string',
             enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
-            description: 'Object type (for create/update/delete/edit_method)',
+            description: btp
+              ? 'Object type (for create/update/delete/edit_method). Supported: CLAS, INTF, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL.'
+              : 'Object type (for create/update/delete/edit_method). Supported: PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL.',
           },
           name: { type: 'string', description: 'Object name (for create/update/delete/edit_method)' },
           source: { type: 'string', description: 'ABAP source code (for create/update/edit_method)' },
@@ -468,7 +485,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
                 type: {
                   type: 'string',
                   enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
-                  description: 'Object type',
+                  description: 'Object type (includes TABL for RAP stack bootstrapping)',
                 },
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
@@ -511,8 +528,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             },
             description:
               'For batch_create: ordered list of objects to create and activate. Each object needs type, name, and source (if applicable). ' +
-              'Objects are created and activated in array order — put dependencies first (e.g., CDS view before projection, BDEF after CDS views). ' +
-              'Example: [{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
+              'Objects are created and activated in array order — put dependencies first (e.g., TABL before DDLS, BDEF after DDLS). ' +
+              'Example: [{type:"TABL",name:"ZTRAVEL",source:"..."},{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
           },
         },
         required: ['action'],

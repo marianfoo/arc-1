@@ -130,10 +130,11 @@ const SAPWRITE_TYPES_ONPREM = [
   'DDLX',
   'BDEF',
   'SRVD',
+  'TABL',
   'DOMA',
   'DTEL',
 ] as const;
-const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'DOMA', 'DTEL'] as const;
+const SAPWRITE_TYPES_BTP = ['CLAS', 'INTF', 'DDLS', 'DDLX', 'BDEF', 'SRVD', 'TABL', 'DOMA', 'DTEL'] as const;
 
 const ddicFixedValueSchema = z.object({
   low: z.string(),

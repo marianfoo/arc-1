@@ -3389,13 +3389,18 @@ ENDCLASS.`;
 
     it('creates DTEL with predefined type using v2 content type and follow-up PUT for labels', async () => {
       mockFetch.mockReset();
-      const calls: Array<{ method: string; url: string; contentType?: string }> = [];
+      const calls: Array<{ method: string; url: string; contentType?: string; body?: string }> = [];
       mockFetch.mockImplementation(
-        (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
           const method = opts?.method ?? 'GET';
           const headers = (opts?.headers ?? {}) as Record<string, string>;
           const urlStr = String(url);
-          calls.push({ method, url: urlStr, contentType: headers['content-type'] ?? headers['Content-Type'] });
+          calls.push({
+            method,
+            url: urlStr,
+            contentType: headers['content-type'] ?? headers['Content-Type'],
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
           if (method === 'POST' && urlStr.includes('_action=LOCK')) {
             return Promise.resolve(
               mockResponse(200, '<asx:values><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
@@ -3606,6 +3611,162 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('blocked');
+    });
+  });
+
+  describe('SAPWrite TABL source-based writes', () => {
+    it('creates TABL using collection POST + source PUT', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string> }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          const urlStr = String(url);
+          calls.push({ method, url: urlStr, contentType: headers['content-type'] ?? headers['Content-Type'] });
+          if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+            return Promise.resolve(
+              mockResponse(200, '<asx:values><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+                'x-csrf-token': 'T',
+              }),
+            );
+          }
+          return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'TABL',
+        name: 'ZTABL_CREATE',
+        package: '$TMP',
+        source:
+          "@EndUserText.label : 'Create test'\ndefine table ztabl_create { key client : abap.clnt; key id : abap.numc(8); }",
+      });
+
+      expect(result.isError).toBeUndefined();
+
+      const createCall = calls.find(
+        (c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/ddic/tables') && !c.url.includes('_action='),
+      );
+      expect(createCall).toBeDefined();
+      if (createCall?.contentType) {
+        expect(createCall.contentType).toContain('application/*');
+      }
+
+      const sourcePut = calls.find(
+        (c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/ddic/tables/ZTABL_CREATE/source/main'),
+      );
+      expect(sourcePut).toBeDefined();
+
+      const metadataPut = calls.find(
+        (c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/ddic/tables/ZTABL_CREATE?'),
+      );
+      expect(metadataPut).toBeUndefined();
+    });
+
+    it('updates TABL via source/main path', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH2</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'TABL',
+        name: 'ZTABL_UPDATE',
+        source:
+          "@EndUserText.label : 'Update test'\ndefine table ztabl_update { key client : abap.clnt; key id : abap.numc(8); descr : abap.char(40); }",
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(
+        calls.some((c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/ddic/tables/ZTABL_UPDATE/source/main')),
+      ).toBe(true);
+      expect(calls.some((c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/ddic/tables/ZTABL_UPDATE?'))).toBe(
+        false,
+      );
+    });
+
+    it('deletes TABL via lock/delete/unlock flow', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH3</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'TABL',
+        name: 'ZTABL_DELETE',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('_action=LOCK'))).toBe(true);
+      expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('/sap/bc/adt/ddic/tables/ZTABL_DELETE'))).toBe(
+        true,
+      );
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'))).toBe(true);
+    });
+
+    it('batch_create supports TABL source processing', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH4</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          {
+            type: 'TABL',
+            name: 'ZTABL_BATCH',
+            source:
+              "@EndUserText.label : 'Batch test'\ndefine table ztabl_batch { key client : abap.clnt; key id : abap.numc(8); }",
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('ZTABL_BATCH (TABL)');
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/ddic/tables/'))).toBe(true);
+      expect(
+        calls.some((c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/ddic/tables/ZTABL_BATCH/source/main')),
+      ).toBe(true);
     });
   });
 
@@ -4035,11 +4196,13 @@ ENDCLASS.`;
       expect(xml).toContain('<dtel:typeName>ZSTATUS</dtel:typeName>');
     });
 
-    it('default fallback uses objectUrlForType instead of hardcoded path', () => {
+    it('returns TABL create XML with blue:blueSource envelope', () => {
       const xml = buildCreateXml('TABL', 'ZTABLE', 'ZPACKAGE', 'A Table');
-      expect(xml).toContain('<adtcore:objectReferences');
-      expect(xml).toContain('/sap/bc/adt/ddic/tables/ZTABLE');
-      expect(xml).not.toContain('/sap/bc/adt/programs/programs/');
+      expect(xml).toContain('<blue:blueSource');
+      expect(xml).toContain('xmlns:blue="http://www.sap.com/wbobj/blue"');
+      expect(xml).toContain('adtcore:type="TABL/DT"');
+      expect(xml).toContain('adtcore:name="ZTABLE"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 
     it('escapes XML special characters in attributes', () => {
