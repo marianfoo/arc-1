@@ -551,6 +551,14 @@ export class AdtHttpClient {
       headers.Authorization = `Bearer ${token}`;
     }
 
+    // Principal Propagation via SAP-Connectivity-Authentication header (Option 2).
+    // Must be included on the CSRF fetch too — otherwise the Cloud Connector
+    // establishes a session without user identity, and the CSRF token ends up
+    // bound to a different session than the subsequent write request.
+    if (this.config.sapConnectivityAuth && !this.config.ppProxyAuth) {
+      headers['SAP-Connectivity-Authentication'] = this.config.sapConnectivityAuth;
+    }
+
     // Include existing cookies (config + jar) so session is maintained
     const cookieParts: string[] = [];
     if (this.config.cookies) {
