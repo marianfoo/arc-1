@@ -421,6 +421,7 @@ export async function handleToolCall(
   // and returns a proper error message with the probe reason when source_code search is unavailable
   const schema = getToolSchema(toolName, isBtp);
   if (schema) {
+    args = normalizeTypeArgsForValidation(toolName, args);
     const parsed = schema.safeParse(args);
     if (!parsed.success) {
       const validationError = formatZodError(parsed.error, toolName);
@@ -581,7 +582,7 @@ async function handleSAPRead(
   args: Record<string, unknown>,
   cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
-  const type = String(args.type ?? '');
+  const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
 
   // BTP: return helpful error for unavailable types
@@ -769,7 +770,7 @@ async function handleSAPRead(
     }
     case 'API_STATE': {
       // Determine object type for URL construction — use explicit objectType, infer from name, or error
-      const explicitType = String(args.objectType ?? '').toUpperCase();
+      const explicitType = normalizeObjectType(String(args.objectType ?? ''));
       const inferredType = explicitType || inferObjectType(name);
       if (!inferredType) {
         return errorResult(
@@ -906,7 +907,7 @@ async function handleSAPRead(
     default:
       return errorResult(
         `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
-          'Tip: Map objectType from SAPSearch results by dropping the slash suffix (e.g., DDLS/DF → type="DDLS", CLAS/OC → type="CLAS", PROG/P → type="PROG"). ' +
+          'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
   }
@@ -925,7 +926,7 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
           `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
       );
     }
-    const objectType = args.objectType as string | undefined;
+    const objectType = args.objectType ? normalizeObjectType(String(args.objectType)) : undefined;
     const packageName = args.packageName as string | undefined;
     try {
       const results = await client.searchSource(rawQuery, maxResults, objectType, packageName);
@@ -1628,6 +1629,102 @@ function escapeXml(s: string): string {
 
 // ─── Object URL Mapping ──────────────────────────────────────────────
 
+const SLASH_TYPE_MAP: Record<string, string> = {
+  'PROG/P': 'PROG',
+  'PROG/I': 'INCL',
+  'CLAS/OC': 'CLAS',
+  'CLAS/LI': 'CLAS',
+  'INTF/OI': 'INTF',
+  'FUNC/FM': 'FUNC',
+  'FUGR/F': 'FUGR',
+  'FUGR/FF': 'FUGR',
+  'DDLS/DF': 'DDLS',
+  'BDEF/BDO': 'BDEF',
+  'SRVD/SRV': 'SRVD',
+  'SRVB/SVB': 'SRVB',
+  'DDLX/EX': 'DDLX',
+  'TABL/DT': 'TABL',
+  'STRU/DS': 'STRU',
+  'DOMA/DD': 'DOMA',
+  'DTEL/DE': 'DTEL',
+  'MSAG/N': 'MSAG',
+  'DEVC/K': 'DEVC',
+  'TRAN/O': 'TRAN',
+  'VIEW/V': 'VIEW',
+};
+
+/** Normalize ADT type codes and aliases to ARC-1 canonical short types. */
+export function normalizeObjectType(type: string): string {
+  const normalized = String(type).trim().toUpperCase();
+  if (!normalized) return '';
+  return SLASH_TYPE_MAP[normalized] ?? normalized;
+}
+
+/** Normalize type fields before schema validation so slash/case aliases are accepted. */
+function normalizeTypeArgsForValidation(toolName: string, args: Record<string, unknown>): Record<string, unknown> {
+  switch (toolName) {
+    case 'SAPRead':
+      return {
+        ...args,
+        type: normalizeObjectType(String(args.type ?? '')),
+        objectType: args.objectType === undefined ? undefined : normalizeObjectType(String(args.objectType ?? '')),
+      };
+    case 'SAPWrite':
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+        objects: Array.isArray(args.objects)
+          ? args.objects.map((obj) =>
+              typeof obj === 'object' && obj !== null
+                ? {
+                    ...obj,
+                    type: normalizeObjectType(String((obj as Record<string, unknown>).type ?? '')),
+                  }
+                : obj,
+            )
+          : args.objects,
+      };
+    case 'SAPActivate':
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+        objects: Array.isArray(args.objects)
+          ? args.objects.map((obj) =>
+              typeof obj === 'object' && obj !== null
+                ? {
+                    ...obj,
+                    type: normalizeObjectType(String((obj as Record<string, unknown>).type ?? '')),
+                  }
+                : obj,
+            )
+          : args.objects,
+      };
+    case 'SAPSearch':
+      return {
+        ...args,
+        objectType: args.objectType === undefined ? undefined : normalizeObjectType(String(args.objectType ?? '')),
+      };
+    case 'SAPNavigate':
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+        objectType: args.objectType === undefined ? undefined : normalizeObjectType(String(args.objectType ?? '')),
+      };
+    case 'SAPDiagnose':
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+      };
+    case 'SAPContext':
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+      };
+    default:
+      return args;
+  }
+}
+
 /** Base path for an object type. Returns path prefix without trailing name segment. */
 function objectBasePath(type: string): string {
   switch (type) {
@@ -1708,7 +1805,7 @@ async function handleSAPWrite(
   cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
-  const type = String(args.type ?? '');
+  const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
   const source = String(args.source ?? '');
   const transport = args.transport as string | undefined;
@@ -1973,7 +2070,8 @@ async function handleSAPWrite(
         try {
           // Use first object's URL for the transport check
           const firstObj = objects[0];
-          const firstUrl = objectUrlForType(String(firstObj.type ?? ''), String(firstObj.name ?? ''));
+          const firstType = normalizeObjectType(String(firstObj?.type ?? ''));
+          const firstUrl = objectUrlForType(firstType, String(firstObj?.name ?? ''));
           const transportInfo = await getTransportInfo(client.http, client.safety, firstUrl, pkg, 'I');
           if (transportInfo.lockedTransport) {
             batchTransport = transportInfo.lockedTransport;
@@ -2002,7 +2100,7 @@ async function handleSAPWrite(
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
 
       for (const obj of objects) {
-        const objType = String(obj.type ?? '');
+        const objType = normalizeObjectType(String(obj.type ?? ''));
         const objName = String(obj.name ?? '');
         const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
@@ -2111,7 +2209,7 @@ async function handleSAPWrite(
       for (let i = results.length; i < objects.length; i++) {
         const skipped = objects[i];
         results.push({
-          type: String(skipped.type ?? ''),
+          type: normalizeObjectType(String(skipped?.type ?? '')),
           name: String(skipped.name ?? ''),
           status: 'failed',
           error: 'skipped — stopped after previous failure',
@@ -2315,13 +2413,13 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   }
 
   // Batch activation: multiple objects at once (for RAP stacks etc.)
-  const type = String(args.type ?? '');
+  const type = normalizeObjectType(String(args.type ?? ''));
   const preaudit = args.preaudit !== undefined ? Boolean(args.preaudit) : undefined;
   const activateOpts = preaudit !== undefined ? { preaudit } : undefined;
 
   if (args.objects && Array.isArray(args.objects)) {
     const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
-      const objType = String(o.type ?? type);
+      const objType = normalizeObjectType(String(o.type ?? type));
       const objName = String(o.name ?? '');
       return { url: objectUrlForType(objType, objName), name: objName };
     });
@@ -2393,7 +2491,7 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
 
   // Allow symbolic type+name as alternative to uri for references
   if (!uri && args.type && args.name) {
-    const symType = String(args.type);
+    const symType = normalizeObjectType(String(args.type));
     const symName = String(args.name);
     if (symType === 'FUNC') {
       // FUNC needs group to build URL — auto-resolve it
@@ -2425,7 +2523,7 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       if (!uri) {
         return errorResult('Provide uri or type+name to find references.');
       }
-      const objectType = args.objectType ? String(args.objectType) : undefined;
+      const objectType = args.objectType ? normalizeObjectType(String(args.objectType)) : undefined;
       let results: WhereUsedResult[] | ReferenceResult[];
       try {
         results = await findWhereUsed(client.http, client.safety, uri, objectType);
@@ -2544,7 +2642,7 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
 async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const action = String(args.action ?? '');
   const name = String(args.name ?? '');
-  const type = String(args.type ?? '');
+  const type = normalizeObjectType(String(args.type ?? ''));
 
   switch (action) {
     case 'syntax': {
@@ -2714,7 +2812,7 @@ async function handleSAPContext(
   cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
-  const type = String(args.type ?? '');
+  const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
   const maxDeps = Number(args.maxDeps ?? 20);
   const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);

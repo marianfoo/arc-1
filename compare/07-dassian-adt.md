@@ -195,7 +195,7 @@ Dev: jest ^29.7.0, ts-jest ^29.2.5
 | `raw_http` escape hatch | Low | 0.5d | Not implemented — security concern |
 | gCTS integration (git_repos, git_pull) | Low | 2d | Feature flag exists, no tools |
 | SAP-domain error hints (SM12, SPAU, L-prefix) | High | 1d | Partial — basic HTTP hints exist, no SAP-domain |
-| 16 type auto-mappings (CLAS→CLAS/OC, etc.) | Low | 0.5d | Not implemented |
+| ~~16 type auto-mappings (CLAS→CLAS/OC, etc.)~~ | ~~Low~~ | ~~0.5d~~ | ~~IMPLEMENTED — normalizeObjectType() across SAPRead/SAPWrite/SAPActivate/SAPSearch/SAPNavigate/SAPDiagnose/SAPContext~~ |
 | ATC ciCheckFlavour workaround | Low | 0.5d | Not implemented |
 | Smart redirect hints (wrong param detection) | Low | 0.5d | Not implemented |
 | AI self-test prompt (scripts/ai-selftest.md) | Low | 0.5d | Not implemented |

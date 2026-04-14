@@ -144,7 +144,7 @@ These were flagged in the original report but have since been implemented in ARC
 |---------|---------|-------------|----------|
 | `raw_http` escape hatch | Arbitrary ADT requests | Not implemented (all ops gated) | Low — security concern |
 | gCTS (git_repos, git_pull) | Yes | Feature flag exists, no tools | Low |
-| 16 type auto-mappings (CLAS→CLAS/OC) | Yes | Not implemented | Low |
+| ~~16 type auto-mappings (CLAS→CLAS/OC)~~ | ~~Yes~~ | ~~Implemented (2026-04-14)~~ | ~~Low~~ |
 | ATC ciCheckFlavour workaround | Yes | Not implemented | Low |
 | Per-user browser login (HTTP) | `/login` page | OIDC/XSUAA covers this better | Low |
 | Smart parameter redirects | Error-based hints | Not implemented | Low |
