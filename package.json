@@ -27,7 +27,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && rm -rf dist/aff/schemas && cp -r src/aff/schemas dist/aff/schemas",
+    "build": "tsc && node -e \"const fs=require('fs');fs.rmSync('dist/aff/schemas',{recursive:true,force:true});fs.cpSync('src/aff/schemas','dist/aff/schemas',{recursive:true})\"",
     "dev": "tsx src/index.ts",
     "dev:http": "npm run build && tsx src/index.ts --transport http-streamable",
     "start": "node dist/index.js",
@@ -45,7 +45,7 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "cli": "tsx src/cli.ts",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "prepublishOnly": "npm run build",
     "test:eval": "vitest run --config vitest.eval.config.ts",
     "test:e2e": "npm run test:e2e:fixtures && vitest run --config tests/e2e/vitest.e2e.config.ts",
@@ -55,11 +55,15 @@
     "test:e2e:stop": "bash scripts/e2e-stop.sh",
     "test:e2e:full": "npm run build && npm run test:e2e:deploy && npm run test:e2e; EXIT=$?; npm run test:e2e:stop; exit $EXIT",
     "test:reliability-report": "node scripts/ci/collect-test-reliability.mjs",
-    "test:assert-execution": "node scripts/ci/assert-required-test-execution.mjs"
+    "test:assert-execution": "node scripts/ci/assert-required-test-execution.mjs",
+    "btp:build": "npx mbt build",
+    "btp:deploy": "node -e \"const v=require('./package.json').version;require('child_process').execSync('cf deploy mta_archives/arc1-mcp_'+v+'.mtar',{stdio:'inherit'})\"",
+    "btp:build-deploy": "npm run btp:build && npm run btp:deploy"
   },
   "dependencies": {
     "@abaplint/core": "^2.115.27",
     "@modelcontextprotocol/sdk": "^1.28.0",
+    "@sap-cloud-sdk/connectivity": "^4.5.1",
     "@sap/xsenv": "^6.1.0",
     "@sap/xssec": "^4.13.0",
     "ajv": "^8.18.0",

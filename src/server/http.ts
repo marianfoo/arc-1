@@ -159,12 +159,18 @@ export async function startHttpServer(
     const appUrl = getAppUrl() ?? `http://${bindHost}:${port}`;
 
     // Create XSUAA provider + chained verifier
-    const { provider } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl);
+    const { provider, clientStore } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl);
     const xsuaaVerifier = createXsuaaTokenVerifier(xsuaaCredentials);
     const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
     const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
 
-    const bearerAuth = requireBearerAuth({ verifier: { verifyAccessToken: chainedVerifier } });
+    // Include resourceMetadataUrl so the 401 WWW-Authenticate header contains the PRM URL.
+    // Copilot Studio (and other PRM-aware clients) use this to discover the OAuth endpoints.
+    const resourceMetadataUrl = `${appUrl}/.well-known/oauth-protected-resource/mcp`;
+    const bearerAuth = requireBearerAuth({
+      verifier: { verifyAccessToken: chainedVerifier },
+      resourceMetadataUrl,
+    });
 
     // ─── OAuth authorize normalization + Copilot Studio MCP workaround ──
     // Copilot Studio sends MCP JSON-RPC requests to /authorize instead of
@@ -206,6 +212,20 @@ export async function startHttpServer(
           client_id: req.body.client_id,
         });
       }
+
+      // Auto-register redirect_uri for the pre-registered XSUAA client.
+      // The MCP SDK requires exact redirect_uri matching, but XSUAA itself
+      // validates redirect URIs against xs-security.json wildcard patterns.
+      // For clients like Copilot Studio that use Manual OAuth config with the
+      // XSUAA client_id, we dynamically add their redirect_uri to pass the
+      // SDK's exact-match check — XSUAA remains the authoritative validator.
+      const params = req.method === 'POST' ? req.body : req.query;
+      const redirectUri = params?.redirect_uri;
+      const clientId = params?.client_id;
+      if (clientId && redirectUri && typeof redirectUri === 'string') {
+        clientStore.ensureRedirectUri(clientId, redirectUri);
+      }
+
       next();
     });
 

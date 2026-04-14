@@ -1,0 +1,112 @@
+_schema-version: "3.1"
+ID: arc1-mcp
+version: 0.6.1 # x-release-please-version
+description: ARC-1 — MCP Server for SAP ABAP Systems
+
+# ──────────────────────────────────────────────────────────────────────
+# On-Premise SAP via Cloud Connector + XSUAA OAuth
+#
+# Deploys ARC-1 as a Node.js app with:
+#   - XSUAA for MCP client authentication (Claude Desktop, Cursor, etc.)
+#   - Destination Service for SAP system lookup
+#   - Connectivity Service for Cloud Connector proxy to on-premise SAP
+#
+# Prerequisites:
+#   1. Cloud Connector configured with virtual host mapping
+#   2. BTP Destination pointing to the virtual host
+#   3. Users assigned to ARC-1 role collections (see xs-security.json)
+#
+# Deploy:
+#   mbt build && cf deploy mta_archives/arc1-mcp_0.6.1.mtar
+#
+# Two destinations are recommended for on-premise PP scenarios:
+#   1. BasicAuth destination (SAP_BTP_DESTINATION) — used at startup for
+#      feature probing and cache warmup. No JWT needed.
+#   2. PrincipalPropagation destination (SAP_BTP_PP_DESTINATION) — used at
+#      runtime for per-user requests. Requires user JWT.
+#
+# When using SAP_BTP_DESTINATION, URL/client come from the destination.
+# Only set manually if NOT using the Destination Service:
+#   cf set-env arc1-mcp-server SAP_URL "http://a4h-abap:50000"
+#   cf set-env arc1-mcp-server SAP_CLIENT "001"
+#   cf restage arc1-mcp-server
+#
+# See docs/phase4-btp-deployment.md for full setup guide.
+# ──────────────────────────────────────────────────────────────────────
+
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npm run build
+
+modules:
+  - name: arc1-mcp-server
+    type: nodejs
+    path: .
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+      instances: 1
+      health-check-type: http
+      health-check-http-endpoint: /health
+      command: node dist/index.js
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: custom
+      commands: []
+      ignore:
+        - .env
+        - .git/
+        - src/
+        - tests/
+        - docs/
+        - compare/
+        - skills/
+        - coverage/
+        - test-results/
+        - "*.md"
+        - .github/
+        - .husky/
+        - .vscode/
+        - .claude/
+    properties:
+      SAP_TRANSPORT: http-streamable
+      SAP_SYSTEM_TYPE: auto
+      SAP_LANGUAGE: EN
+      SAP_INSECURE: "true"
+      SAP_XSUAA_AUTH: "true"
+      # BasicAuth destination for startup (feature probing, cache warmup)
+      SAP_BTP_DESTINATION: ex1mcpdt
+      # PrincipalPropagation destination for per-user requests (with JWT)
+      SAP_BTP_PP_DESTINATION: ex1
+      SAP_PP_ENABLED: "true"
+      SAP_READ_ONLY: "true"
+      SAP_BLOCK_FREE_SQL: "true"
+    requires:
+      - name: arc1-xsuaa
+      - name: arc1-destination
+      - name: arc1-connectivity
+
+resources:
+  - name: arc1-xsuaa
+    type: com.sap.xs.uaa
+    parameters:
+      service-plan: application
+      path: xs-security.json
+
+  - name: arc1-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+
+  - name: arc1-connectivity
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: connectivity
+      service-plan: lite

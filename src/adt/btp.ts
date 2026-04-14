@@ -6,16 +6,20 @@
  * 2. Fetches SAP connection details from the BTP Destination Service
  * 3. Configures an HTTP proxy through the Cloud Connector (Connectivity Service)
  *
- * The flow mirrors the Go implementation in pkg/adt/btp.go:
- * - Parse VCAP_SERVICES → get destination/connectivity/xsuaa credentials
- * - Call Destination Service API → get SAP URL, user, password
- * - Create proxy config → route through Cloud Connector
- * - Inject Proxy-Authorization header → connectivity service JWT token
+ * Startup path (lookupDestination, resolveBTPDestination) uses direct fetch
+ * to the Destination Service API. Per-user principal propagation path
+ * (lookupDestinationWithUserToken) uses SAP Cloud SDK's getDestination()
+ * for automatic token management and per-user caching.
  *
- * Token caching: Both destination and connectivity tokens are cached
- * and refreshed 60 seconds before expiry to avoid request failures.
+ * Token caching: Connectivity proxy tokens are cached and refreshed 60 seconds
+ * before expiry. Per-user destination tokens are cached by the SDK.
  */
 
+import {
+  type DestinationAuthToken,
+  getDestination,
+  type Destination as SdkDestination,
+} from '@sap-cloud-sdk/connectivity';
 import { logger } from '../server/logger.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -50,6 +54,8 @@ export interface Destination {
   User: string;
   Password: string;
   'sap-client'?: string;
+  /** Cloud Connector Location ID — used to route to the correct SCC instance */
+  CloudConnectorLocationId?: string;
 }
 
 /** Proxy configuration for undici ProxyAgent — used by AdtHttpClient */
@@ -59,6 +65,8 @@ export interface BTPProxyConfig {
   protocol: string;
   /** Returns a fresh connectivity proxy JWT token (cached, auto-refreshed) */
   getProxyToken: () => Promise<string>;
+  /** Cloud Connector Location ID — sent as SAP-Connectivity-SCC-Location_ID header */
+  locationId?: string;
 }
 
 // ─── VCAP Parsing ────────────────────────────────────────────────────
@@ -207,6 +215,7 @@ export async function lookupDestination(btpConfig: BTPConfig, destinationName: s
     url: data.destinationConfiguration.URL,
     auth: data.destinationConfiguration.Authentication,
     proxyType: data.destinationConfiguration.ProxyType,
+    locationId: data.destinationConfiguration.CloudConnectorLocationId,
   });
 
   return data.destinationConfiguration;
@@ -220,7 +229,7 @@ export async function lookupDestination(btpConfig: BTPConfig, destinationName: s
  * Returns a BTPProxyConfig with a token getter that caches the connectivity
  * JWT and auto-refreshes it 60 seconds before expiry.
  */
-export function createConnectivityProxy(btpConfig: BTPConfig): BTPProxyConfig | null {
+export function createConnectivityProxy(btpConfig: BTPConfig, locationId?: string): BTPProxyConfig | null {
   if (!btpConfig.connectivityProxyHost) return null;
 
   let cachedToken = '';
@@ -230,6 +239,7 @@ export function createConnectivityProxy(btpConfig: BTPConfig): BTPProxyConfig | 
     host: btpConfig.connectivityProxyHost,
     port: Number.parseInt(btpConfig.connectivityProxyPort || '20003', 10),
     protocol: 'http',
+    locationId,
     getProxyToken: async () => {
       // Return cached token if still valid (60s buffer)
       if (cachedToken && Date.now() < expiresAt) {
@@ -271,30 +281,26 @@ export interface PerUserAuthTokens {
 /**
  * Look up a destination with the user's JWT token for principal propagation.
  *
+ * Uses SAP Cloud SDK's `getDestination()` to resolve the destination with per-user
+ * JWT. The SDK handles service token acquisition, X-User-Token header injection,
+ * and per-user destination caching.
+ *
  * This is the key API for per-user SAP authentication:
  * 1. Caller passes the user's JWT (from XSUAA/OIDC)
- * 2. Destination Service validates the JWT and generates auth tokens
+ * 2. SDK calls the Destination Service with X-User-Token header
  * 3. For PrincipalPropagation destinations: returns SAP-Connectivity-Authentication header
  * 4. For OAuth2SAMLBearerAssertion destinations: returns a Bearer token
  *
- * The returned tokens are per-user and typically valid for 5-10 minutes.
+ * Includes a jwt-bearer fallback (Option 2) when the Destination Service returns
+ * no auth tokens — uses direct fetch to the Connectivity Service token URL.
  *
- * Reference: SAP Destination Service REST API "Find Destination" endpoint
- * https://api.sap.com/api/SAP_CP_CF_Connectivity_Destination/resource/Find_a_Destination
+ * @param btpConfig - BTP service credentials (needed for jwt-bearer fallback only)
  */
 export async function lookupDestinationWithUserToken(
   btpConfig: BTPConfig,
   destinationName: string,
   userJwt: string,
 ): Promise<{ destination: Destination; authTokens: PerUserAuthTokens }> {
-  // Get a service token for Destination Service API
-  const tokenUrl = btpConfig.destinationTokenUrl || `${btpConfig.xsuaaUrl}/oauth/token`;
-  const { accessToken: serviceToken } = await fetchClientCredentialsToken(
-    tokenUrl,
-    btpConfig.destinationClientId,
-    btpConfig.destinationSecret,
-  );
-
   // Log JWT claims for PP debugging (decode payload without verification)
   try {
     const parts = userJwt.split('.');
@@ -319,40 +325,37 @@ export async function lookupDestinationWithUserToken(
     logger.debug('PP user JWT: failed to decode claims');
   }
 
-  // Call Find Destination API with X-User-Token header
-  // This triggers the Destination Service to perform the user-specific
-  // authentication flow (e.g., generate SAML assertion for PrincipalPropagation)
-  const destUrl = `${btpConfig.destinationUrl.replace(/\/$/, '')}/destination-configuration/v1/destinations/${encodeURIComponent(destinationName)}`;
-  const resp = await fetch(destUrl, {
-    headers: {
-      Authorization: `Bearer ${serviceToken}`,
-      'X-user-token': userJwt,
-    },
+  // Use SAP Cloud SDK to resolve the destination with per-user JWT.
+  // The SDK handles: service token acquisition, X-User-Token header,
+  // and per-user destination caching (keyed by destinationName + jwt).
+  const sdkDest: SdkDestination | null = await getDestination({
+    destinationName,
+    jwt: userJwt,
+    useCache: true,
   });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(
-      `Destination Service (per-user) returned HTTP ${resp.status} for '${destinationName}': ${text.slice(0, 300)}`,
-    );
+  if (!sdkDest) {
+    throw new Error(`Destination Service (per-user) returned no destination for '${destinationName}'`);
   }
 
-  const data = (await resp.json()) as {
-    destinationConfiguration: Destination;
-    authTokens?: Array<{
-      type: string;
-      value: string;
-      http_header?: { key: string; value: string };
-      error?: string;
-    }>;
+  // Map SDK Destination → ARC-1 Destination type
+  const dest: Destination = {
+    Name: sdkDest.name ?? destinationName,
+    URL: sdkDest.url ?? '',
+    Authentication: sdkDest.authentication ?? '',
+    ProxyType: sdkDest.proxyType ?? '',
+    User: sdkDest.username ?? '',
+    Password: sdkDest.password ?? '',
+    'sap-client': sdkDest.sapClient ?? undefined,
+    CloudConnectorLocationId: sdkDest.cloudConnectorLocationId ?? undefined,
   };
 
-  const dest = data.destinationConfiguration;
   const tokens: PerUserAuthTokens = {};
+  const sdkAuthTokens: DestinationAuthToken[] | null | undefined = sdkDest.authTokens;
 
   // Log raw auth response for PP debugging.
   // Field names avoid "token" substring to prevent logger redaction.
-  const rawEntries = data.authTokens?.map((t) => ({
+  const rawEntries = sdkAuthTokens?.map((t) => ({
     entryType: t.type,
     httpHeaderKey: t.http_header?.key,
     hasValue: !!t.value,
@@ -364,13 +367,13 @@ export async function lookupDestinationWithUserToken(
     authentication: dest.Authentication,
     proxyType: dest.ProxyType,
     url: dest.URL,
-    ppEntryCount: data.authTokens?.length ?? 0,
+    ppEntryCount: sdkAuthTokens?.length ?? 0,
     ppEntries: rawEntries ?? 'NONE',
   });
 
-  // Extract auth tokens from the response
-  if (data.authTokens) {
-    for (const token of data.authTokens) {
+  // Extract auth tokens from the SDK response
+  if (sdkAuthTokens) {
+    for (const token of sdkAuthTokens) {
       if (token.error) {
         logger.error('Destination Service auth token error', {
           destination: destinationName,
@@ -506,8 +509,12 @@ export async function resolveBTPDestination(destinationName: string): Promise<{
     throw new Error('SAP_BTP_DESTINATION is set but VCAP_SERVICES is not available. Are you running on BTP CF?');
   }
 
+  // Use direct fetch for startup — works with BasicAuth destinations without JWT.
+  // The SDK's getDestination() fails for PrincipalPropagation destinations at startup
+  // because there's no user JWT available yet.
   const dest = await lookupDestination(btpConfig, destinationName);
-  const proxy = dest.ProxyType === 'OnPremise' ? createConnectivityProxy(btpConfig) : null;
+  const proxy =
+    dest.ProxyType === 'OnPremise' ? createConnectivityProxy(btpConfig, dest.CloudConnectorLocationId) : null;
 
   return {
     url: dest.URL,

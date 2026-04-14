@@ -1,12 +1,13 @@
 # Phase 4: BTP Cloud Foundry Deployment
 
-Deploy ARC-1 on SAP BTP Cloud Foundry with Docker, connecting to an on-premise SAP system via Cloud Connector and Destination Service.
+Deploy ARC-1 on SAP BTP Cloud Foundry, connecting to an on-premise SAP system via Cloud Connector and Destination Service. Two deployment methods are supported: **MTA** (recommended) and **Docker**.
 
 ## When to Use
 
 - Organization uses SAP BTP
 - SAP system is on-premise, accessible via Cloud Connector
 - Want a cloud-hosted MCP server without managing infrastructure
+- Need per-user SAP identity via principal propagation (XSUAA + Cloud Connector)
 - Combining with Phase 2 (OAuth/OIDC) for enterprise authentication
 
 ## Architecture
@@ -48,16 +49,81 @@ Deploy ARC-1 on SAP BTP Cloud Foundry with Docker, connecting to an on-premise S
 - SAP BTP subaccount with Cloud Foundry environment enabled
 - Cloud Connector installed and connected to BTP subaccount
 - Cloud Connector configured with virtual host mapping to SAP on-premise system
-- `cf` CLI installed and logged in
-- Docker image pushed to a container registry (GHCR, Docker Hub, etc.)
+- `cf` CLI and `mbt` (MTA Build Tool) installed
+- For Docker deployment: image pushed to a container registry (GHCR, Docker Hub, etc.)
 
-## Setup
+## Deployment Method 1: MTA (Recommended)
+
+MTA (Multi-Target Application) deployment bundles ARC-1 with its BTP service dependencies (XSUAA, Destination, Connectivity) into a single deployable archive. Services are created automatically.
+
+### 1. Build and Deploy
+
+```bash
+# Clone the repo
+git clone https://github.com/marianfoo/arc-1.git
+cd arc-1
+
+# Build the MTA archive (runs npm ci + npm run build internally)
+npm run btp:build
+
+# Deploy to BTP CF (creates services + pushes the app)
+npm run btp:deploy
+
+# Or combined:
+npm run btp:build-deploy
+```
+
+The `mta.yaml` defines three BTP services that are created automatically:
+
+| Service | Instance Name | Plan | Purpose |
+|---------|--------------|------|---------|
+| XSUAA | `arc1-xsuaa` | `application` | MCP client OAuth authentication |
+| Destination | `arc1-destination` | `lite` | SAP system lookup |
+| Connectivity | `arc1-connectivity` | `lite` | Cloud Connector proxy |
+
+### 2. Post-Deploy Configuration
+
+When using `SAP_BTP_DESTINATION`, the URL and credentials come from the BTP Destination — no `cf set-env` for `SAP_URL` or `SAP_CLIENT` is needed. Only set them if you're not using the Destination Service:
+
+```bash
+# Only needed if NOT using SAP_BTP_DESTINATION:
+cf set-env arc1-mcp-server SAP_URL "http://a4h-abap:50000"
+cf set-env arc1-mcp-server SAP_CLIENT "001"
+cf restage arc1-mcp-server
+```
+
+The `mta.yaml` already configures these properties:
+- `SAP_TRANSPORT: http-streamable` — HTTP transport for MCP
+- `SAP_BTP_DESTINATION` / `SAP_BTP_PP_DESTINATION` — dual-destination pattern
+- `SAP_PP_ENABLED: true` — per-user principal propagation
+- `SAP_XSUAA_AUTH: true` — XSUAA OAuth for MCP clients
+- `SAP_READ_ONLY: true` / `SAP_BLOCK_FREE_SQL: true` — safety defaults
+
+### 3. Customize mta.yaml
+
+Edit `mta.yaml` to match your environment:
+
+```yaml
+properties:
+  # Change these to your BTP Destination names
+  SAP_BTP_DESTINATION: my-sap-basic       # BasicAuth destination (startup)
+  SAP_BTP_PP_DESTINATION: my-sap-pp       # PrincipalPropagation destination (per-user)
+```
+
+See the [BTP Destination Setup Guide](btp-destination-setup.md) for creating these destinations.
+
+---
+
+## Deployment Method 2: Docker
 
 ### 1. Create BTP Services
 
 ```bash
 # Login to Cloud Foundry
 cf login -a https://api.cf.us10-001.hana.ondemand.com
+
+# Create XSUAA service instance (for MCP client OAuth)
+cf create-service xsuaa application arc1-xsuaa -c xs-security.json
 
 # Create Destination service instance
 cf create-service destination lite arc1-destination
@@ -118,14 +184,16 @@ applications:
       SAP_INSECURE: "true"
       # MCP transport (CF sets PORT env var automatically)
       SAP_TRANSPORT: "http-streamable"
-      # BTP Destination Service (reads credentials from destination config)
-      SAP_BTP_DESTINATION: "SAP_TRIAL"
+      # BTP Destination Service — dual-destination pattern
+      SAP_BTP_DESTINATION: "SAP_TRIAL"         # BasicAuth (startup)
+      SAP_BTP_PP_DESTINATION: "SAP_TRIAL_PP"   # PrincipalPropagation (per-user)
+      SAP_PP_ENABLED: "true"
+      SAP_XSUAA_AUTH: "true"
       # Safety: read-only, no SQL
       SAP_READ_ONLY: "true"
       SAP_BLOCK_FREE_SQL: "true"
-      # Logging
-      SAP_VERBOSE: "true"
     services:
+      - arc1-xsuaa
       - arc1-connectivity
       - arc1-destination
 ```
@@ -183,8 +251,12 @@ curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/health
 # → {"status":"ok"}
 
 # Check Protected Resource Metadata (OAuth discovery)
-curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/.well-known/oauth-protected-resource
-# → {"resource":"https://arc1-mcp-server.cfapps...","...}
+curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/.well-known/oauth-protected-resource/mcp
+# → {"resource":"https://arc1-mcp-server.cfapps.../mcp","scopes_supported":["read","write","data","sql","admin"],...}
+
+# Check Authorization Server Metadata
+curl https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/.well-known/oauth-authorization-server
+# → {"authorization_endpoint":"...","token_endpoint":"...","registration_endpoint":"...",...}
 
 # Test with Bearer token
 TOKEN=$(az account get-access-token --scope "api://{client-id}/access_as_user" --query accessToken -o tsv)
@@ -200,11 +272,31 @@ ARC-1 auto-detects BTP Cloud Foundry via the `VCAP_APPLICATION` environment vari
 
 1. **Public URL auto-detection:** ARC-1 reads `application_uris` from `VCAP_APPLICATION` to construct the externally reachable URL (used for RFC 9728 metadata). Override with `SAP_PUBLIC_URL` if needed.
 
-2. **Destination Service:** When `SAP_BTP_DESTINATION` is set, ARC-1 reads SAP credentials (user, password, URL) from the BTP Destination Service at runtime, using the connectivity service binding from `VCAP_SERVICES`.
+2. **Destination Service (startup):** When `SAP_BTP_DESTINATION` is set, ARC-1 calls the Destination Service REST API directly at startup to read SAP credentials (user, password, URL). This works with BasicAuth destinations without a user JWT.
 
-3. **Connectivity Proxy:** On-premise HTTP calls are routed through BTP's connectivity proxy (`connectivityproxy.internal.cf...`) using the `Proxy-Authorization` header with a connectivity service OAuth token.
+3. **Destination Service (per-user):** When `SAP_PP_ENABLED=true` and a user has a valid JWT, ARC-1 uses the [SAP Cloud SDK](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/destinations) `getDestination()` to resolve `SAP_BTP_PP_DESTINATION` with the user's JWT. The SDK handles service token acquisition, `X-User-Token` header injection, and per-user destination caching.
 
-4. **Port:** CF sets the `PORT` environment variable (typically `8080`). ARC-1's Docker image defaults `SAP_HTTP_ADDR` to `0.0.0.0:8080`.
+4. **Connectivity Proxy:** On-premise HTTP calls are routed through BTP's connectivity proxy (`connectivityproxy.internal.cf...`) using the `Proxy-Authorization` header with a connectivity service OAuth token.
+
+5. **Cloud Connector Location ID:** When a destination has `CloudConnectorLocationId` set (needed when multiple Cloud Connectors connect to the same subaccount), ARC-1 sends the `SAP-Connectivity-SCC-Location_ID` header to route to the correct Cloud Connector instance. This is propagated correctly in both startup and per-user flows.
+
+6. **Port:** CF sets the `PORT` environment variable (typically `8080`). ARC-1 defaults `ARC1_HTTP_ADDR` to `0.0.0.0:8080`.
+
+### Dual-Destination Pattern
+
+ARC-1 uses two BTP destinations for on-premise PP scenarios:
+
+| Destination | Auth Type | Used For | Config Var |
+|-------------|-----------|----------|------------|
+| Startup destination | BasicAuthentication | Feature probing, cache warmup, API key users | `SAP_BTP_DESTINATION` |
+| Per-user destination | PrincipalPropagation | Per-user requests with JWT | `SAP_BTP_PP_DESTINATION` |
+
+**Why two destinations?** A PrincipalPropagation destination has no User/Password. At startup (no user JWT available), the SDK's `getDestination()` would fail for PP destinations. The BasicAuth destination provides a fallback for system-level operations and API key users.
+
+The destinations may point to the same SAP system but can differ in:
+- Authentication type (BasicAuth vs PP)
+- Cloud Connector port (HTTP 50000 vs HTTPS 50001 for PP)
+- Cloud Connector Location ID (different SCC instances)
 
 ## Updating the Deployment
 
@@ -238,6 +330,16 @@ Then configure your MCP client (Copilot Studio, VS Code) to use OAuth authentica
 
 ## Troubleshooting
 
+### MTA deploy fails: "Lifecycle type cannot be changed from docker to buildpack"
+
+If migrating from a Docker-based deployment to MTA (Node.js buildpack), CF cannot change the lifecycle type of an existing app. Delete the old Docker app first:
+
+```bash
+cf delete arc1-mcp-server -f -r
+# Then redeploy
+npm run btp:deploy
+```
+
 ### App crashes with "unable to find user arc1"
 
 The Docker image user doesn't match what CF cached. Fix with explicit command:
@@ -265,7 +367,7 @@ cf push arc1-mcp-server --docker-image ghcr.io/your-org/arc1:latest -c "/usr/loc
 
 ## Deploying Without Docker (Node.js Buildpack)
 
-If you need customization beyond what the Docker image provides (e.g., custom certificates, native modules, or patching), you can deploy ARC-1 as a Node.js application using the `nodejs_buildpack`:
+The MTA deployment (Method 1) already uses the Node.js buildpack. If you need a simpler deployment without MTA tooling, you can use `cf push` with a manifest file:
 
 ### 1. Prepare the Application
 
@@ -277,7 +379,15 @@ npm ci
 npm run build
 ```
 
-### 2. Create a CF-specific manifest
+### 2. Create BTP services manually
+
+```bash
+cf create-service xsuaa application arc1-xsuaa -c xs-security.json
+cf create-service destination lite arc1-destination
+cf create-service connectivity lite arc1-connectivity
+```
+
+### 3. Create a CF-specific manifest
 
 ```yaml
 # manifest-nodejs.yml
@@ -292,39 +402,32 @@ applications:
     health-check-http-endpoint: /health
     command: node dist/index.js
     env:
-      SAP_URL: "http://a4h-abap:50000"
-      SAP_CLIENT: "001"
       SAP_TRANSPORT: "http-streamable"
       SAP_SYSTEM_TYPE: "auto"
+      SAP_BTP_DESTINATION: "SAP_TRIAL"
+      SAP_BTP_PP_DESTINATION: "SAP_TRIAL_PP"
+      SAP_PP_ENABLED: "true"
+      SAP_XSUAA_AUTH: "true"
       SAP_READ_ONLY: "true"
       SAP_BLOCK_FREE_SQL: "true"
     services:
+      - arc1-xsuaa
       - arc1-connectivity
       - arc1-destination
 ```
 
-### 3. Deploy
+### 4. Deploy
 
 ```bash
 cf push -f manifest-nodejs.yml
 ```
 
-**Differences from Docker deployment:**
-- Uses CF's Node.js buildpack (auto-detects `package.json`)
+**Notes:**
 - `better-sqlite3` native module is compiled during staging — may add 30-60s to deploy
 - You can modify source before pushing (custom tool descriptions, additional middleware, etc.)
-- Environment is Ubuntu-based (not Alpine), which may affect some native dependencies
+- Prefer MTA deployment for production — it bundles service creation and is reproducible
 
-### 4. Customization Examples
-
-**Custom start script** — add pre-startup logic:
-
-```bash
-# In package.json scripts:
-"start:cf": "node scripts/pre-start.js && node dist/index.js"
-```
-
-Then set `command: npm run start:cf` in the manifest.
+### 5. Customization Examples
 
 **Custom CA certificates** — for on-premise SAP with self-signed certs:
 
@@ -348,4 +451,9 @@ Key differences from on-premise deployment:
 - [SAP BTP Cloud Foundry Environment](https://help.sap.com/docs/btp/sap-business-technology-platform/cloud-foundry-environment) — CF runtime overview
 - [SAP Cloud Connector Installation](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/installation) — Cloud Connector setup
 - [SAP Destination Service](https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/calling-destination-service-rest-api) — Destination lookup API
+- [SAP Cloud SDK — Destinations](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/destinations) — SDK destination resolution
+- [SAP Cloud SDK — On-Premise Connectivity](https://sap.github.io/cloud-sdk/docs/js/features/connectivity/on-premise) — Cloud Connector proxy headers
+- [HTTP Proxy for On-Premise Connectivity](https://help.sap.com/docs/CP_CONNECTIVITY/b865ed651e414196b39f8922db2122c7/d872cfb4801c4b54896816df4b75c75d.html) — Proxy headers, Location ID
+- [Configure PP via User Exchange Token](https://help.sap.com/docs/CP_CONNECTIVITY/cca91383641e40ffbe03bdc78f00f681/39f538ad62e144c58c056ebc34bb6890.html) — Option 1 vs Option 2
+- [Destination Authentication Methods](https://help.sap.com/docs/btp/best-practices/destination-authentication-methods) — BTP Best Practices
 - [SAP BTP Docker Deployment](https://help.sap.com/docs/btp/sap-business-technology-platform/deploy-docker-images-in-cloud-foundry-environment) — Docker on CF
