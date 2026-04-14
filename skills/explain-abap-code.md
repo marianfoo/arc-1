@@ -104,6 +104,7 @@ Group findings by priority:
 - **Priority 1 (Errors)**: Must-fix issues — deprecated APIs, syntax problems
 - **Priority 2 (Warnings)**: Should-fix — performance, maintainability
 - **Priority 3 (Info)**: Nice-to-fix — style, conventions
+- Check each finding's `hasQuickfix` flag. If `true`, mention that SAP provides a machine-applicable quickfix proposal for that location.
 
 ## Step 4: (Optional) Research with mcp-sap-docs
 
@@ -171,6 +172,8 @@ From ATC results:
 
 Offer the user next steps:
 - "Want me to explain a specific method in detail?"
+- "Want me to get SAP quickfix proposals for the ATC findings?" (→ `SAPDiagnose(action="quickfix")`)
+- "Want me to apply SAP's quickfix for <finding>?" (uses SAP-verified fix proposals + `apply_quickfix`)
 - "Want me to analyze the ATC findings and suggest fixes?" (→ migrate-custom-code skill)
 - "Want me to generate unit tests for this class?" (→ generate-abap-unit-test skill)
 - "Want me to show the full dependency graph?" (→ SAPContext with depth=2)

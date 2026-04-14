@@ -210,6 +210,14 @@ After writing all methods, run a syntax check:
 SAPDiagnose(action="syntax", type="CLAS", name="<bp_class>")
 ```
 
+If syntax errors occur, try SAP quickfix proposals first before manual edits:
+
+```
+SAPDiagnose(action="quickfix", type="CLAS", name="<bp_class>", source="<current_source>", line=<error_line>, column=<error_col>)
+```
+
+SAP quickfixes can automatically resolve common issues like missing declarations or straightforward syntax corrections.
+
 If syntax errors occur:
 1. Read the error message carefully
 2. Common issues: wrong entity name in `READ ENTITIES`, incorrect field alias, missing `IN LOCAL MODE`

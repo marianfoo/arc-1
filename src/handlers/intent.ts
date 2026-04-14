@@ -46,6 +46,8 @@ import {
   type ActivationResult,
   activate,
   activateBatch,
+  applyFixProposal,
+  getFixProposals,
   publishServiceBinding,
   runAtcCheck,
   runUnitTests,
@@ -2563,6 +2565,59 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
       const result = await runAtcCheck(client.http, client.safety, objectUrl, variant);
       return textResult(JSON.stringify(result, null, 2));
     }
+    case 'quickfix': {
+      const source = args.source as string | undefined;
+      if (!name || !type) return errorResult('"name" and "type" are required for "quickfix" action.');
+      if (!source) return errorResult('"source" is required for "quickfix" action.');
+      if (args.line == null) return errorResult('"line" is required for "quickfix" action.');
+
+      const line = Number(args.line);
+      const column = Number(args.column ?? 0);
+      if (!Number.isFinite(line)) return errorResult('"line" must be a number for "quickfix" action.');
+      if (!Number.isFinite(column)) return errorResult('"column" must be a number for "quickfix" action.');
+
+      const proposals = await getFixProposals(
+        client.http,
+        client.safety,
+        sourceUrlForType(type, name),
+        source,
+        line,
+        column,
+      );
+      return textResult(JSON.stringify(proposals, null, 2));
+    }
+    case 'apply_quickfix': {
+      const source = args.source as string | undefined;
+      const proposalUri = args.proposalUri as string | undefined;
+      const proposalUserContent = args.proposalUserContent as string | undefined;
+      if (!name || !type) return errorResult('"name" and "type" are required for "apply_quickfix" action.');
+      if (!source) return errorResult('"source" is required for "apply_quickfix" action.');
+      if (args.line == null) return errorResult('"line" is required for "apply_quickfix" action.');
+      if (!proposalUri) return errorResult('"proposalUri" is required for "apply_quickfix" action.');
+      if (!proposalUserContent) return errorResult('"proposalUserContent" is required for "apply_quickfix" action.');
+
+      const line = Number(args.line);
+      const column = Number(args.column ?? 0);
+      if (!Number.isFinite(line)) return errorResult('"line" must be a number for "apply_quickfix" action.');
+      if (!Number.isFinite(column)) return errorResult('"column" must be a number for "apply_quickfix" action.');
+
+      const deltas = await applyFixProposal(
+        client.http,
+        client.safety,
+        {
+          uri: proposalUri,
+          type: 'quickfix/proposal',
+          name: '',
+          description: '',
+          userContent: proposalUserContent,
+        },
+        sourceUrlForType(type, name),
+        source,
+        line,
+        column,
+      );
+      return textResult(JSON.stringify(deltas, null, 2));
+    }
     case 'dumps': {
       const id = args.id as string | undefined;
       if (id) {
@@ -2603,7 +2658,9 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
       return textResult(JSON.stringify(traces, null, 2));
     }
     default:
-      return errorResult(`Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, dumps, traces`);
+      return errorResult(
+        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces`,
+      );
   }
 }
 

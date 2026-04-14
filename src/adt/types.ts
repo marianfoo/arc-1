@@ -80,6 +80,32 @@ export interface UnitTestResult {
   duration?: number;
 }
 
+/** Quick fix proposal from /sap/bc/adt/quickfixes/evaluation */
+export interface FixProposal {
+  /** Proposal endpoint URI (used for apply step) */
+  uri: string;
+  /** ADT object type of the proposal */
+  type: string;
+  /** Human-readable proposal name/title */
+  name: string;
+  /** Human-readable description (may contain HTML entities) */
+  description: string;
+  /** Opaque SAP quickfix state blob, pass through unchanged */
+  userContent: string;
+}
+
+/** Text delta returned when applying a quick fix proposal */
+export interface FixDelta {
+  /** Source URI affected by this replacement */
+  uri: string;
+  range: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
+  /** Replacement text */
+  content: string;
+}
+
 /** Syntax check result */
 export interface SyntaxCheckResult {
   hasErrors: boolean;

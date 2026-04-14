@@ -544,9 +544,14 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `syntax`, `unittest`, `atc`, `dumps`, or `traces` |
-| `name` | string | No | Object name (required for syntax/unittest/atc) |
-| `type` | string | No | Object type: `PROG`, `CLAS`, `INTF`, `FUNC` (required for syntax/unittest/atc) |
+| `action` | string | Yes | `syntax`, `unittest`, `atc`, `quickfix`, `apply_quickfix`, `dumps`, or `traces` |
+| `name` | string | No | Object name (required for syntax/unittest/atc/quickfix/apply_quickfix) |
+| `type` | string | No | Object type: `PROG`, `CLAS`, `INTF`, `FUNC` (required for syntax/unittest/atc/quickfix/apply_quickfix) |
+| `source` | string | No | Current source code (required for `quickfix` and `apply_quickfix`) |
+| `line` | number | No | Source line number (required for `quickfix` and `apply_quickfix`) |
+| `column` | number | No | Source column number (optional for `quickfix` and `apply_quickfix`, default `0`) |
+| `proposalUri` | string | No | Quickfix proposal URI from `quickfix` response (required for `apply_quickfix`) |
+| `proposalUserContent` | string | No | Opaque proposal state from `quickfix` response (required for `apply_quickfix`) |
 | `id` | string | No | Dump ID (for dump detail) or Trace ID (for trace analysis) |
 | `user` | string | No | Filter dumps by user |
 | `maxResults` | number | No | Max dumps to return |
@@ -557,7 +562,9 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 
 - **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message. **Important:** Syntax check runs against the *active* (on-system) source, not proposed new source. After writing/updating an object, activate it first, then run syntax check.
 - **`unittest`** — Run ABAP unit tests. Returns results per test class/method with status, alert messages, and execution time.
-- **`atc`** — Run ATC (ABAP Test Cockpit) checks. Returns findings with priority, check title, message, URI, and line number. Optional `variant` parameter for custom check variants.
+- **`atc`** — Run ATC (ABAP Test Cockpit) checks. Returns findings with priority, check title, message, URI, line number, plus quickfix metadata (`quickfixInfo`, `hasQuickfix`). Optional `variant` parameter for custom check variants.
+- **`quickfix`** — Get SAP quickfix proposals for a specific source position (`name`, `type`, `source`, `line`, optional `column`). Returns proposal entries with `uri`, `type`, `name`, `description`, `userContent`.
+- **`apply_quickfix`** — Apply one proposal (`proposalUri` + `proposalUserContent`) and return text deltas (range + replacement content). This does not write source; use `SAPWrite` to persist.
 - **`dumps`** — List short dumps (ST22). Without `id`: returns recent dumps (filterable by `user`, `maxResults`). With `id`: returns full dump detail including error type, exception, program, stack trace, and formatted output.
 - **`traces`** — List ABAP profiler traces. Without `id`: returns trace list. With `id` + `analysis`: returns trace analysis (`hitlist` = call hierarchy with hit counts and timings, `statements` = executed statements, `dbAccesses` = database access details).
 
@@ -566,6 +573,8 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 SAPDiagnose(action="syntax", type="CLAS", name="ZCL_ORDER")
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_ORDER")
 SAPDiagnose(action="atc", type="PROG", name="ZTEST_REPORT", variant="DEFAULT")
+SAPDiagnose(action="quickfix", type="CLAS", name="ZCL_ORDER", source="<current_source>", line=42, column=1)
+SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_ORDER", source="<current_source>", line=42, column=1, proposalUri="/sap/bc/adt/quickfixes/...", proposalUserContent="<opaque_state>")
 SAPDiagnose(action="dumps")
 SAPDiagnose(action="dumps", user="DEVELOPER", maxResults=10)
 SAPDiagnose(action="dumps", id="20260409_123456_DUMP_ID")
@@ -573,6 +582,14 @@ SAPDiagnose(action="traces")
 SAPDiagnose(action="traces", id="TRACE123", analysis="hitlist")
 SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
 ```
+
+### Quickfix Workflow
+
+1. Run `SAPDiagnose(action="atc" ...)` or `SAPDiagnose(action="syntax" ...)`.
+2. Check ATC findings for `hasQuickfix: true`.
+3. Call `SAPDiagnose(action="quickfix", ...)` for the relevant line/column.
+4. Select a proposal and call `SAPDiagnose(action="apply_quickfix", ...)` to receive deltas.
+5. Apply those deltas to source and persist via `SAPWrite(action="update" | "edit_method", ...)`.
 
 ---
 

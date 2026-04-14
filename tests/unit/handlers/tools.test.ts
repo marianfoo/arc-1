@@ -135,7 +135,7 @@ describe('Tool Definitions', () => {
     expect(sapLint.description).toContain('SAPDiagnose');
   });
 
-  it('SAPDiagnose exposes syntax, unittest, atc, dumps, traces', () => {
+  it('SAPDiagnose exposes syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapDiagnose = tools.find((t) => t.name === 'SAPDiagnose')!;
     const schema = sapDiagnose.inputSchema as Record<string, any>;
@@ -144,8 +144,15 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('syntax');
     expect(actionEnum).toContain('unittest');
     expect(actionEnum).toContain('atc');
+    expect(actionEnum).toContain('quickfix');
+    expect(actionEnum).toContain('apply_quickfix');
     expect(actionEnum).toContain('dumps');
     expect(actionEnum).toContain('traces');
+    expect(schema.properties.source).toBeDefined();
+    expect(schema.properties.line).toBeDefined();
+    expect(schema.properties.column).toBeDefined();
+    expect(schema.properties.proposalUri).toBeDefined();
+    expect(schema.properties.proposalUserContent).toBeDefined();
   });
 
   // ─── textSearch-based SAPSearch adaptation ───────────────────────

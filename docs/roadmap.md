@@ -46,7 +46,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~3~~ | ~~FEAT-08~~ | ~~Content-Type 415/406 Auto-Retry~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | ~~4~~ | ~~FEAT-14~~ | ~~401 Session Timeout Auto-Retry~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | ~~5~~ | ~~FEAT-15~~ | ~~Namespace URL Encoding Audit~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
-| 6 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | P1 | S | Features |
+| ~~6~~ | ~~FEAT-12~~ | ~~Fix Proposals / Auto-Fix from ATC~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~7~~ | ~~FEAT-13~~ | ~~DDIC Domain/Data Element Write~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-12~~ |
 | 8 | FEAT-16 | Error Intelligence (Actionable Hints) | P1 | S | Features |
 | 9 | FEAT-17 | Type Auto-Mappings for SAPWrite | P1 | XS | Features |
@@ -98,6 +98,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-12 | Fix Proposals / Auto-Fix from ATC | 2026-04-14 | Features |
 | FEAT-47 | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
 | FEAT-45 | DEVC (Package) Create | 2026-04-14 | Features |
 | FEAT-44 | TABL (Database Table) Create | 2026-04-14 | Features |
@@ -168,7 +169,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
 8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
 9. **FEAT-17** Type Auto-Mappings for SAPWrite (XS) — eliminate LLM type code confusion
-10. **FEAT-12** Fix Proposals / Auto-Fix (S) — safer than LLM-guessed fixes. **↑ Priority increased:** dassian-adt now has `abap_fix_proposals` tool (Apr 2026). abap-adt-api has `fixProposals` + `fixEdits` methods as implementation reference.
+10. ~~**FEAT-12** Fix Proposals / Auto-Fix (S)~~ — **completed 2026-04-14** (`SAPDiagnose` actions: `quickfix`, `apply_quickfix`; ATC enriched with `hasQuickfix`).
 11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03). **↑ Priority increased:** dassian-adt has extensive SAP-domain error classification (SM12, SPAU, L-prefix, activation deps, session timeout detection). High impact for AI self-correction.
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
 13. ~~**FEAT-44** TABL (Database Table) Create (S)~~ — **completed 2026-04-14** (source-based TABL create/update/delete + batch_create support in SAPWrite)
@@ -354,14 +355,19 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — safer than LLM-guessed fixes |
-| **Status** | Not started |
+| **Status** | Complete (2026-04-14) |
 | **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/issue-37-quickfix.md) |
 
-**What:** When ATC or syntax check finds an issue, SAP's fix proposal API (`/sap/bc/adt/quickfixes`) suggests the exact correction. Expose this via SAPDiagnose or SAPWrite so the LLM can apply verified fixes instead of guessing.
+**What:** When ATC or syntax check finds an issue, SAP's fix proposal API (`/sap/bc/adt/quickfixes`) suggests exact machine-applicable corrections. ARC-1 now exposes this via `SAPDiagnose` so the LLM can request proposals and apply deltas before writing.
 
-**Why:** Far safer than having the LLM guess the fix. Directly supports **safe defaults** and **token efficiency** — the LLM gets the exact fix without trial-and-error. The `abap-adt-api` library implements `fixProposals` and `fixEdits`.
+**Why:** Safer than LLM-guessed fixes, preserves ARC-1 safety boundaries (proposal/apply-delta is read-only; write still goes through `SAPWrite` package/transport/read-only gates), and reduces trial-and-error token usage.
 
-**Why not:** The ADT quickfixes endpoint (`/sap/bc/adt/quickfixes`) is undocumented in SAP Help and has unclear API stability across SAP releases. SAP's quickfixes are heuristic-based (pattern matching) and not always semantically correct — an LLM told "these are verified SAP fixes" may apply them blindly, shifting blame to ARC-1. The project already integrates `@abaplint/core` for pre-write validation with 100+ rules and fix suggestions, so adding SAP quickfixes creates ambiguity about which fix authority is canonical. Maintenance burden grows if the API contract changes per SAP patch.
+**Implementation (2026-04-14):**
+- Added `getFixProposals()` and `applyFixProposal()` in `src/adt/devtools.ts` for `/sap/bc/adt/quickfixes/evaluation` and proposal-URI apply calls.
+- Added new `SAPDiagnose` actions: `quickfix` and `apply_quickfix` (`src/handlers/schemas.ts`, `src/handlers/tools.ts`, `src/handlers/intent.ts`).
+- Enriched ATC findings with quickfix metadata (`quickfixInfo`, `hasQuickfix`) in `parseAtcFindings()`.
+- Added unit coverage in `tests/unit/adt/devtools.test.ts`, `tests/unit/handlers/intent.test.ts`, and schema/tool tests.
+- Added E2E coverage block in `tests/e2e/diagnostics.e2e.test.ts` for quickfix flow and ATC metadata verification.
 
 ---
 

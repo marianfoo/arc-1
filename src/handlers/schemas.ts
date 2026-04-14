@@ -352,9 +352,14 @@ export const SAPLintSchema = z.object({
 // ─── SAPDiagnose ────────────────────────────────────────────────────
 
 export const SAPDiagnoseSchema = z.object({
-  action: z.enum(['syntax', 'unittest', 'atc', 'dumps', 'traces']),
+  action: z.enum(['syntax', 'unittest', 'atc', 'dumps', 'traces', 'quickfix', 'apply_quickfix']),
   name: z.string().optional(),
   type: z.string().optional(),
+  source: z.string().optional(),
+  line: z.coerce.number().optional(),
+  column: z.coerce.number().optional(),
+  proposalUri: z.string().optional(),
+  proposalUserContent: z.string().optional(),
   variant: z.string().optional(),
   id: z.string().optional(),
   user: z.string().optional(),

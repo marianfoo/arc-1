@@ -128,12 +128,31 @@ For each finding, present:
 
 For each fixable finding, generate replacement code based on documentation and modern ABAP patterns.
 
+### 4a. Check SAP quickfix first (before LLM-generated fixes)
+
+For each finding location, first check whether SAP provides a native quickfix:
+
+```
+SAPDiagnose(action="quickfix", type="<type>", name="<object_name>", source="<current_source>", line=<finding_line>, column=0)
+```
+
+If proposals are returned:
+- Present them as **SAP-verified fixes** (higher confidence than LLM-generated fixes)
+- If the user selects one, apply it and get exact text deltas:
+
+```
+SAPDiagnose(action="apply_quickfix", type="<type>", name="<object_name>", source="<current_source>", line=<finding_line>, column=0, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")
+```
+
+- Apply the returned deltas and persist via `SAPWrite`
+
 ### Fix Options
 
-Present 3 options per finding (matching SAP Joule pattern):
+Present 4 options per finding:
 1. **Apply** — Auto-write the fix via ARC-1
 2. **Show** — Display the before/after diff without applying
 3. **Skip** — Move to the next finding
+4. **SAP Quick Fix** — Apply SAP's quickfix proposal when available (preferred over LLM-generated fix)
 
 Group related fixes that can be applied together (e.g., multiple deprecated statements in the same method).
 
@@ -239,6 +258,11 @@ Next steps:
 
 - **BTP**: Limited ATC variants — primarily cloud readiness checks. BTP objects already use ABAP Cloud syntax, so migration focus is different: deprecated released APIs, not classic ABAP constructs. Fewer findings expected since ABAP Cloud enforces modern patterns.
 - **On-Premise**: Full range of S/4HANA readiness variants available (2020, 2021, 2022, 2023+). Classic ABAP objects may have many findings. FORM/PERFORM, function modules, classic reports, and DB views are common migration targets. Custom Code Migration Worklist (SCMA) may provide additional context.
+
+### Quickfix Availability
+
+- SAP quickfixes are available for many common ATC findings (for example obsolete statements, missing declarations, straightforward syntax issues).
+- Not every finding has a quickfix. Deprecated API replacements and architecture-level redesign usually still require manual/LLM-guided refactoring.
 
 ### What This Skill Does NOT Do
 

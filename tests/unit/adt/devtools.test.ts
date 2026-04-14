@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   activate,
   activateBatch,
+  applyFixProposal,
+  getFixProposals,
   parseActivationResult,
   publishServiceBinding,
   runAtcCheck,
@@ -9,7 +11,7 @@ import {
   syntaxCheck,
   unpublishServiceBinding,
 } from '../../../src/adt/devtools.js';
-import { AdtSafetyError } from '../../../src/adt/errors.js';
+import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
@@ -626,6 +628,248 @@ describe('DevTools', () => {
     });
   });
 
+  // ─── getFixProposals / applyFixProposal ───────────────────────────
+
+  describe('quickfix APIs', () => {
+    it('getFixProposals parses quickfix proposals', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <qf:evaluationResult>
+    <adtcore:objectReference adtcore:uri="/sap/bc/adt/quickfixes/1" adtcore:type="quickfix/proposal" adtcore:name="Declare variable" adtcore:description="Adds DATA declaration"/>
+    <qf:userContent>opaque-1</qf:userContent>
+  </qf:evaluationResult>
+  <qf:evaluationResult>
+    <adtcore:objectReference adtcore:uri="/sap/bc/adt/quickfixes/2" adtcore:type="quickfix/proposal" adtcore:name="Inline DATA" adtcore:description="Converts to inline declaration"/>
+    <qf:userContent>opaque-2</qf:userContent>
+  </qf:evaluationResult>
+</qf:evaluationResults>`;
+      const http = mockHttp(xml);
+
+      const proposals = await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+        'CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+        12,
+        7,
+      );
+
+      expect(proposals).toHaveLength(2);
+      expect(proposals[0]).toEqual({
+        uri: '/sap/bc/adt/quickfixes/1',
+        type: 'quickfix/proposal',
+        name: 'Declare variable',
+        description: 'Adds DATA declaration',
+        userContent: 'opaque-1',
+      });
+      expect(proposals[1]?.name).toBe('Inline DATA');
+    });
+
+    it('getFixProposals returns empty array for empty evaluation response', async () => {
+      const http = mockHttp('<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>');
+      const proposals = await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+      expect(proposals).toEqual([]);
+    });
+
+    it('getFixProposals returns empty array on 404 endpoint missing', async () => {
+      const http = mockHttp();
+      (http.post as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new AdtApiError('Not found', 404, '/sap/bc/adt/quickfixes/evaluation'),
+      );
+
+      const proposals = await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+      expect(proposals).toEqual([]);
+    });
+
+    it('getFixProposals returns empty array on 406 not acceptable', async () => {
+      const http = mockHttp();
+      (http.post as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new AdtApiError('Not acceptable', 406, '/sap/bc/adt/quickfixes/evaluation'),
+      );
+
+      const proposals = await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+      expect(proposals).toEqual([]);
+    });
+
+    it('getFixProposals encodes #start fragment in URI query parameter', async () => {
+      const http = mockHttp('<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>');
+      await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+        'CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+        42,
+        3,
+      );
+
+      const path = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(path).toContain('/sap/bc/adt/quickfixes/evaluation?uri=');
+      expect(path).toContain('%23start%3D42%2C3');
+    });
+
+    it('getFixProposals sends source as request body', async () => {
+      const source = 'CLASS zcl_test IMPLEMENTATION.\nENDCLASS.';
+      const http = mockHttp('<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>');
+      await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+        source,
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toBe(source);
+    });
+
+    it('getFixProposals is blocked when read operation is disallowed', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
+      await expect(
+        getFixProposals(http, safety, '/sap/bc/adt/programs/programs/ZTEST/source/main', 'REPORT ztest.', 1, 0),
+      ).rejects.toThrow(AdtSafetyError);
+    });
+
+    it('applyFixProposal parses deltas', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes">
+  <quickfixes:delta uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main" startLine="7" startColumn="3" endLine="7" endColumn="8">
+    <quickfixes:content>DATA(lv_count)</quickfixes:content>
+  </quickfixes:delta>
+</quickfixes:applicationResult>`;
+      const http = mockHttp(xml);
+
+      const deltas = await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/1',
+          type: 'quickfix/proposal',
+          name: 'Declare variable',
+          description: 'Adds DATA declaration',
+          userContent: 'opaque-1',
+        },
+        '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+        'CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+        7,
+        3,
+      );
+
+      expect(deltas).toEqual([
+        {
+          uri: '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+          range: { start: { line: 7, column: 3 }, end: { line: 7, column: 8 } },
+          content: 'DATA(lv_count)',
+        },
+      ]);
+    });
+
+    it('applyFixProposal posts to proposal URI', async () => {
+      const http = mockHttp('<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: 'opaque',
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+
+      const target = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(target).toBe('/sap/bc/adt/quickfixes/123');
+    });
+
+    it('applyFixProposal includes userContent in request XML', async () => {
+      const http = mockHttp('<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: 'opaque-state',
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<userContent>opaque-state</userContent>');
+    });
+
+    it('applyFixProposal XML-escapes source and userContent', async () => {
+      const http = mockHttp('<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: 'use <tag> & "quote"',
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        `REPORT ztest.\nWRITE '<A&B>'.`,
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('&lt;A&amp;B&gt;');
+      expect(body).toContain('use &lt;tag&gt; &amp; &quot;quote&quot;');
+    });
+
+    it('applyFixProposal is blocked when read operation is disallowed', async () => {
+      const http = mockHttp();
+      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
+      await expect(
+        applyFixProposal(
+          http,
+          safety,
+          { uri: '/sap/bc/adt/quickfixes/1', type: 'quickfix/proposal', name: 'Fix', description: '', userContent: '' },
+          '/sap/bc/adt/programs/programs/ZTEST/source/main',
+          'REPORT ztest.',
+          1,
+          0,
+        ),
+      ).rejects.toThrow(AdtSafetyError);
+    });
+  });
+
   // ─── XML attribute escaping ────────────────────────────────────────
 
   describe('XML attribute escaping', () => {
@@ -792,6 +1036,53 @@ describe('DevTools', () => {
       expect(result.findings[0]?.checkTitle).toBe('Order Check');
       expect(result.findings[0]?.messageTitle).toBe('Wrong order');
       expect(result.findings[0]?.line).toBe(7);
+    });
+
+    it('extracts quickfixInfo and hasQuickfix=true from ATC finding metadata', async () => {
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
+      const resultResp = `<worklist>
+        <finding priority="1" checkTitle="Check" messageTitle="Issue" quickfixInfo="available" uri="/sap/bc/adt/programs/programs/ZTEST#start=2,1">
+          <quickfixes manual="false" automatic="true" pseudo="false"/>
+        </finding>
+      </worklist>`;
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.findings[0]?.quickfixInfo).toBe('available');
+      expect(result.findings[0]?.hasQuickfix).toBe(true);
+    });
+
+    it('sets hasQuickfix=false when all ATC quickfix flags are false', async () => {
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
+      const resultResp = `<worklist>
+        <finding priority="1" checkTitle="Check" messageTitle="Issue" uri="/sap/bc/adt/programs/programs/ZTEST#start=2,1">
+          <quickfixes manual="false" automatic="false" pseudo="false"/>
+        </finding>
+      </worklist>`;
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.findings[0]?.hasQuickfix).toBe(false);
+    });
+
+    it('defaults hasQuickfix to false when quickfix metadata is missing', async () => {
+      const createResp = '<atc:run xmlns:atc="http://www.sap.com/adt/atc" id="42" worklistId="42"/>';
+      const resultResp = `<worklist>
+        <finding priority="1" checkTitle="Check" messageTitle="Issue" uri="/sap/bc/adt/programs/programs/ZTEST#start=2,1"/>
+      </worklist>`;
+      const http = {
+        ...mockHttp(createResp),
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: resultResp }),
+      } as unknown as AdtHttpClient;
+
+      const result = await runAtcCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result.findings[0]?.hasQuickfix).toBe(false);
     });
   });
 });

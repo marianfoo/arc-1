@@ -7,9 +7,10 @@
  * - RunATCCheck: ABAP Test Cockpit (code quality)
  */
 
+import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import type { SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
+import type { FixDelta, FixProposal, SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
 import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
 /** Run syntax check on an ABAP object */
@@ -276,6 +277,63 @@ export async function runAtcCheck(
   return { findings: parseAtcFindings(resultResp.body) };
 }
 
+/** Get SAP quick fix proposals for a given source position */
+export async function getFixProposals(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  sourceUri: string,
+  source: string,
+  line: number,
+  column: number,
+): Promise<FixProposal[]> {
+  checkOperation(safety, OperationType.Read, 'GetFixProposals');
+
+  const uriWithStart = `${sourceUri}#start=${line},${column}`;
+  const path = `/sap/bc/adt/quickfixes/evaluation?uri=${encodeURIComponent(uriWithStart)}`;
+
+  try {
+    const resp = await http.post(path, source, 'application/*', {
+      Accept: 'application/*',
+    });
+    return parseFixProposals(resp.body);
+  } catch (err) {
+    if (err instanceof AdtApiError && (err.statusCode === 404 || err.statusCode === 406)) {
+      // Graceful fallback: endpoint not available on this SAP release/system.
+      return [];
+    }
+    throw err;
+  }
+}
+
+/** Apply one SAP quick fix proposal and return replacement deltas */
+export async function applyFixProposal(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  proposal: FixProposal,
+  sourceUri: string,
+  source: string,
+  line: number,
+  column: number,
+): Promise<FixDelta[]> {
+  checkOperation(safety, OperationType.Read, 'ApplyFixProposal');
+
+  const uriWithStart = `${sourceUri}#start=${line},${column}`;
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<quickfixes:proposalRequest xmlns:quickfixes="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <input>
+    <content>${escapeXmlText(source)}</content>
+    <adtcore:objectReference adtcore:uri="${escapeXmlAttr(uriWithStart)}"/>
+  </input>
+  <userContent>${escapeXmlText(proposal.userContent)}</userContent>
+</quickfixes:proposalRequest>`;
+
+  const resp = await http.post(proposal.uri, body, 'application/*', {
+    Accept: 'application/*',
+  });
+
+  return parseFixDeltas(resp.body);
+}
+
 // ─── Parsers ────────────────────────────────────────────────────────
 
 export interface AtcFinding {
@@ -284,6 +342,8 @@ export interface AtcFinding {
   messageTitle: string;
   uri: string;
   line: number;
+  quickfixInfo?: string;
+  hasQuickfix?: boolean;
 }
 
 /** Parse activation response XML to detect errors via proper XML parsing */
@@ -426,6 +486,136 @@ function parseUnitTestResults(xml: string): UnitTestResult[] {
   return results;
 }
 
+function escapeXmlText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function toNodeRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === 'object' ? (first as Record<string, unknown>) : undefined;
+  }
+  return typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+}
+
+function readNodeText(node: unknown): string {
+  if (node == null) return '';
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'boolean') return String(node);
+  if (Array.isArray(node)) return node.map((n) => readNodeText(n)).join('');
+  if (typeof node !== 'object') return '';
+  const rec = node as Record<string, unknown>;
+  if ('#text' in rec) return readNodeText(rec['#text']);
+  return Object.entries(rec)
+    .filter(([k]) => !k.startsWith('@_'))
+    .map(([, v]) => readNodeText(v))
+    .join('');
+}
+
+function parseFixProposals(xml: string): FixProposal[] {
+  const parsed = parseXml(xml);
+  const results = findDeepNodes(parsed, 'evaluationResult');
+  if (results.length === 0) return [];
+
+  return results
+    .map((result) => {
+      const objectRef = toNodeRecord(result.objectReference);
+      return {
+        uri: String(objectRef?.['@_uri'] ?? ''),
+        type: String(objectRef?.['@_type'] ?? ''),
+        name: String(objectRef?.['@_name'] ?? ''),
+        description: String(objectRef?.['@_description'] ?? ''),
+        userContent: readNodeText(result.userContent),
+      } satisfies FixProposal;
+    })
+    .filter((proposal) => proposal.uri.length > 0);
+}
+
+function parseIntOrUndefined(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function parsePositionFragment(uri: string, key: 'start' | 'end'): { line: number; column: number } | undefined {
+  const re = key === 'start' ? /#start=(\d+),(\d+)/ : /#end=(\d+),(\d+)/;
+  const match = uri.match(re);
+  if (!match?.[1] || !match[2]) return undefined;
+  return {
+    line: Number.parseInt(match[1], 10),
+    column: Number.parseInt(match[2], 10),
+  };
+}
+
+function parseFixDeltas(xml: string): FixDelta[] {
+  const parsed = parseXml(xml);
+  const candidateKeys = ['delta', 'edit', 'textEdit', 'replacement', 'replace'] as const;
+  let nodes: Array<Record<string, unknown>> = [];
+
+  for (const key of candidateKeys) {
+    nodes = findDeepNodes(parsed, key);
+    if (nodes.length > 0) break;
+  }
+
+  if (nodes.length === 0) return [];
+
+  return nodes.map((node) => {
+    const objectRef = toNodeRecord(node.objectReference);
+    const startNode = toNodeRecord(node.start ?? node.from ?? node.sourceStart);
+    const endNode = toNodeRecord(node.end ?? node.to ?? node.sourceEnd);
+
+    const uri = String(node['@_uri'] ?? objectRef?.['@_uri'] ?? '');
+
+    const startFromUri = parsePositionFragment(uri, 'start');
+    const endFromUri = parsePositionFragment(uri, 'end');
+
+    const startLine =
+      parseIntOrUndefined(node['@_startLine']) ??
+      parseIntOrUndefined(node['@_startline']) ??
+      parseIntOrUndefined(startNode?.['@_line']) ??
+      startFromUri?.line ??
+      0;
+    const startColumn =
+      parseIntOrUndefined(node['@_startColumn']) ??
+      parseIntOrUndefined(node['@_startCol']) ??
+      parseIntOrUndefined(node['@_startcolumn']) ??
+      parseIntOrUndefined(startNode?.['@_column']) ??
+      parseIntOrUndefined(startNode?.['@_col']) ??
+      startFromUri?.column ??
+      0;
+    const endLine =
+      parseIntOrUndefined(node['@_endLine']) ??
+      parseIntOrUndefined(node['@_endline']) ??
+      parseIntOrUndefined(endNode?.['@_line']) ??
+      endFromUri?.line ??
+      startLine;
+    const endColumn =
+      parseIntOrUndefined(node['@_endColumn']) ??
+      parseIntOrUndefined(node['@_endCol']) ??
+      parseIntOrUndefined(node['@_endcolumn']) ??
+      parseIntOrUndefined(endNode?.['@_column']) ??
+      parseIntOrUndefined(endNode?.['@_col']) ??
+      endFromUri?.column ??
+      startColumn;
+
+    const content = readNodeText(node.content ?? node.replacement ?? node.newText ?? node.text ?? node['#text']);
+
+    return {
+      uri,
+      range: {
+        start: { line: startLine, column: startColumn },
+        end: { line: endLine, column: endColumn },
+      },
+      content,
+    };
+  });
+}
+
 function parseAtcFindings(xml: string): AtcFinding[] {
   const parsed = parseXml(xml);
   const nodes = findDeepNodes(parsed, 'finding');
@@ -440,12 +630,21 @@ function parseAtcFindings(xml: string): AtcFinding[] {
       if (!Number.isNaN(firstNum)) line = firstNum;
     }
 
+    const quickfixInfoRaw = f['@_quickfixInfo'];
+    const quickfixInfo = quickfixInfoRaw == null ? undefined : String(quickfixInfoRaw);
+    const quickfixNode = toNodeRecord(f.quickfixes);
+    const manual = String(quickfixNode?.['@_manual'] ?? 'false').toLowerCase() === 'true';
+    const automatic = String(quickfixNode?.['@_automatic'] ?? 'false').toLowerCase() === 'true';
+    const pseudo = String(quickfixNode?.['@_pseudo'] ?? 'false').toLowerCase() === 'true';
+
     return {
       priority: Number.parseInt(String(f['@_priority'] ?? '0'), 10),
       checkTitle: String(f['@_checkTitle'] ?? ''),
       messageTitle: String(f['@_messageTitle'] ?? ''),
       uri: rawUri,
       line,
+      quickfixInfo,
+      hasQuickfix: manual || automatic || pseudo,
     };
   });
 }

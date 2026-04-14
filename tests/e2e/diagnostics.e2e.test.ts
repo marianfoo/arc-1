@@ -275,6 +275,122 @@ describe('E2E Diagnostics Tests', () => {
     });
   });
 
+  // ── Quick Fix Proposals ─────────────────────────────────────────
+
+  describe('SAPDiagnose quickfix', () => {
+    it('gets fix proposals for a class', async (ctx) => {
+      const readResult = await callTool(client, 'SAPRead', {
+        type: 'CLAS',
+        name: 'ZCL_ARC1_TEST',
+      });
+      if (readResult.isError) {
+        return ctx.skip(
+          `Fixture class ZCL_ARC1_TEST not readable: ${readResult.content?.[0]?.text ?? 'unknown error'}`,
+        );
+      }
+      const source = expectToolSuccess(readResult);
+
+      const result = await callTool(client, 'SAPDiagnose', {
+        action: 'quickfix',
+        type: 'CLAS',
+        name: 'ZCL_ARC1_TEST',
+        source,
+        line: 1,
+        column: 1,
+      });
+
+      if (result.isError) {
+        const err = result.content?.[0]?.text ?? '';
+        if (/quickfix|404|406|not found|not acceptable/i.test(err)) {
+          return ctx.skip(`Quickfix endpoint unavailable on this system: ${err.slice(0, 200)}`);
+        }
+      }
+
+      const text = expectToolSuccess(result);
+      const proposals = JSON.parse(text);
+      expect(Array.isArray(proposals)).toBe(true);
+
+      if (proposals.length > 0) {
+        for (const proposal of proposals) {
+          expect(proposal).toHaveProperty('uri');
+          expect(proposal).toHaveProperty('name');
+          expect(proposal).toHaveProperty('type');
+        }
+      }
+
+      const names = proposals.map((p: { name: string }) => p.name).join(', ');
+      console.log(`    Quickfix proposals: ${proposals.length}${names ? ` (${names})` : ''}`);
+    });
+
+    it('returns empty proposals for position without quickfixes', async (ctx) => {
+      const readResult = await callTool(client, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZARC1_TEST_REPORT',
+      });
+      if (readResult.isError) {
+        return ctx.skip(
+          `Fixture program ZARC1_TEST_REPORT not readable: ${readResult.content?.[0]?.text ?? 'unknown error'}`,
+        );
+      }
+      const source = expectToolSuccess(readResult);
+
+      const result = await callTool(client, 'SAPDiagnose', {
+        action: 'quickfix',
+        type: 'PROG',
+        name: 'ZARC1_TEST_REPORT',
+        source,
+        line: 2,
+        column: 0,
+      });
+
+      if (result.isError) {
+        const err = result.content?.[0]?.text ?? '';
+        if (/quickfix|404|406|not found|not acceptable/i.test(err)) {
+          return ctx.skip(`Quickfix endpoint unavailable on this system: ${err.slice(0, 200)}`);
+        }
+      }
+
+      const text = expectToolSuccess(result);
+      const proposals = JSON.parse(text);
+      expect(Array.isArray(proposals)).toBe(true);
+      expect(proposals.length).toBe(0);
+    });
+
+    it('returns error when source is missing', async () => {
+      const result = await callTool(client, 'SAPDiagnose', {
+        action: 'quickfix',
+        type: 'CLAS',
+        name: 'ZCL_ARC1_TEST',
+        line: 1,
+        column: 1,
+      });
+      expectToolError(result, 'source');
+    });
+
+    it('ATC findings include quickfix metadata', async (ctx) => {
+      const result = await callTool(client, 'SAPDiagnose', {
+        action: 'atc',
+        type: 'PROG',
+        name: 'ZARC1_TEST_REPORT',
+      });
+
+      if (result.isError) {
+        return ctx.skip(`ATC not available on this system: ${result.content?.[0]?.text ?? 'unknown error'}`);
+      }
+
+      const text = expectToolSuccess(result);
+      const parsed = JSON.parse(text) as { findings?: Array<Record<string, unknown>> };
+      const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
+      if (findings.length === 0) {
+        return ctx.skip('ATC returned no findings for ZARC1_TEST_REPORT — cannot verify quickfix metadata fields');
+      }
+
+      for (const finding of findings) {
+        expect(typeof finding.hasQuickfix).toBe('boolean');
+      }
+    });
+  });
+
   // ── Error Handling ──────────────────────────────────────────────
 
   describe('SAPDiagnose error handling', () => {

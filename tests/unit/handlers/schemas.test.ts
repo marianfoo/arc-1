@@ -418,6 +418,35 @@ describe('SAPDiagnoseSchema', () => {
     const result = SAPDiagnoseSchema.safeParse({ action: 'traces', id: '123', analysis: 'invalid' });
     expect(result.success).toBe(false);
   });
+
+  it('accepts quickfix with source position fields', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'quickfix',
+      name: 'ZCL_TEST',
+      type: 'CLAS',
+      source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+      line: '12',
+      column: '4',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.line).toBe(12);
+      expect(result.data.column).toBe(4);
+    }
+  });
+
+  it('accepts apply_quickfix with proposal data', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'apply_quickfix',
+      name: 'ZCL_TEST',
+      type: 'CLAS',
+      source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+      line: 12,
+      proposalUri: '/sap/bc/adt/quickfixes/1',
+      proposalUserContent: 'opaque-state',
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('SAPTransportSchema', () => {

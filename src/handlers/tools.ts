@@ -723,18 +723,41 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         '- "syntax": Syntax check an ABAP object. Requires name + type.\n' +
         '- "unittest": Run ABAP unit tests. Requires name + type.\n' +
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
+        '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
+        '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column.\n' +
         '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns full dump detail including formatted text, error analysis, source code extract, and call stack.\n' +
-        '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).',
+        '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).\n\n' +
+        'Quickfix workflow: run syntax/ATC first to identify issues and line positions, then call quickfix to retrieve SAP-verified proposals, then apply_quickfix to get exact text deltas, and finally write the updated source via SAPWrite.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['syntax', 'unittest', 'atc', 'dumps', 'traces'],
+            enum: ['syntax', 'unittest', 'atc', 'dumps', 'traces', 'quickfix', 'apply_quickfix'],
             description: 'Diagnostic action',
           },
           name: { type: 'string', description: 'Object name (for syntax/unittest/atc)' },
           type: { type: 'string', description: 'Object type (PROG, CLAS, etc.) (for syntax/unittest/atc)' },
+          source: {
+            type: 'string',
+            description: 'Current source code (required for quickfix/apply_quickfix).',
+          },
+          line: {
+            type: 'number',
+            description: 'Source line number for quickfix evaluation (required for quickfix/apply_quickfix).',
+          },
+          column: {
+            type: 'number',
+            description: 'Source column number for quickfix evaluation (default 0 for quickfix actions).',
+          },
+          proposalUri: {
+            type: 'string',
+            description: 'Quickfix proposal URI from quickfix action (required for apply_quickfix).',
+          },
+          proposalUserContent: {
+            type: 'string',
+            description: 'Opaque userContent from quickfix action (required for apply_quickfix).',
+          },
           variant: { type: 'string', description: 'ATC check variant (for atc action)' },
           id: {
             type: 'string',
