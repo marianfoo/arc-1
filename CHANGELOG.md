@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/marianfoo/arc-1/compare/v0.6.2...v0.6.3) (2026-04-14)
+
+
+### Bug Fixes
+
+* add mcpName for MCP Registry publishing ([#113](https://github.com/marianfoo/arc-1/issues/113)) ([bd346c5](https://github.com/marianfoo/arc-1/commit/bd346c50dcad7ae52e27cf1af7236d1b9fb114a4))
+
 ## [0.6.2](https://github.com/marianfoo/arc-1/compare/v0.6.1...v0.6.2) (2026-04-14)
 
 
