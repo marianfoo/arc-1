@@ -58,6 +58,25 @@ export interface XsuaaCredentials {
 // ─── In-Memory Client Store ──────────────────────────────────────────
 
 /**
+ * Canonicalize a redirect URI for semantic comparison.
+ *
+ * Compares scheme + host + port + decoded path + sorted decoded query.
+ * Fragments are dropped (servers never see them). Returns undefined if
+ * the URI doesn't parse.
+ */
+function normalizeRedirectUri(uri: string): string | undefined {
+  try {
+    const url = new URL(uri);
+    const pathname = decodeURIComponent(url.pathname);
+    const entries = [...url.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const query = entries.map(([k, v]) => `${k}=${v}`).join('&');
+    return `${url.protocol}//${url.host}${pathname}${query ? `?${query}` : ''}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * In-memory store for OAuth client registrations.
  *
  * MCP clients dynamically register via RFC 7591. The XSUAA service binding
@@ -90,23 +109,44 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
   }
 
   /**
-   * Dynamically add a redirect URI to the pre-registered XSUAA client.
+   * Dynamically add a redirect URI to a client's allow list.
    *
-   * The MCP SDK validates redirect_uri with exact matching (no wildcards),
-   * but XSUAA itself validates redirect URIs against xs-security.json patterns
-   * (which DO support wildcards). For the pre-registered XSUAA client, we
-   * auto-register redirect URIs on-the-fly from authorize requests, relying
-   * on XSUAA as the authoritative redirect URI validator.
+   * The MCP SDK validates redirect_uri with byte-exact matching for
+   * non-loopback HTTPS URIs, but two classes of clients need relaxation:
    *
-   * Only applies to the pre-registered XSUAA client — DCR clients keep their
-   * registration-time redirect_uris unchanged.
+   * 1. Pre-registered XSUAA client: XSUAA itself is the authoritative
+   *    redirect-URI validator (via xs-security.json wildcard patterns),
+   *    so any URI is accepted here and forwarded.
+   *
+   * 2. DCR clients (arc1-*): only accept URIs that are semantically
+   *    equivalent to one the client registered. This handles clients that
+   *    use different percent-encoding at /register vs /authorize — notably
+   *    BAS/Cline via Theia's OAuth proxy, which registers `/callback?x=1`
+   *    but requests with `/callback%3Fx=1`. Security: hostname, port, and
+   *    decoded path/query must all match a previously-registered URI.
    */
   ensureRedirectUri(clientId: string, uri: string): void {
     const client = this.clients.get(clientId);
-    if (!client || client.client_id.startsWith('arc1-')) return; // Only for pre-registered client
+    if (!client) return;
     if (client.redirect_uris.includes(uri)) return;
-    client.redirect_uris.push(uri);
-    logger.debug('Dynamic redirect_uri registered for XSUAA client', { clientId, uri });
+
+    if (!client.client_id.startsWith('arc1-')) {
+      client.redirect_uris.push(uri);
+      logger.debug('Dynamic redirect_uri registered for XSUAA client', { clientId, uri });
+      return;
+    }
+
+    const normalizedRequested = normalizeRedirectUri(uri);
+    if (!normalizedRequested) return;
+    const match = client.redirect_uris.find((reg) => normalizeRedirectUri(reg) === normalizedRequested);
+    if (match) {
+      client.redirect_uris.push(uri);
+      logger.debug('OAuth redirect_uri loose-match: registered encoding variant', {
+        clientId,
+        registered: match,
+        requested: uri,
+      });
+    }
   }
 
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {

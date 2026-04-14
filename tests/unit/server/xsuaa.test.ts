@@ -450,3 +450,73 @@ describe('InMemoryClientStore DCR validation', () => {
     ).rejects.toThrow("'javascript:' scheme is not allowed");
   });
 });
+
+describe('InMemoryClientStore ensureRedirectUri loose match', () => {
+  // Simulates the BAS/Cline flow: register with one percent-encoding, authorize with another.
+  it('accepts %3F in path when the registered URI uses a literal ?', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['https://theia-workspaces-ws-x.eu10.applicationstudio.cloud.sap/oss/callback?vscode-reqid=1'],
+      client_name: 'bas-cline',
+    } as any);
+
+    store.ensureRedirectUri(
+      client.client_id,
+      'https://theia-workspaces-ws-x.eu10.applicationstudio.cloud.sap/oss/callback%3Fvscode-reqid=1',
+    );
+
+    const updated = await store.getClient(client.client_id);
+    expect(updated?.redirect_uris).toContain(
+      'https://theia-workspaces-ws-x.eu10.applicationstudio.cloud.sap/oss/callback%3Fvscode-reqid=1',
+    );
+  });
+
+  it('rejects loose match across different hostnames', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['https://trusted.example.com/callback'],
+      client_name: 'host-test',
+    } as any);
+
+    store.ensureRedirectUri(client.client_id, 'https://attacker.example.com/callback');
+
+    const updated = await store.getClient(client.client_id);
+    expect(updated?.redirect_uris).toEqual(['https://trusted.example.com/callback']);
+  });
+
+  it('rejects loose match across different ports', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['https://app.example.com:8443/callback'],
+      client_name: 'port-test',
+    } as any);
+
+    store.ensureRedirectUri(client.client_id, 'https://app.example.com:9999/callback');
+
+    const updated = await store.getClient(client.client_id);
+    expect(updated?.redirect_uris).toEqual(['https://app.example.com:8443/callback']);
+  });
+
+  it('is a no-op when the requested URI is already registered', async () => {
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    const client = await store.registerClient({
+      redirect_uris: ['https://app.example.com/callback'],
+      client_name: 'dup-test',
+    } as any);
+
+    store.ensureRedirectUri(client.client_id, 'https://app.example.com/callback');
+
+    const updated = await store.getClient(client.client_id);
+    expect(updated?.redirect_uris).toEqual(['https://app.example.com/callback']);
+  });
+
+  it('does not loose-match for the pre-registered XSUAA client (that path accepts any URI)', async () => {
+    // The pre-registered client accepts any https URI unconditionally — this
+    // verifies the old behaviour is preserved for client_ids that don't start with "arc1-".
+    const store = new InMemoryClientStore('xsuaa-client', 'xsuaa-secret');
+    store.ensureRedirectUri('xsuaa-client', 'https://completely-new-host.example.com/cb');
+
+    const client = await store.getClient('xsuaa-client');
+    expect(client?.redirect_uris).toContain('https://completely-new-host.example.com/cb');
+  });
+});
