@@ -1705,10 +1705,11 @@ function normalizeTypeArgsForValidation(toolName: string, args: Record<string, u
         objectType: args.objectType === undefined ? undefined : normalizeObjectType(String(args.objectType ?? '')),
       };
     case 'SAPNavigate':
+      // Only normalize `type` (for URL building). `objectType` is passed to SAP's
+      // where-used scope API in slash format (e.g., CLAS/OC) — normalizing it would break the filter.
       return {
         ...args,
         type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
-        objectType: args.objectType === undefined ? undefined : normalizeObjectType(String(args.objectType ?? '')),
       };
     case 'SAPDiagnose':
       return {
@@ -2523,7 +2524,9 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       if (!uri) {
         return errorResult('Provide uri or type+name to find references.');
       }
-      const objectType = args.objectType ? normalizeObjectType(String(args.objectType)) : undefined;
+      // objectType is passed to SAP's where-used scope API which expects slash format (CLAS/OC, PROG/P).
+      // Do NOT normalize it — the slash suffix is semantically meaningful for the SAP filter.
+      const objectType = args.objectType ? String(args.objectType) : undefined;
       let results: WhereUsedResult[] | ReferenceResult[];
       try {
         results = await findWhereUsed(client.http, client.safety, uri, objectType);

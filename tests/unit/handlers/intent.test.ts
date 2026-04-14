@@ -3151,7 +3151,7 @@ ENDCLASS.`;
       // Response should be valid JSON with note and results
       const parsed = JSON.parse(text);
       expect(parsed.note).toContain('objectType filter');
-      expect(parsed.note).toContain('PROG');
+      expect(parsed.note).toContain('PROG/P');
       expect(parsed.note).toContain('ignored');
       expect(parsed.results).toHaveLength(2);
     });

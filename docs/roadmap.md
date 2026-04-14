@@ -264,7 +264,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Low — most deployments use reverse proxy for TLS termination |
-| **Status** | Completed (2026-04-14) |
+| **Status** | Not started |
 | **Source** | [fr0ster tracker: TLS evaluation](../compare/fr0ster/evaluations/tls-https-support.md) |
 
 **What:** Add native TLS support to the HTTP Streamable transport. fr0ster added this in v4.6.0 with `--tls-cert`/`--tls-key` flags. Currently ARC-1 requires a reverse proxy (nginx, CF router) for HTTPS.
@@ -415,7 +415,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Medium — reduces LLM confusion |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-14) |
 | **Source** | Dassian pattern |
 
 **What:** Auto-map friendly type codes to ADT internal codes: `CLAS` -> `CLAS/OC`, `INTF` -> `INTF/OI`, `PROG` -> `PROG/P`, etc. LLMs shouldn't need to know ADT's internal type code suffixes.
