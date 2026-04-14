@@ -67,7 +67,7 @@ Detect what the system supports — this determines available RAP features, synt
 SAPManage(action="probe")
 ```
 
-**Critical gate:** Check `rap.available` in the response. If `rap.available = false`, **STOP** — inform the user: *"RAP/CDS writes are not available on this system (endpoint `/sap/bc/adt/ddic/ddl/sources` returned 404). Objects must be created manually in ADT, or check your SAP system configuration (ICF service activation)."* Do not attempt any DDLS/BDEF/DDLX/SRVD writes — they will fail with 415/500 errors.
+**Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
 
 Extract and note:
 - **System type**: BTP ABAP Environment vs. On-Premise (and release level: 7.52, 7.54, 7.57, S/4HANA 2020+, etc.)
@@ -182,56 +182,40 @@ This reveals what lint rules and strictness levels are enforced.
 
 ### 1e. Best Practices Research — SAP Documentation
 
-Use the SAP documentation MCP server to research current RAP best practices relevant to the user's request.
+Use the SAP documentation MCP server to research current RAP best practices relevant to the user's request. The search terms below are **starting suggestions** — adapt them based on the user's specific business requirement and the architecture decisions that need to be made. Craft search queries that target the gaps in your knowledge for this particular service.
 
-**Core RAP patterns:**
+**Example search terms** (adapt to the user's spec):
 
 ```
 search("RAP managed business object implementation best practices")
-```
-
-```
 search("RAP behavior definition managed scenario CDS view entity")
 ```
 
-**Domain-specific patterns** (based on user's business requirement):
+**Domain-specific** — tailor to the user's business domain:
 
 ```
 search("<business_domain> RAP example SAP")
 ```
 
-For example, if the user wants a travel app:
-```
-search("RAP travel booking managed scenario example")
-```
+For example, if the user wants a travel app: `search("RAP travel booking managed scenario example")`
 
-**Architecture decisions:**
+**Architecture decisions** — search only for topics relevant to this service:
 
 ```
 search("RAP managed vs unmanaged scenario when to use")
-```
-
-```
 search("RAP draft handling best practices Fiori Elements")
-```
-
-```
 search("RAP compositions parent child entity")
 ```
 
-**If the requirement suggests specific patterns:**
+**Specific patterns** — search if the requirement suggests them:
 
 ```
 search("RAP custom actions determination validation")
-```
-
-```
 search("RAP value help CDS annotation")
-```
-
-```
 search("RAP access control authorization")
 ```
+
+**Important:** Don't just run these searches verbatim. Analyze the user's spec and craft targeted queries that fill specific knowledge gaps. If the user asks for something unusual (e.g., integration with a specific SAP module, specific field types, custom numbering), search for those specifics.
 
 No need to research naming conventions at runtime — the official SAP naming schema is documented below in the "SAP Official Naming Conventions" reference section. Use it directly as the default.
 
@@ -765,7 +749,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 
 | Error | Cause | Fix |
 |---|---|---|
-| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Object already exists | Name collision | Search existing object, propose different name or offer to update |
 | Feature not supported | System version too old | Adapt plan to available features |
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |

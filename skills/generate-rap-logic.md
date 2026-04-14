@@ -33,7 +33,7 @@ Read the behavior definition, CDS view, and behavior pool to understand the comp
 SAPRead(type="BDEF", name="<bdef_name>")
 ```
 
-⚠️ **FAIL-FAST GATE**: If the BDEF read fails with 404 or 415, RAP may not be available on this system. Run `SAPManage(action="probe")` to verify — check that `rap.available = true`. If RAP is unavailable, **STOP** and inform the user.
+⚠️ **FAIL-FAST GATE**: If the BDEF read fails with 404, the object may not exist — verify the name via `SAPSearch`. If it fails with 415, check `SAPManage(action="probe")` for system info and inform the user about the issue.
 
 Parse the BDEF source to identify:
 - **Scenario**: managed / unmanaged / abstract
@@ -433,7 +433,7 @@ ENDMETHOD.
 
 | Error | Cause | Fix |
 |---|---|---|
-| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS not available on this system | Check `SAPManage(action="probe")` — `rap.available` must be true. Create objects in ADT if RAP endpoint is unavailable. |
+| 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Method not found in behavior pool | Class name in BDEF doesn't match actual class | Check `implementation in class` in BDEF source, verify class exists |
 | Syntax error: `<entity>` unknown in `READ ENTITIES` | Wrong entity name or alias | Use the exact alias from the BDEF `define behavior for ... alias <Alias>` |
 | Syntax error: field `<Field>` unknown | Field alias doesn't match CDS view | Check CDS view field aliases — BDEF uses CDS aliases, not table field names |
