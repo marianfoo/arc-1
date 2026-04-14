@@ -6,7 +6,8 @@
 > **Status**: Generally Available (GA) — actively developed, new features added regularly
 > **Availability**: SAP BTP ABAP Environment + SAP S/4HANA Cloud Public Edition + SAP S/4HANA Cloud Private Edition (RISE) only
 > **Relationship**: Direct AI competitor/reference point for ARC-1 + skills layer
-> **Source**: [SAP Help Portal — ADT AI Tools](https://help.sap.com/docs/ABAP_Cloud/bbcee501b99848bdadecd4e290db3ae4) + community research
+> **2026 Roadmap**: SAP published 2026 roadmap confirming GA of ABAP Cloud Extension for VS Code with built-in agentic AI powered by official ABAP MCP Server in Q2 2026. Existing Joule ABAP AI use cases will be re-offered as MCP tools.
+> **Source**: [SAP Help Portal — ADT AI Tools](https://help.sap.com/docs/ABAP_Cloud/bbcee501b99848bdadecd4e290db3ae4) + [2026 Roadmap Blog](https://community.sap.com/t5/technology-blog-posts-by-sap/our-2026-roadmap-for-joule-for-developers-abap-ai-capabilities/ba-p/14360358) + community research
 
 ---
 

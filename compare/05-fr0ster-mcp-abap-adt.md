@@ -1,8 +1,8 @@
 # fr0ster/mcp-abap-adt
 
 > **Repository**: https://github.com/fr0ster/mcp-abap-adt
-> **Language**: TypeScript | **License**: MIT | **Stars**: 26
-> **Status**: Very Active (v5.0.8, 90+ releases in 5 months, 803+ commits)
+> **Language**: TypeScript | **License**: MIT | **Stars**: 29
+> **Status**: Very Active (v5.1.1, 90+ releases in 5 months, 828+ commits)
 > **NPM**: `@mcp-abap-adt/core` — 3,625 monthly downloads
 > **Relationship**: Independent TypeScript ADT MCP server with most advanced auth system
 
@@ -10,7 +10,7 @@
 
 ## Project Overview
 
-A multi-package monorepo MCP server for SAP ADT with 303 tools organized across 4 exposition tiers (read-only 55, high-level 127, low-level 122, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools (1 group + 1 low-level + 12 per-type). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
+A multi-package monorepo MCP server for SAP ADT with 316 tools organized across 4 exposition tiers (read-only 55, high-level 140, low-level 122, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools. v5.1.0-5.1.1 added 13 high-level Check handlers (per-type syntax/semantic validation). Dropped Node 20 support (minimum Node 22). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
 
 Key differentiator: "AI Pairing, Not Vibing (AIPNV)" philosophy — positioned as pair programming assistant, not autopilot.
 
@@ -34,13 +34,13 @@ Design principles: Interface-Only Communication (IOC), Dependency Inversion, sin
 - **fr0ster/mcp-abap-adt-clients** — 449 commits, ADT client library with batch operations, lock registry, WebSocket facade
 - **fr0ster/mcp-abap-adt-auth-broker** — JWT authentication broker for multi-destination token management
 
-## Tool Inventory (303 tools across 4 tiers)
+## Tool Inventory (316 tools across 4 tiers)
 
 ### Read-Only Tier (52 tools)
 ReadClass, ReadProgram, ReadInterface, ReadDomain, ReadDataElement, ReadStructure, ReadTable, ReadView, ReadFunctionGroup, ReadFunctionModule, ReadBehaviorDefinition, ReadBehaviorImplementation, ReadMetadataExtension, ReadServiceDefinition, ReadServiceBinding, ReadPackage, GetProgFullCode, GetInclude, GetIncludesList, GetPackageContents, SearchObject, GetObjectsByType, GetObjectsList, GetWhereUsed, GetObjectInfo, GetObjectStructure, GetObjectNodeFromCache, GetAbapAST, GetAbapSemanticAnalysis, GetAbapSystemSymbols, GetAdtTypes, GetInactiveObjects, GetSession, GetSqlQuery, GetTransaction, GetTypeInfo, DescribeByList, GetTransport, ListTransports, GetEnhancements, GetEnhancementSpot, GetEnhancementImpl, RuntimeListDumps, RuntimeGetDumpById, RuntimeAnalyzeDump, RuntimeListProfilerTraceFiles, RuntimeGetProfilerTraceData, RuntimeAnalyzeProfilerTrace, RuntimeCreateProfilerTraceParameters, RuntimeRunClassWithProfiling, RuntimeRunProgramWithProfiling
 
-### High-Level Tier (127 tools)
-Full CRUD with automatic lock/activate for 16+ object types: Classes (including local definitions, types, macros, test classes), Programs, Interfaces, Domains, Data Elements, Structures, Tables, Views (CDS), Function Groups/Modules, Service Definitions/Bindings, Behavior Definitions/Implementations, Metadata Extensions (DDLX), Packages, Transports, Unit Tests (ABAP + CDS). v5.0.7: Added ActivateObjects (group activation) + 12 per-type Activate handlers (ActivateDomain, ActivateClass, etc.)
+### High-Level Tier (140 tools)
+Full CRUD with automatic lock/activate for 16+ object types: Classes (including local definitions, types, macros, test classes), Programs, Interfaces, Domains, Data Elements, Structures, Tables, Views (CDS), Function Groups/Modules, Service Definitions/Bindings, Behavior Definitions/Implementations, Metadata Extensions (DDLX), Packages, Transports, Unit Tests (ABAP + CDS). v5.0.7: Added ActivateObjects (group activation) + 12 per-type Activate handlers. v5.1.0: Added 13 per-type Check handlers (CheckClass, CheckProgram, CheckDomain, CheckDataElement, CheckStructure, CheckTable, CheckView, CheckFunctionGroup, CheckFunctionModule, CheckServiceDefinition, CheckBehaviorDefinition, CheckBehaviorImplementation, CheckMetadataExtension) for syntax/semantic validation per object type.
 
 ### Low-Level Tier (122 tools)
 Fine-grained per-operation-per-object: Lock/Unlock/Check/Activate/Validate/Create/Update/Delete + generic variants
@@ -121,6 +121,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| v5.0.9-5.1.1 | Apr 13, 2026 | 13 high-level Check handlers (per-type syntax/semantic validation, #54). Try/finally lock fix (#57). Dropped Node 20, minimum Node 22. Fixed stdio log leak (#46), CSRF cookie corruption on sequential creates (#45). Skip syntax check on save-without-activate (#52). Total tools: 316. |
 | v5.0.6-5.0.8 | Apr 13, 2026 | ActivateObjects group activation tool + 12 per-type Activate handlers + ActivateObjectLow. Post-merge fix: renamed low-level handler names/descriptions for LLM discoverability. [Eval](fr0ster/evaluations/feat-49-activate-objects.md) |
 | v5.0.0-5.0.1 | Apr 11-12, 2026 | RuntimeListFeeds (unified ADT feed reader), RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG with detail view), adt-clients 4.0 factory API migration. Removed compact wrappers in v5.0.1 (LLM confusion). [Deep dive](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
 | v4.9.0 | Apr 9, 2026 | Minor release between v4.8.x and v5.0.0 |
@@ -135,7 +136,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | v2.x | Dec 30, 2025 - Feb 23, 2026 | ~20 releases |
 | v1.1.0 | Nov 21, 2025 | First release |
 
-**Total: 90+ releases in ~5 months. Average: ~4 releases/week.**
+**Total: 95+ releases in ~5 months. Average: ~4 releases/week.**
 
 ## Known Issues
 
