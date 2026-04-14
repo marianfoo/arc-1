@@ -18,7 +18,7 @@ This skill produces an A+ implementation plan informed by the target SAP system'
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Package | `$TMP` | Fast prototyping, no transport needed |
+| Package | User's Z* package with transport | Production-ready; only use `$TMP` if user explicitly asks |
 | Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
 | Behavior scenario | Managed | Framework handles CRUD, most common |
 | OData version | V4 | Current SAP standard |
@@ -36,7 +36,7 @@ The user provides a natural language description of the business requirement. Th
 Only the **business requirement** is required. Gather initial context — do NOT over-interview at this stage. Research will surface the right questions later.
 
 Optionally, the user may specify:
-- **Package** (default: `$TMP`)
+- **Package** (required — ask if not provided; only default to `$TMP` if user explicitly says so)
 - **Transport request** (only needed for non-`$TMP` packages — resolved in Phase 1-pre)
 - **Any known constraints** (e.g., "must use existing table ZMAINT_ORDER", "needs to integrate with PM module")
 
@@ -44,9 +44,9 @@ If the user provides just a description, proceed directly to research. Questions
 
 ---
 
-## Phase 1-pre: Resolve Transport (if non-$TMP package)
+## Phase 1-pre: Resolve Package and Transport
 
-If the user specified a transportable package (not `$TMP`), resolve the transport request before any write operations:
+Ask the user for their target package if not provided. Then resolve the transport request (skip only if package is `$TMP`):
 
 ```
 SAPTransport(action="check", objectType="DDLS", objectName="<placeholder_name>", package="<package>")

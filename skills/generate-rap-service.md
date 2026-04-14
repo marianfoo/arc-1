@@ -12,7 +12,7 @@ This skill replicates SAP Joule's "RAP Service Generation" capability by combini
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Package | `$TMP` | Fast prototyping, no transport needed |
+| Package | User's Z* package with transport | Production-ready; only use `$TMP` if user explicitly asks |
 | Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
 | Behavior scenario | Managed | Framework handles CRUD |
 | OData version | V4 | Current SAP standard |
@@ -30,7 +30,7 @@ Only the **business object description** is required. If the user provides just 
 
 Optionally, the user may specify:
 - **Entity name prefix** (default: auto-generate from description)
-- **Package** (default: `$TMP`)
+- **Package** (required — ask if not provided; only default to `$TMP` if user explicitly says so)
 - **Transport request** (only needed for non-`$TMP` packages — see Step 1b)
 - **Draft enabled** (default: yes on BTP, no on-prem)
 - **OData version** (default: V4)
@@ -47,9 +47,9 @@ SAPManage(action="probe")
 
 Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
 
-### Step 1b: Resolve Transport (if non-$TMP package)
+### Step 1b: Resolve Package and Transport
 
-If the user specified a transportable package (not `$TMP`), resolve the transport request before any write operations:
+Ask the user for their target package if not provided. Then resolve the transport request (skip only if package is `$TMP`):
 
 ```
 SAPTransport(action="check", objectType="DDLS", objectName="<first_object_name>", package="<package>")
