@@ -612,6 +612,108 @@ describe('AdtHttpClient', () => {
     });
   });
 
+  // ─── Proactive MIME Discovery ─────────────────────────────────────
+
+  describe('discovery-aware header selection', () => {
+    it('uses discovered Accept when no explicit Accept header is provided', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
+
+      await client.get('/sap/bc/adt/oo/classes/ZCL_FOO/source/main');
+      expect(fetchHeaders(0).Accept).toBe('application/vnd.sap.adt.oo.classes.v4+xml');
+    });
+
+    it('does not override explicit Accept with discovery result', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
+
+      await client.get('/sap/bc/adt/oo/classes/ZCL_FOO/source/main', { Accept: 'application/xml' });
+      expect(fetchHeaders(0).Accept).toBe('application/xml');
+    });
+
+    it('falls back to default Accept for unknown paths', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
+
+      await client.get('/sap/bc/adt/unmapped/endpoint');
+      expect(fetchHeaders(0).Accept).toBe('*/*');
+    });
+
+    it('keeps default behavior when discovery map is empty', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await client.get('/sap/bc/adt/programs/programs/ZHELLO/source/main');
+      expect(fetchHeaders(0).Accept).toBe('*/*');
+    });
+
+    it('caches successful 406 retry headers for later requests', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(406, 'Not Acceptable'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok2'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await client.get('/sap/bc/adt/repository/informationsystem/search', { Accept: 'application/custom+xml' });
+      await client.get('/sap/bc/adt/repository/informationsystem/search');
+
+      expect(fetchHeaders(2).Accept).toBe('application/xml');
+    });
+
+    it('caches successful 415 retry Content-Type for later writes', async () => {
+      // CSRF fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // First POST and retry
+      mockFetch.mockResolvedValueOnce(mockResponse(415, 'Unsupported'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+      // Second POST should use cached Content-Type
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok2'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await client.post('/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main', '<source/>', 'text/xml');
+      await client.post('/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main', '<source2/>');
+
+      expect(fetchHeaders(3)['Content-Type']).toBe('application/xml');
+    });
+
+    it('stateful sessions inherit discovery map', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
+
+      await client.withStatefulSession(async (session) => {
+        await session.get('/sap/bc/adt/oo/classes/ZCL_SESSION/source/main');
+      });
+
+      expect(fetchHeaders(0).Accept).toBe('application/vnd.sap.adt.oo.classes.v4+xml');
+      expect(fetchHeaders(0)['X-sap-adt-sessiontype']).toBe('stateful');
+    });
+
+    it('explicit extra headers win over discovery for Accept and Content-Type', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      client.setDiscoveryMap(
+        new Map([['/sap/bc/adt/ddic/ddl/sources', ['application/vnd.sap.adt.ddic.ddl.sources.v2+xml']]]),
+      );
+
+      await client.post('/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main', '<source/>', undefined, {
+        Accept: 'application/json',
+        'Content-Type': 'text/plain',
+      });
+
+      expect(fetchHeaders(1).Accept).toBe('application/json');
+      expect(fetchHeaders(1)['Content-Type']).toBe('text/plain');
+    });
+  });
+
   // ─── 406/415 Content Negotiation Retry ─────────────────────────────
 
   describe('406/415 content negotiation retry', () => {

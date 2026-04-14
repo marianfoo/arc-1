@@ -78,7 +78,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 35 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
 | 36 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
 | 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
-| 38 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | P0 | S | Features |
+| ~~38~~ | ~~FEAT-38~~ | ~~ADT Service Discovery (MIME Negotiation)~~ | ~~P0~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~39~~ | ~~FEAT-39~~ | ~~Transport Enhancements (delete, reassign, types)~~ | ~~P2~~ | ~~S~~ | ~~Completed (K/W/T types; S/R deferred)~~ |
 | ~~40~~ | ~~FEAT-40~~ | ~~FLP Launchpad Management (OData)~~ | ~~P1~~ | ~~M~~ | ~~Completed 2026-04-12~~ |
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
@@ -98,6 +98,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-14 | Features |
 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | 2026-04-14 | Features |
 | FEAT-47 | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
 | FEAT-45 | DEVC (Package) Create | 2026-04-14 | Features |
@@ -163,7 +164,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 4. ~~**FEAT-15** Namespace URL Encoding Audit (XS)~~ — **completed 2026-04-12** (audit confirmed `encodeURIComponent` consistency; XML attribute escaping hardened in `devtools.ts`)
 
 ### Phase A.5: Proactive Compatibility (P0)
-6. **FEAT-38** ADT Service Discovery / MIME Negotiation (S) — probe `/sap/bc/adt/discovery` once at startup to learn supported MIME types per endpoint; eliminates 415/406 retries entirely. sapcli has had this since 2018. Supersedes reactive FEAT-08 approach.
+6. ~~**FEAT-38** ADT Service Discovery / MIME Negotiation (S)~~ — **completed 2026-04-14** (startup probe fetches `/sap/bc/adt/discovery`, request-time MIME selection uses cached map, 406/415 retry remains fallback)
 
 ### Phase B: Core Value Features (P1)
 7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
@@ -998,7 +999,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Very High — eliminates 415/406 content-type errors proactively |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-14) |
 | **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli `sap/adt/discovery.py` |
 
 **What:** Call `GET /sap/bc/adt/discovery` at startup to learn which MIME type versions each ADT endpoint supports. Cache the accepted Content-Type/Accept values per endpoint. Use correct headers from the start instead of guessing and retrying on 415/406.
@@ -1007,13 +1008,13 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 **Why this is better than FEAT-08 alone:** FEAT-08 retries after failure (1 extra round-trip per mismatch). FEAT-38 probes once at startup and gets it right the first time for all subsequent requests. Combined approach: discovery at startup + FEAT-08 retry as fallback.
 
-**Implementation:**
-- Add `fetchDiscovery()` to `src/adt/http.ts` — parses `/sap/bc/adt/discovery` XML into a `Map<endpointPath, { accept: string[], contentType: string[] }>`
-- Call during `AdtHttpClient` initialization (alongside CSRF fetch, which already hits `/sap/bc/adt/core/discovery`)
-- Store in `AdtHttpClient` instance; cache in SQLite if caching enabled
-- Before each request, look up endpoint in discovery map; use correct MIME types
-- Fallback to current behavior if discovery fails or endpoint not in map
-- Add to `src/adt/features.ts` as a feature probe
+**Implementation (2026-04-14):**
+- Added `src/adt/discovery.ts` with `fetchDiscoveryDocument()`, `resolveAcceptType()`, and `resolveContentType()`
+- Added `parseDiscoveryDocument()` to `src/adt/xml-parser.ts` and discovery fixture/tests
+- `probeFeatures()` now fetches `/sap/bc/adt/discovery` in parallel and stores `discoveryMap` on `ResolvedFeatures`
+- `AdtHttpClient` now uses startup-cached discovery map for proactive `Accept`/`Content-Type` defaults
+- 406/415 retry logic now caches successful negotiated headers per endpoint as a learning fallback
+- Startup wiring injects cached discovery into all request clients (shared and per-user PP)
 
 ---
 

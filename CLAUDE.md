@@ -126,6 +126,7 @@ src/
 ├── adt/
 │   ├── client.ts               # ADT client facade (all read operations)
 │   ├── http.ts                 # HTTP transport (undici/fetch, CSRF, cookies, sessions)
+│   ├── discovery.ts            # ADT discovery (endpoint MIME map fetch + resolve)
 │   ├── errors.ts               # Typed errors (AdtApiError, AdtSafetyError, AdtNetworkError)
 │   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
 │   ├── features.ts             # Feature detection (auto/on/off)
@@ -181,6 +182,7 @@ tests/
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |
+| Modify ADT service discovery / MIME types | `src/adt/discovery.ts`, `src/adt/http.ts` |
 | Improve DDIC save diagnostics (T100/line hints) | `src/adt/errors.ts` (`extractDdicDiagnostics`, `formatDdicDiagnostics`), `src/handlers/intent.ts` (`enrichWithSapDetails`, `formatErrorForLLM`) |
 | Add inactive syntax-check support | `src/adt/devtools.ts` (`syntaxCheck` options.version), `src/handlers/intent.ts` (`tryPostSaveSyntaxCheck`) |
 | Add method-level surgery | `src/context/method-surgery.ts` |
@@ -257,6 +259,7 @@ ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
   ▼
 HTTP Request (adt/http.ts)
   │
+  ├─ Proactive MIME negotiation via `/sap/bc/adt/discovery` map (startup-cached)
   ├─ CSRF token management (auto-fetch via HEAD, refresh on 403)
   ├─ Content negotiation fallback (one-retry on 406/415 with header mutation)
   ├─ Cookie/session management

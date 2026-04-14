@@ -50,7 +50,7 @@ flowchart TB
         end
 
         subgraph TransportLayer["Transport Layer"]
-            HTTP[http.ts<br/>CSRF · Sessions · Auth]
+            HTTP[http.ts<br/>Discovery MIME · CSRF · Sessions · Auth]
         end
 
         subgraph Packages["Supporting Packages"]
@@ -99,6 +99,7 @@ sequenceDiagram
         Note over Safety,ADT: For SAPWrite create/batch_create:<br/>AFF metadata validation runs here<br/>(bundled JSON schemas from SAP/abap-file-formats)
         Safety->>ADT: Execute operation
         ADT->>HTTP: HTTP request
+        HTTP->>HTTP: Resolve Accept/Content-Type via discovery map
         HTTP->>HTTP: Add CSRF token + cookies
         HTTP->>SAP: HTTPS
         SAP-->>HTTP: Response
@@ -169,7 +170,8 @@ arc-1/
 │   │   └── tools.ts                # Tool definitions (names, descriptions, schemas)
 │   ├── adt/
 │   │   ├── client.ts               # ADT client facade (all read operations)
-│   │   ├── http.ts                 # HTTP transport (axios, CSRF, cookies, sessions)
+│   │   ├── http.ts                 # HTTP transport (undici/fetch, discovery MIME, CSRF, cookies, sessions)
+│   │   ├── discovery.ts            # ADT service discovery parser/lookup for MIME negotiation
 │   │   ├── errors.ts               # Typed error classes (AdtApiError, AdtSafetyError)
 │   │   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
 │   │   ├── features.ts             # Feature detection (auto/on/off)

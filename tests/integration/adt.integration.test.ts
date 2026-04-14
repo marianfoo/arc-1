@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
 import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
+import { fetchDiscoveryDocument, resolveAcceptType } from '../../src/adt/discovery.js';
 import { AdtApiError } from '../../src/adt/errors.js';
 import {
   createCatalog,
@@ -60,6 +61,47 @@ describe('ADT Integration Tests', () => {
         expect(comp.release).toBeTruthy();
         // description may be empty for some components
         expect(typeof comp.description).toBe('string');
+      }
+    });
+  });
+
+  // ─── ADT Discovery (MIME Negotiation) ─────────────────────────
+
+  describe('discovery MIME negotiation', () => {
+    it('fetches discovery map with key ADT endpoints and MIME types', async (ctx) => {
+      const discoveryMap = await fetchDiscoveryDocument(client.http);
+      const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
+      requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
+
+      expect(nonEmptyMap.has('/sap/bc/adt/oo/classes')).toBe(true);
+      expect(nonEmptyMap.has('/sap/bc/adt/programs/programs')).toBe(true);
+
+      const classesTypes = nonEmptyMap.get('/sap/bc/adt/oo/classes') ?? [];
+      expect(classesTypes.length).toBeGreaterThan(0);
+      expect(classesTypes[0]).toMatch(/^application\/vnd\.sap\.adt\./);
+    });
+
+    it('resolveAcceptType returns sensible MIME type for known endpoints', async (ctx) => {
+      const discoveryMap = await fetchDiscoveryDocument(client.http);
+      const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
+      requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
+
+      const classes = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/oo/classes/CL_ABAP_CHAR_UTILITIES/source/main');
+      const programs = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/programs/programs/RSHOWTIM/source/main');
+      const ddls = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main');
+      const transports = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/cts/transportrequests?user=DEVELOPER');
+
+      expect(classes).toBeTruthy();
+      expect(programs).toBeTruthy();
+      expect(classes).toMatch(/^application\/vnd\.sap\.adt\./);
+      expect(programs).toMatch(/^application\/vnd\.sap\.adt\./);
+
+      // DDL/transports may be missing depending on backend release/authorizations.
+      if (ddls) {
+        expect(ddls).toMatch(/^application\/vnd\.sap\.adt\./);
+      }
+      if (transports) {
+        expect(transports).toMatch(/^application\/vnd\.sap\.adt\./);
       }
     });
   });

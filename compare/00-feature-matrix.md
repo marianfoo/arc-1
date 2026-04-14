@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-14 (fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAuth, multi-system; SAP Joule Q2 2026 GA announced)_
+_Last updated: 2026-04-14 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAuth, multi-system; SAP Joule Q2 2026 GA announced)_
 
 ## Legend
 - ✅ = Supported
@@ -189,7 +189,7 @@ _Last updated: 2026-04-14 (fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAu
 
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
-| Feature auto-detection | ✅ (6 probes) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (ADT discovery/MIME) |
+| Feature auto-detection | ✅ (7 probes + ADT discovery/MIME) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (ADT discovery/MIME) |
 | Caching (SQLite) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | UI5/Fiori BSP | ❌ | ⚠️ (3 read-only; 4 write tools disabled — ADT filestore returns 405) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (OData upload/download) |
 | abapGit/gCTS | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (full gCTS + checkout/checkin) |
@@ -297,7 +297,7 @@ The following items were incorrectly marked in the previous version and have sin
 
 **P0 — production blockers:**
 - ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented: one-retry negotiation fallback in `src/adt/http.ts`, endpoint-specific CTS media types, lock `corrNr` auto-propagation. fr0ster v4.5.0 added per-endpoint header caching (P3 optimization ARC-1 doesn't need yet). [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)
-- ADT service discovery / MIME negotiation (FEAT-38) — probe once at startup, eliminate 415/406 guesswork
+- ~~ADT service discovery / MIME negotiation (FEAT-38)~~ — ✅ completed 2026-04-14 (startup probe + proactive header selection + retry fallback)
 - ~~401 session timeout auto-retry (centralized gateway idle)~~ — ✅ Implemented: guard-protected single retry with session reset + re-auth in `src/adt/http.ts`. Handles both Basic Auth (on-prem) and Bearer token refresh (BTP).
 - ~~TLS/HTTPS for HTTP Streamable~~ — downgraded to P3: most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress)
 

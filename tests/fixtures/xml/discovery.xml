@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<app:service xmlns:app="http://www.w3.org/2007/app" xmlns:atom="http://www.w3.org/2005/Atom">
+  <app:workspace>
+    <atom:title>ABAP Development</atom:title>
+    <app:collection href="/sap/bc/adt/oo/classes">
+      <atom:title>Classes</atom:title>
+      <app:accept>application/vnd.sap.adt.oo.classes.v2+xml</app:accept>
+      <app:accept>application/vnd.sap.adt.oo.classes.v4+xml</app:accept>
+      <app:accept>text/html</app:accept>
+    </app:collection>
+    <app:collection href="https://a4h.example.local:443/sap/bc/adt/oo/interfaces">
+      <atom:title>Interfaces</atom:title>
+      <app:accept>application/vnd.sap.adt.oo.interfaces.v2+xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/programs/programs">
+      <atom:title>Programs</atom:title>
+      <app:accept>application/vnd.sap.adt.programs.programs.v2+xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/ddic/ddl/sources">
+      <atom:title>CDS Sources</atom:title>
+      <app:accept>application/vnd.sap.adt.ddic.ddl.sources.v2+xml</app:accept>
+      <app:accept>application/*</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/ddic/domains">
+      <atom:title>Domains</atom:title>
+      <app:accept>application/vnd.sap.adt.domains.v2+xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/packages">
+      <atom:title>Packages</atom:title>
+      <app:accept>application/vnd.sap.adt.packages.v2+xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/functions/groups">
+      <atom:title>Function Groups</atom:title>
+      <app:accept>application/vnd.sap.adt.functions.groups.v1+xml</app:accept>
+      <app:accept>application/vnd.sap.adt.functions.groups.v3+xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/activation">
+      <atom:title>Activation</atom:title>
+    </app:collection>
+  </app:workspace>
+  <app:workspace>
+    <atom:title>Workflow</atom:title>
+    <app:collection href="/sap/bc/adt/cts/transportrequests">
+      <atom:title>Transport Requests</atom:title>
+      <app:accept>application/vnd.sap.adt.transportrequests.v2+xml</app:accept>
+      <app:accept>application/xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/abapunit/testruns">
+      <atom:title>ABAP Unit</atom:title>
+      <app:accept>application/vnd.sap.adt.abapunit.testruns.v2+xml</app:accept>
+    </app:collection>
+    <app:collection>
+      <atom:title>Missing href</atom:title>
+      <app:accept>application/vnd.sap.adt.ignored.v1+xml</app:accept>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/programs/programs">
+      <atom:title>Programs override</atom:title>
+      <app:accept>application/vnd.sap.adt.programs.programs.v2+xml</app:accept>
+      <app:accept>text/plain</app:accept>
+    </app:collection>
+  </app:workspace>
+</app:service>

@@ -19,6 +19,7 @@
 
 import { Version } from '@abaplint/core';
 import type { FeatureConfig, FeatureMode } from './config.js';
+import { fetchDiscoveryDocument } from './discovery.js';
 import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import type { AuthProbeResult, FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
@@ -90,8 +91,8 @@ export async function probeFeatures(
   // Only probe features that are in "auto" mode
   const probesToRun = PROBES.filter((p) => modeMap[p.id] === 'auto');
 
-  // Run feature probes + system detection + text search probe + auth probe in parallel
-  const [probeResults, systemDetection, textSearchResult, authProbeResult] = await Promise.all([
+  // Run feature probes + system detection + text search probe + auth probe + discovery in parallel
+  const [probeResults, systemDetection, textSearchResult, authProbeResult, discoveryMap] = await Promise.all([
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
@@ -114,6 +115,7 @@ export async function probeFeatures(
     detectSystemFromComponents(client),
     probeTextSearch(client),
     probeAuthorization(client),
+    fetchDiscoveryDocument(client),
   ]);
 
   // Build result map
@@ -142,6 +144,7 @@ export async function probeFeatures(
   }
   resolved.textSearch = textSearchResult;
   resolved.authProbe = authProbeResult;
+  resolved.discoveryMap = discoveryMap;
   return resolved;
 }
 

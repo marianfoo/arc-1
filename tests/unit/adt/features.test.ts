@@ -6,6 +6,7 @@ import {
   detectSystemType,
   mapSapReleaseToAbaplintVersion,
   probeAuthorization,
+  probeFeatures,
   probeTextSearch,
   resolveWithoutProbing,
 } from '../../../src/adt/features.js';
@@ -248,6 +249,93 @@ describe('Feature Detection', () => {
         { name: 'sap_cloud', release: '100', description: 'SAP Cloud' },
       ];
       expect(detectSystemType(components)).toBe('btp');
+    });
+  });
+
+  // ─── probeFeatures (with discovery) ───────────────────────────────
+
+  describe('probeFeatures', () => {
+    const defaultConfig: FeatureConfig = {
+      hana: 'auto',
+      abapGit: 'auto',
+      rap: 'auto',
+      amdp: 'auto',
+      ui5: 'auto',
+      transport: 'auto',
+      ui5repo: 'auto',
+      flp: 'auto',
+    };
+
+    const componentsXml = `<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:id>SAP_BASIS</atom:id>
+    <atom:title>758;SAPKB75801;0001;SAP Basis Component</atom:title>
+  </atom:entry>
+  <atom:entry>
+    <atom:id>SAP_ABA</atom:id>
+    <atom:title>758;SAPK-75801INSAPABA;0001;SAP Application Basis</atom:title>
+  </atom:entry>
+</atom:feed>`;
+
+    const discoveryXml = `<?xml version="1.0" encoding="utf-8"?>
+<app:service xmlns:app="http://www.w3.org/2007/app" xmlns:atom="http://www.w3.org/2005/Atom">
+  <app:workspace>
+    <app:collection href="/sap/bc/adt/oo/classes">
+      <app:accept>application/vnd.sap.adt.oo.classes.v4+xml</app:accept>
+    </app:collection>
+  </app:workspace>
+</app:service>`;
+
+    function mockProbeClient(options?: { discoveryFails?: boolean }): AdtHttpClient {
+      return {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') {
+            if (options?.discoveryFails) {
+              return Promise.reject(new Error('Discovery unavailable'));
+            }
+            return Promise.resolve({ statusCode: 200, body: discoveryXml });
+          }
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({ statusCode: 200, body: componentsXml });
+          }
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+    }
+
+    it('includes discovery map from startup probe', async () => {
+      const client = mockProbeClient();
+      const result = await probeFeatures(client, defaultConfig);
+
+      expect(result.discoveryMap).toBeDefined();
+      expect(result.discoveryMap?.get('/sap/bc/adt/oo/classes')).toEqual(['application/vnd.sap.adt.oo.classes.v4+xml']);
+    });
+
+    it('calls discovery endpoint as part of probeFeatures', async () => {
+      const client = mockProbeClient();
+      await probeFeatures(client, defaultConfig);
+
+      expect((client as any).get).toHaveBeenCalledWith('/sap/bc/adt/discovery', {
+        Accept: 'application/atomsvc+xml',
+      });
+    });
+
+    it('does not fail feature probing when discovery request fails', async () => {
+      const client = mockProbeClient({ discoveryFails: true });
+      const result = await probeFeatures(client, defaultConfig);
+
+      expect(result.hana.available).toBe(true);
+      expect(result.textSearch?.available).toBe(true);
+      expect(result.discoveryMap).toEqual(new Map());
+    });
+
+    it('sets discoveryMap to empty map when discovery fails', async () => {
+      const client = mockProbeClient({ discoveryFails: true });
+      const result = await probeFeatures(client, defaultConfig);
+
+      expect(result.discoveryMap).toBeDefined();
+      expect(result.discoveryMap?.size).toBe(0);
     });
   });
 

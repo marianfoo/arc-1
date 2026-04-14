@@ -80,6 +80,9 @@ const parser = new XMLParser({
       'access',
       'successor',
       'messages',
+      'workspace',
+      'collection',
+      'accept',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings
@@ -291,6 +294,91 @@ export function parseSystemInfo(
   }
 
   return { user: username ?? '', collections };
+}
+
+/**
+ * Parse ADT discovery service document into endpoint -> accepted MIME types.
+ *
+ * The service document is AtomPub:
+ * service > workspace[] > collection[] > accept[]
+ */
+export function parseDiscoveryDocument(xml: string): Map<string, string[]> {
+  if (!xml?.trim()) return new Map();
+
+  try {
+    const parsed = parseXml(xml);
+    const service = (parsed.service ?? {}) as Record<string, unknown>;
+    const workspaces = Array.isArray(service.workspace)
+      ? service.workspace
+      : service.workspace
+        ? [service.workspace]
+        : [];
+
+    const discoveryMap = new Map<string, string[]>();
+
+    for (const ws of workspaces as Array<Record<string, unknown>>) {
+      const collections = Array.isArray(ws.collection) ? ws.collection : ws.collection ? [ws.collection] : [];
+      for (const collection of collections as Array<Record<string, unknown>>) {
+        const href = String(collection['@_href'] ?? '');
+        const normalizedPath = normalizeDiscoveryPath(href);
+        if (!normalizedPath) continue;
+
+        const acceptsRaw = Array.isArray(collection.accept)
+          ? collection.accept
+          : collection.accept != null
+            ? [collection.accept]
+            : [];
+
+        const accepts = acceptsRaw.map((value) => String(value)).filter((value) => value.length > 0);
+
+        // Collections without <app:accept> are not useful for negotiation.
+        if (accepts.length === 0) continue;
+
+        // If href is duplicated, keep the last definition from the document.
+        discoveryMap.set(normalizedPath, accepts);
+      }
+    }
+
+    return discoveryMap;
+  } catch {
+    return new Map();
+  }
+}
+
+function normalizeDiscoveryPath(href: string): string | undefined {
+  if (!href) return undefined;
+
+  let path = href.trim();
+  if (!path) return undefined;
+
+  // Absolute URL -> extract pathname.
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      path = new URL(path).pathname;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Normalize leading slash.
+  if (!path.startsWith('/')) {
+    path = `/${path}`;
+  }
+
+  // Keep only ADT paths.
+  const adtPrefix = '/sap/bc/adt/';
+  if (!path.startsWith(adtPrefix)) {
+    const idx = path.indexOf(adtPrefix);
+    if (idx < 0) return undefined;
+    path = path.slice(idx);
+  }
+
+  // Remove trailing slash for stable map keys.
+  if (path.length > adtPrefix.length && path.endsWith('/')) {
+    path = path.slice(0, -1);
+  }
+
+  return path;
 }
 
 /**

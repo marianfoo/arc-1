@@ -35,6 +35,9 @@ export interface FeatureStatus {
 /** SAP system type: BTP ABAP Environment or on-premise */
 export type SystemType = 'btp' | 'onprem';
 
+/** ADT discovery map: endpoint path -> accepted MIME types */
+export type DiscoveryMap = Map<string, string[]>;
+
 /** Resolved features after probing */
 export interface ResolvedFeatures {
   hana: FeatureStatus;
@@ -53,6 +56,8 @@ export interface ResolvedFeatures {
   textSearch?: { available: boolean; reason?: string };
   /** Authorization probe results — search and transport access */
   authProbe?: AuthProbeResult;
+  /** ADT discovery MIME map used by HTTP content negotiation */
+  discoveryMap?: DiscoveryMap;
 }
 
 /** Authorization probe result from startup probing */

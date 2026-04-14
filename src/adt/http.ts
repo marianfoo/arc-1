@@ -30,6 +30,7 @@
 import { Agent, Client, type Dispatcher, fetch as undiciFetch } from 'undici';
 import { logger } from '../server/logger.js';
 import type { BTPProxyConfig } from './btp.js';
+import { resolveAcceptType, resolveContentType } from './discovery.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
 
 /** Session type for ADT requests */
@@ -79,6 +80,8 @@ export interface AdtResponse {
  * Not a generic HTTP client: it's purpose-built for SAP ADT REST API conventions.
  */
 export class AdtHttpClient {
+  private discoveryMap: Map<string, string[]> = new Map();
+  private negotiatedHeaders: Map<string, { accept?: string; contentType?: string }> = new Map();
   private csrfToken = '';
   private dispatcher: Dispatcher | undefined;
   private config: AdtHttpConfig;
@@ -106,6 +109,11 @@ export class AdtHttpClient {
     if (!config.btpProxy && config.insecure) {
       this.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
     }
+  }
+
+  /** Inject startup discovery data used for proactive MIME negotiation. */
+  setDiscoveryMap(map: Map<string, string[]>): void {
+    this.discoveryMap = map;
   }
 
   /** GET request */
@@ -154,6 +162,8 @@ export class AdtHttpClient {
     // Share CSRF token and cookies so we don't need to re-fetch
     sessionClient.csrfToken = this.csrfToken;
     sessionClient.cookieJar = new Map(this.cookieJar);
+    sessionClient.discoveryMap = this.discoveryMap;
+    sessionClient.negotiatedHeaders = new Map(this.negotiatedHeaders);
     return fn(sessionClient);
   }
 
@@ -170,10 +180,34 @@ export class AdtHttpClient {
       await this.fetchCsrfToken();
     }
 
-    const headers: Record<string, string> = {
-      Accept: '*/*',
-      ...extraHeaders,
-    };
+    const headers: Record<string, string> = { Accept: '*/*' };
+    const negotiationKey = this.normalizeHeaderCacheKey(path);
+
+    if (!extraHeaders?.Accept) {
+      const cached = this.resolveNegotiatedHeaders(negotiationKey);
+      if (cached?.accept) {
+        headers.Accept = cached.accept;
+      } else {
+        const discoveredAccept = resolveAcceptType(this.discoveryMap, path);
+        if (discoveredAccept) {
+          headers.Accept = discoveredAccept;
+        }
+      }
+    }
+
+    if (isModifyingMethod(method) && contentType === undefined && !extraHeaders?.['Content-Type']) {
+      const cached = this.resolveNegotiatedHeaders(negotiationKey);
+      if (cached?.contentType) {
+        headers['Content-Type'] = cached.contentType;
+      } else {
+        const discoveredContentType = resolveContentType(this.discoveryMap, path);
+        if (discoveredContentType) {
+          headers['Content-Type'] = discoveredContentType;
+        }
+      }
+    }
+
+    Object.assign(headers, extraHeaders);
 
     if (isModifyingMethod(method)) {
       headers['X-CSRF-Token'] = this.csrfToken;
@@ -436,6 +470,9 @@ export class AdtHttpClient {
         }
 
         if (headersChanged) {
+          const retryAccept = fallbackHeaders.Accept;
+          const retryContentType = fallbackHeaders['Content-Type'];
+
           logger.emitAudit({
             timestamp: new Date().toISOString(),
             level: 'warn',
@@ -458,6 +495,18 @@ export class AdtHttpClient {
           }
 
           const retryResult = this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+
+          const currentContentType = contentType ?? headers['Content-Type'];
+          const negotiated: { accept?: string; contentType?: string } = {};
+          if (retryAccept !== headers.Accept) {
+            negotiated.accept = retryAccept;
+          }
+          if (retryContentType !== currentContentType) {
+            negotiated.contentType = retryContentType;
+          }
+          if (negotiated.accept || negotiated.contentType) {
+            this.negotiatedHeaders.set(negotiationKey, negotiated);
+          }
 
           logger.emitAudit({
             timestamp: new Date().toISOString(),
@@ -514,6 +563,30 @@ export class AdtHttpClient {
       const message = err instanceof Error ? err.message : String(err);
       throw new AdtNetworkError(message, err instanceof Error ? err : undefined);
     }
+  }
+
+  private normalizeHeaderCacheKey(path: string): string {
+    const withoutHash = path.split('#')[0] ?? path;
+    const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
+    if (!withoutQuery) return '/';
+    return withoutQuery.endsWith('/') && withoutQuery.length > 1 ? withoutQuery.slice(0, -1) : withoutQuery;
+  }
+
+  private resolveNegotiatedHeaders(path: string): { accept?: string; contentType?: string } | undefined {
+    let matched: { accept?: string; contentType?: string } | undefined;
+    let matchedPathLength = -1;
+
+    for (const [prefix, headers] of this.negotiatedHeaders.entries()) {
+      const isExact = path === prefix;
+      const isChild = path.startsWith(`${prefix}/`);
+      if (!isExact && !isChild) continue;
+      if (prefix.length > matchedPathLength) {
+        matched = headers;
+        matchedPathLength = prefix.length;
+      }
+    }
+
+    return matched;
   }
 
   /** Handle response: throw on error status, return normalized response */

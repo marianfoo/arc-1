@@ -2995,6 +2995,7 @@ async function handleSAPContext(
 
 /** Cached feature status — populated on first probe */
 let cachedFeatures: ResolvedFeatures | undefined;
+let cachedDiscovery: Map<string, string[]> = new Map();
 
 async function handleSAPManage(
   client: AdtClient,
@@ -3296,6 +3297,7 @@ async function handleSAPManage(
 /** Reset cached features (for testing) */
 export function resetCachedFeatures(): void {
   cachedFeatures = undefined;
+  cachedDiscovery = new Map();
 }
 
 /** Set cached features directly (for testing BTP mode, etc.) */
@@ -3306,4 +3308,14 @@ export function setCachedFeatures(features: ResolvedFeatures | undefined): void 
 /** Get cached features (for tool definition adaptation) */
 export function getCachedFeatures(): ResolvedFeatures | undefined {
   return cachedFeatures;
+}
+
+/** Set startup-cached ADT discovery MIME map. */
+export function setCachedDiscovery(map: Map<string, string[]>): void {
+  cachedDiscovery = map;
+}
+
+/** Get startup-cached ADT discovery MIME map. */
+export function getCachedDiscovery(): Map<string, string[]> {
+  return cachedDiscovery;
 }

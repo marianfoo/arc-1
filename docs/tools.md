@@ -367,7 +367,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 **List defaults:** Without parameters, `list` returns modifiable transports (status D) for the current SAP user, across all transport types (Workbench, Customizing, Transport of Copies). Query params follow sapcli's `workbench_params()` pattern (`requestType=KWT`, `requestStatus`).
 
-**Protocol compatibility:** ARC-1 uses endpoint-specific CTS media types and includes a one-retry content negotiation fallback (406/415) for SAP version variance.
+**Protocol compatibility:** ARC-1 uses startup ADT service discovery (`/sap/bc/adt/discovery`) to proactively select endpoint MIME types, with endpoint-specific CTS media types and a one-retry 406/415 fallback as defense-in-depth.
 
 **Note:** Most actions require `--enable-transports`. The `check` action works without it (read-only).
 

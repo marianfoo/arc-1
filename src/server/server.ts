@@ -18,9 +18,11 @@ import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
 import {
+  getCachedDiscovery,
   getCachedFeatures,
   handleToolCall,
   hasRequiredScope,
+  setCachedDiscovery,
   setCachedFeatures,
   TOOL_SCOPES,
 } from '../handlers/intent.js';
@@ -197,7 +199,9 @@ export function runStartupProbe(
         }
       }
       setCachedFeatures(features);
+      setCachedDiscovery(features.discoveryMap ?? new Map());
     } catch {
+      setCachedDiscovery(new Map());
       // Probe failed (e.g., SAP system unreachable) — continue with default tool set
     }
   })();
@@ -311,6 +315,9 @@ export function createServer(
       } as Record<string, unknown>;
     }
 
+    // Inject startup discovery MIME map (shared for default and per-user clients).
+    client.http.setDiscoveryMap(getCachedDiscovery());
+
     // Per-request safety: merge server ceiling with JWT scopes.
     // Scopes can only restrict further, never expand beyond server config.
     let effectiveClient = client;
@@ -318,6 +325,7 @@ export function createServer(
       const effectiveSafety = deriveUserSafety(client.safety, extra.authInfo.scopes);
       effectiveClient = client.withSafety(effectiveSafety);
     }
+    effectiveClient.http.setDiscoveryMap(getCachedDiscovery());
 
     const result = await handleToolCall(
       effectiveClient,
