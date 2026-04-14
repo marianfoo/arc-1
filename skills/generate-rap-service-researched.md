@@ -1,18 +1,8 @@
 # Generate RAP OData Service — Research-First
 
-Generate a production-quality RAP OData service through deep system research, best-practice analysis, and iterative planning before writing a single line of code. This is the "measure twice, cut once" counterpart to the vibe-coding `generate-rap-service` skill.
+Generate a production-quality RAP OData service through deep system research, best-practice analysis, and iterative planning before writing a single line of code.
 
-This skill produces an A+ implementation plan informed by the target SAP system's actual capabilities, existing code patterns, SAP documentation, and user requirements — then executes it only after explicit user approval.
-
-## When to Use This Skill vs. `generate-rap-service`
-
-| Use `generate-rap-service` (vibe code) | Use THIS skill (research-first) |
-|---|---|
-| Quick prototyping / proof of concept | Production-quality service |
-| Simple CRUD with standard patterns | Complex domain with specific requirements |
-| User knows exactly what they want | User has a high-level idea, needs guidance |
-| `$TMP` / throwaway package | Transportable / long-lived code |
-| Single root entity, managed, UUID | May need unmanaged, compositions, custom keys |
+This skill produces an implementation plan informed by the target SAP system's actual capabilities, existing code patterns, SAP documentation, and user requirements — then executes it only after explicit user approval.
 
 ## Smart Defaults (apply silently, do NOT ask before research)
 
