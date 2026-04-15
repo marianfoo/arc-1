@@ -77,7 +77,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 34 | FEAT-36 | Type Information (SAPNavigate) | P2 | S | Features |
 | 35 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
 | 36 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
-| 37 | FEAT-37 | DCL (Access Control) Read/Write | P1 | S | Features |
+| ~~37~~ | ~~FEAT-37~~ | ~~DCL (Access Control) Read/Write~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-15~~ |
 | ~~38~~ | ~~FEAT-38~~ | ~~ADT Service Discovery (MIME Negotiation)~~ | ~~P0~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~39~~ | ~~FEAT-39~~ | ~~Transport Enhancements (delete, reassign, types)~~ | ~~P2~~ | ~~S~~ | ~~Completed (K/W/T types; S/R deferred)~~ |
 | ~~40~~ | ~~FEAT-40~~ | ~~FLP Launchpad Management (OData)~~ | ~~P1~~ | ~~M~~ | ~~Completed 2026-04-12~~ |
@@ -100,6 +100,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 |----|---------|-----------|----------|
 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
 | FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
+| FEAT-37 | DCL (Access Control) Read/Write | 2026-04-15 | Features |
 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | 2026-04-14 | Features |
 | FEAT-47 | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
 | FEAT-45 | DEVC (Package) Create | 2026-04-14 | Features |
@@ -168,7 +169,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 6. ~~**FEAT-38** ADT Service Discovery / MIME Negotiation (S)~~ — **completed 2026-04-14** (startup probe fetches `/sap/bc/adt/discovery`, request-time MIME selection uses cached map, 406/415 retry remains fallback)
 
 ### Phase B: Core Value Features (P1)
-7. **FEAT-37** DCL (Access Control) Read/Write (S) — missing CDS access control objects; sapcli, VSP have this. Critical for RAP development workflow.
+7. ~~**FEAT-37** DCL (Access Control) Read/Write (S)~~ — **completed 2026-04-15**
 8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
 9. ~~**FEAT-17** Type Auto-Mappings for SAPWrite (XS)~~ — **completed 2026-04-14**
 10. ~~**FEAT-12** Fix Proposals / Auto-Fix (S)~~ — **completed 2026-04-14** (`SAPDiagnose` actions: `quickfix`, `apply_quickfix`; ATC enriched with `hasQuickfix`).
@@ -982,19 +983,21 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — completes RAP development workflow |
-| **Status** | Not started |
+| **Status** | ✅ Completed (2026-04-15) |
 | **Source** | [sapcli comparison](../compare/09-sapcli.md) |
 
-**What:** Add read and write support for CDS access control objects (DCL). sapcli uses the ADT basepath `/dcl/sources`. DCL objects are a mandatory part of RAP development — every CDS entity needs an access control to restrict data access.
+**What:** Added full read/write support for CDS access control objects (`DCLS`) via ADT ACM endpoints.
 
-**Current gap:** ARC-1 supports DDLS, DDLX, BDEF, SRVD, SRVB for RAP but is missing DCL, which breaks the RAP object creation workflow.
-
-**Implementation:**
-- Add `getDcl(name)` to `src/adt/client.ts` using `/sap/bc/adt/acm/dcl/sources/{name}/source/main`
-- Add DCL to `objectBasePath()` and `sourceUrlForType()` in `src/adt/crud.ts`
-- Add `buildCreateXml()` support for DCL in `src/adt/crud.ts`
-- Add DCL to `SAPREAD_TYPES_ONPREM`, `SAPREAD_TYPES_BTP`, `SAPWRITE_TYPES_ONPREM`, `SAPWRITE_TYPES_BTP` in `src/handlers/tools.ts`
-- Add unit tests with XML fixtures
+**Implemented (2026-04-15):**
+- Added `getDcl(name)` to `src/adt/client.ts` using `/sap/bc/adt/acm/dcl/sources/{name}/source/main`.
+- Added `DCLS` routing in `src/handlers/intent.ts`:
+  - `handleSAPRead()` read path
+  - `objectBasePath()` to `/sap/bc/adt/acm/dcl/sources/`
+  - `buildCreateXml()` with `dcl:dclSource` and `DCLS/DL`
+  - Type alias mapping `DCLS/DL -> DCLS`
+  - DDIC save-hint and post-save syntax-check sets
+- Added `DCLS` to SAPRead/SAPWrite type enums for on-prem + BTP in `src/handlers/schemas.ts` and `src/handlers/tools.ts`.
+- Added unit coverage (client + handler + XML/type mapping tests) and E2E RAP lifecycle coverage for DCLS create/activate/read/delete.
 
 ---
 
@@ -1227,7 +1230,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - **vibing-steampunk:** No create, only publish/unpublish.
 - **dassian-adt:** No SRVB create.
 
-**Note:** SRVB creation is now covered end-to-end; remaining RAP lifecycle gap is DCL (FEAT-37). TABL (FEAT-44), DEVC (FEAT-45), and MSAG (FEAT-47) were completed 2026-04-14.
+**Note:** SRVB and DCL are now covered end-to-end. TABL (FEAT-44), DEVC (FEAT-45), MSAG (FEAT-47), and DCL (FEAT-37) are completed.
 
 ---
 

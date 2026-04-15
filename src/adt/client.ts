@@ -251,6 +251,13 @@ export class AdtClient {
     return resp.body;
   }
 
+  /** Get CDS access control source code (DCLS) */
+  async getDcl(name: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetDCL');
+    const resp = await this.http.get(`/sap/bc/adt/acm/dcl/sources/${encodeURIComponent(name)}/source/main`);
+    return resp.body;
+  }
+
   /** Get behavior definition source code (BDEF) */
   async getBdef(name: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetBDEF');

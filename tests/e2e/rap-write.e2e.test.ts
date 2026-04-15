@@ -384,7 +384,96 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 4: SRVD service definition lifecycle ──────────────────────
+  // ── Test 4: DCLS lifecycle ──────────────────────────────────────────
+
+  it('DCLS lifecycle: create, activate, read, delete', async (ctx) => {
+    requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
+
+    const tableName = uniqueName('ZARD').slice(0, 16);
+    const viewName = uniqueName('ZARC1_DV_');
+    const dclName = uniqueName('ZARC1_DCL_');
+
+    const tableSource = [
+      "@EndUserText.label: 'ARC1 DCL test table'",
+      '@AbapCatalog.enhancement.category: #NOT_EXTENSIBLE',
+      '@AbapCatalog.tableCategory: #TRANSPARENT',
+      '@AbapCatalog.deliveryClass: #A',
+      '@AbapCatalog.dataMaintenance: #RESTRICTED',
+      `define table ${tableName.toLowerCase()} {`,
+      '  key client : abap.clnt not null;',
+      '  key id     : sysuuid_x16 not null;',
+      '  name       : abap.char(40);',
+      '}',
+    ].join('\n');
+
+    const viewSource = [
+      "@EndUserText.label: 'ARC1 DCL test view'",
+      '@AccessControl.authorizationCheck: #CHECK',
+      `define root view entity ${viewName}`,
+      `  as select from ${tableName.toLowerCase()}`,
+      '{',
+      '  key id   as Id,',
+      '  name     as Name',
+      '}',
+    ].join('\n');
+
+    const dclSource = [
+      "@EndUserText.label: 'E2E Test Access Control'",
+      '@MappingRole: true',
+      `define role ${dclName} {`,
+      `  grant select on ${viewName};`,
+      '}',
+    ].join('\n');
+
+    try {
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'TABL',
+          name: tableName,
+          source: tableSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'TABL', name: tableName }));
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'DDLS',
+          name: viewName,
+          source: viewSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'DDLS', name: viewName }));
+
+      expectToolSuccess(
+        await callTool(client, 'SAPWrite', {
+          action: 'create',
+          type: 'DCLS',
+          name: dclName,
+          source: dclSource,
+          package: '$TMP',
+        }),
+      );
+      expectToolSuccess(await callTool(client, 'SAPActivate', { type: 'DCLS', name: dclName }));
+
+      const readDclResult = await callTool(client, 'SAPRead', {
+        type: 'DCLS',
+        name: dclName,
+      });
+      const dclText = expectToolSuccess(readDclResult);
+      expect(dclText.toLowerCase()).toContain('define role');
+      expect(dclText.toLowerCase()).toContain(viewName.toLowerCase());
+    } finally {
+      await bestEffortDelete(client, 'DCLS', dclName);
+      await bestEffortDelete(client, 'DDLS', viewName);
+      await bestEffortDelete(client, 'TABL', tableName);
+    }
+  });
+
+  // ── Test 5: SRVD service definition lifecycle ──────────────────────
 
   it('SAPWrite create SRVD service definition, activate, read, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
@@ -491,7 +580,7 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 4: SRVB lifecycle (create -> activate -> publish) ────────
+  // ── Test 6: SRVB lifecycle (create -> activate -> publish) ────────
 
   it('SAPWrite create SRVB, activate, publish, unpublish, delete', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
@@ -656,14 +745,15 @@ describe('E2E RAP write lifecycle tests', () => {
     }
   });
 
-  // ── Test 5: batch_create for RAP stack ─────────────────────────────
+  // ── Test 7: batch_create for RAP stack ─────────────────────────────
 
-  it('SAPWrite batch_create for table entity + CDS view', async (ctx) => {
+  it('SAPWrite batch_create for table entity + CDS view + DCL', async (ctx) => {
     requireOrSkip(ctx, rapAvailable, 'RAP/CDS not available on test system');
 
     // DDLS table entity name = underlying DB table name, max 16 chars
     const tableName = uniqueName('ZARB').slice(0, 16);
     const viewName = uniqueName('ZARC1_RC_');
+    const dclName = uniqueName('ZARC1_BD_');
 
     const tableSource = [
       `@EndUserText.label: 'ARC1 batch test table'`,
@@ -680,12 +770,20 @@ describe('E2E RAP write lifecycle tests', () => {
 
     const viewSource = [
       `@EndUserText.label: 'ARC1 batch test view'`,
-      '@AccessControl.authorizationCheck: #NOT_ALLOWED',
+      '@AccessControl.authorizationCheck: #CHECK',
       `define root view entity ${viewName}`,
       `  as select from ${tableName.toLowerCase()}`,
       '{',
       '  key id   as Id,',
       '  value    as Value',
+      '}',
+    ].join('\n');
+
+    const dclSource = [
+      "@EndUserText.label: 'ARC1 batch test access control'",
+      '@MappingRole: true',
+      `define role ${dclName} {`,
+      `  grant select on ${viewName};`,
       '}',
     ].join('\n');
 
@@ -703,6 +801,11 @@ describe('E2E RAP write lifecycle tests', () => {
           type: 'DDLS',
           name: viewName,
           source: viewSource,
+        },
+        {
+          type: 'DCLS',
+          name: dclName,
+          source: dclSource,
         },
       ],
     });
@@ -725,8 +828,17 @@ describe('E2E RAP write lifecycle tests', () => {
       const viewText = expectToolSuccess(readViewResult);
       expect(viewText.toLowerCase()).toContain('define root view entity');
       expect(viewText.toLowerCase()).toContain(viewName.toLowerCase());
+
+      const readDclResult = await callTool(client, 'SAPRead', {
+        type: 'DCLS',
+        name: dclName,
+      });
+      const dclText = expectToolSuccess(readDclResult);
+      expect(dclText.toLowerCase()).toContain('define role');
+      expect(dclText.toLowerCase()).toContain(viewName.toLowerCase());
     } finally {
-      // Cleanup in reverse dependency order: view -> table
+      // Cleanup in reverse dependency order: DCL -> view -> table
+      await bestEffortDelete(client, 'DCLS', dclName);
       await bestEffortDelete(client, 'DDLS', viewName);
       await bestEffortDelete(client, 'TABL', tableName);
     }

@@ -62,7 +62,7 @@ Returns a formatted listing of all fields with key markers, aliases, association
 
 Depending on type, also read associated objects:
 - **CLAS**: `SAPRead(type="CLAS", name="<class>", include="testclasses")` — check if tests exist
-- **DDLS**: `SAPRead(type="BDEF", name="<entity>")` — check if behavior definition exists; `SAPRead(type="DDLX", name="<entity>")` — check for metadata extensions
+- **DDLS**: `SAPRead(type="BDEF", name="<entity>")` — check if behavior definition exists; `SAPRead(type="DCLS", name="<entity>_DCL")` — check CDS access control; `SAPRead(type="DDLX", name="<entity>")` — check for metadata extensions
 - **BDEF**: `SAPRead(type="DDLS", name="<entity>")` — read the associated CDS view
 
 These may fail if the related artifact doesn't exist — that's fine, skip them.
@@ -162,6 +162,11 @@ From SAPContext results:
 - External system calls (RFC, HTTP, etc.) if any
 - Database tables accessed
 
+### Security / Authorization
+- CDS access control (`DCLS`) rules if present (row-level restrictions, role mapping)
+- Behavior-level authorization hints (`authorization master`, `authorization dependent by`) when present in BDEF
+- Practical impact: what data/operations may be restricted at runtime
+
 ### Code Quality (if ATC was run)
 From ATC results:
 - Summary: total findings by priority
@@ -195,7 +200,7 @@ Offer the user next steps:
 
 ### BTP vs On-Premise Differences
 
-- **BTP**: Fewer object types available — no PROG, INCL, FUGR. Focus on released APIs and ABAP Cloud objects. DDLS, CLAS, INTF, BDEF, DDLX, SRVD are the primary types. ATC variants are limited to cloud readiness checks.
+- **BTP**: Fewer object types available — no PROG, INCL, FUGR. Focus on released APIs and ABAP Cloud objects. DDLS, DCLS, CLAS, INTF, BDEF, DDLX, SRVD are the primary types. ATC variants are limited to cloud readiness checks.
 - **On-Premise**: Full range of object types. All ATC variants available. Can explain legacy objects (FORM routines, function modules, classic reports).
 
 ### What This Skill Does NOT Do

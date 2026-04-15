@@ -116,6 +116,16 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('reads CDS access control (DCLS)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DCLS',
+        name: 'ZTEST_DCL',
+      });
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/sap/bc/adt/acm/dcl/sources/ZTEST_DCL/source/main');
+    });
+
     it('reads behavior definition (BDEF)', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'BDEF',
@@ -4608,6 +4618,113 @@ ENDCLASS.`;
     });
   });
 
+  describe('SAPWrite DCLS source-based writes', () => {
+    it('creates DCLS using collection POST + source PUT', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr, body: opts?.body });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH_DCL_1</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DCLS',
+        name: 'ZTEST_DCL',
+        package: '$TMP',
+        source: `@MappingRole: true
+define role ZTEST_DCL {
+  grant select on ZI_TEST_ENTITY
+  where inheriting conditions from super;
+}`,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = calls.find(
+        (c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/acm/dcl/sources') && !c.url.includes('_action='),
+      );
+      expect(createCall).toBeDefined();
+      expect(createCall?.body).toContain('<dcl:dclSource');
+      expect(createCall?.body).toContain('http://www.sap.com/adt/acm/dclsources');
+      expect(createCall?.body).toContain('adtcore:type="DCLS/DL"');
+      expect(
+        calls.some((c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/acm/dcl/sources/ZTEST_DCL/source/main')),
+      ).toBe(true);
+    });
+
+    it('updates DCLS via source/main path', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH_DCL_2</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'DCLS',
+        name: 'ZTEST_DCL',
+        source: `@MappingRole: true
+define role ZTEST_DCL {
+  grant select on ZI_TEST_ENTITY;
+}`,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(
+        calls.some((c) => c.method === 'PUT' && c.url.includes('/sap/bc/adt/acm/dcl/sources/ZTEST_DCL/source/main')),
+      ).toBe(true);
+    });
+
+    it('deletes DCLS via lock/delete/unlock flow', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(200, '<asx:values><LOCK_HANDLE>LH_DCL_3</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'DCLS',
+        name: 'ZTEST_DCL',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('/sap/bc/adt/acm/dcl/sources/ZTEST_DCL'))).toBe(
+        true,
+      );
+      expect(calls.some((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'))).toBe(true);
+    });
+  });
+
   describe('SAPWrite edit_method', () => {
     it('rejects edit_method without method param', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
@@ -4935,6 +5052,7 @@ ENDCLASS.`;
         ['FUGR/F', 'FUGR'],
         ['FUGR/FF', 'FUGR'],
         ['DDLS/DF', 'DDLS'],
+        ['DCLS/DL', 'DCLS'],
         ['BDEF/BDO', 'BDEF'],
         ['SRVD/SRV', 'SRVD'],
         ['SRVB/SVB', 'SRVB'],
@@ -5063,6 +5181,16 @@ ENDCLASS.`;
       expect(xml).toContain('adtcore:type="DDLS/DF"');
       expect(xml).toContain('adtcore:name="ZI_TRAVEL"');
       expect(xml).toContain('adtcore:description="Travel CDS View"');
+      expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
+    });
+
+    it('returns correct XML for DCLS', () => {
+      const xml = buildCreateXml('DCLS', 'ZI_TRAVEL_DCL', 'ZPACKAGE', 'Travel DCL');
+      expect(xml).toContain('<dcl:dclSource');
+      expect(xml).toContain('xmlns:dcl="http://www.sap.com/adt/acm/dclsources"');
+      expect(xml).toContain('adtcore:type="DCLS/DL"');
+      expect(xml).toContain('adtcore:name="ZI_TRAVEL_DCL"');
+      expect(xml).toContain('adtcore:description="Travel DCL"');
       expect(xml).toContain('<adtcore:packageRef adtcore:name="ZPACKAGE"/>');
     });
 

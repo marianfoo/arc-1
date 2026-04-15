@@ -167,8 +167,8 @@ function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
-const DDIC_SAVE_HINT_TYPES = new Set(['TABL', 'DDLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX', 'DOMA', 'DTEL']);
-const DDIC_POST_SAVE_CHECK_TYPES = new Set(['TABL', 'DDLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX']);
+const DDIC_SAVE_HINT_TYPES = new Set(['TABL', 'DDLS', 'DCLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX', 'DOMA', 'DTEL']);
+const DDIC_POST_SAVE_CHECK_TYPES = new Set(['TABL', 'DDLS', 'DCLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX']);
 
 // ─── Search Helpers ─────────────────────────────────────────────────
 
@@ -730,6 +730,10 @@ async function handleSAPRead(
       }
       return cachedTextResult(ddlSource, cacheHit);
     }
+    case 'DCLS': {
+      const { source, cacheHit } = await cachedGet('DCLS', name, () => client.getDcl(name));
+      return cachedTextResult(source, cacheHit);
+    }
     case 'BDEF': {
       const { source, cacheHit } = await cachedGet('BDEF', name, () => client.getBdef(name));
       return cachedTextResult(source, cacheHit);
@@ -797,7 +801,7 @@ async function handleSAPRead(
       const inferredType = explicitType || inferObjectType(name);
       if (!inferredType) {
         return errorResult(
-          `Cannot infer object type from name "${name}". Please specify objectType explicitly (e.g., objectType="CLAS", "INTF", "PROG", "TABL", "DDLS", "FUGR", "DOMA", "DTEL", "SRVD", "SRVB", "BDEF").`,
+          `Cannot infer object type from name "${name}". Please specify objectType explicitly (e.g., objectType="CLAS", "INTF", "PROG", "TABL", "DDLS", "DCLS", "FUGR", "DOMA", "DTEL", "SRVD", "SRVB", "BDEF").`,
         );
       }
       // Use raw URI (no name encoding) — getApiReleaseState encodes the full URI as a single path segment
@@ -929,8 +933,8 @@ async function handleSAPRead(
     }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
-          'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
+          'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, DCLS/DL → DCLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
   }
@@ -1491,6 +1495,18 @@ export function buildCreateXml(
                  adtcore:responsible="DEVELOPER">
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </ddl:ddlSource>`;
+    case 'DCLS':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<dcl:dclSource xmlns:dcl="http://www.sap.com/adt/acm/dclsources"
+               xmlns:adtcore="http://www.sap.com/adt/core"
+               adtcore:description="${escapeXml(description)}"
+               adtcore:name="${escapeXml(name)}"
+               adtcore:type="DCLS/DL"
+               adtcore:masterLanguage="EN"
+               adtcore:masterSystem="H00"
+               adtcore:responsible="DEVELOPER">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+</dcl:dclSource>`;
     case 'TABL':
       // TABL creation also uses SAP's "blue" framework envelope, then source is written via /source/main.
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1662,6 +1678,7 @@ const SLASH_TYPE_MAP: Record<string, string> = {
   'FUGR/F': 'FUGR',
   'FUGR/FF': 'FUGR',
   'DDLS/DF': 'DDLS',
+  'DCLS/DL': 'DCLS',
   'BDEF/BDO': 'BDEF',
   'SRVD/SRV': 'SRVD',
   'SRVB/SVB': 'SRVB',
@@ -1766,6 +1783,8 @@ function objectBasePath(type: string): string {
       return '/sap/bc/adt/functions/groups/';
     case 'DDLS':
       return '/sap/bc/adt/ddic/ddl/sources/';
+    case 'DCLS':
+      return '/sap/bc/adt/acm/dcl/sources/';
     case 'BDEF':
       return '/sap/bc/adt/bo/behaviordefinitions/';
     case 'SRVD':
