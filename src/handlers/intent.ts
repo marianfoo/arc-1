@@ -2333,13 +2333,29 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   const action = String(args.action ?? 'activate');
   const name = String(args.name ?? '');
   const version = String(args.version ?? '0001');
+  const explicitServiceType = args.service_type as string | undefined;
+
+  // Resolve the OData service type for publish/unpublish endpoints.
+  // Explicit service_type parameter takes precedence; otherwise auto-detect from SRVB metadata.
+  async function resolveServiceType(): Promise<'odatav2' | 'odatav4'> {
+    if (explicitServiceType === 'odatav4' || explicitServiceType === 'odatav2') return explicitServiceType;
+    try {
+      const srvbJson = await client.getSrvb(name);
+      const srvb = JSON.parse(srvbJson);
+      if (srvb.odataVersion === 'V4') return 'odatav4';
+    } catch {
+      // If readback fails, fall back to odatav2 (legacy default)
+    }
+    return 'odatav2';
+  }
 
   // Publish service binding
   if (action === 'publish_srvb') {
     if (!name) {
       return errorResult('Missing required "name" parameter for publish_srvb action.');
     }
-    const result = await publishServiceBinding(client.http, client.safety, name, version);
+    const serviceType = await resolveServiceType();
+    const result = await publishServiceBinding(client.http, client.safety, name, version, serviceType);
     if (result.severity === 'ERROR') {
       return errorResult(
         `Failed to publish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,
@@ -2382,7 +2398,8 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     if (!name) {
       return errorResult('Missing required "name" parameter for unpublish_srvb action.');
     }
-    const result = await unpublishServiceBinding(client.http, client.safety, name, version);
+    const serviceType = await resolveServiceType();
+    const result = await unpublishServiceBinding(client.http, client.safety, name, version, serviceType);
     if (result.severity === 'ERROR') {
       return errorResult(
         `Failed to unpublish service binding ${name}: ${result.shortText}${result.longText ? ` — ${result.longText}` : ''}`,

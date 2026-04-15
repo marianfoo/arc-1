@@ -2,7 +2,7 @@
 
 > **Repository**: https://github.com/fr0ster/mcp-abap-adt
 > **Language**: TypeScript | **License**: MIT | **Stars**: 29
-> **Status**: Very Active (v5.1.1, 90+ releases in 5 months, 828+ commits)
+> **Status**: Very Active (v5.2.0, 90+ releases in 5 months, 830+ commits)
 > **NPM**: `@mcp-abap-adt/core` — 3,625 monthly downloads
 > **Relationship**: Independent TypeScript ADT MCP server with most advanced auth system
 
@@ -10,7 +10,7 @@
 
 ## Project Overview
 
-A multi-package monorepo MCP server for SAP ADT with 316 tools organized across 4 exposition tiers (read-only 55, high-level 140, low-level 122, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools. v5.1.0-5.1.1 added 13 high-level Check handlers (per-type syntax/semantic validation). Dropped Node 20 support (minimum Node 22). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
+A multi-package monorepo MCP server for SAP ADT with 318 tools organized across 4 exposition tiers (read-only 55, high-level 140, low-level 124, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools. v5.1.0-5.1.1 added 13 high-level Check handlers (per-type syntax/semantic validation). v5.2.0 added ActivateServiceDefinition/ActivateServiceBinding low-level handlers and replaced `binding_type`/`service_type` with `ServiceBindingVariant` enum. Dropped Node 20 support (minimum Node 22). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
 
 Key differentiator: "AI Pairing, Not Vibing (AIPNV)" philosophy — positioned as pair programming assistant, not autopilot.
 
@@ -121,6 +121,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| v5.2.0 | Apr 15, 2026 | ActivateServiceDefinition/ActivateServiceBinding handlers (#59, #60). Replaced `binding_type`/`service_type` with `binding_variant` (ServiceBindingVariant enum: ODATA_V2_UI, ODATA_V2_WEB_API, ODATA_V4_UI, ODATA_V4_WEB_API). SERVICE_BINDING_VARIANT_MAP for centralized ADT parameter derivation. Shared SRVD fixtures for integration tests. |
 | v5.0.9-5.1.1 | Apr 13, 2026 | 13 high-level Check handlers (per-type syntax/semantic validation, #54). Try/finally lock fix (#57). Dropped Node 20, minimum Node 22. Fixed stdio log leak (#46), CSRF cookie corruption on sequential creates (#45). Skip syntax check on save-without-activate (#52). Total tools: 316. |
 | v5.0.6-5.0.8 | Apr 13, 2026 | ActivateObjects group activation tool + 12 per-type Activate handlers + ActivateObjectLow. Post-merge fix: renamed low-level handler names/descriptions for LLM discoverability. [Eval](fr0ster/evaluations/feat-49-activate-objects.md) |
 | v5.0.0-5.0.1 | Apr 11-12, 2026 | RuntimeListFeeds (unified ADT feed reader), RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG with detail view), adt-clients 4.0 factory API migration. Removed compact wrappers in v5.0.1 (LLM confusion). [Deep dive](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
@@ -182,7 +183,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | **Health check endpoint** | — | — | ARC-1 already has /health |
 | **Lock registry with crash recovery** | Low | 2d | Persistent lock state |
 | **Batch HTTP operations** (multipart/mixed) | Medium | 2d | Reduces SAP round trips |
-| **Service Binding read/CRUD** | High | 1d | RAP completeness |
+| ~~**Service Binding read/CRUD**~~ | ~~High~~ | ~~1d~~ | ✅ **Done** — ARC-1 has full SRVB read/create/activate/publish/unpublish/delete. Gap: publish endpoint hardcodes `odatav2` (should use `odatav4` for V4 bindings). |
 
 ## Features ARC-1 Has That This Project Lacks
 
@@ -208,6 +209,7 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-15 | v5.2.0 — ActivateServiceDefinition/ActivateServiceBinding + ServiceBindingVariant enum (#59, #60) | **Medium** | Activation: ARC-1 already handles via SAPActivate — no action. ServiceBindingVariant: ARC-1's `normalizeSrvbBindingType()` is already more LLM-friendly (fuzzy parsing vs strict enum). **Bug found**: ARC-1 hardcodes `odatav2` in publish/unpublish endpoints — should use `odatav4` for V4 bindings. Fix `publishServiceBinding()`/`unpublishServiceBinding()` in devtools.ts. | TODO |
 | 2026-04-13 | v5.0.7-5.0.8 — ActivateObjects group activation + 12 per-type Activate handlers (289→303 tools) | **No action** | ARC-1 already has SAPActivate with batch_activate. Gap: GetInactiveObjects endpoint (P2). Post-merge naming fix validates ARC-1's intent-based approach. | [Eval](fr0ster/evaluations/feat-49-activate-objects.md) |
 | 2026-04-12 | v5.0.1 — Removed compact feed wrappers (LLM confusion, 292→289 tools) | Lesson | Validates ARC-1's intent-based approach — duplicate tools confuse LLMs | Done |
 | 2026-04-11 | v5.0.0 — RuntimeListFeeds, RuntimeListSystemMessages (SM02), RuntimeGetGatewayErrorLog (/IWFND/ERROR_LOG), adt-clients 4.0 factory API | **Medium** | Add `system_messages` + `gateway_errors` actions to SAPDiagnose | [Eval](fr0ster/evaluations/v5.0.0-release-deep-dive.md) |
@@ -230,6 +232,6 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
 | 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-13_
+_Last updated: 2026-04-15_
 
 > **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

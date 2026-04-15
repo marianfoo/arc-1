@@ -316,6 +316,7 @@ export const SAPActivateSchema = z.object({
   name: z.string().optional(),
   type: z.string().optional(),
   version: z.string().optional(),
+  service_type: z.enum(['odatav2', 'odatav4']).optional(),
   preaudit: z.coerce.boolean().optional(),
   objects: z
     .array(

@@ -163,11 +163,12 @@ export async function publishServiceBinding(
   safety: SafetyConfig,
   name: string,
   version = '0001',
+  serviceType: 'odatav2' | 'odatav4' = 'odatav2',
 ): Promise<PublishResult> {
   checkOperation(safety, OperationType.Activate, 'PublishServiceBinding');
 
   const resp = await http.post(
-    `/sap/bc/adt/businessservices/odatav2/publishjobs?servicename=${encodeURIComponent(name)}&serviceversion=${encodeURIComponent(version)}`,
+    `/sap/bc/adt/businessservices/${serviceType}/publishjobs?servicename=${encodeURIComponent(name)}&serviceversion=${encodeURIComponent(version)}`,
     publishBody(name),
     'application/xml',
     { Accept: 'application/*' },
@@ -182,11 +183,12 @@ export async function unpublishServiceBinding(
   safety: SafetyConfig,
   name: string,
   version = '0001',
+  serviceType: 'odatav2' | 'odatav4' = 'odatav2',
 ): Promise<PublishResult> {
   checkOperation(safety, OperationType.Activate, 'UnpublishServiceBinding');
 
   const resp = await http.post(
-    `/sap/bc/adt/businessservices/odatav2/unpublishjobs?servicename=${encodeURIComponent(name)}&serviceversion=${encodeURIComponent(version)}`,
+    `/sap/bc/adt/businessservices/${serviceType}/unpublishjobs?servicename=${encodeURIComponent(name)}&serviceversion=${encodeURIComponent(version)}`,
     publishBody(name),
     'application/xml',
     { Accept: 'application/*' },

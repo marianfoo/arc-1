@@ -612,6 +612,13 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           name: { type: 'string', description: 'Object name (for single activation or publish/unpublish)' },
           type: { type: 'string', description: 'Object type (PROG, CLAS, DDLS, DDLX, BDEF, SRVD, SRVB, etc.)' },
           version: { type: 'string', description: 'Service version for publish/unpublish (default: "0001")' },
+          service_type: {
+            type: 'string',
+            enum: ['odatav2', 'odatav4'],
+            description:
+              'OData service type for publish/unpublish endpoint routing. ' +
+              'Auto-detected from SRVB metadata when omitted. Only needed if auto-detection fails.',
+          },
           preaudit: {
             type: 'boolean',
             description:
