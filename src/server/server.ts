@@ -49,6 +49,7 @@ function buildAdtConfig(
     insecure: config.insecure,
     btpProxy,
     bearerTokenProvider,
+    maxConcurrent: config.maxConcurrent,
     safety: {
       readOnly: config.readOnly,
       blockFreeSQL: config.blockFreeSQL,

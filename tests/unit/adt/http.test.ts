@@ -1128,4 +1128,109 @@ describe('AdtHttpClient', () => {
       expect(clientRequestPath(0)).toBe('http://sap.example.com:8000/path?sap-client=001&sap-language=EN');
     });
   });
+
+  // ─── 503 Retry ──────────────────────────────────────────────────────
+
+  describe('503 retry with backoff', () => {
+    it('retries GET on 503 and succeeds on second attempt', async () => {
+      // First call: CSRF fetch (HEAD), second: GET returns 503, third: retry returns 200
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'))
+        .mockResolvedValueOnce(mockResponse(200, 'OK'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T'; // skip CSRF fetch
+
+      const response = await client.get('/sap/bc/adt/programs/programs/ZHELLO/source/main');
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe('OK');
+      // Two fetch calls: original 503 + retry
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws AdtApiError when GET retry also returns 503', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'))
+        .mockResolvedValueOnce(mockResponse(503, 'Still Unavailable'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      await expect(client.get('/sap/bc/adt/programs/programs/ZHELLO/source/main')).rejects.toThrow(AdtApiError);
+    });
+
+    it('retries HEAD on 503', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'))
+        .mockResolvedValueOnce(mockResponse(200, ''));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      const response = await client.head('/sap/bc/adt/core/discovery');
+      expect(response.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT retry POST on 503', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      await expect(client.post('/sap/bc/adt/some/action', '<xml/>')).rejects.toThrow(AdtApiError);
+      // Only one fetch call (no retry for POST)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT retry PUT on 503', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      await expect(client.put('/sap/bc/adt/some/action', '<xml/>')).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT retry DELETE on 503', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      await expect(client.delete('/sap/bc/adt/some/action')).rejects.toThrow(AdtApiError);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── Semaphore Integration ──────────────────────────────────────────
+
+  describe('semaphore integration', () => {
+    it('limits concurrency when semaphore is provided', async () => {
+      const { Semaphore } = await import('../../../src/adt/semaphore.js');
+      const sem = new Semaphore(1);
+
+      let concurrent = 0;
+      let maxConcurrent = 0;
+      mockFetch.mockImplementation(async () => {
+        concurrent++;
+        if (concurrent > maxConcurrent) maxConcurrent = concurrent;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        concurrent--;
+        return mockResponse(200, 'ok');
+      });
+
+      const client = new AdtHttpClient({ ...getDefaultConfig(), semaphore: sem });
+      (client as any).csrfToken = 'T';
+
+      await Promise.all([
+        client.get('/path1'),
+        client.get('/path2'),
+        client.get('/path3'),
+      ]);
+
+      expect(maxConcurrent).toBe(1);
+    });
+  });
 });

@@ -269,6 +269,13 @@ export function parseArgs(args: string[]): ServerConfig {
   config.cacheWarmup = resolveBool('cache-warmup', 'ARC1_CACHE_WARMUP', false);
   config.cacheWarmupPackages = resolve('cache-warmup-packages', 'ARC1_CACHE_WARMUP_PACKAGES', '');
 
+  // --- Concurrency ---
+  const maxConcurrent = getFlag('max-concurrent') ?? process.env.ARC1_MAX_CONCURRENT;
+  if (maxConcurrent) {
+    const parsed = Number.parseInt(maxConcurrent, 10);
+    config.maxConcurrent = Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
+  }
+
   // --- Logging ---
   config.logFile = getFlag('log-file') ?? process.env.ARC1_LOG_FILE;
   const logLevel = resolve('log-level', 'ARC1_LOG_LEVEL', 'info');

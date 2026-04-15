@@ -265,6 +265,40 @@ describe('parseArgs', () => {
     expect(config.blockData).toBe(true);
   });
 
+  // --- maxConcurrent ---
+
+  it('defaults maxConcurrent to 10', () => {
+    const config = parseArgs([]);
+    expect(config.maxConcurrent).toBe(10);
+  });
+
+  it('parses --max-concurrent flag', () => {
+    const config = parseArgs(['--max-concurrent', '5']);
+    expect(config.maxConcurrent).toBe(5);
+  });
+
+  it('parses ARC1_MAX_CONCURRENT env var', () => {
+    process.env.ARC1_MAX_CONCURRENT = '20';
+    const config = parseArgs([]);
+    expect(config.maxConcurrent).toBe(20);
+  });
+
+  it('clamps maxConcurrent to minimum 1', () => {
+    const config = parseArgs(['--max-concurrent', '0']);
+    expect(config.maxConcurrent).toBe(1);
+  });
+
+  it('clamps invalid maxConcurrent to 1', () => {
+    const config = parseArgs(['--max-concurrent', 'notanumber']);
+    expect(config.maxConcurrent).toBe(1);
+  });
+
+  it('--max-concurrent takes precedence over ARC1_MAX_CONCURRENT', () => {
+    process.env.ARC1_MAX_CONCURRENT = '20';
+    const config = parseArgs(['--max-concurrent', '3']);
+    expect(config.maxConcurrent).toBe(3);
+  });
+
   // --- Profile ---
 
   it('--profile viewer sets readOnly, blockData, blockFreeSQL', () => {

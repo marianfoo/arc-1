@@ -32,6 +32,7 @@ import { logger } from '../server/logger.js';
 import type { BTPProxyConfig } from './btp.js';
 import { resolveAcceptType, resolveContentType } from './discovery.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
+import type { Semaphore } from './semaphore.js';
 
 /** Session type for ADT requests */
 export type SessionType = 'stateful' | 'stateless' | undefined;
@@ -65,6 +66,8 @@ export interface AdtHttpConfig {
    * Used for direct BTP ABAP connections via service key.
    */
   bearerTokenProvider?: () => Promise<string>;
+  /** Optional concurrency limiter shared across requests */
+  semaphore?: Semaphore;
 }
 
 /** Response from an ADT HTTP request */
@@ -167,8 +170,22 @@ export class AdtHttpClient {
     return fn(sessionClient);
   }
 
-  /** Core request method */
+  /** Core request method — wraps requestInner with optional concurrency limiter */
   private async request(
+    method: string,
+    path: string,
+    body?: string,
+    contentType?: string,
+    extraHeaders?: Record<string, string>,
+  ): Promise<AdtResponse> {
+    if (this.config.semaphore) {
+      return this.config.semaphore.run(() => this.requestInner(method, path, body, contentType, extraHeaders));
+    }
+    return this.requestInner(method, path, body, contentType, extraHeaders);
+  }
+
+  /** Inner request method — CSRF, retries, content negotiation */
+  private async requestInner(
     method: string,
     path: string,
     body?: string,
@@ -328,6 +345,42 @@ export class AdtHttpClient {
         } finally {
           this.dbRetryInProgress = false;
         }
+      }
+
+      // Handle 503 Service Unavailable — SAP work processes exhausted.
+      // Retry once with backoff for safe (idempotent) methods only.
+      // Retry happens INSIDE the semaphore slot to avoid increasing load on an overloaded system.
+      if (response.status === 503 && !isModifyingMethod(method)) {
+        const jitterMs = 1000 + Math.random() * 1000; // 1-2s with jitter
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'http_request',
+          method,
+          path,
+          statusCode: 503,
+          durationMs: Date.now() - httpStart,
+          errorBody: `503 Service Unavailable — retrying in ${Math.round(jitterMs)}ms`,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, jitterMs));
+
+        const retryResp = await this.doFetch(url, method, headers, body);
+        const retryBody = await retryResp.text();
+        this.storeCookies(retryResp);
+
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: retryResp.status === 503 ? 'warn' : 'info',
+          event: 'http_request',
+          method,
+          path,
+          statusCode: retryResp.status,
+          durationMs: Date.now() - httpStart,
+          errorBody: `503 retry completed (${retryResp.status})`,
+        });
+
+        return this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
       }
 
       // Handle 401 session timeout — reset session and retry once.

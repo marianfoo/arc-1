@@ -101,6 +101,10 @@ export interface ServerConfig {
   /** Package filter for warmup (supports wildcards, e.g. "Z*,Y*,/COMPANY/*") */
   cacheWarmupPackages: string;
 
+  // --- Concurrency ---
+  /** Maximum concurrent SAP HTTP requests (default: 10). Prevents work process exhaustion. */
+  maxConcurrent: number;
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -141,6 +145,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   cacheFile: '.arc1-cache.db',
   cacheWarmup: false,
   cacheWarmupPackages: '',
+  maxConcurrent: 10,
   logLevel: 'info',
   logFormat: 'text',
   verbose: false,

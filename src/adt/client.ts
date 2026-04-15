@@ -21,6 +21,7 @@ import { defaultAdtClientConfig } from './config.js';
 import { isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
+import { Semaphore } from './semaphore.js';
 import type {
   AdtSearchResult,
   ApiReleaseStateInfo,
@@ -77,6 +78,7 @@ export class AdtClient {
       btpProxy: config.btpProxy,
       sapConnectivityAuth: config.sapConnectivityAuth,
       bearerTokenProvider: config.bearerTokenProvider,
+      semaphore: config.maxConcurrent ? new Semaphore(config.maxConcurrent) : undefined,
     };
 
     this.http = new AdtHttpClient(httpConfig);
