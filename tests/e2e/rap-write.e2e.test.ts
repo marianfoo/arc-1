@@ -421,8 +421,7 @@ describe('E2E RAP write lifecycle tests', () => {
       "@EndUserText.label: 'E2E Test Access Control'",
       '@MappingRole: true',
       `define role ${dclName} {`,
-      `  grant select on ${viewName}`,
-      '    where inheriting conditions from super;',
+      `  grant select on ${viewName};`,
       '}',
     ].join('\n');
 
@@ -784,8 +783,7 @@ describe('E2E RAP write lifecycle tests', () => {
       "@EndUserText.label: 'ARC1 batch test access control'",
       '@MappingRole: true',
       `define role ${dclName} {`,
-      `  grant select on ${viewName}`,
-      '    where inheriting conditions from super;',
+      `  grant select on ${viewName};`,
       '}',
     ].join('\n');
 
