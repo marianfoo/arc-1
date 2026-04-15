@@ -14,15 +14,20 @@ import { requireOrSkip } from '../helpers/skip-policy.js';
 import { callTool, connectClient, expectToolSuccess } from './helpers.js';
 
 /** Generate a collision-safe unique name with a given prefix (max 30 chars).
- *  The suffix always starts with a letter so ABAP alias tokens (via .slice)
- *  never begin with a digit — ABAP rejects identifiers starting with numbers. */
+ *  Uses letters-only encoding to avoid ABAP/CDS identifier issues —
+ *  digit sequences like "00" confuse the BDEF parser in certain positions. */
 function uniqueName(prefix: string): string {
-  const ts = Date.now().toString(36);
-  const rnd = Math.floor(Math.random() * 1e5)
-    .toString(36)
-    .padStart(3, '0');
-  // Prefix the suffix with 'X' to guarantee it starts with a letter
-  const suffix = `X${ts}${rnd}`.toUpperCase();
+  // Encode timestamp + random as letters only (A-Z, base 26)
+  const toLetters = (n: number): string => {
+    let s = '';
+    let v = n;
+    while (v > 0) {
+      s = String.fromCharCode(65 + (v % 26)) + s;
+      v = Math.floor(v / 26);
+    }
+    return s || 'A';
+  };
+  const suffix = `${toLetters(Date.now())}${toLetters(Math.floor(Math.random() * 1e6))}`;
   return `${prefix}${suffix}`.slice(0, 30);
 }
 
