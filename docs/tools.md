@@ -620,14 +620,19 @@ Probe and report SAP system capabilities, inspect the object cache state, and ma
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `probe`, `features`, `cache_stats`, `create_package`, `delete_package`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `action` | string | Yes | `probe`, `features`, `cache_stats`, `create_package`, `delete_package`, `change_package`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
 | `name` | string | No | Required for `create_package` and `delete_package` (package name) |
 | `description` | string | No | Required for `create_package` (package description) |
 | `superPackage` | string | No | Optional parent package for `create_package` (use `$TMP` for local packages) |
 | `softwareComponent` | string | No | Optional software component for `create_package` (default: `LOCAL`) |
 | `transportLayer` | string | No | Optional transport layer for `create_package` |
 | `packageType` | string | No | Optional package type for `create_package`: `development`, `structure`, `main` (default: `development`) |
-| `transport` | string | No | Optional transport request ID (`corrNr`) for `create_package`/`delete_package` |
+| `transport` | string | No | Optional transport request ID (`corrNr`) for `create_package`/`delete_package`/`change_package` |
+| `objectName` | string | No | Required for `change_package` — name of the object to move (e.g., `ZCL_MY_CLASS`) |
+| `objectType` | string | No | Required for `change_package` — ADT object type (e.g., `CLAS/OC`, `DDLS/DF`, `PROG/P`) |
+| `objectUri` | string | No | Optional for `change_package` — ADT URI of the object. Auto-resolved from objectName + objectType if not provided |
+| `oldPackage` | string | No | Required for `change_package` — current package of the object |
+| `newPackage` | string | No | Required for `change_package` — target package to move the object to |
 | `catalogId` | string | No | Required for `flp_list_tiles`, `flp_create_tile`, `flp_add_tile_to_group` |
 | `groupId` | string | No | Required for `flp_create_group`, `flp_add_tile_to_group` |
 | `domainId` | string | No | Required for `flp_create_catalog` |
@@ -667,6 +672,7 @@ SAPManage(action="cache_stats") → check cache state and warmup status
 SAPManage(action="create_package", name="ZRAP_TRAVEL", description="RAP Travel Demo")
 SAPManage(action="create_package", name="ZRAP_TRAVEL", description="RAP Travel Demo", superPackage="ZRAP", softwareComponent="HOME", transportLayer="HOME", packageType="development", transport="K900123")
 SAPManage(action="delete_package", name="ZRAP_TRAVEL")
+SAPManage(action="change_package", objectName="ZCL_MY_CLASS", objectType="CLAS/OC", oldPackage="$TMP", newPackage="Z_PRODUCTION", transport="K900123")
 SAPManage(action="flp_list_catalogs")
 SAPManage(action="flp_list_groups")
 SAPManage(action="flp_list_tiles", catalogId="ZARC1_SALES")

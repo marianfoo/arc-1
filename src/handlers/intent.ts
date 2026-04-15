@@ -80,6 +80,7 @@ import {
   listGroups,
   listTiles,
 } from '../adt/flp.js';
+import { changePackage } from '../adt/refactoring.js';
 import { checkOperation, checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
   createTransport,
@@ -3167,6 +3168,82 @@ async function handleSAPManage(
       });
 
       return textResult(`Deleted package ${name}.`);
+    }
+
+    case 'change_package': {
+      const objectName = String(args.objectName ?? '').trim();
+      const objectType = String(args.objectType ?? '').trim();
+      const oldPackage = String(args.oldPackage ?? '').trim();
+      const newPackage = String(args.newPackage ?? '').trim();
+      const transport = String(args.transport ?? '').trim();
+      let objectUri = String(args.objectUri ?? '').trim();
+
+      if (!objectName) return errorResult('"objectName" is required for change_package action.');
+      if (!objectType) return errorResult('"objectType" is required for change_package action.');
+      if (!oldPackage) return errorResult('"oldPackage" is required for change_package action.');
+      if (!newPackage) return errorResult('"newPackage" is required for change_package action.');
+
+      checkOperation(client.safety, OperationType.Update, 'ChangePackage');
+      checkPackage(client.safety, oldPackage);
+      checkPackage(client.safety, newPackage);
+
+      // Resolve object URI via search if not provided
+      if (!objectUri) {
+        const searchResp = await client.http.get(
+          `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=${encodeURIComponent(objectName)}&maxResults=10`,
+        );
+        const uriMatch = searchResp.body.match(
+          new RegExp(`adtcore:uri="([^"]*)"[^>]*adtcore:type="${objectType.replace('/', '\\/')}"`, 'i'),
+        );
+        if (!uriMatch?.[1]) {
+          return errorResult(
+            `Could not find object "${objectName}" with type "${objectType}" via ADT search. ` +
+              `Verify the object exists and the type is correct (e.g., CLAS/OC, DDLS/DF, PROG/P).`,
+          );
+        }
+        objectUri = uriMatch[1];
+      }
+
+      // Transport pre-flight for non-local target packages
+      let effectiveTransport = transport || undefined;
+      if (!effectiveTransport && newPackage.toUpperCase() !== '$TMP') {
+        try {
+          const transportInfo = await getTransportInfo(client.http, client.safety, objectUri, newPackage, 'I');
+          if (transportInfo.lockedTransport) {
+            effectiveTransport = transportInfo.lockedTransport;
+          } else if (!transportInfo.isLocal && transportInfo.recording) {
+            const existingList =
+              transportInfo.existingTransports.length > 0
+                ? `\n\nExisting transports for this package:\n${transportInfo.existingTransports
+                    .slice(0, 10)
+                    .map((t) => `  - ${t.id}: ${t.description} (${t.owner})`)
+                    .join('\n')}`
+                : '';
+            return errorResult(
+              `Package "${newPackage}" requires a transport number for change_package, but none was provided.\n\n` +
+                `To fix this, either:\n` +
+                `1. Use SAPTransport(action="list") to find an existing modifiable transport\n` +
+                `2. Use SAPTransport(action="create", description="...") to create a new one\n` +
+                `3. Then retry SAPManage(action="change_package", ..., transport="<transport_id>")` +
+                existingList,
+            );
+          }
+        } catch {
+          // Graceful fallback: let SAP enforce transport requirements if the pre-check fails.
+        }
+      }
+
+      const result = await changePackage(client.http, client.safety, {
+        objectUri,
+        objectType,
+        objectName,
+        oldPackage,
+        newPackage,
+        transport: effectiveTransport,
+      });
+
+      const transportNote = result.transport ? ` (transport: ${result.transport})` : '';
+      return textResult(`Moved ${objectName} from package ${oldPackage} to ${newPackage}${transportNote}.`);
     }
 
     case 'flp_list_catalogs': {
