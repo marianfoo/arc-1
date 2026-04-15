@@ -56,6 +56,38 @@ describe('AdtApiError', () => {
         'SAP returned an error (no readable message)',
       );
     });
+
+    it('extracts msgText from SAP HTML 500 error page', () => {
+      const html = `<!DOCTYPE html>
+<html><head><title>Application Server Error</title></head><body>
+<p class="detailText"><span id="msgText">Syntax error in program ZC_FBCLUBTP===================BD        .</span></p>
+</body></html>`;
+      expect(AdtApiError.extractCleanMessage(html)).toBe(
+        'Application Server Error: Syntax error in program ZC_FBCLUBTP===================BD        .',
+      );
+    });
+
+    it('extracts msgText without title context', () => {
+      const html = '<html><body><span id="msgText">The ASSERT condition was violated.</span></body></html>';
+      expect(AdtApiError.extractCleanMessage(html)).toBe('The ASSERT condition was violated.');
+    });
+
+    it('extracts detailText paragraph', () => {
+      const html = '<html><body><p class="detailText">Session expired for user DEVELOPER</p></body></html>';
+      expect(AdtApiError.extractCleanMessage(html)).toBe('Session expired for user DEVELOPER');
+    });
+  });
+
+  describe('constructor deep error extraction', () => {
+    it('extracts msgText from full responseBody when truncated message only yields HTML title', () => {
+      // Simulate: first 500 chars only contain the HTML head (title), but full body has msgText deeper
+      const shortHtml = '<html><head><title>Application Server Error</title></head><body>' + 'x'.repeat(400);
+      const fullHtml =
+        shortHtml +
+        '<p class="detailText"><span id="msgText">Syntax error in program ZC_FBCLUBTP===================BD</span></p></body></html>';
+      const err = new AdtApiError(shortHtml, 500, '/sap/bc/adt/activation', fullHtml);
+      expect(err.message).toContain('Syntax error in program ZC_FBCLUBTP');
+    });
   });
 
   describe('extractAllMessages', () => {

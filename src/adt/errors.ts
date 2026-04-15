@@ -39,8 +39,14 @@ export class AdtApiError extends AdtError {
     public readonly path: string,
     public readonly responseBody?: string,
   ) {
-    // Extract a human-readable message, stripping raw XML/HTML
-    const clean = AdtApiError.extractCleanMessage(message);
+    // Extract a human-readable message, stripping raw XML/HTML.
+    // Try the truncated message first; if that only yields a generic title (e.g., "Application Server Error"),
+    // retry with the full responseBody which may contain deeper error details (e.g., <span id="msgText">).
+    let clean = AdtApiError.extractCleanMessage(message);
+    if (responseBody && responseBody.length > message.length && /^Application Server Error/.test(clean)) {
+      const deepClean = AdtApiError.extractCleanMessage(responseBody);
+      if (deepClean !== clean) clean = deepClean;
+    }
     super(`ADT API error: status ${statusCode} at ${path}: ${clean}`);
     this.name = 'AdtApiError';
   }
@@ -62,18 +68,30 @@ export class AdtApiError extends AdtError {
       return xmlMatch[1].trim();
     }
 
-    // 2. Try HTML: extract <title> or <h1> content
+    // 2. Try HTML: extract SAP's error detail from <span id="msgText"> or <p class="detailText">
+    //    SAP 500 pages embed the actual error (e.g., "Syntax error in program ...") in these elements.
+    const msgTextMatch =
+      raw.match(/<span\s+id="msgText"[^>]*>([^<]+)</) ?? raw.match(/<p\s+class="detailText"[^>]*>([^<]+)</);
+    if (msgTextMatch?.[1]) {
+      const detail = msgTextMatch[1].trim();
+      // Also grab the title for context (e.g., "Application Server Error")
+      const titleMatch = raw.match(/<title>([^<]+)</);
+      const title = titleMatch?.[1]?.trim();
+      return title && title !== detail ? `${title}: ${detail}` : detail;
+    }
+
+    // 3. Try HTML: extract <title> or <h1> content
     const htmlMatch = raw.match(/<title>([^<]+)</) ?? raw.match(/<h1>([^<]+)</);
     if (htmlMatch?.[1]) {
       return htmlMatch[1].trim();
     }
 
-    // 3. If no XML/HTML tags at all, it's plain text — use as-is (truncated)
+    // 4. If no XML/HTML tags at all, it's plain text — use as-is (truncated)
     if (!raw.includes('<')) {
       return raw.slice(0, 300);
     }
 
-    // 4. Fallback: strip all tags and use whatever text remains
+    // 5. Fallback: strip all tags and use whatever text remains
     const stripped = raw
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
