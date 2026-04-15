@@ -45,7 +45,7 @@ function resolveTypesForPath(discoveryMap: DiscoveryMap, rawPath: string): strin
 
   let matchedPath: string | undefined;
   for (const key of discoveryMap.keys()) {
-    if (!isPrefixMatch(key, path)) continue;
+    if (!isShallowMatch(key, path)) continue;
     if (!matchedPath || key.length > matchedPath.length) {
       matchedPath = key;
     }
@@ -90,7 +90,24 @@ function normalizeRequestPath(rawPath: string): string {
   return path;
 }
 
-function isPrefixMatch(prefix: string, path: string): boolean {
-  if (path === prefix) return true;
-  return path.startsWith(`${prefix}/`);
+/**
+ * Match if path is the collection itself or at most one segment deeper (object name).
+ *
+ * Discovery MIME types describe the collection endpoint (e.g., /sap/bc/adt/oo/classes).
+ * They apply to the collection and to direct child resources (object metadata reads/writes),
+ * but NOT to deeper sub-resources like /source/main or /includes/testclasses — those
+ * require different Accept headers (typically text/plain or *\/*).
+ *
+ * Examples for collection "/sap/bc/adt/oo/classes":
+ *   ✓ /sap/bc/adt/oo/classes                        (exact)
+ *   ✓ /sap/bc/adt/oo/classes/ZCL_FOO                (1 segment deeper — metadata)
+ *   ✗ /sap/bc/adt/oo/classes/ZCL_FOO/source/main    (3 segments deeper — source code)
+ *   ✗ /sap/bc/adt/oo/classes/ZCL_FOO/includes/defs  (3 segments deeper — includes)
+ */
+function isShallowMatch(collectionPath: string, requestPath: string): boolean {
+  if (requestPath === collectionPath) return true;
+  if (!requestPath.startsWith(`${collectionPath}/`)) return false;
+  // Check depth: only allow one additional segment after the collection path
+  const remainder = requestPath.slice(collectionPath.length + 1);
+  return !remainder.includes('/');
 }

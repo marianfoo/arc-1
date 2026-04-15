@@ -615,14 +615,24 @@ describe('AdtHttpClient', () => {
   // ─── Proactive MIME Discovery ─────────────────────────────────────
 
   describe('discovery-aware header selection', () => {
-    it('uses discovered Accept when no explicit Accept header is provided', async () => {
+    it('uses discovered Accept for object-level paths (shallow match)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
+
+      await client.get('/sap/bc/adt/oo/classes/ZCL_FOO');
+      expect(fetchHeaders(0).Accept).toBe('application/vnd.sap.adt.oo.classes.v4+xml');
+    });
+
+    it('does NOT apply discovery to deep sub-resource paths like /source/main', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
 
       const client = new AdtHttpClient(getDefaultConfig());
       client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
 
       await client.get('/sap/bc/adt/oo/classes/ZCL_FOO/source/main');
-      expect(fetchHeaders(0).Accept).toBe('application/vnd.sap.adt.oo.classes.v4+xml');
+      expect(fetchHeaders(0).Accept).toBe('*/*');
     });
 
     it('does not override explicit Accept with discovery result', async () => {
@@ -631,7 +641,7 @@ describe('AdtHttpClient', () => {
       const client = new AdtHttpClient(getDefaultConfig());
       client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
 
-      await client.get('/sap/bc/adt/oo/classes/ZCL_FOO/source/main', { Accept: 'application/xml' });
+      await client.get('/sap/bc/adt/oo/classes/ZCL_FOO', { Accept: 'application/xml' });
       expect(fetchHeaders(0).Accept).toBe('application/xml');
     });
 
@@ -688,7 +698,7 @@ describe('AdtHttpClient', () => {
       client.setDiscoveryMap(new Map([['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']]]));
 
       await client.withStatefulSession(async (session) => {
-        await session.get('/sap/bc/adt/oo/classes/ZCL_SESSION/source/main');
+        await session.get('/sap/bc/adt/oo/classes/ZCL_SESSION');
       });
 
       expect(fetchHeaders(0).Accept).toBe('application/vnd.sap.adt.oo.classes.v4+xml');
@@ -704,7 +714,7 @@ describe('AdtHttpClient', () => {
         new Map([['/sap/bc/adt/ddic/ddl/sources', ['application/vnd.sap.adt.ddic.ddl.sources.v2+xml']]]),
       );
 
-      await client.post('/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main', '<source/>', undefined, {
+      await client.post('/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL', '<source/>', undefined, {
         Accept: 'application/json',
         'Content-Type': 'text/plain',
       });

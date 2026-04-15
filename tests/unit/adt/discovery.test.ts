@@ -127,16 +127,24 @@ describe('ADT Discovery', () => {
       expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes')).toBe('application/vnd.sap.adt.oo.classes.v4+xml');
     });
 
-    it('resolves prefix path matches', () => {
+    it('resolves one-level-deep path (object metadata)', () => {
       const map = new Map<string, string[]>([
         ['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']],
       ]);
-      expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes/ZCL_FOO/source/main')).toBe(
+      expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes/ZCL_FOO')).toBe(
         'application/vnd.sap.adt.oo.classes.v4+xml',
       );
     });
 
-    it('uses longest prefix match', () => {
+    it('does NOT resolve deep sub-resource paths (source/main)', () => {
+      const map = new Map<string, string[]>([
+        ['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']],
+      ]);
+      // Discovery MIME types are for collection/metadata, not source code sub-resources
+      expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes/ZCL_FOO/source/main')).toBeUndefined();
+    });
+
+    it('uses longest shallow match', () => {
       const map = new Map<string, string[]>([
         ['/sap/bc/adt/oo', ['application/vnd.sap.adt.oo.v1+xml']],
         ['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']],
@@ -157,13 +165,15 @@ describe('ADT Discovery', () => {
       expect(resolveAcceptType(new Map(), '/sap/bc/adt/oo/classes')).toBeUndefined();
     });
 
-    it('resolveContentType returns first type from matched collection', () => {
+    it('resolveContentType returns first type for shallow match', () => {
       const map = new Map<string, string[]>([
         ['/sap/bc/adt/ddic/ddl/sources', ['application/vnd.sap.adt.ddic.ddl.sources.v2+xml', 'application/*']],
       ]);
-      expect(resolveContentType(map, '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main')).toBe(
+      expect(resolveContentType(map, '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL')).toBe(
         'application/vnd.sap.adt.ddic.ddl.sources.v2+xml',
       );
+      // Deep sub-resources should NOT match
+      expect(resolveContentType(map, '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main')).toBeUndefined();
     });
 
     it('resolves independently across multiple collections', () => {
@@ -171,12 +181,15 @@ describe('ADT Discovery', () => {
         ['/sap/bc/adt/oo/classes', ['application/vnd.sap.adt.oo.classes.v4+xml']],
         ['/sap/bc/adt/programs/programs', ['application/vnd.sap.adt.programs.programs.v2+xml']],
       ]);
-      expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes/ZCL_FOO/source/main')).toBe(
+      // One level deep (object metadata) — matches
+      expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes/ZCL_FOO')).toBe(
         'application/vnd.sap.adt.oo.classes.v4+xml',
       );
-      expect(resolveAcceptType(map, '/sap/bc/adt/programs/programs/ZREP/source/main')).toBe(
+      expect(resolveAcceptType(map, '/sap/bc/adt/programs/programs/ZREP')).toBe(
         'application/vnd.sap.adt.programs.programs.v2+xml',
       );
+      // Deep sub-resources — no match
+      expect(resolveAcceptType(map, '/sap/bc/adt/oo/classes/ZCL_FOO/source/main')).toBeUndefined();
     });
 
     it('ignores query parameters during matching', () => {

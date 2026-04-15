@@ -86,10 +86,15 @@ describe('ADT Integration Tests', () => {
       const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
       requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
 
-      const classes = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/oo/classes/CL_ABAP_CHAR_UTILITIES/source/main');
-      const programs = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/programs/programs/RSHOWTIM/source/main');
-      const ddls = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL/source/main');
+      // Shallow match: object-level metadata paths resolve to discovered MIME types
+      const classes = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/oo/classes/CL_ABAP_CHAR_UTILITIES');
+      const programs = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/programs/programs/RSHOWTIM');
+      const ddls = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/ddic/ddl/sources/ZI_TRAVEL');
       const transports = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/cts/transportrequests?user=DEVELOPER');
+
+      // Deep sub-resource paths (source/main) should NOT resolve — different Accept needed
+      const classSource = resolveAcceptType(nonEmptyMap, '/sap/bc/adt/oo/classes/CL_ABAP_CHAR_UTILITIES/source/main');
+      expect(classSource).toBeUndefined();
 
       expect(classes).toBeTruthy();
       expect(programs).toBeTruthy();
