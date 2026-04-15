@@ -1224,11 +1224,7 @@ describe('AdtHttpClient', () => {
       const client = new AdtHttpClient({ ...getDefaultConfig(), semaphore: sem });
       (client as any).csrfToken = 'T';
 
-      await Promise.all([
-        client.get('/path1'),
-        client.get('/path2'),
-        client.get('/path3'),
-      ]);
+      await Promise.all([client.get('/path1'), client.get('/path2'), client.get('/path3')]);
 
       expect(maxConcurrent).toBe(1);
     });
