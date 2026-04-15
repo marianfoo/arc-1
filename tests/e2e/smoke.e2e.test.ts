@@ -188,11 +188,67 @@ describe('E2E Smoke Tests', () => {
 
   // ── Error handling ─────────────────────────────────────────────
 
+  it('SAPWrite — write policy is explicit (read-only error or writable create+delete)', async () => {
+    const objectName = `ZARC1_E2E_WPOL${Date.now().toString().slice(-8)}`;
+    const result = await callTool(client, 'SAPWrite', {
+      action: 'create',
+      type: 'PROG',
+      name: objectName,
+      source: `REPORT ${objectName}.\nWRITE: / 'write-policy'.`,
+      package: '$TMP',
+    });
+
+    if (result.isError) {
+      const text = expectToolError(result);
+      // Safety system blocks writes in read-only mode — message varies by config
+      if (/read-only/i.test(text) || /blocked by safety/i.test(text)) {
+        expect(text).toMatch(/read-only|blocked by safety/i);
+        return;
+      }
+      throw new Error(`Unexpected SAPWrite create failure in write-policy smoke test: ${text}`);
+    }
+
+    const createText = expectToolSuccess(result);
+    expect(createText).toContain(`Created PROG ${objectName}`);
+
+    // best-effort-cleanup
+    const deleteResult = await callTool(client, 'SAPWrite', {
+      action: 'delete',
+      type: 'PROG',
+      name: objectName,
+    });
+    if (deleteResult.isError) {
+      console.warn(`    [cleanup] Failed to delete ${objectName}: ${deleteResult.content[0]?.text ?? 'unknown error'}`);
+    }
+  });
+
   it('SAPRead — 404 for non-existent program returns error with hint', async () => {
     const result = await callTool(client, 'SAPRead', { type: 'PROG', name: 'ZZZNOTEXIST999' });
     expectToolError(result, 'ZZZNOTEXIST999');
     const text = result.content[0].text;
     expect(text).toContain('SAPSearch'); // LLM remediation hint
+  });
+
+  it('SAPRead — invalid include returns Zod validation error with valid include values', async () => {
+    const result = await callTool(client, 'SAPRead', {
+      type: 'CLAS',
+      name: 'CL_ABAP_CHAR_UTILITIES',
+      include: 'INVALID_INCLUDE',
+    });
+    expectToolError(result, 'Invalid arguments for SAPRead');
+    const text = result.content[0].text;
+    expect(text).toContain('Valid values');
+    expect(text).toContain('main');
+    expect(text).toContain('testclasses');
+  });
+
+  it('SAPActivate — non-existent object returns actionable error', async () => {
+    const result = await callTool(client, 'SAPActivate', { type: 'PROG', name: 'ZZZNOTEXIST999' });
+    expectToolError(result);
+    const text = result.content[0].text;
+    // In read-only mode, activation is blocked by safety before reaching SAP.
+    // In writable mode, SAP returns 404 with a not-found hint.
+    expect(text).toMatch(/blocked by safety|ZZZNOTEXIST999|not found/i);
   });
 
   it('SAPRead — unknown type returns Zod validation error', async () => {

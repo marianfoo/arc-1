@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-04-15
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -48,7 +48,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~5~~ | ~~FEAT-15~~ | ~~Namespace URL Encoding Audit~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-12~~ |
 | ~~6~~ | ~~FEAT-12~~ | ~~Fix Proposals / Auto-Fix from ATC~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~7~~ | ~~FEAT-13~~ | ~~DDIC Domain/Data Element Write~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-12~~ |
-| 8 | FEAT-16 | Error Intelligence (Actionable Hints) | P1 | S | Features |
+| ~~8~~ | ~~FEAT-16~~ | ~~Error Intelligence (Actionable Hints)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-15~~ |
 | ~~9~~ | ~~FEAT-17~~ | ~~Type Auto-Mappings for SAPWrite~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-14~~ |
 | 10 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
 | 11 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
@@ -98,6 +98,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
 | FEAT-12 | Fix Proposals / Auto-Fix from ATC | 2026-04-14 | Features |
 | FEAT-47 | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
 | FEAT-45 | DEVC (Package) Create | 2026-04-14 | Features |
@@ -170,7 +171,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
 9. ~~**FEAT-17** Type Auto-Mappings for SAPWrite (XS)~~ — **completed 2026-04-14**
 10. ~~**FEAT-12** Fix Proposals / Auto-Fix (S)~~ — **completed 2026-04-14** (`SAPDiagnose` actions: `quickfix`, `apply_quickfix`; ATC enriched with `hasQuickfix`).
-11. **FEAT-16** Error Intelligence (S) — actionable hints for SAP errors (subsumes SEC-03). **↑ Priority increased:** dassian-adt has extensive SAP-domain error classification (SM12, SPAU, L-prefix, activation deps, session timeout detection). High impact for AI self-correction.
+11. ~~**FEAT-16** Error Intelligence (S)~~ — **completed 2026-04-15**. SAP-domain classification now enriches errors with actionable hints (locks/enqueue/auth/activation/object-exists/adjustment) and transaction references (SM12, SU53, SPAU).
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
 13. ~~**FEAT-44** TABL (Database Table) Create (S)~~ — **completed 2026-04-14** (source-based TABL create/update/delete + batch_create support in SAPWrite)
 14. ~~**FEAT-45** DEVC (Package) Create (S)~~ — **completed 2026-04-14**. Endpoint: `/sap/bc/adt/packages`.
@@ -401,12 +402,17 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — directly improves admin control and LLM UX |
-| **Status** | Partially implemented (2026-04-14) |
+| **Status** | Completed (2026-04-15) |
 | **Source** | Dassian pattern, Roadmap SEC-03 |
 
 **What:** When SAP returns common errors (409 locked, 423 enqueued, 403 auth, 415 content type), return actionable hints: "Object locked by user X — check SM12", "Authorization failed — check SU53/PFCG", "Transport required — check SE09". Subsumes SEC-03 (S_DEVELOP awareness).
 
-**Partial implementation (2026-04-14):** PR #119 added structured DDIC diagnostics (`extractDdicDiagnostics`, `formatDdicDiagnostics` in `src/adt/errors.ts`) with T100KEY parsing, line-number extraction, and deduplication. The `formatErrorForLLM()` function in `src/handlers/intent.ts` now provides DDIC-specific hints for 400/409 save errors. Remaining: broader error classification for 409/423/403 with SAP transaction hints (SM12, SU53, SE09).
+**Implementation (2026-04-15):**
+- Added SAP-domain classification in `src/adt/errors.ts` (`extractExceptionType`, `extractLockOwner`, `classifySapDomainError`) using ADT XML exception `type id` + message patterns.
+- Extended `formatErrorForLLM()` in `src/handlers/intent.ts` to prioritize domain hints for lock conflicts (409), enqueue/invalid lock handle (423), authorization failures (403), object-exists conflicts, activation dependency chains, and adjustment mode.
+- Added transaction guidance: `SM12` (locks/enqueue), `SU53` (authorization), `SPAU` (adjustment mode); retained existing fallback hints for not-found, transport, DDIC save, and 5xx errors.
+- Extended audit classification (`errorClass`) to include domain categories like `AdtApiError:lock-conflict`.
+- Added unit tests for extraction/classification and intent hint routing plus E2E smoke assertions for validation/not-found hint behavior.
 
 **Why:** Supports **centralized admin control** — admins and LLMs get clear guidance instead of raw SAP error HTML. Dassian does this well with its error intelligence pattern.
 
@@ -1368,9 +1374,9 @@ The following features are tracked but not planned for near-term implementation.
 ### SEC-03: SAP Authorization Object Awareness (S_DEVELOP)
 | Field | Value |
 |-------|-------|
-| **Status** | Subsumed by FEAT-16 (Error Intelligence) |
+| **Status** | Completed via FEAT-16 (2026-04-15) |
 
-**Merged:** SEC-03's scope (parsing 403 authorization errors, mapping to S_DEVELOP objects, suggesting SU53/PFCG) is now part of FEAT-16 Error Intelligence, which covers all SAP error codes (403, 409, 423, 415) with actionable hints. See FEAT-16 for details.
+**Merged:** SEC-03's scope (parsing 403 authorization errors, mapping to S_DEVELOP/S_ADT_RES objects, suggesting SU53/PFCG) is fully implemented as part of FEAT-16 Error Intelligence. FEAT-16 now adds SAP-domain error classification and transaction-aware hints across 403/409/423 + activation/dependency scenarios.
 
 ---
 
