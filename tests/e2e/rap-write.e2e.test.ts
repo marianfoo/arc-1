@@ -13,11 +13,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { requireOrSkip } from '../helpers/skip-policy.js';
 import { callTool, connectClient, expectToolSuccess } from './helpers.js';
 
-/** Generate a collision-safe unique name with a given prefix (max 30 chars). */
+/** Generate a collision-safe unique name with a given prefix (max 30 chars).
+ *  The suffix always starts with a letter so ABAP alias tokens (via .slice)
+ *  never begin with a digit — ABAP rejects identifiers starting with numbers. */
 function uniqueName(prefix: string): string {
-  const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e5)
+  const ts = Date.now().toString(36);
+  const rnd = Math.floor(Math.random() * 1e5)
     .toString(36)
-    .padStart(3, '0')}`.toUpperCase();
+    .padStart(3, '0');
+  // Prefix the suffix with 'X' to guarantee it starts with a letter
+  const suffix = `X${ts}${rnd}`.toUpperCase();
   return `${prefix}${suffix}`.slice(0, 30);
 }
 
