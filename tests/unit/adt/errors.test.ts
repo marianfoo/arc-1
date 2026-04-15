@@ -288,6 +288,11 @@ describe('AdtApiError', () => {
       expect(owner).toEqual({ transport: 'A4HK900502' });
     });
 
+    it('extracts user from "User X is currently editing Y" format', () => {
+      const owner = extractLockOwner('User MARIAN is currently editing ZARC1_TEST_REPORT');
+      expect(owner).toEqual({ user: 'MARIAN' });
+    });
+
     it('returns undefined when no lock owner details exist', () => {
       expect(extractLockOwner('Syntax error in line 5')).toBeUndefined();
     });
@@ -304,6 +309,33 @@ describe('AdtApiError', () => {
       expect(classification?.hint).toContain('DEVELOPER');
       expect(classification?.hint).toContain('E19K900001');
       expect(classification?.transaction).toBe('SM12');
+    });
+
+    it('classifies lock conflicts from 403 with "currently editing" (SAP A4H pattern)', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">User MARIAN is currently editing ZARC1_TEST_REPORT</exc:localizedMessage>
+</exc:exception>`;
+      const classification = classifySapDomainError(403, xml);
+      expect(classification?.category).toBe('lock-conflict');
+      expect(classification?.hint).toContain('MARIAN');
+      expect(classification?.hint).toContain('SM12');
+      expect(classification?.transaction).toBe('SM12');
+      expect(classification?.details?.user).toBe('MARIAN');
+    });
+
+    it('classifies lock conflicts from 403 with "being edited by" pattern', () => {
+      const classification = classifySapDomainError(403, 'Resource is being edited by user DEVELOPER');
+      expect(classification?.category).toBe('lock-conflict');
+      expect(classification?.hint).toContain('DEVELOPER');
+    });
+
+    it('does not misclassify 403 auth error as lock conflict', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionNotAuthorized"/>
+  <exc:localizedMessage lang="EN">Not authorized for S_DEVELOP</exc:localizedMessage>
+</exc:exception>`;
+      const classification = classifySapDomainError(403, xml);
+      expect(classification?.category).toBe('authorization');
     });
 
     it('classifies enqueue errors for 423', () => {

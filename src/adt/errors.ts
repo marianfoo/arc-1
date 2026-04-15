@@ -260,7 +260,8 @@ export function extractLockOwner(text: string): { user?: string; transport?: str
 
   const userMatch =
     text.match(/\blocked by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
-    text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i);
+    text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
+    text.match(/\buser\s+["']?([A-Z0-9_.$/-]+)["']?\s+is\s+currently\s+editing\b/i);
   const transportMatch =
     text.match(/\b(?:in\s+)?(?:task|transport|request)\s+([A-Z0-9]{3,}\d{4,})\b/i) ??
     text.match(/\b([A-Z]\d{2}[A-Z]\d{6})\b/i);
@@ -281,8 +282,12 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   const bodyLower = bodyRaw.toLowerCase();
   const typeId = extractExceptionType(bodyRaw);
 
-  const lockPattern = /\blocked by\b|\bbeing edited by\b|\bresource is locked\b|\balready locked\b/i.test(bodyRaw);
-  if (typeId === 'ExceptionResourceLockedByAnotherUser' || (statusCode === 409 && lockPattern)) {
+  const lockPattern =
+    /\blocked by\b|\bbeing edited by\b|\bcurrently editing\b|\bresource is locked\b|\balready locked\b/i.test(bodyRaw);
+  if (
+    typeId === 'ExceptionResourceLockedByAnotherUser' ||
+    ((statusCode === 409 || statusCode === 403) && lockPattern)
+  ) {
     const owner = extractLockOwner(bodyRaw);
     const lockHintParts: string[] = ['Object is locked'];
     if (owner?.user && owner?.transport) {
