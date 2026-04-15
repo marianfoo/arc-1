@@ -53,6 +53,12 @@ SAPRead(type="DDLS", name="<interface_view>")
 
 Understand the data model: field names, types, aliases, associations. This is needed to generate correct `READ ENTITIES` and `MODIFY ENTITIES` statements.
 
+If access control exists, also read it to understand CDS-level authorization constraints:
+
+```
+SAPRead(type="DCLS", name="<interface_view>_DCL")
+```
+
 ### 1c. Get dependency context
 
 ```
@@ -457,6 +463,7 @@ ENDMETHOD.
 
 - **BTP**: ABAP Cloud syntax strictly enforced. Only `READ ENTITIES` / `MODIFY ENTITIES` — no `SELECT` from database tables directly. All APIs must be released. `strict ( 2 )` in BDEF.
 - **On-Prem**: More flexible — classic ABAP can be used in the behavior pool (e.g., `SELECT` directly), but `READ ENTITIES` / `MODIFY ENTITIES` is strongly recommended for consistency and future compatibility.
+- **Authorization layering**: `DCLS` enforces CDS row-level access, while BDEF authorization (`authorization master`) governs behavior operations. Consider both when debugging authorization-related logic.
 
 ### What This Skill Does NOT Do
 

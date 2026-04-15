@@ -108,6 +108,7 @@ describe('SAPReadSchemaBtp', () => {
   it('accepts BTP types', () => {
     const result = SAPReadSchemaBtp.safeParse({ type: 'CLAS', name: 'ZCL_TEST' });
     expect(result.success).toBe(true);
+    expect(SAPReadSchemaBtp.safeParse({ type: 'DCLS', name: 'ZI_TEST_DCL' }).success).toBe(true);
   });
 
   it('rejects on-prem-only types', () => {
@@ -333,6 +334,7 @@ describe('SAPWriteSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'CLAS', name: 'Z' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DDLS', name: 'Z' }).success).toBe(true);
+    expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'DCLS', name: 'ZI_TEST_DCL' }).success).toBe(true);
     expect(SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'TABL', name: 'ZTABL' }).success).toBe(true);
     expect(
       SAPWriteSchemaBtp.safeParse({ action: 'create', type: 'SRVB', name: 'ZSB', serviceDefinition: 'ZSD' }).success,

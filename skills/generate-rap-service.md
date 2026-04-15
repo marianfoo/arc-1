@@ -89,6 +89,7 @@ Based on the user's description, design the complete artifact stack. Follow SAP 
 | Metadata extension | `ZC_<Entity>` | `ZC_TRAVEL` |
 | Interface behavior definition | `ZI_<Entity>` | `ZI_TRAVEL` |
 | Projection behavior definition | `ZC_<Entity>` | `ZC_TRAVEL` |
+| Access control (DCL) | `ZI_<Entity>_DCL` | `ZI_TRAVEL_DCL` |
 | Service definition | `ZSD_<Entity>` | `ZSD_TRAVEL` |
 | Service binding | `ZSB_<Entity>_V4` | `ZSB_TRAVEL_V4` |
 | Behavior pool class | `ZBP_I_<Entity>` | `ZBP_I_TRAVEL` |
@@ -126,13 +127,14 @@ Proposed artifact stack for "Travel Booking":
 |---|------|------|-------------|
 | 1 | TABL | ZTRAVEL_D | Database table entity |
 | 2 | DDLS | ZI_TRAVEL | Interface CDS view entity |
-| 3 | BDEF | ZI_TRAVEL | Interface behavior definition |
-| 4 | DDLS | ZC_TRAVEL | Projection CDS view entity |
-| 5 | BDEF | ZC_TRAVEL | Projection behavior definition |
-| 6 | DDLX | ZC_TRAVEL | Metadata extension (UI annotations) |
-| 7 | SRVD | ZSD_TRAVEL | Service definition |
-| 8 | CLAS | ZBP_I_TRAVEL | Behavior pool class |
-| 9 | SRVB | ZSB_TRAVEL_V4 | Service binding |
+| 3 | DCLS | ZI_TRAVEL_DCL | CDS access control (authorization rules) |
+| 4 | BDEF | ZI_TRAVEL | Interface behavior definition |
+| 5 | DDLS | ZC_TRAVEL | Projection CDS view entity |
+| 6 | BDEF | ZC_TRAVEL | Projection behavior definition |
+| 7 | DDLX | ZC_TRAVEL | Metadata extension (UI annotations) |
+| 8 | SRVD | ZSD_TRAVEL | Service definition |
+| 9 | CLAS | ZBP_I_TRAVEL | Behavior pool class |
+| 10 | SRVB | ZSB_TRAVEL_V4 | Service binding |
 
 Fields: key_uuid, agency_id, customer_id, destination, begin_date, end_date,
         total_price, currency_code, status, created_by, created_at,
@@ -167,6 +169,7 @@ Instead of creating each artifact individually in Steps 4-13, you can use batch 
 SAPWrite(action="batch_create", objects=[
   {type: "TABL", name: "<table_name>", description: "<Entity> Table", source: "<table_ddl>"},
   {type: "DDLS", name: "ZI_<entity>", description: "<Entity> Interface View", source: "<interface_view_ddl>"},
+  {type: "DCLS", name: "ZI_<entity>_DCL", description: "<Entity> Access Control", source: "<interface_dcl_source>"},
   {type: "DDLS", name: "ZC_<entity>", description: "<Entity> Projection View", source: "<projection_view_ddl>"},
   {type: "BDEF", name: "ZI_<entity>", description: "<Entity> Interface Behavior", source: "<interface_bdef>"},
   {type: "BDEF", name: "ZC_<entity>", description: "<Entity> Projection Behavior", source: "<projection_bdef>"},
@@ -177,7 +180,7 @@ SAPWrite(action="batch_create", objects=[
 ], package="<package>", transport="<transport>")
 ```
 
-Objects are created and activated in array order — put dependencies first (table before CDS views, CDS views before BDEFs, behavior pool before interface BDEF). The batch stops on the first failure and reports which objects succeeded and which failed.
+Objects are created and activated in array order — put dependencies first (table before CDS views, DCLS after DDLS, CDS views before BDEFs, behavior pool before interface BDEF). The batch stops on the first failure and reports which objects succeeded and which failed.
 
 If batch creation fails, fall back to the sequential approach below (Steps 4-13).
 
@@ -228,7 +231,7 @@ SAPWrite(action="create", type="DDLS", name="ZI_<entity>", package="<package>", 
 ### Interface View DDL Template
 
 ```cds
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #CHECK
 @EndUserText.label: '<Entity description>'
 define root view entity ZI_<Entity>
   as select from <table_name>
@@ -259,6 +262,31 @@ Activate:
 
 ```
 SAPActivate(type="DDLS", name="ZI_<entity>")
+```
+
+## Step 5a: Create Interface Access Control (DCLS)
+
+Create a basic CDS access control role for the interface view.
+
+```
+SAPWrite(action="create", type="DCLS", name="ZI_<entity>_DCL", package="<package>", transport="<transport>", source="<dcl_source>")
+```
+
+### Interface DCL Template
+
+```dcl
+@EndUserText.label: '<Entity description> Access Control'
+@MappingRole: true
+define role ZI_<Entity>_DCL {
+  grant select on ZI_<Entity>
+    where inheriting conditions from super;
+}
+```
+
+Activate:
+
+```
+SAPActivate(type="DCLS", name="ZI_<entity>_DCL")
 ```
 
 ## Step 5b: Create Draft Table (if draft enabled)
@@ -382,7 +410,7 @@ SAPWrite(action="create", type="DDLS", name="ZC_<entity>", package="<package>", 
 ### Projection View DDL Template
 
 ```cds
-@AccessControl.authorizationCheck: #NOT_REQUIRED
+@AccessControl.authorizationCheck: #CHECK
 @EndUserText.label: '<Entity description> - Projection'
 @Metadata.allowExtensions: true
 @Search.searchable: true
@@ -602,6 +630,7 @@ Activate all artifacts together to resolve cross-dependencies:
 SAPActivate(objects=[
   {type:"TABL", name:"<table_name>"},
   {type:"DDLS", name:"ZI_<entity>"},
+  {type:"DCLS", name:"ZI_<entity>_DCL"},
   {type:"CLAS", name:"ZBP_I_<entity>"},
   {type:"BDEF", name:"ZI_<entity>"},
   {type:"DDLS", name:"ZC_<entity>"},
@@ -616,12 +645,13 @@ SAPActivate(objects=[
 If batch activation fails, activate sequentially in dependency order:
 1. Table entity
 2. Interface CDS view
-3. Behavior pool class
-4. Interface behavior definition
-5. Projection CDS view
-6. Projection behavior definition
-7. Metadata extension
-8. Service definition
+3. Interface access control (DCLS)
+4. Behavior pool class
+5. Interface behavior definition
+6. Projection CDS view
+7. Projection behavior definition
+8. Metadata extension
+9. Service definition
 
 For any failing object, run syntax check to identify the issue:
 
@@ -664,6 +694,7 @@ Read back key artifacts and run final checks:
 
 ```
 SAPRead(type="DDLS", name="ZI_<entity>")
+SAPRead(type="DCLS", name="ZI_<entity>_DCL")
 SAPRead(type="BDEF", name="ZI_<entity>")
 SAPRead(type="DDLS", name="ZC_<entity>")
 SAPDiagnose(action="syntax", type="CLAS", name="ZBP_I_<entity>")
@@ -677,6 +708,7 @@ RAP Service Generation Complete!
 Created artifacts:
   [x] Database table entity: <table_name>
   [x] Interface CDS view: ZI_<Entity>
+  [x] Interface access control: ZI_<Entity>_DCL
   [x] Interface behavior definition: ZI_<Entity>
   [x] Projection CDS view: ZC_<Entity>
   [x] Projection behavior definition: ZC_<Entity>
@@ -689,7 +721,6 @@ Created artifacts:
 Next steps:
   - Add validations and determinations (use generate-rap-logic skill)
   - Add value helps for business fields
-  - Add access control (DCLS)
   - Add custom actions if needed
   - Generate unit tests (use generate-abap-unit-test skill)
   - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
@@ -728,7 +759,6 @@ Next steps:
 - **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
 - **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
-- **Access control (DCL)**: ARC-1 does not yet support DCL read/write (FEAT-37). Create manually in ADT.
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
 - **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
 - **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.

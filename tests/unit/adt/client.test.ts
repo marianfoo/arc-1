@@ -140,6 +140,15 @@ describe('AdtClient', () => {
       expect(typeof source).toBe('string');
     });
 
+    it('getDcl returns source code', async () => {
+      const client = createClient();
+      const source = await client.getDcl('ZI_TRAVEL_DCL');
+      expect(typeof source).toBe('string');
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ZI_TRAVEL_DCL'));
+      expect(urlUsed).toContain('/sap/bc/adt/acm/dcl/sources/ZI_TRAVEL_DCL/source/main');
+    });
+
     it('getBdef returns behavior definition source', async () => {
       const client = createClient();
       const source = await client.getBdef('ZTRAVEL');
@@ -473,6 +482,13 @@ describe('AdtClient', () => {
       });
       const source = await client.getProgram('ZHELLO');
       expect(source).toBeDefined();
+    });
+
+    it('getDcl is blocked when read operations are disallowed', async () => {
+      const client = createClient({
+        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
+      });
+      await expect(client.getDcl('ZI_TRAVEL_DCL')).rejects.toThrow(AdtSafetyError);
     });
   });
 

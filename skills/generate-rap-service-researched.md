@@ -93,6 +93,10 @@ SAPSearch(query="SRVD Z*", maxResults=20)
 SAPSearch(query="SRVB Z*", maxResults=20)
 ```
 
+```
+SAPSearch(query="DCLS Z*", maxResults=20)
+```
+
 **If NO Z* BDEFs are found**, you MUST still ground yourself in at least one real system example before writing any code. Use this deterministic fallback:
 
 ```
@@ -321,6 +325,17 @@ For each question, lead with a concrete recommendation based on the user's spec 
 >
 > Unless your requirements specifically suggest a non-draft or freestyle app, V4 with draft is the right choice. Is there any reason to deviate?
 
+**4b. Authorization model**
+> I recommend **enforced CDS access control** (`@AccessControl.authorizationCheck: #CHECK` + `DCLS`) so the service has explicit row-level authorization from day one.
+>
+> Your options:
+> | Option | Upside | Downside |
+> |--------|--------|----------|
+> | **#CHECK + DCLS** | Correct security baseline, production-ready authorization model | Requires access-control design decisions |
+> | **#NOT_ALLOWED / #NOT_REQUIRED** | Faster prototyping | Not suitable for production authorization |
+>
+> Should I generate a strict baseline DCLS now (with inheriting conditions) and mark domain-specific rules as follow-up?
+
 ### Data Model Questions
 
 **5. Fields and types**
@@ -441,13 +456,14 @@ Create a comprehensive design table:
 | 1 | DDLS | <table> | Database table entity | — |
 | 2 | DDLS | <draft_table> | Draft table (if draft) | — |
 | 3 | DDLS | ZI_<Entity> | Interface CDS view | #1 |
-| 4 | CLAS | ZBP_I_<Entity> | Behavior pool class | #3 |
-| 5 | BDEF | ZI_<Entity> | Interface behavior definition | #3, #4 |
-| 6 | DDLS | ZC_<Entity> | Projection CDS view | #3 |
-| 7 | BDEF | ZC_<Entity> | Projection behavior definition | #5, #6 |
-| 8 | DDLX | ZC_<Entity> | Metadata extension | #6 |
-| 9 | SRVD | ZSD_<Entity> | Service definition | #6 |
-| 10 | SRVB | ZSB_<Entity>_V4 | Service binding (manual in ADT) | #9 |
+| 4 | DCLS | ZI_<Entity>_DCL | Access control for interface CDS view | #3 |
+| 5 | CLAS | ZBP_I_<Entity> | Behavior pool class | #3 |
+| 6 | BDEF | ZI_<Entity> | Interface behavior definition | #3, #5 |
+| 7 | DDLS | ZC_<Entity> | Projection CDS view | #3 |
+| 8 | BDEF | ZC_<Entity> | Projection behavior definition | #6, #7 |
+| 9 | DDLX | ZC_<Entity> | Metadata extension | #7 |
+| 10 | SRVD | ZSD_<Entity> | Service definition | #7 |
+| 11 | SRVB | ZSB_<Entity>_V4 | Service binding | #10 |
 
 ### Field Definitions
 | Field | DB Column | CDS Alias | Type | Annotations | Notes |
@@ -530,7 +546,7 @@ After approval, create the artifacts. Use batch creation when possible.
 
 ### MANDATORY: Use batch_create First
 
-**ALWAYS try `batch_create` first.** Do not start with sequential creates. `batch_create` creates all objects in one call — put dependencies first in the array (tables → views → class → BDEFs → service definition).
+**ALWAYS try `batch_create` first.** Do not start with sequential creates. `batch_create` creates all objects in one call — put dependencies first in the array (tables → views → DCLS → class → BDEFs → service definition).
 
 ```
 SAPWrite(action="batch_create", objects=[...], package="<package>", transport="<transport>")
@@ -578,6 +594,7 @@ If the system supports it and the artifact stack is straightforward:
 SAPWrite(action="batch_create", objects=[
   {type: "TABL", name: "<table>", description: "<desc>", source: "<ddl>"},
   {type: "DDLS", name: "ZI_<entity>", description: "<desc>", source: "<ddl>"},
+  {type: "DCLS", name: "ZI_<entity>_DCL", description: "<desc>", source: "<dcl>"},
   {type: "DDLS", name: "ZC_<entity>", description: "<desc>", source: "<ddl>"},
   {type: "BDEF", name: "ZI_<entity>", description: "<desc>", source: "<bdef>"},
   {type: "BDEF", name: "ZC_<entity>", description: "<desc>", source: "<bdef>"},
@@ -597,12 +614,13 @@ If batch creation fails or the stack is complex (compositions, multiple entities
 1. **Table entity/entities** → Create + Activate each
 2. **Draft table(s)** (if draft) → Create + Activate each
 3. **Interface CDS view(s)** → Create + Activate each
-4. **Behavior pool class(es)** → Create + Activate
-5. **Interface behavior definition(s)** → Create (do NOT activate individually — depends on class)
-6. **Projection CDS view(s)** → Create + Activate
-7. **Projection behavior definition(s)** → Create (do NOT activate individually)
-8. **Metadata extension(s)** → Create + Activate
-9. **Service definition** → Create + Activate
+4. **Interface access control (DCLS)** → Create + Activate
+5. **Behavior pool class(es)** → Create + Activate
+6. **Interface behavior definition(s)** → Create (do NOT activate individually — depends on class)
+7. **Projection CDS view(s)** → Create + Activate
+8. **Projection behavior definition(s)** → Create (do NOT activate individually)
+9. **Metadata extension(s)** → Create + Activate
+10. **Service definition** → Create + Activate
 
 After all artifacts are created, batch activate the interdependent ones:
 
@@ -748,17 +766,16 @@ Offer follow-up actions based on the plan:
    - Determinations: [list from plan]
    - Validations: [list from plan]
 3. **Add value helps** for reference fields
-4. **Add access control (DCL)** for authorization — must be created manually in ADT (ARC-1 DCL support pending FEAT-37)
-5. **Add custom actions** if needed (e.g., Approve, Release)
-6. **Generate unit tests** → use `generate-abap-unit-test` skill
-7. **Add compositions** for child entities (if multi-entity scenario planned for Phase 2)
-8. **Register in FLP** (if FLP feature available) → use SAPManage:
-   - `SAPManage(action="flp_create_catalog", catalogId="Z_<ENTITY>_C", title="<Entity> Catalog")`
-   - `SAPManage(action="flp_create_tile", catalogId="Z_<ENTITY>_C", tile={id:"Z_<ENTITY>_T", title:"<Entity>", semanticObject:"<Entity>", semanticAction:"manage"})`
-   - `SAPManage(action="flp_create_group", groupId="Z_<ENTITY>_G", title="<Entity>")`
-   - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileId="Z_<ENTITY>_T")`
-9. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
-10. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", transport="<TR>")` to release tasks and parent in one step
+4. **Add custom actions** if needed (e.g., Approve, Release)
+5. **Generate unit tests** → use `generate-abap-unit-test` skill
+6. **Add compositions** for child entities (if multi-entity scenario planned for Phase 2)
+7. **Register in FLP** (if FLP feature available) → use SAPManage:
+  - `SAPManage(action="flp_create_catalog", catalogId="Z_<ENTITY>_C", title="<Entity> Catalog")`
+  - `SAPManage(action="flp_create_tile", catalogId="Z_<ENTITY>_C", tile={id:"Z_<ENTITY>_T", title:"<Entity>", semanticObject:"<Entity>", semanticAction:"manage"})`
+  - `SAPManage(action="flp_create_group", groupId="Z_<ENTITY>_G", title="<Entity>")`
+  - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileId="Z_<ENTITY>_T")`
+8. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
+9. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", transport="<TR>")` to release tasks and parent in one step
 ```
 
 ---
@@ -870,7 +887,6 @@ This skill prioritizes **correctness and consistency** over speed. The extra res
 - **Unmanaged save** implementation (plan it, implement the managed wrapper, note the save handler as a follow-up)
 - **Custom CDS functions/actions** (plan them, implement standard CRUD, add as follow-up)
 - **Fiori app generation** (generates the OData service; Fiori Elements app is auto-generated from annotations)
-- **Access control (DCL)** — ARC-1 does not yet support DCL read/write (FEAT-37). Create manually in ADT. This is the main gap for a fully automated e2e RAP stack.
 
 ### Relationship to Other Skills
 

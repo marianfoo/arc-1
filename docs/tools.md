@@ -38,6 +38,7 @@ Read any SAP ABAP object.
 | `FUGR` | Function group structure |
 | `INCL` | Include source |
 | `DDLS` | CDS view source |
+| `DCLS` | CDS access control source (authorization rules for CDS views) |
 | `DDLX` | CDS metadata extension (UI annotations for Fiori Elements) |
 | `BDEF` | Behavior definition |
 | `SRVD` | Service definition |
@@ -80,6 +81,7 @@ SAPRead(type="CLAS", name="ZCL_ORDER", format="structured")  — JSON with metad
 SAPRead(type="CLAS", name="ZCL_ORDER", method="*")           — list all methods
 SAPRead(type="CLAS", name="ZCL_ORDER", method="get_name")    — read a specific method
 SAPRead(type="DDLS", name="ZI_TRAVEL", include="elements")   — extract CDS view elements
+SAPRead(type="DCLS", name="ZI_TRAVEL_DCL")       — CDS access control source
 SAPRead(type="DDLX", name="ZC_TRAVEL")          — metadata extension with UI annotations
 SAPRead(type="SRVB", name="ZUI_TRAVEL_O4")       — service binding metadata as JSON
 SAPRead(type="FUGR", name="ZUTILS", expand_includes=true)    — function group with all includes expanded
@@ -140,7 +142,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
-| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions). Slash/case aliases are auto-normalized (e.g., `CLAS/OC` or `clas` → `CLAS`). |
+| `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DCLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions). Slash/case aliases are auto-normalized (e.g., `CLAS/OC` or `clas` → `CLAS`). |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
@@ -176,14 +178,14 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 **DDIC metadata writes:** `DOMA`, `DTEL`, `MSAG`, and `SRVB` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. `SRVB` create uses wildcard content type (`application/*`) and SRVB update uses vendor type (`application/vnd.sap.adt.businessservices.servicebinding.v2+xml`).
 
-**TABL writes:** `TABL` is source-based (like DDLS/BDEF/SRVD). ARC-1 creates the table shell, then writes table source via `/source/main`.
+**Source-based DDIC writes:** `TABL`, `DDLS`, `DCLS`, `BDEF`, and `SRVD` are source-based and write source via `/source/main`.
 
 **BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
 
-**DDIC save diagnostics:** On `SAPWrite` save failures for DDIC/RAP artifacts (`TABL`, `DDLS`, `BDEF`, `SRVD`, `SRVB`, `DDLX`, `DOMA`, `DTEL`), ARC-1 enriches errors with structured diagnostics:
+**DDIC save diagnostics:** On `SAPWrite` save failures for DDIC/RAP artifacts (`TABL`, `DDLS`, `DCLS`, `BDEF`, `SRVD`, `SRVB`, `DDLX`, `DOMA`, `DTEL`), ARC-1 enriches errors with structured diagnostics:
 - T100 message identifiers/variables (e.g., `SBD_MESSAGES/007`, `V1..V4`)
 - Line-aware details when available
-- Best-effort inactive syntax-check output for source-based DDIC creates (`TABL`, `DDLS`, `BDEF`, `SRVD`, `SRVB`, `DDLX`)
+- Best-effort inactive syntax-check output for source-based DDIC creates (`TABL`, `DDLS`, `DCLS`, `BDEF`, `SRVD`, `SRVB`, `DDLX`)
 
 This helps pinpoint the exact failing field/annotation instead of retrying blindly.
 
@@ -197,7 +199,7 @@ This helps pinpoint the exact failing field/annotation instead of retrying blind
 
 **Batch creation:**
 
-`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, DCLS after DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
 
@@ -205,6 +207,7 @@ If any object fails, processing stops and the response reports which objects suc
 SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"TABL", name:"ZTRAVEL", source:"define table ztravel {...}"},
   {type:"DDLS", name:"ZI_TRAVEL", source:"define root view..."},
+  {type:"DCLS", name:"ZI_TRAVEL_DCL", source:"define role..."},
   {type:"BDEF", name:"ZI_TRAVEL", source:"managed implementation..."},
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."},

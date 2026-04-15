@@ -256,7 +256,7 @@ describe('Tool Definitions', () => {
       expect(typeEnum).not.toContain('SOBJ');
     });
 
-    it('keeps CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB on BTP', () => {
+    it('keeps CLAS, INTF, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB on BTP', () => {
       const tools = getToolDefinitions(btpConfig);
       const sapRead = tools.find((t) => t.name === 'SAPRead')!;
       const schema = sapRead.inputSchema as Record<string, any>;
@@ -265,6 +265,7 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('CLAS');
       expect(typeEnum).toContain('INTF');
       expect(typeEnum).toContain('DDLS');
+      expect(typeEnum).toContain('DCLS');
       expect(typeEnum).toContain('DDLX');
       expect(typeEnum).toContain('BDEF');
       expect(typeEnum).toContain('SRVD');
@@ -288,7 +289,7 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('SRVB');
     });
 
-    it('includes DDLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL in SAPWrite types on both BTP and on-prem', () => {
+    it('includes DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL in SAPWrite types on both BTP and on-prem', () => {
       for (const config of [btpConfig, onpremConfig]) {
         const tools = getToolDefinitions(config);
         const sapWrite = tools.find((t) => t.name === 'SAPWrite')!;
@@ -296,6 +297,7 @@ describe('Tool Definitions', () => {
         const typeEnum: string[] = schema.properties.type.enum;
 
         expect(typeEnum).toContain('DDLS');
+        expect(typeEnum).toContain('DCLS');
         expect(typeEnum).toContain('DDLX');
         expect(typeEnum).toContain('BDEF');
         expect(typeEnum).toContain('SRVD');
