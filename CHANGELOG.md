@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.7](https://github.com/marianfoo/arc-1/compare/v0.6.6...v0.6.7) (2026-04-15)
+
+
+### Features
+
+* add concurrency limiter and 503 retry ([#132](https://github.com/marianfoo/arc-1/issues/132)) ([ab18e25](https://github.com/marianfoo/arc-1/commit/ab18e25b8fef23f2d985f69a5bbb9a8ad6d0e1dd))
+* add DCLS read/write support (FEAT-37) ([#129](https://github.com/marianfoo/arc-1/issues/129)) ([b4424e2](https://github.com/marianfoo/arc-1/commit/b4424e28507b8d5ff261141dd7ad30429c52ddce))
+* add proactive ADT discovery MIME negotiation ([#127](https://github.com/marianfoo/arc-1/issues/127)) ([418b3d1](https://github.com/marianfoo/arc-1/commit/418b3d1f055c5891bdb46ec7a9bbad1d4f8bcd82))
+* implement FEAT-16 SAP-domain error intelligence hints ([#128](https://github.com/marianfoo/arc-1/issues/128)) ([ce80aea](https://github.com/marianfoo/arc-1/commit/ce80aead717bb6ec00f8c229650f99ab1421d2b9))
+
+
+### Bug Fixes
+
+* route SRVB publish/unpublish to correct OData version endpoint ([#130](https://github.com/marianfoo/arc-1/issues/130)) ([9b0601c](https://github.com/marianfoo/arc-1/commit/9b0601c6883e34a7c8aa0b75919a00918bf6f91d))
+
 ## [0.6.6](https://github.com/marianfoo/arc-1/compare/v0.6.5...v0.6.6) (2026-04-14)
 
 
