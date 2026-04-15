@@ -1172,35 +1172,44 @@ describe('AdtHttpClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('does NOT retry POST on 503', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+    it('retries POST on 503 (ICM rejects before WP execution)', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'))
+        .mockResolvedValueOnce(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T2' }));
 
       const client = new AdtHttpClient(getDefaultConfig());
       (client as any).csrfToken = 'T';
 
-      await expect(client.post('/sap/bc/adt/some/action', '<xml/>')).rejects.toThrow(AdtApiError);
-      // Only one fetch call (no retry for POST)
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const result = await client.post('/sap/bc/adt/some/action', '<xml/>');
+      expect(result.statusCode).toBe(200);
+      expect(result.body).toBe('<ok/>');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('does NOT retry PUT on 503', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+    it('retries PUT on 503', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'))
+        .mockResolvedValueOnce(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T2' }));
 
       const client = new AdtHttpClient(getDefaultConfig());
       (client as any).csrfToken = 'T';
 
-      await expect(client.put('/sap/bc/adt/some/action', '<xml/>')).rejects.toThrow(AdtApiError);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const result = await client.put('/sap/bc/adt/some/action', '<xml/>');
+      expect(result.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('does NOT retry DELETE on 503', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'));
+    it('retries DELETE on 503', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(503, 'Service Unavailable'))
+        .mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T2' }));
 
       const client = new AdtHttpClient(getDefaultConfig());
       (client as any).csrfToken = 'T';
 
-      await expect(client.delete('/sap/bc/adt/some/action')).rejects.toThrow(AdtApiError);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const result = await client.delete('/sap/bc/adt/some/action');
+      expect(result.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 

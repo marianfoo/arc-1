@@ -347,10 +347,11 @@ export class AdtHttpClient {
         }
       }
 
-      // Handle 503 Service Unavailable — SAP work processes exhausted.
-      // Retry once with backoff for safe (idempotent) methods only.
+      // Handle 503 Service Unavailable — ICM thread/MPI exhaustion or WP overload.
+      // Retry ALL methods: a 503 means ICM rejected the request before it reached a work
+      // process, so the operation never executed — retrying is safe even for POST/PUT/DELETE.
       // Retry happens INSIDE the semaphore slot to avoid increasing load on an overloaded system.
-      if (response.status === 503 && !isModifyingMethod(method)) {
+      if (response.status === 503) {
         const jitterMs = 1000 + Math.random() * 1000; // 1-2s with jitter
         logger.emitAudit({
           timestamp: new Date().toISOString(),
@@ -706,7 +707,24 @@ export class AdtHttpClient {
     }
 
     try {
-      const response = await this.doFetch(url, 'HEAD', headers);
+      let response = await this.doFetch(url, 'HEAD', headers);
+
+      // Retry once on 503 — ICM may be temporarily overloaded (thread/MPI exhaustion)
+      if (response.status === 503) {
+        const jitterMs = 1000 + Math.random() * 1000;
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'http_request',
+          method: 'HEAD',
+          path: '/sap/bc/adt/core/discovery',
+          statusCode: 503,
+          durationMs: 0,
+          errorBody: `CSRF fetch got 503 — retrying in ${Math.round(jitterMs)}ms`,
+        });
+        await new Promise((resolve) => setTimeout(resolve, jitterMs));
+        response = await this.doFetch(url, 'HEAD', headers);
+      }
 
       // Store cookies from CSRF response — critical for session correlation
       this.storeCookies(response);
