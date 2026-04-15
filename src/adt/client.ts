@@ -272,6 +272,16 @@ export class AdtClient {
     return resp.body;
   }
 
+  /** Get Knowledge Transfer Document (SKTD) — Markdown documentation attached to an ABAP object. */
+  async getKtd(name: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetKTD');
+    // Eclipse ADT lowercases the name in the URL path; server-side matching is case-sensitive here.
+    const resp = await this.http.get(
+      `/sap/bc/adt/documentation/ktd/documents/${encodeURIComponent(name.toLowerCase())}?version=workingArea`,
+    );
+    return resp.body;
+  }
+
   /** Get metadata extension source code (DDLX) */
   async getDdlx(name: string): Promise<string> {
     checkOperation(this.safety, OperationType.Read, 'GetDDLX');

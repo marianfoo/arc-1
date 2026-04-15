@@ -38,8 +38,10 @@ import {
   buildServiceBindingXml,
   type DataElementCreateParams,
   type DomainCreateParams,
+  decodeKtdText,
   type MessageClassCreateParams,
   type PackageCreateParams,
+  rewriteKtdText,
   type ServiceBindingCreateParams,
 } from '../adt/ddic-xml.js';
 import {
@@ -759,6 +761,22 @@ async function handleSAPRead(
       const { source, cacheHit } = await cachedGet('SRVB', name, () => client.getSrvb(name));
       return cachedTextResult(source, cacheHit);
     }
+    case 'SKTD': {
+      try {
+        // ADT returns a <sktd:docu> XML envelope with the Markdown body base64-encoded
+        // inside <sktd:text>. Cache the raw envelope (update flow re-uses it) and
+        // return the decoded Markdown to the LLM.
+        const { source, cacheHit } = await cachedGet('SKTD', name, () => client.getKtd(name));
+        return cachedTextResult(decodeKtdText(source), cacheHit);
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            `No Knowledge Transfer Document (SKTD) found for "${name}". KTD docs are optional Markdown documentation attached to ABAP objects — either one was never created for "${name}", or the name is wrong.`,
+          );
+        }
+        throw err;
+      }
+    }
     case 'TABL': {
       const { source, cacheHit } = await cachedGet('TABL', name, () => client.getTable(name));
       return cachedTextResult(source, cacheHit);
@@ -933,7 +951,7 @@ async function handleSAPRead(
     }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
           'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, DCLS/DL → DCLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
@@ -1122,6 +1140,7 @@ const DATAELEMENT_V2_CONTENT_TYPE = 'application/vnd.sap.adt.dataelements.v2+xml
 const SERVICEBINDING_V2_CONTENT_TYPE = 'application/vnd.sap.adt.businessservices.servicebinding.v2+xml; charset=utf-8';
 const BDEF_CONTENT_TYPE = 'application/vnd.sap.adt.blues.v1+xml';
 const MESSAGECLASS_CONTENT_TYPE = 'application/vnd.sap.adt.mc.messageclass+xml';
+const SKTD_V2_CONTENT_TYPE = 'application/vnd.sap.adt.sktdv2+xml';
 
 function isMetadataWriteType(type: string): boolean {
   return type === 'DOMA' || type === 'DTEL' || type === 'MSAG' || type === 'SRVB';
@@ -1129,7 +1148,7 @@ function isMetadataWriteType(type: string): boolean {
 
 /** Types that require a specific vendor content type for creation (not application/*) */
 function needsVendorContentType(type: string): boolean {
-  return type === 'DOMA' || type === 'DTEL' || type === 'BDEF' || type === 'MSAG';
+  return type === 'DOMA' || type === 'DTEL' || type === 'BDEF' || type === 'MSAG' || type === 'SKTD';
 }
 
 /** Content type used for create POST */
@@ -1170,6 +1189,8 @@ function vendorContentTypeForType(type: string): string {
       return BDEF_CONTENT_TYPE;
     case 'MSAG':
       return MESSAGECLASS_CONTENT_TYPE;
+    case 'SKTD':
+      return SKTD_V2_CONTENT_TYPE;
     default:
       // Wildcard lets the SAP server resolve the correct handler.
       // Sending 'application/xml' causes 415 on DDL-based endpoints
@@ -1807,6 +1828,8 @@ function objectBasePath(type: string): string {
       return '/sap/bc/adt/packages/';
     case 'TRAN':
       return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
+    case 'SKTD':
+      return '/sap/bc/adt/documentation/ktd/documents/';
     default:
       return '/sap/bc/adt/programs/programs/';
   }
@@ -1814,7 +1837,9 @@ function objectBasePath(type: string): string {
 
 /** Map object type + name to the ADT object URL used by CRUD/DevTools/etc. Name is URI-encoded. */
 function objectUrlForType(type: string, name: string): string {
-  return `${objectBasePath(type)}${encodeURIComponent(name)}`;
+  // KTD endpoints require lowercase object names in the URL path (confirmed via Eclipse ADT trace).
+  const effectiveName = type === 'SKTD' ? name.toLowerCase() : name;
+  return `${objectBasePath(type)}${encodeURIComponent(effectiveName)}`;
 }
 
 /** Infer SAP object type from naming conventions. Returns empty string if type cannot be determined. */
@@ -1831,7 +1856,8 @@ function inferObjectType(name: string): string {
  * Used for API release state where the full URI is encoded as a single path segment by the caller.
  */
 function objectUrlForTypeRaw(type: string, name: string): string {
-  return `${objectBasePath(type)}${name}`;
+  const effectiveName = type === 'SKTD' ? name.toLowerCase() : name;
+  return `${objectBasePath(type)}${effectiveName}`;
 }
 
 /** Get the source URL for an object (appends /source/main) */
@@ -1874,6 +1900,20 @@ async function handleSAPWrite(
   switch (action) {
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
+
+      if (type === 'SKTD') {
+        // KTD update requires the full <sktd:docu> XML envelope with the Markdown
+        // body base64-encoded inside <sktd:text>, PUT with
+        // `application/vnd.sap.adt.sktdv2+xml`. PUTting raw text/plain silently
+        // no-ops (or 415s on strict systems). Fetch the current envelope,
+        // replace only the <sktd:text> body, and PUT it back — preserves
+        // responsible/masterLanguage/packageRef/refObject metadata.
+        const currentEnvelope = await client.getKtd(name);
+        const body = rewriteKtdText(currentEnvelope, source);
+        await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, transport);
+        cachingLayer?.invalidate(type, name);
+        return textResult(`Successfully updated ${type} ${name}.`);
+      }
 
       if (isMetadataWriteType(type)) {
         // Metadata updates are full-XML-replace — we must fetch existing metadata
@@ -1952,6 +1992,64 @@ async function handleSAPWrite(
       if (!affResult.valid) {
         return errorResult(
           `AFF metadata validation failed for ${type} ${name}:\n- ${(affResult.errors ?? []).join('\n- ')}\n\nFix the metadata and retry.`,
+        );
+      }
+
+      if (type === 'SKTD') {
+        // A KTD is not a standalone object — it documents a parent object (e.g., a DDLS view or a CLAS).
+        // The create POST goes to the collection URL with a sktd:docu XML body that references the parent.
+        const refType = String(args.refObjectType ?? '');
+        if (!refType) {
+          return errorResult(
+            '"refObjectType" is required for SKTD create — the ADT type+subtype of the parent object being documented (e.g., "DDLS/DF", "CLAS/OC", "PROG/P", "INTF/OI", "BDEF/BDO", "SRVD/SRV").',
+          );
+        }
+        const refName = String(args.refObjectName ?? name);
+        // SAP rule: a KTD's own name must equal the parent object's name (one KTD per object).
+        // Creating a KTD named differently from its parent fails server-side with a cryptic
+        // "Check of condition failed" — fail fast with a clear message instead.
+        if (refName.toUpperCase() !== name.toUpperCase()) {
+          return errorResult(
+            `SKTD name "${name}" must match refObjectName "${refName}" — a Knowledge Transfer Document inherits the name of the ABAP object it documents (one KTD per object). To document "${refName}", call SAPWrite(action="create", type="SKTD", name="${refName}", refObjectType="${refType}", ...).`,
+          );
+        }
+        const refDescription = String(args.refObjectDescription ?? '');
+        // Build the parent URI. ADT URIs use lowercase names by convention (matches the Eclipse trace).
+        const refParentType = refType.split('/')[0] ?? '';
+        const refUri = `${objectBasePath(refParentType)}${encodeURIComponent(refName.toLowerCase())}`;
+
+        const ktdBody = `<?xml version="1.0" encoding="UTF-8"?>
+<sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:language="EN" adtcore:name="${escapeXml(name)}" adtcore:type="SKTD/TYP" adtcore:masterLanguage="EN">
+  <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
+  <sktd:refObject adtcore:description="${escapeXml(refDescription)}" adtcore:name="${escapeXml(refName)}" adtcore:type="${escapeXml(refType)}" adtcore:uri="${escapeXml(refUri)}"/>
+</sktd:docu>`;
+
+        const ktdCreateUrl = '/sap/bc/adt/documentation/ktd/documents';
+        const ktdResult = await createObject(
+          client.http,
+          client.safety,
+          ktdCreateUrl,
+          ktdBody,
+          SKTD_V2_CONTENT_TYPE,
+          effectiveTransport,
+        );
+
+        // If initial Markdown was provided, follow up with an update PUT to write it.
+        // Same envelope contract as the update path: fetch-then-rewrite ensures we
+        // PUT back exactly the shape SAP gave us (with all the server-assigned
+        // metadata), only swapping <sktd:text>.
+        if (source) {
+          const currentEnvelope = await client.getKtd(name);
+          const body = rewriteKtdText(currentEnvelope, source);
+          await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, effectiveTransport);
+          cachingLayer?.invalidate(type, name);
+          return textResult(
+            `Created SKTD ${name} in package ${pkg} and wrote Markdown content.\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
+          );
+        }
+        cachingLayer?.invalidate(type, name);
+        return textResult(
+          `Created SKTD ${name} in package ${pkg} (no Markdown content written — pass "source" to write the body).\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
         );
       }
 
@@ -2079,6 +2177,32 @@ async function handleSAPWrite(
     }
     case 'delete': {
       await enforcePackageForExistingObject();
+
+      if (type === 'SKTD') {
+        // KTD documents use the dedicated /sap/bc/adt/deletion/{check,delete} framework
+        // — no lock/unlock envelope. Check first, then execute deletion with optional transport.
+        checkOperation(client.safety, OperationType.Delete, 'DeleteKTD');
+
+        const checkBody = `<?xml version="1.0" encoding="UTF-8"?>
+<del:checkRequest xmlns:del="http://www.sap.com/adt/deletion" xmlns:adtcore="http://www.sap.com/adt/core">
+  <del:object adtcore:uri="${escapeXml(objectUrl)}"/>
+</del:checkRequest>`;
+        await client.http.post('/sap/bc/adt/deletion/check', checkBody, 'application/xml');
+
+        const transportElement = transport
+          ? `\n    <del:transportNumber>${escapeXml(transport)}</del:transportNumber>`
+          : '';
+        const deleteBody = `<?xml version="1.0" encoding="UTF-8"?>
+<del:deletionRequest xmlns:del="http://www.sap.com/adt/deletion" xmlns:adtcore="http://www.sap.com/adt/core">
+  <del:object adtcore:uri="${escapeXml(objectUrl)}">${transportElement}
+  </del:object>
+</del:deletionRequest>`;
+        await client.http.post('/sap/bc/adt/deletion/delete', deleteBody, 'application/xml');
+
+        cachingLayer?.invalidate(type, name);
+        return textResult(`Deleted ${type} ${name}.`);
+      }
+
       // Lock, delete, unlock pattern — auto-propagate lock corrNr if no explicit transport
       await client.http.withStatefulSession(async (session) => {
         const lock = await lockObject(session, client.safety, objectUrl);

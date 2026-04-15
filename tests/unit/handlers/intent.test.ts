@@ -163,6 +163,41 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.text).toContain('manifest.json');
     });
 
+    it('reads Knowledge Transfer Document (SKTD), decodes base64 text from the <sktd:docu> envelope, and lowercases the name in the URL', async () => {
+      mockFetch.mockReset();
+      const calls: string[] = [];
+      const markdown = '# Title\n\nMarkdown doc content.';
+      const base64 = Buffer.from(markdown, 'utf-8').toString('base64');
+      const envelope = `<?xml version="1.0" encoding="UTF-8"?><sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZTR_C_PAYMENT_VALUE_DATE" adtcore:type="SKTD/TYP"><sktd:element><sktd:text>${base64}</sktd:text></sktd:element></sktd:docu>`;
+      mockFetch.mockImplementation((url: string | URL) => {
+        calls.push(String(url));
+        return Promise.resolve(mockResponse(200, envelope, { 'x-csrf-token': 'T' }));
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+      });
+      expect(result.isError).toBeUndefined();
+      // The decoded Markdown should be returned — not the raw XML envelope, not base64.
+      expect(result.content[0]?.text).toBe(markdown);
+      expect(result.content[0]?.text).not.toContain('<sktd:docu');
+      expect(result.content[0]?.text).not.toContain(base64);
+      const getUrl = calls.find((u) => u.includes('/documentation/ktd/'));
+      expect(getUrl).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date');
+      expect(getUrl).toContain('version=workingArea');
+    });
+
+    it('returns soft informational message when SKTD is not found (404)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, 'Not Found', { 'x-csrf-token': 'mock-csrf-token' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'SKTD',
+        name: 'ZDOES_NOT_EXIST',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('No Knowledge Transfer Document (SKTD) found for "ZDOES_NOT_EXIST"');
+    });
+
     it('reads service binding (SRVB) and returns parsed JSON', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValueOnce(
@@ -4143,6 +4178,309 @@ ENDCLASS.`;
       expect(putCall!.contentType).toContain('application/vnd.sap.adt.domains.v2+xml');
       const unlockCall = calls.find((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'));
       expect(unlockCall).toBeDefined();
+    });
+
+    it('updates SKTD via fetch-then-PUT with sktdv2+xml envelope and base64-encoded Markdown in <sktd:text>', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>KTDLOCK</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      const oldMarkdown = 'old content';
+      const oldBase64 = Buffer.from(oldMarkdown, 'utf-8').toString('base64');
+      // Full envelope (mirrors the Eclipse capture): carries responsible/masterLanguage/packageRef/refObject
+      // and MUST be preserved in the PUT body — only <sktd:text> changes.
+      const envelope =
+        '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd" xmlns:adtcore="http://www.sap.com/adt/core" ' +
+        'adtcore:name="ZTR_C_PAYMENT_VALUE_DATE" adtcore:type="SKTD/TYP" ' +
+        'adtcore:responsible="LEMAIWO" adtcore:masterLanguage="EN" adtcore:masterSystem="KD1" ' +
+        'adtcore:language="EN" adtcore:version="inactive">' +
+        '<adtcore:packageRef adtcore:name="ZE_TR"/>' +
+        '<sktd:refObject adtcore:name="ZTR_C_PAYMENT_VALUE_DATE" adtcore:type="DDLS/DF"/>' +
+        '<sktd:element>' +
+        `<sktd:text>${oldBase64}</sktd:text>` +
+        '</sktd:element>' +
+        '</sktd:docu>';
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string>; body?: string | Buffer }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({
+            method,
+            url: String(url),
+            contentType: headers['content-type'] ?? headers['Content-Type'],
+            body: opts?.body ? String(opts.body) : undefined,
+          });
+          if (method === 'POST' && String(url).includes('_action=LOCK')) {
+            return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'GET' && String(url).includes('/documentation/ktd/documents/')) {
+            return Promise.resolve(mockResponse(200, envelope, { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const newMarkdown = '# Payment Value Date\n\nBusiness rule explanation.';
+      const newBase64 = Buffer.from(newMarkdown, 'utf-8').toString('base64');
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+        source: newMarkdown,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully updated SKTD ZTR_C_PAYMENT_VALUE_DATE');
+
+      // Fetched current envelope before PUT
+      const getCall = calls.find(
+        (c) => c.method === 'GET' && c.url.includes('/documentation/ktd/documents/ztr_c_payment_value_date'),
+      );
+      expect(getCall).toBeDefined();
+
+      const lockCall = calls.find((c) => c.method === 'POST' && c.url.includes('_action=LOCK'));
+      expect(lockCall?.url).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date?_action=LOCK');
+
+      const putCall = calls.find((c) => c.method === 'PUT');
+      expect(putCall?.url).toContain(
+        '/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date?lockHandle=KTDLOCK',
+      );
+      // Vendor content type from the Eclipse trace
+      expect(putCall?.contentType).toContain('application/vnd.sap.adt.sktdv2+xml');
+      // PUT body is the full envelope with <sktd:text> swapped to base64(newMarkdown)
+      expect(putCall?.body).toContain('<sktd:docu');
+      expect(putCall?.body).toContain('xmlns:sktd="http://www.sap.com/wbobj/texts/sktd"');
+      expect(putCall?.body).toContain(`<sktd:text>${newBase64}</sktd:text>`);
+      // Preserved metadata — carried over from the GET envelope
+      expect(putCall?.body).toContain('adtcore:responsible="LEMAIWO"');
+      expect(putCall?.body).toContain('<adtcore:packageRef adtcore:name="ZE_TR"/>');
+      expect(putCall?.body).toContain('<sktd:refObject');
+      // Old body must be gone
+      expect(putCall?.body).not.toContain(oldBase64);
+      // Raw Markdown must NOT appear — it must be encoded
+      expect(putCall?.body).not.toContain(newMarkdown);
+
+      const unlockCall = calls.find((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'));
+      expect(unlockCall?.url).toContain(
+        '/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date?_action=UNLOCK',
+      );
+    });
+
+    it('activates SKTD using the lowercased ADT URL in the objectReference', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
+        calls.push({
+          method: opts?.method ?? 'GET',
+          url: String(url),
+          body: opts?.body ? String(opts.body) : undefined,
+        });
+        return Promise.resolve(
+          mockResponse(200, '<?xml version="1.0"?><chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist"/>', {
+            'x-csrf-token': 'T',
+          }),
+        );
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        action: 'activate',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const activateCall = calls.find((c) => c.url.includes('/sap/bc/adt/activation'));
+      expect(activateCall?.body).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date');
+    });
+
+    it('creates SKTD via POST to the collection URL with sktd:docu XML body and vendor content-type', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string>; body?: string | Buffer }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({
+            method,
+            url: String(url),
+            contentType: headers['content-type'] ?? headers['Content-Type'],
+            body: opts?.body ? String(opts.body) : undefined,
+          });
+          return Promise.resolve(mockResponse(201, '<sktd:docu/>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+        package: '$TMP',
+        refObjectType: 'DDLS/DF',
+        refObjectName: 'ZTR_C_PAYMENT_VALUE_DATE',
+        refObjectDescription: 'Treasury Payment Value Date',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const postCall = calls.find(
+        (c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/documentation/ktd/documents'),
+      );
+      expect(postCall).toBeDefined();
+      expect(postCall!.url).not.toContain('/documents/');
+      expect(postCall!.contentType).toContain('application/vnd.sap.adt.sktdv2+xml');
+      expect(postCall!.body).toContain('<sktd:docu');
+      expect(postCall!.body).toContain('xmlns:sktd="http://www.sap.com/wbobj/texts/sktd"');
+      expect(postCall!.body).toContain('adtcore:name="ZTR_C_PAYMENT_VALUE_DATE"');
+      expect(postCall!.body).toContain('adtcore:type="SKTD/TYP"');
+      expect(postCall!.body).toContain('<adtcore:packageRef adtcore:name="$TMP"/>');
+      expect(postCall!.body).toContain('<sktd:refObject');
+      expect(postCall!.body).toContain('adtcore:type="DDLS/DF"');
+      expect(postCall!.body).toContain('adtcore:uri="/sap/bc/adt/ddic/ddl/sources/ztr_c_payment_value_date"');
+      expect(postCall!.body).toContain('adtcore:description="Treasury Payment Value Date"');
+    });
+
+    it('SKTD create rejects missing refObjectType with an actionable error', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+        package: '$TMP',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('refObjectType');
+      expect(result.content[0]?.text).toContain('DDLS/DF');
+    });
+
+    it('SKTD create rejects when name differs from refObjectName (KTD inherits parent name)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE_TEMP',
+        package: '$TMP',
+        refObjectType: 'DDLS/DF',
+        refObjectName: 'ZTR_C_PAYMENT_VALUE_DATE',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('must match refObjectName');
+      expect(result.content[0]?.text).toContain('one KTD per object');
+      expect(result.content[0]?.text).toContain('name="ZTR_C_PAYMENT_VALUE_DATE"');
+    });
+
+    it('creates SKTD and writes initial Markdown content when "source" is provided', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>KTDLOCK</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      // After POST-create the server has an (empty) envelope we must fetch before PUTing the body.
+      const postCreateEnvelope =
+        '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd" xmlns:adtcore="http://www.sap.com/adt/core" ' +
+        'adtcore:name="ZTR_C_PAYMENT_VALUE_DATE" adtcore:type="SKTD/TYP">' +
+        '<adtcore:packageRef adtcore:name="$TMP"/>' +
+        '<sktd:element><sktd:text></sktd:text></sktd:element>' +
+        '</sktd:docu>';
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; contentType?: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (url: string | URL, opts?: { method?: string; headers?: Record<string, string>; body?: string | Buffer }) => {
+          const method = opts?.method ?? 'GET';
+          const headers = (opts?.headers ?? {}) as Record<string, string>;
+          calls.push({
+            method,
+            url: String(url),
+            contentType: headers['content-type'] ?? headers['Content-Type'],
+            body: opts?.body ? String(opts.body) : undefined,
+          });
+          if (method === 'POST' && String(url).includes('_action=LOCK')) {
+            return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'GET' && String(url).includes('/documentation/ktd/documents/')) {
+            return Promise.resolve(mockResponse(200, postCreateEnvelope, { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(201, '<sktd:docu/>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const initialMarkdown = '# Initial docs';
+      const initialBase64 = Buffer.from(initialMarkdown, 'utf-8').toString('base64');
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+        package: '$TMP',
+        refObjectType: 'DDLS/DF',
+        source: initialMarkdown,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('wrote Markdown content');
+      // Follow-up PUT uses the vendor content type and base64-encodes the Markdown in <sktd:text>
+      const putCall = calls.find(
+        (c) => c.method === 'PUT' && c.url.includes('/documentation/ktd/documents/ztr_c_payment_value_date'),
+      );
+      expect(putCall).toBeDefined();
+      expect(putCall!.contentType).toContain('application/vnd.sap.adt.sktdv2+xml');
+      expect(putCall!.body).toContain(`<sktd:text>${initialBase64}</sktd:text>`);
+    });
+
+    it('deletes SKTD via /deletion/check + /deletion/delete (no lock/unlock), passing transport number', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
+        calls.push({
+          method: opts?.method ?? 'GET',
+          url: String(url),
+          body: opts?.body ? String(opts.body) : undefined,
+        });
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+        transport: 'KD1K939319',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Deleted SKTD ZTR_C_PAYMENT_VALUE_DATE');
+
+      const checkCall = calls.find((c) => c.url.includes('/sap/bc/adt/deletion/check'));
+      expect(checkCall).toBeDefined();
+      expect(checkCall!.body).toContain('<del:checkRequest');
+      expect(checkCall!.body).toContain(
+        'adtcore:uri="/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date"',
+      );
+
+      const deleteCall = calls.find((c) => c.url.includes('/sap/bc/adt/deletion/delete'));
+      expect(deleteCall).toBeDefined();
+      expect(deleteCall!.body).toContain('<del:deletionRequest');
+      expect(deleteCall!.body).toContain('<del:transportNumber>KD1K939319</del:transportNumber>');
+
+      // No lock/unlock for the deletion framework flow
+      expect(calls.some((c) => c.url.includes('_action=LOCK'))).toBe(false);
+      expect(calls.some((c) => c.url.includes('_action=UNLOCK'))).toBe(false);
+    });
+
+    it('deletes SKTD omits transportNumber element when no transport is provided', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
+        calls.push({
+          method: opts?.method ?? 'GET',
+          url: String(url),
+          body: opts?.body ? String(opts.body) : undefined,
+        });
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'delete',
+        type: 'SKTD',
+        name: 'ZTR_C_PAYMENT_VALUE_DATE',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const deleteCall = calls.find((c) => c.url.includes('/sap/bc/adt/deletion/delete'));
+      expect(deleteCall!.body).not.toContain('transportNumber');
     });
 
     it('updates DTEL via metadata PUT', async () => {

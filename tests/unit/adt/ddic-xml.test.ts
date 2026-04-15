@@ -5,7 +5,9 @@ import {
   buildMessageClassXml,
   buildPackageXml,
   buildServiceBindingXml,
+  decodeKtdText,
   normalizeSrvbBindingType,
+  rewriteKtdText,
 } from '../../../src/adt/ddic-xml.js';
 
 describe('ddic-xml builders', () => {
@@ -491,5 +493,99 @@ describe('ddic-xml builders', () => {
     expect(srvbXml).toContain('<srvb:serviceDefinition adtcore:name="ZSD_&lt;TEST&gt;&amp;"/>');
     // bindingType is normalized — srvb:type is always "ODATA"
     expect(srvbXml).toContain('srvb:type="ODATA"');
+  });
+
+  describe('SKTD helpers', () => {
+    // Realistic envelope shape mirroring the Eclipse ADT capture.
+    const buildEnvelope = (textBody: string) =>
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd" xmlns:adtcore="http://www.sap.com/adt/core" ' +
+      'adtcore:responsible="LEMAIWO" adtcore:masterLanguage="EN" adtcore:name="ZTR_I_PAYMENT_VALUE_DATE" ' +
+      'adtcore:type="SKTD/TYP">' +
+      '<adtcore:packageRef adtcore:name="ZE_TR"/>' +
+      '<sktd:refObject adtcore:name="ZTR_I_PAYMENT_VALUE_DATE" adtcore:type="DDLS/DF"/>' +
+      '<sktd:element>' +
+      `<sktd:text>${textBody}</sktd:text>` +
+      '</sktd:element>' +
+      '</sktd:docu>';
+
+    describe('decodeKtdText', () => {
+      it('decodes base64 Markdown from <sktd:text>', () => {
+        const markdown = '# Heading\n\nBody text.';
+        const base64 = Buffer.from(markdown, 'utf-8').toString('base64');
+        expect(decodeKtdText(buildEnvelope(base64))).toBe(markdown);
+      });
+
+      it('round-trips the exact Eclipse-capture payload', () => {
+        // "dGVzdCB0byBzZWUgaXQgaHRoaXMgd29ya3M=" → "test to see it hthis works"
+        const capture =
+          '<?xml version="1.0" encoding="UTF-8"?><sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd">' +
+          '<sktd:element><sktd:text>dGVzdCB0byBzZWUgaXQgaHRoaXMgd29ya3M=</sktd:text></sktd:element></sktd:docu>';
+        expect(decodeKtdText(capture)).toBe('test to see it hthis works');
+      });
+
+      it('returns empty string when <sktd:text> is empty', () => {
+        expect(decodeKtdText(buildEnvelope(''))).toBe('');
+      });
+
+      it('returns empty string when <sktd:text> is missing', () => {
+        const xml = '<?xml version="1.0"?><sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd"></sktd:docu>';
+        expect(decodeKtdText(xml)).toBe('');
+      });
+
+      it('handles UTF-8 content (multi-byte characters round-trip correctly)', () => {
+        const markdown = '# Überblick — résumé 日本語 🚀';
+        const base64 = Buffer.from(markdown, 'utf-8').toString('base64');
+        expect(decodeKtdText(buildEnvelope(base64))).toBe(markdown);
+      });
+    });
+
+    describe('rewriteKtdText', () => {
+      it('replaces only <sktd:text> with base64(markdown) and preserves all other metadata', () => {
+        const original = buildEnvelope('b2xkIGNvbnRlbnQ='); // "old content"
+        const newMarkdown = '# New title\n\nNew body.';
+        const rewritten = rewriteKtdText(original, newMarkdown);
+        const newBase64 = Buffer.from(newMarkdown, 'utf-8').toString('base64');
+
+        expect(rewritten).toContain(`<sktd:text>${newBase64}</sktd:text>`);
+        expect(rewritten).not.toContain('b2xkIGNvbnRlbnQ=');
+        // Metadata preserved
+        expect(rewritten).toContain('adtcore:responsible="LEMAIWO"');
+        expect(rewritten).toContain('adtcore:masterLanguage="EN"');
+        expect(rewritten).toContain('<adtcore:packageRef adtcore:name="ZE_TR"/>');
+        expect(rewritten).toContain('<sktd:refObject');
+        expect(rewritten).toContain('adtcore:type="DDLS/DF"');
+      });
+
+      it('round-trips: rewrite then decode yields original Markdown', () => {
+        const markdown = '# Heading\n\n- bullet 1\n- bullet 2';
+        const rewritten = rewriteKtdText(buildEnvelope(''), markdown);
+        expect(decodeKtdText(rewritten)).toBe(markdown);
+      });
+
+      it('handles self-closing <sktd:text/> in the source envelope', () => {
+        const envelope =
+          '<?xml version="1.0"?><sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd">' +
+          '<sktd:element><sktd:text/></sktd:element></sktd:docu>';
+        const markdown = 'hello';
+        const rewritten = rewriteKtdText(envelope, markdown);
+        const base64 = Buffer.from(markdown, 'utf-8').toString('base64');
+        expect(rewritten).toContain(`<sktd:text>${base64}</sktd:text>`);
+      });
+
+      it('throws when the envelope has no <sktd:text> element', () => {
+        const xml = '<?xml version="1.0"?><sktd:docu xmlns:sktd="http://www.sap.com/wbobj/texts/sktd"/>';
+        expect(() => rewriteKtdText(xml, 'x')).toThrow(/missing <sktd:text>/);
+      });
+
+      it('Markdown body is encoded, not interpolated as raw text (prevents XML injection via user input)', () => {
+        const malicious = '</sktd:text><evil/>not-encoded';
+        const rewritten = rewriteKtdText(buildEnvelope(''), malicious);
+        expect(rewritten).not.toContain('<evil/>');
+        expect(rewritten).not.toContain('not-encoded');
+        // And the round-trip still gives the exact input back
+        expect(decodeKtdText(rewritten)).toBe(malicious);
+      });
+    });
   });
 });

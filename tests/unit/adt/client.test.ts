@@ -175,6 +175,21 @@ describe('AdtClient', () => {
       expect(urlUsed).toContain('/sap/bc/adt/ddic/ddlx/sources/ZC_TRAVEL/source/main');
     });
 
+    it('getKtd returns the raw <sktd:docu> XML envelope (decoding to Markdown happens at the handler layer)', async () => {
+      const client = createClient();
+      const source = await client.getKtd('ZTR_C_PAYMENT_VALUE_DATE');
+      expect(typeof source).toBe('string');
+    });
+
+    it('getKtd uses correct ADT URL with lowercase name and workingArea version', async () => {
+      const client = createClient();
+      await client.getKtd('ZTR_C_PAYMENT_VALUE_DATE');
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('/documentation/ktd/'));
+      expect(urlUsed).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date');
+      expect(urlUsed).toContain('version=workingArea');
+    });
+
     it('getSrvb returns parsed service binding metadata', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue(

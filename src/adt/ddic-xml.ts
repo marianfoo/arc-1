@@ -334,3 +334,45 @@ export function buildServiceBindingXml(params: ServiceBindingCreateParams): stri
   </srvb:binding>
 </srvb:serviceBinding>`;
 }
+
+// ─── Knowledge Transfer Documents (SKTD) ─────────────────────────────
+//
+// KTD update requires the full <sktd:docu> XML envelope with the Markdown
+// body base64-encoded inside <sktd:text>. PUTting raw text/plain silently
+// no-ops on the server. The envelope carries metadata (responsible,
+// masterLanguage, packageRef, refObject) that must be preserved from the
+// current server-side version, so we fetch-modify-put.
+
+/** Decode the Markdown body from a <sktd:docu> envelope returned by the ADT GET. */
+export function decodeKtdText(envelopeXml: string): string {
+  const match = envelopeXml.match(/<sktd:text[^>]*>([\s\S]*?)<\/sktd:text>/);
+  if (!match) return '';
+  const base64 = match[1].trim();
+  if (!base64) return '';
+  try {
+    return Buffer.from(base64, 'base64').toString('utf-8');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Replace the <sktd:text> body of a <sktd:docu> envelope with base64(markdown),
+ * preserving all other attributes and elements (responsible, packageRef, refObject, etc.).
+ *
+ * The returned XML is suitable for a PUT to the KTD object URL with
+ * content-type `application/vnd.sap.adt.sktdv2+xml`.
+ */
+export function rewriteKtdText(envelopeXml: string, markdown: string): string {
+  const base64 = Buffer.from(markdown, 'utf-8').toString('base64');
+  const textPattern = /(<sktd:text[^>]*>)([\s\S]*?)(<\/sktd:text>)/;
+  if (textPattern.test(envelopeXml)) {
+    return envelopeXml.replace(textPattern, `$1${base64}$3`);
+  }
+  // Self-closing form: <sktd:text ... /> (rare but possible on an empty KTD)
+  const selfClosing = /<sktd:text([^>]*)\/>/;
+  if (selfClosing.test(envelopeXml)) {
+    return envelopeXml.replace(selfClosing, `<sktd:text$1>${base64}</sktd:text>`);
+  }
+  throw new Error('KTD envelope missing <sktd:text> element — cannot update documentation body.');
+}

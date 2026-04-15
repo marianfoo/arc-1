@@ -27,6 +27,7 @@ const SAPREAD_TYPES_ONPREM = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'VIEW',
   'STRU',
@@ -58,6 +59,7 @@ const SAPREAD_TYPES_BTP = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'STRU',
   'DOMA',
@@ -165,6 +167,7 @@ const SAPWRITE_TYPES_ONPREM = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'DOMA',
   'DTEL',
@@ -179,6 +182,7 @@ const SAPWRITE_TYPES_BTP = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'DOMA',
   'DTEL',
@@ -301,6 +305,9 @@ export const SAPWriteSchema = z.object({
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
+  refObjectType: z.string().optional(),
+  refObjectName: z.string().optional(),
+  refObjectDescription: z.string().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
@@ -341,6 +348,9 @@ export const SAPWriteSchemaBtp = z.object({
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
+  refObjectType: z.string().optional(),
+  refObjectName: z.string().optional(),
+  refObjectDescription: z.string().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 

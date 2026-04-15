@@ -47,6 +47,7 @@ const SAPREAD_TYPES_ONPREM = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'VIEW',
   'STRU',
@@ -79,6 +80,7 @@ const SAPREAD_TYPES_BTP = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'STRU',
   'DOMA',
@@ -95,10 +97,10 @@ const SAPREAD_TYPES_BTP = [
 ];
 
 const SAPREAD_DESC_ONPREM =
-  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DCLS (CDS access control — authorization rules for CDS views), DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" or "clas" both map to CLAS). For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method implementation (95% fewer tokens than full source). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / S/4HANA Clean Core; returns contract states C0-C4, successor info; use objectType param for non-class objects). INACTIVE_OBJECTS (list all objects pending activation — no name param needed; use before SAPActivate batch_activate to see what needs activating).';
+  'Read SAP ABAP objects. Types: PROG, CLAS, INTF, FUNC, FUGR (use expand_includes=true to get all include sources), INCL, DDLS, DDLX (CDS metadata extensions — UI annotations), BDEF, SRVD, SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), SKTD (Knowledge Transfer Documents — Markdown documentation attached to ABAP objects like CDS views, BDEFs, classes), TABL, VIEW, STRU (DDIC structures like BAPIRET2 — returns CDS-like source), DOMA (DDIC domains — returns type info, value table, fixed values), DTEL (data elements — returns domain, labels, search help), TRAN (transaction codes — returns description, program, package), TABLE_CONTENTS, DEVC, SOBJ (BOR business objects — returns method catalog or full implementation), SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS. For CLAS: omit include to get the full class source (definition + implementation combined). The include param is optional — use it only to read class-local sections: definitions (local types), implementations (local helper classes), macros, testclasses (ABAP Unit). For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method implementation (95% fewer tokens than full source). For SOBJ: returns BOR method catalog; use method param to read a specific method implementation. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / S/4HANA Clean Core; returns contract states C0-C4, successor info; use objectType param for non-class objects). INACTIVE_OBJECTS (list all objects pending activation — no name param needed; use before SAPActivate batch_activate to see what needs activating).';
 
 const SAPREAD_DESC_BTP =
-  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DCLS (CDS access control — authorization rules for CDS views), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" or "clas" both map to CLAS). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method (95% fewer tokens). Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / Clean Core; returns contract states C0-C4, successor info; essential for cloud development; use objectType param for non-class objects). INACTIVE_OBJECTS (list all objects pending activation — no name param needed; use before SAPActivate batch_activate to see what needs activating).';
+  'Read SAP ABAP objects (BTP ABAP Environment). Types: CLAS, INTF, FUNC (released/custom only), FUGR (released/custom only), DDLS (CDS views — primary data model on BTP), DDLX (CDS metadata extensions — UI annotations for Fiori Elements), BDEF (RAP behavior definitions), SRVD (service definitions), SRVB (service bindings — returns structured binding info: OData version, publish status, service definition ref), SKTD (Knowledge Transfer Documents — Markdown documentation attached to ABAP objects like CDS views, BDEFs, classes), TABL (custom tables only), STRU (DDIC structures — returns CDS-like source), DOMA (DDIC domains — type info, value table, fixed values), DTEL (data elements — domain, labels, search help), TABLE_CONTENTS (custom tables and released CDS only — SAP standard tables are blocked), DEVC, SYSTEM, COMPONENTS, MESSAGES (custom message classes only). For CLAS: omit include to get the full class source. The include param reads class-local sections: definitions, implementations, macros, testclasses. For CLAS with method param: use method="*" to list all methods with signatures and visibility, or method="method_name" to read a single method (95% fewer tokens). Note: PROG, INCL, VIEW, TRAN, TEXT_ELEMENTS, VARIANTS are not available on BTP — use CLAS with IF_OO_ADT_CLASSRUN for console applications, and DDLS for data models instead of classic views. BSP (deployed UI5/Fiori apps — list apps, browse files, read content; use name to browse app structure, include for subfolder or file), BSP_DEPLOY (query deployed UI5 apps via ABAP Repository OData Service — returns name, package, description). API_STATE (API release state — checks if an object is released for ABAP Cloud / Clean Core; returns contract states C0-C4, successor info; essential for cloud development; use objectType param for non-class objects). INACTIVE_OBJECTS (list all objects pending activation — no name param needed; use before SAPActivate batch_activate to see what needs activating).';
 
 // ─── SAPWrite Types ─────────────────────────────────────────────────
 
@@ -128,6 +130,7 @@ const SAPWRITE_TYPES_BTP = [
   'BDEF',
   'SRVD',
   'SRVB',
+  'SKTD',
   'TABL',
   'DOMA',
   'DTEL',
@@ -135,25 +138,27 @@ const SAPWRITE_TYPES_BTP = [
 ];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL, MSAG. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
   'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
   'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name), odataVersion ("V2"/"V4"), optional category (0=UI, 1=Web API). ' +
   'bindingType accepts human-readable values like "ODataV4-UI" which are auto-normalized. ' +
+  'SKTD (Knowledge Transfer Documents, Markdown docs attached to an ABAP object): create requires refObjectType (parent ADT type+subtype, e.g., "DDLS/DF"). A KTD inherits the name of the object it documents — so "name" MUST equal the parent object name (one KTD per object; refObjectName defaults to name and cannot differ). Update takes Markdown in "source"; delete uses the ADT deletion framework (two-step check/delete). Follow creates/updates with SAPActivate(type="SKTD", name="..."). ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). Pass "objects" array with dependency order.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL, MSAG. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
   'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
   'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name), odataVersion ("V2"/"V4"), optional category (0=UI, 1=Web API). ' +
   'bindingType accepts human-readable values like "ODataV4-UI" which are auto-normalized. ' +
+  'SKTD (Knowledge Transfer Documents, Markdown docs attached to an ABAP object): create requires refObjectType (parent ADT type+subtype, e.g., "DDLS/DF"). A KTD inherits the name of the object it documents — so "name" MUST equal the parent object name (one KTD per object; refObjectName defaults to name and cannot differ). Update takes Markdown in "source"; delete uses the ADT deletion framework (two-step check/delete). Follow creates/updates with SAPActivate(type="SKTD", name="..."). ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD).';
@@ -529,6 +534,19 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
             type: 'boolean',
             description:
               'Override server lint-before-write setting for this call. Set false to skip pre-write lint validation. Lint applies to ABAP types (PROG, CLAS, INTF, FUNC) and CDS views (DDLS). BDEF/SRVD/SRVB/DDLX/TABL are skipped (not supported by offline linter).',
+          },
+          refObjectType: {
+            type: 'string',
+            description:
+              'SKTD create: ADT type+subtype of the parent object the KTD documents (e.g., "DDLS/DF", "CLAS/OC", "INTF/OI", "PROG/P", "BDEF/BDO", "SRVD/SRV"). Required for SKTD create.',
+          },
+          refObjectName: {
+            type: 'string',
+            description: 'SKTD create: name of the parent object the KTD documents (defaults to "name").',
+          },
+          refObjectDescription: {
+            type: 'string',
+            description: 'SKTD create: description of the parent object (shown in Eclipse tooltips).',
           },
           objects: {
             type: 'array',
