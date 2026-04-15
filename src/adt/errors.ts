@@ -39,8 +39,7 @@ export interface SapErrorClassification {
     | 'activation-dependency'
     | 'transport-issue'
     | 'object-exists'
-    | 'method-not-supported'
-    | 'unclassified';
+    | 'method-not-supported';
   hint: string;
   transaction?: string;
   details?: Record<string, string>;
@@ -327,10 +326,11 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
     };
   }
 
-  if (
-    (typeId === 'ExceptionResourceCreationFailure' || statusCode === 400 || statusCode === 409) &&
-    (bodyLower.includes('already exists') || bodyLower.includes('does already exist'))
-  ) {
+  const objectExistsPattern = bodyLower.includes('already exists') || bodyLower.includes('does already exist');
+  const resourceExistsPattern =
+    /\bresource\b[^.\n]*\bdoes?\s+already\s+exist\b/i.test(bodyRaw) ||
+    /\bresource\b[^.\n]*\balready exists\b/i.test(bodyRaw);
+  if ((typeId === 'ExceptionResourceCreationFailure' || resourceExistsPattern) && objectExistsPattern) {
     return {
       category: 'object-exists',
       hint: 'An object with this name already exists. Use SAPRead to inspect the existing object, or choose a different name.',

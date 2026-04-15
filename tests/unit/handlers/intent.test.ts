@@ -5817,6 +5817,24 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('Hint: DDIC save failed.');
     });
 
+    it('keeps DDIC hint for generic "already exists" conflicts without creation signatures', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          409,
+          '<exc:exception><localizedMessage>Activation failed: element already exists in metadata extension</localizedMessage></exc:exception>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BDEF',
+        name: 'ZI_TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Hint: DDIC save failed.');
+      expect(result.content[0]?.text).not.toContain('choose a different name');
+    });
+
     it('does not add DDIC hint for 404 not-found path', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue(mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' }));

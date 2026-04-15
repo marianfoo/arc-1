@@ -13,7 +13,6 @@ import { callTool, connectClient, expectToolError, expectToolSuccess } from './h
 
 describe('E2E Smoke Tests', () => {
   let client: Client;
-  const expectReadOnly = process.env.E2E_EXPECT_READ_ONLY === '1';
 
   beforeAll(async () => {
     client = await connectClient();
@@ -189,15 +188,37 @@ describe('E2E Smoke Tests', () => {
 
   // ── Error handling ─────────────────────────────────────────────
 
-  (expectReadOnly ? it : it.skip)('SAPWrite — read-only server returns safety error with clear message', async () => {
+  it('SAPWrite — write policy is explicit (read-only error or writable create+delete)', async () => {
+    const objectName = `ZARC1_E2E_WPOL${Date.now().toString().slice(-8)}`;
     const result = await callTool(client, 'SAPWrite', {
       action: 'create',
       type: 'PROG',
-      name: 'ZARC1_E2E_READONLY',
-      source: "REPORT zarc1_e2e_readonly.\nWRITE 'readonly'.",
+      name: objectName,
+      source: `REPORT ${objectName}.\nWRITE: / 'write-policy'.`,
       package: '$TMP',
     });
-    expectToolError(result, 'read-only');
+
+    if (result.isError) {
+      const text = expectToolError(result);
+      if (/read-only/i.test(text)) {
+        expect(text).toContain('read-only');
+        return;
+      }
+      throw new Error(`Unexpected SAPWrite create failure in write-policy smoke test: ${text}`);
+    }
+
+    const createText = expectToolSuccess(result);
+    expect(createText).toContain(`Created PROG ${objectName}`);
+
+    // best-effort-cleanup
+    const deleteResult = await callTool(client, 'SAPWrite', {
+      action: 'delete',
+      type: 'PROG',
+      name: objectName,
+    });
+    if (deleteResult.isError) {
+      console.warn(`    [cleanup] Failed to delete ${objectName}: ${deleteResult.content[0]?.text ?? 'unknown error'}`);
+    }
   });
 
   it('SAPRead — 404 for non-existent program returns error with hint', async () => {

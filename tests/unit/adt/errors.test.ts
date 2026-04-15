@@ -334,6 +334,14 @@ describe('AdtApiError', () => {
       expect(classification?.hint).toContain('already exists');
     });
 
+    it('does not classify generic "already exists" messages without creation context', () => {
+      const classification = classifySapDomainError(
+        409,
+        '<exc:exception><localizedMessage>Activation failed: element already exists in metadata extension</localizedMessage></exc:exception>',
+      );
+      expect(classification).toBeUndefined();
+    });
+
     it('classifies activation dependency errors from message text', () => {
       const classification = classifySapDomainError(
         400,
