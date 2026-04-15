@@ -1712,6 +1712,7 @@ const SLASH_TYPE_MAP: Record<string, string> = {
   'DEVC/K': 'DEVC',
   'TRAN/O': 'TRAN',
   'VIEW/V': 'VIEW',
+  'SKTD/TYP': 'SKTD',
 };
 
 /** Normalize ADT type codes and aliases to ARC-1 canonical short types. */

@@ -277,7 +277,8 @@ export class AdtClient {
     checkOperation(this.safety, OperationType.Read, 'GetKTD');
     // Eclipse ADT lowercases the name in the URL path; server-side matching is case-sensitive here.
     const resp = await this.http.get(
-      `/sap/bc/adt/documentation/ktd/documents/${encodeURIComponent(name.toLowerCase())}?version=workingArea`,
+      `/sap/bc/adt/documentation/ktd/documents/${encodeURIComponent(name.toLowerCase())}`,
+      { Accept: 'application/vnd.sap.adt.sktdv2+xml' },
     );
     return resp.body;
   }

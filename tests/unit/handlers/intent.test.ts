@@ -184,7 +184,7 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.text).not.toContain(base64);
       const getUrl = calls.find((u) => u.includes('/documentation/ktd/'));
       expect(getUrl).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date');
-      expect(getUrl).toContain('version=workingArea');
+      expect(getUrl).not.toContain('version=workingArea');
     });
 
     it('returns soft informational message when SKTD is not found (404)', async () => {

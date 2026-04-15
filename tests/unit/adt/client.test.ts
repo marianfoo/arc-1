@@ -181,13 +181,13 @@ describe('AdtClient', () => {
       expect(typeof source).toBe('string');
     });
 
-    it('getKtd uses correct ADT URL with lowercase name and workingArea version', async () => {
+    it('getKtd uses correct ADT URL with lowercase name and vendor Accept header', async () => {
       const client = createClient();
       await client.getKtd('ZTR_C_PAYMENT_VALUE_DATE');
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
       const urlUsed = urls.find((u) => u.includes('/documentation/ktd/'));
       expect(urlUsed).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date');
-      expect(urlUsed).toContain('version=workingArea');
+      expect(urlUsed).not.toContain('version=workingArea');
     });
 
     it('getSrvb returns parsed service binding metadata', async () => {

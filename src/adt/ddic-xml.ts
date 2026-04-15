@@ -343,17 +343,57 @@ export function buildServiceBindingXml(params: ServiceBindingCreateParams): stri
 // masterLanguage, packageRef, refObject) that must be preserved from the
 // current server-side version, so we fetch-modify-put.
 
-/** Decode the Markdown body from a <sktd:docu> envelope returned by the ADT GET. */
+/** Decode the Markdown body from a <sktd:docu> envelope returned by the ADT GET.
+ *
+ * A KTD may contain multiple `<sktd:element>` entries — one per documentable
+ * element of the referenced object (e.g., one per CDS field). Each element has
+ * an `<sktd:id>` and a Base64-encoded `<sktd:text>`. We extract all of them
+ * and return a combined Markdown document with element headings.
+ */
 export function decodeKtdText(envelopeXml: string): string {
-  const match = envelopeXml.match(/<sktd:text[^>]*>([\s\S]*?)<\/sktd:text>/);
-  if (!match) return '';
-  const base64 = match[1].trim();
-  if (!base64) return '';
-  try {
-    return Buffer.from(base64, 'base64').toString('utf-8');
-  } catch {
-    return '';
+  // Extract all <sktd:element> blocks with their id and text
+  const elementPattern = /<sktd:element[^>]*>[\s\S]*?<sktd:id>([^<]*)<\/sktd:id>[\s\S]*?<\/sktd:element>/g;
+  const elements: Array<{ id: string; text: string }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = elementPattern.exec(envelopeXml)) !== null) {
+    const elementBlock = match[0];
+    const id = match[1].trim();
+    const textMatch = elementBlock.match(/<sktd:text[^>]*>([\s\S]*?)<\/sktd:text>/);
+    const base64 = textMatch?.[1]?.trim() ?? '';
+    let decoded = '';
+    if (base64) {
+      try {
+        decoded = Buffer.from(base64, 'base64').toString('utf-8');
+      } catch {
+        decoded = '';
+      }
+    }
+    if (decoded) {
+      elements.push({ id, text: decoded });
+    }
   }
+
+  if (elements.length === 0) {
+    // Fallback: try extracting a single <sktd:text> without element structure
+    const singleMatch = envelopeXml.match(/<sktd:text[^>]*>([\s\S]*?)<\/sktd:text>/);
+    if (!singleMatch) return '';
+    const base64 = singleMatch[1].trim();
+    if (!base64) return '';
+    try {
+      return Buffer.from(base64, 'base64').toString('utf-8');
+    } catch {
+      return '';
+    }
+  }
+
+  // Single element: return just the text (most common case — root element doc)
+  if (elements.length === 1) {
+    return elements[0].text;
+  }
+
+  // Multiple elements: format as structured Markdown with element headings
+  return elements.map((e) => `## ${e.id}\n\n${e.text}`).join('\n\n');
 }
 
 /**
