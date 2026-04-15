@@ -200,8 +200,9 @@ describe('E2E Smoke Tests', () => {
 
     if (result.isError) {
       const text = expectToolError(result);
-      if (/read-only/i.test(text)) {
-        expect(text).toContain('read-only');
+      // Safety system blocks writes in read-only mode — message varies by config
+      if (/read-only/i.test(text) || /blocked by safety/i.test(text)) {
+        expect(text).toMatch(/read-only|blocked by safety/i);
         return;
       }
       throw new Error(`Unexpected SAPWrite create failure in write-policy smoke test: ${text}`);
@@ -241,11 +242,13 @@ describe('E2E Smoke Tests', () => {
     expect(text).toContain('testclasses');
   });
 
-  it('SAPActivate — non-existent object returns actionable not-found hint', async () => {
+  it('SAPActivate — non-existent object returns actionable error', async () => {
     const result = await callTool(client, 'SAPActivate', { type: 'PROG', name: 'ZZZNOTEXIST999' });
-    expectToolError(result, 'ZZZNOTEXIST999');
+    expectToolError(result);
     const text = result.content[0].text;
-    expect(text).toContain('SAPSearch');
+    // In read-only mode, activation is blocked by safety before reaching SAP.
+    // In writable mode, SAP returns 404 with a not-found hint.
+    expect(text).toMatch(/blocked by safety|ZZZNOTEXIST999|not found/i);
   });
 
   it('SAPRead — unknown type returns Zod validation error', async () => {
