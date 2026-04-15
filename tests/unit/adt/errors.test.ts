@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { AdtApiError } from '../../../src/adt/errors.js';
+import {
+  AdtApiError,
+  classifySapDomainError,
+  extractExceptionType,
+  extractLockOwner,
+} from '../../../src/adt/errors.js';
 
 describe('AdtApiError', () => {
   describe('extractCleanMessage', () => {
@@ -235,6 +240,174 @@ describe('AdtApiError', () => {
   <exc:localizedMessage lang="EN">Object not found</exc:localizedMessage>
 </exc:exception>`;
       expect(AdtApiError.formatDdicDiagnostics(xml)).toBe('');
+    });
+  });
+
+  describe('extractExceptionType', () => {
+    it('extracts type id from standard SAP XML', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionResourceNotFound"/>
+  <exc:localizedMessage lang="EN">Object not found</exc:localizedMessage>
+</exc:exception>`;
+      expect(extractExceptionType(xml)).toBe('ExceptionResourceNotFound');
+    });
+
+    it('extracts type id with namespace prefix', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:type id="ExceptionNotAuthorized"></exc:type>
+</exc:exception>`;
+      expect(extractExceptionType(xml)).toBe('ExceptionNotAuthorized');
+    });
+
+    it('returns undefined for HTML input', () => {
+      expect(extractExceptionType('<html><body>403 Forbidden</body></html>')).toBeUndefined();
+    });
+
+    it('returns undefined for plain text input', () => {
+      expect(extractExceptionType('authorization failed')).toBeUndefined();
+    });
+
+    it('returns undefined for empty input', () => {
+      expect(extractExceptionType('')).toBeUndefined();
+    });
+  });
+
+  describe('extractLockOwner', () => {
+    it('extracts user and transport from lock message', () => {
+      const owner = extractLockOwner('Object is locked by user DEVELOPER in task E19K900001');
+      expect(owner).toEqual({ user: 'DEVELOPER', transport: 'E19K900001' });
+    });
+
+    it('extracts user only when transport is missing', () => {
+      const owner = extractLockOwner('Request is currently being edited by user MARIAN');
+      expect(owner).toEqual({ user: 'MARIAN' });
+    });
+
+    it('extracts transport only when user is missing', () => {
+      const owner = extractLockOwner('Resource is locked in transport A4HK900502');
+      expect(owner).toEqual({ transport: 'A4HK900502' });
+    });
+
+    it('extracts user from "User X is currently editing Y" format', () => {
+      const owner = extractLockOwner('User MARIAN is currently editing ZARC1_TEST_REPORT');
+      expect(owner).toEqual({ user: 'MARIAN' });
+    });
+
+    it('returns undefined when no lock owner details exist', () => {
+      expect(extractLockOwner('Syntax error in line 5')).toBeUndefined();
+    });
+  });
+
+  describe('classifySapDomainError', () => {
+    it('classifies lock conflicts and extracts lock owner details', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionResourceLockedByAnotherUser"/>
+  <exc:localizedMessage lang="EN">Object is locked by user DEVELOPER in task E19K900001</exc:localizedMessage>
+</exc:exception>`;
+      const classification = classifySapDomainError(409, xml);
+      expect(classification?.category).toBe('lock-conflict');
+      expect(classification?.hint).toContain('DEVELOPER');
+      expect(classification?.hint).toContain('E19K900001');
+      expect(classification?.transaction).toBe('SM12');
+    });
+
+    it('classifies lock conflicts from 403 with "currently editing" (SAP A4H pattern)', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">User MARIAN is currently editing ZARC1_TEST_REPORT</exc:localizedMessage>
+</exc:exception>`;
+      const classification = classifySapDomainError(403, xml);
+      expect(classification?.category).toBe('lock-conflict');
+      expect(classification?.hint).toContain('MARIAN');
+      expect(classification?.hint).toContain('SM12');
+      expect(classification?.transaction).toBe('SM12');
+      expect(classification?.details?.user).toBe('MARIAN');
+    });
+
+    it('classifies lock conflicts from 403 with "being edited by" pattern', () => {
+      const classification = classifySapDomainError(403, 'Resource is being edited by user DEVELOPER');
+      expect(classification?.category).toBe('lock-conflict');
+      expect(classification?.hint).toContain('DEVELOPER');
+    });
+
+    it('does not misclassify 403 auth error as lock conflict', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionNotAuthorized"/>
+  <exc:localizedMessage lang="EN">Not authorized for S_DEVELOP</exc:localizedMessage>
+</exc:exception>`;
+      const classification = classifySapDomainError(403, xml);
+      expect(classification?.category).toBe('authorization');
+    });
+
+    it('classifies enqueue errors for 423', () => {
+      const classification = classifySapDomainError(423, 'Lock handle invalid');
+      expect(classification?.category).toBe('enqueue-error');
+      expect(classification?.hint).toContain('fresh lock');
+      expect(classification?.transaction).toBe('SM12');
+    });
+
+    it('classifies authorization errors via XML type', () => {
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionNotAuthorized"/>
+  <exc:localizedMessage lang="EN">Not authorized</exc:localizedMessage>
+</exc:exception>`;
+      const classification = classifySapDomainError(403, xml);
+      expect(classification?.category).toBe('authorization');
+      expect(classification?.hint).toContain('SU53');
+      expect(classification?.hint).toContain('S_DEVELOP');
+      expect(classification?.transaction).toBe('SU53');
+    });
+
+    it('classifies object-exists errors', () => {
+      const classification = classifySapDomainError(
+        409,
+        '<exc:exception><type id="ExceptionResourceCreationFailure"/><localizedMessage>Object already exists</localizedMessage></exc:exception>',
+      );
+      expect(classification?.category).toBe('object-exists');
+      expect(classification?.hint).toContain('already exists');
+    });
+
+    it('does not classify generic "already exists" messages without creation context', () => {
+      const classification = classifySapDomainError(
+        409,
+        '<exc:exception><localizedMessage>Activation failed: element already exists in metadata extension</localizedMessage></exc:exception>',
+      );
+      expect(classification).toBeUndefined();
+    });
+
+    it('classifies activation dependency errors from message text', () => {
+      const classification = classifySapDomainError(
+        400,
+        'Activation failed because dependency ZI_TRAVEL is inactive and not active',
+      );
+      expect(classification?.category).toBe('activation-dependency');
+      expect(classification?.hint).toContain('INACTIVE_OBJECTS');
+    });
+
+    it('classifies adjustment mode errors and points to SPAU', () => {
+      const classification = classifySapDomainError(400, 'System is in adjustment mode (SPAU_ENH)');
+      expect(classification?.category).toBe('transport-issue');
+      expect(classification?.transaction).toBe('SPAU');
+    });
+
+    it('classifies method-not-supported errors', () => {
+      const classification = classifySapDomainError(
+        405,
+        '<exc:exception><type id="ExceptionMethodNotSupported"/></exc:exception>',
+      );
+      expect(classification?.category).toBe('method-not-supported');
+    });
+
+    it('returns undefined for unclassifiable errors', () => {
+      expect(classifySapDomainError(418, 'teapot')).toBeUndefined();
+    });
+
+    it('returns undefined when response body is missing for non-special status', () => {
+      expect(classifySapDomainError(400, undefined)).toBeUndefined();
+    });
+
+    it('still classifies 423 when response body is undefined', () => {
+      const classification = classifySapDomainError(423, undefined);
+      expect(classification?.category).toBe('enqueue-error');
     });
   });
 

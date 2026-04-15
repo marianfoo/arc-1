@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError } from '../../../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 import type { ResolvedFeatures } from '../../../src/adt/types.js';
+import { logger } from '../../../src/server/logger.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 import { mockResponse } from '../../helpers/mock-fetch.js';
 
@@ -2849,6 +2850,150 @@ ENDCLASS.`;
     });
   });
 
+  describe('SAP domain error classification hints', () => {
+    it('409 lock conflict XML returns SM12 hint with extracted user', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Conflict',
+          409,
+          '/sap/bc/adt/programs/programs/ZPROG/source/main',
+          `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionResourceLockedByAnotherUser"/>
+  <exc:localizedMessage lang="EN">Object is locked by user DEVELOPER in task E19K900001</exc:localizedMessage>
+</exc:exception>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SM12');
+      expect(result.content[0]?.text).toContain('DEVELOPER');
+      expect(result.content[0]?.text).toContain('E19K900001');
+    });
+
+    it('423 lock handle error returns enqueue hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Locked',
+          423,
+          '/sap/bc/adt/ddic/ddl/sources/ZI_TEST/source/main',
+          '<exc:exception><type id="ExceptionResourceInvalidLockHandle"/><localizedMessage>Invalid lock handle</localizedMessage></exc:exception>',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Lock handle is invalid or expired');
+      expect(result.content[0]?.text).toContain('SM12');
+    });
+
+    it('403 authorization XML returns SU53/PFCG hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Forbidden',
+          403,
+          '/sap/bc/adt/programs/programs/ZPROG/source/main',
+          '<exc:exception><type id="ExceptionNotAuthorized"/><localizedMessage>No authorization for S_DEVELOP</localizedMessage></exc:exception>',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SU53');
+      expect(result.content[0]?.text).toContain('PFCG');
+      expect(result.content[0]?.text).toContain('S_DEVELOP');
+    });
+
+    it('409 already-exists error returns object-exists hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Conflict',
+          409,
+          '/sap/bc/adt/ddic/ddl/sources',
+          '<exc:exception><type id="ExceptionResourceCreationFailure"/><localizedMessage>Object does already exist</localizedMessage></exc:exception>',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZA_TEST' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('already exists');
+      expect(result.content[0]?.text).toContain('Use SAPRead');
+    });
+
+    it('400 activation dependency message returns activation hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Bad request',
+          400,
+          '/sap/bc/adt/activation',
+          'Activation failed: dependency ZI_TRAVEL is inactive and not active',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'DDLS',
+        name: 'ZI_TRAVEL',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("SAPRead(type='INACTIVE_OBJECTS')");
+      expect(result.content[0]?.text).toContain('SAPActivate');
+    });
+
+    it('unclassifiable 409 falls through without domain-specific hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError('Conflict', 409, '/sap/bc/adt/programs/programs/ZPROG/source/main', 'generic conflict'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).not.toContain('SM12');
+      expect(result.content[0]?.text).not.toContain('SU53');
+      expect(result.content[0]?.text).not.toContain('INACTIVE_OBJECTS');
+    });
+
+    it('audit logging includes domain category in errorClass', async () => {
+      const auditSpy = vi.spyOn(logger, 'emitAudit');
+      try {
+        mockFetch.mockReset();
+        mockFetch.mockRejectedValueOnce(
+          new AdtApiError(
+            'Conflict',
+            409,
+            '/sap/bc/adt/programs/programs/ZPROG/source/main',
+            '<exc:exception><type id="ExceptionResourceLockedByAnotherUser"/><localizedMessage>Object is locked by user DEV1 in task E19K900001</localizedMessage></exc:exception>',
+          ),
+        );
+
+        await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+          type: 'PROG',
+          name: 'ZPROG',
+        });
+
+        const endEvent = auditSpy.mock.calls
+          .map(([event]) => event)
+          .find(
+            (event) =>
+              typeof event === 'object' &&
+              event !== null &&
+              (event as { event?: string; status?: string }).event === 'tool_call_end' &&
+              (event as { event?: string; status?: string }).status === 'error',
+          ) as { errorClass?: string } | undefined;
+        expect(endEvent?.errorClass).toBe('AdtApiError:lock-conflict');
+      } finally {
+        auditSpy.mockRestore();
+      }
+    });
+
+    it('network errors still return connectivity hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:8000'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Cannot reach the SAP system');
+      expect(result.content[0]?.text).toContain('connectivity issue');
+    });
+  });
+
   // ─── Transport/corrNr error hints ──────────────────────────────────
 
   describe('transport error hints', () => {
@@ -2891,7 +3036,7 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('SAPSearch');
     });
 
-    it('403 error gets generic auth hint (takes priority over transport hint)', async () => {
+    it('403 transport authorization error gets SAP-domain auth hint (takes priority over transport hint)', async () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(
         new AdtApiError(
@@ -2905,9 +3050,10 @@ ENDCLASS.`;
         type: 'PROG',
         name: 'ZPROG',
       });
-      // 403 triggers isForbidden check before getTransportHint — generic auth hint is returned
+      // 403 is now classified as a SAP-domain authorization error before transport hint fallback
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Authorization error');
+      expect(result.content[0]?.text).toContain('SU53');
+      expect(result.content[0]?.text).toContain('PFCG');
     });
 
     it('transport not found on 400 status gets transport-specific hint', async () => {
@@ -5669,6 +5815,24 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Hint: DDIC save failed.');
+    });
+
+    it('keeps DDIC hint for generic "already exists" conflicts without creation signatures', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          409,
+          '<exc:exception><localizedMessage>Activation failed: element already exists in metadata extension</localizedMessage></exc:exception>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'BDEF',
+        name: 'ZI_TEST',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Hint: DDIC save failed.');
+      expect(result.content[0]?.text).not.toContain('choose a different name');
     });
 
     it('does not add DDIC hint for 404 not-found path', async () => {

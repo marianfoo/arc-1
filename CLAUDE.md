@@ -183,7 +183,8 @@ tests/
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |
 | Modify ADT service discovery / MIME types | `src/adt/discovery.ts`, `src/adt/http.ts` |
-| Improve DDIC save diagnostics (T100/line hints) | `src/adt/errors.ts` (`extractDdicDiagnostics`, `formatDdicDiagnostics`), `src/handlers/intent.ts` (`enrichWithSapDetails`, `formatErrorForLLM`) |
+| Improve DDIC save diagnostics + SAP-domain error hints (T100/line + lock/auth/dependency hints) | `src/adt/errors.ts` (`extractDdicDiagnostics`, `formatDdicDiagnostics`, `classifySapDomainError`), `src/handlers/intent.ts` (`enrichWithSapDetails`, `formatErrorForLLM`) |
+| Add SAP error classification | `src/adt/errors.ts` (`extractExceptionType`, `extractLockOwner`, `classifySapDomainError`), `src/handlers/intent.ts` (`formatErrorForLLM`, `classifyError`) |
 | Add inactive syntax-check support | `src/adt/devtools.ts` (`syntaxCheck` options.version), `src/handlers/intent.ts` (`tryPostSaveSyntaxCheck`) |
 | Add method-level surgery | `src/context/method-surgery.ts` |
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |

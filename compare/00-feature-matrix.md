@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-14 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAuth, multi-system; SAP Joule Q2 2026 GA announced)_
+_Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAuth, multi-system; SAP Joule Q2 2026 GA announced)_
 
 ## Legend
 - ✅ = Supported
@@ -208,7 +208,7 @@ _Last updated: 2026-04-14 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools
 | Batch HTTP operations | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (multipart/mixed) | ❌ | ❌ | ❌ |
 | RAG-optimized tool descriptions | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v4.4.0) | ❌ | ❌ | ❌ |
 | Embeddable server (library mode) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Error intelligence (hints) | ⚠️ (LLM hints) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (extensive) | ✅ (typed error hierarchy) |
+| Error intelligence (hints) | ✅ (SAP-domain classification) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (extensive) | ✅ (typed error hierarchy) |
 
 ## 12. Token Efficiency
 

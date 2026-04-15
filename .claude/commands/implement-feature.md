@@ -152,6 +152,12 @@ Ensure error paths are covered:
 - What happens when safety checks block the operation?
 - Are error messages LLM-friendly (actionable hints, not raw stack traces)?
 
+Troubleshooting guidance should reuse ARC-1's SAP-domain error intelligence:
+- Lock/enqueue failures should reference `SM12`
+- Authorization failures should reference `SU53` (and role follow-up in `PFCG`)
+- Transport-related failures should reference `SE09`
+- RAP activation dependency failures should guide users to `SAPRead(type='INACTIVE_OBJECTS')` before retrying `SAPActivate`
+
 ### 4c. Test with hyperfocused mode (if applicable)
 
 If the feature adds or modifies a tool, verify it works in both:
