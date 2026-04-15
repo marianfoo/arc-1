@@ -62,7 +62,13 @@ import {
   listDumps,
   listTraces,
 } from '../adt/diagnostics.js';
-import { AdtApiError, AdtNetworkError, AdtSafetyError, isNotFoundError } from '../adt/errors.js';
+import {
+  AdtApiError,
+  AdtNetworkError,
+  AdtSafetyError,
+  classifySapDomainError,
+  isNotFoundError,
+} from '../adt/errors.js';
 import { classifyTextSearchError, mapSapReleaseToAbaplintVersion, probeFeatures } from '../adt/features.js';
 import {
   addTileToGroup,
@@ -211,6 +217,12 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
     const argType = String(args.type ?? '').toUpperCase();
+    const classification = classifySapDomainError(err.statusCode, err.responseBody);
+
+    if (classification) {
+      const transactionLine = classification.transaction ? `\nSAP Transaction: ${classification.transaction}` : '';
+      return `${enriched}\n\nHint: ${classification.hint}${transactionLine}`;
+    }
 
     if (err.isNotFound) {
       const name = String(args.name ?? '');
@@ -352,7 +364,10 @@ function getTransportHint(err: AdtApiError): string | undefined {
 }
 
 function classifyError(err: unknown): string {
-  if (err instanceof AdtApiError) return 'AdtApiError';
+  if (err instanceof AdtApiError) {
+    const classification = classifySapDomainError(err.statusCode, err.responseBody);
+    return classification ? `AdtApiError:${classification.category}` : 'AdtApiError';
+  }
   if (err instanceof AdtNetworkError) return 'AdtNetworkError';
   if (err instanceof AdtSafetyError) return 'AdtSafetyError';
   if (err instanceof Error) return err.constructor.name;

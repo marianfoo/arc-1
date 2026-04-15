@@ -13,6 +13,7 @@ import { callTool, connectClient, expectToolError, expectToolSuccess } from './h
 
 describe('E2E Smoke Tests', () => {
   let client: Client;
+  const expectReadOnly = process.env.E2E_EXPECT_READ_ONLY === '1';
 
   beforeAll(async () => {
     client = await connectClient();
@@ -188,11 +189,42 @@ describe('E2E Smoke Tests', () => {
 
   // ── Error handling ─────────────────────────────────────────────
 
+  (expectReadOnly ? it : it.skip)('SAPWrite — read-only server returns safety error with clear message', async () => {
+    const result = await callTool(client, 'SAPWrite', {
+      action: 'create',
+      type: 'PROG',
+      name: 'ZARC1_E2E_READONLY',
+      source: "REPORT zarc1_e2e_readonly.\nWRITE 'readonly'.",
+      package: '$TMP',
+    });
+    expectToolError(result, 'read-only');
+  });
+
   it('SAPRead — 404 for non-existent program returns error with hint', async () => {
     const result = await callTool(client, 'SAPRead', { type: 'PROG', name: 'ZZZNOTEXIST999' });
     expectToolError(result, 'ZZZNOTEXIST999');
     const text = result.content[0].text;
     expect(text).toContain('SAPSearch'); // LLM remediation hint
+  });
+
+  it('SAPRead — invalid include returns Zod validation error with valid include values', async () => {
+    const result = await callTool(client, 'SAPRead', {
+      type: 'CLAS',
+      name: 'CL_ABAP_CHAR_UTILITIES',
+      include: 'INVALID_INCLUDE',
+    });
+    expectToolError(result, 'Invalid arguments for SAPRead');
+    const text = result.content[0].text;
+    expect(text).toContain('Valid values');
+    expect(text).toContain('main');
+    expect(text).toContain('testclasses');
+  });
+
+  it('SAPActivate — non-existent object returns actionable not-found hint', async () => {
+    const result = await callTool(client, 'SAPActivate', { type: 'PROG', name: 'ZZZNOTEXIST999' });
+    expectToolError(result, 'ZZZNOTEXIST999');
+    const text = result.content[0].text;
+    expect(text).toContain('SAPSearch');
   });
 
   it('SAPRead — unknown type returns Zod validation error', async () => {

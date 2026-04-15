@@ -71,30 +71,61 @@ const SAPREAD_TYPES_BTP = [
   'INACTIVE_OBJECTS',
 ] as const;
 
-export const SAPReadSchema = z.object({
-  type: z.enum(SAPREAD_TYPES_ONPREM),
-  name: z.string().optional(),
-  include: z.string().optional(),
-  group: z.string().optional(),
-  method: z.string().optional(),
-  expand_includes: z.coerce.boolean().optional(),
-  format: z.enum(['text', 'structured']).optional(),
-  maxRows: z.coerce.number().optional(),
-  sqlFilter: z.string().optional(),
-  objectType: z.string().optional(),
-});
+const SAPREAD_CLAS_INCLUDES = ['main', 'testclasses', 'definitions', 'implementations', 'macros'] as const;
+const SAPREAD_DDLS_INCLUDES = ['elements'] as const;
 
-export const SAPReadSchemaBtp = z.object({
-  type: z.enum(SAPREAD_TYPES_BTP),
-  name: z.string().optional(),
-  include: z.string().optional(),
-  group: z.string().optional(),
-  method: z.string().optional(),
-  format: z.enum(['text', 'structured']).optional(),
-  maxRows: z.coerce.number().optional(),
-  sqlFilter: z.string().optional(),
-  objectType: z.string().optional(),
-});
+function validateSapReadInclude(
+  input: { type: string; include?: string },
+  ctx: { addIssue: (issue: { code: 'custom'; path: string[]; message: string }) => void },
+): void {
+  if (!input.include) return;
+
+  const include = input.include.toLowerCase();
+  if (input.type === 'CLAS' && !SAPREAD_CLAS_INCLUDES.includes(include as (typeof SAPREAD_CLAS_INCLUDES)[number])) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['include'],
+      message: `Invalid include value "${input.include}" for type CLAS. Valid values: ${SAPREAD_CLAS_INCLUDES.join(', ')}`,
+    });
+  }
+
+  if (input.type === 'DDLS' && !SAPREAD_DDLS_INCLUDES.includes(include as (typeof SAPREAD_DDLS_INCLUDES)[number])) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['include'],
+      message: `Invalid include value "${input.include}" for type DDLS. Valid values: ${SAPREAD_DDLS_INCLUDES.join(', ')}`,
+    });
+  }
+}
+
+export const SAPReadSchema = z
+  .object({
+    type: z.enum(SAPREAD_TYPES_ONPREM),
+    name: z.string().optional(),
+    include: z.string().optional(),
+    group: z.string().optional(),
+    method: z.string().optional(),
+    expand_includes: z.coerce.boolean().optional(),
+    format: z.enum(['text', 'structured']).optional(),
+    maxRows: z.coerce.number().optional(),
+    sqlFilter: z.string().optional(),
+    objectType: z.string().optional(),
+  })
+  .superRefine((input, ctx) => validateSapReadInclude(input, ctx));
+
+export const SAPReadSchemaBtp = z
+  .object({
+    type: z.enum(SAPREAD_TYPES_BTP),
+    name: z.string().optional(),
+    include: z.string().optional(),
+    group: z.string().optional(),
+    method: z.string().optional(),
+    format: z.enum(['text', 'structured']).optional(),
+    maxRows: z.coerce.number().optional(),
+    sqlFilter: z.string().optional(),
+    objectType: z.string().optional(),
+  })
+  .superRefine((input, ctx) => validateSapReadInclude(input, ctx));
 
 // ─── SAPSearch ──────────────────────────────────────────────────────
 

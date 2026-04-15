@@ -31,6 +31,21 @@ export interface DdicDiagnostic {
   text: string;
 }
 
+export interface SapErrorClassification {
+  category:
+    | 'lock-conflict'
+    | 'enqueue-error'
+    | 'authorization'
+    | 'activation-dependency'
+    | 'transport-issue'
+    | 'object-exists'
+    | 'method-not-supported'
+    | 'unclassified';
+  hint: string;
+  transaction?: string;
+  details?: Record<string, string>;
+}
+
 /** HTTP-level API error from SAP ADT */
 export class AdtApiError extends AdtError {
   constructor(
@@ -231,6 +246,127 @@ export class AdtApiError extends AdtError {
 
     return `DDIC diagnostics:\n${lines.join('\n')}`;
   }
+}
+
+/** Extract SAP ADT exception type id from XML response bodies. */
+export function extractExceptionType(xml: string): string | undefined {
+  if (!xml?.includes('<')) return undefined;
+  const match = xml.match(/<(?:\w+:)?type\s+id="([^"]+)"\s*\/>|<(?:\w+:)?type\s+id="([^"]+)">/i);
+  return match?.[1] ?? match?.[2];
+}
+
+/** Extract lock owner details (user + transport/task) from SAP lock messages. */
+export function extractLockOwner(text: string): { user?: string; transport?: string } | undefined {
+  if (!text) return undefined;
+
+  const userMatch =
+    text.match(/\blocked by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
+    text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i);
+  const transportMatch =
+    text.match(/\b(?:in\s+)?(?:task|transport|request)\s+([A-Z0-9]{3,}\d{4,})\b/i) ??
+    text.match(/\b([A-Z]\d{2}[A-Z]\d{6})\b/i);
+
+  const user = userMatch?.[1]?.replace(/[.,;:)]$/, '');
+  const transport = transportMatch?.[1]?.replace(/[.,;:)]$/, '');
+  if (!user && !transport) return undefined;
+
+  return {
+    ...(user ? { user } : {}),
+    ...(transport ? { transport } : {}),
+  };
+}
+
+/** Classify SAP ADT errors into actionable domain categories with remediation hints. */
+export function classifySapDomainError(statusCode: number, responseBody?: string): SapErrorClassification | undefined {
+  const bodyRaw = responseBody ?? '';
+  const bodyLower = bodyRaw.toLowerCase();
+  const typeId = extractExceptionType(bodyRaw);
+
+  const lockPattern = /\blocked by\b|\bbeing edited by\b|\bresource is locked\b|\balready locked\b/i.test(bodyRaw);
+  if (typeId === 'ExceptionResourceLockedByAnotherUser' || (statusCode === 409 && lockPattern)) {
+    const owner = extractLockOwner(bodyRaw);
+    const lockHintParts: string[] = ['Object is locked'];
+    if (owner?.user && owner?.transport) {
+      lockHintParts.push(`by user ${owner.user} in transport ${owner.transport}`);
+    } else if (owner?.user) {
+      lockHintParts.push(`by user ${owner.user}`);
+    } else if (owner?.transport) {
+      lockHintParts.push(`in transport ${owner.transport}`);
+    } else {
+      lockHintParts.push('by another user/session');
+    }
+
+    return {
+      category: 'lock-conflict',
+      hint: `${lockHintParts.join(' ')}. Check SM12 in SAP GUI for lock entries, or wait for the lock to be released.`,
+      transaction: 'SM12',
+      details: {
+        ...(typeId ? { exceptionType: typeId } : {}),
+        ...(owner?.user ? { user: owner.user } : {}),
+        ...(owner?.transport ? { transport: owner.transport } : {}),
+      },
+    };
+  }
+
+  if (typeId === 'ExceptionResourceInvalidLockHandle' || statusCode === 423) {
+    return {
+      category: 'enqueue-error',
+      hint: 'Lock handle is invalid or expired. The lock may have timed out. Retry the operation so ARC-1 acquires a fresh lock. If the error persists, check SM12 for stale lock entries.',
+      transaction: 'SM12',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  const authPattern = /\bauthorization\b|not authorized|s_develop|s_adt_res|s_transprt/i.test(bodyRaw);
+  if (typeId === 'ExceptionNotAuthorized' || (statusCode === 403 && authPattern)) {
+    return {
+      category: 'authorization',
+      hint: 'The SAP user lacks required authorization. Run transaction SU53 in SAP GUI to inspect the last failed authorization check. Common objects: S_DEVELOP (development), S_ADT_RES (ADT resources), S_TRANSPRT (transports). Contact your basis admin or review PFCG role assignments.',
+      transaction: 'SU53',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  if (
+    (typeId === 'ExceptionResourceCreationFailure' || statusCode === 400 || statusCode === 409) &&
+    (bodyLower.includes('already exists') || bodyLower.includes('does already exist'))
+  ) {
+    return {
+      category: 'object-exists',
+      hint: 'An object with this name already exists. Use SAPRead to inspect the existing object, or choose a different name.',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  if (
+    /activat(e|ion)/i.test(bodyRaw) &&
+    (/\bdependency\b/i.test(bodyRaw) || /\binactive\b/i.test(bodyRaw) || /\bnot active\b/i.test(bodyRaw))
+  ) {
+    return {
+      category: 'activation-dependency',
+      hint: "Activation failed due to inactive dependencies. Use SAPRead(type='INACTIVE_OBJECTS') to list inactive objects, then activate dependencies first with SAPActivate.",
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  if (/\badjustment\b|\bupgrade mode\b|\bspau(?:_enh)?\b/i.test(bodyRaw)) {
+    return {
+      category: 'transport-issue',
+      hint: 'SAP is in adjustment/upgrade mode. Development changes may be blocked until upgrade activities are complete. Check SPAU/SPAU_ENH in SAP GUI.',
+      transaction: 'SPAU',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  if (typeId === 'ExceptionMethodNotSupported' || statusCode === 405) {
+    return {
+      category: 'method-not-supported',
+      hint: 'The ADT endpoint rejected this HTTP method. Verify the operation is supported on this SAP release and retry with the correct tool action.',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  return undefined;
 }
 
 function parseOptionalInt(value: string | undefined): number | undefined {

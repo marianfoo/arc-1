@@ -78,6 +78,30 @@ describe('SAPReadSchema', () => {
     expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'xml' }).success).toBe(false);
     expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'json' }).success).toBe(false);
   });
+
+  it('rejects invalid CLAS include values and lists allowed includes', () => {
+    const result = SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', include: 'invalid_include' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = result.error.issues[0]?.message ?? '';
+      expect(message).toContain('Valid values');
+      expect(message).toContain('main');
+      expect(message).toContain('testclasses');
+    }
+  });
+
+  it('rejects invalid DDLS include values', () => {
+    const result = SAPReadSchema.safeParse({ type: 'DDLS', name: 'ZI_TEST', include: 'main' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('Valid values: elements');
+    }
+  });
+
+  it('allows free-form include for BSP paths', () => {
+    const result = SAPReadSchema.safeParse({ type: 'BSP', name: 'ZAPP', include: 'webapp/Component.js' });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('SAPReadSchemaBtp', () => {
