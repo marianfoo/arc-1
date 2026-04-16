@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-16
+**Last Updated:** 2026-04-17
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -57,7 +57,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 11 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
 | 12 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 13 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
-| 14 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
+| ~~—~~ | ~~FEAT-43~~ | ~~DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations)~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
 | 15 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 16 | SEC-05 | Rate Limiting | P2 | S | Security |
 | 17 | FEAT-31 | Code Coverage from Unit Tests | P2 | S | Features |
@@ -85,6 +85,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
 | FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
 | FEAT-37 | DCL (Access Control) Read/Write | 2026-04-15 | Features |
@@ -199,7 +200,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 22. ~~**FEAT-39** Transport Enhancements (S)~~ — **completed 2026-04-13** (K/W/T types; S/R deferred). sapcli has full CTS lifecycle.
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
-23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
+23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FTG2`, `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
 24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
 25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
@@ -1180,17 +1181,17 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
-### FEAT-43: DDIC Auth & Misc Read (Authorization Fields, Feature Toggles)
+### FEAT-43: DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations)
 | Field | Value |
 |-------|-------|
 | **Priority** | P2 |
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — niche but useful for authorization analysis |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-17) |
 | **Source** | [sapcli comparison](../compare/09-sapcli.md), sapcli commit `2ec4228` (Apr 2026) |
 
-**What:** Add read support for Authorization Fields (`/sap/bc/adt/authorizationfields/{name}`, XML namespace `http://www.sap.com/iam/auth`), Feature Toggles (`/sap/bc/adt/sfw/featuretoggles`), and Enhancement Implementations (BAdI). sapcli recently added Authorization Fields (Apr 2026) and has had Feature Toggles since 2023.
+**What:** Add read support for Authorization Fields (`/sap/bc/adt/aps/iam/auth/{name}`, XML namespace `http://www.sap.com/iam/auth`), Feature Toggles (`/sap/bc/adt/sfw/featuretoggles/{name}/states`), and Enhancement Implementations (`/sap/bc/adt/enhancements/enhoxhb/{name}`). sapcli recently added Authorization Fields (Apr 2026) and has had Feature Toggles since 2023.
 
 **Why:** Authorization analysis is important for security audits. Feature toggles are used in SAP's switch framework for conditional features.
 

@@ -311,6 +311,74 @@ describe('ADT Integration Tests', () => {
       expect(dtel.searchHelp).toBe('C_T001');
     });
 
+    it('reads authorization field metadata (AUTH/BUKRS)', async (ctx) => {
+      try {
+        const auth = await client.getAuthorizationField('BUKRS');
+        expect(auth.name).toBe('BUKRS');
+        expect(auth.checkTable).toBe('T001');
+        expect(Array.isArray(auth.orgLevelInfo)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: Auth Fields ADT endpoint not available on this kernel`,
+        );
+      }
+    });
+
+    it('reads feature toggle state (FTG2) when available', async (ctx) => {
+      const toggleName = process.env.TEST_FEATURE_TOGGLE || 'ABC_TOGGLE';
+      try {
+        const toggle = await client.getFeatureToggle(toggleName);
+        expect(toggle.name).toBeTruthy();
+        expect(Array.isArray(toggle.states)).toBe(true);
+      } catch (err) {
+        // Feature toggles are often unavailable or empty on plain A4H systems.
+        expectSapFailureClass(err, [404, 403], [/not found/i, /no authorization/i, /forbidden/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: Feature toggle endpoint unavailable or unauthorized on this system`,
+        );
+      }
+    });
+
+    it('reads enhancement implementation metadata (ENHO) when a fixture exists', async (ctx) => {
+      const byName = process.env.TEST_ENHO_NAME?.trim();
+      let enhoName = byName || '';
+
+      if (!enhoName) {
+        try {
+          const candidates = await client.searchObject('ENHO*', 20);
+          const firstEnho = candidates.find((row) => String(row.objectType).startsWith('ENHO'));
+          enhoName = firstEnho?.objectName ?? '';
+        } catch (err) {
+          expectSapFailureClass(err, [404, 403, 500], [/search/i, /not found/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: Could not search ENHO objects on this backend`,
+          );
+        }
+      }
+
+      requireOrSkip(ctx, enhoName || undefined, 'No enhancement implementation fixture found for ENHO read test');
+
+      try {
+        const enho = await client.getEnhancementImplementation(enhoName);
+        expect(enho.name).toBeTruthy();
+        expect(Array.isArray(enho.badiImplementations)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404, 403], [/not found/i, /forbidden/i, /no authorization/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: Enhancement implementation endpoint unavailable or unauthorized`,
+        );
+      }
+    });
+
     it('reads transaction metadata (SE38)', async () => {
       const tran = await client.getTransaction('SE38');
       expect(tran.code).toBe('SE38');

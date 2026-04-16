@@ -1,0 +1,11 @@
+{
+  "name": "ABC_TOGGLE",
+  "description": "Sample toggle",
+  "package": "SFW",
+  "states": [
+    {
+      "system": "A4H",
+      "state": "on"
+    }
+  ]
+}

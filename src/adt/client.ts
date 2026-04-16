@@ -25,11 +25,14 @@ import { Semaphore } from './semaphore.js';
 import type {
   AdtSearchResult,
   ApiReleaseStateInfo,
+  AuthorizationFieldInfo,
   BspAppInfo,
   BspFileNode,
   ClassMetadata,
   DataElementInfo,
   DomainInfo,
+  EnhancementImplementationInfo,
+  FeatureToggleInfo,
   InactiveObject,
   MessageClassInfo,
   SourceSearchResult,
@@ -38,11 +41,14 @@ import type {
 } from './types.js';
 import {
   parseApiReleaseState,
+  parseAuthorizationField,
   parseBspAppList,
   parseBspFolderListing,
   parseClassMetadata,
   parseDataElementMetadata,
   parseDomainMetadata,
+  parseEnhancementImplementation,
+  parseFeatureToggleStates,
   parseFunctionGroup,
   parseInactiveObjects,
   parseInstalledComponents,
@@ -332,6 +338,35 @@ export class AdtClient {
     checkOperation(this.safety, OperationType.Read, 'GetDataElement');
     const resp = await this.http.get(`/sap/bc/adt/ddic/dataelements/${encodeURIComponent(name)}`);
     return parseDataElementMetadata(resp.body);
+  }
+
+  // ─── Authorization & Switch Framework ───────────────────────────
+
+  /** Get authorization field metadata (role, check table, domain, org-level flags) */
+  async getAuthorizationField(name: string): Promise<AuthorizationFieldInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetAuthorizationField');
+    const resp = await this.http.get(`/sap/bc/adt/aps/iam/auth/${encodeURIComponent(name)}`, {
+      Accept: 'application/vnd.sap.adt.blues.v1+xml',
+    });
+    return parseAuthorizationField(resp.body);
+  }
+
+  /** Get feature toggle states from switch framework */
+  async getFeatureToggle(name: string): Promise<FeatureToggleInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetFeatureToggle');
+    const resp = await this.http.get(`/sap/bc/adt/sfw/featuretoggles/${encodeURIComponent(name)}/states`, {
+      Accept: 'application/vnd.sap.adt.states.v1+asjson',
+    });
+    return parseFeatureToggleStates(resp.body, name);
+  }
+
+  /** Get enhancement implementation metadata (technology, referenced object, BAdI implementations) */
+  async getEnhancementImplementation(name: string): Promise<EnhancementImplementationInfo> {
+    checkOperation(this.safety, OperationType.Read, 'GetEnhancementImplementation');
+    const resp = await this.http.get(`/sap/bc/adt/enhancements/enhoxhb/${encodeURIComponent(name)}`, {
+      Accept: 'application/vnd.sap.adt.enh.enhoxhb.v4+xml',
+    });
+    return parseEnhancementImplementation(resp.body);
   }
 
   /** Get transaction code metadata (description, package) */

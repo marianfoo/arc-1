@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<enho:objectData
+  xmlns:enho="http://www.sap.com/adt/enhancements/enho"
+  xmlns:enhcore="http://www.sap.com/abapsource/enhancementscore"
+  xmlns:adtcore="http://www.sap.com/adt/core"
+  adtcore:name="ZMY_BADI_IMPL"
+  adtcore:description="Test impl">
+  <adtcore:packageRef adtcore:name="ZPKG"/>
+  <enho:contentCommon/>
+  <enho:contentSpecific>
+    <enho:badiTechnology>BADI_IMPL</enho:badiTechnology>
+    <enho:badiImplementations>
+      <enho:badiImplementation
+        adtcore:name="ZMY_BADI_IMPL_A"
+        enho:implementingClass="ZCL_BADI_IMPL_A"
+        enho:badi="BADI_DEF_A"
+        enho:active="true"
+        enho:default="false"/>
+      <enho:badiImplementation
+        adtcore:name="ZMY_BADI_IMPL_B"
+        enho:implementingClass="ZCL_BADI_IMPL_B"
+        enho:badi="BADI_DEF_B"
+        enho:active="false"
+        enho:default="true"/>
+    </enho:badiImplementations>
+  </enho:contentSpecific>
+  <enhcore:referencedObject
+    adtcore:uri="/sap/bc/adt/enhancements/enhsxsb/ENH_SPOT_EXAMPLE"
+    adtcore:name="ENH_SPOT_EXAMPLE"
+    adtcore:type="ENHS/XSB"/>
+</enho:objectData>

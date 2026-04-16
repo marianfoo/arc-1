@@ -798,6 +798,18 @@ async function handleSAPRead(
       const dtel = await client.getDataElement(name);
       return textResult(JSON.stringify(dtel, null, 2));
     }
+    case 'AUTH': {
+      const authField = await client.getAuthorizationField(name);
+      return textResult(JSON.stringify(authField, null, 2));
+    }
+    case 'FTG2': {
+      const toggle = await client.getFeatureToggle(name);
+      return textResult(JSON.stringify(toggle, null, 2));
+    }
+    case 'ENHO': {
+      const enhancement = await client.getEnhancementImplementation(name);
+      return textResult(JSON.stringify(enhancement, null, 2));
+    }
     case 'TRAN': {
       const tran = await client.getTransaction(name);
       // Enrich with program name via SQL — only if free SQL is allowed by safety config
@@ -952,7 +964,7 @@ async function handleSAPRead(
     }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, AUTH, FTG2, ENHO, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
           'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, DCLS/DL → DCLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );

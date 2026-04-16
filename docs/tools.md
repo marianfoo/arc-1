@@ -16,7 +16,7 @@ Read any SAP ABAP object.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `type` | string | Yes | Object type (see below) |
+| `type` | string | Yes | Object type (see below; includes `AUTH`, `FTG2`, `ENHO` on on-prem systems) |
 | `name` | string | No | Object name (e.g., `ZTEST_PROGRAM`, `ZCL_ORDER`, `MARA`) |
 | `format` | string | No | Output format: `"text"` (default) or `"structured"` (CLAS only, see below) |
 | `include` | string | No | For CLAS: `main`, `testclasses`, `definitions`, `implementations`, `macros`. For DDLS: `elements` (extract CDS view elements). |
@@ -48,6 +48,9 @@ Read any SAP ABAP object.
 | `STRU` | Structure definition (DDIC structure source) |
 | `DOMA` | Domain metadata (structured JSON: data type, length, fixed values, value table) |
 | `DTEL` | Data element metadata (structured JSON: type, labels, search help) |
+| `AUTH` | Authorization field metadata (structured JSON: role name, check table, domain, conversion exit, org-level info) |
+| `FTG2` | Feature toggle states (structured JSON: toggle state per system from SAP switch framework) |
+| `ENHO` | Enhancement implementation metadata (structured JSON: BAdI technology, referenced object, implementation classes) |
 | `TRAN` | Transaction metadata (structured JSON: code, description, program) |
 | `SOBJ` | BOR business object (list methods, or read specific method with `method` param) |
 | `BSP` | BSP/UI5 filestore (list apps, browse structure, read files via `name`+`include` path) |
@@ -88,6 +91,9 @@ SAPRead(type="FUGR", name="ZUTILS", expand_includes=true)    — function group 
 SAPRead(type="STRU", name="BAPIRET2")            — structure definition
 SAPRead(type="DOMA", name="BUKRS")               — domain metadata with fixed values
 SAPRead(type="DTEL", name="MANDT")               — data element metadata with labels
+SAPRead(type="AUTH", name="BUKRS")               — authorization field metadata
+SAPRead(type="FTG2", name="ABC_TOGGLE")          — feature toggle states
+SAPRead(type="ENHO", name="ZMY_BADI_IMPL")       — enhancement implementation metadata
 SAPRead(type="TRAN", name="SE38")                — transaction metadata
 SAPRead(type="SOBJ", name="BUS2032")             — list BOR object methods
 SAPRead(type="BSP")                              — list all BSP/UI5 apps

@@ -46,6 +46,9 @@ const SAPREAD_TYPES_ONPREM = [
   'BSP_DEPLOY',
   'API_STATE',
   'INACTIVE_OBJECTS',
+  'AUTH',
+  'FTG2',
+  'ENHO',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [

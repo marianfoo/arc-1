@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-16 (PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
+_Last updated: 2026-04-17 (FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
 
 ## Legend
 - ✅ = Supported
@@ -90,7 +90,9 @@ _Last updated: 2026-04-16 (PR #134 merged 2026-04-16: SKTD read/write (Knowledge
 | Structures | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Domains | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ | ⚠️ (PR #149 in progress) |
 | Data elements | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ | ✅ |
-| Enhancements (BAdI/ENHO) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (on-prem only; `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` + `GET /sap/bc/adt/enhancements/enhsxsb/{spot}`) | N/A | ❌ | ✅ (BAdI/enhancement impl) |
+| Enhancements (BAdI/ENHO) | ✅ (`GET /sap/bc/adt/enhancements/enhoxhb/{name}`) | ❌ | ❌ | ❌ | ❌ | ✅ (on-prem only; `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` + `GET /sap/bc/adt/enhancements/enhsxsb/{spot}`) | N/A | ❌ | ✅ (BAdI/enhancement impl) |
+| Authorization fields (AUTH) | ✅ (`GET /sap/bc/adt/aps/iam/auth/{name}`) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ (`GET /sap/bc/adt/aps/iam/auth/{name}`) |
+| Feature toggles (FTG2) | ✅ (states only, `GET /sap/bc/adt/sfw/featuretoggles/{name}/states`) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ (states + toggle/check/validate) |
 | Transactions | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | N/A | ❌ | ❌ |
 | Free SQL | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | System info / components | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |

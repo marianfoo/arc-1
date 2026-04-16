@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<auth:auth
+  xmlns:auth="http://www.sap.com/iam/auth"
+  xmlns:adtcore="http://www.sap.com/adt/core"
+  adtcore:name="BUKRS"
+  adtcore:description="Company code"
+  adtcore:masterLanguage="EN">
+  <adtcore:packageRef adtcore:name="SF"/>
+  <auth:fieldName>BUKRS</auth:fieldName>
+  <auth:rollName>BUKRS</auth:rollName>
+  <auth:checkTable>T001</auth:checkTable>
+  <auth:domname>BUKRS</auth:domname>
+  <auth:outputlen>4</auth:outputlen>
+  <auth:convexit></auth:convexit>
+  <auth:exitFB></auth:exitFB>
+  <auth:orglvlinfo>true</auth:orglvlinfo>
+  <auth:orglvlinfo>false</auth:orglvlinfo>
+</auth:auth>

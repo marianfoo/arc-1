@@ -69,6 +69,12 @@ describe('SAPReadSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts on-prem AUTH/FTG2/ENHO types', () => {
+    expect(SAPReadSchema.safeParse({ type: 'AUTH', name: 'BUKRS' }).success).toBe(true);
+    expect(SAPReadSchema.safeParse({ type: 'FTG2', name: 'ABC_TOGGLE' }).success).toBe(true);
+    expect(SAPReadSchema.safeParse({ type: 'ENHO', name: 'ZMY_BADI_IMPL' }).success).toBe(true);
+  });
+
   it('accepts format field with valid values', () => {
     expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'text' }).success).toBe(true);
     expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'structured' }).success).toBe(true);
@@ -117,6 +123,9 @@ describe('SAPReadSchemaBtp', () => {
     expect(SAPReadSchemaBtp.safeParse({ type: 'VIEW' }).success).toBe(false);
     expect(SAPReadSchemaBtp.safeParse({ type: 'TEXT_ELEMENTS' }).success).toBe(false);
     expect(SAPReadSchemaBtp.safeParse({ type: 'VARIANTS' }).success).toBe(false);
+    expect(SAPReadSchemaBtp.safeParse({ type: 'AUTH' }).success).toBe(false);
+    expect(SAPReadSchemaBtp.safeParse({ type: 'FTG2' }).success).toBe(false);
+    expect(SAPReadSchemaBtp.safeParse({ type: 'ENHO' }).success).toBe(false);
   });
 
   it('does not have expand_includes field', () => {

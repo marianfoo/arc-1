@@ -254,6 +254,9 @@ describe('Tool Definitions', () => {
       expect(typeEnum).not.toContain('TEXT_ELEMENTS');
       expect(typeEnum).not.toContain('VARIANTS');
       expect(typeEnum).not.toContain('SOBJ');
+      expect(typeEnum).not.toContain('AUTH');
+      expect(typeEnum).not.toContain('FTG2');
+      expect(typeEnum).not.toContain('ENHO');
     });
 
     it('keeps CLAS, INTF, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB on BTP', () => {
@@ -287,6 +290,9 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('SOBJ');
       expect(typeEnum).toContain('DDLX');
       expect(typeEnum).toContain('SRVB');
+      expect(typeEnum).toContain('AUTH');
+      expect(typeEnum).toContain('FTG2');
+      expect(typeEnum).toContain('ENHO');
     });
 
     it('includes DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL in SAPWrite types on both BTP and on-prem', () => {

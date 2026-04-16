@@ -15,15 +15,19 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
+import { AdtApiError } from './errors.js';
 import type {
   AdtSearchResult,
   ApiReleaseContract,
   ApiReleaseStateInfo,
+  AuthorizationFieldInfo,
   BspAppInfo,
   BspFileNode,
   ClassMetadata,
   DataElementInfo,
   DomainInfo,
+  EnhancementImplementationInfo,
+  FeatureToggleInfo,
   InactiveObject,
   MessageClassInfo,
   SourceSearchResult,
@@ -83,6 +87,8 @@ const parser = new XMLParser({
       'workspace',
       'collection',
       'accept',
+      'orglvlinfo',
+      'badiImplementation',
     ].includes(name);
   },
   parseAttributeValue: false, // Keep attributes as strings
@@ -532,6 +538,104 @@ export function parseDataElementMetadata(xml: string): DataElementInfo {
 }
 
 /**
+ * Parse authorization field metadata from /sap/bc/adt/aps/iam/auth/{name}.
+ *
+ * Expected root: <auth:auth> with IAM field metadata and org-level entries.
+ */
+export function parseAuthorizationField(xml: string): AuthorizationFieldInfo {
+  const parsed = parseXml(xml);
+  const authNodes = findDeepNodes(parsed, 'auth');
+  const auth = (authNodes[0] ?? {}) as Record<string, unknown>;
+  const pkgRef = (auth.packageRef ?? {}) as Record<string, unknown>;
+  const orgLevelInfo = toStringArray(auth.orglvlinfo);
+
+  return {
+    name: String(auth.fieldName ?? auth['@_name'] ?? ''),
+    description: String(auth['@_description'] ?? ''),
+    roleName: String(auth.rollName ?? ''),
+    checkTable: String(auth.checkTable ?? ''),
+    domainName: String(auth.domname ?? ''),
+    outputLength: String(auth.outputlen ?? ''),
+    conversionExit: String(auth.convexit ?? ''),
+    exitFunctionModule: String(auth.exitFB ?? ''),
+    package: String(pkgRef['@_name'] ?? ''),
+    orgLevelInfo,
+    masterLanguage: String(auth['@_masterLanguage'] ?? ''),
+  };
+}
+
+/**
+ * Parse feature toggle states JSON from /sap/bc/adt/sfw/featuretoggles/{name}/states.
+ */
+export function parseFeatureToggleStates(json: string, name: string): FeatureToggleInfo {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(json) as Record<string, unknown>;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'Invalid JSON';
+    throw new AdtApiError(
+      `ADT_JSON_PARSE: Failed to parse feature toggle states for "${name}": ${reason}`,
+      500,
+      `/sap/bc/adt/sfw/featuretoggles/${encodeURIComponent(name)}/states`,
+      json,
+    );
+  }
+
+  const statesRaw = Array.isArray(parsed.states) ? parsed.states : [];
+  const states = statesRaw.map((state) => {
+    const row = (state ?? {}) as Record<string, unknown>;
+    const rawState = String(row.state ?? '').toLowerCase();
+    const normalizedState: 'on' | 'off' | 'unknown' = rawState === 'on' ? 'on' : rawState === 'off' ? 'off' : 'unknown';
+    const description = String(row.description ?? '');
+    return {
+      system: String(row.system ?? ''),
+      state: normalizedState,
+      ...(description ? { description } : {}),
+    };
+  });
+
+  return {
+    name: String(parsed.name ?? name),
+    description: String(parsed.description ?? ''),
+    package: String(parsed.package ?? ''),
+    states,
+  };
+}
+
+/**
+ * Parse enhancement implementation metadata from /sap/bc/adt/enhancements/enhoxhb/{name}.
+ *
+ * Expected root: <enho:objectData> with contentCommon/contentSpecific and BAdI entries.
+ */
+export function parseEnhancementImplementation(xml: string): EnhancementImplementationInfo {
+  const parsed = parseXml(xml);
+  const objectData = ((findDeepNodes(parsed, 'objectData')[0] ?? {}) as Record<string, unknown>) ?? {};
+  const pkgRef = (objectData.packageRef ?? {}) as Record<string, unknown>;
+  const contentSpecific = (objectData.contentSpecific ?? {}) as Record<string, unknown>;
+  const badiImplContainer = (contentSpecific.badiImplementations ?? {}) as Record<string, unknown>;
+  const badiImplNodes = toRecordArray(badiImplContainer.badiImplementation);
+
+  const referencedObject = (findDeepNodes(parsed, 'referencedObject')[0] ?? {}) as Record<string, unknown>;
+
+  return {
+    name: String(objectData['@_name'] ?? ''),
+    description: String(objectData['@_description'] ?? ''),
+    package: String(pkgRef['@_name'] ?? ''),
+    technology: String(contentSpecific.badiTechnology ?? ''),
+    referencedObjectUri: String(referencedObject['@_uri'] ?? ''),
+    referencedObjectName: String(referencedObject['@_name'] ?? ''),
+    referencedObjectType: String(referencedObject['@_type'] ?? ''),
+    badiImplementations: badiImplNodes.map((node) => ({
+      name: String(node['@_name'] ?? ''),
+      implementationClass: String(node['@_implementingClass'] ?? ''),
+      badiDefinition: String(node['@_badi'] ?? ''),
+      active: String(node['@_active'] ?? '') === 'true',
+      default: String(node['@_default'] ?? '') === 'true',
+    })),
+  };
+}
+
+/**
  * Parse transaction metadata XML from /sap/bc/adt/vit/wb/object_type/trant/object_name/{name}.
  *
  * Returns basic transaction info: code, description, package.
@@ -868,6 +972,22 @@ function getDeepArray(obj: Record<string, unknown>, path: string[]): Array<Recor
     if (arr && typeof arr === 'object') return [arr as Record<string, unknown>];
   }
   return [];
+}
+
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+  }
+  if (value && typeof value === 'object') {
+    return [value as Record<string, unknown>];
+  }
+  return [];
+}
+
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((entry) => String(entry ?? ''));
+  if (value === undefined || value === null) return [];
+  return [String(value)];
 }
 
 /** Parse inactive objects response from /sap/bc/adt/activation/inactive */

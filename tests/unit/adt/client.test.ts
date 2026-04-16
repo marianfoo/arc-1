@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
@@ -11,6 +13,9 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 const { AdtClient } = await import('../../../src/adt/client.js');
+
+const fixturesDir = join(import.meta.dirname, '../../fixtures/xml');
+const loadFixture = (name: string) => readFileSync(join(fixturesDir, name), 'utf-8');
 
 /** Default mock: returns ABAP source code for any request */
 function setupDefaultMock() {
@@ -337,6 +342,39 @@ describe('AdtClient', () => {
       expect(tran.code).toBe('SE38');
       expect(tran.description).toBe('ABAP Editor');
       expect(tran.package).toBe('SEDT');
+    });
+
+    it('getAuthorizationField returns parsed metadata', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, loadFixture('authorization-field.xml'), { 'x-csrf-token': 'T' }));
+      const client = createClient();
+      const auth = await client.getAuthorizationField('BUKRS');
+      expect(auth.name).toBe('BUKRS');
+      expect(auth.checkTable).toBe('T001');
+      expect(auth.orgLevelInfo).toEqual(['true', 'false']);
+    });
+
+    it('getFeatureToggle returns parsed states', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(200, loadFixture('feature-toggle-states.json'), { 'x-csrf-token': 'T' }),
+      );
+      const client = createClient();
+      const toggle = await client.getFeatureToggle('ABC_TOGGLE');
+      expect(toggle.name).toBe('ABC_TOGGLE');
+      expect(toggle.states).toEqual([{ system: 'A4H', state: 'on' }]);
+    });
+
+    it('getEnhancementImplementation returns parsed metadata', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(200, loadFixture('enhancement-implementation.xml'), { 'x-csrf-token': 'T' }),
+      );
+      const client = createClient();
+      const enho = await client.getEnhancementImplementation('ZMY_BADI_IMPL');
+      expect(enho.name).toBe('ZMY_BADI_IMPL');
+      expect(enho.technology).toBe('BADI_IMPL');
+      expect(enho.badiImplementations).toHaveLength(2);
     });
   });
 

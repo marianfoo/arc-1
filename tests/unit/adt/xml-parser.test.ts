@@ -5,11 +5,14 @@ import {
   escapeXmlAttr,
   findDeepNodes,
   parseApiReleaseState,
+  parseAuthorizationField,
   parseBspAppList,
   parseBspFolderListing,
   parseClassMetadata,
   parseDataElementMetadata,
   parseDomainMetadata,
+  parseEnhancementImplementation,
+  parseFeatureToggleStates,
   parseFunctionGroup,
   parseInactiveObjects,
   parseInstalledComponents,
@@ -435,6 +438,91 @@ describe('XML Parser', () => {
       expect(dtel.description).toBe('Test Element');
       expect(dtel.typeKind).toBe('');
       expect(dtel.typeName).toBe('');
+    });
+  });
+
+  // ─── parseAuthorizationField ─────────────────────────────────────
+
+  describe('parseAuthorizationField', () => {
+    it('parses authorization field metadata from fixture', () => {
+      const xml = loadFixture('authorization-field.xml');
+      const auth = parseAuthorizationField(xml);
+      expect(auth.name).toBe('BUKRS');
+      expect(auth.description).toBe('Company code');
+      expect(auth.roleName).toBe('BUKRS');
+      expect(auth.checkTable).toBe('T001');
+      expect(auth.domainName).toBe('BUKRS');
+      expect(auth.outputLength).toBe('4');
+      expect(auth.package).toBe('SF');
+      expect(auth.orgLevelInfo).toEqual(['true', 'false']);
+      expect(auth.masterLanguage).toBe('EN');
+    });
+
+    it('handles minimal authorization field XML', () => {
+      const xml =
+        '<auth:auth xmlns:auth="http://www.sap.com/iam/auth" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:description="Test auth"/>';
+      const auth = parseAuthorizationField(xml);
+      expect(auth.name).toBe('');
+      expect(auth.description).toBe('Test auth');
+      expect(auth.roleName).toBe('');
+      expect(auth.orgLevelInfo).toEqual([]);
+      expect(auth.package).toBe('');
+    });
+  });
+
+  // ─── parseFeatureToggleStates ────────────────────────────────────
+
+  describe('parseFeatureToggleStates', () => {
+    it('parses feature toggle states from fixture', () => {
+      const json = loadFixture('feature-toggle-states.json');
+      const toggle = parseFeatureToggleStates(json, 'ABC_TOGGLE');
+      expect(toggle.name).toBe('ABC_TOGGLE');
+      expect(toggle.description).toBe('Sample toggle');
+      expect(toggle.package).toBe('SFW');
+      expect(toggle.states).toHaveLength(1);
+      expect(toggle.states[0]).toEqual({ system: 'A4H', state: 'on' });
+    });
+
+    it('handles minimal feature toggle JSON', () => {
+      const toggle = parseFeatureToggleStates('{"states":[{"system":"QAS","state":"maybe"}]}', 'Z_MIN');
+      expect(toggle.name).toBe('Z_MIN');
+      expect(toggle.description).toBe('');
+      expect(toggle.package).toBe('');
+      expect(toggle.states).toEqual([{ system: 'QAS', state: 'unknown' }]);
+    });
+  });
+
+  // ─── parseEnhancementImplementation ──────────────────────────────
+
+  describe('parseEnhancementImplementation', () => {
+    it('parses enhancement implementation metadata from fixture', () => {
+      const xml = loadFixture('enhancement-implementation.xml');
+      const enho = parseEnhancementImplementation(xml);
+      expect(enho.name).toBe('ZMY_BADI_IMPL');
+      expect(enho.description).toBe('Test impl');
+      expect(enho.package).toBe('ZPKG');
+      expect(enho.technology).toBe('BADI_IMPL');
+      expect(enho.referencedObjectName).toBe('ENH_SPOT_EXAMPLE');
+      expect(enho.referencedObjectType).toBe('ENHS/XSB');
+      expect(enho.badiImplementations).toHaveLength(2);
+      expect(enho.badiImplementations[0]).toEqual({
+        name: 'ZMY_BADI_IMPL_A',
+        implementationClass: 'ZCL_BADI_IMPL_A',
+        badiDefinition: 'BADI_DEF_A',
+        active: true,
+        default: false,
+      });
+    });
+
+    it('handles minimal enhancement implementation XML', () => {
+      const xml =
+        '<enho:objectData xmlns:enho="http://www.sap.com/adt/enhancements/enho" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZENHO" adtcore:description="Test"/>';
+      const enho = parseEnhancementImplementation(xml);
+      expect(enho.name).toBe('ZENHO');
+      expect(enho.description).toBe('Test');
+      expect(enho.package).toBe('');
+      expect(enho.technology).toBe('');
+      expect(enho.badiImplementations).toEqual([]);
     });
   });
 
