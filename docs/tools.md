@@ -388,7 +388,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 Get compressed dependency context for an ABAP object, or look up reverse dependencies (who uses a given object).
 
-SAPContext has two modes controlled by the `action` parameter:
+SAPContext has three modes controlled by the `action` parameter:
 
 ### action="deps" (default) — Dependency context
 
@@ -407,13 +407,14 @@ Returns only the public API contracts (method signatures, interface definitions,
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | No | `"deps"` (default) or `"usages"` |
-| `type` | string | Yes (for deps) | Object type: `CLAS`, `INTF`, `PROG`, `FUNC` |
+| `action` | string | No | `"deps"` (default), `"usages"`, or `"impact"` |
+| `type` | string | Yes (for deps/impact) | Object type: `CLAS`, `INTF`, `PROG`, `FUNC`, `DDLS` |
 | `name` | string | Yes | Object name (e.g., `ZCL_ORDER`) |
 | `source` | string | No | Provide source directly instead of fetching from SAP |
 | `group` | string | No | Required for `FUNC` type. The function group name. |
 | `maxDeps` | number | No | Maximum dependencies to resolve (default 20) |
 | `depth` | number | No | Dependency depth: 1 = direct only (default), 2 = deps of deps, 3 = max |
+| `includeIndirect` | boolean | No | Only for `action="impact"` (DDLS): include indirect downstream where-used entries (default `false`) |
 
 **Examples:**
 ```
@@ -446,6 +447,48 @@ ENDCLASS.
 **Cache indicator:** When the dependency graph is served from the object cache (no ADT calls needed), the header changes to:
 ```
 * === Dependency context for ZCL_ORDER (3 deps resolved) [cached] ===
+```
+
+### action="impact" — CDS upstream + downstream impact (DDLS only)
+
+Returns a single JSON payload with:
+- **upstream** dependencies from CDS AST extraction (`tables`, `views`, `associations`, `compositions`)
+- **downstream** where-used consumers classified into RAP-relevant buckets (`projectionViews`, `bdefs`, `serviceDefinitions`, `serviceBindings`, `accessControls`, `metadataExtensions`, `abapConsumers`, `documentation`, etc.)
+
+Use this to answer: "If I change this CDS view, what breaks?"
+
+**Example:**
+```
+SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT")
+SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT", includeIndirect=true)
+```
+
+**Output (shape):**
+```json
+{
+  "name": "ZI_ARC1_I33_ROOT",
+  "type": "DDLS",
+  "upstream": {
+    "tables": [{ "name": "ZTABL_ARC1_I33" }],
+    "views": [],
+    "associations": [],
+    "compositions": []
+  },
+  "downstream": {
+    "projectionViews": [{ "name": "ZI_ARC1_I33_PROJ", "type": "DDLS/DF" }],
+    "bdefs": [],
+    "serviceDefinitions": [],
+    "serviceBindings": [],
+    "accessControls": [],
+    "metadataExtensions": [],
+    "abapConsumers": [],
+    "tables": [],
+    "documentation": [],
+    "other": [],
+    "summary": { "total": 1, "direct": 1, "indirect": 0, "byBucket": { "projectionViews": 1 } }
+  },
+  "summary": { "upstreamCount": 1, "downstreamTotal": 1, "downstreamDirect": 1 }
+}
 ```
 
 ### action="usages" — Reverse dependency lookup

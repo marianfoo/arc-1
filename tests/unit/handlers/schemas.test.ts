@@ -509,11 +509,12 @@ describe('SAPContextSchema', () => {
 
   it('accepts full input', () => {
     const result = SAPContextSchema.safeParse({
-      action: 'deps',
+      action: 'impact',
       type: 'CLAS',
       name: 'ZCL_ORDER',
       maxDeps: 10,
       depth: 2,
+      includeIndirect: true,
     });
     expect(result.success).toBe(true);
   });
@@ -543,6 +544,7 @@ describe('SAPContextSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'CLAS' }).success).toBe(true);
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS' }).success).toBe(true);
+    expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS', action: 'impact' }).success).toBe(true);
   });
 
   it('does not have group field', () => {

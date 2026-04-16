@@ -139,6 +139,10 @@ async function deleteObjectTypes(client: Client, name: string, types: string[], 
     if (deleteResult.isError) {
       const text = toolText(deleteResult);
       if (/not found|does not exist|unknown/i.test(text)) continue;
+      if (/still in use|dependent object|used by|cannot be deleted/i.test(text)) {
+        console.warn(`    [setup] delete skipped for ${type} ${name}: ${text.slice(0, 240)}`);
+        continue; // best-effort-cleanup
+      }
       throw new Error(`Failed to delete ${type} ${name}: ${text}`);
     }
     sink.push(`${type} ${name}`);

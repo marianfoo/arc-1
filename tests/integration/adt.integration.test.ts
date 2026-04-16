@@ -8,7 +8,9 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { classifyCdsImpact } from '../../src/adt/cds-impact.js';
 import type { AdtClient } from '../../src/adt/client.js';
+import { findWhereUsed } from '../../src/adt/codeintel.js';
 import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
 import { fetchDiscoveryDocument, resolveAcceptType } from '../../src/adt/discovery.js';
 import { AdtApiError } from '../../src/adt/errors.js';
@@ -819,6 +821,42 @@ describe('ADT Integration Tests', () => {
 
       const source2 = await client.getProgram(prog2);
       expect(typeof source2).toBe('string');
+    });
+  });
+
+  // ─── CDS Impact Analysis ──────────────────────────────────────────
+
+  describe('CDS impact analysis', () => {
+    it('classifies downstream consumers for I_ABAPPACKAGE', async (ctx) => {
+      try {
+        const results = await findWhereUsed(client.http, client.safety, '/sap/bc/adt/ddic/ddl/sources/i_abappackage');
+        const downstream = classifyCdsImpact(results);
+
+        expect(downstream.accessControls.length).toBeGreaterThanOrEqual(1);
+        expect(
+          downstream.accessControls.some((entry) => entry.name === 'I_ABAPPACKAGE' && entry.type === 'DCLS/DL'),
+        ).toBe(true);
+        expect(downstream.summary.total).toBeGreaterThanOrEqual(2);
+      } catch (err) {
+        expectSapFailureClass(err, [403, 404, 500], [/not found/i, /forbidden/i, /usageReferences/i]);
+        requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
+      }
+    });
+
+    it('includeIndirect=true returns at least as many entries as default', async (ctx) => {
+      try {
+        const results = await findWhereUsed(client.http, client.safety, '/sap/bc/adt/ddic/ddl/sources/i_abappackage');
+        const directOnly = classifyCdsImpact(results);
+        const withIndirect = classifyCdsImpact(results, { includeIndirect: true });
+
+        if (directOnly.summary.total === 0) {
+          requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
+        }
+        expect(withIndirect.summary.total).toBeGreaterThanOrEqual(directOnly.summary.total);
+      } catch (err) {
+        expectSapFailureClass(err, [403, 404, 500], [/not found/i, /forbidden/i, /usageReferences/i]);
+        requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
+      }
     });
   });
 

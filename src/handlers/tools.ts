@@ -190,7 +190,8 @@ const SAPCONTEXT_DESC_ONPREM =
   'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.\n\n' +
   'For CDS analysis: Use SAPContext instead of reading each view in the dependency chain individually. ' +
   'A single SAPContext call on a consumption view (e.g., ZC_*) returns all dependent interface views, tables, and associations — ' +
-  'replacing 5-10 separate SAPRead calls. Only use targeted SAPRead for metadata extensions (DDLX) or service bindings (SRVB) that SAPContext does not cover.';
+  'replacing 5-10 separate SAPRead calls. Only use targeted SAPRead for metadata extensions (DDLX) or service bindings (SRVB) that SAPContext does not cover.\n\n' +
+  'CDS impact mode: SAPContext(action="impact", type="DDLS", name="...") returns upstream AST dependencies plus RAP-classified downstream consumers (projection views, BDEFs, SRVDs, SRVBs, DCLS, DDLX, ABAP consumers).';
 
 const SAPCONTEXT_DESC_BTP =
   'Get compressed dependency context for an ABAP object or CDS entity (BTP ABAP Environment). Returns only the public API contracts ' +
@@ -206,7 +207,8 @@ const SAPCONTEXT_DESC_BTP =
   'Use SAPContext BEFORE writing code that modifies or extends existing objects.\n\n' +
   'For CDS analysis: Use SAPContext instead of reading each view in the dependency chain individually. ' +
   'A single SAPContext call on a consumption view returns all dependent interface views, tables, and associations — ' +
-  'replacing 5-10 separate SAPRead calls.';
+  'replacing 5-10 separate SAPRead calls.\n\n' +
+  'CDS impact mode: SAPContext(action="impact", type="DDLS", name="...") returns upstream AST dependencies plus RAP-classified downstream consumers.';
 
 // ─── SAPQuery ───────────────────────────────────────────────────────
 
@@ -835,11 +837,12 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       properties: {
         action: {
           type: 'string',
-          enum: ['deps', 'usages'],
+          enum: ['deps', 'usages', 'impact'],
           description:
             'Action: "deps" (default, can be omitted) = get dependency context. ' +
             '"usages" = reverse dependency lookup — find all objects that depend on the given name. ' +
-            'Requires cache warmup (--cache-warmup). Only "name" is needed for usages.',
+            'Requires cache warmup (--cache-warmup). Only "name" is needed for usages. ' +
+            '"impact" = DDLS only; returns upstream CDS dependencies plus downstream RAP-classified consumers.',
         },
         type: {
           type: 'string',
@@ -873,6 +876,11 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           description:
             'Dependency depth: 1 = direct deps only (default), 2 = deps of deps, 3 = maximum. ' +
             'Higher depth = more context but more SAP calls.',
+        },
+        includeIndirect: {
+          type: 'boolean',
+          description:
+            'Only for action="impact". Include indirect (transitive) downstream where-used entries. Default false.',
         },
       },
       required: ['name'],
