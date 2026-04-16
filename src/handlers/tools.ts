@@ -890,6 +890,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'cache_stats',
               'create_package',
               'delete_package',
+              'change_package',
               'flp_list_catalogs',
               'flp_list_groups',
               'flp_list_tiles',
@@ -900,7 +901,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'flp_delete_catalog',
             ],
             description:
-              'Action to execute. Includes package lifecycle (create/delete) and FLP actions for catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
+              'Action to execute. Includes package lifecycle (create/delete/move) and FLP actions for catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
           },
           name: {
             type: 'string',
@@ -929,7 +930,28 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           },
           transport: {
             type: 'string',
-            description: 'Optional transport request (corrNr) for create_package or delete_package.',
+            description: 'Optional transport request (corrNr) for create_package, delete_package, or change_package.',
+          },
+          objectUri: {
+            type: 'string',
+            description:
+              'ADT URI of the object to move (e.g., /sap/bc/adt/oo/classes/zcl_my_class). If not provided, resolved automatically from objectName + objectType via search.',
+          },
+          objectType: {
+            type: 'string',
+            description: 'ADT object type (e.g., CLAS/OC, DDLS/DF, PROG/P). Required for change_package.',
+          },
+          objectName: {
+            type: 'string',
+            description: 'Object name to move (e.g., ZCL_MY_CLASS). Required for change_package.',
+          },
+          oldPackage: {
+            type: 'string',
+            description: 'Current package of the object. Required for change_package.',
+          },
+          newPackage: {
+            type: 'string',
+            description: 'Target package to move the object to. Required for change_package.',
           },
           catalogId: {
             type: 'string',

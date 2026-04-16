@@ -2686,6 +2686,216 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('blocked by safety');
     });
 
+    it('change_package calls refactoring preview then execute endpoints', async () => {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url), body: opts?.body });
+        if (String(url).includes('step=preview')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<generic:genericRefactoring xmlns:generic="http://www.sap.com/adt/refactoring/genericrefactoring"><generic:transport/></generic:genericRefactoring>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        if (String(url).includes('quickSearch')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/zarc1_test" adtcore:type="DDLS/DF" adtcore:name="ZARC1_TEST" adtcore:packageName="$TMP"/></adtcore:objectReferences>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+        newPackage: '$TMP',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Moved ZARC1_TEST');
+
+      const previewCall = calls.find((c) => c.method === 'POST' && c.url.includes('step=preview'));
+      expect(previewCall).toBeDefined();
+      const executeCall = calls.find((c) => c.method === 'POST' && c.url.includes('step=execute'));
+      expect(executeCall).toBeDefined();
+    });
+
+    it('change_package returns error when objectName is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+        newPackage: 'Z_TARGET',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"objectName" is required');
+    });
+
+    it('change_package returns error when objectType is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        oldPackage: '$TMP',
+        newPackage: 'Z_TARGET',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"objectType" is required');
+    });
+
+    it('change_package returns error when oldPackage is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        newPackage: 'Z_TARGET',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"oldPackage" is required');
+    });
+
+    it('change_package returns error when newPackage is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"newPackage" is required');
+    });
+
+    it('change_package is blocked by read-only safety mode', async () => {
+      const readOnlyClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+      });
+
+      const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+        newPackage: 'Z_TARGET',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('change_package is blocked when old package not in allowlist', async () => {
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['Z_ALLOWED'] },
+      });
+
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+        newPackage: 'Z_ALLOWED',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('change_package is blocked when new package not in allowlist', async () => {
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+        newPackage: 'Z_FORBIDDEN',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked by safety');
+    });
+
+    it('change_package passes transport in XML when provided', async () => {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string }) => {
+        calls.push({ method: opts?.method ?? 'GET', url: String(url), body: opts?.body });
+        if (String(url).includes('step=preview')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<generic:genericRefactoring xmlns:generic="http://www.sap.com/adt/refactoring/genericrefactoring"><generic:transport/></generic:genericRefactoring>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        objectUri: '/sap/bc/adt/ddic/ddl/sources/zarc1_test',
+        oldPackage: '$TMP',
+        newPackage: 'Z_TARGET',
+        transport: 'A4HK900123',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const executeCall = calls.find((c) => c.method === 'POST' && c.url.includes('step=execute'));
+      expect(executeCall?.body).toContain('<generic:transport>A4HK900123</generic:transport>');
+    });
+
+    it('change_package success message includes object name and packages', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        if (String(url).includes('step=preview')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<generic:genericRefactoring xmlns:generic="http://www.sap.com/adt/refactoring/genericrefactoring"><generic:transport/></generic:genericRefactoring>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPManage', {
+        action: 'change_package',
+        objectName: 'ZCL_MY_CLASS',
+        objectType: 'CLAS/OC',
+        objectUri: '/sap/bc/adt/oo/classes/zcl_my_class',
+        oldPackage: '$TMP',
+        newPackage: 'Z_PRODUCTION',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('ZCL_MY_CLASS');
+      expect(text).toContain('$TMP');
+      expect(text).toContain('Z_PRODUCTION');
+    });
+
     it('create_package returns transport guidance when parent package requires transport', async () => {
       mockFetch.mockReset();
       mockFetch.mockImplementation((url: string | URL) => {

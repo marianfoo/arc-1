@@ -225,7 +225,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ### Phase F: Future / Niche (P3)
 37. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress) for TLS termination; in-app TLS is edge case
-38. **FEAT-05** Code Refactoring (L) — rename, extract method, change package
+38. **FEAT-05** Code Refactoring (L) — rename, extract method *(change package completed 2026-04-15)*
 39. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
 
 ### Strategic Context: SAP Official ABAP MCP Server (Q2 2026)
@@ -1271,13 +1271,13 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Effort** | L (1-2 weeks) |
 | **Risk** | Medium — complex ADT API interactions |
 | **Usefulness** | Medium — valuable but complex |
-| **Status** | Not started |
+| **Status** | Partially complete — change package implemented (2026-04-15); rename/extract remain future |
 
 **What:** ADT supports code refactoring operations (rename symbol, extract method, change package). The marcellourbani/abap-adt-api TypeScript library implements these.
 
-**Why:** Refactoring is a common developer workflow.
+**Progress:** Change package assignment is implemented as `SAPManage(action="change_package")` — moves objects between packages via `/sap/bc/adt/refactorings` preview+execute flow. Supports transport auto-detection, package allowlists on both source and target.
 
-**Why not:** Massive implementation burden for marginal value — rename requires cross-system impact analysis (all callers, dynamic references); extract method requires parsing dependencies, detecting side effects, validating signatures. Both need multi-step ADT lock/unlock cycles with rollback semantics. LLMs are better at writing new methods than surgically extracting from existing ones — `SAPWrite edit_method` already lets the LLM replace a method body. Eclipse ADT and VS Code already have mature refactoring tools that humans prefer for this workflow.
+**Why not (rename/extract):** Massive implementation burden for marginal value — rename requires cross-system impact analysis (all callers, dynamic references); extract method requires parsing dependencies, detecting side effects, validating signatures. Both need multi-step ADT lock/unlock cycles with rollback semantics. LLMs are better at writing new methods than surgically extracting from existing ones — `SAPWrite edit_method` already lets the LLM replace a method body. Eclipse ADT and VS Code already have mature refactoring tools that humans prefer for this workflow.
 
 **Competitive update (2026-04-08):** VSP added rename preview analysis (commit dcaa358, Apr 6). Shows what would change without performing the rename. abap-adt-api has full rename (3 methods).
 

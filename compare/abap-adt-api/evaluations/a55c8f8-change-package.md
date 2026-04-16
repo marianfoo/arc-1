@@ -14,9 +14,9 @@ Uses ADT refactoring endpoints: `/sap/bc/adt/refactorings/changepackage`
 
 ## ARC-1 current state
 
-- No package reassignment/move support
-- Objects created in a package stay there
-- Would need the 3-step refactoring pattern (evaluate → preview → execute)
+- **Implemented** as `SAPManage(action="change_package")` — preview then execute via `/sap/bc/adt/refactorings`
+- Supports moving objects between packages with automatic URI resolution and transport pre-flight
+- Safety: respects read-only mode, package allowlists on both source and target packages
 
 ## Assessment
 
@@ -26,6 +26,6 @@ However, this is a refactoring operation with transport implications. Lower prio
 
 ## Decision
 
-**Consider future** — Bundle with other refactoring operations (FEAT-05: rename, extract method). All use the same ADT refactoring pattern.
+**Implemented** — Shipped as standalone `SAPManage(action="change_package")` action. Rename and extract-method remain future work (FEAT-05).
 
-**Effort**: S (1d — follows same pattern as rename/extract method)
+**Effort**: S (1d — implemented as SAPManage action with refactoring module)

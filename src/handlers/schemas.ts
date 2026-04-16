@@ -472,6 +472,7 @@ export const SAPManageSchema = z.object({
     'cache_stats',
     'create_package',
     'delete_package',
+    'change_package',
     'flp_list_catalogs',
     'flp_list_groups',
     'flp_list_tiles',
@@ -494,6 +495,11 @@ export const SAPManageSchema = z.object({
   transportLayer: z.string().optional(),
   packageType: z.enum(['development', 'structure', 'main']).optional(),
   transport: z.string().optional(),
+  objectUri: z.string().optional(),
+  objectType: z.string().optional(),
+  objectName: z.string().optional(),
+  oldPackage: z.string().optional(),
+  newPackage: z.string().optional(),
 });
 
 // ─── Hyperfocused SAP ───────────────────────────────────────────────

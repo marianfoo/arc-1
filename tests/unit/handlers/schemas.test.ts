@@ -559,6 +559,16 @@ describe('SAPManageSchema', () => {
       }).success,
     ).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'delete_package', name: 'ZPKG' }).success).toBe(true);
+    expect(
+      SAPManageSchema.safeParse({
+        action: 'change_package',
+        objectName: 'ZARC1_TEST',
+        objectType: 'DDLS/DF',
+        oldPackage: '$TMP',
+        newPackage: 'Z_TARGET',
+        transport: 'A4HK900123',
+      }).success,
+    ).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_catalogs' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_groups' }).success).toBe(true);
     expect(SAPManageSchema.safeParse({ action: 'flp_list_tiles', catalogId: 'ZCAT' }).success).toBe(true);
