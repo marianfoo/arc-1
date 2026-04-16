@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.8](https://github.com/marianfoo/arc-1/compare/v0.6.7...v0.6.8) (2026-04-16)
+
+
+### Features
+
+* add change_package action for moving objects between packages ([#133](https://github.com/marianfoo/arc-1/issues/133)) ([de2bc1a](https://github.com/marianfoo/arc-1/commit/de2bc1ab6d5fe286aa2942b18ff90260566a25fc))
+* implementation for creationg sktd objects ([#134](https://github.com/marianfoo/arc-1/issues/134)) ([1e8f59c](https://github.com/marianfoo/arc-1/commit/1e8f59cef66a3265b3c8b4105d5111016ff2c15d))
+
+
+### Bug Fixes
+
+* retry all HTTP methods on 503 and add CSRF token retry ([#135](https://github.com/marianfoo/arc-1/issues/135)) ([39e3529](https://github.com/marianfoo/arc-1/commit/39e35293cd369244f6f2d98df8a6a33ab15c2847))
+
 ## [0.6.7](https://github.com/marianfoo/arc-1/compare/v0.6.6...v0.6.7) (2026-04-15)
 
 
