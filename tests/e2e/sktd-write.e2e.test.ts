@@ -123,11 +123,12 @@ define view entity ${objectName}
 
     try {
       // Step 2: Activate the DDLS (KTD needs an active parent to attach to)
-      await callTool(client, 'SAPActivate', {
+      const activateDdls = await callTool(client, 'SAPActivate', {
         action: 'activate',
         type: 'DDLS',
         name: objectName,
       });
+      expectToolSuccess(activateDdls);
 
       // Step 3: Create KTD for the DDLS
       const createKtd = await callTool(client, 'SAPWrite', {
@@ -232,7 +233,12 @@ define view entity ${objectName}
     });
 
     try {
-      await callTool(client, 'SAPActivate', { action: 'activate', type: 'DDLS', name: objectName });
+      const activateResult = await callTool(client, 'SAPActivate', {
+        action: 'activate',
+        type: 'DDLS',
+        name: objectName,
+      });
+      expectToolSuccess(activateResult);
 
       // Create KTD with source in one call
       const createResult = await callTool(client, 'SAPWrite', {

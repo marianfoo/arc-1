@@ -2180,32 +2180,7 @@ async function handleSAPWrite(
     case 'delete': {
       await enforcePackageForExistingObject();
 
-      if (type === 'SKTD') {
-        // KTD documents use the dedicated /sap/bc/adt/deletion/{check,delete} framework
-        // — no lock/unlock envelope. Check first, then execute deletion with optional transport.
-        checkOperation(client.safety, OperationType.Delete, 'DeleteKTD');
-
-        const checkBody = `<?xml version="1.0" encoding="UTF-8"?>
-<del:checkRequest xmlns:del="http://www.sap.com/adt/deletion" xmlns:adtcore="http://www.sap.com/adt/core">
-  <del:object adtcore:uri="${escapeXml(objectUrl)}"/>
-</del:checkRequest>`;
-        await client.http.post('/sap/bc/adt/deletion/check', checkBody, 'application/xml');
-
-        const transportElement = transport
-          ? `\n    <del:transportNumber>${escapeXml(transport)}</del:transportNumber>`
-          : '';
-        const deleteBody = `<?xml version="1.0" encoding="UTF-8"?>
-<del:deletionRequest xmlns:del="http://www.sap.com/adt/deletion" xmlns:adtcore="http://www.sap.com/adt/core">
-  <del:object adtcore:uri="${escapeXml(objectUrl)}">${transportElement}
-  </del:object>
-</del:deletionRequest>`;
-        await client.http.post('/sap/bc/adt/deletion/delete', deleteBody, 'application/xml');
-
-        cachingLayer?.invalidate(type, name);
-        return textResult(`Deleted ${type} ${name}.`);
-      }
-
-      // Lock, delete, unlock pattern — auto-propagate lock corrNr if no explicit transport
+      // Lock, delete, unlock pattern (works for all types including SKTD) — auto-propagate lock corrNr if no explicit transport
       await client.http.withStatefulSession(async (session) => {
         const lock = await lockObject(session, client.safety, objectUrl);
         const effectiveTransport = transport ?? (lock.corrNr || undefined);

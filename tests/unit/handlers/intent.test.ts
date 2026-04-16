@@ -4631,15 +4631,17 @@ ENDCLASS.`;
       expect(putCall!.body).toContain(`<sktd:text>${initialBase64}</sktd:text>`);
     });
 
-    it('deletes SKTD via /deletion/check + /deletion/delete (no lock/unlock), passing transport number', async () => {
+    it('deletes SKTD via standard lock→DELETE→unlock pattern', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>KTDLOCK</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
       mockFetch.mockReset();
-      const calls: Array<{ method: string; url: string; body?: string }> = [];
-      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
-        calls.push({
-          method: opts?.method ?? 'GET',
-          url: String(url),
-          body: opts?.body ? String(opts.body) : undefined,
-        });
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        calls.push({ method, url: String(url) });
+        if (method === 'POST' && String(url).includes('_action=LOCK')) {
+          return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
+        }
         return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
       });
 
@@ -4647,50 +4649,21 @@ ENDCLASS.`;
         action: 'delete',
         type: 'SKTD',
         name: 'ZTR_C_PAYMENT_VALUE_DATE',
-        transport: 'KD1K939319',
       });
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Deleted SKTD ZTR_C_PAYMENT_VALUE_DATE');
 
-      const checkCall = calls.find((c) => c.url.includes('/sap/bc/adt/deletion/check'));
-      expect(checkCall).toBeDefined();
-      expect(checkCall!.body).toContain('<del:checkRequest');
-      expect(checkCall!.body).toContain(
-        'adtcore:uri="/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date"',
+      const lockCall = calls.find((c) => c.method === 'POST' && c.url.includes('_action=LOCK'));
+      expect(lockCall?.url).toContain('/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date?_action=LOCK');
+
+      const deleteCall = calls.find((c) => c.method === 'DELETE');
+      expect(deleteCall?.url).toContain(
+        '/sap/bc/adt/documentation/ktd/documents/ztr_c_payment_value_date?lockHandle=KTDLOCK',
       );
 
-      const deleteCall = calls.find((c) => c.url.includes('/sap/bc/adt/deletion/delete'));
-      expect(deleteCall).toBeDefined();
-      expect(deleteCall!.body).toContain('<del:deletionRequest');
-      expect(deleteCall!.body).toContain('<del:transportNumber>KD1K939319</del:transportNumber>');
-
-      // No lock/unlock for the deletion framework flow
-      expect(calls.some((c) => c.url.includes('_action=LOCK'))).toBe(false);
-      expect(calls.some((c) => c.url.includes('_action=UNLOCK'))).toBe(false);
-    });
-
-    it('deletes SKTD omits transportNumber element when no transport is provided', async () => {
-      mockFetch.mockReset();
-      const calls: Array<{ method: string; url: string; body?: string }> = [];
-      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
-        calls.push({
-          method: opts?.method ?? 'GET',
-          url: String(url),
-          body: opts?.body ? String(opts.body) : undefined,
-        });
-        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
-      });
-
-      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
-        action: 'delete',
-        type: 'SKTD',
-        name: 'ZTR_C_PAYMENT_VALUE_DATE',
-      });
-
-      expect(result.isError).toBeUndefined();
-      const deleteCall = calls.find((c) => c.url.includes('/sap/bc/adt/deletion/delete'));
-      expect(deleteCall!.body).not.toContain('transportNumber');
+      const unlockCall = calls.find((c) => c.method === 'POST' && c.url.includes('_action=UNLOCK'));
+      expect(unlockCall).toBeDefined();
     });
 
     it('updates DTEL via metadata PUT', async () => {
