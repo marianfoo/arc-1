@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-16 (PR #134: SKTD read/write (Knowledge Transfer Documents); fr0ster v6.1.0: UpdateInterface BTP corrNr fix (not applicable to ARC-1 — centralized safeUpdateSource already handles), ServiceBindingVariant (V4 SRVB publish bug in devtools.ts), dump API simplified; VSP: lock-handle bug class resolved (modificationSupport guard — implement in ARC-1 crud.ts) + CSRF HEAD fails on S/4HANA Public Cloud issue #104 (add GET fallback in http.ts); abap-adt-api: Dynpro metadata proposal #44; dassian-adt deep analysis: 9 transport tools, 8 trace tools, abap_run endpoint confirmed; ARC-1 action items: fix V4 SRVB publish endpoint + add modificationSupport check to lockObject() + CSRF HEAD fallback)_
+_Last updated: 2026-04-16 (PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); fr0ster v6.1.0: UpdateInterface BTP corrNr fix (not applicable to ARC-1 — centralized safeUpdateSource already handles), ServiceBindingVariant (V4 SRVB publish bug in devtools.ts), dump API simplified; VSP: lock-handle bug class resolved (modificationSupport guard — implement in ARC-1 crud.ts) + CSRF HEAD fails on S/4HANA Public Cloud issue #104 (add GET fallback in http.ts); abap-adt-api: Dynpro metadata proposal #44; dassian-adt deep analysis: 9 transport tools, 8 trace tools, abap_run endpoint confirmed; ARC-1 action items: fix V4 SRVB publish endpoint + add modificationSupport check to lockObject() + CSRF HEAD fallback)_
 
 ## Legend
 - ✅ = Supported
@@ -100,7 +100,7 @@ _Last updated: 2026-04-16 (PR #134: SKTD read/write (Knowledge Transfer Document
 | Variants | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Structured class decomposition (metadata + includes) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ (locals_def/imp/test/macros) |
 | GetProgFullCode (include traversal) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (on-prem only; `GET /sap/bc/adt/repository/nodestructure?objecttype=PROG/P&objectname={name}` + recursive INCL fetch) | N/A | ❌ | ❌ |
-| SKTD (Knowledge Transfer Documents) | ✅ (PR #134, pending merge; `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| SKTD (Knowledge Transfer Documents) | ✅ (merged PR #134 2026-04-16; `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 
 ## 6. Write / CRUD Operations
 
@@ -127,7 +127,7 @@ _Last updated: 2026-04-16 (PR #134: SKTD read/write (Knowledge Transfer Document
 | Service binding create (SRVB) | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
 | Message class write (MSAG) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | DCL write (DCLS) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ |
-| SKTD write (Knowledge Transfer Docs) | ✅ (PR #134, pending merge; base64 Markdown in XML envelope; create requires refObjectType) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| SKTD write (Knowledge Transfer Docs) | ✅ (merged PR #134 2026-04-16; base64 Markdown in XML envelope; create requires refObjectType) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 
 ## 7. Code Intelligence
 
@@ -274,7 +274,7 @@ The following items were incorrectly marked in the previous version and have sin
 | VSP lock-handle bug | ⚠️ (ongoing 423 errors) | ✅ (22517d4 — modificationSupport guard) | Root cause fixed: detect modificationSupport=false in lock response. ARC-1 crud.ts needs same fix. |
 | VSP version | v2.39.0+ | v2.40.0+ (Apr 13-15 sprint) | cr-config-audit CLI tools, RecoverFailedCreate primitive, lock-handle fix |
 | S/4HANA Public Cloud CSRF | not tracked | ❌ ARC-1 may fail | VSP issue #104: HEAD request for CSRF fetch fails on S/4HANA Public Cloud (CL_ADT_WB_RES_APP returns 403). ARC-1 http.ts uses HEAD — verify GET fallback needed. |
-| ARC-1 SKTD (Knowledge Transfer Documents) | ❌ | ✅ (PR #134, pending merge) | PR #134 by lemaiwo adds full SKTD read/write: `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`, base64-decoded Markdown, create requires refObjectType, update preserves server-side metadata. |
+| ARC-1 SKTD (Knowledge Transfer Documents) | ❌ | ✅ (merged PR #134 2026-04-16) | PR #134 by lemaiwo — full SKTD read/write: `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`, base64-decoded Markdown, create requires refObjectType, update preserves server-side metadata. |
 | GetProgFullCode (include traversal) availability | ✅ fr0ster | ✅ fr0ster (on-prem only) | fr0ster v6.1.0 deep analysis: uses `GET /sap/bc/adt/repository/nodestructure?objecttype=PROG/P&objectname={name}` + recursive include fetch. NOT available on BTP Cloud (missing node API). |
 | fr0ster Enhancements endpoint | noted | documented | fr0ster deep analysis: `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` (base64-encoded source, on-prem only); enhancement spot: `GET /sap/bc/adt/enhancements/enhsxsb/{spotName}`; on-prem only. |
 | dassian-adt deep analysis | partial | complete | 2026-04-16 deep dive: 9 transport tools (was 6), 8 trace tools, abap_run endpoint `POST /sap/bc/adt/oo/classrun/{name}`, multi-system `sap_system_id` injection, OAuth self-hosted AS with PKCE. New folder: compare/dassian-adt/ |
@@ -309,8 +309,8 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~DDIC completeness~~ → STRU, DOMA, DTEL, TRAN read
 - ~~Token efficiency~~ → method-level surgery, hyperfocused mode, context compression
 
-**Upcoming (not yet merged):**
-- **SKTD (Knowledge Transfer Documents)** — PR #134 by lemaiwo. Full read/write for Markdown docs attached to ABAP objects. Unique to ARC-1 among all competitors.
+**Recently merged:**
+- ~~**SKTD (Knowledge Transfer Documents)**~~ — **✅ Merged PR #134 (2026-04-16)** by lemaiwo. Full read/write for Markdown docs attached to ABAP objects. Unique to ARC-1 among all competitors.
 
 **P0 — production blockers:**
 - ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented. [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)

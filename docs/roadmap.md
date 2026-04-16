@@ -88,7 +88,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
-| 44 | FEAT-48 | SKTD (Knowledge Transfer Documents) Read/Write | P2 | S | Features |
+| ~~44~~ | ~~FEAT-48~~ | ~~SKTD (Knowledge Transfer Documents) Read/Write~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
 | ~~44~~ | ~~FEAT-44~~ | ~~TABL (Database Table) Create~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~45~~ | ~~FEAT-45~~ | ~~DEVC (Package) Create~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~46~~ | ~~FEAT-46~~ | ~~SRVB (Service Binding) Create~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
@@ -164,7 +164,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 >
 > **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
 >
-> **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) found 3 new P0 compatibility bugs (COMPAT-01 through COMPAT-03) and 1 verify item (COMPAT-04 — likely not applicable to ARC-1). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of all 423 lock errors. S/4HANA Public Cloud CSRF HEAD bug affects ALL write operations for that platform. PR #134 (SKTD) adds ARC-1-unique Knowledge Transfer Document support. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API.
+> **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) found 3 new P0 compatibility bugs (COMPAT-01 through COMPAT-03) and 1 verify item (COMPAT-04 — likely not applicable to ARC-1). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of all 423 lock errors. S/4HANA Public Cloud CSRF HEAD bug affects ALL write operations for that platform. PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API.
 
 ### Phase A: Production Blockers (P0)
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
@@ -217,7 +217,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
 23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
-24. **FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S) — PR #134 pending merge. Unique to ARC-1. LLM-generated documentation for ABAP objects.
+24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
 25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
 26. ~~**FEAT-20** Source Version / Revision History (S) — **promoted to P1/Phase B** (dassian-adt added revisions tool)~~
@@ -1304,7 +1304,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — Markdown documentation attached to ABAP objects |
-| **Status** | **Pending merge** — PR #134 by lemaiwo (2026-04-15) |
+| **Status** | **✅ Completed** — PR #134 by lemaiwo merged 2026-04-16 |
 | **Source** | [PR #134](https://github.com/marianfoo/arc-1/pull/134) |
 
 **What:** Read and write SAP Knowledge Transfer Documents (KTDs) — Markdown documentation that can be attached to ABAP objects like CDS views, BDEFs, classes, programs, etc. Editable in Eclipse ADT and stored on the SAP system as XML envelopes with base64-encoded Markdown content.
