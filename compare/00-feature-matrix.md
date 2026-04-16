@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools; dassian-adt: 53 tools, OAuth, multi-system; SAP Joule Q2 2026 GA announced)_
+_Last updated: 2026-04-16 (PR #134: SKTD read/write (Knowledge Transfer Documents); fr0ster v6.1.0: UpdateInterface BTP corrNr fix (not applicable to ARC-1 — centralized safeUpdateSource already handles), ServiceBindingVariant (V4 SRVB publish bug in devtools.ts), dump API simplified; VSP: lock-handle bug class resolved (modificationSupport guard — implement in ARC-1 crud.ts) + CSRF HEAD fails on S/4HANA Public Cloud issue #104 (add GET fallback in http.ts); abap-adt-api: Dynpro metadata proposal #44; dassian-adt deep analysis: 9 transport tools, 8 trace tools, abap_run endpoint confirmed; ARC-1 action items: fix V4 SRVB publish endpoint + add modificationSupport check to lockObject() + CSRF HEAD fallback)_
 
 ## Legend
 - ✅ = Supported
@@ -21,8 +21,8 @@ _Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools
 | ADT client | Custom (undici/fetch) | Custom (Go) | abap-adt-api | Custom (axios) | Custom (aiohttp) | Custom (axios) | SAP Cloud SDK | abap-adt-api | Custom (requests) |
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) | N/A (Python, git install) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Stars | — | 273 | 109 | 103 | 33 | 29 | 120 | 32 | 79 |
-| Active development | ✅ | ✅ Very (v2.38.1) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v5.1.1) | ⚠️ Dormant (Jan 2026) | ✅ Very (53 tools, daily commits) | ✅ Very (since 2018) |
+| Stars | — | 279 | 109 | 103 | 33 | 35 | 120 | 33 | 79 |
+| Active development | ✅ | ✅ Very (v2.39+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v6.1.0) | ⚠️ Dormant (Jan 2026) | ⚠️ Stable (53 tools, no commits since Apr 14) | ✅ Very (since 2018) |
 | Release count | — | 32+ | — | — | — | 95+ (5 months) | — | rolling | rolling "latest" |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A | N/A |
 
@@ -90,7 +90,7 @@ _Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools
 | Structures | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Domains | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ | ⚠️ (PR #149 in progress) |
 | Data elements | ✅ | ❌ | ✅ | ⚠️ | ❌ | ✅ | N/A | ❌ | ✅ |
-| Enhancements | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ (BAdI/enhancement impl) |
+| Enhancements (BAdI/ENHO) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (on-prem only; `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` + `GET /sap/bc/adt/enhancements/enhsxsb/{spot}`) | N/A | ❌ | ✅ (BAdI/enhancement impl) |
 | Transactions | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | N/A | ❌ | ❌ |
 | Free SQL | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | System info / components | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
@@ -99,7 +99,8 @@ _Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools
 | Text elements | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Variants | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Structured class decomposition (metadata + includes) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ (locals_def/imp/test/macros) |
-| GetProgFullCode (include traversal) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ❌ |
+| GetProgFullCode (include traversal) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (on-prem only; `GET /sap/bc/adt/repository/nodestructure?objecttype=PROG/P&objectname={name}` + recursive INCL fetch) | N/A | ❌ | ❌ |
+| SKTD (Knowledge Transfer Documents) | ✅ (PR #134, pending merge; `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 
 ## 6. Write / CRUD Operations
 
@@ -120,12 +121,13 @@ _Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (ADTObjectType) |
-| Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ (class write test_classes) |
+| Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ✅ (abap_create_test_include) | ✅ (class write test_classes) |
 | Table write (TABL) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Package create (DEVC) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
 | Service binding create (SRVB) | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ | ✅ |
 | Message class write (MSAG) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | DCL write (DCLS) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ |
+| SKTD write (Knowledge Transfer Docs) | ✅ (PR #134, pending merge; base64 Markdown in XML envelope; create requires refObjectType) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 
 ## 7. Code Intelligence
 
@@ -175,7 +177,7 @@ _Last updated: 2026-04-15 (FEAT-38 delivered in ARC-1; fr0ster v5.1.1: 316 tools
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
 | Short dumps (ST22) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ❌ |
-| ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ (Apr 2026) | ❌ |
+| ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ (8 tools: list/params/config/hit-list/statements/db-access/delete×2) | ❌ |
 | System messages (SM02) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0) | N/A | ❌ | ❌ |
 | Gateway error log (IWFND) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, on-prem) | N/A | ❌ | ❌ |
 | ADT feed reader (unified) | ⚠️ (dumps+traces) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, 5 types) | N/A | ❌ | ❌ |
@@ -261,8 +263,21 @@ The following items were incorrectly marked in the previous version and have sin
 | fr0ster version | v4.8.1 | v4.8.7 | Continued iteration |
 | fr0ster version | v4.8.7 | v5.0.8 (303 tools) | v5.0.7: 14 activation tools (+14), post-merge naming fix in v5.0.8 |
 | fr0ster version | v5.0.8 (303 tools) | v5.1.1 (316 tools) | v5.1.0: 13 Check handlers, Node 22 minimum, stdio log fix, CSRF fix |
-| dassian-adt | 0 stars, 25 tools, no OAuth | 32 stars, 53 tools, OAuth/XSUAA, multi-system | Explosive growth: 28 new tools, OAuth, multi-system in 2 weeks |
+| fr0ster version | v5.1.1 (316 tools) | v6.1.0 (~320 tools) | v5.2.0: SRVD/SRVB activate + ServiceBindingVariant. v6.0.0 BREAKING: RuntimeListDumps removed, dump reads via RuntimeListFeeds; UpdateInterface BTP corrNr fix. v6.1.0: RFC decoupled from legacy. |
+| dassian-adt | 0 stars, 25 tools, no OAuth | 33 stars, 53 tools, OAuth/XSUAA, multi-system | Explosive growth: 28 new tools, OAuth, multi-system in 2 weeks. No new commits since Apr 14. |
+| dassian-adt transport tool count | 6 | 9 | Deep analysis: +transport_set_owner, +transport_add_user, +transport_delete in TransportHandlers.ts |
+| dassian-adt trace tools | (unlisted) | 8 (TraceHandlers.ts) | Full profiler workflow: list/params/config/hit-list/statements/db-access/delete/delete-config |
+| dassian-adt test include | ❌ | ✅ abap_create_test_include | TestHandlers.ts confirmed in deep analysis 2026-04-16 |
+| VSP stars | 273 | 279 | New issues: 103 (SAProuter support), 104 (CSRF HEAD 403 on S/4HANA public cloud) |
+| fr0ster stars | 29 | 35 | v6.1.0 |
 | sapcli stars | 77 | 79 | PR #149 merged (domain support), PR #147 (auth fields), HTTP refactor |
+| VSP lock-handle bug | ⚠️ (ongoing 423 errors) | ✅ (22517d4 — modificationSupport guard) | Root cause fixed: detect modificationSupport=false in lock response. ARC-1 crud.ts needs same fix. |
+| VSP version | v2.39.0+ | v2.40.0+ (Apr 13-15 sprint) | cr-config-audit CLI tools, RecoverFailedCreate primitive, lock-handle fix |
+| S/4HANA Public Cloud CSRF | not tracked | ❌ ARC-1 may fail | VSP issue #104: HEAD request for CSRF fetch fails on S/4HANA Public Cloud (CL_ADT_WB_RES_APP returns 403). ARC-1 http.ts uses HEAD — verify GET fallback needed. |
+| ARC-1 SKTD (Knowledge Transfer Documents) | ❌ | ✅ (PR #134, pending merge) | PR #134 by lemaiwo adds full SKTD read/write: `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`, base64-decoded Markdown, create requires refObjectType, update preserves server-side metadata. |
+| GetProgFullCode (include traversal) availability | ✅ fr0ster | ✅ fr0ster (on-prem only) | fr0ster v6.1.0 deep analysis: uses `GET /sap/bc/adt/repository/nodestructure?objecttype=PROG/P&objectname={name}` + recursive include fetch. NOT available on BTP Cloud (missing node API). |
+| fr0ster Enhancements endpoint | noted | documented | fr0ster deep analysis: `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` (base64-encoded source, on-prem only); enhancement spot: `GET /sap/bc/adt/enhancements/enhsxsb/{spotName}`; on-prem only. |
+| dassian-adt deep analysis | partial | complete | 2026-04-16 deep dive: 9 transport tools (was 6), 8 trace tools, abap_run endpoint `POST /sap/bc/adt/oo/classrun/{name}`, multi-system `sap_system_id` injection, OAuth self-hosted AS with PKCE. New folder: compare/dassian-adt/ |
 
 ---
 
@@ -280,9 +295,9 @@ The following items were incorrectly marked in the previous version and have sin
 9. **npm + Docker + release-please** — Most professional distribution pipeline.
 
 ### Biggest Competitive Threats
-1. **vibing-steampunk** (273 stars) — Community favorite. Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening. Defaults to hyperfocused mode (1 tool). Still lacks BTP OAuth / Destination Service. Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (#91, #98).
-2. **fr0ster** (v5.1.1, 95+ releases, 29 stars) — Closest enterprise competitor. 316 tools, 9 auth providers, TLS, RFC, embeddable. v5.1.0 added 13 Check handlers. Ongoing bug fixes reveal complexity cost of 316-tool surface area (stdio log leaks, CSRF corruption, lock leaks).
-3. **dassian-adt** (32 stars, 53 tools) — **Fastest-growing threat.** Went from 0 to 32 stars in 2 weeks. Added OAuth/XSUAA, multi-system support, 28 new tools (fix proposals, unit tests, traces, revisions, pretty print). Azure-focused. Still lacks safety system, BTP Destination/PP, caching, linting.
+1. **vibing-steampunk** (279 stars) — Community favorite. Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening, RecoverFailedCreate primitive. Defaults to hyperfocused mode (1 tool). Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (fix in 22517d4), CSRF HEAD 403 on S/4HANA public cloud (#104), SAProuter support (#103).
+2. **fr0ster** (v6.1.0, 100+ releases, 35 stars) — Closest enterprise competitor. ~320 tools, 9 auth providers, TLS, RFC, embeddable. v6.0.0 BREAKING: simplified dump API + fixed UpdateInterface on BTP (corrNr bug — not applicable to ARC-1 due to centralized safeUpdateSource). v6.1.0: RFC decoupled from legacy system type. ARC-1 action: **fix V4 SRVB publish endpoint** (`devtools.ts` hardcodes `odatav2` — fails for OData V4 bindings).
+3. **dassian-adt** (33 stars, 53 tools) — Stabilized after explosive April sprint (0 → 33 stars, 25 → 53 tools in 2 weeks). OAuth/XSUAA/multi-system/per-user auth all added. Deep analysis (2026-04-16): 9 transport tools, 8 trace tools, abap_create_test_include confirmed. Still no new commits since Apr 14. Lacks: safety system, BTP Destination/PP, caching, linting.
 4. **SAP Joule / Official ABAP MCP Server** — SAP announced Q2 2026 GA for ABAP Cloud Extension for VS Code with built-in agentic AI. Initial scope: RAP UI service development. Will reshape landscape — community servers become complementary.
 5. **btp-odata-mcp** (120 stars) — Different category (OData not ADT). Dormant since Jan 2026. High stars but no recent development.
 
@@ -294,11 +309,18 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~DDIC completeness~~ → STRU, DOMA, DTEL, TRAN read
 - ~~Token efficiency~~ → method-level surgery, hyperfocused mode, context compression
 
+**Upcoming (not yet merged):**
+- **SKTD (Knowledge Transfer Documents)** — PR #134 by lemaiwo. Full read/write for Markdown docs attached to ABAP objects. Unique to ARC-1 among all competitors.
+
 **P0 — production blockers:**
-- ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented: one-retry negotiation fallback in `src/adt/http.ts`, endpoint-specific CTS media types, lock `corrNr` auto-propagation. fr0ster v4.5.0 added per-endpoint header caching (P3 optimization ARC-1 doesn't need yet). [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)
-- ~~ADT service discovery / MIME negotiation (FEAT-38)~~ — ✅ completed 2026-04-14 (startup probe + proactive header selection + retry fallback)
-- ~~401 session timeout auto-retry (centralized gateway idle)~~ — ✅ Implemented: guard-protected single retry with session reset + re-auth in `src/adt/http.ts`. Handles both Basic Auth (on-prem) and Bearer token refresh (BTP).
-- ~~TLS/HTTPS for HTTP Streamable~~ — downgraded to P3: most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress)
+- ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented. [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)
+- ~~ADT service discovery / MIME negotiation (FEAT-38)~~ — ✅ completed 2026-04-14
+- ~~401 session timeout auto-retry (centralized gateway idle)~~ — ✅ Implemented in `src/adt/http.ts`
+- ~~TLS/HTTPS for HTTP Streamable~~ — downgraded to P3: most deployments use reverse proxy
+- **modificationSupport guard in lockObject()** — Root cause of all 423 `ExceptionResourceInvalidLockHandle` errors. ADT lock response includes `MODIFICATION_SUPPORT` flag; if `false` (released transport, read-only object), return LLM-friendly error instead of trying to lock. Fix `src/adt/crud.ts`. [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+- **CSRF HEAD fallback for S/4HANA Public Cloud** — `CL_ADT_WB_RES_APP` returns 403 for HEAD on S/4HANA Public Cloud and some on-prem S/4HANA 2023 FPS03. All write operations silently fail. Add GET fallback in `src/adt/http.ts`. [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) / VSP issue #104
+- **V4 SRVB publish endpoint bug** — `publishServiceBinding()` in `src/adt/devtools.ts` hardcodes `bindingtype=odatav2` — fails for OData V4 service bindings. Fix: pass binding type through and use `odatav4` for V4 bindings. [Eval](fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
+- ~~**BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable.** ARC-1's centralized `safeUpdateSource()` already uses `transport ?? (lock.corrNr || undefined)` for all types — fr0ster's bug was per-handler (only `UpdateInterface` was missing it). Verify with BTP INTF update integration test. [Eval](fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
 
 **P1 — high-value gaps:**
 - Where-Used analysis, fix proposals
@@ -312,6 +334,8 @@ The following items were incorrectly marked in the previous version and have sin
 - SQL traces, PrettyPrint, transport contents, source versions
 - Cloud readiness assessment, gCTS/abapGit, enhancement framework
 - Multi-system routing, rate limiting
+- Dynpro (screen) metadata — ADT endpoint `/sap/bc/adt/programs/programs/<PROG>/dynpros` (abap-adt-api #44)
+- RecoverFailedCreate — partial-create recovery on 5xx (VSP f00356a)
 
 **Not planned (intentional):**
 - ABAP debugger (WebSocket + ZADT_VSP), execute ABAP (security risk), Lua scripting (VSP-unique)

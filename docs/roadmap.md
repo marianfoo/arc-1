@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-16
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -51,6 +51,10 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~8~~ | ~~FEAT-16~~ | ~~Error Intelligence (Actionable Hints)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-15~~ |
 | ~~9~~ | ~~FEAT-17~~ | ~~Type Auto-Mappings for SAPWrite~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-14~~ |
 | 10 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
+| — | COMPAT-01 | modificationSupport guard in lockObject() | P0 | XS | Compatibility |
+| — | COMPAT-02 | CSRF HEAD→GET fallback (S/4HANA Public Cloud) | P0 | XS | Compatibility |
+| — | COMPAT-03 | V4 SRVB publish endpoint bug | P0 | XS | Compatibility |
+| — | COMPAT-04 | BTP transport omission in safeUpdateSource() — verify only | P2 | XS | Compatibility |
 | 11 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
 | 12 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
 | 13 | SEC-05 | Rate Limiting | P2 | S | Security |
@@ -84,6 +88,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 41 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
 | 42 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | 43 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles) | P2 | S | Features |
+| 44 | FEAT-48 | SKTD (Knowledge Transfer Documents) Read/Write | P2 | S | Features |
 | ~~44~~ | ~~FEAT-44~~ | ~~TABL (Database Table) Create~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~45~~ | ~~FEAT-45~~ | ~~DEVC (Package) Create~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
 | ~~46~~ | ~~FEAT-46~~ | ~~SRVB (Service Binding) Create~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-14~~ |
@@ -158,6 +163,8 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 > Priorities are assigned based on which [core design principle](#vision) a feature serves. Sourced from 4 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md), [dassian-adt](../compare/07-dassian-adt.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
 >
 > **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
+>
+> **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) found 3 new P0 compatibility bugs (COMPAT-01 through COMPAT-03) and 1 verify item (COMPAT-04 — likely not applicable to ARC-1). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of all 423 lock errors. S/4HANA Public Cloud CSRF HEAD bug affects ALL write operations for that platform. PR #134 (SKTD) adds ARC-1-unique Knowledge Transfer Document support. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API.
 
 ### Phase A: Production Blockers (P0)
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
@@ -168,6 +175,17 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### Phase A.5: Proactive Compatibility (P0)
 6. ~~**FEAT-38** ADT Service Discovery / MIME Negotiation (S)~~ — **completed 2026-04-14** (startup probe fetches `/sap/bc/adt/discovery`, request-time MIME selection uses cached map, 406/415 retry remains fallback)
 
+### Phase A.6: Compatibility Bug Fixes (P0) — identified 2026-04-16
+These bugs affect real-world deployments and were confirmed by cross-project competitor analysis:
+
+- **COMPAT-01: modificationSupport guard in lockObject()** (XS) — ADT lock response includes `MODIFICATION_SUPPORT` flag; if `false`, the object is in a released transport or system-delivered and cannot be locked. ARC-1 ignores this flag → cryptic 423 `ExceptionResourceInvalidLockHandle`. Fix: parse from lock response in `src/adt/crud.ts`, return actionable error if `false`. Source: VSP commit 22517d4 (root-cause fix for all recurring 423 issues). [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+
+- **COMPAT-02: CSRF HEAD→GET fallback (S/4HANA Public Cloud)** (XS) — `CL_ADT_WB_RES_APP` returns 403 for HEAD on S/4HANA Public Cloud and some S/4HANA 2023 FPS03 on-prem. ARC-1's `fetchCSRFToken()` in `src/adt/http.ts` uses HEAD → all write operations silently fail with a misleading "access forbidden" error. Fix: retry CSRF fetch with GET when HEAD returns 403. Source: VSP issue #104. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+
+- **COMPAT-03: V4 SRVB publish endpoint bug** (XS) — `publishServiceBinding()` and `unpublishServiceBinding()` in `src/adt/devtools.ts` hardcode `bindingtype=odatav2`. OData V4 service bindings need `bindingtype=odatav4`. Fix: propagate binding type from `SAPManage publish_srvb` through to the publish URL. Source: fr0ster commit 51781d3 (ServiceBindingVariant). [Eval](../compare/fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
+
+- ~~**COMPAT-04: BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable to ARC-1.** fr0ster's bug was per-handler transport wiring (`UpdateInterface` missing what `UpdateClass` had). ARC-1's centralized `safeUpdateSource()` handles ALL types with `effectiveTransport = transport ?? (lock.corrNr || undefined)` — the pattern already correctly omits `corrNr` when undefined. **Verify** with BTP Cloud INTF update integration test. Source: fr0ster commit c2b8006 + issue #61. [Eval](../compare/fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
+
 ### Phase B: Core Value Features (P1)
 7. ~~**FEAT-37** DCL (Access Control) Read/Write (S)~~ — **completed 2026-04-15**
 8. ~~**FEAT-40** FLP Launchpad Management (M)~~ — **completed 2026-04-12**
@@ -177,7 +195,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 12. ~~**FEAT-13** DDIC Domain/Data Element Write (S) — complete data modeling workflow~~ (**completed 2026-04-12**)
 13. ~~**FEAT-44** TABL (Database Table) Create (S)~~ — **completed 2026-04-14** (source-based TABL create/update/delete + batch_create support in SAPWrite)
 14. ~~**FEAT-45** DEVC (Package) Create (S)~~ — **completed 2026-04-14**. Endpoint: `/sap/bc/adt/packages`.
-15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings. dassian-adt has parallel fetch.
+15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings. dassian-adt has parallel fetch (objectstructure + Promise.all pattern confirmed).
 16. **FEAT-10** PrettyPrint (XS) — **↑ Upgraded from P2:** dassian-adt and VSP both have this. XS effort, high visibility.
 17. **FEAT-20** Source Version / Revision History (S) — **↑ Upgraded from P2:** dassian-adt added `abap_get_revisions`. Enables diff and rollback workflows.
 18. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
@@ -199,8 +217,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
 23. **FEAT-43** DDIC Auth & Misc Read (S) — Authorization Fields (`/authorizationfields`), Feature Toggles, Enhancement Implementations. sapcli added auth fields Apr 2026.
-24. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
-25. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
+24. **FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S) — PR #134 pending merge. Unique to ARC-1. LLM-generated documentation for ABAP objects.
+25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
+26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
 26. ~~**FEAT-20** Source Version / Revision History (S) — **promoted to P1/Phase B** (dassian-adt added revisions tool)~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
 28. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
@@ -494,12 +513,19 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Risk** | Low |
 | **Usefulness** | Medium — important for customization scenarios |
 | **Status** | Not started |
+| **Source** | fr0ster (confirmed ADT endpoints via deep analysis 2026-04-16) |
 
-**What:** Read enhancement spots, BAdI definitions, and enhancement implementations. Uses ADT endpoints `/sap/bc/adt/enhancements/*`.
+**What:** Read enhancement spots, BAdI definitions, and enhancement implementations. Confirmed ADT endpoints (from fr0ster deep analysis):
 
-**Why:** BAdIs are the primary extensibility mechanism in SAP — LLMs helping with customization need to discover and understand them.
+- **Enhancement source code** (on-prem only): `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` — returns base64-encoded enhancement source; auto-detects object type (class/program/include); supports `include_nested=true` to traverse all includes
+- **Enhancement spot (BAdI spot) metadata**: `GET /sap/bc/adt/enhancements/enhsxsb/{spot_name}` — returns spot metadata including `badi_definitions` array (name, shorttext, interface)
+- **Enhancement implementation**: retrieve specific BAdI implementation by name + spot
 
-**Why not:** BAdI discovery is primarily a human-driven IDE task (Eclipse ADT, SE80) — LLMs almost never implement BAdIs autonomously. ADT doesn't have a clean dedicated BAdI endpoint; implementation would require parsing program annotations and text include chains, making it fragile and version-sensitive. Reading BAdI definitions overlaps with what `SAPRead CLAS` already provides (method signatures of the implementing class). Adding enhancement-specific tools violates the "11 intent-based" design philosophy and opens the door to user exits, custom BAdIs, and other extension mechanisms.
+Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cloud does not expose this endpoint).
+
+**Why:** BAdIs are the primary extensibility mechanism in SAP — LLMs helping with customization need to discover and understand them. fr0ster (v6.1.0, 35 stars) and sapcli both have this. Having confirmed ADT endpoints removes the implementation uncertainty.
+
+**Why not:** BAdI discovery is primarily a human-driven IDE task (Eclipse ADT, SE80) — LLMs almost never implement BAdIs autonomously. Reading BAdI definitions overlaps with what `SAPRead CLAS` already provides (method signatures of the implementing class). Adding enhancement-specific tools violates the "11 intent-based" design philosophy. The on-prem-only restriction means BTP users can't use this feature.
 
 ---
 
@@ -665,13 +691,20 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 | **Risk** | Low |
 | **Usefulness** | Medium — reduces round trips for programs with includes |
 | **Status** | Not started |
-| **Source** | fr0ster |
+| **Source** | fr0ster (confirmed ADT endpoints via deep analysis 2026-04-16) |
+| **Restriction** | **On-prem only** — SAP BTP ABAP Cloud does not expose the `nodestructure` API needed for include discovery |
 
-**What:** Fetch a program with all its includes resolved into a single response. fr0ster has `GetProgFullCode`. Reduces N+1 round trips when reading programs with many includes.
+**What:** Fetch a program with all its includes resolved into a single response. Confirmed ADT endpoints (from fr0ster deep analysis):
 
-**Why:** Simplifies reading programs with includes for LLMs.
+1. **List includes via nodestructure API** (on-prem only): `GET /sap/bc/adt/repository/nodestructure?objecttype=PROG/P&objectname={name}&node_id=000000` — finds `PROG/I` nodes, fetches their children to discover all includes
+2. **Read include source**: `GET /sap/bc/adt/programs/includes/{includeName}/source/main`
+3. **Recursive traversal**: Parse `INCLUDE <name>.` and `INCLUDE: <name1>, <name2>.` statements recursively from each include
 
-**Why not:** `SAPContext` with dependency extraction already resolves includes and returns combined context with AST-based compression (7-30x reduction). A dedicated "full code" tool just renames existing functionality without adding behavior — it violates the 11-tool design principle. The LLM can already request `SAPRead PROG` followed by individual includes if needed; a bulk tool trades flexibility for marginal convenience.
+For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` and source via `/sap/bc/adt/programs/includes/{include}/source/main`.
+
+**Why:** Simplifies reading programs with many includes — reduces N+1 round trips. fr0ster has `GetProgFullCode`. Useful for LLMs working with large legacy programs that heavily use includes (a very common pattern in ECC/on-prem codebases).
+
+**Why not:** `SAPContext` with dependency extraction already resolves includes and returns combined context with AST-based compression (7-30x reduction). A dedicated "full code" tool just renames existing functionality without adding behavior — it violates the 11-tool design principle. The LLM can already request `SAPRead PROG` followed by individual includes if needed. **On-prem only** (SAP BTP doesn't expose nodestructure for includes), so BTP users get no benefit. The recursive traversal is fragile — malformed INCLUDE statements or circular dependencies cause infinite loops.
 
 ---
 
@@ -1261,6 +1294,47 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 - XML body includes message class name, description, and message entries (number, type, short text, long text)
 - Add to `isDdicMetadataType()` for XML PUT updates
 - Content-Type: likely `application/vnd.sap.adt.messageclass.v2+xml` (vendor-specific)
+
+---
+
+### FEAT-48: SKTD (Knowledge Transfer Documents) Read/Write
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | Medium — Markdown documentation attached to ABAP objects |
+| **Status** | **Pending merge** — PR #134 by lemaiwo (2026-04-15) |
+| **Source** | [PR #134](https://github.com/marianfoo/arc-1/pull/134) |
+
+**What:** Read and write SAP Knowledge Transfer Documents (KTDs) — Markdown documentation that can be attached to ABAP objects like CDS views, BDEFs, classes, programs, etc. Editable in Eclipse ADT and stored on the SAP system as XML envelopes with base64-encoded Markdown content.
+
+**ADT endpoints:**
+- **Read**: `GET /sap/bc/adt/documentation/ktd/documents/{name}` with `Accept: application/vnd.sap.adt.sktdv2+xml`
+- **Create**: `POST /sap/bc/adt/documentation/ktd/documents` (collection URL)
+- **Update**: `PUT /sap/bc/adt/documentation/ktd/documents/{name}` with full XML envelope (fetch-modify-PUT pattern preserving server-side metadata)
+- **Delete**: Standard ADT delete via lock/delete/unlock
+- Name must equal parent object name (SAP rule: one KTD per object)
+- Supports multiple `sktd:element` sections (e.g., one per CDS field)
+
+**XML envelope structure:**
+```xml
+<sktd:docu xmlns:sktd="..." responsible="..." masterLanguage="EN">
+  <sktd:refObject type="DDLS/DF" name="ZC_MYBOOKING"/>
+  <sktd:element id="...">
+    <sktd:text>{base64-encoded Markdown}</sktd:text>
+  </sktd:element>
+</sktd:docu>
+```
+
+**New tool parameters (PR #134):**
+- `SAPRead type=SKTD` — returns decoded Markdown (not raw XML/base64)
+- `SAPWrite action=create type=SKTD` — requires `refObjectType` (e.g., `DDLS/DF`, `CLAS/OC`, `BDEF/BDO`)
+- `SAPWrite action=update type=SKTD` — `source` parameter contains new Markdown
+
+**Why:** LLMs can read and write inline documentation for ABAP objects without leaving the ADT context. Enables AI-assisted documentation workflows: generate KTD for a CDS view, update existing documentation, read KTDs before suggesting changes. Unique to ARC-1 — no other MCP server supports KTDs.
+
+**Why not:** Documentation is authored by humans; LLM-generated KTDs risk low-quality content being committed to SAP systems. KTDs are an Eclipse ADT-specific concept — not widely known or used in all SAP landscapes. Activation required after create/update adds complexity.
 
 ---
 

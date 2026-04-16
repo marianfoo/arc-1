@@ -1,17 +1,235 @@
 {
   "$schema": "Commit tracker for oisee/vibing-steampunk — grouped by release, auto-triaged",
   "repo": "https://github.com/oisee/vibing-steampunk",
-  "lastUpdated": "2026-04-12",
-  "lastCheckedSha": "e62c7d5",
+  "lastUpdated": "2026-04-16",
+  "lastCheckedSha": "1989ce1",
   "stats": {
-    "totalCommits": 495,
+    "totalCommits": 517,
     "trackedFrom": "v2.22.0 (2026-02-01)",
-    "totalTracked": 95,
-    "evaluated": 90,
+    "totalTracked": 117,
+    "evaluated": 109,
     "pending": 0,
-    "skipped": 60
+    "skipped": 68
   },
   "releases": [
+    {
+      "version": "post-v2.39.0 (Apr 13-15 sprint)",
+      "date": "2026-04-13 to 2026-04-15",
+      "commits": [
+        {
+          "sha": "1989ce1",
+          "date": "2026-04-15",
+          "message": "docs(contexts): session wisdom — security scrub and lock-handle bug class",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Docs only — session wisdom referenced in 22517d4 evaluation"
+        },
+        {
+          "sha": "22517d4",
+          "date": "2026-04-15",
+          "message": "fix(adt): close the lock-handle bug class — Stateful + ModificationSupport guard",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "implement",
+          "relevance": "Root cause of all 423 ExceptionResourceInvalidLockHandle errors across all SAP ADT clients. Fix: (1) parse modificationSupport from lock response — if false, fail early with clear error instead of cryptic 423; (2) verify stateful session isolation in ARC-1. All lock-handle issues in VSP #88, #91, #92, fr0ster #57, abap-adt-api #36 trace back to this.",
+          "evaluationFile": "evaluations/22517d4-lock-handle-bug-class.md"
+        },
+        {
+          "sha": "87ce9c7",
+          "date": "2026-04-12",
+          "message": "fix(saml): address PR #97 review follow-up notes",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "SAML follow-up. ARC-1 doesn't use SAML."
+        },
+        {
+          "sha": "4f8b757",
+          "date": "2026-04-13",
+          "message": "docs(claude): add sanitize policy for identifiers in tracked files",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal ops docs."
+        },
+        {
+          "sha": "11e31fd",
+          "date": "2026-04-13",
+          "message": "chore: drop tracked amdp-breakpoint-test-results-*.log",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Housekeeping."
+        },
+        {
+          "sha": "ce1f191",
+          "date": "2026-04-13",
+          "message": "feat(cr-audit): treat DOMA in CR as implicit cover for its FIXVAL node",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "CLI governance tool — DOMA in transport implicitly covers fixed values (FIXVAL). Not an MCP tool. Interesting ADT domain knowledge: DOMA and FIXVAL are linked objects in transport.",
+          "evaluationFile": "evaluations/cr-config-audit-sprint.md"
+        },
+        {
+          "sha": "4b5b0e9",
+          "date": "2026-04-13",
+          "message": "feat(cr-audit): classify orphans by DDIC delivery class",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "CLI governance tool. DDIC delivery class (A/C/G/S/W/E/L/M/P/V) classification for transport objects.",
+          "evaluationFile": "evaluations/cr-config-audit-sprint.md"
+        },
+        {
+          "sha": "1b05441",
+          "date": "2026-04-13",
+          "message": "feat(cli): vsp recover-failed-create — CLI wrapper for the recovery primitive",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "CLI wrapper for recover-failed-create. The MCP-level primitive (f00356a) is the relevant part for ARC-1.",
+          "evaluationFile": "evaluations/f00356a-recover-failed-create.md"
+        },
+        {
+          "sha": "f00356a",
+          "date": "2026-04-13",
+          "message": "feat(mcp): Phase 3 — RecoverFailedCreate recovery primitive",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Recovery primitive for partial-create state (5xx during create → object exists but may lack source). Recovers by checking existence then updating. ARC-1's 409 hint ('use update instead') already handles most cases. Future enhancement: auto-recovery on 5xx-then-409.",
+          "evaluationFile": "evaluations/f00356a-recover-failed-create.md"
+        },
+        {
+          "sha": "e0fef2a",
+          "date": "2026-04-13",
+          "message": "feat(cr-audit): DDIC delivery class filter — transactional and views no longer false-positive as MISSING",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "49173e8",
+          "date": "2026-04-13",
+          "message": "feat(cr-audit): 1-hop transitive reach + MD report parity + scope fix",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "afbc19d",
+          "date": "2026-04-13",
+          "message": "fix: two high defects from f6b1726 review + statement-order literal scope",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI tool bug fixes."
+        },
+        {
+          "sha": "3d1353e",
+          "date": "2026-04-13",
+          "message": "fix(adt): reconcile partial-create on 5xx + cr-config-audit v2a.1 polish",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "Phase 1 of partial-create recovery. On 5xx during create, check if object was partially created. Related to f00356a.",
+          "evaluationFile": "evaluations/f00356a-recover-failed-create.md"
+        },
+        {
+          "sha": "ab665c4",
+          "date": "2026-04-13",
+          "message": "feat(cr-config-audit): per-object L2 cache for CROSS/WBCROSSGT scans",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "6826446",
+          "date": "2026-04-12",
+          "message": "fix(cr-config-audit): drop OR-LIKE batching, parallelise per-object instead",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "2a15190",
+          "date": "2026-04-12",
+          "message": "feat(cr-config-audit): v2a-min value-level literal matcher",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "5aed8ab",
+          "date": "2026-04-12",
+          "message": "perf+fix(cr-audit): batch CROSS/WBCROSSGT, TFDIR batch, TADIR by (type,name), maxObjects warning",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool performance."
+        },
+        {
+          "sha": "792ce58",
+          "date": "2026-04-12",
+          "message": "feat(cr-audit): stable order, FUGR progress, and L2 sqlite cache",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "5b36f53",
+          "date": "2026-04-12",
+          "message": "feat(cr-config-audit): v1.2a — DDIC metadata chain",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "CLI governance tool."
+        },
+        {
+          "sha": "edd94bc",
+          "date": "2026-04-12",
+          "message": "feat: cr-config-audit v1 and FUGR source extraction fix",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "CLI governance tool + FUGR source extraction fix. The FUGR fix is notable: function module sources in FUGR groups need special handling in source extraction. ARC-1 getFunctionModule reads source correctly via dedicated endpoint.",
+          "evaluationFile": "evaluations/cr-config-audit-sprint.md"
+        },
+        {
+          "sha": "d199a75",
+          "date": "2026-04-13",
+          "message": "chore(security): redact environment-specific identifiers from tracked docs and tests",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Security hygiene in docs. Not relevant."
+        },
+        {
+          "sha": "3b7c4b4",
+          "date": "2026-04-13",
+          "message": "chore(security): expand .gitignore to cover operational scratch dirs",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "gitignore update."
+        }
+      ]
+    },
     {
       "version": "post-v2.39.0 (Apr 9-12 sprint)",
       "date": "2026-04-09 to 2026-04-12",

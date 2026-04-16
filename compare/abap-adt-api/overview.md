@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) as an **API reference** for ARC-1's ADT implementation. This library is the most complete TypeScript ADT client and shows which endpoints/patterns exist.
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-16_
 
 ## Approach
 
@@ -15,12 +15,12 @@ _Last updated: 2026-04-08_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | ~100 | 18 |
-| Tracked | 36 | 18 |
-| Evaluated | 36 | 18 |
+| Total | ~100 | 19 |
+| Tracked | 36 | 19 |
+| Evaluated | 36 | 19 |
 | Pending evaluation | 0 | 0 |
 | Skipped (not relevant) | 16 | 7 |
-| Evaluation files | 8 | 4 |
+| Evaluation files | 8 | 5 |
 
 ## API Surface Comparison
 
@@ -79,6 +79,8 @@ This library has **~90 public methods** on its ADTClient class. Here's how ARC-1
 | Change package refactoring | commit a55c8f8 | Move objects between packages |
 | Object source versions | commit d3c6940 | Version comparison / revision history |
 | Language attributes on create | commit ffa43d7 | Multi-language object creation |
+| Dynpro (screen) metadata access | issue #44 | New SAPRead DYNT action — ADT endpoint at /sap/bc/adt/programs/programs/<PROG>/dynpros |
+| Non-native object source retrieval | issue #44 | Fallback endpoint for legacy types (SAP Note 2980930) |
 | Stateful session handling | issue #30 | Verify ARC-1 lock/write uses stateful correctly |
 | Include lock handling | issue #36 | Verify ARC-1 locks class includes properly |
 | runQuery API issue | issue #42 | Verify ARC-1 RunQuery doesn't have same bug |

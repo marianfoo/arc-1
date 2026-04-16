@@ -2,7 +2,7 @@
 
 > **Repository**: https://github.com/fr0ster/mcp-abap-adt
 > **Language**: TypeScript | **License**: MIT | **Stars**: 29
-> **Status**: Very Active (v5.2.0, 90+ releases in 5 months, 830+ commits)
+> **Status**: Very Active (v6.1.0, 90+ releases in 5 months, 834+ commits)
 > **NPM**: `@mcp-abap-adt/core` — 3,625 monthly downloads
 > **Relationship**: Independent TypeScript ADT MCP server with most advanced auth system
 
@@ -10,7 +10,7 @@
 
 ## Project Overview
 
-A multi-package monorepo MCP server for SAP ADT with 318 tools organized across 4 exposition tiers (read-only 55, high-level 140, low-level 124, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools. v5.1.0-5.1.1 added 13 high-level Check handlers (per-type syntax/semantic validation). v5.2.0 added ActivateServiceDefinition/ActivateServiceBinding low-level handlers and replaced `binding_type`/`service_type` with `ServiceBindingVariant` enum. Dropped Node 20 support (minimum Node 22). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
+A multi-package monorepo MCP server for SAP ADT with ~320 tools organized across 4 exposition tiers (read-only 55, high-level 140, low-level 124, compact 22). v5.0.0 added unified ADT feed tools (SM02 messages, gateway errors, feed reader) and migrated to adt-clients 4.0 factory API. v5.0.7-5.0.8 added 14 activation tools. v5.1.0-5.1.1 added 13 high-level Check handlers (per-type syntax/semantic validation). v5.2.0 added ActivateServiceDefinition/ActivateServiceBinding low-level handlers and replaced `binding_type`/`service_type` with `ServiceBindingVariant` enum. v6.0.0 simplified dump reading (RuntimeListDumps removed — use RuntimeListFeeds with feed_type=dumps) and fixed UpdateInterface on BTP Cloud (corrNr parameter was causing 400 errors when no transport exists). v6.1.0 decoupled RFC connection from legacy system type. Dropped Node 20 support (minimum Node 22). Features the most comprehensive authentication system of any project (9 providers including SAML, OIDC device flow, token exchange). Strict interface isolation via separate npm packages.
 
 Key differentiator: "AI Pairing, Not Vibing (AIPNV)" philosophy — positioned as pair programming assistant, not autopilot.
 
@@ -37,7 +37,7 @@ Design principles: Interface-Only Communication (IOC), Dependency Inversion, sin
 ## Tool Inventory (316 tools across 4 tiers)
 
 ### Read-Only Tier (52 tools)
-ReadClass, ReadProgram, ReadInterface, ReadDomain, ReadDataElement, ReadStructure, ReadTable, ReadView, ReadFunctionGroup, ReadFunctionModule, ReadBehaviorDefinition, ReadBehaviorImplementation, ReadMetadataExtension, ReadServiceDefinition, ReadServiceBinding, ReadPackage, GetProgFullCode, GetInclude, GetIncludesList, GetPackageContents, SearchObject, GetObjectsByType, GetObjectsList, GetWhereUsed, GetObjectInfo, GetObjectStructure, GetObjectNodeFromCache, GetAbapAST, GetAbapSemanticAnalysis, GetAbapSystemSymbols, GetAdtTypes, GetInactiveObjects, GetSession, GetSqlQuery, GetTransaction, GetTypeInfo, DescribeByList, GetTransport, ListTransports, GetEnhancements, GetEnhancementSpot, GetEnhancementImpl, RuntimeListDumps, RuntimeGetDumpById, RuntimeAnalyzeDump, RuntimeListProfilerTraceFiles, RuntimeGetProfilerTraceData, RuntimeAnalyzeProfilerTrace, RuntimeCreateProfilerTraceParameters, RuntimeRunClassWithProfiling, RuntimeRunProgramWithProfiling
+ReadClass, ReadProgram, ReadInterface, ReadDomain, ReadDataElement, ReadStructure, ReadTable, ReadView, ReadFunctionGroup, ReadFunctionModule, ReadBehaviorDefinition, ReadBehaviorImplementation, ReadMetadataExtension, ReadServiceDefinition, ReadServiceBinding, ReadPackage, GetProgFullCode, GetInclude, GetIncludesList, GetPackageContents, SearchObject, GetObjectsByType, GetObjectsList, GetWhereUsed, GetObjectInfo, GetObjectStructure, GetObjectNodeFromCache, GetAbapAST, GetAbapSemanticAnalysis, GetAbapSystemSymbols, GetAdtTypes, GetInactiveObjects, GetSession, GetSqlQuery, GetTransaction, GetTypeInfo, DescribeByList, GetTransport, ListTransports, GetEnhancements, GetEnhancementSpot, GetEnhancementImpl, RuntimeListFeeds, RuntimeGetDumpById, RuntimeListProfilerTraceFiles, RuntimeGetProfilerTraceData, RuntimeAnalyzeProfilerTrace, RuntimeCreateProfilerTraceParameters, RuntimeRunClassWithProfiling, RuntimeRunProgramWithProfiling _(v6.0.0: RuntimeListDumps removed → use RuntimeListFeeds(feed_type='dumps'); RuntimeAnalyzeDump removed)_
 
 ### High-Level Tier (140 tools)
 Full CRUD with automatic lock/activate for 16+ object types: Classes (including local definitions, types, macros, test classes), Programs, Interfaces, Domains, Data Elements, Structures, Tables, Views (CDS), Function Groups/Modules, Service Definitions/Bindings, Behavior Definitions/Implementations, Metadata Extensions (DDLX), Packages, Transports, Unit Tests (ABAP + CDS). v5.0.7: Added ActivateObjects (group activation) + 12 per-type Activate handlers. v5.1.0: Added 13 per-type Check handlers (CheckClass, CheckProgram, CheckDomain, CheckDataElement, CheckStructure, CheckTable, CheckView, CheckFunctionGroup, CheckFunctionModule, CheckServiceDefinition, CheckBehaviorDefinition, CheckBehaviorImplementation, CheckMetadataExtension) for syntax/semantic validation per object type.
@@ -209,6 +209,8 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 
 | Date | Change | Relevant? | Action for ARC-1 | Status |
 |------|--------|-----------|-------------------|--------|
+| 2026-04-16 | v6.0.0 — BREAKING: remove RuntimeListDumps (use RuntimeListFeeds(dumps) instead); fix UpdateInterface on BTP Cloud — corrNr param causes 400 on BTP when no transport (#61, #62) | **Medium** | (1) Dump simplification validates ARC-1's "defer" decision — datetime+user lookup had timezone bugs, fr0ster removed it 2 weeks after adding. ARC-1's simpler dump_id-only flow was correct. (2) UpdateInterface fix: **not applicable to ARC-1** — centralized `safeUpdateSource()` in `crud.ts` uses `transport ?? (lock.corrNr \|\| undefined)` for ALL types, so INTF updates already work correctly on BTP. | [Eval](fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md) |
+| 2026-04-16 | v6.1.0 — RFC connection decoupled from legacy system type | No | ARC-1 is HTTP-only | — |
 | 2026-04-15 | v5.2.0 — ActivateServiceDefinition/ActivateServiceBinding + ServiceBindingVariant enum (#59, #60) | **Medium** | Activation: ARC-1 already handles via SAPActivate — no action. ServiceBindingVariant: ARC-1's `normalizeSrvbBindingType()` is already more LLM-friendly (fuzzy parsing vs strict enum). **Bug found**: ARC-1 hardcodes `odatav2` in publish/unpublish endpoints — should use `odatav4` for V4 bindings. Fix `publishServiceBinding()`/`unpublishServiceBinding()` in devtools.ts. | TODO |
 | 2026-04-13 | v5.0.7-5.0.8 — ActivateObjects group activation + 12 per-type Activate handlers (289→303 tools) | **No action** | ARC-1 already has SAPActivate with batch_activate. Gap: GetInactiveObjects endpoint (P2). Post-merge naming fix validates ARC-1's intent-based approach. | [Eval](fr0ster/evaluations/feat-49-activate-objects.md) |
 | 2026-04-12 | v5.0.1 — Removed compact feed wrappers (LLM confusion, 292→289 tools) | Lesson | Validates ARC-1's intent-based approach — duplicate tools confuse LLMs | Done |
@@ -232,6 +234,6 @@ Dev: Biome, Jest, TypeScript, Express, Husky
 | 2026-03-04 | v3.1.0-3.2.0 — Create/Update separation, table contents | Medium | Keep current combined create+write. Table contents: already have RunQuery | Evaluated |
 | 2026-02-09 | v2.2.0 — MCP client auto-configurator | Medium | Implement lightweight `arc-1 config` snippet printer | TODO |
 
-_Last updated: 2026-04-15_
+_Last updated: 2026-04-16_
 
 > **Detailed commit-level tracking**: See [fr0ster/commits.json](fr0ster/commits.json) and [fr0ster/evaluations/](fr0ster/evaluations/) for per-commit analysis.

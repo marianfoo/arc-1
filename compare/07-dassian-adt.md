@@ -2,9 +2,10 @@
 
 > **Repository**: https://github.com/DassianInc/dassian-adt
 > **Successor/MCPB**: https://github.com/albanleong/abap-mcpb (MCPB format for Claude Desktop)
-> **Language**: TypeScript / JavaScript | **License**: MIT | **Stars**: 32 | **Forks**: 7
-> **Status**: **Very Active** — explosive growth in April 2026, from 25 to 53 tools in 2 weeks
+> **Language**: TypeScript / JavaScript | **License**: MIT | **Stars**: 33 | **Forks**: 7
+> **Status**: Active (no new commits since 2026-04-14) — explosive April sprint concluded at 53 tools
 > **Relationship**: Fork of mario-andreschak's wrapper → dassian rewrite → enterprise-grade MCP server
+> **Deep analysis**: See [07-dassian-adt-updated.md](07-dassian-adt-updated.md) for full implementation internals
 
 ---
 
@@ -263,4 +264,4 @@ albanleong/abap-mcpb packages dassian-adt as an **MCPB** (MCP Bundle) for Claude
 
 **Risk:** If Dassian adds safety controls and BTP support, the gap narrows significantly. Monitor closely.
 
-_Last updated: 2026-04-14_
+_Last updated: 2026-04-16 (no new commits since 2026-04-14; stars +1 to 33; deep implementation analysis added in 07-dassian-adt-updated.md)_

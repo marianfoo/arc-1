@@ -1,19 +1,222 @@
 {
   "$schema": "Issue tracker for fr0ster/mcp-abap-adt — relevance to ARC-1",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-08",
+  "lastUpdated": "2026-04-16",
   "stats": {
-    "total": 40,
-    "open": 2,
-    "closed": 38,
-    "relevantToArc1": 11,
-    "evaluated": 11,
+    "total": 63,
+    "open": 1,
+    "closed": 62,
+    "relevantToArc1": 16,
+    "evaluated": 16,
     "pending": 0
   },
   "issues": [
     {
+      "number": 63,
+      "state": "closed",
+      "date": "2026-04-16",
+      "title": "Support RFC connection for all SAP systems, not just legacy",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "RFC docs framing change — ARC-1 is HTTP-only, not relevant."
+    },
+    {
+      "number": 62,
+      "state": "closed",
+      "date": "2026-04-16",
+      "title": "RuntimeGetDumpById: fails to find dumps that RuntimeListFeeds returns",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Timezone/format mismatch in dump ID lookup: ListFeeds returns IDs like '20260415031226epbyminsd0654_E19_00' but GetDumpById with datetime+user can't match them. Root cause: datetime+user search has narrow ±60s window or timezone offset. Fixed by: BREAKING removed datetime+user params, now accepts dump_id directly. ARC-1 lesson: if adding dump ID lookup, use the feed-returned ID directly rather than datetime+user search."
+    },
+    {
+      "number": 61,
+      "state": "closed",
+      "date": "2026-04-15",
+      "title": "UpdateInterface fails with 'Parameter corrNr could not be found' on SAP BTP ABAP Cloud",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "BTP Cloud has no transports — passing corrNr (even as empty/undefined) causes ExceptionParameterNotFound 400 for UpdateInterface. Fix: only include transportRequest when it has a value. ARC-1 verify: safeUpdateSource() must not include transport param when undefined on BTP.",
+      "evaluationFile": "evaluations/c2b8006-simplify-dump-btp-fix.md"
+    },
+    {
+      "number": 60,
+      "state": "closed",
+      "date": "2026-04-14",
+      "title": "Update ServiceBinding handlers to use ServiceBindingVariant from adt-clients",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "ServiceBindingVariant replaces separate binding_type/service_type. Key: V2 vs V4 variants use different publish endpoints (odatav2 vs odatav4). ARC-1 hardcodes odatav2 — fix needed for V4 bindings.",
+      "evaluationFile": "evaluations/51781d3-srvd-srvb-activate-variant.md"
+    },
+    {
+      "number": 59,
+      "state": "closed",
+      "date": "2026-04-14",
+      "title": "CreateServiceBinding: add category parameter (UI vs Web API)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Same as #60 — ServiceBindingVariant covers both binding type (V2/V4) and category (UI/Web API). ARC-1 CreateServiceBinding should support V4 variants.",
+      "evaluationFile": "evaluations/51781d3-srvd-srvb-activate-variant.md"
+    },
+    {
+      "number": 58,
+      "state": "closed",
+      "date": "2026-04-14",
+      "title": "Update/Delete handlers don't unlock objects on failure",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Lock leak in Update/Delete when operation fails — identical to #57 but for more handler types. Root cause: try-finally not used. ARC-1 uses centralized safeUpdateSource() with try-finally — already protected. But verify Delete path in crud.ts also uses try-finally around lock."
+    },
+    {
+      "number": 57,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "Update handlers must unlock objects in finally block on failure",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Same as #58 — fr0ster had lock leaks in Update handlers. ARC-1 already has try-finally via safeUpdateSource(). Validates ARC-1's centralized lock management."
+    },
+    {
+      "number": 56,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "Missing Content-Type header in BehaviorDefinition lock request",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "BDEF lock requires Content-Type header — omitting it causes 415. ARC-1 verify: lockObject() in crud.ts for BDEF sets correct Content-Type on the lock POST request."
+    },
+    {
+      "number": 55,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "CSRF 403 on UpdateBehaviorDefinition LOCK via BTP Destination",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "CSRF token 403 when using BTP Destination Service — related to #45 (CSRF cookie corruption). ARC-1's CSRF handling via http.ts auto-refreshes on 403 — should be covered."
+    },
+    {
+      "number": 54,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "Add Check tools for ABAP objects (syntax/semantic validation)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "13 per-type Check handlers added. ARC-1 already has unified syntax_check via SAPDiagnose — no action."
+    },
+    {
+      "number": 53,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "ActivateObjects fails with CSRF 403 on on-premise via BTP Destination",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Same CSRF 403 pattern as #55 but for activation. ARC-1 http.ts handles CSRF retry — should be covered."
+    },
+    {
+      "number": 52,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "UpdateView/CreateView: support skipSyntaxCheck for CDS with circular dependencies",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "CDS views with circular associations fail syntax check at save time. skipSyntaxCheck=true bypasses check. ARC-1 SAPWrite CDS path: verify syntax check can be skipped for circular CDS."
+    },
+    {
+      "number": 49,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "Missing ActivateObject tool for group/mass activation",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already has batch_activate via SAPActivate."
+    },
+    {
+      "number": 47,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "CreateDomain does not activate created domains on on-premise",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Their create handler didn't wait before activation — not relevant to ARC-1 flow."
+    },
+    {
+      "number": 46,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "Stdio mode: log output leaks into stdio transport channel",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 uses stderr-only logger — not affected."
+    },
+    {
+      "number": 45,
+      "state": "closed",
+      "date": "2026-04-13",
+      "title": "CSRF token errors when creating multiple objects in sequence",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 uses withStatefulSession() for isolation — already protected."
+    },
+    {
+      "number": 44,
+      "state": "closed",
+      "date": "2026-04-12",
+      "title": "Export resolveSystemContext from public API",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Internal API export — not relevant to ARC-1."
+    },
+    {
+      "number": 43,
+      "state": "closed",
+      "date": "2026-04-12",
+      "title": "DefaultPipeline ignores externalTools from options",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Internal pipeline bug — not relevant to ARC-1."
+    },
+    {
+      "number": 42,
+      "state": "closed",
+      "date": "2026-04-12",
+      "title": "Improve MCP tool descriptions for RAG search quality",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "RAG tool discovery — not applicable to ARC-1 intent-based routing."
+    },
+    {
+      "number": 41,
+      "state": "closed",
+      "date": "2026-04-07",
+      "title": "feat: return SearchObjects results in TSV format",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "This was issue #40 being closed — same as #40."
+    },
+    {
       "number": 40,
-      "state": "open",
+      "state": "closed",
       "date": "2026-04-07",
       "title": "feat: return SearchObjects results in TSV format instead of XML",
       "labels": [],

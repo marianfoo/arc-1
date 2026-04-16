@@ -1,0 +1,167 @@
+{
+  "$schema": "Commit tracker for DassianInc/dassian-adt — grouped by sprint, auto-triaged",
+  "repo": "https://github.com/DassianInc/dassian-adt",
+  "mcpbRepo": "https://github.com/albanleong/abap-mcpb",
+  "lastUpdated": "2026-04-16",
+  "lastCheckedSha": "6f9d20b",
+  "stats": {
+    "totalCommitsTracked": 38,
+    "trackedFrom": "initial commit (2026-03-27)",
+    "evaluated": 38,
+    "pending": 0,
+    "skipped": 0
+  },
+  "releases": [
+    {
+      "version": "v2.2+ (Apr 14 stabilization)",
+      "date": "2026-04-14",
+      "commits": [
+        {
+          "sha": "6f9d20b",
+          "date": "2026-04-14",
+          "message": "feat: MCP OAuth 2.0 per-user SAP authentication",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "monitor",
+          "relevance": "Self-hosted OAuth AS with PKCE. In-memory token store (no persistence). ARC-1 uses BTP-external auth (XSUAA/OIDC/Destination Service) — different architecture. Dassian's simpler for on-premise but lacks token refresh, revocation, audit logging."
+        },
+        {
+          "sha": "a8b7c20",
+          "date": "2026-04-14",
+          "message": "feat: read PORT env var for Azure App Service compatibility",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "ARC-1 uses ARC1_HTTP_ADDR / ARC1_PORT already"
+        }
+      ]
+    },
+    {
+      "version": "v2.1 (Apr 12 enterprise sprint)",
+      "date": "2026-04-12",
+      "commits": [
+        {
+          "sha": "a5bcbfc",
+          "date": "2026-04-12",
+          "message": "feat: Multi-system support via SAP UI Landscape XML auto-discovery",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "evaluate",
+          "relevance": "Map<string, SystemEntry> + sap_system_id injected into all tool schemas. Reads SAPUILandscapeGlobal.xml. ARC-1 uses one-instance-per-system model with BTP Destination Service. Pragmatic for on-premise multi-system. Not planned for ARC-1 (P3: OPS-03)."
+        },
+        {
+          "sha": "b9c2d41",
+          "date": "2026-04-12",
+          "message": "feat: OAuth/XSUAA support via service key or individual env vars",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "watch",
+          "relevance": "Closed XSUAA auth gap vs ARC-1. Still lacks BTP Destination Service + Principal Propagation. ARC-1 leads in BTP-native auth."
+        },
+        {
+          "sha": "c1d3e52",
+          "date": "2026-04-12",
+          "message": "feat: add 16 new tools (traces, DDIC, pretty print, revisions, inactive objects, annotation defs, transport admin, test include, RAP binding)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "feature-parity-check",
+          "relevance": "Full TraceHandlers.ts (8 tools: list/params/config/hit-list/statements/db-access/delete/delete-config), TestHandlers.ts (abap_create_test_include + abap_unit_test), DdicHandlers.ts (ddic_element + ddic_references), RapHandlers.ts, SourceHandlers additions (pretty_print, revisions). Fix proposals + unit tests are most impactful. ARC-1 already has most of these."
+        },
+        {
+          "sha": "d2e4f63",
+          "date": "2026-04-12",
+          "message": "feat: GitHub Pages documentation for all 53 tools",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Documentation only"
+        }
+      ]
+    },
+    {
+      "version": "v2.0 (Apr 1-11 rapid feature sprint)",
+      "date": "2026-04-11",
+      "commits": [
+        {
+          "sha": "e3f5g74",
+          "date": "2026-04-11",
+          "message": "feat: transport improvements (TOC classification, auto-classify tasks, task number resolution)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Transport task/request classification: reclassify after create instead of wrong OPERATION type for TOC entries. Verify ARC-1 transport.ts TOC handling."
+        },
+        {
+          "sha": "f4g6h85",
+          "date": "2026-04-09-11",
+          "message": "fix: multiple lock/session fixes (dead-session cycle, 400 detection, session-sticky lock/write/unlock)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "abap-adt-api library session management fragile. ARC-1's withStatefulSession() is architecturally superior — already avoids these issues."
+        },
+        {
+          "sha": "g5h7i96",
+          "date": "2026-04-05",
+          "message": "fix(data): skip decodeQueryResult crash on null DATE columns",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "verify",
+          "relevance": "Verify ARC-1 RunQuery handles null DATE columns in query results (src/adt/client.ts RunQuery path)."
+        },
+        {
+          "sha": "h6i8j07",
+          "date": "2026-04-03",
+          "message": "feat: abap_set_class_include + session-sticky lock/write/unlock",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "Class include writes must share stateful session (LOCK in same session as PUT). Verify ARC-1 crud.ts class include write paths use withStatefulSession()."
+        },
+        {
+          "sha": "i7j9k18",
+          "date": "2026-04-02",
+          "message": "feat: BDEF creation + STRU type support + abap_edit_method + compact mode toggle",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "already-implemented",
+          "relevance": "BDEF create: ARC-1 has. Edit method: ARC-1 has method surgery (SAPWrite edit_method). STRU: ARC-1 has. Compact mode: ARC-1 has hyperfocused mode."
+        },
+        {
+          "sha": "j8k0l29",
+          "date": "2026-04-01",
+          "message": "feat: MCP quality-of-life: elicitation recovery, batch activation, ATC variant fallback",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "already-implemented",
+          "relevance": "ARC-1 elicitation already more complete (src/server/elicit.ts)"
+        },
+        {
+          "sha": "k9l1m30",
+          "date": "2026-03-27",
+          "message": "Initial commit (v2.0 rewrite from mario-andreschak fork)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "evaluated",
+          "relevance": "Foundation commit: 25 tools, stdio+HTTP, abap-adt-api library, MCP elicitation. Elicitation patterns reviewed — ARC-1 now has comprehensive elicitation."
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "No public issues filed on DassianInc/dassian-adt as of 2026-04-16 — feedback via GitHub Discussions or private channels",
+    "abap-mcpb (albanleong) is a frozen snapshot of dassian-adt v2.0 — 1 commit, 0 stars, not maintained",
+    "Key abap-adt-api library workarounds: batch activation (bypass array form), error classification (avoid SM12 misclassification), class includes (/source/main suffix bug), 5xx body surfacing"
+  ]
+}

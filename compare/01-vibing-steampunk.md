@@ -197,6 +197,11 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 |------|----------------|-----------|----------|--------|
 | 2026-04-12 | **CRITICAL: Package safety bypass on mutations (#101)** — `SAP_ALLOWED_PACKAGES` not enforced on update/delete. **ARC-1 has same bug.** | **Critical** | **Fix immediately** — checkPackage() missing on update/delete/edit_method | [Eval](vibing-steampunk/evaluations/0713d75-package-safety-mutations.md) |
 | 2026-04-12 | SAML SSO auth for S/4HANA Public Cloud (#97) — programmatic + browser + credential-cmd | Low | Defer — ARC-1 uses BTP OAuth / Destination Service | [Eval](vibing-steampunk/evaluations/e62c7d5-saml-sso-auth.md) |
+| 2026-04-15 | **Fix lock-handle bug class — modificationSupport guard** (22517d4) | **High** | **Implement**: add modificationSupport parsing to lockObject() in crud.ts. If false, fail early with clear LLM-friendly error (object locked in released transport). Fixes root cause of all 423 errors. | [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) |
+| 2026-04-15 | Issue #104: CSRF HEAD fails on S/4HANA public cloud (CL_ADT_WB_RES_APP) | **High** | **Verify**: ARC-1 http.ts uses HEAD for CSRF fetch — add GET fallback if HEAD returns 403 | [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) |
+| 2026-04-13 | feat: RecoverFailedCreate recovery primitive (f00356a, 3d1353e) | Medium | Consider future — ARC-1's 409 hint already handles most cases | [Eval](vibing-steampunk/evaluations/f00356a-recover-failed-create.md) |
+| 2026-04-12 to 2026-04-13 | cr-config-audit sprint — CLI governance tooling (DDIC delivery classes, transport change analysis, boundary crossing) | Low | No action — CLI-only governance tools, not MCP | [Eval](vibing-steampunk/evaluations/cr-config-audit-sprint.md) |
+| 2026-04-11 | Issue #98: 423 on DDLS — LOCK and UPDATE_SOURCE in separate HTTP sessions (root cause confirmed) | **High** | **Verify**: ARC-1 withStatefulSession() should cover this — test DDLS update flow specifically | [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) |
 | 2026-04-12 | HANA database detection from S4CORE component (#100) | Low | Consider — system info enhancement | — |
 | 2026-04-10 | API release state bug fix — C0-C4 structure (#95) | Medium | Verify ARC-1 getApiReleaseState | [Eval](vibing-steampunk/evaluations/a66bcd5-release-state-bugfix.md) |
 | 2026-04-09 | Default mode → hyperfocused (1 tool), transport/CR boundary analysis, batch IN-clause fix | Low | Market signal — validates intent-based approach | — |
@@ -218,4 +223,4 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 > **Detailed commit-level tracking**: See [`compare/vibing-steampunk/`](vibing-steampunk/) for per-commit and per-issue evaluations.
 
-_Last updated: 2026-04-12_
+_Last updated: 2026-04-16_

@@ -1,17 +1,81 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-14",
-  "lastCheckedSha": "1b39a24",
+  "lastUpdated": "2026-04-16",
+  "lastCheckedSha": "9969ee7",
   "stats": {
-    "totalCommits": 828,
+    "totalCommits": 834,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 97,
-    "evaluated": 55,
+    "totalTracked": 103,
+    "evaluated": 59,
     "pending": 0,
-    "skipped": 42
+    "skipped": 44
   },
   "releases": [
+    {
+      "version": "v6.0.0-v6.1.0",
+      "date": "2026-04-16",
+      "commits": [
+        {
+          "sha": "9969ee7",
+          "date": "2026-04-16",
+          "message": "chore: bump version to 6.1.0",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "4d3b2df",
+          "date": "2026-04-16",
+          "message": "Merge pull request #64 from fr0ster/feat/rfc-for-all-systems",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Merge commit"
+        },
+        {
+          "sha": "3385748",
+          "date": "2026-04-16",
+          "message": "chore: add .codex to .gitignore",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "gitignore update"
+        },
+        {
+          "sha": "79e7d60",
+          "date": "2026-04-16",
+          "message": "docs: decouple RFC connection from legacy system type (#63)",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "RFC docs framing change — ARC-1 is HTTP-only, not relevant"
+        },
+        {
+          "sha": "c2b8006",
+          "date": "2026-04-16",
+          "message": "feat!: simplify dump reading, fix UpdateInterface on BTP Cloud (#61, #62)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "verify",
+          "relevance": "BREAKING: RuntimeListDumps removed — use RuntimeListFeeds(dumps) instead. Fixed UpdateInterface on BTP by passing transportRequest param (was missing, causing 'corrNr not found' 400 error). ARC-1 verify: safeUpdateSource() must omit transport query param when undefined on BTP — not pass empty string.",
+          "evaluationFile": "evaluations/c2b8006-simplify-dump-btp-fix.md"
+        },
+        {
+          "sha": "51781d3",
+          "date": "2026-04-15",
+          "message": "feat: add ActivateServiceDefinition/ServiceBinding handlers and ServiceBindingVariant support (#59, #60)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "fix-bug",
+          "relevance": "ServiceBindingVariant enum (ODATA_V2_UI/V4_UI/V2_WEB_API/V4_WEB_API) replaces binding_type+service_type. Key insight: publish/unpublish endpoint differs for V2 vs V4 ('odatav2' vs 'odatav4'). ARC-1 hardcodes 'odatav2' in publishServiceBinding() — bug for V4 bindings. Must fix. Activate handlers for SRVD/SRVB: ARC-1 already handles via generic SAPActivate.",
+          "evaluationFile": "evaluations/51781d3-srvd-srvb-activate-variant.md"
+        }
+      ]
+    },
     {
       "version": "v5.0.9-v5.1.1",
       "date": "2026-04-13",

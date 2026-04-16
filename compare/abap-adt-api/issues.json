@@ -1,16 +1,27 @@
 {
   "$schema": "Issue tracker for marcellourbani/abap-adt-api — API reference for ARC-1",
   "repo": "https://github.com/marcellourbani/abap-adt-api",
-  "lastUpdated": "2026-04-04",
+  "lastUpdated": "2026-04-16",
   "stats": {
-    "total": 18,
+    "total": 19,
     "open": 7,
-    "closed": 11,
-    "relevantToArc1": 8,
-    "evaluated": 18,
+    "closed": 12,
+    "relevantToArc1": 9,
+    "evaluated": 19,
     "pending": 0
   },
   "issues": [
+    {
+      "number": 44,
+      "state": "closed",
+      "date": "2026-04-14",
+      "title": "Feature proposal: Dynpro metadata access + ADT-backed source retrieval (non-native objects)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Two-part feature proposal: (1) Dynpro (screen) metadata — ARC-1 doesn't support DYNT/screens at all. The ADT endpoint is /sap/bc/adt/dynpros/<program>/<screen>. (2) Non-native object source retrieval via SAP Note 2980930 extension endpoint for legacy types. Both are gaps in ARC-1.",
+      "evaluationFile": "evaluations/issue-44-dynpro-nonnative.md"
+    },
     {
       "number": 42,
       "state": "open",

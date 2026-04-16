@@ -2,12 +2,12 @@
 
 > Tracking commits and issues from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (ARC-1's upstream) for features and bug fixes worth adopting.
 
-_Last updated: 2026-04-14_
+_Last updated: 2026-04-16_
 
 ## Approach
 
 - **Commits**: Grouped by release in `commits.json`. Auto-triaged by commit prefix.
-- **Issues**: All 42 issues evaluated in `issues.json`
+- **Issues**: All 55 issues evaluated in `issues.json`
 - **Evaluations**: Detailed write-ups for high/medium priority items in `evaluations/`
 - **Scope**: Tracking from v2.22.0 (2026-02-01) onwards
 - **Key difference from fr0ster**: VSP is ARC-1's upstream — same safety system design, shared heritage. ~70% of commits are experimental (WASM/LLVM compilers, Lua, JS evaluator) and not relevant.
@@ -16,12 +16,12 @@ _Last updated: 2026-04-14_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 495+ | 42 |
-| Tracked | 95 | 42 |
-| Evaluated | 90 | 42 |
+| Total | 517+ | 55 |
+| Tracked | 117 | 55 |
+| Evaluated | 109 | 55 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 60 | 22 |
-| Evaluation files | 31 | 9 |
+| Skipped (not relevant) | 68 | 25 |
+| Evaluation files | 34 | 9 |
 
 ## Priority Summary
 
@@ -31,12 +31,16 @@ _Last updated: 2026-04-14_
 |--------|----|-------------|-------------------|
 | commit | **0713d75** | **CRITICAL: Package safety bypass on mutations — ARC-1 has same bug** | **Safety system bypass** |
 | commit | 7270ad7 | API release state for S/4HANA Clean Core | New — critical for BTP/cloud |
+| commit | **22517d4** | **Fix lock-handle bug class: add modificationSupport check to lockObject()** | **crud.ts reliability** |
+| issue | **#104** | **CSRF fetch via HEAD fails on S/4HANA public cloud (CL_ADT_WB_RES_APP returns 403)** | **http.ts CSRF resilience** |
+| issue | **#98** | **423 on DDLS LOCK+UPDATE in separate sessions — root cause confirmed** | **Verify withStatefulSession for CDS** |
 | ~~issue~~ | ~~#9~~ | ~~Transport 406 Accept header (same class as fr0ster 415)~~ | ~~Critical #3~~ ✅ ARC-1 has 415/406 retry |
 
 ### Medium Priority (evaluate/verify)
 
 | Source | ID | Description | ARC-1 Matrix Ref |
 |--------|----|-------------|-------------------|
+| commit | f00356a + 3d1353e | RecoverFailedCreate — partial-create recovery on 5xx | SAPWrite reliability |
 | commit | daedc99 | VSP now has Streamable HTTP transport | No action — landscape update |
 | commit | 27d4d7c | Auth headers on redirects + stateful lock sessions | Verify http.ts |
 | commit | dcaa358 | Rename refactoring preview | Medium #18 in matrix |
@@ -61,7 +65,7 @@ _Last updated: 2026-04-14_
 | commit | a66bcd5 | API release state bug fix (C0-C4 structure) | Verify getApiReleaseState |
 | commit | e62c7d5 | SAML SSO for S/4HANA Public Cloud | Low — defer unless SAML-only demand |
 | commit | 880aa68 | Default mode → hyperfocused (market signal) | Validates intent-based approach |
-| issue | #91, #88 | 423 lock handle errors (recurring) | Verify crud.ts |
+| issue | #91, #88, #92 | 423 lock handle errors (recurring) | Verify crud.ts |
 | issue | #78 | 423 lock handle on ECC 6.0 | Verify crud.ts |
 | issue | #40 | i18n/translation tools | Closed by commit 566f1f7 |
 | issue | #39 | gCTS tools | Closed by commit 81cce41 |
@@ -73,10 +77,12 @@ _Last updated: 2026-04-14_
 - WASM/LLVM/JS compiler experiments (30+ commits) — experimental, not MCP tooling
 - Lua scripting — Go-specific
 - ABAP LSP — niche
+- CLI governance tools (cr-config-audit, cr-audit) — not MCP tooling
 - CLI mode — ARC-1 is MCP-only
 - Debugger — requires ZADT_VSP deployment
 - GetAbapHelp — requires ZADT_VSP WebSocket
 - BTP Basic Auth issue (#90) — ARC-1 correctly uses OAuth
+- SAProuter (#103) — ARC-1 uses Cloud Connector
 
 ## How to Update
 

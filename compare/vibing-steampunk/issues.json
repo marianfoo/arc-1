@@ -1,16 +1,79 @@
 {
   "$schema": "Issue tracker for oisee/vibing-steampunk — relevance to ARC-1",
   "repo": "https://github.com/oisee/vibing-steampunk",
-  "lastUpdated": "2026-04-08",
+  "lastUpdated": "2026-04-16",
   "stats": {
-    "total": 42,
-    "open": 17,
-    "closed": 25,
-    "relevantToArc1": 16,
-    "evaluated": 42,
+    "total": 55,
+    "open": 22,
+    "closed": 33,
+    "relevantToArc1": 21,
+    "evaluated": 55,
     "pending": 0
   },
   "issues": [
+    {
+      "number": 104,
+      "state": "open",
+      "date": "2026-04-15",
+      "title": "CSRF token fetch fails (403) on S/4HANA public cloud and some on-premise systems — HEAD not supported by CL_ADT_WB_RES_APP",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "CRITICAL: SAP has CL_ADT_WB_RES_APP handler that returns 403 for HEAD requests (used by all ADT clients to fetch CSRF token). Affects S/4HANA public cloud and some on-premise. Workaround: use GET with X-CSRF-Token: fetch header instead of HEAD. ARC-1 http.ts uses HEAD for CSRF fetch — verify GET fallback exists or add one.",
+      "evaluationFile": "evaluations/22517d4-lock-handle-bug-class.md"
+    },
+    {
+      "number": 103,
+      "state": "open",
+      "date": "2026-04-15",
+      "title": "Support for S/4HANA on-premise systems accessed via SAProuter",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "SAProuter proxy support. ARC-1 uses Cloud Connector for on-premise connectivity — different approach. Low priority unless SAProuter-only customers emerge."
+    },
+    {
+      "number": 99,
+      "state": "open",
+      "date": "2026-04-11",
+      "title": "Feature Request: OAuth2 authentication for BTP ABAP Environment",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already has OAuth for BTP ABAP (oauth.ts). This is VSP's gap, not ARC-1's."
+    },
+    {
+      "number": 98,
+      "state": "open",
+      "date": "2026-04-11",
+      "title": "[Bug] 423 'Invalid Lock Handle' when editing DDLS objects — LOCK and UPDATE_SOURCE executed in separate HTTP sessions",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "Root cause confirmed: 423 errors on DDLS (CDS views) because LOCK and UPDATE happen in different HTTP sessions. ARC-1 uses withStatefulSession() which should prevent this. Verify CDS view update flow uses stateful session.",
+      "evaluationFile": "evaluations/22517d4-lock-handle-bug-class.md"
+    },
+    {
+      "number": 94,
+      "state": "open",
+      "date": "2026-04-10",
+      "title": "Enhancement request for enabling new features via zadt custom api",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ZADT_VSP custom API. ARC-1 doesn't deploy custom ABAP."
+    },
+    {
+      "number": 92,
+      "state": "open",
+      "date": "2026-04-09",
+      "title": "Bug Report: Invalid Lock Handle (Status 423) on Windows when Writing/Updating ABAP Objects",
+      "labels": ["bug"],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "Another 423 instance — this one on Windows. Likely same root cause as #98 (separate sessions). Cross-platform session handling issue. ARC-1 uses Node 22 + undici — verify cookie jar is not platform-specific.",
+      "evaluationFile": "evaluations/22517d4-lock-handle-bug-class.md"
+    },
     {
       "number": 91,
       "state": "open",

@@ -2,7 +2,7 @@
 
 > Tracking commits and issues from [fr0ster/mcp-abap-adt](https://github.com/fr0ster/mcp-abap-adt) for features worth adopting in ARC-1.
 
-_Last updated: 2026-04-14_
+_Last updated: 2026-04-16_
 
 ## Approach
 
@@ -10,7 +10,7 @@ _Last updated: 2026-04-14_
   - `feat:` → needs evaluation (pending)
   - `fix:` with SAP/ADT relevance → check
   - `chore:/docs:/test:/style:/ci:` → skipped
-- **Issues**: All 40 issues evaluated in `issues.json` with relevance to ARC-1
+- **Issues**: All 63 issues evaluated in `issues.json` with relevance to ARC-1
 - **Evaluations**: Detailed write-ups only for high/medium priority items in `evaluations/`
 - **Scope**: Tracking from v2.4.0 (2026-02-15) onwards — earlier commits are scaffolding/refactoring
 
@@ -18,12 +18,12 @@ _Last updated: 2026-04-14_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 828 | 57 |
-| Tracked | 97 | 57 |
-| Evaluated | 55 | 57 |
+| Total | 834 | 63 |
+| Tracked | 103 | 63 |
+| Evaluated | 59 | 63 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 42 | 25 |
-| Evaluation files | 23 | 10 |
+| Skipped (not relevant) | 44 | 30 |
+| Evaluation files | 25 | 11 |
 
 ## Priority Summary
 
@@ -48,6 +48,9 @@ _Last updated: 2026-04-14_
 | commit | 5f975fe | MCP client auto-configurator | High #21 in matrix |
 | commit | 8fd0ef3 | GetInactiveObjects endpoint (list pending activations) | New SAPRead/SAPDiagnose action |
 | commit | 4f95094 | 13 high-level Check handlers (per-type syntax/semantic) | No action — ARC-1 uses single SAPDiagnose |
+| commit | 51781d3 | ServiceBindingVariant — V4 publish endpoint must use `odatav4` | Fix bug in devtools.ts publishServiceBinding() |
+| commit | c2b8006 | UpdateInterface BTP Cloud: transport param causes 400 | Verify safeUpdateSource() omits transport on BTP |
+| issue | #61 | UpdateInterface `corrNr not found` on BTP ABAP | Verify ARC-1 crud.ts for BTP transport omission |
 | issue | #57 | Lock/unlock must use try/finally | Verify — ARC-1 already does |
 | issue | #45 | CSRF cookie corruption on sequential creates | Verify — ARC-1 uses withStatefulSession |
 | issue | #46 | stdio log leak corrupting MCP protocol | Verify — ARC-1 uses stderr-only |
