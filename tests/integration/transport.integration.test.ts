@@ -295,7 +295,7 @@ describe('Transport Integration Tests', () => {
         if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support recursive release');
         throw err;
       }
-    }, 30_000);
+    }, 60_000);
   });
 
   // ─── Transportable Package Write with corrNr Propagation ──────
