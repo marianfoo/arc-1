@@ -61,7 +61,7 @@ echo "-- Starting MCP server..."
 > "${LOG_FILE}"
 
 SAP_TRANSPORT=http-streamable \
-ARC1_HTTP_ADDR="127.0.0.1:${MCP_PORT}" \
+ARC1_PORT="${MCP_PORT}" \
 SAP_INSECURE=true \
 ARC1_PROFILE=developer-sql \
 SAP_ENABLE_TRANSPORTS=true \
