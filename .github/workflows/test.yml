@@ -141,25 +141,22 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.E2E_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.E2E_SERVER }} >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Deploy MCP server
-        run: npm run test:e2e:deploy
+      - name: Start MCP server (local)
+        run: npm run test:e2e:start
         env:
-          E2E_SERVER: ${{ secrets.E2E_SERVER }}
-          E2E_SERVER_USER: ${{ secrets.E2E_SERVER_USER }}
+          SAP_URL: ${{ secrets.SAP_URL }}
           SAP_USER: ${{ secrets.SAP_USER }}
           SAP_PASSWORD: ${{ secrets.SAP_PASSWORD }}
+          SAP_CLIENT: '001'
 
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          E2E_MCP_URL: http://${{ secrets.E2E_SERVER }}:3000/mcp
+          E2E_MCP_URL: http://localhost:3000/mcp
+          SAP_URL: ${{ secrets.SAP_URL }}
+          SAP_USER: ${{ secrets.SAP_USER }}
+          SAP_PASSWORD: ${{ secrets.SAP_PASSWORD }}
+          SAP_CLIENT: '001'
 
       - name: Upload E2E JSON test results
         if: always()
@@ -175,12 +172,9 @@ jobs:
         run: node scripts/ci/collect-test-reliability.mjs --results-dir test-results
         continue-on-error: true
 
-      - name: Stop MCP server & collect logs
+      - name: Stop MCP server
         if: always()
         run: npm run test:e2e:stop
-        env:
-          E2E_SERVER: ${{ secrets.E2E_SERVER }}
-          E2E_SERVER_USER: ${{ secrets.E2E_SERVER_USER }}
 
       - name: Upload E2E logs
         if: always()
