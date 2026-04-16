@@ -173,6 +173,48 @@ describe('AdtHttpClient', () => {
       expect(fetchHeaders(1)['X-CSRF-Token']).toBe('TOKEN123');
     });
 
+    it('retries CSRF fetch with GET when HEAD returns 403 (S/4HANA Public Cloud compat)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(403, 'Forbidden'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'TOKEN' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await client.post('/sap/bc/adt/checkruns', '<xml/>', 'application/xml');
+
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(fetchOptions(0).method).toBe('HEAD');
+      expect(fetchOptions(1).method).toBe('GET');
+      expect(fetchHeaders(2)['X-CSRF-Token']).toBe('TOKEN');
+    });
+
+    it('throws when both HEAD and GET return 403', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(403, 'Forbidden'));
+      mockFetch.mockResolvedValueOnce(mockResponse(403, 'Forbidden'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      try {
+        await client.fetchCsrfToken();
+        throw new Error('Expected fetchCsrfToken to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(AdtApiError);
+        expect(error).toMatchObject({
+          statusCode: 403,
+          message: expect.stringMatching(/forbidden/i),
+        });
+      }
+    });
+
+    it('does not use GET fallback when HEAD returns 401', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.fetchCsrfToken()).rejects.toMatchObject({
+        statusCode: 401,
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(fetchOptions(0).method).toBe('HEAD');
+    });
+
     it('does not re-fetch CSRF token for second POST', async () => {
       // CSRF fetch
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T1' }));
@@ -323,6 +365,7 @@ describe('AdtHttpClient', () => {
     });
 
     it('throws AdtApiError on 403 during CSRF fetch', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(403, 'Forbidden'));
       mockFetch.mockResolvedValueOnce(mockResponse(403, 'Forbidden'));
 
       const client = new AdtHttpClient(getDefaultConfig());

@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-16 (PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); fr0ster v6.1.0: UpdateInterface BTP corrNr fix (not applicable to ARC-1 — centralized safeUpdateSource already handles), ServiceBindingVariant (V4 SRVB publish bug in devtools.ts), dump API simplified; VSP: lock-handle bug class resolved (modificationSupport guard — implement in ARC-1 crud.ts) + CSRF HEAD fails on S/4HANA Public Cloud issue #104 (add GET fallback in http.ts); abap-adt-api: Dynpro metadata proposal #44; dassian-adt deep analysis: 9 transport tools, 8 trace tools, abap_run endpoint confirmed; ARC-1 action items: fix V4 SRVB publish endpoint + add modificationSupport check to lockObject() + CSRF HEAD fallback)_
+_Last updated: 2026-04-16 (PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
 
 ## Legend
 - ✅ = Supported
@@ -271,9 +271,10 @@ The following items were incorrectly marked in the previous version and have sin
 | VSP stars | 273 | 279 | New issues: 103 (SAProuter support), 104 (CSRF HEAD 403 on S/4HANA public cloud) |
 | fr0ster stars | 29 | 35 | v6.1.0 |
 | sapcli stars | 77 | 79 | PR #149 merged (domain support), PR #147 (auth fields), HTTP refactor |
-| VSP lock-handle bug | ⚠️ (ongoing 423 errors) | ✅ (22517d4 — modificationSupport guard) | Root cause fixed: detect modificationSupport=false in lock response. ARC-1 crud.ts needs same fix. |
+| VSP lock-handle bug | ⚠️ (ongoing 423 errors) | ✅ (22517d4 — modificationSupport guard) | Root cause fixed in VSP; ARC-1 aligned with COMPAT-01 fix on 2026-04-16 (`lockObject` now checks `MODIFICATION_SUPPORT`/`modificationSupport`). |
 | VSP version | v2.39.0+ | v2.40.0+ (Apr 13-15 sprint) | cr-config-audit CLI tools, RecoverFailedCreate primitive, lock-handle fix |
-| S/4HANA Public Cloud CSRF | not tracked | ❌ ARC-1 may fail | VSP issue #104: HEAD request for CSRF fetch fails on S/4HANA Public Cloud (CL_ADT_WB_RES_APP returns 403). ARC-1 http.ts uses HEAD — verify GET fallback needed. |
+| S/4HANA Public Cloud CSRF | not tracked | ✅ fixed 2026-04-16 | VSP issue #104 confirmed the HEAD incompatibility. ARC-1 now retries CSRF fetch with GET when HEAD returns 403. |
+| ARC-1 V4 SRVB publish endpoint | not tracked | ✅ fixed 2026-04-15 (PR #130) | `publishServiceBinding()`/`unpublishServiceBinding()` now use resolved binding type (`odatav2`/`odatav4`) instead of hardcoded v2. |
 | ARC-1 SKTD (Knowledge Transfer Documents) | ❌ | ✅ (merged PR #134 2026-04-16) | PR #134 by lemaiwo — full SKTD read/write: `GET/PUT/POST /sap/bc/adt/documentation/ktd/documents/`, base64-decoded Markdown, create requires refObjectType, update preserves server-side metadata. |
 | GetProgFullCode (include traversal) availability | ✅ fr0ster | ✅ fr0ster (on-prem only) | fr0ster v6.1.0 deep analysis: uses `GET /sap/bc/adt/repository/nodestructure?objecttype=PROG/P&objectname={name}` + recursive include fetch. NOT available on BTP Cloud (missing node API). |
 | fr0ster Enhancements endpoint | noted | documented | fr0ster deep analysis: `GET /sap/bc/adt/programs/programs/{name}/source/main/enhancements/elements` (base64-encoded source, on-prem only); enhancement spot: `GET /sap/bc/adt/enhancements/enhsxsb/{spotName}`; on-prem only. |
@@ -296,7 +297,7 @@ The following items were incorrectly marked in the previous version and have sin
 
 ### Biggest Competitive Threats
 1. **vibing-steampunk** (279 stars) — Community favorite. Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening, RecoverFailedCreate primitive. Defaults to hyperfocused mode (1 tool). Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (fix in 22517d4), CSRF HEAD 403 on S/4HANA public cloud (#104), SAProuter support (#103).
-2. **fr0ster** (v6.1.0, 100+ releases, 35 stars) — Closest enterprise competitor. ~320 tools, 9 auth providers, TLS, RFC, embeddable. v6.0.0 BREAKING: simplified dump API + fixed UpdateInterface on BTP (corrNr bug — not applicable to ARC-1 due to centralized safeUpdateSource). v6.1.0: RFC decoupled from legacy system type. ARC-1 action: **fix V4 SRVB publish endpoint** (`devtools.ts` hardcodes `odatav2` — fails for OData V4 bindings).
+2. **fr0ster** (v6.1.0, 100+ releases, 35 stars) — Closest enterprise competitor. ~320 tools, 9 auth providers, TLS, RFC, embeddable. v6.0.0 BREAKING: simplified dump API + fixed UpdateInterface on BTP (corrNr bug — not applicable to ARC-1 due to centralized safeUpdateSource). v6.1.0: RFC decoupled from legacy system type. ARC-1 has already aligned on V4 SRVB publish endpoint support (PR #130, 2026-04-15).
 3. **dassian-adt** (33 stars, 53 tools) — Stabilized after explosive April sprint (0 → 33 stars, 25 → 53 tools in 2 weeks). OAuth/XSUAA/multi-system/per-user auth all added. Deep analysis (2026-04-16): 9 transport tools, 8 trace tools, abap_create_test_include confirmed. Still no new commits since Apr 14. Lacks: safety system, BTP Destination/PP, caching, linting.
 4. **SAP Joule / Official ABAP MCP Server** — SAP announced Q2 2026 GA for ABAP Cloud Extension for VS Code with built-in agentic AI. Initial scope: RAP UI service development. Will reshape landscape — community servers become complementary.
 5. **btp-odata-mcp** (120 stars) — Different category (OData not ADT). Dormant since Jan 2026. High stars but no recent development.
@@ -317,9 +318,9 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~ADT service discovery / MIME negotiation (FEAT-38)~~ — ✅ completed 2026-04-14
 - ~~401 session timeout auto-retry (centralized gateway idle)~~ — ✅ Implemented in `src/adt/http.ts`
 - ~~TLS/HTTPS for HTTP Streamable~~ — downgraded to P3: most deployments use reverse proxy
-- **modificationSupport guard in lockObject()** — Root cause of all 423 `ExceptionResourceInvalidLockHandle` errors. ADT lock response includes `MODIFICATION_SUPPORT` flag; if `false` (released transport, read-only object), return LLM-friendly error instead of trying to lock. Fix `src/adt/crud.ts`. [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
-- **CSRF HEAD fallback for S/4HANA Public Cloud** — `CL_ADT_WB_RES_APP` returns 403 for HEAD on S/4HANA Public Cloud and some on-prem S/4HANA 2023 FPS03. All write operations silently fail. Add GET fallback in `src/adt/http.ts`. [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) / VSP issue #104
-- **V4 SRVB publish endpoint bug** — `publishServiceBinding()` in `src/adt/devtools.ts` hardcodes `bindingtype=odatav2` — fails for OData V4 service bindings. Fix: pass binding type through and use `odatav4` for V4 bindings. [Eval](fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
+- ~~**modificationSupport guard in lockObject()**~~ — ✅ fixed 2026-04-16 in `src/adt/crud.ts`. Lock responses with explicit `MODIFICATION_SUPPORT=false`/`modificationSupport=false` now fail early with actionable 423 guidance. [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+- ~~**CSRF HEAD fallback for S/4HANA Public Cloud**~~ — ✅ fixed 2026-04-16 in `src/adt/http.ts`. CSRF fetch now retries with GET when HEAD returns 403. [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) / VSP issue #104
+- ~~**V4 SRVB publish endpoint bug**~~ — ✅ fixed 2026-04-15 in PR #130 (`9b0601c`). Publish/unpublish now respect resolved service binding type (`odatav2`/`odatav4`). [Eval](fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
 - ~~**BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable.** ARC-1's centralized `safeUpdateSource()` already uses `transport ?? (lock.corrNr || undefined)` for all types — fr0ster's bug was per-handler (only `UpdateInterface` was missing it). Verify with BTP INTF update integration test. [Eval](fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
 
 **P1 — high-value gaps:**

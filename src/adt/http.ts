@@ -726,6 +726,22 @@ export class AdtHttpClient {
         response = await this.doFetch(url, 'HEAD', headers);
       }
 
+      // S/4HANA Public Cloud compat: CL_ADT_WB_RES_APP returns 403 for HEAD.
+      // Retry with GET — GET also returns the CSRF token via X-CSRF-Token response header.
+      if (response.status === 403) {
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'http_request',
+          method: 'HEAD',
+          path: '/sap/bc/adt/core/discovery',
+          statusCode: 403,
+          durationMs: 0,
+          errorBody: 'CSRF HEAD returned 403 — retrying with GET (S/4HANA Public Cloud compat)',
+        });
+        response = await this.doFetch(url, 'GET', headers);
+      }
+
       // Store cookies from CSRF response — critical for session correlation
       this.storeCookies(response);
 

@@ -51,9 +51,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~8~~ | ~~FEAT-16~~ | ~~Error Intelligence (Actionable Hints)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-15~~ |
 | ~~9~~ | ~~FEAT-17~~ | ~~Type Auto-Mappings for SAPWrite~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-14~~ |
 | 10 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
-| — | COMPAT-01 | modificationSupport guard in lockObject() | P0 | XS | Compatibility |
-| — | COMPAT-02 | CSRF HEAD→GET fallback (S/4HANA Public Cloud) | P0 | XS | Compatibility |
-| — | COMPAT-03 | V4 SRVB publish endpoint bug | P0 | XS | Compatibility |
+| ~~—~~ | ~~COMPAT-01~~ | ~~modificationSupport guard in lockObject()~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
+| ~~—~~ | ~~COMPAT-02~~ | ~~CSRF HEAD→GET fallback (S/4HANA Public Cloud)~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
+| ~~—~~ | ~~COMPAT-03~~ | ~~V4 SRVB publish endpoint bug~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-15~~ |
 | — | COMPAT-04 | BTP transport omission in safeUpdateSource() — verify only | P2 | XS | Compatibility |
 | 11 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
 | 12 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
@@ -164,7 +164,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 >
 > **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
 >
-> **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) found 3 new P0 compatibility bugs (COMPAT-01 through COMPAT-03) and 1 verify item (COMPAT-04 — likely not applicable to ARC-1). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of all 423 lock errors. S/4HANA Public Cloud CSRF HEAD bug affects ALL write operations for that platform. PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API.
+> **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) identified COMPAT-01..03 plus verify item COMPAT-04. Follow-up confirmed COMPAT-03 had already been fixed in PR #130 (commit `9b0601c`, completed 2026-04-15). COMPAT-01 and COMPAT-02 were fixed in this follow-up implementation (completed 2026-04-16). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of recurring 423 lock errors and surfaced S/4HANA Public Cloud CSRF HEAD incompatibility (#104). PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API.
 
 ### Phase A: Production Blockers (P0)
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
@@ -178,11 +178,11 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### Phase A.6: Compatibility Bug Fixes (P0) — identified 2026-04-16
 These bugs affect real-world deployments and were confirmed by cross-project competitor analysis:
 
-- **COMPAT-01: modificationSupport guard in lockObject()** (XS) — ADT lock response includes `MODIFICATION_SUPPORT` flag; if `false`, the object is in a released transport or system-delivered and cannot be locked. ARC-1 ignores this flag → cryptic 423 `ExceptionResourceInvalidLockHandle`. Fix: parse from lock response in `src/adt/crud.ts`, return actionable error if `false`. Source: VSP commit 22517d4 (root-cause fix for all recurring 423 issues). [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+- ~~**COMPAT-01: modificationSupport guard in lockObject()** (XS)~~ — **completed 2026-04-16.** `lockObject()` now checks both `MODIFICATION_SUPPORT` and namespaced `modificationSupport` for explicit `false` and returns a targeted `AdtApiError` (423) before write attempts. Source: VSP commit 22517d4. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
 
-- **COMPAT-02: CSRF HEAD→GET fallback (S/4HANA Public Cloud)** (XS) — `CL_ADT_WB_RES_APP` returns 403 for HEAD on S/4HANA Public Cloud and some S/4HANA 2023 FPS03 on-prem. ARC-1's `fetchCSRFToken()` in `src/adt/http.ts` uses HEAD → all write operations silently fail with a misleading "access forbidden" error. Fix: retry CSRF fetch with GET when HEAD returns 403. Source: VSP issue #104. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+- ~~**COMPAT-02: CSRF HEAD→GET fallback (S/4HANA Public Cloud)** (XS)~~ — **completed 2026-04-16.** `fetchCsrfToken()` now retries with GET when HEAD returns 403, preserving existing 401/403 auth error behavior for true authorization failures. Source: VSP issue #104. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
 
-- **COMPAT-03: V4 SRVB publish endpoint bug** (XS) — `publishServiceBinding()` and `unpublishServiceBinding()` in `src/adt/devtools.ts` hardcode `bindingtype=odatav2`. OData V4 service bindings need `bindingtype=odatav4`. Fix: propagate binding type from `SAPManage publish_srvb` through to the publish URL. Source: fr0ster commit 51781d3 (ServiceBindingVariant). [Eval](../compare/fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
+- ~~**COMPAT-03: V4 SRVB publish endpoint bug** (XS)~~ — **already completed 2026-04-15** in PR #130 (commit `9b0601c`) before this compatibility plan was executed. `publishServiceBinding()`/`unpublishServiceBinding()` now propagate the resolved binding type (`odatav2` or `odatav4`) correctly. [Eval](../compare/fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
 
 - ~~**COMPAT-04: BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable to ARC-1.** fr0ster's bug was per-handler transport wiring (`UpdateInterface` missing what `UpdateClass` had). ARC-1's centralized `safeUpdateSource()` handles ALL types with `effectiveTransport = transport ?? (lock.corrNr || undefined)` — the pattern already correctly omits `corrNr` when undefined. **Verify** with BTP Cloud INTF update integration test. Source: fr0ster commit c2b8006 + issue #61. [Eval](../compare/fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
 

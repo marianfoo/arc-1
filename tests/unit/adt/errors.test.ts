@@ -86,7 +86,7 @@ describe('AdtApiError', () => {
   describe('constructor deep error extraction', () => {
     it('extracts msgText from full responseBody when truncated message only yields HTML title', () => {
       // Simulate: first 500 chars only contain the HTML head (title), but full body has msgText deeper
-      const shortHtml = '<html><head><title>Application Server Error</title></head><body>' + 'x'.repeat(400);
+      const shortHtml = `<html><head><title>Application Server Error</title></head><body>${'x'.repeat(400)}`;
       const fullHtml =
         shortHtml +
         '<p class="detailText"><span id="msgText">Syntax error in program ZC_FBCLUBTP===================BD</span></p></body></html>';

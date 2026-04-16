@@ -9,7 +9,7 @@ import {
   updateObject,
   updateSource,
 } from '../../../src/adt/crud.js';
-import { AdtSafetyError } from '../../../src/adt/errors.js';
+import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
@@ -62,6 +62,64 @@ describe('CRUD Operations', () => {
       const result = await lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
       expect(result.corrNr).toBe('A4HK900100');
       expect(result.isLocal).toBe(false);
+    });
+
+    it('returns lock result when MODIFICATION_SUPPORT is absent (normal object)', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H2</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>';
+      const http = {
+        ...mockHttp(),
+        post: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: lockBody }),
+      } as unknown as AdtHttpClient;
+      const result = await lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result).toEqual({ lockHandle: 'H2', corrNr: '', isLocal: true });
+    });
+
+    it('returns lock result when MODIFICATION_SUPPORT is true', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H3</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL></IS_LOCAL><MODIFICATION_SUPPORT>true</MODIFICATION_SUPPORT></DATA></asx:values></asx:abap>';
+      const http = {
+        ...mockHttp(),
+        post: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: lockBody }),
+      } as unknown as AdtHttpClient;
+      const result = await lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+      expect(result).toEqual({ lockHandle: 'H3', corrNr: '', isLocal: false });
+    });
+
+    it('throws AdtApiError 423 when MODIFICATION_SUPPORT is false (ABAP XML format)', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>H4</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL></IS_LOCAL><MODIFICATION_SUPPORT>false</MODIFICATION_SUPPORT></DATA></asx:values></asx:abap>';
+      const http = {
+        ...mockHttp(),
+        post: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: lockBody }),
+      } as unknown as AdtHttpClient;
+      await expect(
+        lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST'),
+      ).rejects.toMatchObject({
+        statusCode: 423,
+        message: expect.stringContaining('Object cannot be modified'),
+      });
+      await expect(lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST')).rejects.toThrow(
+        AdtApiError,
+      );
+    });
+
+    it('throws AdtApiError 423 when modificationSupport is false (adtcore namespace format)', async () => {
+      const lockBody =
+        '<asx:abap xmlns:asx="http://www.sap.com/abapxml" xmlns:adtcore="http://www.sap.com/adt/core"><asx:values><DATA><LOCK_HANDLE>H5</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL></IS_LOCAL><adtcore:modificationSupport>false</adtcore:modificationSupport></DATA></asx:values></asx:abap>';
+      const http = {
+        ...mockHttp(),
+        post: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: lockBody }),
+      } as unknown as AdtHttpClient;
+      await expect(
+        lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST'),
+      ).rejects.toMatchObject({
+        statusCode: 423,
+        message: expect.stringContaining('Object cannot be modified'),
+      });
+      await expect(lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST')).rejects.toThrow(
+        AdtApiError,
+      );
     });
 
     it('sends LOCK action to correct URL', async () => {

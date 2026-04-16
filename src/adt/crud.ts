@@ -10,6 +10,7 @@
  * leaked locks on error, blocking the object for other developers.
  */
 
+import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 /** Lock result from SAP */
@@ -40,6 +41,17 @@ export async function lockObject(
   const lockHandle = extractXmlValue(resp.body, 'LOCK_HANDLE');
   const corrNr = extractXmlValue(resp.body, 'CORRNR');
   const isLocal = extractXmlValue(resp.body, 'IS_LOCAL') === 'X';
+  const modificationSupport = extractXmlValue(resp.body, 'MODIFICATION_SUPPORT');
+  const namespacedModificationSupportMatch = resp.body.match(/modificationSupport[^>]*>([^<]+)<\//);
+  const namespacedModificationSupport = namespacedModificationSupportMatch?.[1] ?? '';
+
+  if (modificationSupport === 'false' || namespacedModificationSupport === 'false') {
+    throw new AdtApiError(
+      'Object cannot be modified: it is in a released or non-modifiable transport. To edit this object, assign it to a new open correction request (use SE09 to create one), or work with your basis team to create a new transport.',
+      423,
+      objectUrl,
+    );
+  }
 
   return { lockHandle, corrNr, isLocal };
 }
