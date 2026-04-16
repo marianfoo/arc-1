@@ -540,12 +540,14 @@ describe('Intent Handler', () => {
           `<?xml version="1.0" encoding="utf-8"?>
 <auth:auth xmlns:auth="http://www.sap.com/iam/auth" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="BUKRS" adtcore:description="Company code" adtcore:masterLanguage="EN">
   <adtcore:packageRef adtcore:name="SF"/>
-  <auth:fieldName>BUKRS</auth:fieldName>
-  <auth:rollName>BUKRS</auth:rollName>
-  <auth:checkTable>T001</auth:checkTable>
-  <auth:domname>BUKRS</auth:domname>
-  <auth:outputlen>4</auth:outputlen>
-  <auth:orglvlinfo>true</auth:orglvlinfo>
+  <auth:content>
+    <auth:fieldName>BUKRS</auth:fieldName>
+    <auth:rollName>BUKRS</auth:rollName>
+    <auth:checkTable>T001</auth:checkTable>
+    <auth:domname>BUKRS</auth:domname>
+    <auth:outputlen>4</auth:outputlen>
+    <auth:orglvlinfo>true</auth:orglvlinfo>
+  </auth:content>
 </auth:auth>`,
         ),
       );
@@ -567,9 +569,13 @@ describe('Intent Handler', () => {
         mockResponse(
           200,
           JSON.stringify({
-            name: 'ABC_TOGGLE',
-            description: 'Sample toggle',
-            states: [{ system: 'A4H', state: 'on' }],
+            STATES: {
+              NAME: 'ABC_TOGGLE',
+              CLIENT_STATE: 'on',
+              USER_STATE: 'undefined',
+              CLIENT_STATES: [{ CLIENT: '001', DESCRIPTION: 'Dev', STATE: 'on' }],
+              USER_STATES: [],
+            },
           }),
         ),
       );
@@ -581,7 +587,8 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
       const parsed = JSON.parse(result.content[0]!.text);
       expect(parsed.name).toBe('ABC_TOGGLE');
-      expect(parsed.states).toEqual([{ system: 'A4H', state: 'on' }]);
+      expect(parsed.clientState).toBe('on');
+      expect(parsed.states).toEqual([{ client: '001', state: 'on', description: 'Dev' }]);
     });
 
     it('reads enhancement implementation metadata (ENHO)', async () => {
@@ -592,13 +599,18 @@ describe('Intent Handler', () => {
           `<?xml version="1.0" encoding="utf-8"?>
 <enho:objectData xmlns:enho="http://www.sap.com/adt/enhancements/enho" xmlns:enhcore="http://www.sap.com/abapsource/enhancementscore" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZMY_BADI_IMPL" adtcore:description="Test impl">
   <adtcore:packageRef adtcore:name="ZPKG"/>
+  <enho:contentCommon enho:toolType="BADI_IMPL" enho:switchSupported="false"/>
   <enho:contentSpecific>
-    <enho:badiTechnology>BADI_IMPL</enho:badiTechnology>
-    <enho:badiImplementations>
-      <enho:badiImplementation adtcore:name="ZMY_BADI_IMPL_A" enho:implementingClass="ZCL_BADI_IMPL_A" enho:badi="BADI_DEF_A" enho:active="true" enho:default="false"/>
-    </enho:badiImplementations>
+    <enho:badiTechnology>
+      <enho:badiImplementations>
+        <enho:badiImplementation enho:name="ZMY_BADI_IMPL_A" enho:shortText="First" enho:active="true" enho:default="false">
+          <enho:enhancementSpot adtcore:name="ENH_SPOT_EXAMPLE"/>
+          <enho:badiDefinition adtcore:name="BADI_DEF_A"/>
+          <enho:implementingClass adtcore:name="ZCL_BADI_IMPL_A"/>
+        </enho:badiImplementation>
+      </enho:badiImplementations>
+    </enho:badiTechnology>
   </enho:contentSpecific>
-  <enhcore:referencedObject adtcore:uri="/sap/bc/adt/enhancements/enhsxsb/ENH_SPOT_EXAMPLE" adtcore:name="ENH_SPOT_EXAMPLE" adtcore:type="ENHS/XSB"/>
 </enho:objectData>`,
         ),
       );
@@ -612,7 +624,9 @@ describe('Intent Handler', () => {
       expect(parsed.name).toBe('ZMY_BADI_IMPL');
       expect(parsed.technology).toBe('BADI_IMPL');
       expect(parsed.badiImplementations).toHaveLength(1);
-      expect(parsed.badiImplementations[0].implementationClass).toBe('ZCL_BADI_IMPL_A');
+      expect(parsed.badiImplementations[0].implementingClass).toBe('ZCL_BADI_IMPL_A');
+      expect(parsed.badiImplementations[0].badiDefinition).toBe('BADI_DEF_A');
+      expect(parsed.badiImplementations[0].enhancementSpot).toBe('ENH_SPOT_EXAMPLE');
     });
 
     it('reads a transaction (TRAN)', async () => {

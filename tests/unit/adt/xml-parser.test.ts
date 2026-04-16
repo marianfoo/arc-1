@@ -444,18 +444,18 @@ describe('XML Parser', () => {
   // ─── parseAuthorizationField ─────────────────────────────────────
 
   describe('parseAuthorizationField', () => {
-    it('parses authorization field metadata from fixture', () => {
+    it('parses authorization field metadata from real SAP fixture (fields under <auth:content>)', () => {
       const xml = loadFixture('authorization-field.xml');
       const auth = parseAuthorizationField(xml);
       expect(auth.name).toBe('BUKRS');
-      expect(auth.description).toBe('Company code');
+      expect(auth.description).toBe('Company Code');
       expect(auth.roleName).toBe('BUKRS');
       expect(auth.checkTable).toBe('T001');
       expect(auth.domainName).toBe('BUKRS');
-      expect(auth.outputLength).toBe('4');
-      expect(auth.package).toBe('SF');
-      expect(auth.orgLevelInfo).toEqual(['true', 'false']);
-      expect(auth.masterLanguage).toBe('EN');
+      expect(auth.outputLength).toBe('000004');
+      expect(auth.package).toBe('BF');
+      expect(auth.orgLevelInfo).toEqual(['Field is not defined as Organizational level.']);
+      expect(auth.masterLanguage).toBe('DE');
     });
 
     it('handles minimal authorization field XML', () => {
@@ -473,45 +473,50 @@ describe('XML Parser', () => {
   // ─── parseFeatureToggleStates ────────────────────────────────────
 
   describe('parseFeatureToggleStates', () => {
-    it('parses feature toggle states from fixture', () => {
+    it('parses feature toggle states from real SAP fixture (uppercase STATES wrapper)', () => {
       const json = loadFixture('feature-toggle-states.json');
-      const toggle = parseFeatureToggleStates(json, 'ABC_TOGGLE');
-      expect(toggle.name).toBe('ABC_TOGGLE');
-      expect(toggle.description).toBe('Sample toggle');
-      expect(toggle.package).toBe('SFW');
-      expect(toggle.states).toHaveLength(1);
-      expect(toggle.states[0]).toEqual({ system: 'A4H', state: 'on' });
+      const toggle = parseFeatureToggleStates(json, 'SFW_SWITCH_TOGGLE');
+      expect(toggle.name).toBe('SFW_SWITCH_TOGGLE');
+      expect(toggle.clientState).toBe('off');
+      expect(toggle.userState).toBe('undefined');
+      expect(toggle.states).toHaveLength(2);
+      expect(toggle.states[0]).toEqual({ client: '000', state: 'off', description: 'SAP SE' });
+      expect(toggle.states[1]).toEqual({ client: '001', state: 'off', description: 'SAP SE' });
+      expect(toggle.userStates).toEqual([]);
     });
 
-    it('handles minimal feature toggle JSON', () => {
-      const toggle = parseFeatureToggleStates('{"states":[{"system":"QAS","state":"maybe"}]}', 'Z_MIN');
-      expect(toggle.name).toBe('Z_MIN');
-      expect(toggle.description).toBe('');
-      expect(toggle.package).toBe('');
-      expect(toggle.states).toEqual([{ system: 'QAS', state: 'unknown' }]);
+    it('normalizes unknown state values', () => {
+      const toggle = parseFeatureToggleStates(
+        '{"STATES":{"NAME":"Z","CLIENT_STATE":"","USER_STATE":"","CLIENT_STATES":[{"CLIENT":"100","STATE":"maybe"}],"USER_STATES":[]}}',
+        'Z',
+      );
+      expect(toggle.states[0]?.state).toBe('unknown');
     });
   });
 
   // ─── parseEnhancementImplementation ──────────────────────────────
 
   describe('parseEnhancementImplementation', () => {
-    it('parses enhancement implementation metadata from fixture', () => {
+    it('parses enhancement implementation metadata from real SAP fixture', () => {
       const xml = loadFixture('enhancement-implementation.xml');
       const enho = parseEnhancementImplementation(xml);
-      expect(enho.name).toBe('ZMY_BADI_IMPL');
-      expect(enho.description).toBe('Test impl');
-      expect(enho.package).toBe('ZPKG');
+      expect(enho.name).toBe('SFW_BCF_TCD');
+      expect(enho.description).toBe('TCD Lookup, Assignment...');
+      expect(enho.package).toBe('SFWTOOLS');
       expect(enho.technology).toBe('BADI_IMPL');
-      expect(enho.referencedObjectName).toBe('ENH_SPOT_EXAMPLE');
-      expect(enho.referencedObjectType).toBe('ENHS/XSB');
+      expect(enho.switchSupported).toBe(true);
       expect(enho.badiImplementations).toHaveLength(2);
       expect(enho.badiImplementations[0]).toEqual({
-        name: 'ZMY_BADI_IMPL_A',
-        implementationClass: 'ZCL_BADI_IMPL_A',
-        badiDefinition: 'BADI_DEF_A',
+        name: 'SFW_TCD',
+        shortText: 'Implementierung: BCF: BADI für TCD Remote Service',
+        implementingClass: 'CL_SFW_TCD',
+        badiDefinition: 'BCF_TCD_REMOTE_BADI',
+        enhancementSpot: 'BCF_REMOTE_TCD',
         active: true,
         default: false,
       });
+      expect(enho.badiImplementations[1]?.default).toBe(true);
+      expect(enho.badiImplementations[1]?.active).toBe(false);
     });
 
     it('handles minimal enhancement implementation XML', () => {

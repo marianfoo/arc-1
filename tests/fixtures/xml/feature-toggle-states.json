@@ -1,11 +1,14 @@
 {
-  "name": "ABC_TOGGLE",
-  "description": "Sample toggle",
-  "package": "SFW",
-  "states": [
-    {
-      "system": "A4H",
-      "state": "on"
-    }
-  ]
+  "STATES": {
+    "NAME": "SFW_SWITCH_TOGGLE",
+    "CLIENT_STATE": "off",
+    "CLIENT_CHANGED_BY": "",
+    "CLIENT_CHANGED_ON": "",
+    "USER_STATE": "undefined",
+    "CLIENT_STATES": [
+      { "CLIENT": "000", "DESCRIPTION": "SAP SE", "STATE": "off" },
+      { "CLIENT": "001", "DESCRIPTION": "SAP SE", "STATE": "off" }
+    ],
+    "USER_STATES": []
+  }
 }

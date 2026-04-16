@@ -351,7 +351,11 @@ describe('AdtClient', () => {
       const auth = await client.getAuthorizationField('BUKRS');
       expect(auth.name).toBe('BUKRS');
       expect(auth.checkTable).toBe('T001');
-      expect(auth.orgLevelInfo).toEqual(['true', 'false']);
+      expect(auth.roleName).toBe('BUKRS');
+      expect(auth.domainName).toBe('BUKRS');
+      expect(auth.outputLength).toBe('000004');
+      expect(auth.package).toBe('BF');
+      expect(auth.orgLevelInfo).toEqual(['Field is not defined as Organizational level.']);
     });
 
     it('getFeatureToggle returns parsed states', async () => {
@@ -360,9 +364,15 @@ describe('AdtClient', () => {
         mockResponse(200, loadFixture('feature-toggle-states.json'), { 'x-csrf-token': 'T' }),
       );
       const client = createClient();
-      const toggle = await client.getFeatureToggle('ABC_TOGGLE');
-      expect(toggle.name).toBe('ABC_TOGGLE');
-      expect(toggle.states).toEqual([{ system: 'A4H', state: 'on' }]);
+      const toggle = await client.getFeatureToggle('SFW_SWITCH_TOGGLE');
+      expect(toggle.name).toBe('SFW_SWITCH_TOGGLE');
+      expect(toggle.clientState).toBe('off');
+      expect(toggle.userState).toBe('undefined');
+      expect(toggle.states).toEqual([
+        { client: '000', state: 'off', description: 'SAP SE' },
+        { client: '001', state: 'off', description: 'SAP SE' },
+      ]);
+      expect(toggle.userStates).toEqual([]);
     });
 
     it('getEnhancementImplementation returns parsed metadata', async () => {
@@ -371,10 +381,20 @@ describe('AdtClient', () => {
         mockResponse(200, loadFixture('enhancement-implementation.xml'), { 'x-csrf-token': 'T' }),
       );
       const client = createClient();
-      const enho = await client.getEnhancementImplementation('ZMY_BADI_IMPL');
-      expect(enho.name).toBe('ZMY_BADI_IMPL');
+      const enho = await client.getEnhancementImplementation('SFW_BCF_TCD');
+      expect(enho.name).toBe('SFW_BCF_TCD');
+      expect(enho.package).toBe('SFWTOOLS');
       expect(enho.technology).toBe('BADI_IMPL');
+      expect(enho.switchSupported).toBe(true);
       expect(enho.badiImplementations).toHaveLength(2);
+      expect(enho.badiImplementations[0]).toMatchObject({
+        name: 'SFW_TCD',
+        implementingClass: 'CL_SFW_TCD',
+        badiDefinition: 'BCF_TCD_REMOTE_BADI',
+        enhancementSpot: 'BCF_REMOTE_TCD',
+        active: true,
+        default: false,
+      });
     });
   });
 

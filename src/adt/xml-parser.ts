@@ -544,20 +544,23 @@ export function parseDataElementMetadata(xml: string): DataElementInfo {
  */
 export function parseAuthorizationField(xml: string): AuthorizationFieldInfo {
   const parsed = parseXml(xml);
-  const authNodes = findDeepNodes(parsed, 'auth');
-  const auth = (authNodes[0] ?? {}) as Record<string, unknown>;
+  // After NS strip: auth:auth → auth (root). Fall back to findDeepNodes for robustness.
+  const auth = (parsed.auth ?? findDeepNodes(parsed, 'auth')[0] ?? {}) as Record<string, unknown>;
+  const content = (auth.content ?? {}) as Record<string, unknown>;
   const pkgRef = (auth.packageRef ?? {}) as Record<string, unknown>;
-  const orgLevelInfo = toStringArray(auth.orglvlinfo);
+  // Real SAP responses wrap fields under <auth:content>; older shapes put them at root. Support both.
+  const field = (key: string): unknown => content[key] ?? auth[key];
+  const orgLevelInfo = toStringArray(content.orglvlinfo ?? auth.orglvlinfo);
 
   return {
-    name: String(auth.fieldName ?? auth['@_name'] ?? ''),
+    name: String(field('fieldName') ?? auth['@_name'] ?? ''),
     description: String(auth['@_description'] ?? ''),
-    roleName: String(auth.rollName ?? ''),
-    checkTable: String(auth.checkTable ?? ''),
-    domainName: String(auth.domname ?? ''),
-    outputLength: String(auth.outputlen ?? ''),
-    conversionExit: String(auth.convexit ?? ''),
-    exitFunctionModule: String(auth.exitFB ?? ''),
+    roleName: String(field('rollName') ?? ''),
+    checkTable: String(field('checkTable') ?? ''),
+    domainName: String(field('domname') ?? ''),
+    outputLength: String(field('outputlen') ?? ''),
+    conversionExit: String(field('convexit') ?? ''),
+    exitFunctionModule: String(field('exitFB') ?? ''),
     package: String(pkgRef['@_name'] ?? ''),
     orgLevelInfo,
     masterLanguage: String(auth['@_masterLanguage'] ?? ''),
@@ -581,24 +584,40 @@ export function parseFeatureToggleStates(json: string, name: string): FeatureTog
     );
   }
 
-  const statesRaw = Array.isArray(parsed.states) ? parsed.states : [];
-  const states = statesRaw.map((state) => {
-    const row = (state ?? {}) as Record<string, unknown>;
-    const rawState = String(row.state ?? '').toLowerCase();
-    const normalizedState: 'on' | 'off' | 'unknown' = rawState === 'on' ? 'on' : rawState === 'off' ? 'off' : 'unknown';
-    const description = String(row.description ?? '');
+  // SAP wraps the payload in a STATES object with upper-case keys.
+  const wrap = (parsed.STATES ?? parsed) as Record<string, unknown>;
+  const normalizeState = (raw: unknown): 'on' | 'off' | 'unknown' => {
+    const s = String(raw ?? '').toLowerCase();
+    return s === 'on' ? 'on' : s === 'off' ? 'off' : 'unknown';
+  };
+
+  const clientStatesRaw = Array.isArray(wrap.CLIENT_STATES) ? wrap.CLIENT_STATES : [];
+  const states = clientStatesRaw.map((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const description = String(row.DESCRIPTION ?? '');
     return {
-      system: String(row.system ?? ''),
-      state: normalizedState,
+      client: String(row.CLIENT ?? ''),
+      state: normalizeState(row.STATE),
       ...(description ? { description } : {}),
     };
   });
 
+  const userStatesRaw = Array.isArray(wrap.USER_STATES) ? wrap.USER_STATES : [];
+  const userStates = userStatesRaw.map((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    return {
+      client: String(row.CLIENT ?? ''),
+      user: String(row.USER ?? ''),
+      state: normalizeState(row.STATE),
+    };
+  });
+
   return {
-    name: String(parsed.name ?? name),
-    description: String(parsed.description ?? ''),
-    package: String(parsed.package ?? ''),
+    name: String(wrap.NAME ?? name),
+    clientState: String(wrap.CLIENT_STATE ?? ''),
+    userState: String(wrap.USER_STATE ?? ''),
     states,
+    userStates,
   };
 }
 
@@ -609,29 +628,46 @@ export function parseFeatureToggleStates(json: string, name: string): FeatureTog
  */
 export function parseEnhancementImplementation(xml: string): EnhancementImplementationInfo {
   const parsed = parseXml(xml);
-  const objectData = ((findDeepNodes(parsed, 'objectData')[0] ?? {}) as Record<string, unknown>) ?? {};
+  const objectData = (parsed.objectData ?? findDeepNodes(parsed, 'objectData')[0] ?? {}) as Record<string, unknown>;
   const pkgRef = (objectData.packageRef ?? {}) as Record<string, unknown>;
+  const contentCommon = (objectData.contentCommon ?? {}) as Record<string, unknown>;
   const contentSpecific = (objectData.contentSpecific ?? {}) as Record<string, unknown>;
-  const badiImplContainer = (contentSpecific.badiImplementations ?? {}) as Record<string, unknown>;
+
+  // Real responses wrap impls: contentSpecific > badiTechnology > badiImplementations > badiImplementation[]
+  // badiTechnology may be an empty element (text value) on implementations with no BAdIs.
+  const badiTech = contentSpecific.badiTechnology;
+  const badiTechRec =
+    badiTech && typeof badiTech === 'object' ? (badiTech as Record<string, unknown>) : ({} as Record<string, unknown>);
+  const badiImplContainer = (badiTechRec.badiImplementations ?? contentSpecific.badiImplementations ?? {}) as Record<
+    string,
+    unknown
+  >;
   const badiImplNodes = toRecordArray(badiImplContainer.badiImplementation);
 
-  const referencedObject = (findDeepNodes(parsed, 'referencedObject')[0] ?? {}) as Record<string, unknown>;
+  const technology = String(
+    contentCommon['@_toolType'] ?? (typeof badiTech === 'string' || typeof badiTech === 'number' ? badiTech : ''),
+  );
 
   return {
     name: String(objectData['@_name'] ?? ''),
     description: String(objectData['@_description'] ?? ''),
     package: String(pkgRef['@_name'] ?? ''),
-    technology: String(contentSpecific.badiTechnology ?? ''),
-    referencedObjectUri: String(referencedObject['@_uri'] ?? ''),
-    referencedObjectName: String(referencedObject['@_name'] ?? ''),
-    referencedObjectType: String(referencedObject['@_type'] ?? ''),
-    badiImplementations: badiImplNodes.map((node) => ({
-      name: String(node['@_name'] ?? ''),
-      implementationClass: String(node['@_implementingClass'] ?? ''),
-      badiDefinition: String(node['@_badi'] ?? ''),
-      active: String(node['@_active'] ?? '') === 'true',
-      default: String(node['@_default'] ?? '') === 'true',
-    })),
+    technology,
+    switchSupported: String(contentCommon['@_switchSupported'] ?? '') === 'true',
+    badiImplementations: badiImplNodes.map((node) => {
+      const implementingClass = (node.implementingClass ?? {}) as Record<string, unknown>;
+      const badiDefinition = (node.badiDefinition ?? {}) as Record<string, unknown>;
+      const enhancementSpot = (node.enhancementSpot ?? {}) as Record<string, unknown>;
+      return {
+        name: String(node['@_name'] ?? ''),
+        shortText: String(node['@_shortText'] ?? ''),
+        implementingClass: String(implementingClass['@_name'] ?? ''),
+        badiDefinition: String(badiDefinition['@_name'] ?? ''),
+        enhancementSpot: String(enhancementSpot['@_name'] ?? ''),
+        active: String(node['@_active'] ?? '') === 'true',
+        default: String(node['@_default'] ?? '') === 'true',
+      };
+    }),
   };
 }
 

@@ -475,12 +475,17 @@ export interface AuthorizationFieldInfo {
 /** Feature toggle states from /sap/bc/adt/sfw/featuretoggles/{name}/states */
 export interface FeatureToggleInfo {
   name: string;
-  description: string;
-  package: string;
+  clientState: string;
+  userState: string;
   states: Array<{
-    system: string;
+    client: string;
     state: 'on' | 'off' | 'unknown';
     description?: string;
+  }>;
+  userStates: Array<{
+    client: string;
+    user: string;
+    state: 'on' | 'off' | 'unknown';
   }>;
 }
 
@@ -490,13 +495,13 @@ export interface EnhancementImplementationInfo {
   description: string;
   package: string;
   technology: string;
-  referencedObjectUri: string;
-  referencedObjectName: string;
-  referencedObjectType: string;
+  switchSupported: boolean;
   badiImplementations: Array<{
     name: string;
-    implementationClass: string;
+    shortText: string;
+    implementingClass: string;
     badiDefinition: string;
+    enhancementSpot: string;
     active: boolean;
     default: boolean;
   }>;
