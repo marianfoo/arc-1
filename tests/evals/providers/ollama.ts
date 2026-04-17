@@ -1,17 +1,26 @@
 /**
  * Ollama LLM provider — uses Ollama's OpenAI-compatible API.
  *
- * Requires a running Ollama instance at OLLAMA_BASE_URL (default: http://localhost:11434).
- * Supports any Ollama model with tool calling: llama3.1, qwen3, mistral, etc.
+ * Reads configuration from environment (loaded by the test entry from .env):
+ *   OLLAMA_BASE_URL  default http://localhost:11434
+ *   EVAL_MODEL       default qwen3.5:9b (overrides per-call)
+ *
+ * Supports any Ollama model with tool calling (qwen3.5, llama3.1, mistral, …).
  *
  * Usage:
- *   const provider = createOllamaProvider('llama3.1:8b');
+ *   const provider = createOllamaProvider('qwen3.5:9b');
  *   const response = await provider.chat(messages, tools);
  */
 
 import type { LLMProvider, LLMResponse, LLMToolCall, Message, ToolDefinitionForLLM } from '../types.js';
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
+/** Default model. Chosen for tool-calling quality / latency balance. */
+export const DEFAULT_OLLAMA_MODEL = 'qwen3.5:9b';
+
+/** Resolved lazily so .env loaded by the test entry is honoured. */
+function getOllamaBaseUrl(): string {
+  return process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
+}
 
 /** Convert our Message format to OpenAI chat format */
 function toOpenAIMessages(messages: Message[]): Array<Record<string, unknown>> {
@@ -72,7 +81,7 @@ export function createOllamaProvider(model: string): LLMProvider {
         stream: false,
       };
 
-      const resp = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
+      const resp = await fetch(`${getOllamaBaseUrl()}/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -114,29 +123,37 @@ export function createOllamaProvider(model: string): LLMProvider {
   };
 }
 
-/** Check if Ollama is reachable and model is available */
+/**
+ * Check Ollama reachability and model availability.
+ *
+ * Returns `{ available: true }` when the server answers and the requested
+ * model is in `ollama list`. Any other state — server down, wrong port,
+ * missing model — is reported as `available: false` so the test entry can
+ * turn it into a hard failure (we don't skip when Ollama is down; skipping
+ * hides real misconfiguration).
+ */
 export async function checkOllamaAvailable(model: string): Promise<{ available: boolean; reason?: string }> {
+  const baseUrl = getOllamaBaseUrl();
   try {
-    const resp = await fetch(`${OLLAMA_BASE_URL}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    const resp = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(5000) });
     if (!resp.ok) {
-      return { available: false, reason: `Ollama API returned ${resp.status}` };
+      return { available: false, reason: `Ollama API returned ${resp.status} from ${baseUrl}/api/tags` };
     }
     const data = (await resp.json()) as { models?: Array<{ name: string }> };
     const models = data.models?.map((m) => m.name) ?? [];
 
-    // Check if exact model or base name matches
-    const found = models.some((m) => m === model || m.startsWith(`${model.split(':')[0]}:`));
+    const found = models.some((m) => m === model);
     if (!found) {
       return {
         available: false,
-        reason: `Model "${model}" not found. Available: ${models.join(', ')}. Run: ollama pull ${model}`,
+        reason: `Model "${model}" not installed at ${baseUrl}. Installed: ${models.join(', ') || '(none)'}. Run: ollama pull ${model}`,
       };
     }
     return { available: true };
   } catch (err) {
     return {
       available: false,
-      reason: `Cannot reach Ollama at ${OLLAMA_BASE_URL}: ${err instanceof Error ? err.message : String(err)}`,
+      reason: `Cannot reach Ollama at ${baseUrl}: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

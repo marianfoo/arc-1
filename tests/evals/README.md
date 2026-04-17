@@ -6,7 +6,7 @@ through tool calls, and scores the trace against expected tool choice + args.
 
 The point is to catch regressions in **how LLMs route intent through our tool
 descriptions** — the same class of bug we found in FEAT-33 where LLMs
-text-scanned `DDDDLSRC` via SAPQuery instead of calling
+text-scanned `DDDDLSRC` via `SAPQuery` instead of calling
 `SAPContext(action="impact")`.
 
 ---
@@ -14,20 +14,72 @@ text-scanned `DDDDLSRC` via SAPQuery instead of calling
 ## TL;DR
 
 ```bash
-# Default: run everything against a local Ollama model with mock responses
+# Run everything — provider/model/URL come from .env
 npm run test:eval
 
-# Just the FEAT-33 CDS impact scenarios, mocked
+# Just one feature bucket
 EVAL_FILE=context-impact npm run test:eval
 
-# Same scenarios against the real SAP test system
-# (requires a running MCP server — see "Live backend" below)
+# Same bucket against the real SAP test system (requires a running MCP server)
 EVAL_FILE=context-impact npm run test:eval:live
-
-# Anthropic Sonnet against the full suite
-EVAL_PROVIDER=anthropic EVAL_MODEL=claude-sonnet-4-20250514 \
-  ANTHROPIC_API_KEY=sk-... npm run test:eval
 ```
+
+All configuration lives in `.env` (copy `.env.example`). There is no magic
+fallback — if Ollama isn't reachable or `ANTHROPIC_API_KEY` isn't set, the
+harness fails loudly instead of silently skipping.
+
+---
+
+## Configuration (`.env`)
+
+```bash
+# Provider: ollama (default) or anthropic — only these two are supported.
+EVAL_PROVIDER=ollama
+
+# ── Ollama ────────────────────────────────────────────────────────────
+OLLAMA_BASE_URL=http://localhost:11434
+EVAL_MODEL=qwen3.5:9b
+
+# ── Anthropic ─────────────────────────────────────────────────────────
+# EVAL_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=sk-ant-...
+# EVAL_MODEL=claude-haiku-4-5-20251001
+
+# ── Backend ───────────────────────────────────────────────────────────
+# mock = replay scenario.mockResponses (offline)
+# live = call a real ARC-1 MCP server
+EVAL_BACKEND=mock
+EVAL_MCP_URL=http://localhost:3000/mcp
+
+# ── Scoring ───────────────────────────────────────────────────────────
+EVAL_PASS_THRESHOLD=0.5
+```
+
+### Default models
+
+| Provider  | Default                         | Why                                               |
+| --------- | ------------------------------- | ------------------------------------------------- |
+| ollama    | `qwen3.5:9b`                    | Best tool-calling quality / latency balance       |
+| anthropic | `claude-haiku-4-5-20251001`     | Current Haiku; fast + strong at tool calling      |
+
+Tested Ollama models (any with tool calling works — set `EVAL_MODEL`):
+
+| Model          | Tool calling | Notes                                            |
+| -------------- | ------------ | ------------------------------------------------ |
+| `qwen3.5:9b`   | ✅           | Default. Fast.                                   |
+| `qwen3.5:27b`  | ✅           | Better disambiguation across 11 tools; slower.   |
+| `gemma4:31b`   | ⚠️           | Heavy; only if you've confirmed tool calling.    |
+
+### Fail-hard behavior
+
+The harness throws during `beforeAll` when:
+
+- `EVAL_PROVIDER=ollama` but `OLLAMA_BASE_URL` is unreachable
+- `EVAL_PROVIDER=ollama` but `EVAL_MODEL` is not installed (`ollama list`)
+- `EVAL_PROVIDER=anthropic` but `ANTHROPIC_API_KEY` is unset
+- `EVAL_BACKEND=live` but the MCP server `/health` check fails
+
+This is deliberate. Silent skips hide real misconfiguration.
 
 ---
 
@@ -36,9 +88,9 @@ EVAL_PROVIDER=anthropic EVAL_MODEL=claude-sonnet-4-20250514 \
 ```
 tests/evals/
 ├── README.md                  ← you are here
-├── llm-eval.test.ts           ← vitest entry — loops scenarios + prints/persists results
-├── harness.ts                 ← agentic loop + tiered scoring (optimal/acceptable/forbidden)
-├── live-backend.ts            ← optional — routes tool calls to a real MCP server
+├── llm-eval.test.ts           ← vitest entry — loops scenarios + persists results
+├── harness.ts                 ← agentic loop + tiered scoring
+├── live-backend.ts            ← routes tool calls to a real MCP server
 ├── types.ts                   ← EvalScenario, LLMProvider, result shapes
 ├── providers/
 │   ├── ollama.ts              ← /v1/chat/completions (OpenAI-compatible)
@@ -75,12 +127,12 @@ One file per feature bucket. Scenario ids are globally unique (enforced by
 | _(none)_          | —                                       | Run everything                                     |
 
 Filters combine with AND: a scenario must pass every filter you set.
+Non-matching scenarios show in the reporter as `↓ skipped`, so the full
+matrix is always visible.
 
 ---
 
 ## Backends
-
-The harness can feed the LLM either static mocks or real ADT responses.
 
 ### `EVAL_BACKEND=mock` (default)
 
@@ -96,51 +148,18 @@ The harness can feed the LLM either static mocks or real ADT responses.
   the LLM-observable gap between the tool description, the Zod schema, and
   what the handler actually requires.
 - Requires the server to be running and the ADT backend to be reachable.
-  Skips gracefully if `/health` can't be reached.
+- Fails hard if `/health` can't be reached — we don't fall back to mocks.
 - Use read-only scenarios whenever possible — writes are non-deterministic
   (order, names, transport) and produce flake.
 
 Bring up the server the same way E2E tests do:
 
 ```bash
-# Local stdio? No — evals use HTTP streamable. Either:
-#   a) npm run test:e2e:deploy   (starts the server in the background)
-#   b) npm run dev:http          (foreground)
+npm run test:e2e:deploy   # background
+# or
+npm run dev:http          # foreground
+
 EVAL_BACKEND=live EVAL_FILE=context-impact npm run test:eval
-```
-
----
-
-## Providers
-
-### Ollama (default)
-
-```bash
-# Make sure the model supports tool calling
-ollama pull qwen3:8b
-
-EVAL_MODEL=qwen3:8b npm run test:eval
-```
-
-Honours `OLLAMA_BASE_URL` (default `http://localhost:11434`).
-
-Tested models:
-
-| Model          | Tool calling | Notes                                            |
-| -------------- | ------------ | ------------------------------------------------ |
-| `qwen3:8b`     | ✅           | Solid default. Fast.                             |
-| `qwen3:14b`    | ✅           | Better routing, noticeably slower.               |
-| `llama3.1:8b`  | ✅           | Weaker at disambiguating our 11 tools.           |
-| `llama3.1:70b` | ✅           | Best local, but requires serious hardware.       |
-| `mistral:7b`   | ⚠️           | Sometimes ignores schemas — treat as a weak baseline. |
-
-### Anthropic
-
-```bash
-EVAL_PROVIDER=anthropic \
-  EVAL_MODEL=claude-sonnet-4-20250514 \
-  ANTHROPIC_API_KEY=sk-ant-... \
-  npm run test:eval
 ```
 
 ---
@@ -164,49 +183,145 @@ Aggregate results (per model/backend/run) go to
 
 ---
 
-## Adding a scenario
+## Authoring a scenario
 
-1. **Pick the right file** in `scenarios/`. If the feature is new (e.g. a new
-   tool or a new action enum), add a new file and register it in
-   `scenarios/index.ts`.
-2. **Give it a stable id** — globally unique, kebab-case, feature-prefixed
-   (`cds-impact-*`, `rap-lifecycle-*`). The id appears in results JSON and in
-   `EVAL_SCENARIO` — never rename.
-3. **Write the prompt the way a user would phrase it.** Don't hint at the
-   tool name. For real-world coverage, lift prompts from actual transcripts
-   (PR reviews, Cursor logs, Copilot Studio traces).
-4. **Declare expectations:**
-   - `optimal` — the one or two "best" first tool calls.
-   - `acceptable` — reasonable alternatives (scores 0.5).
-   - `forbidden` — tools that must NOT be called. This is how you lock in
-     anti-patterns (e.g. SAPQuery against DDDDLSRC for CDS impact questions).
-5. **Tag it.** Stable feature tags (`feat-33`, `cds-impact`, `rap`,
-   `discoverability`, `anti-pattern`) make `EVAL_TAG` useful.
-6. **Mock responses.** Keep them short but shaped like the real tool output —
-   if you lie about the shape, the LLM will over-fit to fake data.
+> **Core rule: mock responses must be captured from a real SAP system.**
+> If you make them up, the LLM over-fits to fake data and the eval stops
+> predicting real behaviour. Every `mockResponses` entry below should have
+> been pasted in from a live tool call at some point.
 
-Template:
+### 1. Pick the right file
+
+Find the feature bucket in `scenarios/`. If the feature is new (new tool or
+new `action` enum), create `scenarios/<feature>.ts` and register it in
+`scenarios/index.ts` — the filename becomes the `EVAL_FILE` filter value.
+
+### 2. Lift the prompt from a real user interaction
+
+Don't invent prompts; copy them from actual transcripts (PR reviews, Cursor
+logs, Copilot Studio traces, the PR description that motivated the feature).
+Invented prompts drift from how humans actually phrase things. If you must
+invent one, vary it — register 2–3 phrasings as separate scenarios so you
+catch routing that's brittle to wording.
+
+### 3. Give it a stable id
+
+Globally unique, kebab-case, feature-prefixed: `cds-impact-blast-radius-natural`,
+`rap-lifecycle-service-bind`. The id appears in results JSON and in
+`EVAL_SCENARIO`. **Never rename** — breaks historical trend comparisons.
+
+### 4. Capture real mock responses from SAP
+
+This is the step most likely to go wrong. Do it carefully.
+
+**Option A — record from a live MCP call (recommended):**
+
+```bash
+# Start the MCP server once (uses SAP_* from .env)
+npm run test:e2e:deploy
+
+# Call the tool against the test system and save the raw output.
+curl -s -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc":"2.0","id":1,"method":"tools/call",
+    "params":{"name":"SAPContext","arguments":{"action":"impact","name":"I_COUNTRY","type":"DDLS"}}
+  }' \
+  | jq -r '.result.content[0].text' > /tmp/impact-i-country.txt
+```
+
+Paste the saved text (or the relevant slice) into `mockResponses` as a
+constant:
+
+```ts
+const IMPACT_I_COUNTRY_MOCK = `… pasted from /tmp/impact-i-country.txt …`;
+```
+
+**Option B — run the scenario once in live mode and promote the trace:**
+
+```bash
+EVAL_BACKEND=live EVAL_SCENARIO=cds-impact-blast-radius-natural npm run test:eval
+# The live tool output is recorded in test-results/evals/<timestamp>-….json
+# Copy the text of the tool result into a mock constant in the scenario file.
+```
+
+**Do NOT fabricate responses.** If the shape is wrong, the LLM learns to
+expect fake fields and stops following real ADT conventions. Shape matters
+more than volume — a trimmed real response beats a fully-populated fake one.
+
+### 5. Declare expectations
+
+```ts
+optimal: [       // 1.0 tool-selection score
+  { tool: 'SAPContext', requiredArgs: { action: 'impact', name: 'I_COUNTRY', type: 'DDLS' } },
+],
+acceptable: [    // 0.5 tool-selection score — a defensible alternative
+  { tool: 'SAPNavigate', requiredArgs: { action: 'references', type: 'DDLS', name: 'I_COUNTRY' } },
+],
+forbidden: ['SAPQuery'],   // 0.0 — anti-pattern canary
+```
+
+- **optimal** should be the one or two truly best first tool calls.
+- **acceptable** captures workable alternatives you don't want to punish.
+- **forbidden** locks in anti-patterns (e.g. `SAPQuery` against `DDDDLSRC`
+  for CDS impact questions). If there's no clear anti-pattern, use `[]`.
+
+### 6. Tag for filtering
+
+Stable feature tags make `EVAL_TAG` useful across buckets. Examples used today:
+`feat-33`, `cds-impact`, `rap`, `discoverability`, `anti-pattern`,
+`single-step`, `multi-step`. Prefer fewer, stable tags over many ad-hoc ones.
+
+### 7. Template
 
 ```ts
 import type { EvalScenario } from '../types.js';
 
+// Captured from `SAPContext(action="impact", name="I_COUNTRY", type="DDLS")`
+// against the A4H test system on 2026-04-17. Refresh when the dep graph
+// changes meaningfully.
+const IMPACT_I_COUNTRY_MOCK = `… real SAP output pasted here …`;
+
 export const SCENARIOS: EvalScenario[] = [
   {
-    id: 'my-feature-happy-path',
-    description: 'One-line summary',
-    prompt: 'Natural-language user prompt',
-    category: 'read', // coarse bucket for legacy EVAL_CATEGORY
-    tags: ['feat-XX', 'my-feature', 'single-step'],
-    optimal: [{ tool: 'SAPRead', requiredArgs: { type: 'PROG', name: 'Z_EXAMPLE' } }],
-    acceptable: [{ tool: 'SAPSearch', requiredArgKeys: ['query'] }],
+    id: 'cds-impact-blast-radius-natural',
+    description: 'Blast-radius question in natural language — the canonical FEAT-33 prompt',
+    prompt: 'what breaks if I change the CDS view I_COUNTRY?',
+    category: 'context',
+    tags: ['feat-33', 'cds-impact', 'single-step'],
+    optimal: [
+      { tool: 'SAPContext', requiredArgs: { action: 'impact', name: 'I_COUNTRY', type: 'DDLS' } },
+    ],
+    acceptable: [
+      { tool: 'SAPNavigate', requiredArgs: { action: 'references', type: 'DDLS', name: 'I_COUNTRY' } },
+    ],
     forbidden: ['SAPQuery'],
-    mockResponses: {
-      SAPRead: 'REPORT z_example.',
-      SAPSearch: JSON.stringify([{ objectName: 'Z_EXAMPLE', objectType: 'PROG/P' }]),
-    },
+    mockResponses: { SAPContext: IMPACT_I_COUNTRY_MOCK },
   },
 ];
 ```
+
+### 8. Refreshing mocks
+
+Real SAP responses drift (system upgrades, activated objects, new where-used
+entries). When a scenario starts failing in mock mode but passes in live
+mode, that's a signal the mock is stale — regenerate it using step 4.
+
+Tag refreshes with a dated comment above the constant so the next person
+knows when it was last synced:
+
+```ts
+// Captured on 2026-04-17 from A4H (CDS where-used index).
+const IMPACT_I_COUNTRY_MOCK = `…`;
+```
+
+### 9. Prefer read-only scenarios in live mode
+
+Writes are non-deterministic: transport numbers, generated names, activation
+state. A write scenario in `EVAL_BACKEND=live` will flake. If you must test
+a write, wrap it in its own unique object name (`ZARC1_EVAL_<ts>`) and
+prefer running it against mocks only.
 
 ---
 
@@ -226,7 +341,7 @@ Persisted JSON (`test-results/evals/…`):
 
 ```jsonc
 {
-  "model": "qwen3:8b",
+  "model": "qwen3.5:9b",
   "toolMode": "standard",
   "timestamp": "2026-04-17T12:34:56.789Z",
   "scores": [{ "scenarioId": "...", "trace": [...], "explanation": "..." }],
@@ -234,5 +349,5 @@ Persisted JSON (`test-results/evals/…`):
 }
 ```
 
-Commit these files (or not) per your regression-tracking policy — they are
-under `test-results/` which is gitignored alongside other test artefacts.
+Files under `test-results/` are gitignored alongside other test artefacts.
+Commit them (or not) per your regression-tracking policy.

@@ -6,6 +6,8 @@
  * aggregated by `scenarios/index.ts`. See `tests/evals/README.md` for the
  * full filter matrix and the rules for adding a new scenario.
  *
+ * All configuration is read from environment (loaded from `.env` on startup).
+ *
  * Filtering (precedence: high → low):
  *   EVAL_SCENARIO=<id>        — single scenario by id (most specific)
  *   EVAL_FILE=<name>[,<name>] — feature bucket(s); name matches key in SCENARIO_FILES
@@ -15,13 +17,15 @@
  * Backend:
  *   EVAL_BACKEND=mock (default) — scenario.mockResponses feed the LLM
  *   EVAL_BACKEND=live           — real MCP server at EVAL_MCP_URL (default
- *                                 http://localhost:3000/mcp). Skips gracefully
- *                                 when the server is unreachable.
+ *                                 http://localhost:3000/mcp). Fails hard if
+ *                                 the server is unreachable.
  *
  * Provider:
  *   EVAL_PROVIDER=ollama (default) | anthropic
- *   EVAL_MODEL=<model-id>        (default: qwen3:8b for ollama,
- *                                 claude-sonnet-4-20250514 for anthropic)
+ *   EVAL_MODEL=<model-id>        (default: qwen3.5:9b for ollama,
+ *                                 claude-haiku-4-5-20251001 for anthropic)
+ *   OLLAMA_BASE_URL=<url>        (default: http://localhost:11434)
+ *   ANTHROPIC_API_KEY=<key>      (required for anthropic provider)
  *
  * Scoring:
  *   EVAL_PASS_THRESHOLD=0.5 (default)
@@ -32,22 +36,30 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { config as loadDotenv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+// Load .env before reading any provider / model / URL config. Matches the
+// convention used by tests/integration/helpers.ts and src/cli.ts so users only
+// configure Ollama / Anthropic once and `npm run test:eval` picks it up.
+loadDotenv();
+
 import { getToolDefinitions } from '../../src/handlers/tools.js';
 import { DEFAULT_CONFIG } from '../../src/server/types.js';
 import { formatResults, runScenario, toOpenAITools } from './harness.js';
 import { checkLiveBackendAvailable, connectLiveBackend, type LiveBackend } from './live-backend.js';
-import { checkAnthropicAvailable, createAnthropicProvider } from './providers/anthropic.js';
-import { checkOllamaAvailable, createOllamaProvider } from './providers/ollama.js';
+import { checkAnthropicAvailable, createAnthropicProvider, DEFAULT_ANTHROPIC_MODEL } from './providers/anthropic.js';
+import { checkOllamaAvailable, createOllamaProvider, DEFAULT_OLLAMA_MODEL } from './providers/ollama.js';
 import { ALL_SCENARIOS, FILE_OF_SCENARIO, SCENARIO_FILES } from './scenarios/index.js';
 import type { EvalRunResult, EvalScenario, LLMProvider, ScenarioScore, ToolDefinitionForLLM } from './types.js';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
-const PROVIDER_NAME = process.env.EVAL_PROVIDER ?? 'ollama';
-const DEFAULT_OLLAMA_MODEL = 'qwen3:8b';
-const MODEL =
-  process.env.EVAL_MODEL ?? (PROVIDER_NAME === 'ollama' ? DEFAULT_OLLAMA_MODEL : 'claude-sonnet-4-20250514');
+const PROVIDER_NAME = (process.env.EVAL_PROVIDER ?? 'ollama').toLowerCase();
+if (PROVIDER_NAME !== 'ollama' && PROVIDER_NAME !== 'anthropic') {
+  throw new Error(`Unknown EVAL_PROVIDER: "${PROVIDER_NAME}". Only "ollama" and "anthropic" are supported.`);
+}
+const MODEL = process.env.EVAL_MODEL ?? (PROVIDER_NAME === 'ollama' ? DEFAULT_OLLAMA_MODEL : DEFAULT_ANTHROPIC_MODEL);
 
 const BACKEND = (process.env.EVAL_BACKEND ?? 'mock').toLowerCase();
 const SCENARIO_FILTER = process.env.EVAL_SCENARIO;
@@ -107,32 +119,39 @@ const allScores: ScenarioScore[] = [];
 
 describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
   beforeAll(async () => {
-    // Provider setup
+    // Provider setup — we intentionally throw (not skip) when the configured
+    // provider is unavailable. A silent skip would hide a real misconfiguration
+    // and turn the whole suite into a green pass-through.
     if (PROVIDER_NAME === 'ollama') {
       const check = await checkOllamaAvailable(MODEL);
       if (!check.available) {
-        console.log(`\n  ⚠️  Skipping eval: ${check.reason}\n`);
-        return;
+        throw new Error(
+          `Ollama is not reachable or model not installed: ${check.reason}\n` +
+            '  Check OLLAMA_BASE_URL and EVAL_MODEL in .env, or start Ollama: `ollama serve`.',
+        );
       }
       provider = createOllamaProvider(MODEL);
-    } else if (PROVIDER_NAME === 'anthropic') {
+    } else {
       const check = checkAnthropicAvailable();
       if (!check.available) {
-        console.log(`\n  ⚠️  Skipping eval: ${check.reason}\n`);
-        return;
+        throw new Error(
+          `Anthropic provider unavailable: ${check.reason}\n` + '  Add ANTHROPIC_API_KEY=sk-ant-... to .env.',
+        );
       }
       provider = createAnthropicProvider(MODEL);
-    } else {
-      throw new Error(`Unknown provider: ${PROVIDER_NAME}. Use "ollama" or "anthropic".`);
     }
 
-    // Live backend (optional)
+    // Live backend (optional) — also fail hard if the server is unreachable
+    // while EVAL_BACKEND=live is set, otherwise we'd silently fall back to
+    // mock-like noop and miss the schema/handler drift we're trying to catch.
     if (BACKEND === 'live') {
       const check = await checkLiveBackendAvailable();
       if (!check.available) {
-        console.log(`\n  ⚠️  Skipping eval: live backend unavailable (${check.reason})\n`);
-        provider = undefined; // cause individual tests to no-op
-        return;
+        throw new Error(
+          `EVAL_BACKEND=live but MCP server unavailable: ${check.reason}\n` +
+            '  Start the server with `npm run test:e2e:deploy` (background)\n' +
+            '  or `npm run dev:http` (foreground), then re-run.',
+        );
       }
       live = await connectLiveBackend();
       console.log(`  Live backend: ${live.url}`);
