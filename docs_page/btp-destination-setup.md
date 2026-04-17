@@ -35,7 +35,7 @@ This works for:
 - Direct network access to SAP (no Cloud Connector needed)
 - Testing and demos
 
-**Important:** Hardcoded credentials are always used as a fallback. Even when BTP Destination or Principal Propagation is configured, if PP fails for any reason, ARC-1 falls back to the hardcoded credentials or the BTP Destination's service account.
+**Important:** With `SAP_PP_STRICT=false` (default) hardcoded credentials or the destination's service account act as a fallback when PP fails. Set `SAP_PP_STRICT=true` to disable fallback and surface PP failures as errors. Per-user sessions never inherit shared Basic/cookie credentials — cookies combined with `SAP_PP_ENABLED=true` fail fast at startup unless the `SAP_PP_ALLOW_SHARED_COOKIES=true` escape hatch is set (SEC-09). See [Coexistence Matrix](enterprise-auth.md#coexistence-matrix).
 
 ---
 

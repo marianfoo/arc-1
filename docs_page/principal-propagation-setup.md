@@ -130,8 +130,11 @@ export SAP_PP_ENABLED=true
 |------|---------|---------|-------------|
 | `--pp-enabled` | `SAP_PP_ENABLED` | `false` | Enable principal propagation |
 | `--pp-strict` | `SAP_PP_STRICT` | `false` | Fail on PP errors (no fallback) |
+| `--pp-allow-shared-cookies` | `SAP_PP_ALLOW_SHARED_COOKIES` | `false` | Escape hatch — allow cookies to coexist with PP (cookies stay on shared client only) |
 | — | `SAP_BTP_DESTINATION` | — | Shared (fallback) destination name |
 | — | `SAP_BTP_PP_DESTINATION` | — | Per-user PP destination name |
+
+> **Auth safety (SEC-09):** ARC-1 fails fast at startup if `SAP_PP_ENABLED=true` is combined with `SAP_COOKIE_FILE` / `SAP_COOKIE_STRING` — per-user sessions must not inherit a shared cookie. Set `SAP_PP_ALLOW_SHARED_COOKIES=true` only if you accept that the cookie stays on the shared-fallback client. Per-user auth never inherits shared Basic/cookie credentials. See [Coexistence Matrix](enterprise-auth.md#coexistence-matrix).
 
 ## Step 5: Test
 

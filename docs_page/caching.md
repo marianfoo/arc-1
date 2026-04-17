@@ -201,7 +201,7 @@ docker run -d --name arc1 \
 
 ### What it does
 
-`SAPContext(action="usages", objectName="ZCL_MY_CLASS")` returns all objects that depend on the given object -- i.e., "who calls/uses this class?"
+`SAPContext(action="usages", name="ZCL_MY_CLASS")` returns all objects that depend on the given object -- i.e., "who calls/uses this class?"
 
 This is a reverse lookup on the edge index: find all edges where `toId` matches the target object.
 
@@ -217,12 +217,7 @@ Reverse dependency lookup is only available after the pre-warmer has run. The `w
 
 ### Fallback when warmup is not available
 
-If warmup has not run, `getUsages()` returns `null`. The handler should display a message indicating that reverse dependency lookup requires the pre-warmer:
-
-```
-Reverse dependency lookup requires cache warmup.
-Set ARC1_CACHE_WARMUP=true to enable.
-```
+If warmup has not run, `SAPContext(action="usages", ...)` returns an `isError: true` response with setup instructions — telling the caller to start ARC-1 with `--cache-warmup` (or `ARC1_CACHE_WARMUP=true`), wait for indexing to complete, then retry.
 
 ## Performance Impact
 

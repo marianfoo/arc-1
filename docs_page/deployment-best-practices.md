@@ -142,7 +142,7 @@ When `SAP_SYSTEM_TYPE=btp` is set, tool definitions are adapted at server startu
 | Target | Auth | Config |
 |--------|------|--------|
 | On-premise SAP (via Cloud Connector) | Principal Propagation | `SAP_BTP_DESTINATION`, `SAP_PP_ENABLED=true` |
-| BTP ABAP Environment | JWT Bearer Exchange | `SAP_BTP_SERVICE_KEY` (future) |
+| BTP ABAP Environment | Direct OAuth (service key) | `SAP_BTP_SERVICE_KEY_FILE` |
 
 ### Configuration examples
 

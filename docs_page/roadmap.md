@@ -957,7 +957,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 | **Risk** | Medium — endpoint availability varies by SAP version |
 | **Usefulness** | Medium-High — variable type resolution for LLM |
 | **Status** | Deferred — endpoint not available on test system |
-| **Source** | [ADT API Audit](research/complete/adt-api-audit-documentation-and-unused.md) |
+| **Source** | [ADT API Audit](https://github.com/marianfoo/arc-1/blob/main/docs/research/complete/adt-api-audit-documentation-and-unused.md) |
 
 **What:** `POST /sap/bc/adt/abapsource/typeinformation` returns the complete type of a variable/expression at a given source position. Tested on A4H 7.52 — returned 404. May be available on newer SAP NetWeaver/S/4HANA versions. Revisit when a newer test system is available.
 
@@ -1679,7 +1679,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Field | Value |
 |-------|-------|
 | **Status** | Complete |
-| **Source** | [ADT API Audit](research/complete/adt-api-audit-documentation-and-unused.md) |
+| **Source** | [ADT API Audit](https://github.com/marianfoo/arc-1/blob/main/docs/research/complete/adt-api-audit-documentation-and-unused.md) |
 
 **What:** Added `hierarchy` action to SAPNavigate. Returns superclass, implemented interfaces, and subclasses for a given ABAP class. Implemented via SQL queries against SEOMETAREL table (the ADT `/hierarchy` endpoint returned 404 on the test system). Includes SQL injection prevention via regex whitelist on class names.
 

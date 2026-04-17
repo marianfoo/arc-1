@@ -55,7 +55,7 @@ A browser opens for login (OAuth 2.0 Authorization Code flow). See **[btp-abap-e
 
 ### Claude Desktop
 
-Add to `~/.config/claude/claude_desktop_config.json`:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
@@ -153,9 +153,9 @@ Full reference: **[tools.md](tools.md)**
 
 ## Testing & CI
 
-- **1,349+ unit tests** run locally without SAP access (`npm test`)
+- **1,300+ unit tests** run locally without SAP access (`npm test`)
 - **Integration + E2E lanes** run on `main` pushes and internal PRs in GitHub Actions
-- **BTP tests** are local-only (`npm run test:integration:btp:smoke`, `npm run test:integration:btp:extended`)
+- **BTP tests** are local-only (`npm run test:integration:btp`, `npm run test:integration:btp:smoke`)
 - **Reliability telemetry + coverage** are collected as informational CI signals
 
 ## Admin Controls (Safety)

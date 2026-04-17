@@ -201,7 +201,7 @@ SAPWrite(action="batch_create", package="ZDEV", transport="A4HK900123", objects=
 Step 1: SAPDiagnose(action="dumps", user="DEVELOPER")
         → Returns list of short dumps
 
-Step 2: SAPDiagnose(action="dump_detail", name="<dump_id>")
+Step 2: SAPDiagnose(action="dumps", id="<dump_id>")
         → Returns full dump with stack trace
 ```
 

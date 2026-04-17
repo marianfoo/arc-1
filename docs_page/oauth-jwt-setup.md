@@ -1,4 +1,4 @@
-# OAuth / JWT Setup Setup
+# OAuth / JWT Setup
 
 Authenticate MCP clients using OAuth 2.1 with an external Identity Provider (EntraID, Cognito, Okta, Keycloak). ARC-1 validates JWT Bearer tokens and extracts user identity.
 

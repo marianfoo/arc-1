@@ -701,6 +701,7 @@ Probe and report SAP system capabilities, inspect the object cache state, and ma
 - `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
 - `create_package` — Create a package (`DEVC`) via `/sap/bc/adt/packages`.
 - `delete_package` — Delete a package via lock/delete/unlock.
+- `change_package` — Move an existing object into a different package (DEVC reassignment).
 - `flp_list_catalogs` — List FLP business catalogs.
 - `flp_list_groups` — List FLP groups (`Pages`) from `/UI2/FLPD_CATALOG`.
 - `flp_list_tiles` — List tiles/target mappings in a catalog.

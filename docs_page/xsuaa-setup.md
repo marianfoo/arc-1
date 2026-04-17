@@ -1,4 +1,4 @@
-# Phase 5: XSUAA OAuth for MCP-Native Clients
+# XSUAA OAuth for MCP-Native Clients
 
 This guide sets up BTP XSUAA authentication so MCP-native clients (Claude Desktop, Cursor, VS Code, MCP Inspector) can authenticate via OAuth when connecting to ARC-1.
 
@@ -20,7 +20,7 @@ MCP-native clients use RFC 8414 OAuth discovery to find authorization endpoints 
 
 - SAP BTP Cloud Foundry account with XSUAA entitlement
 - CF CLI installed and logged in
-- ARC-1 deployed on BTP CF (see [Phase 4](phase4-btp-deployment.md))
+- ARC-1 deployed on BTP CF (see [BTP Cloud Foundry deployment](phase4-btp-deployment.md))
 
 ## Step 1: Create XSUAA Service Instance
 

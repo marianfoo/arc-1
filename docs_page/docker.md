@@ -32,9 +32,9 @@ without spawning a new process per session.
    - [Sandboxed AI (Z* packages only)](#sandboxed-ai-z-packages-only)
    - [Cookie Authentication](#cookie-authentication)
    - [Corporate Proxy](#corporate-proxy)
-7. [Updating the Image](#updating-the-image)
-8. [Security Notes](#security-notes)
-9. [Troubleshooting](#troubleshooting)
+8. [Updating the Image](#updating-the-image)
+9. [Security Notes](#security-notes)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -158,7 +158,7 @@ You can trigger a new Docker build for any existing tag without a full release:
 3. Optionally supply an image tag override.
 
 This is useful for republishing after a `Dockerfile` fix without bumping the
-Go version.
+package version.
 
 ### Visibility
 
@@ -259,7 +259,7 @@ prefix. CLI flags map 1:1 to env vars:
 | `--url` | `SAP_URL` | *(required)* |
 | `--user` | `SAP_USER` | |
 | `--password` | `SAP_PASSWORD` | |
-| `--client` | `SAP_CLIENT` | `001` |
+| `--client` | `SAP_CLIENT` | `100` |
 | `--language` | `SAP_LANGUAGE` | `EN` |
 | `--insecure` | `SAP_INSECURE` | `false` |
 | `--read-only` | `SAP_READ_ONLY` | `true` |
@@ -410,11 +410,17 @@ Only permit specific operation types. The operation codes are:
 |---|---|
 | `R` | Read (GetSource, GetObject, etc.) |
 | `S` | Search (SearchObjects, GrepSource, etc.) |
-| `Q` | Query (RunQuery — free SQL) |
+| `I` | Intelligence (findRef, whereUsed, completion) |
+| `Q` | Query (named table preview) |
+| `F` | Free SQL (`RunQuery`) |
 | `C` | Create |
-| `D` | Delete |
 | `U` | Update (EditSource, WriteSource) |
+| `D` | Delete |
 | `A` | Activate |
+| `W` | Workflow (FLP actions) |
+| `T` | Test (unit tests) |
+| `L` | Lock |
+| `X` | Transport |
 
 Example — allow only read and search (equivalent to read-only but explicit):
 
@@ -539,7 +545,7 @@ USER arc1
 
 #### HTTP/HTTPS proxy
 
-arc1 respects standard Go proxy environment variables. Pass them via `-e`:
+arc1 respects standard `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` environment variables. Pass them via `-e`:
 
 ```bash
 -e HTTPS_PROXY=http://proxy.corp.example:3128
@@ -659,7 +665,7 @@ For a production system (read-only is already the default — no extra flags nee
 
 Clients that support HTTP MCP can connect to `http://localhost:8080/mcp` directly
 once the container is running. For stdio-only clients use `docker run -i` with
-`-e SAP_TRANSPORT=stdio`. See `docs/cli-agents/README.md` for agent-specific
+`-e SAP_TRANSPORT=stdio`. See [local-development.md → MCP client configuration](local-development.md#mcp-client-configuration) for agent-specific
 configuration examples.
 
 ---

@@ -422,7 +422,9 @@ S_ADT_RES authorization, SSO-only system needing `SAP_DISABLE_SAML=true`).
 | `--disable-saml` | `SAP_DISABLE_SAML` | Disable SAML redirect via `X-SAP-SAML2` + `saml2=disabled` (advanced) |
 | `--insecure` | `SAP_INSECURE` | Skip TLS verification |
 
-## Coexistence Matrix (Layer A can always combine; Layer B is exclusive)
+## Coexistence Matrix
+
+**Layer A** (MCP client → ARC-1) methods always combine. **Layer B** (ARC-1 → SAP) methods are largely exclusive — the matrix below shows valid combinations.
 
 | Layer B combination | Status | Reason |
 |---|---|---|

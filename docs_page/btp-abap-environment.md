@@ -4,6 +4,8 @@ ARC-1 supports direct connections to SAP BTP ABAP Environment (Steampunk) using 
 
 This is the same authentication flow used by Eclipse ADT when connecting to BTP ABAP systems — a browser opens for login, and tokens are cached for subsequent use.
 
+> **Do not set `SAP_DISABLE_SAML=true` with BTP ABAP.** The SAML/SAML2 disable opt-in (SEC-09) is intended for on-prem SAP systems and breaks BTP ABAP / S/4HANA Public Cloud authentication. See [enterprise-auth.md](enterprise-auth.md) for details.
+
 ## Prerequisites
 
 - A SAP BTP ABAP Environment service instance (see [Provisioning a BTP ABAP Free Tier Instance](#provisioning-a-btp-abap-free-tier-instance) if you don't have one)
@@ -493,4 +495,4 @@ Auth and connectivity failures are expected with free-tier instances. Assertion 
 
 ## Architecture Details
 
-For the research report covering authentication options, competitor analysis, and design decisions, see [docs/reports/btp-abap-environment-connectivity.md](reports/btp-abap-environment-connectivity.md).
+For the research report covering authentication options, competitor analysis, and design decisions, see [btp-abap-environment-connectivity.md](https://github.com/marianfoo/arc-1/blob/main/docs/reports/btp-abap-environment-connectivity.md) in the repo.

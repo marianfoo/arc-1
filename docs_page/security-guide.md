@@ -6,7 +6,7 @@ A consolidated security reference for ARC-1 operators. This guide covers hardeni
 
 ## 1. Security Architecture Overview
 
-ARC-1 enforces authorization at two independent layers. Both must allow an operation for it to succeed.
+ARC-1 enforces authorization at three stacked layers. All must allow an operation for it to succeed.
 
 | Layer | What it checks | Controlled by |
 |-------|---------------|---------------|

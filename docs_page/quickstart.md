@@ -111,7 +111,7 @@ Pick the smallest thing that unblocks your task. All three examples go in the sa
 "env": { "ARC1_PROFILE": "developer-sql", "SAP_ALLOWED_PACKAGES": "*" }
 ```
 
-Profiles are shortcuts — `developer-sql` expands to `readOnly=false`, `blockData=false`, `blockFreeSQL=false`, `enableTransports=true`. Full matrix and per-capability recipes: [local-development.md → Safety profiles](local-development.md#safety-profiles).
+Profiles are shortcuts — `developer-sql` expands to `readOnly=false`, `blockData=false`, `blockFreeSQL=false`, `enableTransports=true`, and keeps `allowedPackages=$TMP` (widen it with `SAP_ALLOWED_PACKAGES`). Full matrix and per-capability recipes: [local-development.md → Safety profiles](local-development.md#safety-profiles).
 
 ## Next steps
 
