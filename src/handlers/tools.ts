@@ -845,7 +845,9 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         type: {
           type: 'string',
           enum: btp ? SAPCONTEXT_TYPES_BTP : SAPCONTEXT_TYPES_ONPREM,
-          description: 'Object type (required for deps action)',
+          description:
+            'Object type. Required for action="deps" and action="usages". ' +
+            'Optional for action="impact" — defaults to DDLS (the only supported type for impact).',
         },
         name: {
           type: 'string',

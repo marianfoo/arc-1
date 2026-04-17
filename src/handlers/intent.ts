@@ -3043,7 +3043,11 @@ async function handleSAPContext(
   cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
-  const type = normalizeObjectType(String(args.type ?? ''));
+  // action="impact" is DDLS-only on the server side — default the type so LLMs
+  // don't have to supply it redundantly (and don't get a validation retry when
+  // they don't). Any non-DDLS value still fails the guardrail below.
+  const rawType = String(args.type ?? '');
+  const type = normalizeObjectType(rawType || (action === 'impact' ? 'DDLS' : ''));
   const name = String(args.name ?? '');
   const maxDeps = Number(args.maxDeps ?? 20);
   const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);

@@ -180,6 +180,20 @@ describe('Tool Definitions', () => {
       expect(sapNavigate.description).toMatch(/action="impact"/);
       expect(sapNavigate.description).toMatch(/DDLS/);
     });
+
+    it('SAPContext type property description marks type as optional for action="impact"', () => {
+      // Regression for Sonnet 4.6 transcript: LLMs call
+      //   SAPContext({ action: "impact", name: "I_COUNTRY" })
+      // without `type` because impact is DDLS-only and the type is redundant.
+      // The schema description must make that contract explicit so LLMs know
+      // not to guess, and the handler defaults type=DDLS.
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const typeDesc: string = schema.properties.type.description;
+      expect(typeDesc).toMatch(/optional.*action="impact"|action="impact".*optional/i);
+      expect(typeDesc).toMatch(/defaults to DDLS/i);
+    });
   });
 
   it('SAPDiagnose exposes syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces', () => {

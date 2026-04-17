@@ -2234,6 +2234,42 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('SAPNavigate');
     });
 
+    it('defaults type to DDLS when action=impact and type is omitted', async () => {
+      // Regression: Sonnet 4.6 transcript showed LLMs call
+      //   SAPContext({ action: "impact", name: "I_COUNTRY" })
+      // without `type` (since impact is DDLS-only, the type is redundant).
+      // Previously this returned 'Both "type" and "name" are required' and
+      // forced a retry. Now the handler should default type=DDLS and proceed.
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/I_COUNTRY/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity I_COUNTRY as select from t005 { key t005.land1 as Country }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/usageReferences?uri=')) {
+          return Promise.resolve(mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        name: 'I_COUNTRY',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('I_COUNTRY');
+      expect(parsed.type).toBe('DDLS');
+      // Upstream came from the DDL source we mocked, proving the default
+      // routed through the DDLS impact pipeline.
+      expect(parsed.upstream.tables.map((item: { name: string }) => item.name)).toContain('T005');
+    });
+
     it('returns Zod validation error when impact is called without name', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
         action: 'impact',
