@@ -135,6 +135,53 @@ describe('Tool Definitions', () => {
     expect(sapLint.description).toContain('SAPDiagnose');
   });
 
+  describe('SAPContext discoverability — impact action must be findable by LLMs', () => {
+    it('lists impact first in the action enum so LLMs anchor on it in ambiguous cases', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const actionEnum: string[] = schema.properties.action.enum;
+      expect(actionEnum[0]).toBe('impact');
+      expect(actionEnum).toContain('deps');
+      expect(actionEnum).toContain('usages');
+    });
+
+    it('SAPContext tool description contains blast-radius trigger phrases', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      // Trigger phrases that map the user's natural question to action="impact".
+      expect(sapContext.description).toMatch(/blast.?radius/i);
+      expect(sapContext.description).toMatch(/what breaks if/i);
+      expect(sapContext.description).toMatch(/who consumes/i);
+    });
+
+    it('SAPContext action description steers LLMs away from SAPQuery-against-DDDDLSRC', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const actionDesc: string = schema.properties.action.description;
+      expect(actionDesc).toContain('DDDDLSRC');
+      expect(actionDesc).toMatch(/impact/);
+    });
+
+    it('SAPQuery description redirects CDS impact questions to SAPContext(action="impact")', () => {
+      // SAPQuery is only registered when free SQL is allowed.
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
+      const sapQuery = tools.find((t) => t.name === 'SAPQuery')!;
+      expect(sapQuery.description).toContain('DDDDLSRC');
+      expect(sapQuery.description).toContain('SAPContext');
+      expect(sapQuery.description).toMatch(/action="impact"/);
+    });
+
+    it('SAPNavigate description redirects CDS where-used questions to SAPContext(action="impact")', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapNavigate = tools.find((t) => t.name === 'SAPNavigate')!;
+      expect(sapNavigate.description).toContain('SAPContext');
+      expect(sapNavigate.description).toMatch(/action="impact"/);
+      expect(sapNavigate.description).toMatch(/DDLS/);
+    });
+  });
+
   it('SAPDiagnose exposes syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapDiagnose = tools.find((t) => t.name === 'SAPDiagnose')!;

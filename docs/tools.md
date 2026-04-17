@@ -390,6 +390,13 @@ Get compressed dependency context for an ABAP object, or look up reverse depende
 
 SAPContext has three modes controlled by the `action` parameter:
 
+**Quick decision rule:**
+- *"What breaks if I change `<CDS view>`?"* / *"Who consumes `I_*`?"* / *"Impact of `<DDLS>`"* → **`action="impact"`**
+- *"What does `<object>` depend on?"* / dependency context before editing → **`action="deps"`** (default)
+- *"Who calls `<object>`?"* (requires cache warmup) → **`action="usages"`**
+
+> **Do not** hand-roll CDS impact analysis by querying `DDDDLSRC`, `ACMDCLSRC`, `DDLXSRC_SRC`, or `SRVDSRC_SRC` via `SAPQuery`. Those text-scans produce substring-match noise and package group nodes. `action="impact"` uses SAP's where-used index and returns deduplicated, RAP-classified results.
+
 ### action="deps" (default) — Dependency context
 
 Returns only the public API contracts (method signatures, interface definitions, type declarations) of all objects that the target depends on — NOT the full source code. Typical compression: 7-30x fewer tokens.
