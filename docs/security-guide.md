@@ -24,7 +24,7 @@ For the full two-layer model, scope definitions, and role assignment details, se
 
 | Scenario | Transport | MCP Client Auth | Recommended Guide |
 |----------|-----------|----------------|-------------------|
-| Local development (single user) | stdio | None | [Setup Guide](setup-guide.md) |
+| Local development (single user) | stdio | None | [Local Development](local-development.md) |
 | Shared server (single access level) | HTTP | Single API key | [API Key Setup](api-key-setup.md) |
 | Team server (role-based access) | HTTP | Multiple API keys with profiles | [API Key Setup](api-key-setup.md) |
 | Enterprise (per-user identity) | HTTP | OIDC / JWT | [OAuth / JWT Setup](oauth-jwt-setup.md) |

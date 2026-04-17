@@ -27,7 +27,7 @@ After starting, check the server's first INFO log line: `auth: MCP=[...] SAP=[..
 
 | Your situation | MCP Client → ARC-1 | ARC-1 → SAP | Setup Guide |
 |----------------|-------------------|-------------|-------------|
-| **Local dev** (single user, `npx`) | None needed | Basic Auth | [Setup Guide](setup-guide.md) |
+| **Local dev** (single user, `npx`) | None needed | Basic Auth | [Quickstart](quickstart.md) |
 | **Shared server** (team, quick start) | API Key | Basic Auth | [API Key Setup](api-key-setup.md) |
 | **Team server** (role-based access) | API Keys (multi) | Basic Auth | [API Key Setup](api-key-setup.md) |
 | **Enterprise** (per-user identity) | OIDC / JWT | Basic Auth (shared user) | [OAuth / JWT Setup](oauth-jwt-setup.md) |
