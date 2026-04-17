@@ -1,0 +1,14 @@
+# Copy gitignored files into Claude Code worktrees.
+# Patterns use .gitignore syntax; only files that are also gitignored get copied.
+
+# Environment files (credentials for SAP, BTP, infrastructure)
+.env
+.env.local
+.env.*
+.env.infrastructure
+
+# BTP deployment config (personal, per-environment values)
+mta.yaml
+
+# arc1 runtime config (may contain credentials)
+.arc1*.json
