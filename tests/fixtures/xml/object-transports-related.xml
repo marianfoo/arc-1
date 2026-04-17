@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<asx:abap version="1.0" xmlns:asx="http://www.sap.com/abapxml">
+  <asx:values>
+    <DATA>
+      <LOCK_HANDLE/>
+      <CORRNR>A4HK900123</CORRNR>
+      <CORRUSER>DEVELOPER</CORRUSER>
+      <CORRTEXT>Refactor ZCL_ORDER</CORRTEXT>
+      <IS_LOCAL/>
+      <IS_LINK_UP/>
+      <MODIFICATION_SUPPORT/>
+      <LINK_UP_MODE/>
+      <CORR_LOCKS/>
+      <CORR_CONTENTS/>
+      <SCOPE_MESSAGES/>
+    </DATA>
+  </asx:values>
+</asx:abap>

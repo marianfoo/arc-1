@@ -5,6 +5,7 @@
  * Safety checks are applied at every entry point.
  */
 
+import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, checkTransport, OperationType, type SafetyConfig } from './safety.js';
 import type { TransportObject, TransportRequest, TransportTask } from './types.js';
@@ -263,6 +264,78 @@ export async function getTransportInfo(
   );
 
   return parseTransportInfo(resp.body);
+}
+
+/**
+ * List transport requests related to an ABAP object via the per-object
+ * `/transports` endpoint.
+ *
+ * The endpoint returns a `com.sap.adt.lock.result2` payload with flat
+ * `<DATA><CORRNR>…<CORRUSER>…<CORRTEXT>…</DATA>` when the object is
+ * currently locked (CORRNR is the parent K-request, already resolved
+ * by SAP). Empty body is normal for unlocked objects. 404 is normal
+ * for object types that don't expose this subresource (e.g. TABL, DDLS,
+ * BDEF, PROG on NetWeaver) — treated like empty so callers can fall
+ * back to `transportchecks`.
+ */
+export async function getObjectTransports(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objectUrl: string,
+): Promise<{
+  lockedTransport?: string;
+  relatedTransports: Array<{ id: string; description: string; owner: string; status: string }>;
+  candidateTransports: Array<{ id: string; description: string; owner: string }>;
+}> {
+  checkOperation(safety, OperationType.Read, 'GetObjectTransports');
+
+  let body: string;
+  try {
+    const resp = await http.get(`${objectUrl}/transports`, { Accept: 'application/vnd.sap.as+xml' });
+    body = resp.body;
+  } catch (err) {
+    if (err instanceof AdtApiError && err.isNotFound) {
+      return { relatedTransports: [], candidateTransports: [] };
+    }
+    throw err;
+  }
+
+  if (!body || body.trim() === '') {
+    return { relatedTransports: [], candidateTransports: [] };
+  }
+
+  const lock = parseObjectTransports(body);
+  const relatedTransports: Array<{ id: string; description: string; owner: string; status: string }> = [];
+  if (lock.corrNr) {
+    relatedTransports.push({
+      id: lock.corrNr,
+      description: lock.corrText ?? '',
+      owner: lock.corrUser ?? '',
+      status: 'D',
+    });
+  }
+
+  return {
+    ...(lock.corrNr ? { lockedTransport: lock.corrNr } : {}),
+    relatedTransports,
+    candidateTransports: [],
+  };
+}
+
+/**
+ * Parse the `com.sap.adt.lock.result2` shape returned by
+ * `GET {objectUrl}/transports`. Flat CORRNR/CORRUSER/CORRTEXT on DATA.
+ */
+function parseObjectTransports(xml: string): { corrNr?: string; corrUser?: string; corrText?: string } {
+  const parsed = parseXml(xml);
+  const corrNr = String(findDeepValue(parsed, 'CORRNR') ?? '').trim();
+  const corrUser = String(findDeepValue(parsed, 'CORRUSER') ?? '').trim();
+  const corrText = String(findDeepValue(parsed, 'CORRTEXT') ?? '').trim();
+  return {
+    ...(corrNr ? { corrNr } : {}),
+    ...(corrUser ? { corrUser } : {}),
+    ...(corrText ? { corrText } : {}),
+  };
 }
 
 /** Parse transport check response XML */

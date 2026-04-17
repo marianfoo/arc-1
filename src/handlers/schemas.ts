@@ -419,7 +419,7 @@ export const SAPDiagnoseSchema = z.object({
 // ─── SAPTransport ───────────────────────────────────────────────────
 
 export const SAPTransportSchema = z.object({
-  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check']),
+  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check', 'history']),
   id: z.string().optional(),
   description: z.string().optional(),
   name: z.string().optional(),
@@ -437,22 +437,24 @@ const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC', 'DDLS'] as cons
 const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF', 'DDLS'] as const;
 
 export const SAPContextSchema = z.object({
-  action: z.enum(['deps', 'usages']).optional(),
+  action: z.enum(['deps', 'usages', 'impact']).optional(),
   type: z.enum(SAPCONTEXT_TYPES_ONPREM).optional(),
   name: z.string(),
   source: z.string().optional(),
   group: z.string().optional(),
   maxDeps: z.coerce.number().optional(),
   depth: z.coerce.number().min(1).max(3).optional(),
+  includeIndirect: z.boolean().optional(),
 });
 
 export const SAPContextSchemaBtp = z.object({
-  action: z.enum(['deps', 'usages']).optional(),
+  action: z.enum(['deps', 'usages', 'impact']).optional(),
   type: z.enum(SAPCONTEXT_TYPES_BTP).optional(),
   name: z.string(),
   source: z.string().optional(),
   maxDeps: z.coerce.number().optional(),
   depth: z.coerce.number().min(1).max(3).optional(),
+  includeIndirect: z.boolean().optional(),
 });
 
 // ─── SAPManage ──────────────────────────────────────────────────────

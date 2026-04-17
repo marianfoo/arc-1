@@ -52,6 +52,24 @@ export const PERSISTENT_OBJECTS = [
     fixture: 'zcl_arc1_test_ut.clas.abap',
     searchQuery: 'ZCL_ARC1_TEST_UT',
   },
+  {
+    name: 'ZTABL_ARC1_I33',
+    type: 'TABL',
+    fixture: 'ztabl_arc1_i33.tabl.abap',
+    searchQuery: 'ZTABL_ARC1_I33',
+  },
+  {
+    name: 'ZI_ARC1_I33_ROOT',
+    type: 'DDLS',
+    fixture: 'zi_arc1_i33_root.ddls.abap',
+    searchQuery: 'ZI_ARC1_I33_ROOT',
+  },
+  {
+    name: 'ZI_ARC1_I33_PROJ',
+    type: 'DDLS',
+    fixture: 'zi_arc1_i33_proj.ddls.abap',
+    searchQuery: 'ZI_ARC1_I33_PROJ',
+  },
 ] as const;
 
 /** Transient test objects — created and deleted within a test run */

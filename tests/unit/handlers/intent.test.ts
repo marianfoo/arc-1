@@ -2173,6 +2173,142 @@ ENDCLASS.`;
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('CDS dependency context for ZI_ORDER');
     });
+
+    it('returns CDS impact with upstream and downstream buckets', async () => {
+      mockFetch.mockReset();
+      const whereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddl/sources/zi_arc1_proj" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="ZI_ARC1_PROJ" adtcore:type="DDLS/DF" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+    <usageReferences:referencedObject uri="/sap/bc/adt/rap/bdef/bo/zi_arc1_root" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="ZI_ARC1_ROOT" adtcore:type="BDEF/BO" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+
+      mockFetch.mockImplementation((url: string | URL, _opts?: RequestInit) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z_MY_VIEW/source/main')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              `define view entity Z_MY_VIEW as select from zmytab\n  inner join ZI_BASE on ZI_BASE.id = zmytab.id\n  association [0..1] to ZI_ASSOC as _Assoc on _Assoc.id = zmytab.id\n{\n  key zmytab.id,\n  _Assoc\n}`,
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/usageReferences?uri=')) {
+          return Promise.resolve(mockResponse(200, whereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        // default fallback for token bootstrap/other requests
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z_MY_VIEW',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('Z_MY_VIEW');
+      expect(parsed.type).toBe('DDLS');
+      expect(parsed.upstream.tables.map((item: { name: string }) => item.name)).toContain('ZMYTAB');
+      expect(parsed.upstream.views.map((item: { name: string }) => item.name)).toContain('ZI_BASE');
+      expect(parsed.downstream.projectionViews.map((item: { name: string }) => item.name)).toContain('ZI_ARC1_PROJ');
+      expect(parsed.downstream.bdefs.map((item: { name: string }) => item.name)).toContain('ZI_ARC1_ROOT');
+      expect(parsed.summary.downstreamTotal).toBeGreaterThanOrEqual(2);
+    });
+
+    it('returns guidance error when impact is requested for non-DDLS type', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('SAPNavigate');
+    });
+
+    it('defaults type to DDLS when action=impact and type is omitted', async () => {
+      // Regression: Sonnet 4.6 transcript showed LLMs call
+      //   SAPContext({ action: "impact", name: "I_COUNTRY" })
+      // without `type` (since impact is DDLS-only, the type is redundant).
+      // Previously this returned 'Both "type" and "name" are required' and
+      // forced a retry. Now the handler should default type=DDLS and proceed.
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/I_COUNTRY/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity I_COUNTRY as select from t005 { key t005.land1 as Country }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/usageReferences?uri=')) {
+          return Promise.resolve(mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        name: 'I_COUNTRY',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('I_COUNTRY');
+      expect(parsed.type).toBe('DDLS');
+      // Upstream came from the DDL source we mocked, proving the default
+      // routed through the DDLS impact pipeline.
+      expect(parsed.upstream.tables.map((item: { name: string }) => item.name)).toContain('T005');
+    });
+
+    it('returns Zod validation error when impact is called without name', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPContext');
+      expect(result.content[0]?.text).toContain('name');
+    });
+
+    it('degrades gracefully when where-used endpoint is unavailable', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z_MY_VIEW/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity Z_MY_VIEW as select from zmytab { key zmytab.id }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/usageReferences?uri=')) {
+          return Promise.resolve(mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z_MY_VIEW',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.warnings).toEqual(['Where-used endpoint not available on this system']);
+      expect(parsed.downstream.summary.total).toBe(0);
+    });
   });
 
   // ─── SAPRead DDLS include="elements" ──────────────────────────────
@@ -6324,6 +6460,100 @@ define role ZTEST_DCL {
       expect(result.isError).toBeUndefined();
       const parsed = JSON.parse(result.content[0]?.text ?? '[]');
       expect(parsed).toHaveLength(2);
+    });
+
+    it('history returns object transport data as JSON', async () => {
+      // Real /transports response shape: com.sap.adt.lock.result2 with flat
+      // CORRNR/CORRUSER/CORRTEXT on DATA. CORRNR is already the parent
+      // K-request (SAP resolves task→parent automatically).
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <LOCK_HANDLE/>
+      <CORRNR>A4HK900123</CORRNR>
+      <CORRUSER>DEVELOPER</CORRUSER>
+      <CORRTEXT>Refactor ZCL_TEST</CORRTEXT>
+    </DATA>
+  </asx:values>
+</asx:abap>`;
+      mockFetch.mockResolvedValue(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'history',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.object).toEqual({
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        uri: '/sap/bc/adt/oo/classes/ZCL_TEST',
+      });
+      expect(parsed.lockedTransport).toBe('A4HK900123');
+      expect(parsed.relatedTransports[0]).toEqual({
+        id: 'A4HK900123',
+        description: 'Refactor ZCL_TEST',
+        owner: 'DEVELOPER',
+        status: 'D',
+      });
+      expect(parsed.candidateTransports).toEqual([]);
+      expect(parsed.summary).toBe('Object ZCL_TEST is locked in transport A4HK900123 by DEVELOPER.');
+    });
+
+    it('history falls back to transportchecks when /transports is empty', async () => {
+      const objectStructure = `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="Z_MY_PKG"/>
+      </adtcore:objectReferences>`;
+      const fallbackXml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+        <asx:values><DATA>
+          <DEVCLASS>Z_MY_PKG</DEVCLASS>
+          <DLVUNIT>SAP</DLVUNIT>
+          <RECORDING>X</RECORDING>
+          <TRANSPORTS>
+            <headers>
+              <TRKORR>A4HK900500</TRKORR>
+              <AS4TEXT>Fallback candidate</AS4TEXT>
+              <AS4USER>DEVELOPER</AS4USER>
+            </headers>
+          </TRANSPORTS>
+        </DATA></asx:values>
+      </asx:abap>`;
+
+      mockFetch.mockImplementation((url: string) => {
+        const target = String(url);
+        if (target.includes('/sap/bc/adt/oo/classes/ZCL_TEST/transports')) {
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        }
+        if (target.includes('/sap/bc/adt/oo/classes/ZCL_TEST')) {
+          return Promise.resolve(mockResponse(200, objectStructure, { 'x-csrf-token': 'T' }));
+        }
+        if (target.includes('/sap/bc/adt/cts/transportchecks')) {
+          return Promise.resolve(mockResponse(200, fallbackXml, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'history',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.relatedTransports).toEqual([]);
+      expect(parsed.candidateTransports).toHaveLength(1);
+      expect(parsed.candidateTransports[0]?.id).toBe('A4HK900500');
+      expect(parsed.summary).toContain('available for assignment');
+    });
+
+    it('history requires type and name', async () => {
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'history',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"type" and "name" are required');
     });
   });
 

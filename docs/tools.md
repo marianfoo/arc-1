@@ -334,20 +334,20 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, and check transport requirements.
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, check transport requirements, and object transport history (reverse lookup).
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`, or `check` |
+| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`, `check`, or `history` |
 | `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Transport description text (required for create) |
-| `name` | string | No | Object name (for check action, e.g. `ZCL_ORDER`) |
+| `name` | string | No | Object name (for check/history actions, e.g. `ZCL_ORDER`) |
 | `package` | string | No | Package name (for check action, e.g. `ZDEV`) |
 | `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
 | `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
-| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
+| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check/history: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
 | `owner` | string | No | New owner SAP username (required for reassign) |
 | `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
 
@@ -361,6 +361,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 - **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.
 - **`release_recursive`** — Release all unreleased tasks first, then the transport itself.
 - **`check`** — Check if a transport number is required for creating an object in a specific package. Requires `type`, `name`, and `package`. Returns whether transport recording is required, whether the package is local, existing transports, and any locked transport. **Does NOT require `--enable-transports`** — this is a read-only pre-flight check.
+- **`history`** — Reverse lookup: given an object (`type` + `name`), list the transport requests that reference it. Returns the locked transport (if any), all related transports, and candidate transports for assignment. Read-only; does NOT require `--enable-transports`.
 
 **Check action output:**
 ```json
@@ -376,11 +377,26 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 }
 ```
 
+**History action output:**
+```json
+{
+  "object": { "type": "CLAS", "name": "ZCL_ORDER", "uri": "/sap/bc/adt/oo/classes/zcl_order" },
+  "lockedTransport": "A4HK900123",
+  "relatedTransports": [
+    { "id": "A4HK900123", "description": "", "owner": "", "status": "D" }
+  ],
+  "candidateTransports": [
+    { "id": "A4HK900124", "description": "Refactor", "owner": "DEVELOPER" }
+  ],
+  "summary": "Object ZCL_ORDER is locked in transport A4HK900123."
+}
+```
+
 **List defaults:** Without parameters, `list` returns modifiable transports (status D) for the current SAP user, across all transport types (Workbench, Customizing, Transport of Copies). Query params follow sapcli's `workbench_params()` pattern (`requestType=KWT`, `requestStatus`).
 
 **Protocol compatibility:** ARC-1 uses startup ADT service discovery (`/sap/bc/adt/discovery`) to proactively select endpoint MIME types, with endpoint-specific CTS media types and a one-retry 406/415 fallback as defense-in-depth.
 
-**Note:** Most actions require `--enable-transports`. The `check` action works without it (read-only).
+**Note:** Most actions require `--enable-transports`. The `check` and `history` actions work without it (read-only).
 
 ---
 
@@ -388,7 +404,14 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 Get compressed dependency context for an ABAP object, or look up reverse dependencies (who uses a given object).
 
-SAPContext has two modes controlled by the `action` parameter:
+SAPContext has three modes controlled by the `action` parameter:
+
+**Quick decision rule:**
+- *"What breaks if I change `<CDS view>`?"* / *"Who consumes `I_*`?"* / *"Impact of `<DDLS>`"* → **`action="impact"`**
+- *"What does `<object>` depend on?"* / dependency context before editing → **`action="deps"`** (default)
+- *"Who calls `<object>`?"* (requires cache warmup) → **`action="usages"`**
+
+> **Do not** hand-roll CDS impact analysis by querying `DDDDLSRC`, `ACMDCLSRC`, `DDLXSRC_SRC`, or `SRVDSRC_SRC` via `SAPQuery`. Those text-scans produce substring-match noise and package group nodes. `action="impact"` uses SAP's where-used index and returns deduplicated, RAP-classified results.
 
 ### action="deps" (default) — Dependency context
 
@@ -407,13 +430,14 @@ Returns only the public API contracts (method signatures, interface definitions,
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | No | `"deps"` (default) or `"usages"` |
-| `type` | string | Yes (for deps) | Object type: `CLAS`, `INTF`, `PROG`, `FUNC` |
+| `action` | string | No | `"deps"` (default), `"usages"`, or `"impact"` |
+| `type` | string | Yes (for deps/impact) | Object type: `CLAS`, `INTF`, `PROG`, `FUNC`, `DDLS` |
 | `name` | string | Yes | Object name (e.g., `ZCL_ORDER`) |
 | `source` | string | No | Provide source directly instead of fetching from SAP |
 | `group` | string | No | Required for `FUNC` type. The function group name. |
 | `maxDeps` | number | No | Maximum dependencies to resolve (default 20) |
 | `depth` | number | No | Dependency depth: 1 = direct only (default), 2 = deps of deps, 3 = max |
+| `includeIndirect` | boolean | No | Only for `action="impact"` (DDLS): include indirect downstream where-used entries (default `false`) |
 
 **Examples:**
 ```
@@ -446,6 +470,48 @@ ENDCLASS.
 **Cache indicator:** When the dependency graph is served from the object cache (no ADT calls needed), the header changes to:
 ```
 * === Dependency context for ZCL_ORDER (3 deps resolved) [cached] ===
+```
+
+### action="impact" — CDS upstream + downstream impact (DDLS only)
+
+Returns a single JSON payload with:
+- **upstream** dependencies from CDS AST extraction (`tables`, `views`, `associations`, `compositions`)
+- **downstream** where-used consumers classified into RAP-relevant buckets (`projectionViews`, `bdefs`, `serviceDefinitions`, `serviceBindings`, `accessControls`, `metadataExtensions`, `abapConsumers`, `documentation`, etc.)
+
+Use this to answer: "If I change this CDS view, what breaks?"
+
+**Example:**
+```
+SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT")
+SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT", includeIndirect=true)
+```
+
+**Output (shape):**
+```json
+{
+  "name": "ZI_ARC1_I33_ROOT",
+  "type": "DDLS",
+  "upstream": {
+    "tables": [{ "name": "ZTABL_ARC1_I33" }],
+    "views": [],
+    "associations": [],
+    "compositions": []
+  },
+  "downstream": {
+    "projectionViews": [{ "name": "ZI_ARC1_I33_PROJ", "type": "DDLS/DF" }],
+    "bdefs": [],
+    "serviceDefinitions": [],
+    "serviceBindings": [],
+    "accessControls": [],
+    "metadataExtensions": [],
+    "abapConsumers": [],
+    "tables": [],
+    "documentation": [],
+    "other": [],
+    "summary": { "total": 1, "direct": 1, "indirect": 0, "byBucket": { "projectionViews": 1 } }
+  },
+  "summary": { "upstreamCount": 1, "downstreamTotal": 1, "downstreamDirect": 1 }
+}
 ```
 
 ### action="usages" — Reverse dependency lookup

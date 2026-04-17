@@ -499,6 +499,16 @@ describe('SAPTransportSchema', () => {
     const result = SAPTransportSchema.safeParse({ action: 'invalid' });
     expect(result.success).toBe(false);
   });
+
+  it('accepts history with type and name', () => {
+    const result = SAPTransportSchema.safeParse({ action: 'history', type: 'CLAS', name: 'ZCL_X' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts history without type/name at schema level', () => {
+    const result = SAPTransportSchema.safeParse({ action: 'history' });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('SAPContextSchema', () => {
@@ -509,11 +519,12 @@ describe('SAPContextSchema', () => {
 
   it('accepts full input', () => {
     const result = SAPContextSchema.safeParse({
-      action: 'deps',
+      action: 'impact',
       type: 'CLAS',
       name: 'ZCL_ORDER',
       maxDeps: 10,
       depth: 2,
+      includeIndirect: true,
     });
     expect(result.success).toBe(true);
   });
@@ -543,6 +554,7 @@ describe('SAPContextSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'CLAS' }).success).toBe(true);
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS' }).success).toBe(true);
+    expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS', action: 'impact' }).success).toBe(true);
   });
 
   it('does not have group field', () => {

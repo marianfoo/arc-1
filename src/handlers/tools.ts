@@ -172,41 +172,40 @@ const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC', 'DDLS'];
 const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF', 'DDLS'];
 
 const SAPCONTEXT_DESC_ONPREM =
-  'Get compressed dependency context for an ABAP object or CDS entity. Returns only the public API contracts ' +
-  '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
-  'NOT the full source code. This is the most token-efficient way to understand dependencies. ' +
-  'Instead of N separate SAPRead calls returning full source (~200 lines each), SAPContext returns ONE response ' +
-  'with compressed contracts (~15-30 lines each). Typical compression: 7-30x fewer tokens.\n\n' +
-  'What gets extracted per dependency:\n' +
+  'Get compressed dependency context or CDS blast-radius impact for an ABAP / CDS object.\n\n' +
+  "Decision rule — pick the action based on the user's question:\n" +
+  '- "What breaks if I change <CDS view>?" / "Who consumes <I_*>?" / "Impact analysis on <DDLS>" / "Blast radius" → action="impact"\n' +
+  '- "Understand dependencies before editing <object>" / "What does X depend on?" → action="deps" (default)\n' +
+  '- "Find all callers of <object>" (cache-warmup required) → action="usages"\n\n' +
+  'action="impact" (CDS blast-radius, DDLS only): ALWAYS use this for CDS change-impact questions. Returns upstream AST dependencies plus downstream where-used results classified into RAP-aware buckets: projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls (DCLS), metadataExtensions (DDLX), abapConsumers, documentation (SKTD), tables, other. DO NOT replicate this with SAPQuery against DDDDLSRC/ACMDCLSRC/DDLXSRC_SRC/SRVDSRC_SRC — those text scans produce noise (non-dependency matches, package group nodes) that this classifier already filters out. Optional includeIndirect=true widens to transitive consumers.\n\n' +
+  'action="deps" (default): Returns only the public API contracts (method signatures, interface definitions, type declarations) of all objects that the target depends on — NOT the full source code. The most token-efficient way to understand dependencies. Instead of N separate SAPRead calls returning full source (~200 lines each), returns ONE response with compressed contracts (~15-30 lines each). Typical compression: 7-30x fewer tokens.\n\n' +
+  'What deps extracts per dependency:\n' +
   '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants). PROTECTED, PRIVATE and IMPLEMENTATION stripped.\n' +
   '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
   '- Function modules: FUNCTION signature block only (IMPORTING/EXPORTING parameters).\n' +
   '- CDS views (DDLS): All data sources (tables, other CDS views), association targets, and compositions. ' +
   "Each dependency's full source is included (table definitions, CDS DDL). Essential for CDS unit test generation — " +
   'provides the dependency graph and field catalogs needed for cl_cds_test_environment doubles.\n\n' +
-  'Filtering: SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded — the LLM already knows standard SAP APIs. ' +
-  'Custom objects (Z*, Y*) are prioritized.\n\n' +
+  'Filtering (deps): SAP standard objects (CL_ABAP_*, IF_ABAP_*, CX_SY_*) are excluded. Custom objects (Z*, Y*) are prioritized.\n\n' +
   'Use SAPContext BEFORE writing code that modifies or extends existing objects. ' +
   'Use SAPRead to get the full source of the target object, then SAPContext to understand its dependencies.\n\n' +
-  'For CDS analysis: Use SAPContext instead of reading each view in the dependency chain individually. ' +
-  'A single SAPContext call on a consumption view (e.g., ZC_*) returns all dependent interface views, tables, and associations — ' +
-  'replacing 5-10 separate SAPRead calls. Only use targeted SAPRead for metadata extensions (DDLX) or service bindings (SRVB) that SAPContext does not cover.';
+  'For non-CDS reverse-lookup, use SAPNavigate(action="references"). For CDS reverse-lookup, ALWAYS prefer action="impact" over SAPNavigate — it returns the same where-used data pre-classified into RAP buckets.';
 
 const SAPCONTEXT_DESC_BTP =
-  'Get compressed dependency context for an ABAP object or CDS entity (BTP ABAP Environment). Returns only the public API contracts ' +
-  '(method signatures, interface definitions, type declarations) of all objects that the target depends on — ' +
-  'NOT the full source code. This is the most token-efficient way to understand dependencies.\n\n' +
-  'What gets extracted per dependency:\n' +
+  'Get compressed dependency context or CDS blast-radius impact for an ABAP / CDS object (BTP ABAP Environment).\n\n' +
+  "Decision rule — pick the action based on the user's question:\n" +
+  '- "What breaks if I change <CDS view>?" / "Who consumes <I_*>?" / "Impact analysis on <DDLS>" / "Blast radius" → action="impact"\n' +
+  '- "Understand dependencies before editing <object>" / "What does X depend on?" → action="deps" (default)\n\n' +
+  'action="impact" (CDS blast-radius, DDLS only): ALWAYS use this for CDS change-impact questions. Returns upstream AST dependencies plus downstream where-used results classified into RAP-aware buckets: projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls (DCLS), metadataExtensions (DDLX), abapConsumers, documentation (SKTD), tables, other. DO NOT replicate this with SAPQuery — the classifier already filters noise. Optional includeIndirect=true widens to transitive consumers.\n\n' +
+  'action="deps" (default): Returns only the public API contracts (method signatures, interface definitions, type declarations) of all objects that the target depends on — NOT the full source code.\n\n' +
+  'What deps extracts per dependency:\n' +
   '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants).\n' +
   '- Interfaces: Full interface definition (interfaces are already public contracts).\n' +
   '- CDS views (DDLS): All data sources (tables, other CDS views), association targets, and compositions. ' +
   "Each dependency's full source is included. Essential for CDS unit test generation.\n\n" +
   'On BTP: released SAP objects (CL_ABAP_*, IF_ABAP_*) are included since they form the primary development API surface. ' +
   'Custom objects (Z*, Y*) are also included.\n\n' +
-  'Use SAPContext BEFORE writing code that modifies or extends existing objects.\n\n' +
-  'For CDS analysis: Use SAPContext instead of reading each view in the dependency chain individually. ' +
-  'A single SAPContext call on a consumption view returns all dependent interface views, tables, and associations — ' +
-  'replacing 5-10 separate SAPRead calls.';
+  'Use SAPContext BEFORE writing code that modifies or extends existing objects.';
 
 // ─── SAPQuery ───────────────────────────────────────────────────────
 
@@ -215,7 +214,8 @@ const SAPQUERY_DESC_ONPREM =
   'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
   'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
   'If a table is not found, similar table names will be suggested automatically. ' +
-  'Note: Uses the ADT freestyle SQL endpoint (same as ADT SQL Console in Eclipse). Supports ABAP SQL syntax including JOINs, but the endpoint parser has known edge cases with complex queries on some system versions (SAP Note 3605050). If a complex query fails, try simplifying — split JOINs into separate single-table SELECTs.';
+  'Note: Uses the ADT freestyle SQL endpoint (same as ADT SQL Console in Eclipse). Supports ABAP SQL syntax including JOINs, but the endpoint parser has known edge cases with complex queries on some system versions (SAP Note 3605050). If a complex query fails, try simplifying — split JOINs into separate single-table SELECTs.\n\n' +
+  'CDS impact analysis: DO NOT query DDDDLSRC, ACMDCLSRC, DDLXSRC_SRC, or SRVDSRC_SRC to find CDS consumers — those text scans produce noise (substring matches, package group nodes, generated patterns). Use SAPContext(action="impact", type="DDLS", name="...") instead — it uses SAP\'s where-used index and returns bucketed, filtered results (projection views, BDEFs, SRVDs, access controls, documentation, ABAP consumers).';
 
 const SAPQUERY_DESC_BTP =
   'Execute ABAP SQL queries (BTP ABAP Environment). Returns structured data with column names and rows. ' +
@@ -245,7 +245,8 @@ const SAPTRANSPORT_DESC_ONPREM =
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
   'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
-  'check (check if a package requires a transport — provide type, name, package). ' +
+  'check (check if a package requires a transport — provide type, name, package), ' +
+  'history (find transports referencing an object — provide type, name; read-only, works without --enable-transports). ' +
   'Transport IDs look like A4HK900123. Status: D=modifiable, R=released.';
 
 const SAPTRANSPORT_DESC_BTP =
@@ -253,7 +254,8 @@ const SAPTRANSPORT_DESC_BTP =
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
   'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
-  'check (check if a package requires a transport — provide type, name, package). ' +
+  'check (check if a package requires a transport — provide type, name, package), ' +
+  'history (find transports referencing an object — provide type, name; read-only, works without --enable-transports). ' +
   'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
   'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
 
@@ -687,8 +689,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
   tools.push({
     name: 'SAPNavigate',
     description: btp
-      ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). Type+name params are auto-normalized (e.g., type="clas" works). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.'
-      : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). Type+name params are auto-normalized (e.g., type="clas" works). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.',
+      ? 'Navigate code (BTP ABAP Environment): find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). Type+name params are auto-normalized (e.g., type="clas" works). On BTP, navigation scope is limited to released SAP objects and custom Z/Y objects.\n\nFor CDS entities (DDLS), prefer SAPContext(action="impact") — it returns the same where-used data pre-classified into RAP buckets (projection views, BDEFs, SRVDs, access controls, etc.), which is more useful than the flat reference list returned here.'
+      : 'Navigate code: find definitions, references (where-used), code completion, and class hierarchy. Use for "go to definition", "where is this used?", "what does this class inherit?", and auto-complete. For references: uses the full scope-based Where-Used API returning detailed results with line numbers, snippets, and package info. Optional objectType filter narrows results to a specific ADT type in slash format (e.g., CLAS/OC, PROG/P). Type+name params are auto-normalized (e.g., type="clas" works). For hierarchy: returns superclass, implemented interfaces, and direct subclasses via SEOMETAREL. You can use type+name instead of uri (e.g., type="CLAS", name="ZCL_ORDER") for a where-used list without needing the full ADT URI.\n\nFor CDS entities (DDLS), prefer SAPContext(action="impact") — it returns the same where-used data pre-classified into RAP buckets (projection views, BDEFs, SRVDs, access controls, metadata extensions, documentation, ABAP consumers), which answers "what breaks if I change this view" directly without manual bucketing.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -835,16 +837,19 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
       properties: {
         action: {
           type: 'string',
-          enum: ['deps', 'usages'],
+          enum: ['impact', 'deps', 'usages'],
           description:
-            'Action: "deps" (default, can be omitted) = get dependency context. ' +
-            '"usages" = reverse dependency lookup — find all objects that depend on the given name. ' +
-            'Requires cache warmup (--cache-warmup). Only "name" is needed for usages.',
+            'Action:\n' +
+            '"impact" = CDS blast-radius analysis (DDLS only). USE THIS for any question like "what breaks if I change <view>", "who consumes <I_*>", "impact analysis on <CDS>", "downstream of <view>". Returns upstream AST dependencies + downstream where-used classified into RAP buckets (projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls, metadataExtensions, abapConsumers, documentation, tables, other). ALWAYS prefer over SAPQuery against DDDDLSRC/ACMDCLSRC/DDLXSRC_SRC/SRVDSRC_SRC (those text-scans produce noise this classifier filters out). Non-DDLS input returns a guardrail error.\n' +
+            '"deps" (default, can be omitted) = forward dependency context — "what does <object> depend on?". Returns public API contracts of dependencies.\n' +
+            '"usages" = reverse dependency lookup — "who calls <object>?". Requires cache warmup (--cache-warmup). Only "name" is needed. For CDS entities prefer action="impact" instead.',
         },
         type: {
           type: 'string',
           enum: btp ? SAPCONTEXT_TYPES_BTP : SAPCONTEXT_TYPES_ONPREM,
-          description: 'Object type (required for deps action)',
+          description:
+            'Object type. Required for action="deps" and action="usages". ' +
+            'Optional for action="impact" — defaults to DDLS (the only supported type for impact).',
         },
         name: {
           type: 'string',
@@ -873,6 +878,11 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           description:
             'Dependency depth: 1 = direct deps only (default), 2 = deps of deps, 3 = maximum. ' +
             'Higher depth = more context but more SAP calls.',
+        },
+        includeIndirect: {
+          type: 'boolean',
+          description:
+            'Only for action="impact". Include indirect (transitive) downstream where-used entries. Default false.',
         },
       },
       required: ['name'],
@@ -1010,7 +1020,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check'],
+            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check', 'history'],
             description:
               'list: show transports (defaults to current user, modifiable only). ' +
               'get: fetch transport details including tasks and objects. ' +
@@ -1019,7 +1029,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'delete: delete a transport (use recursive=true to delete tasks first). ' +
               'reassign: change transport owner (use recursive=true for tasks too). ' +
               'release_recursive: release all unreleased tasks first, then the transport itself. ' +
-              'check: check if a transport is needed for a package/object (requires type, name, package).',
+              'check: check if a transport is needed for a package/object (requires type, name, package). ' +
+              'history: list transports referencing an object (reverse lookup; requires type, name; works without --enable-transports).',
           },
           id: {
             type: 'string',
@@ -1027,7 +1038,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'Transport request ID, e.g. A4HK900123 (required for get/release/delete/reassign/release_recursive)',
           },
           description: { type: 'string', description: 'Transport description text (required for create)' },
-          name: { type: 'string', description: 'Object name (for check action)' },
+          name: { type: 'string', description: 'Object name (for check or history actions)' },
           package: { type: 'string', description: 'Package name (for check action)' },
           user: {
             type: 'string',
@@ -1041,7 +1052,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           type: {
             type: 'string',
             description:
-              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check: object type (PROG, CLAS, DDLS, etc.)',
+              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check/history: object type (PROG, CLAS, DDLS, etc.)',
           },
           owner: { type: 'string', description: 'New owner SAP username (required for reassign)' },
           recursive: {

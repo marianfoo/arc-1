@@ -24,6 +24,7 @@ import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import {
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   listTransports,
   reassignTransport,
@@ -172,6 +173,46 @@ describe('Transport Integration Tests', () => {
         expect(typeof t.description).toBe('string');
         expect(typeof t.owner).toBe('string');
         expect(typeof t.status).toBe('string');
+      }
+    });
+  });
+
+  // ─── getObjectTransports ───────────────────────────────────────
+
+  describe('getObjectTransports (object → transports reverse lookup)', () => {
+    it('$TMP fixture object returns no related transports', async (ctx) => {
+      try {
+        const result = await getObjectTransports(client.http, client.safety, '/sap/bc/adt/oo/classes/zcl_arc1_test');
+        expect(result.relatedTransports.length).toBe(0);
+        expect(result.lockedTransport).toBeUndefined();
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.NO_FIXTURE}: ZCL_ARC1_TEST not found — run npm run test:e2e:fixtures first`,
+        );
+      }
+    });
+
+    it('supports probing a transportable object when configured', async (ctx) => {
+      const transportPkg = process.env.TEST_TRANSPORT_PACKAGE;
+      requireOrSkip(ctx, transportPkg, SkipReason.NO_TRANSPORT_PACKAGE);
+
+      const objectName = process.env.TEST_TRANSPORT_OBJECT_NAME;
+      requireOrSkip(ctx, objectName, 'TEST_TRANSPORT_OBJECT_NAME not configured');
+
+      const objectUrl = `/sap/bc/adt/oo/classes/${encodeURIComponent(objectName.toLowerCase())}`;
+      try {
+        const result = await getObjectTransports(client.http, client.safety, objectUrl);
+        expect(Array.isArray(result.relatedTransports)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: configured TEST_TRANSPORT_OBJECT_NAME "${objectName}" is not available`,
+        );
       }
     });
   });

@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-17
+**Last Updated:** 2026-04-16
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -47,7 +47,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 1 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
 | 2 | FEAT-10 | PrettyPrint (Code Formatting) | P1 | XS | Features |
 | 3 | FEAT-20 | Source Version / Revision History | P1 | S | Features |
-| 4 | FEAT-49 | Object Transport History (Reverse Lookup) | P1 | S | Features |
+| ~~—~~ | ~~FEAT-49~~ | ~~Object Transport History (Reverse Lookup)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
 | 5 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
 | 6 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
 | 7 | FEAT-24 | CompareSource (Diff) | P2 ↑ | S | Features |
@@ -61,7 +61,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 15 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 16 | SEC-05 | Rate Limiting | P2 | S | Security |
 | 17 | FEAT-31 | Code Coverage from Unit Tests | P2 | S | Features |
-| 18 | FEAT-33 | CDS Impact Analysis | P2 | S | Features |
+| ~~18~~ | ~~FEAT-33~~ | ~~CDS Impact Analysis~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
 | 19 | FEAT-26 | MCP Client Config Snippets | P2 | S | Features |
 | 20 | FEAT-25 | CDS Unit Tests | P2 | S | Features |
 | 21 | FEAT-23 | GetProgFullCode (Include Traversal) | P2 | S | Features |
@@ -85,6 +85,8 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-49 | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
+| FEAT-33 | CDS Impact Analysis | 2026-04-16 | Features |
 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
 | FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
@@ -181,7 +183,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings. dassian-adt has parallel fetch (objectstructure + Promise.all pattern confirmed).
 16. **FEAT-10** PrettyPrint (XS) — **↑ Upgraded from P2:** dassian-adt and VSP both have this. XS effort, high visibility.
 17. **FEAT-20** Source Version / Revision History (S) — **↑ Upgraded from P2:** dassian-adt added `abap_get_revisions`. Enables diff and rollback workflows. ADT endpoints confirmed: `{sourceUrl}/versions` (Atom feed) + `{versionUri}` for source at revision.
-18. **FEAT-49** Object Transport History / Reverse Lookup (S) — **NEW:** find all transports containing a given object. ADT endpoint: `GET /sap/bc/adt/cts/transportrequests/reference?pgmid=R3TR&obj_wbtype={type}&obj_name={name}`. Enables fr0ster#30 code review workflow. Prerequisite for transport-scoped diff with FEAT-20 + FEAT-24.
+18. ~~**FEAT-49** Object Transport History / Reverse Lookup (S)~~ — **completed 2026-04-17.** Implemented as `SAPTransport(action="history")` using per-object `GET {objectUrl}/transports` endpoint with `transportchecks` fallback for candidate transports.
 19. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 20. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
 
@@ -206,7 +208,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
 26. ~~**FEAT-20** Source Version / Revision History (S) — **promoted to P1/Phase B** (dassian-adt added revisions tool)~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
-28. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
+28. ~~**FEAT-33** CDS Impact Analysis (S)~~ — **completed 2026-04-16** (`SAPContext(action="impact")` for DDLS upstream+downstream analysis)
 25. **FEAT-24** CompareSource / Diff (S) — **↑ Upgraded:** with FEAT-20 (revisions) + FEAT-49 (object transport history), transport-scoped code review now viable (fr0ster#30). Client-side diff of two revision sources — ADT has no server-side diff endpoint.
 26. **FEAT-26** MCP Client Config Snippets (S) — onboarding UX
 27. **FEAT-25** CDS Unit Tests (S) — CDS test-driven development
@@ -223,7 +225,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 ### Phase E: New Capabilities from Competitor Sprint (P2-P3)
 33. **FEAT-31** Code Coverage from Unit Tests (S) — VSP added line-level coverage metrics
 34. **FEAT-32** Table Pagination / Offset (XS) — VSP added offset + columns_only to table contents
-35. **FEAT-33** CDS Impact Analysis (S) — VSP added downstream consumer tracing for CDS views
+35. ~~**FEAT-33** CDS Impact Analysis (S)~~ — **completed 2026-04-16** (RAP-aware downstream consumer classification)
 36. **FEAT-34** i18n Translation Management (M) — VSP added 7 translation tools
 
 ### Phase F: Future / Niche (P3)
@@ -910,14 +912,14 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — increasingly important as S/4 moves logic into CDS |
-| **Status** | Not started |
+| **Status** | Done (2026-04-16) |
 | **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/6c67140-cds-impact.md) |
 
-**What:** CDS-specific impact analysis: trace downstream consumers of a CDS view, get column-level metadata. VSP added CDS impact analysis and element info tools (commit 6c67140, Apr 4). Could extend SAPNavigate or SAPContext.
+**What:** CDS-specific impact analysis is now available via `SAPContext(action="impact", type="DDLS", name="...")`. It returns upstream CDS AST dependencies and downstream RAP-classified where-used consumers in one response.
 
 **Why:** CDS views are the foundation of S/4HANA — understanding downstream impact is critical before making changes.
 
-**Why not:** `SAPContext` with AST-based dependency extraction already returns dependent views, associations, and consumers for CDS entities. ADT doesn't expose a "consumption graph" endpoint — full downstream tracing requires multiple queries or SQL against system tables. Comprehensive impact analysis spans multiple layers (CDS -> OData service -> Fiori app -> transactional programs), which is out of scope for a single MCP tool call.
+**Scope:** Scoped intentionally to the RAP stack immediately around a CDS view (projection chain, BDEF, SRVD, SRVB, DCLS, DDLX, direct ABAP consumers). Multi-level transitive tracing remains out of scope for a single call — follow-up analysis can be done via `SAPNavigate(action="references")` on individual consumers when needed.
 
 ---
 
@@ -1373,41 +1375,48 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — enables transport-scoped code review, change tracking |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-17) |
 | **Source** | [fr0ster#30](https://github.com/fr0ster/mcp-abap-adt/issues/30) |
 | **Related** | FEAT-20 (revision history), FEAT-24 (diff) — together these three enable transport-scoped code review |
 
 **What:** Given an ABAP object (type + name), find all transport requests that contain it. This is the "reverse lookup" — ARC-1 already supports `SAPTransport(action="get")` to see objects inside a transport, but not the other direction ("which transports touched `ZCL_MY_CLASS`?"). This is step 1 of the fr0ster#30 workflow: identify the relevant transport before fetching versioned source or computing diffs.
 
-**ADT endpoints (three approaches, from pure-REST to SQL-based):**
+**ADT endpoints (verified 2026-04-17 on A4H):**
 
-1. **`transportReference` endpoint (pure REST, preferred):**
+1. **Per-object transport endpoint (implemented, preferred):**
+   - `GET {objectUrl}/transports`
+   - Discovered from object structure links: `rel="http://www.sap.com/adt/relations/transport"`
+   - Returns `dataname=com.sap.adt.lock.result2` payload (`LOCKS` + `TRANSPORTS`)
+   - For `$TMP`/untracked objects, returns 200 with empty body (normal outcome)
+
+2. **`transportReference` endpoint (not suitable for history payload):**
    - `GET /sap/bc/adt/cts/transportrequests/reference?pgmid=R3TR&obj_wbtype={type}&obj_name={name}`
-   - Accept: `application/*`
-   - Response: XML with `<atom:link href="...">` pointing to the transport
-   - Source: `abap-adt-api` `src/api/transports.ts` — `transportReference()`
-   - **Limitation:** Returns only the current/active transport assignment, not full history
+   - Verified live to resolve object URI link only; does **not** return related transport list
+   - Kept as research note, not used for FEAT-49 implementation
 
-2. **`transportchecks` endpoint (existing in ARC-1):**
-   - `POST /sap/bc/adt/cts/transportchecks` — already used by ARC-1's `checkTransportRequired()`
-   - Returns lock status, available transports — but again, only current state, not history
+3. **`transportchecks` endpoint (implemented fallback):**
+   - `POST /sap/bc/adt/cts/transportchecks`
+   - Used when `/transports` returns no related transports
+   - Surfaces candidate transports and lock context after package auto-resolution from object structure
 
-3. **SQL-based E071 query (complete history, requires free SQL or data preview):**
+4. **SQL-based E071 query (complete history, deferred):**
    - `SELECT TRKORR FROM E071 WHERE PGMID = 'R3TR' AND OBJECT = '{type}' AND OBJ_NAME = '{name}'`
    - Then resolve task→request hierarchy via E070, optionally map to CR via E070A
    - Source: VSP `handleCRHistory` in `handlers_transport_analysis.go`
    - **Only way to get full transport history** — ADT REST endpoints only return current assignments
    - Requires `blockFreeSQL=false` or data preview access to E071/E070
 
-**Implementation plan:**
-- **Phase 1 (pure REST):** Add `getTransportReference(type, name)` to `src/adt/transport.ts` using the `transportReference` endpoint. Expose via `SAPTransport(action="history", type="CLAS", name="ZCL_MY_CLASS")`. Returns current transport only — still useful for "what transport is this currently in?"
-- **Phase 2 (SQL-based, optional):** If the user has SQL/data access, query E071+E070 for full transport history. Could be exposed as `SAPTransport(action="history", full=true)` or auto-selected based on server config.
-- Add to `SAPTransport` tool schema in `src/handlers/tools.ts` and `src/handlers/schemas.ts`
-- Safety: `checkTransport(safety, '', 'TransportHistory', false)` — read-only transport operation
+**Implementation summary (completed):**
+- Added `SAPTransport(action="history", type, name)` in `handleSAPTransport`.
+- Added `getObjectTransports()` in `src/adt/transport.ts` using `GET {objectUrl}/transports`.
+- Reused existing `parseTransportInfo()` for `lock.result2` payload parsing.
+- Added fallback to `transportchecks` when primary response is empty (package auto-resolved from object metadata).
+- Added unit, integration, and E2E coverage plus docs/tool-schema updates.
+- Safety model: read-only operation (`OperationType.Read`), no transport write privilege required.
 
 **Why:** This is the missing link that makes FEAT-20 and FEAT-24 actionable. Without knowing *which* transport changed an object, the user can't ask for versioned source or a diff. The fr0ster#30 use case ("code review of the last transport") requires all three features working together. No competitor has the full trio as a cohesive workflow — implementing this puts ARC-1 ahead.
 
-**Why not:** The pure REST endpoint (`transportReference`) only returns the current transport, not full history. Full history requires SQL access to E071/E070, which may be blocked by `blockFreeSQL` or `blockData` settings. However, even the current-transport lookup is valuable for the most common use case ("what's the last transport that touched this?").
+**Why not (deferred scope):** Full historical transport lineage via E071/E070 is intentionally deferred because it depends on free SQL/data-preview access, can conflict with safe defaults, and bypasses some clean per-user ADT authorization boundaries.
 
 ---
 
