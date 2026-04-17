@@ -12,9 +12,14 @@
  *   npm run test:eval -- --provider anthropic --model claude-haiku-4-5-20251001
  *   npm run test:eval -- --backend live --file context-impact
  *
- * Flags are equivalent to env vars — the env var wins if both are set,
- * so you can override a flag from a shell script. Unknown flags are
- * forwarded to vitest so `--reporter verbose`, `--bail`, etc. still work.
+ * Priority: CLI flags > shell env vars > .env > defaults (matches CLAUDE.md).
+ * Unknown flags are forwarded to vitest so `--reporter verbose`, `--bail`,
+ * etc. still work.
+ *
+ * Provider switching: if `--provider X` is passed WITHOUT `--model`, we
+ * drop EVAL_MODEL so the provider's default kicks in — otherwise a pinned
+ * `EVAL_MODEL=claude-haiku-4-5-20251001` in your .env would leak into a
+ * cursor or ollama run and fail with "Cannot use this model".
  */
 
 import { spawn } from 'node:child_process';
@@ -36,6 +41,9 @@ const FLAG_TO_ENV = {
 const env = { ...process.env };
 const passthrough = [];
 
+let explicitProvider = false;
+let explicitModel = false;
+
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
@@ -46,7 +54,9 @@ for (let i = 0; i < args.length; i++) {
     const flag = arg.slice(0, eqIdx);
     const value = arg.slice(eqIdx + 1);
     if (FLAG_TO_ENV[flag]) {
-      if (!env[FLAG_TO_ENV[flag]]) env[FLAG_TO_ENV[flag]] = value;
+      env[FLAG_TO_ENV[flag]] = value;
+      if (flag === '--provider') explicitProvider = true;
+      if (flag === '--model') explicitModel = true;
       continue;
     }
     passthrough.push(arg);
@@ -60,12 +70,28 @@ for (let i = 0; i < args.length; i++) {
       console.error(`Error: ${arg} requires a value`);
       process.exit(2);
     }
-    if (!env[FLAG_TO_ENV[arg]]) env[FLAG_TO_ENV[arg]] = value;
+    env[FLAG_TO_ENV[arg]] = value;
+    if (arg === '--provider') explicitProvider = true;
+    if (arg === '--model') explicitModel = true;
     i++;
     continue;
   }
 
   passthrough.push(arg);
+}
+
+// If the user switched providers via CLI but didn't pick a model, inject the
+// provider's default NOW so dotenv (loaded later inside vitest) can't overwrite
+// it with a stale EVAL_MODEL from .env that's pinned to a different provider.
+// Keep this table in sync with the DEFAULT_*_MODEL constants in the providers.
+const PROVIDER_DEFAULT_MODEL = {
+  'claude-code': 'claude-haiku-4-5-20251001',
+  anthropic: 'claude-haiku-4-5-20251001',
+  cursor: 'claude-4.5-sonnet',
+  ollama: 'qwen3.5:9b',
+};
+if (explicitProvider && !explicitModel && PROVIDER_DEFAULT_MODEL[env.EVAL_PROVIDER]) {
+  env.EVAL_MODEL = PROVIDER_DEFAULT_MODEL[env.EVAL_PROVIDER];
 }
 
 const vitestArgs = ['vitest', 'run', '--config', 'vitest.eval.config.ts', ...passthrough];

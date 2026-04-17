@@ -39,9 +39,14 @@ import { dirname, resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// Load .env before reading any provider / model / URL config. Matches the
-// convention used by tests/integration/helpers.ts and src/cli.ts so users only
-// configure Ollama / Anthropic once and `npm run test:eval` picks it up.
+// Priority (matches CLAUDE.md): CLI flags > real env vars > .env > defaults.
+// An empty-string env var (e.g. accidental `export ANTHROPIC_API_KEY=""` in
+// ~/.zshrc) counts as "unset" for our purposes — delete those before loading
+// .env so the .env value fills them in correctly.
+const EVAL_ENV_KEYS = ['ANTHROPIC_API_KEY', 'EVAL_PROVIDER', 'EVAL_MODEL', 'OLLAMA_BASE_URL'];
+for (const k of EVAL_ENV_KEYS) {
+  if (process.env[k] === '') delete process.env[k];
+}
 loadDotenv();
 
 import { getToolDefinitions } from '../../src/handlers/tools.js';
@@ -49,19 +54,37 @@ import { DEFAULT_CONFIG } from '../../src/server/types.js';
 import { formatResults, runScenario, toOpenAITools } from './harness.js';
 import { checkLiveBackendAvailable, connectLiveBackend, type LiveBackend } from './live-backend.js';
 import { checkAnthropicAvailable, createAnthropicProvider, DEFAULT_ANTHROPIC_MODEL } from './providers/anthropic.js';
+import {
+  checkClaudeCodeAvailable,
+  DEFAULT_CLAUDE_CODE_MODEL,
+  runScenarioWithClaudeCode,
+} from './providers/claude-code.js';
+import { checkCursorAvailable, DEFAULT_CURSOR_MODEL, runScenarioWithCursor } from './providers/cursor.js';
 import { checkOllamaAvailable, createOllamaProvider, DEFAULT_OLLAMA_MODEL } from './providers/ollama.js';
 import { ALL_SCENARIOS, FILE_OF_SCENARIO, SCENARIO_FILES } from './scenarios/index.js';
 import type { EvalRunResult, EvalScenario, LLMProvider, ScenarioScore, ToolDefinitionForLLM } from './types.js';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
-const PROVIDER_NAME = (process.env.EVAL_PROVIDER ?? 'ollama').toLowerCase();
-if (PROVIDER_NAME !== 'ollama' && PROVIDER_NAME !== 'anthropic') {
-  throw new Error(`Unknown EVAL_PROVIDER: "${PROVIDER_NAME}". Only "ollama" and "anthropic" are supported.`);
+const PROVIDER_NAME = (process.env.EVAL_PROVIDER ?? 'claude-code').toLowerCase();
+const SUPPORTED_PROVIDERS = new Set(['ollama', 'anthropic', 'claude-code', 'cursor']);
+if (!SUPPORTED_PROVIDERS.has(PROVIDER_NAME)) {
+  throw new Error(
+    `Unknown EVAL_PROVIDER: "${PROVIDER_NAME}". Supported: "claude-code" (default), "cursor", "ollama", "anthropic".`,
+  );
 }
-const MODEL = process.env.EVAL_MODEL ?? (PROVIDER_NAME === 'ollama' ? DEFAULT_OLLAMA_MODEL : DEFAULT_ANTHROPIC_MODEL);
+function defaultModelFor(provider: string): string {
+  if (provider === 'ollama') return DEFAULT_OLLAMA_MODEL;
+  if (provider === 'anthropic') return DEFAULT_ANTHROPIC_MODEL;
+  if (provider === 'cursor') return DEFAULT_CURSOR_MODEL;
+  return DEFAULT_CLAUDE_CODE_MODEL;
+}
+const MODEL = process.env.EVAL_MODEL ?? defaultModelFor(PROVIDER_NAME);
 
-const BACKEND = (process.env.EVAL_BACKEND ?? 'mock').toLowerCase();
+// Integration-level providers (claude-code, cursor) spawn ARC-1 as an stdio MCP
+// server and always run "live". The mock/live distinction doesn't apply.
+const IS_INTEGRATION_PROVIDER = PROVIDER_NAME === 'claude-code' || PROVIDER_NAME === 'cursor';
+const BACKEND = IS_INTEGRATION_PROVIDER ? 'live' : (process.env.EVAL_BACKEND ?? 'mock').toLowerCase();
 const SCENARIO_FILTER = process.env.EVAL_SCENARIO;
 const FILE_FILTER = parseList(process.env.EVAL_FILE);
 const TAG_FILTER = parseList(process.env.EVAL_TAG ?? process.env.EVAL_TAGS);
@@ -131,7 +154,7 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
         );
       }
       provider = createOllamaProvider(MODEL);
-    } else {
+    } else if (PROVIDER_NAME === 'anthropic') {
       const check = checkAnthropicAvailable();
       if (!check.available) {
         throw new Error(
@@ -139,12 +162,29 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
         );
       }
       provider = createAnthropicProvider(MODEL);
+    } else if (PROVIDER_NAME === 'claude-code') {
+      // claude-code — integration mode, no chat-loop provider object.
+      const check = await checkClaudeCodeAvailable();
+      if (!check.available) {
+        throw new Error(
+          `claude-code provider unavailable: ${check.reason}\n` +
+            '  Install Claude Code CLI (https://claude.com/claude-code) and set ANTHROPIC_API_KEY.',
+        );
+      }
+    } else {
+      // cursor — integration mode via Cursor subscription.
+      const check = await checkCursorAvailable();
+      if (!check.available) {
+        throw new Error(
+          `cursor provider unavailable: ${check.reason}\n` +
+            '  Install cursor-agent (https://cursor.com/cli) and run `cursor-agent login`.',
+        );
+      }
     }
 
-    // Live backend (optional) — also fail hard if the server is unreachable
-    // while EVAL_BACKEND=live is set, otherwise we'd silently fall back to
-    // mock-like noop and miss the schema/handler drift we're trying to catch.
-    if (BACKEND === 'live') {
+    // Live backend only applies to ollama/anthropic — integration providers
+    // handle their own stdio MCP wiring and never read this config.
+    if (!IS_INTEGRATION_PROVIDER && BACKEND === 'live') {
       const check = await checkLiveBackendAvailable();
       if (!check.available) {
         throw new Error(
@@ -231,12 +271,24 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
     testFn(
       `[${fileTag}] ${scenario.id}: ${scenario.description}`,
       async () => {
-        if (!provider) return;
-
-        const score = await runScenario(provider, scenario, tools, {
-          passThreshold: PASS_THRESHOLD,
-          liveExecutor: live?.execute,
-        });
+        let score: ScenarioScore;
+        if (PROVIDER_NAME === 'claude-code') {
+          score = await runScenarioWithClaudeCode(scenario, {
+            model: MODEL,
+            passThreshold: PASS_THRESHOLD,
+          });
+        } else if (PROVIDER_NAME === 'cursor') {
+          score = await runScenarioWithCursor(scenario, {
+            model: MODEL,
+            passThreshold: PASS_THRESHOLD,
+          });
+        } else {
+          if (!provider) return;
+          score = await runScenario(provider, scenario, tools, {
+            passThreshold: PASS_THRESHOLD,
+            liveExecutor: live?.execute,
+          });
+        }
         allScores.push(score);
 
         const status = score.passed ? '✅' : '❌';
@@ -255,8 +307,10 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
 
         expect(score.overallScore, score.explanation).toBeGreaterThanOrEqual(PASS_THRESHOLD);
       },
-      // 180s per scenario — LLM + (optional) real SAP latency.
-      180_000,
+      // 300s per scenario — LLM + real SAP latency. Cursor's first turn can
+      // include MCP server startup + multi-call exploration, which exceeds
+      // the original 180s budget.
+      300_000,
     );
   }
 });

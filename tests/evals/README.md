@@ -1,12 +1,26 @@
 # LLM Evals
 
 End-to-end tool-selection evals for the ARC-1 MCP tool surface. The harness
-feeds a natural-language prompt to an LLM (Ollama or Anthropic), lets it loop
-through tool calls, and scores the trace against expected tool choice + args.
+runs two shapes of eval against your scenarios:
 
-The point is to catch regressions in **how LLMs route intent through our tool
-descriptions** — the same class of bug we found in FEAT-33 where LLMs
-text-scanned `DDDDLSRC` via `SAPQuery` instead of calling
+- **`claude-code` (default)** — integration-level via Claude Code CLI.
+  Spawns `claude -p` per scenario with ARC-1 as an **stdio** MCP server.
+  Keeps Claude's full native toolset alongside ARC-1. Bills to
+  `ANTHROPIC_API_KEY`. Scoring ignores native tool noise.
+- **`cursor`** — integration-level via Cursor CLI. Same shape as
+  `claude-code`, but runs against your Cursor subscription (no API key).
+  Writes `.cursor/mcp.json` into a tempdir to register ARC-1. On first
+  use you'll need to approve the MCP server once via `cursor-agent` — or
+  reuse an already-approved ARC-1 entry from your global
+  `~/.cursor/mcp.json` (scoring is server-name-agnostic).
+- **`ollama` / `anthropic`** — isolated routing. The harness drives the
+  model directly with only ARC-1 tools exposed, running an agentic loop
+  with either mock or live MCP responses. Good for model comparison and
+  offline runs; less realistic than the integration modes.
+
+Either way the point is to catch regressions in **how LLMs route intent
+through our tool descriptions** — the same class of bug we found in FEAT-33
+where LLMs text-scanned `DDDDLSRC` via `SAPQuery` instead of calling
 `SAPContext(action="impact")`.
 
 ---
@@ -14,7 +28,12 @@ text-scanned `DDDDLSRC` via `SAPQuery` instead of calling
 ## TL;DR
 
 ```bash
-# Run everything — provider/model/URL come from .env
+# One-time: build ARC-1 so the stdio MCP server spawns instantly.
+# Without dist/, the fallback `npx tsx` cold-start can miss Claude's first
+# turn and you'll see "No ARC-1 MCP tools were called".
+npm run build
+
+# Default: Claude Code CLI + ARC-1 as stdio MCP. Needs `claude` + ANTHROPIC_API_KEY.
 npm run test:eval
 
 # Just one feature bucket (CLI flag)
@@ -23,14 +42,20 @@ npm run test:eval -- --file context-impact
 # …or via env var, whichever you prefer
 EVAL_FILE=context-impact npm run test:eval
 
-# Against the real SAP test system (requires a running MCP server)
-npm run test:eval:live -- --file context-impact
+# Integration eval via Cursor subscription (no API key)
+npm run test:eval -- --provider cursor --file context-impact
+
+# Isolated routing eval with Ollama
+npm run test:eval -- --provider ollama --file context-impact
+
+# Isolated routing eval with Anthropic API (no Claude Code)
+npm run test:eval -- --provider anthropic --file context-impact
 ```
 
 All configuration lives in `.env` (copy `.env.example`). CLI flags override
-env vars for quick one-offs. If Ollama isn't reachable or
-`ANTHROPIC_API_KEY` isn't set, the harness fails loudly instead of silently
-skipping.
+env vars for quick one-offs. The harness fails loudly — missing `claude`
+CLI, missing `ANTHROPIC_API_KEY`, unreachable Ollama — rather than
+silently skipping.
 
 ### CLI flags
 
@@ -57,27 +82,52 @@ forwarded to vitest, so `--bail`, `--reporter verbose`, etc. still work.
 ## Configuration (`.env`)
 
 ```bash
-# Provider: ollama (default) or anthropic — only these two are supported.
-EVAL_PROVIDER=ollama
+# Provider: claude-code (default), ollama, or anthropic.
+EVAL_PROVIDER=claude-code
+
+# ── claude-code (default) ─────────────────────────────────────────────
+# Spawns `claude -p` per scenario with ARC-1 as an stdio MCP server.
+# Needs: `claude` CLI + ANTHROPIC_API_KEY (bills to API, not subscription).
+# The harness writes a throwaway .mcp.json pointing at `tsx src/index.ts`
+# and forwards SAP_* / TEST_SAP_* env vars into the spawned server.
+ANTHROPIC_API_KEY=sk-ant-...
+# EVAL_MODEL=claude-haiku-4-5-20251001       # default
+# EVAL_MODEL=claude-sonnet-4-5-20250929      # stronger/slower
 
 # ── Ollama ────────────────────────────────────────────────────────────
-OLLAMA_BASE_URL=http://localhost:11434
-EVAL_MODEL=qwen3.5:9b
+# EVAL_PROVIDER=ollama
+# OLLAMA_BASE_URL=http://localhost:11434
+# EVAL_MODEL=qwen3.5:9b
 
-# ── Anthropic ─────────────────────────────────────────────────────────
+# ── Anthropic (isolated routing, no Claude Code) ──────────────────────
 # EVAL_PROVIDER=anthropic
 # ANTHROPIC_API_KEY=sk-ant-...
 # EVAL_MODEL=claude-haiku-4-5-20251001
 
-# ── Backend ───────────────────────────────────────────────────────────
+# ── Backend (ollama/anthropic only — claude-code is always "live") ────
 # mock = replay scenario.mockResponses (offline)
-# live = call a real ARC-1 MCP server
-EVAL_BACKEND=mock
-EVAL_MCP_URL=http://localhost:3000/mcp
+# live = call a real ARC-1 MCP server at EVAL_MCP_URL
+# EVAL_BACKEND=mock
+# EVAL_MCP_URL=http://localhost:3000/mcp
 
 # ── Scoring ───────────────────────────────────────────────────────────
 EVAL_PASS_THRESHOLD=0.5
 ```
+
+### How `claude-code` mode scores
+
+Claude Code runs its own agentic loop. In the stream we see both native
+tool calls (`Read`, `Bash`, …) and ARC-1 calls (`mcp__arc1__SAPContext`,
+`mcp__arc1__SAPRead`, …). We strip the `mcp__arc1__` prefix and score
+**only the ARC-1 calls** against `scenario.optimal` / `acceptable` /
+`forbidden`. A scenario fails if:
+
+- the LLM made zero ARC-1 tool calls (ignored the MCP server), or
+- the first ARC-1 call was in `forbidden`, or
+- no optimal/acceptable match for the first ARC-1 call.
+
+Native tool calls neither help nor hurt — they're realistic noise (the
+LLM reading local files, running `ls`, etc.).
 
 ### Default models
 
