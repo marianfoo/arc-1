@@ -1226,6 +1226,9 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.text).toContain('lint');
       expect(result.content[0]?.text).toContain('lint_and_fix');
       expect(result.content[0]?.text).toContain('list_rules');
+      expect(result.content[0]?.text).toContain('format');
+      expect(result.content[0]?.text).toContain('get_formatter_settings');
+      expect(result.content[0]?.text).toContain('set_formatter_settings');
     });
 
     it('returns Zod validation error for atc (not a valid SAPLint action)', async () => {
@@ -1344,6 +1347,123 @@ ENDCLASS.`;
       // With length=10, many lines should trigger line_length
       const lineIssues = issues.filter((i: { rule: string }) => i.rule === 'line_length');
       expect(lineIssues.length).toBeGreaterThan(0);
+    });
+
+    it('format returns pretty-printed source via ADT endpoint', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      const source = 'report ztest.\ndata lv type string.\n';
+      const formatted = 'REPORT ztest.\nDATA lv TYPE string.\n';
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({
+          method,
+          url: urlStr,
+          body: typeof opts?.body === 'string' ? opts.body : undefined,
+        });
+        if (method === 'HEAD' && urlStr.includes('/sap/bc/adt/core/discovery')) {
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+        }
+        if (method === 'POST' && urlStr.includes('/sap/bc/adt/abapsource/prettyprinter')) {
+          return Promise.resolve(mockResponse(200, formatted, { 'x-csrf-token': 'mock-csrf-token' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'format',
+        source,
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toBe(formatted);
+      const formatCall = calls.find((c) => c.method === 'POST' && c.url.includes('/abapsource/prettyprinter'));
+      expect(formatCall).toBeDefined();
+      expect(formatCall?.body).toBe(source);
+    });
+
+    it('format requires source', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'format',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"source" is required for format action.');
+    });
+
+    it('get_formatter_settings returns parsed settings as JSON', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/abapsource/prettyprinter/settings')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<abapformatter:PrettyPrinterSettings abapformatter:indentation="true" abapformatter:style="keywordUpper" xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>',
+            ),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'get_formatter_settings',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toEqual({ indentation: true, style: 'keywordUpper' });
+    });
+
+    it('set_formatter_settings merges with current values when only style is provided', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({
+          method,
+          url: urlStr,
+          body: typeof opts?.body === 'string' ? opts.body : undefined,
+        });
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/abapsource/prettyprinter/settings')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<abapformatter:PrettyPrinterSettings abapformatter:indentation="false" abapformatter:style="keywordUpper" xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>',
+            ),
+          );
+        }
+        if (method === 'HEAD' && urlStr.includes('/sap/bc/adt/core/discovery')) {
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+        }
+        if (method === 'PUT' && urlStr.includes('/sap/bc/adt/abapsource/prettyprinter/settings')) {
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'set_formatter_settings',
+        style: 'keywordLower',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed).toEqual({ indentation: false, style: 'keywordLower' });
+
+      const putCall = calls.find((c) => c.method === 'PUT' && c.url.includes('/abapsource/prettyprinter/settings'));
+      expect(putCall).toBeDefined();
+      expect(putCall?.body).toContain('abapformatter:indentation="false"');
+      expect(putCall?.body).toContain('abapformatter:style="keywordLower"');
+    });
+
+    it('set_formatter_settings requires indentation or style', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPLint', {
+        action: 'set_formatter_settings',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain(
+        'At least one of "indentation" or "style" is required for set_formatter_settings.',
+      );
     });
 
     it('lint requires source', async () => {

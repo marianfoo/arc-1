@@ -2,6 +2,7 @@
  * Development tools for SAP ADT.
  *
  * - SyntaxCheck: compile-time validation
+ * - PrettyPrint: server-side ABAP formatting
  * - Activate: publish objects to the main repository
  * - RunUnitTests: execute ABAP unit tests
  * - RunATCCheck: ABAP Test Cockpit (code quality)
@@ -33,6 +34,60 @@ export async function syntaxCheck(
   });
 
   return parseSyntaxCheckResult(resp.body);
+}
+
+export interface PrettyPrinterSettings {
+  indentation: boolean;
+  style: 'keywordUpper' | 'keywordLower' | 'keywordAuto' | 'none';
+}
+
+/** Format ABAP source code via ADT PrettyPrinter */
+export async function prettyPrint(http: AdtHttpClient, safety: SafetyConfig, source: string): Promise<string> {
+  checkOperation(safety, OperationType.Intelligence, 'PrettyPrint');
+
+  const resp = await http.post('/sap/bc/adt/abapsource/prettyprinter', source, 'text/plain; charset=utf-8', {
+    Accept: 'text/plain',
+  });
+  return resp.body;
+}
+
+/** Read system-wide ADT PrettyPrinter settings */
+export async function getPrettyPrinterSettings(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+): Promise<PrettyPrinterSettings> {
+  checkOperation(safety, OperationType.Read, 'GetPrettyPrinterSettings');
+
+  const resp = await http.get('/sap/bc/adt/abapsource/prettyprinter/settings', {
+    Accept: 'application/vnd.sap.adt.ppsettings.v2+xml',
+  });
+
+  const parsed = parseXml(resp.body);
+  const root = (parsed.PrettyPrinterSettings as Record<string, unknown> | undefined) ?? {};
+
+  const rawIndentation = root['@_indentation'];
+  const rawStyle = String(root['@_style'] ?? '');
+  const validStyle: PrettyPrinterSettings['style'] =
+    rawStyle === 'keywordUpper' || rawStyle === 'keywordLower' || rawStyle === 'keywordAuto' || rawStyle === 'none'
+      ? rawStyle
+      : 'keywordUpper';
+
+  return {
+    indentation: rawIndentation == null ? true : String(rawIndentation).toLowerCase() === 'true',
+    style: validStyle,
+  };
+}
+
+/** Update system-wide ADT PrettyPrinter settings */
+export async function setPrettyPrinterSettings(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  settings: PrettyPrinterSettings,
+): Promise<void> {
+  checkOperation(safety, OperationType.Update, 'SetPrettyPrinterSettings');
+
+  const body = `<?xml version="1.0" encoding="utf-8"?><abapformatter:PrettyPrinterSettings abapformatter:indentation="${settings.indentation}" abapformatter:style="${settings.style}" xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>`;
+  await http.put('/sap/bc/adt/abapsource/prettyprinter/settings', body, 'application/vnd.sap.adt.ppsettings.v2+xml');
 }
 
 /** Structured message from an activation response */

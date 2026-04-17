@@ -115,7 +115,7 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPQuery');
   });
 
-  it('SAPLint only exposes lint action (atc/syntax moved to SAPDiagnose)', () => {
+  it('SAPLint exposes lint + formatter actions (atc/syntax moved to SAPDiagnose)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapLint = tools.find((t) => t.name === 'SAPLint')!;
     const schema = sapLint.inputSchema as Record<string, any>;
@@ -126,7 +126,12 @@ describe('Tool Definitions', () => {
     expect(actionEnum).not.toContain('syntax');
     expect(actionEnum).toContain('lint_and_fix');
     expect(actionEnum).toContain('list_rules');
-    expect(actionEnum).toHaveLength(3);
+    expect(actionEnum).toContain('format');
+    expect(actionEnum).toContain('get_formatter_settings');
+    expect(actionEnum).toContain('set_formatter_settings');
+    expect(actionEnum).toHaveLength(6);
+    expect(schema.properties.indentation).toBeDefined();
+    expect(schema.properties.style).toBeDefined();
   });
 
   it('SAPLint description mentions SAPDiagnose for server-side checks', () => {

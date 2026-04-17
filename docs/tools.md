@@ -557,9 +557,11 @@ Run local abaplint rules on ABAP source code. System-aware: auto-selects cloud o
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `lint`, `lint_and_fix`, or `list_rules` |
-| `source` | string | No | ABAP source code (for `lint` and `lint_and_fix`) |
+| `action` | string | Yes | `lint`, `lint_and_fix`, `list_rules`, `format`, `get_formatter_settings`, or `set_formatter_settings` |
+| `source` | string | No | ABAP source code (for `lint`, `lint_and_fix`, and `format`) |
 | `name` | string | No | Object name (used for filename detection) |
+| `indentation` | boolean | No | PrettyPrinter indentation toggle (for `set_formatter_settings`) |
+| `style` | string | No | PrettyPrinter keyword style: `keywordUpper`, `keywordLower`, `keywordAuto`, or `none` (for `set_formatter_settings`) |
 | `rules` | object | No | Rule overrides: `{ "rule_name": false }` to disable, `{ "rule_name": { "severity": "Warning" } }` to configure |
 
 **Actions:**
@@ -567,6 +569,9 @@ Run local abaplint rules on ABAP source code. System-aware: auto-selects cloud o
 - **`lint`** — Check ABAP source for issues. Returns errors and warnings with line/column positions.
 - **`lint_and_fix`** — Lint + auto-fix all fixable issues (keyword case, obsolete statements, etc.). Returns the fixed source code alongside remaining unfixable issues.
 - **`list_rules`** — List all available rules with current config (preset, enabled/disabled status, severity). No source needed.
+- **`format`** — Pretty-print ABAP source via SAP ADT PrettyPrinter using the SAP system's global formatter settings. Returns formatted source text.
+- **`get_formatter_settings`** — Read SAP global PrettyPrinter settings (indentation + keyword style).
+- **`set_formatter_settings`** — Update SAP global PrettyPrinter settings. Provide at least one of `indentation` or `style`. Blocked in read-only mode.
 
 **System-Aware Presets:**
 
@@ -577,6 +582,10 @@ The lint rules auto-configure based on the detected SAP system:
 **Pre-Write Validation:**
 
 When `--lint-before-write` is enabled (default: true), SAPWrite automatically runs a strict subset of lint rules before writing to SAP. Parser errors and cloud violations block the write. Style issues (keyword case, indentation) never block writes.
+
+**Execution mode note:**
+
+`lint`, `lint_and_fix`, and `list_rules` run locally in ARC-1. `format` and `*_formatter_settings` actions call the SAP system (ADT PrettyPrinter endpoints).
 
 **Custom Configuration:**
 
@@ -602,12 +611,18 @@ Rules from the config file are merged on top of the auto-detected preset (cloud/
 - **`lint`** returns: `[{ rule, message, line, column, endLine, endColumn, severity }]`
 - **`lint_and_fix`** returns: `{ fixedSource, appliedFixes, fixedRules, remainingIssues }` — use `fixedSource` as the corrected code
 - **`list_rules`** returns: `{ preset, abapVersion, enabledRules, disabledRules, rules }` — shows active config
+- **`format`** returns: plain text (formatted ABAP source)
+- **`get_formatter_settings`** returns: `{ indentation, style }`
+- **`set_formatter_settings`** returns: `{ indentation, style }` (effective merged settings)
 
 **Examples:**
 ```
 SAPLint(action="lint", source="DATA lv_test TYPE string.\nlv_test = 'hello'.")
 SAPLint(action="lint_and_fix", source="data lv_x type i.\nadd 1 to lv_x.", name="ZCL_TEST")
 SAPLint(action="list_rules")
+SAPLint(action="format", source="report ztest. data lv type string.")
+SAPLint(action="get_formatter_settings")
+SAPLint(action="set_formatter_settings", style="keywordLower")
 SAPLint(action="lint", source="...", rules={"line_length": {"severity": "Error", "length": 80}})
 ```
 

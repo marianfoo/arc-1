@@ -745,18 +745,34 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         'Actions:\n' +
         '- "lint": Check source for issues. Returns errors and warnings. Works for ABAP (PROG, CLAS, INTF, FUNC) and CDS views (DDLS) — catches syntax errors, naming conventions, field order, legacy view patterns.\n' +
         '- "lint_and_fix": Lint + auto-fix all fixable issues (keyword case, obsolete statements, etc.). Returns fixed source.\n' +
-        '- "list_rules": List all available rules with current config. No source needed.\n\n' +
-        'For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.',
+        '- "list_rules": List all available rules with current config. No source needed.\n' +
+        '- "format": Pretty-print ABAP source via SAP\'s ADT formatter (uses the SAP system\'s global formatter settings). Requires source. Returns the formatted source.\n' +
+        '- "get_formatter_settings": Read the SAP system\'s global PrettyPrinter settings (indentation, keyword style). No params.\n' +
+        '- "set_formatter_settings": Update the SAP system\'s global PrettyPrinter settings. Requires indentation (bool) and/or style (keywordUpper|keywordLower|keywordAuto|none). Blocked in read-only mode.\n\n' +
+        'For server-side checks (ATC, syntax check, unit tests), use SAPDiagnose instead.\n' +
+        'Note: lint/lint_and_fix/list_rules run locally; format/*_formatter_settings call the SAP system.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['lint', 'lint_and_fix', 'list_rules'],
+            enum: ['lint', 'lint_and_fix', 'list_rules', 'format', 'get_formatter_settings', 'set_formatter_settings'],
             description: 'Check type',
           },
-          source: { type: 'string', description: 'ABAP or CDS source code to lint (not needed for list_rules)' },
+          source: {
+            type: 'string',
+            description: 'ABAP or CDS source code to lint/format (not needed for list_rules/get_formatter_settings)',
+          },
           name: { type: 'string', description: 'Object name (used for filename detection)' },
+          indentation: {
+            type: 'boolean',
+            description: 'PrettyPrinter: indent source (for set_formatter_settings)',
+          },
+          style: {
+            type: 'string',
+            enum: ['keywordUpper', 'keywordLower', 'keywordAuto', 'none'],
+            description: 'PrettyPrinter: keyword casing (for set_formatter_settings)',
+          },
           rules: {
             type: 'object',
             description:
