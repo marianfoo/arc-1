@@ -261,6 +261,94 @@ describe('ADT Integration Tests', () => {
     });
   });
 
+  describe('Version history (VERSIONS / VERSION_SOURCE)', () => {
+    it('lists revisions for PROG ZARC1_TEST_REPORT', async (ctx) => {
+      try {
+        const result = await client.getRevisions('PROG', 'ZARC1_TEST_REPORT');
+        const hasRevisions = result.revisions.length > 0 ? result : undefined;
+        requireOrSkip(ctx, hasRevisions, 'Persistent fixture ZARC1_TEST_REPORT has no revisions on this system');
+        expect(result.object.name).toBe('ZARC1_TEST_REPORT');
+        for (const revision of result.revisions) {
+          expect(revision.uri.startsWith('/sap/bc/adt/')).toBe(true);
+        }
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Persistent fixture ZARC1_TEST_REPORT is missing on this system');
+      }
+    });
+
+    it('lists revisions for CLAS ZCL_ARC1_TEST include=main', async (ctx) => {
+      try {
+        const result = await client.getRevisions('CLAS', 'ZCL_ARC1_TEST', { include: 'main' });
+        const first = result.revisions[0];
+        requireOrSkip(ctx, first, 'No CLAS revisions available for ZCL_ARC1_TEST include=main');
+        expect(first.uri).toContain('/includes/main/versions/');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Persistent fixture ZCL_ARC1_TEST is missing on this system');
+      }
+    });
+
+    it('lists revisions for CLAS ZCL_ARC1_TEST include=definitions', async (ctx) => {
+      try {
+        const result = await client.getRevisions('CLAS', 'ZCL_ARC1_TEST', { include: 'definitions' });
+        const first = result.revisions[0];
+        requireOrSkip(ctx, first, 'No CLAS definition revisions available for ZCL_ARC1_TEST');
+        expect(first.uri).toContain('/includes/definitions/versions/');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: CLAS include=definitions revision endpoint unavailable or fixture has no definitions include`,
+        );
+      }
+    });
+
+    it('lists revisions for INTF ZIF_ARC1_TEST (source/main endpoint)', async (ctx) => {
+      try {
+        const result = await client.getRevisions('INTF', 'ZIF_ARC1_TEST');
+        const first = result.revisions[0];
+        requireOrSkip(ctx, first, 'No INTF revisions available for ZIF_ARC1_TEST');
+        expect(first.uri).toContain('/oo/interfaces/ZIF_ARC1_TEST/source/main/versions/');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Persistent fixture ZIF_ARC1_TEST is missing on this system');
+      }
+    });
+
+    it('fetches version source for the first PROG revision', async (ctx) => {
+      try {
+        const revisions = await client.getRevisions('PROG', 'ZARC1_TEST_REPORT');
+        const first = revisions.revisions[0];
+        requireOrSkip(ctx, first, 'No PROG revisions available for ZARC1_TEST_REPORT');
+        const source = await client.getRevisionSource(first.uri);
+        expect(source).toMatch(/report/i);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Version source endpoint unavailable or fixture missing');
+      }
+    });
+
+    it('rejects non-ADT URIs for VERSION_SOURCE', async () => {
+      await expect(client.getRevisionSource('https://evil.example/foo')).rejects.toThrow(/\/sap\/bc\/adt\//);
+    });
+
+    it('handles DDLS revision endpoint gaps gracefully', async (ctx) => {
+      try {
+        const result = await client.getRevisions('DDLS', 'ZI_TRAVEL');
+        expect(Array.isArray(result.revisions)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: DDLS revisions endpoint is not available on this backend`,
+        );
+      }
+    });
+  });
+
   // ─── DDIC Operations (Structures, Domains, Data Elements) ─────
 
   describe('DDIC operations', () => {

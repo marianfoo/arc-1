@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atom:title>Version List of ZARC1_TEST_REPORT (REPS)</atom:title>
+  <atom:updated>2026-04-10T18:58:51Z</atom:updated>
+  <atom:entry>
+    <atom:title>Version 00000</atom:title>
+    <atom:author><atom:name>DEVELOPER</atom:name></atom:author>
+    <atom:content
+      type="text/plain"
+      src="/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/20260410185851/00000/content"
+    />
+    <atom:link
+      rel="http://www.sap.com/adt/relations/transports"
+      href="/sap/bc/adt/cts/transportrequests/A4HK900123"
+      title="A4HK900123"
+    />
+    <atom:id>00000</atom:id>
+    <atom:updated>2026-04-10T18:58:51Z</atom:updated>
+  </atom:entry>
+  <atom:entry>
+    <atom:title>Version 00001</atom:title>
+    <atom:author><atom:name>MARIAN</atom:name></atom:author>
+    <atom:content
+      type="text/plain"
+      src="/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/20260409120000/00001/content"
+    />
+    <atom:id>00001</atom:id>
+    <atom:updated>2026-04-09T12:00:00Z</atom:updated>
+  </atom:entry>
+</atom:feed>

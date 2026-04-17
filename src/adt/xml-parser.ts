@@ -30,6 +30,8 @@ import type {
   FeatureToggleInfo,
   InactiveObject,
   MessageClassInfo,
+  RevisionInfo,
+  RevisionListResult,
   SourceSearchResult,
   TransactionInfo,
 } from './types.js';
@@ -1046,4 +1048,49 @@ export function parseInactiveObjects(xml: string): InactiveObject[] {
     }
   }
   return results;
+}
+
+/** Parse source revision history feed from /source/main/versions */
+export function parseRevisionFeed(xml: string): RevisionListResult {
+  const empty: RevisionListResult = {
+    object: { name: '', type: '' },
+    revisions: [],
+  };
+  if (!xml.trim()) return empty;
+
+  try {
+    const parsed = parseXml(xml);
+    const feed = (parsed.feed ?? {}) as Record<string, unknown>;
+    const title = String(feed.title ?? '');
+    const match = title.match(/^Version List of (\S+) \(([A-Z]+)\)/);
+    const object = {
+      name: String(match?.[1] ?? ''),
+      type: String(match?.[2] ?? ''),
+    };
+
+    const revisions: RevisionInfo[] = [];
+    const entries = findDeepNodes(parsed, 'entry');
+    for (const entry of entries) {
+      const authorNode = toRecordArray(entry.author)[0] ?? {};
+      const contentNode = toRecordArray(entry.content)[0] ?? {};
+      const links = toRecordArray(entry.link);
+      const transportLink = links.find(
+        (link) => String(link['@_rel'] ?? '') === 'http://www.sap.com/adt/relations/transports',
+      );
+      const transport = String(transportLink?.['@_title'] ?? transportLink?.['@_version'] ?? '');
+      const versionTitle = String(entry.title ?? '');
+
+      revisions.push({
+        id: String(entry.id ?? ''),
+        author: String(authorNode.name ?? ''),
+        timestamp: String(entry.updated ?? ''),
+        ...(versionTitle ? { versionTitle } : {}),
+        ...(transport ? { transport } : {}),
+        uri: String(contentNode['@_src'] ?? ''),
+      });
+    }
+    return { object, revisions };
+  } catch {
+    return empty;
+  }
 }

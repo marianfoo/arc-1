@@ -519,3 +519,24 @@ export interface EnhancementImplementationInfo {
     default: boolean;
   }>;
 }
+
+// ─── Source Revision / Version History Types ─────────────────────
+
+/** A single revision entry from the ADT `{sourceUrl}/versions` Atom feed. */
+export interface RevisionInfo {
+  id: string;
+  author: string;
+  timestamp: string;
+  versionTitle?: string;
+  transport?: string;
+  uri: string;
+}
+
+/** Parsed result of a revisions feed read — object metadata plus one entry per revision. */
+export interface RevisionListResult {
+  object: {
+    name: string;
+    type: string;
+  };
+  revisions: RevisionInfo[];
+}

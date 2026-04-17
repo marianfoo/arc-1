@@ -816,6 +816,54 @@ async function handleSAPRead(
       const enhancement = await client.getEnhancementImplementation(name);
       return textResult(JSON.stringify(enhancement, null, 2));
     }
+    case 'VERSIONS': {
+      const include = typeof args.include === 'string' ? args.include : undefined;
+      let group = typeof args.group === 'string' ? args.group : undefined;
+      const objectType = normalizeObjectType(String(args.objectType ?? '')) || inferObjectType(name) || 'PROG';
+
+      if (objectType === 'FUNC' && !group) {
+        const resolved = cachingLayer
+          ? await cachingLayer.resolveFuncGroup(client, name)
+          : await client.resolveFunctionGroup(name);
+        if (!resolved) {
+          return errorResult(
+            `Cannot resolve function group for "${name}". Provide the group parameter explicitly, or use SAPSearch("${name}") to find the function group.`,
+          );
+        }
+        group = resolved;
+      }
+
+      try {
+        const revisions = await client.getRevisions(objectType, name, { include, group });
+        return textResult(JSON.stringify(revisions, null, 2));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            `No version history available for ${objectType} "${name}" on this SAP system. ` +
+              `This usually means the object does not exist, or the ADT versions endpoint is not supported for ${objectType} on this backend release.`,
+          );
+        }
+        throw err;
+      }
+    }
+    case 'VERSION_SOURCE': {
+      const versionUri = String(args.versionUri ?? '');
+      if (!versionUri) {
+        return errorResult(
+          'VERSION_SOURCE requires a versionUri parameter. Get it from SAPRead(type="VERSIONS", name="...") response (.revisions[].uri).',
+        );
+      }
+      try {
+        return textResult(await client.getRevisionSource(versionUri));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return errorResult(
+            `Revision at URI "${versionUri}" was not found. The revision may have been removed, or the URI is malformed. Fetch a fresh list via SAPRead(type="VERSIONS", name="...").`,
+          );
+        }
+        throw err;
+      }
+    }
     case 'TRAN': {
       const tran = await client.getTransaction(name);
       // Enrich with program name via SQL — only if free SQL is allowed by safety config
@@ -970,7 +1018,7 @@ async function handleSAPRead(
     }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, AUTH, FTG2, ENHO, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, AUTH, FTG2, ENHO, VERSIONS, VERSION_SOURCE, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
           'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, DCLS/DL → DCLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
