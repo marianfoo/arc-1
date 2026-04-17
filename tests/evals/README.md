@@ -17,16 +17,40 @@ text-scanned `DDDDLSRC` via `SAPQuery` instead of calling
 # Run everything — provider/model/URL come from .env
 npm run test:eval
 
-# Just one feature bucket
+# Just one feature bucket (CLI flag)
+npm run test:eval -- --file context-impact
+
+# …or via env var, whichever you prefer
 EVAL_FILE=context-impact npm run test:eval
 
-# Same bucket against the real SAP test system (requires a running MCP server)
-EVAL_FILE=context-impact npm run test:eval:live
+# Against the real SAP test system (requires a running MCP server)
+npm run test:eval:live -- --file context-impact
 ```
 
-All configuration lives in `.env` (copy `.env.example`). There is no magic
-fallback — if Ollama isn't reachable or `ANTHROPIC_API_KEY` isn't set, the
-harness fails loudly instead of silently skipping.
+All configuration lives in `.env` (copy `.env.example`). CLI flags override
+env vars for quick one-offs. If Ollama isn't reachable or
+`ANTHROPIC_API_KEY` isn't set, the harness fails loudly instead of silently
+skipping.
+
+### CLI flags
+
+Every `EVAL_*` env var has a flag equivalent. Pass them after `--`:
+
+| Flag               | Env var               | Example                                    |
+| ------------------ | --------------------- | ------------------------------------------ |
+| `--file`           | `EVAL_FILE`           | `--file context-impact,read-basic`         |
+| `--scenario`       | `EVAL_SCENARIO`       | `--scenario cds-impact-blast-radius-natural` |
+| `--tag`            | `EVAL_TAG`            | `--tag feat-33,cds-impact`                 |
+| `--category`       | `EVAL_CATEGORY`       | `--category context`                       |
+| `--backend`        | `EVAL_BACKEND`        | `--backend live`                           |
+| `--provider`       | `EVAL_PROVIDER`       | `--provider anthropic`                     |
+| `--model`          | `EVAL_MODEL`          | `--model claude-haiku-4-5-20251001`        |
+| `--mcp-url`        | `EVAL_MCP_URL`        | `--mcp-url http://localhost:3000/mcp`      |
+| `--ollama-url`     | `OLLAMA_BASE_URL`     | `--ollama-url http://remote-gpu:11434`     |
+| `--threshold`      | `EVAL_PASS_THRESHOLD` | `--threshold 0.7`                          |
+
+Both `--flag value` and `--flag=value` forms work. Unknown flags are
+forwarded to vitest, so `--bail`, `--reporter verbose`, etc. still work.
 
 ---
 
