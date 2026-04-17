@@ -18,6 +18,7 @@ import {
   parseInstalledComponents,
   parseMessageClass,
   parsePackageContents,
+  parseRevisionFeed,
   parseSearchResults,
   parseServiceBinding,
   parseSourceSearchResults,
@@ -1007,6 +1008,44 @@ describe('XML Parser', () => {
     it('returns empty array when no objectReference nodes', () => {
       const xml = '<?xml version="1.0"?><root><empty/></root>';
       expect(parseInactiveObjects(xml)).toEqual([]);
+    });
+  });
+
+  describe('parseRevisionFeed', () => {
+    it('parses PROG revision feed with two entries', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-prog.xml'));
+      expect(result.object).toEqual({ name: 'ZARC1_TEST_REPORT', type: 'REPS' });
+      expect(result.revisions).toHaveLength(2);
+      expect(result.revisions[0]?.id).toBe('00000');
+      expect(result.revisions[0]?.author).toBe('DEVELOPER');
+      expect(result.revisions[0]?.uri).toContain('/versions/20260410185851/00000/content');
+    });
+
+    it('maps optional transport from the transport relation link', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-prog.xml'));
+      expect(result.revisions[0]?.transport).toBe('A4HK900123');
+      expect(result.revisions[1]?.transport).toBeUndefined();
+    });
+
+    it('parses CLAS main include feed and keeps opaque version URI', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-clas-main.xml'));
+      expect(result.object.name).toBe('ZCL_X');
+      expect(result.object.type).toBe('CINC');
+      expect(result.revisions).toHaveLength(1);
+      expect(result.revisions[0]?.uri).toContain('/oo/classes/ZCL_X/includes/main/versions/');
+    });
+
+    it('returns empty revisions for empty feed while keeping title metadata', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-empty.xml'));
+      expect(result.object).toEqual({ name: 'FOO', type: 'REPS' });
+      expect(result.revisions).toEqual([]);
+    });
+
+    it('returns empty result for malformed XML', () => {
+      expect(parseRevisionFeed('<atom:feed><atom:title>broken')).toEqual({
+        object: { name: '', type: '' },
+        revisions: [],
+      });
     });
   });
 

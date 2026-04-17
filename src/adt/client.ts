@@ -35,6 +35,7 @@ import type {
   FeatureToggleInfo,
   InactiveObject,
   MessageClassInfo,
+  RevisionListResult,
   SourceSearchResult,
   StructuredClassResponse,
   TransactionInfo,
@@ -54,6 +55,7 @@ import {
   parseInstalledComponents,
   parseMessageClass,
   parsePackageContents,
+  parseRevisionFeed,
   parseSearchResults,
   parseServiceBinding,
   parseSourceSearchResults,
@@ -349,6 +351,74 @@ export class AdtClient {
       Accept: 'application/vnd.sap.adt.blues.v1+xml',
     });
     return parseAuthorizationField(resp.body);
+  }
+
+  // ─── Source Revision / Version History ──────────────────────────
+
+  private revisionsUrlFor(type: string, name: string, opts: { include?: string; group?: string }): string {
+    const normalizedType = String(type).trim().toUpperCase();
+    const encodedName = encodeURIComponent(name);
+    const include =
+      String(opts.include ?? 'main')
+        .trim()
+        .toLowerCase() || 'main';
+
+    switch (normalizedType) {
+      case 'PROG':
+        return `/sap/bc/adt/programs/programs/${encodedName}/source/main/versions`;
+      case 'CLAS': {
+        const validIncludes = new Set(['main', 'definitions', 'implementations', 'macros', 'testclasses']);
+        if (!validIncludes.has(include)) {
+          throw new Error(
+            `Invalid include "${opts.include ?? ''}" for CLAS revisions. Valid values: main, definitions, implementations, macros, testclasses.`,
+          );
+        }
+        return `/sap/bc/adt/oo/classes/${encodedName}/includes/${include}/versions`;
+      }
+      case 'INTF':
+        return `/sap/bc/adt/oo/interfaces/${encodedName}/source/main/versions`;
+      case 'FUNC': {
+        const group = String(opts.group ?? '').trim();
+        if (!group) {
+          throw new Error(`Function group is required for FUNC revisions of "${name}".`);
+        }
+        return `/sap/bc/adt/functions/groups/${encodeURIComponent(group)}/fmodules/${encodedName}/source/main/versions`;
+      }
+      case 'INCL':
+        return `/sap/bc/adt/programs/includes/${encodedName}/source/main/versions`;
+      case 'DDLS':
+        return `/sap/bc/adt/ddic/ddl/sources/${encodedName}/source/main/versions`;
+      case 'DCLS':
+        return `/sap/bc/adt/acm/dcl/sources/${encodedName}/source/main/versions`;
+      case 'BDEF':
+        return `/sap/bc/adt/bo/behaviordefinitions/${encodedName}/source/main/versions`;
+      case 'SRVD':
+        return `/sap/bc/adt/ddic/srvd/sources/${encodedName}/source/main/versions`;
+      default:
+        throw new Error(`Unsupported object type "${type}" for revisions.`);
+    }
+  }
+
+  /** List available source revisions for an ABAP object. */
+  async getRevisions(
+    type: string,
+    name: string,
+    opts: { include?: string; group?: string } = {},
+  ): Promise<RevisionListResult> {
+    checkOperation(this.safety, OperationType.Read, 'GetRevisions');
+    const url = this.revisionsUrlFor(type, name, opts);
+    const resp = await this.http.get(url, { Accept: 'application/atom+xml;type=feed' });
+    return parseRevisionFeed(resp.body);
+  }
+
+  /** Read source content for a specific revision URI from the revisions feed. */
+  async getRevisionSource(versionUri: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetRevisionSource');
+    if (!versionUri.startsWith('/sap/bc/adt/')) {
+      throw new Error('versionUri must be an ADT path starting with /sap/bc/adt/');
+    }
+    const resp = await this.http.get(versionUri, { Accept: 'text/plain' });
+    return resp.body;
   }
 
   /** Get feature toggle states from switch framework */

@@ -46,7 +46,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~—~~ | ~~COMPAT-03~~ | ~~V4 SRVB publish endpoint bug~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-15~~ |
 | 1 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
 | 2 | FEAT-10 | PrettyPrint (Code Formatting) | P1 | XS | Features |
-| 3 | FEAT-20 | Source Version / Revision History | P1 | S | Features |
+| ~~—~~ | ~~FEAT-20~~ | ~~Source Version / Revision History~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
 | 4 | FEAT-49 | Object Transport History (Reverse Lookup) | P1 | S | Features |
 | 5 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
 | 6 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
@@ -85,6 +85,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-20 | Source Version / Revision History | 2026-04-17 | Features |
 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
 | FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
@@ -180,7 +181,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 14. ~~**FEAT-45** DEVC (Package) Create (S)~~ — **completed 2026-04-14**. Endpoint: `/sap/bc/adt/packages`.
 15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings. dassian-adt has parallel fetch (objectstructure + Promise.all pattern confirmed).
 16. **FEAT-10** PrettyPrint (XS) — **↑ Upgraded from P2:** dassian-adt and VSP both have this. XS effort, high visibility.
-17. **FEAT-20** Source Version / Revision History (S) — **↑ Upgraded from P2:** dassian-adt added `abap_get_revisions`. Enables diff and rollback workflows. ADT endpoints confirmed: `{sourceUrl}/versions` (Atom feed) + `{versionUri}` for source at revision.
+17. ~~**FEAT-20** Source Version / Revision History (S)~~ — **completed 2026-04-17.** Added on-prem `SAPRead(type="VERSIONS")` (Atom revision feed parsed to JSON) and `SAPRead(type="VERSION_SOURCE")` (revision source fetch by opaque `versionUri`). BTP exposure intentionally deferred pending endpoint verification.
 18. **FEAT-49** Object Transport History / Reverse Lookup (S) — **NEW:** find all transports containing a given object. ADT endpoint: `GET /sap/bc/adt/cts/transportrequests/reference?pgmid=R3TR&obj_wbtype={type}&obj_name={name}`. Enables fr0ster#30 code review workflow. Prerequisite for transport-scoped diff with FEAT-20 + FEAT-24.
 19. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 20. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
@@ -204,7 +205,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
 25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
-26. ~~**FEAT-20** Source Version / Revision History (S) — **promoted to P1/Phase B** (dassian-adt added revisions tool)~~
+26. ~~**FEAT-20** Source Version / Revision History (S) — promoted to P1/Phase B and completed 2026-04-17~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
 28. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
 25. **FEAT-24** CompareSource / Diff (S) — **↑ Upgraded:** with FEAT-20 (revisions) + FEAT-49 (object transport history), transport-scoped code review now viable (fr0ster#30). Client-side diff of two revision sources — ADT has no server-side diff endpoint.
@@ -616,11 +617,16 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — version comparison, rollback context, transport-scoped code review |
-| **Status** | Not started |
+| **Status** | Completed (2026-04-17) |
 | **Source** | [abap-adt-api eval](../compare/abap-adt-api/evaluations/d3c6940-source-versions.md), [VSP eval](../compare/vibing-steampunk/evaluations/dd06202-version-history.md), [fr0ster#30](https://github.com/fr0ster/mcp-abap-adt/issues/30) |
 | **Related** | FEAT-49 (object transport history), FEAT-24 (diff) — together these three enable transport-scoped code review |
 
 **What:** List revision history of ABAP objects and retrieve source at a specific revision. Combined with FEAT-49 (object→transport lookup) and FEAT-24 (diff), enables the full code review workflow requested in fr0ster#30: "check only the code modified in the last Transport Request."
+
+**Completed notes (2026-04-17):**
+- Added on-prem SAPRead types: `VERSIONS` (revision feed as JSON) and `VERSION_SOURCE` (raw source by opaque revision URI).
+- `VERSION_SOURCE` now validates ADT-local paths (`/sap/bc/adt/...`) before request dispatch.
+- BTP exposure intentionally deferred: `VERSIONS`/`VERSION_SOURCE` are currently on-prem only until endpoint parity is verified on BTP ABAP Environment.
 
 **ADT endpoints (confirmed via abap-adt-api + VSP):**
 
@@ -630,7 +636,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
    |---|---|
    | PROG | `GET /sap/bc/adt/programs/programs/{name}/source/main/versions` |
    | CLAS | `GET /sap/bc/adt/oo/classes/{name}/includes/{include}/versions` |
-   | INTF | `GET /sap/bc/adt/oo/interfaces/{name}/includes/main/versions` |
+   | INTF | `GET /sap/bc/adt/oo/interfaces/{name}/source/main/versions` |
    | FUNC | `GET /sap/bc/adt/functions/groups/{parent}/fmodules/{name}/source/main/versions` |
    | INCL | `GET /sap/bc/adt/programs/includes/{name}/source/main/versions` |
    | DDLS | `GET /sap/bc/adt/ddic/ddl/sources/{name}/source/main/versions` |
@@ -644,11 +650,12 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
    - `GET {version_uri}` — the `uri` field from the revision feed entry, with `Accept: text/plain`
    - `GET {sourceUrl}?version=active|inactive|{versionId}` — query parameter on the standard source URL
 
-**Implementation plan:**
-- Add `getRevisions(objectUrl: string, include?: string)` to `src/adt/client.ts` — fetch object structure, find `rel=versions` link, GET Atom feed, parse entries
-- Add `getRevisionSource(versionUri: string)` to `src/adt/client.ts` — simple GET on the version URI
-- Expose via `SAPRead type=VERSIONS` (list revisions) and `SAPRead type=VERSION_SOURCE` (source at specific revision) in `src/handlers/intent.ts`
-- Safety: `checkOperation(Read)` — read-only operation
+**Implementation (delivered):**
+- `src/adt/client.ts`: added `getRevisions(type, name, opts)` + `getRevisionSource(versionUri)` with read safety checks.
+- `src/adt/xml-parser.ts`: added Atom feed parser `parseRevisionFeed`.
+- `src/handlers/intent.ts`: added `SAPRead` routing for `VERSIONS` and `VERSION_SOURCE` with friendly 404 handling.
+- `src/handlers/schemas.ts`/`src/handlers/tools.ts`: on-prem schema/tool enums extended; BTP intentionally unchanged.
+- Tests: new unit fixtures and parser/client/handler tests, integration coverage, and e2e coverage (`tests/e2e/revisions.e2e.test.ts`).
 
 **Why:** Version history is essential for code review and understanding change context. Combined with FEAT-49 and FEAT-24, enables a complete transport-scoped code review workflow — the #1 request from fr0ster#30. Three competitors already have this (dassian-adt `abap_revisions`, VSP 3 version tools, abap-adt-api `sourceVersions`/`loadSourceVersion`).
 

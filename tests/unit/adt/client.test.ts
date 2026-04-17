@@ -242,6 +242,71 @@ describe('AdtClient', () => {
     });
   });
 
+  describe('getRevisions', () => {
+    it('returns parsed revision list for a program', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, loadFixture('revision-feed-prog.xml'), { 'x-csrf-token': 'T' }));
+      const client = createClient();
+      const result = await client.getRevisions('PROG', 'ZARC1_TEST_REPORT');
+      expect(result.object.name).toBe('ZARC1_TEST_REPORT');
+      expect(result.revisions).toHaveLength(2);
+      expect(result.revisions[0]?.uri.startsWith('/sap/bc/adt/')).toBe(true);
+    });
+
+    it('uses CLAS include endpoint for explicit include', async () => {
+      const client = createClient();
+      await client.getRevisions('CLAS', 'ZCL_TEST', { include: 'definitions' });
+      const urls = mockFetch.mock.calls.map((c: any[]) => String(c[0]));
+      expect(urls.some((u) => u.includes('/oo/classes/ZCL_TEST/includes/definitions/versions'))).toBe(true);
+    });
+
+    it('defaults CLAS include to main when omitted', async () => {
+      const client = createClient();
+      await client.getRevisions('CLAS', 'ZCL_TEST');
+      const urls = mockFetch.mock.calls.map((c: any[]) => String(c[0]));
+      expect(urls.some((u) => u.includes('/oo/classes/ZCL_TEST/includes/main/versions'))).toBe(true);
+    });
+
+    it('uses source/main revisions endpoint for INTF', async () => {
+      const client = createClient();
+      await client.getRevisions('INTF', 'ZIF_TEST');
+      const urls = mockFetch.mock.calls.map((c: any[]) => String(c[0]));
+      expect(urls.some((u) => u.includes('/oo/interfaces/ZIF_TEST/source/main/versions'))).toBe(true);
+    });
+
+    it('throws descriptive error for FUNC revisions without group', async () => {
+      const client = createClient();
+      await expect(client.getRevisions('FUNC', 'Z_MY_FUNC')).rejects.toThrow(/Function group is required/i);
+    });
+
+    it('throws for unsupported type and includes type name', async () => {
+      const client = createClient();
+      await expect(client.getRevisions('TRAN', 'SE38')).rejects.toThrow(/Unsupported object type "TRAN"/);
+    });
+  });
+
+  describe('getRevisionSource', () => {
+    it('rejects non-ADT URIs', async () => {
+      const client = createClient();
+      await expect(client.getRevisionSource('https://evil.example/foo')).rejects.toThrow(/\/sap\/bc\/adt\//);
+    });
+
+    it('returns plain source text for valid revision URI', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(200, "REPORT zarc1_test_report.\nWRITE: / 'hello'.", { 'x-csrf-token': 'T' }),
+      );
+      const client = createClient();
+      const source = await client.getRevisionSource(
+        '/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/20260410185851/00000/content',
+      );
+      expect(source).toContain('REPORT zarc1_test_report');
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/versions/20260410185851/00000/content');
+      expect(fetchHeaders(0).Accept).toBe('text/plain');
+    });
+  });
+
   describe('system information', () => {
     it('getSystemInfo returns structured JSON with user', async () => {
       const client = createClient();

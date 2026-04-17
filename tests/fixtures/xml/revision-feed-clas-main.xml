@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atom:title>Version List of ZCL_X (CINC)</atom:title>
+  <atom:updated>2026-04-11T07:30:00Z</atom:updated>
+  <atom:entry>
+    <atom:title>Version 00000</atom:title>
+    <atom:author><atom:name>DEVELOPER</atom:name></atom:author>
+    <atom:content
+      type="text/plain"
+      src="/sap/bc/adt/oo/classes/ZCL_X/includes/main/versions/20260411073000/00000/content"
+    />
+    <atom:id>00000</atom:id>
+    <atom:updated>2026-04-11T07:30:00Z</atom:updated>
+  </atom:entry>
+</atom:feed>

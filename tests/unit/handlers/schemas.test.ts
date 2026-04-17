@@ -75,6 +75,35 @@ describe('SAPReadSchema', () => {
     expect(SAPReadSchema.safeParse({ type: 'ENHO', name: 'ZMY_BADI_IMPL' }).success).toBe(true);
   });
 
+  it('accepts VERSIONS on on-prem', () => {
+    const result = SAPReadSchema.safeParse({ type: 'VERSIONS', name: 'ZARC1_TEST_REPORT' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts VERSION_SOURCE only when versionUri is provided and ADT-scoped', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'VERSION_SOURCE',
+      versionUri: '/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/20260410185851/00000/content',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects VERSION_SOURCE when versionUri is missing', () => {
+    const result = SAPReadSchema.safeParse({ type: 'VERSION_SOURCE' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'versionUri')).toBe(true);
+    }
+  });
+
+  it('rejects VERSION_SOURCE when versionUri is not an ADT path', () => {
+    const result = SAPReadSchema.safeParse({ type: 'VERSION_SOURCE', versionUri: 'https://evil.example/source' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('/sap/bc/adt/');
+    }
+  });
+
   it('accepts format field with valid values', () => {
     expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'text' }).success).toBe(true);
     expect(SAPReadSchema.safeParse({ type: 'CLAS', name: 'ZCL_TEST', format: 'structured' }).success).toBe(true);

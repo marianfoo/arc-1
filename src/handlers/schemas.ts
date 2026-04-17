@@ -49,6 +49,8 @@ const SAPREAD_TYPES_ONPREM = [
   'AUTH',
   'FTG2',
   'ENHO',
+  'VERSIONS',
+  'VERSION_SOURCE',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [
@@ -81,27 +83,49 @@ const SAPREAD_TYPES_BTP = [
 const SAPREAD_CLAS_INCLUDES = ['main', 'testclasses', 'definitions', 'implementations', 'macros'] as const;
 const SAPREAD_DDLS_INCLUDES = ['elements'] as const;
 
-function validateSapReadInclude(
-  input: { type: string; include?: string },
+function validateSapReadInput(
+  input: { type: string; include?: string; versionUri?: string },
   ctx: { addIssue: (issue: { code: 'custom'; path: string[]; message: string }) => void },
 ): void {
-  if (!input.include) return;
+  if (input.include) {
+    const include = input.include.toLowerCase();
+    if (
+      (input.type === 'CLAS' || input.type === 'VERSIONS') &&
+      !SAPREAD_CLAS_INCLUDES.includes(include as (typeof SAPREAD_CLAS_INCLUDES)[number])
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['include'],
+        message: `Invalid include value "${input.include}" for type ${input.type}. Valid values: ${SAPREAD_CLAS_INCLUDES.join(', ')}`,
+      });
+    }
 
-  const include = input.include.toLowerCase();
-  if (input.type === 'CLAS' && !SAPREAD_CLAS_INCLUDES.includes(include as (typeof SAPREAD_CLAS_INCLUDES)[number])) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['include'],
-      message: `Invalid include value "${input.include}" for type CLAS. Valid values: ${SAPREAD_CLAS_INCLUDES.join(', ')}`,
-    });
+    if (input.type === 'DDLS' && !SAPREAD_DDLS_INCLUDES.includes(include as (typeof SAPREAD_DDLS_INCLUDES)[number])) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['include'],
+        message: `Invalid include value "${input.include}" for type DDLS. Valid values: ${SAPREAD_DDLS_INCLUDES.join(', ')}`,
+      });
+    }
   }
 
-  if (input.type === 'DDLS' && !SAPREAD_DDLS_INCLUDES.includes(include as (typeof SAPREAD_DDLS_INCLUDES)[number])) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['include'],
-      message: `Invalid include value "${input.include}" for type DDLS. Valid values: ${SAPREAD_DDLS_INCLUDES.join(', ')}`,
-    });
+  if (input.type === 'VERSION_SOURCE') {
+    const versionUri = String(input.versionUri ?? '');
+    if (!versionUri) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['versionUri'],
+        message: 'VERSION_SOURCE requires versionUri.',
+      });
+      return;
+    }
+    if (!versionUri.startsWith('/sap/bc/adt/')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['versionUri'],
+        message: 'VERSION_SOURCE versionUri must start with /sap/bc/adt/.',
+      });
+    }
   }
 }
 
@@ -117,8 +141,9 @@ export const SAPReadSchema = z
     maxRows: z.coerce.number().optional(),
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
+    versionUri: z.string().optional(),
   })
-  .superRefine((input, ctx) => validateSapReadInclude(input, ctx));
+  .superRefine((input, ctx) => validateSapReadInput(input, ctx));
 
 export const SAPReadSchemaBtp = z
   .object({
@@ -131,8 +156,9 @@ export const SAPReadSchemaBtp = z
     maxRows: z.coerce.number().optional(),
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
+    versionUri: z.string().optional(),
   })
-  .superRefine((input, ctx) => validateSapReadInclude(input, ctx));
+  .superRefine((input, ctx) => validateSapReadInput(input, ctx));
 
 // ─── SAPSearch ──────────────────────────────────────────────────────
 

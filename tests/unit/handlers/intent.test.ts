@@ -629,6 +629,99 @@ describe('Intent Handler', () => {
       expect(parsed.badiImplementations[0].enhancementSpot).toBe('ENH_SPOT_EXAMPLE');
     });
 
+    it('reads VERSIONS for a program and returns revision JSON', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:title>Version List of ZARC1_TEST_REPORT (REPS)</atom:title>
+  <atom:entry>
+    <atom:author><atom:name>DEVELOPER</atom:name></atom:author>
+    <atom:content src="/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/1/00000/content"/>
+    <atom:id>00000</atom:id>
+    <atom:updated>2026-04-10T18:58:51Z</atom:updated>
+  </atom:entry>
+</atom:feed>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VERSIONS',
+        name: 'ZARC1_TEST_REPORT',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.object.name).toBe('ZARC1_TEST_REPORT');
+      expect(parsed.revisions).toHaveLength(1);
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/programs/programs/ZARC1_TEST_REPORT/source/main/versions');
+    });
+
+    it('passes CLAS include through for VERSIONS', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?><atom:feed xmlns:atom="http://www.w3.org/2005/Atom"><atom:title>Version List of ZCL_ARC1_TEST (CINC)</atom:title></atom:feed>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VERSIONS',
+        name: 'ZCL_ARC1_TEST',
+        include: 'definitions',
+      });
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/oo/classes/ZCL_ARC1_TEST/includes/definitions/versions');
+    });
+
+    it('auto-resolves FUNC group for VERSIONS when group is omitted', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<objectReferences><objectReference type="FUGR/FF" name="Z_MY_FUNC" uri="/sap/bc/adt/functions/groups/zgroup/fmodules/z_my_func" packageName="ZTEST" description="Test FM"/></objectReferences>`,
+        ),
+      );
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?><atom:feed xmlns:atom="http://www.w3.org/2005/Atom"><atom:title>Version List of Z_MY_FUNC (FUNC)</atom:title></atom:feed>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VERSIONS',
+        objectType: 'FUNC',
+        name: 'Z_MY_FUNC',
+      });
+      expect(result.isError).toBeUndefined();
+      const urls = mockFetch.mock.calls.map((call: any[]) => String(call[0]));
+      expect(urls.some((u) => u.includes('operation=quickSearch&query=Z_MY_FUNC'))).toBe(true);
+      expect(urls.some((u) => u.includes('/functions/groups/ZGROUP/fmodules/Z_MY_FUNC/source/main/versions'))).toBe(
+        true,
+      );
+    });
+
+    it('returns an error result when VERSION_SOURCE is called without versionUri', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VERSION_SOURCE',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('VERSION_SOURCE requires versionUri');
+    });
+
+    it('returns raw revision source for VERSION_SOURCE', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, "REPORT zarc1_test_report.\nWRITE: / 'revision'."));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'VERSION_SOURCE',
+        versionUri: '/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/1/00000/content',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('REPORT zarc1_test_report');
+    });
+
     it('reads a transaction (TRAN)', async () => {
       mockFetch.mockReset();
       // First call: transaction metadata
