@@ -66,6 +66,8 @@ export interface AdtHttpConfig {
    * Used for direct BTP ABAP connections via service key.
    */
   bearerTokenProvider?: () => Promise<string>;
+  /** Opt-in: disable SAML redirect via X-SAP-SAML2 header + saml2 query param */
+  disableSaml?: boolean;
   /** Optional concurrency limiter shared across requests */
   semaphore?: Semaphore;
 }
@@ -225,6 +227,10 @@ export class AdtHttpClient {
     }
 
     Object.assign(headers, extraHeaders);
+
+    if (this.config.disableSaml) {
+      headers['X-SAP-SAML2'] = 'disabled';
+    }
 
     if (isModifyingMethod(method)) {
       headers['X-CSRF-Token'] = this.csrfToken;
@@ -645,6 +651,16 @@ export class AdtHttpClient {
 
   /** Handle response: throw on error status, return normalized response */
   private handleResponse(status: number, headers: Headers, body: string, path: string): AdtResponse {
+    const contentType = headers.get('content-type')?.toLowerCase();
+    if (status === 200 && path.startsWith('/sap/bc/adt/') && contentType?.startsWith('text/html')) {
+      throw new AdtApiError(
+        'ADT call returned HTML login page — authentication required. If using cookies, they may have expired. If using Basic auth, credentials may be invalid or not authorized for ADT (S_ADT_RES missing). If on an SSO-only system, try SAP_DISABLE_SAML=true or see docs/enterprise-auth.md. Re-run arc-1 after fixing.',
+        401,
+        path,
+        body.slice(0, 500),
+      );
+    }
+
     if (status >= 400) {
       throw new AdtApiError(body.slice(0, 500), status, path, body);
     }
@@ -675,6 +691,10 @@ export class AdtHttpClient {
 
     if (this.config.sessionType === 'stateful') {
       headers['X-sap-adt-sessiontype'] = 'stateful';
+    }
+
+    if (this.config.disableSaml) {
+      headers['X-SAP-SAML2'] = 'disabled';
     }
 
     // Auth: Bearer token (BTP ABAP) or Basic Auth (on-premise)
@@ -822,13 +842,22 @@ export class AdtHttpClient {
     if (this.config.language) {
       url.searchParams.set('sap-language', this.config.language);
     }
+    if (this.config.disableSaml) {
+      url.searchParams.set('saml2', 'disabled');
+    }
 
     return url.toString();
   }
 
   /** Apply Basic Auth header if username/password are configured (and no bearer provider) */
   private applyAuthHeader(headers: Record<string, string>): void {
-    if (this.config.username && this.config.password && !this.config.bearerTokenProvider) {
+    if (
+      this.config.username &&
+      this.config.password &&
+      !this.config.bearerTokenProvider &&
+      !this.config.sapConnectivityAuth &&
+      !this.config.ppProxyAuth
+    ) {
       headers.Authorization = `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`;
     }
   }

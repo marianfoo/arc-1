@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROFILE_SCOPES, PROFILES, parseApiKeys, parseArgs, validateConfig } from '../../../src/server/config.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
@@ -153,6 +153,20 @@ describe('parseArgs', () => {
     const config = parseArgs(['--cookie-file', '/path/cookies.txt', '--cookie-string', 'a=b; c=d']);
     expect(config.cookieFile).toBe('/path/cookies.txt');
     expect(config.cookieString).toBe('a=b; c=d');
+  });
+
+  it('parses --disable-saml and --pp-allow-shared-cookies flags', () => {
+    const config = parseArgs(['--disable-saml', 'true', '--pp-allow-shared-cookies', 'true']);
+    expect(config.disableSaml2).toBe(true);
+    expect(config.ppAllowSharedCookies).toBe(true);
+  });
+
+  it('parses SAP_DISABLE_SAML and SAP_PP_ALLOW_SHARED_COOKIES env vars', () => {
+    process.env.SAP_DISABLE_SAML = 'true';
+    process.env.SAP_PP_ALLOW_SHARED_COOKIES = '1';
+    const config = parseArgs([]);
+    expect(config.disableSaml2).toBe(true);
+    expect(config.ppAllowSharedCookies).toBe(true);
   });
 
   it('defaults xsuaaAuth to false', () => {
@@ -527,6 +541,75 @@ describe('validateConfig', () => {
         ppEnabled: true,
       }),
     ).not.toThrow();
+  });
+
+  it('throws when ppEnabled is combined with cookieFile without opt-in', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppEnabled: true,
+        cookieFile: '/tmp/cookies.txt',
+      }),
+    ).toThrow('SAP_PP_ENABLED=true is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING');
+  });
+
+  it('throws when ppEnabled is combined with cookieString without opt-in', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppEnabled: true,
+        cookieString: 'SAP_SESSIONID=abc',
+      }),
+    ).toThrow('SAP_PP_ENABLED=true is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING');
+  });
+
+  it('accepts ppEnabled with cookies when SAP_PP_ALLOW_SHARED_COOKIES=true', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppEnabled: true,
+        cookieFile: '/tmp/cookies.txt',
+        ppAllowSharedCookies: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it('throws when btpServiceKey is combined with cookies', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        btpServiceKey: '{"uaa":{"url":"https://uaa.example.com"}}',
+        cookieFile: '/tmp/cookies.txt',
+      }),
+    ).toThrow('SAP_BTP_SERVICE_KEY is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING');
+  });
+
+  it('throws when btpServiceKey is combined with ppEnabled', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        btpServiceKey: '{"uaa":{"url":"https://uaa.example.com"}}',
+        ppEnabled: true,
+      }),
+    ).toThrow('SAP_BTP_SERVICE_KEY (BTP ABAP) is incompatible with SAP_PP_ENABLED=true');
+  });
+
+  it('warns to stderr (without throwing) when disableSaml2=true on btp system', () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        validateConfig({
+          ...DEFAULT_CONFIG,
+          disableSaml2: true,
+          systemType: 'btp',
+        }),
+      ).not.toThrow();
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('SAP_DISABLE_SAML=true on a BTP system usually breaks login'),
+      );
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 
   it('parseArgs fails with oidcIssuer but no oidcAudience', () => {

@@ -84,6 +84,8 @@ export interface AdtClientConfig {
    * The function handles token lifecycle (caching, refresh, re-login).
    */
   bearerTokenProvider?: () => Promise<string>;
+  /** Opt-in: disable SAML redirect via X-SAP-SAML2 header + saml2 query param */
+  disableSaml?: boolean;
   /** Maximum concurrent SAP HTTP requests. When set, requests beyond this limit queue. */
   maxConcurrent?: number;
 }

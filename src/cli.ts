@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { config } from 'dotenv';
 import { AdtClient } from './adt/client.js';
+import { resolveCookies } from './adt/cookies.js';
 import { detectFilename, lintAbapSource } from './lint/lint.js';
 import { parseArgs } from './server/config.js';
 import { VERSION } from './server/server.js';
@@ -97,6 +98,7 @@ program
 
 function createClientFromEnv(): AdtClient {
   const serverConfig = parseArgs([]);
+  const cookies = resolveCookies(serverConfig.cookieFile, serverConfig.cookieString);
   return new AdtClient({
     baseUrl: serverConfig.url,
     username: serverConfig.username,
@@ -104,6 +106,7 @@ function createClientFromEnv(): AdtClient {
     client: serverConfig.client,
     language: serverConfig.language,
     insecure: serverConfig.insecure,
+    ...(cookies ? { cookies } : {}),
   });
 }
 

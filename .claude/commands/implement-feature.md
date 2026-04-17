@@ -6,6 +6,9 @@ Quality-first implementation workflow for ARC-1 features. Guides you through res
 
 The user provides a feature description — either a reference to a gap analysis item (e.g., from `compare/08-dassian-adt-feature-gap.md`), a GitHub issue, or a free-form description.
 
+SAP auth guidance:
+- When touching auth (Layer A or Layer B), read `docs/enterprise-auth.md#coexistence-matrix` first. The `validateConfig` fail-fast rules in `src/server/config.ts` are the authoritative source — extend them if adding a new combination.
+
 Ask the user for:
 - **Feature description** (required) — what to implement
 - **Scope** (optional) — small/medium/large, helps calibrate effort

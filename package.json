@@ -46,6 +46,7 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "cli": "tsx src/cli.ts",
+    "extract-sap-cookies": "tsx scripts/extract-sap-cookies.ts",
     "prepare": "husky || true",
     "prepublishOnly": "npm run build",
     "test:eval": "vitest run --config vitest.eval.config.ts",

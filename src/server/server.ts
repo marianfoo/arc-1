@@ -13,6 +13,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
+import { resolveCookies } from '../adt/cookies.js';
 import { deriveUserSafety } from '../adt/safety.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
@@ -34,19 +35,56 @@ import type { ServerConfig } from './types.js';
 /** ARC-1 version */
 export const VERSION = '0.6.8'; // x-release-please-version
 
+export function logAuthSummary(config: ServerConfig): void {
+  const mcpMethods: string[] = [];
+  if (config.apiKey) mcpMethods.push('api-key');
+  if (config.apiKeys?.length) mcpMethods.push('api-keys');
+  if (config.oidcIssuer && config.oidcAudience) mcpMethods.push('oidc');
+  if (config.xsuaaAuth) mcpMethods.push('xsuaa');
+  if (mcpMethods.length === 0) mcpMethods.push('none');
+
+  const hasCookie = !!(config.cookieFile || config.cookieString);
+  const hasBearer = !!(config.btpServiceKey || config.btpServiceKeyFile);
+  const hasDestination = !!process.env.SAP_BTP_DESTINATION;
+  const hasBasic = !!(config.username && config.password);
+
+  let sapMethod = 'none';
+  if (config.ppEnabled) {
+    if (hasDestination) sapMethod = 'destination+pp';
+    else if (hasCookie) sapMethod = 'cookie+pp';
+    else sapMethod = 'pp';
+  } else if (hasBearer) {
+    sapMethod = 'bearer';
+  } else if (hasDestination) {
+    sapMethod = 'destination';
+  } else if (hasBasic && hasCookie) {
+    sapMethod = 'basic+cookie';
+  } else if (hasCookie) {
+    sapMethod = 'cookie';
+  } else if (hasBasic) {
+    sapMethod = 'basic';
+  }
+
+  const scope = config.ppEnabled ? 'per-user' : 'shared';
+  const samlSuffix = config.disableSaml2 ? ' disable-saml=on' : '';
+  logger.info(`auth: MCP=[${mcpMethods.join(',')}] SAP=${sapMethod} (${scope})${samlSuffix}`);
+}
+
 /** Build the base ADT client config (without per-user auth) */
-function buildAdtConfig(
+// When perUser=true, strips shared credentials (username/password/cookies)
+// so per-user PP clients never inherit admin auth.
+export function buildAdtConfig(
   config: ServerConfig,
   btpProxy?: BTPProxyConfig,
   bearerTokenProvider?: () => Promise<string>,
+  opts?: { perUser?: boolean },
 ): Partial<AdtClientConfig> {
-  return {
+  const adtConfig: Partial<AdtClientConfig> = {
     baseUrl: config.url,
-    username: config.username,
-    password: config.password,
     client: config.client,
     language: config.language,
     insecure: config.insecure,
+    disableSaml: config.disableSaml2,
     btpProxy,
     bearerTokenProvider,
     maxConcurrent: config.maxConcurrent,
@@ -63,6 +101,17 @@ function buildAdtConfig(
       allowedTransports: [],
     },
   };
+
+  if (!opts?.perUser) {
+    const cookies = resolveCookies(config.cookieFile, config.cookieString);
+    adtConfig.username = config.username;
+    adtConfig.password = config.password;
+    if (cookies) {
+      adtConfig.cookies = cookies;
+    }
+  }
+
+  return adtConfig;
 }
 
 /**
@@ -104,7 +153,7 @@ async function createPerUserClient(
       ? { ...btpProxy, locationId: destination.CloudConnectorLocationId }
       : btpProxy;
 
-  const adtConfig = buildAdtConfig(config, effectiveProxy);
+  const adtConfig = buildAdtConfig(config, effectiveProxy, undefined, { perUser: true });
   // Override URL from destination (in case it differs from startup-resolved URL)
   adtConfig.baseUrl = destination.URL;
   // Set per-user auth for principal propagation.
@@ -383,6 +432,7 @@ async function createCachingLayer(config: ServerConfig): Promise<CachingLayer | 
  */
 export async function createAndStartServer(config: ServerConfig): Promise<Server> {
   initLogger(config.logFormat, config.verbose);
+  logAuthSummary(config);
 
   // Add file sink if configured
   if (config.logFile) {

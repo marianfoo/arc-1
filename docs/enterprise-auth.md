@@ -23,6 +23,8 @@ For **what users can do** after authenticating (scopes, roles, safety controls),
 
 ### Quick Decision Guide
 
+After starting, check the server's first INFO log line: `auth: MCP=[...] SAP=[...]`. This is the authoritative summary of what's active.
+
 | Your situation | MCP Client → ARC-1 | ARC-1 → SAP | Setup Guide |
 |----------------|-------------------|-------------|-------------|
 | **Local dev** (single user, `npx`) | None needed | Basic Auth | [Setup Guide](setup-guide.md) |
@@ -365,6 +367,32 @@ NODE_EXTRA_CA_CERTS=/path/to/internal-ca.crt arc1 --url https://sap-host:443 ...
 
 ---
 
+## SAML Disable (Advanced, Opt-in)
+
+Some on-prem AS ABAP systems are configured with SAML as the default ICF auth method
+even where Basic / cookie auth is also available. ARC-1 can request that SAP skip
+the SAML redirect via either a request header (preferred) or a URL query parameter:
+
+```bash
+SAP_DISABLE_SAML=true
+```
+
+When set, every ADT request adds `X-SAP-SAML2: disabled` (SAP Note 3456236)
+and `?saml2=disabled` (SAP KBA 2577263). **Never enable this on BTP ABAP Environment
+or S/4HANA Public Cloud** — those systems require SAML, and disabling it breaks login.
+ARC-1 emits a warning if you combine `SAP_DISABLE_SAML=true` with
+`SAP_SYSTEM_TYPE=btp`.
+
+### HTML login page detection
+
+Independent of the SAML flag, ARC-1 detects when SAP returns a login HTML page
+(200 OK + `Content-Type: text/html`) on an ADT endpoint. Instead of trying to parse
+HTML as XML, ARC-1 throws a clear `401 — ADT call returned HTML login page` error
+with pointers to the common causes (expired cookies, wrong Basic creds, missing
+S_ADT_RES authorization, SSO-only system needing `SAP_DISABLE_SAML=true`).
+
+---
+
 ## Configuration Reference
 
 ### All Auth-Related Flags
@@ -390,15 +418,33 @@ NODE_EXTRA_CA_CERTS=/path/to/internal-ca.crt arc1 --url https://sap-host:443 ...
 | — | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (per-user) |
 | `--pp-enabled` | `SAP_PP_ENABLED` | Enable principal propagation |
 | `--pp-strict` | `SAP_PP_STRICT` | Fail on PP errors (no fallback) |
+| `--pp-allow-shared-cookies` | `SAP_PP_ALLOW_SHARED_COOKIES` | Allow PP + cookie auth only for shared client (advanced escape hatch) |
+| `--disable-saml` | `SAP_DISABLE_SAML` | Disable SAML redirect via `X-SAP-SAML2` + `saml2=disabled` (advanced) |
 | `--insecure` | `SAP_INSECURE` | Skip TLS verification |
 
-### SAP Auth Method Priority
+## Coexistence Matrix (Layer A can always combine; Layer B is exclusive)
 
-Only one SAP authentication method can be active at a time:
-1. Basic auth (`--user` + `--password`)
-2. Cookie auth (`--cookie-file` or `--cookie-string`)
-3. BTP Service Key (`--btp-service-key` / `--btp-service-key-file`)
-4. BTP Destination (`SAP_BTP_DESTINATION`)
+| Layer B combination | Status | Reason |
+|---|---|---|
+| Basic only | ✅ | Standard on-prem |
+| Cookie only | ✅ | On-prem SSO developer loop |
+| Basic + Cookie | ✅ | ARC-1 sends both headers — SAP picks |
+| Bearer (BTP ABAP) only | ✅ | BTP ABAP Environment direct OAuth |
+| Destination only | ✅ | BTP Cloud Foundry, shared user |
+| Destination + PP (per-user) | ✅ | Enterprise standard on BTP CF |
+| PP + Cookie | ❌ fail-fast | Cookies would leak into per-user requests |
+| PP + Cookie + SAP_PP_ALLOW_SHARED_COOKIES=true | ⚠️ allowed with warning | Cookies stay on shared client only |
+| Bearer + Cookie | ❌ fail-fast | Two Layer B methods in conflict |
+| Bearer + PP | ❌ fail-fast | BTP ABAP is single-tenant; PP not supported |
+
+### SAP Auth Coexistence Rules
+
+ARC-1 enforces these Layer B constraints at startup:
+
+1. `SAP_PP_ENABLED=true` with `SAP_COOKIE_FILE` / `SAP_COOKIE_STRING` fails fast unless `SAP_PP_ALLOW_SHARED_COOKIES=true`.
+2. `SAP_BTP_SERVICE_KEY` with `SAP_COOKIE_FILE` / `SAP_COOKIE_STRING` fails fast.
+3. `SAP_BTP_SERVICE_KEY` with `SAP_PP_ENABLED=true` fails fast.
+4. `SAP_DISABLE_SAML=true` with `SAP_SYSTEM_TYPE=btp` emits a warning (startup continues).
 
 MCP client auth (API Key, OIDC, XSUAA) is independent and can be combined with any SAP auth method.
 

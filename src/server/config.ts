@@ -251,6 +251,10 @@ export function parseArgs(args: string[]): ServerConfig {
   // --- Principal Propagation ---
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
   config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);
+  config.ppAllowSharedCookies = resolveBool('pp-allow-shared-cookies', 'SAP_PP_ALLOW_SHARED_COOKIES', false);
+
+  // --- SAML Behavior ---
+  config.disableSaml2 = resolveBool('disable-saml', 'SAP_DISABLE_SAML', false);
 
   // --- Tool Mode ---
   const toolMode = resolve('tool-mode', 'ARC1_TOOL_MODE', 'standard');
@@ -318,6 +322,34 @@ export function validateConfig(config: ServerConfig): void {
   if (config.ppStrict && !config.ppEnabled) {
     throw new Error(
       'SAP_PP_STRICT=true requires SAP_PP_ENABLED=true — strict mode has no effect without principal propagation enabled',
+    );
+  }
+
+  const hasCookieAuth = !!(config.cookieFile || config.cookieString);
+  const hasBtpServiceKey = !!(config.btpServiceKey || config.btpServiceKeyFile);
+
+  if (config.ppEnabled && hasCookieAuth && !config.ppAllowSharedCookies) {
+    throw new Error(
+      'SAP_PP_ENABLED=true is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING — shared cookies would leak into per-user requests. ' +
+        'If you genuinely need both, set SAP_PP_ALLOW_SHARED_COOKIES=true (cookies will be used only for the shared client, not for per-user PP requests).',
+    );
+  }
+
+  if (hasBtpServiceKey && hasCookieAuth) {
+    throw new Error(
+      'SAP_BTP_SERVICE_KEY is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING — pick one SAP auth method.',
+    );
+  }
+
+  if (hasBtpServiceKey && config.ppEnabled) {
+    throw new Error(
+      'SAP_BTP_SERVICE_KEY (BTP ABAP) is incompatible with SAP_PP_ENABLED=true — BTP ABAP Environment is single-tenant OAuth and does not support principal propagation.',
+    );
+  }
+
+  if (config.disableSaml2 && config.systemType === 'btp') {
+    console.error(
+      '[warn] SAP_DISABLE_SAML=true on a BTP system usually breaks login — BTP ABAP and S/4HANA Public Cloud require SAML. Continuing because you explicitly set this, but check docs/enterprise-auth.md if login starts failing.',
     );
   }
 }
