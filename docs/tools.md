@@ -334,20 +334,20 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, and check transport requirements.
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, check transport requirements, and object transport history (reverse lookup).
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`, or `check` |
+| `action` | string | Yes | `list`, `get`, `create`, `release`, `delete`, `reassign`, `release_recursive`, `check`, or `history` |
 | `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Transport description text (required for create) |
-| `name` | string | No | Object name (for check action, e.g. `ZCL_ORDER`) |
+| `name` | string | No | Object name (for check/history actions, e.g. `ZCL_ORDER`) |
 | `package` | string | No | Package name (for check action, e.g. `ZDEV`) |
 | `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
 | `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
-| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
+| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check/history: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
 | `owner` | string | No | New owner SAP username (required for reassign) |
 | `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
 
@@ -361,6 +361,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 - **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.
 - **`release_recursive`** — Release all unreleased tasks first, then the transport itself.
 - **`check`** — Check if a transport number is required for creating an object in a specific package. Requires `type`, `name`, and `package`. Returns whether transport recording is required, whether the package is local, existing transports, and any locked transport. **Does NOT require `--enable-transports`** — this is a read-only pre-flight check.
+- **`history`** — Reverse lookup: given an object (`type` + `name`), list the transport requests that reference it. Returns the locked transport (if any), all related transports, and candidate transports for assignment. Read-only; does NOT require `--enable-transports`.
 
 **Check action output:**
 ```json
@@ -376,11 +377,26 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 }
 ```
 
+**History action output:**
+```json
+{
+  "object": { "type": "CLAS", "name": "ZCL_ORDER", "uri": "/sap/bc/adt/oo/classes/zcl_order" },
+  "lockedTransport": "A4HK900123",
+  "relatedTransports": [
+    { "id": "A4HK900123", "description": "", "owner": "", "status": "D" }
+  ],
+  "candidateTransports": [
+    { "id": "A4HK900124", "description": "Refactor", "owner": "DEVELOPER" }
+  ],
+  "summary": "Object ZCL_ORDER is locked in transport A4HK900123."
+}
+```
+
 **List defaults:** Without parameters, `list` returns modifiable transports (status D) for the current SAP user, across all transport types (Workbench, Customizing, Transport of Copies). Query params follow sapcli's `workbench_params()` pattern (`requestType=KWT`, `requestStatus`).
 
 **Protocol compatibility:** ARC-1 uses startup ADT service discovery (`/sap/bc/adt/discovery`) to proactively select endpoint MIME types, with endpoint-specific CTS media types and a one-retry 406/415 fallback as defense-in-depth.
 
-**Note:** Most actions require `--enable-transports`. The `check` action works without it (read-only).
+**Note:** Most actions require `--enable-transports`. The `check` and `history` actions work without it (read-only).
 
 ---
 

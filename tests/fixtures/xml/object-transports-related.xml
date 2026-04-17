@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <LOCKS>
+        <HEADER>
+          <TRKORR>A4HK900123</TRKORR>
+        </HEADER>
+      </LOCKS>
+      <TRANSPORTS>
+        <headers>
+          <TRKORR>A4HK900124</TRKORR>
+          <AS4TEXT>Refactor ZCL_ORDER</AS4TEXT>
+          <AS4USER>DEVELOPER</AS4USER>
+        </headers>
+        <headers>
+          <TRKORR>A4HK900125</TRKORR>
+          <AS4TEXT>Bugfix</AS4TEXT>
+          <AS4USER>DEVELOPER</AS4USER>
+        </headers>
+      </TRANSPORTS>
+    </DATA>
+  </asx:values>
+</asx:abap>

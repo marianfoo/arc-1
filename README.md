@@ -76,7 +76,7 @@ The 11 tools are designed from real LLM interaction feedback:
 | **SAPActivate** | Activate ABAP objects — single or batch (essential for RAP stacks). Publish/unpublish OData service bindings (SRVB) |
 | **SAPNavigate** | Go-to-definition, find references, code completion |
 | **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
-| **SAPTransport** | CTS transport management (list, create, release) |
+| **SAPTransport** | CTS transport management (list/create/release/delete/reassign), transport requirement checks, and reverse lookup history (`action=\"history\"`) |
 | **SAPContext** | Compressed dependency context — one call replaces N SAPRead calls |
 | **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) |
 | **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps, profiler traces |

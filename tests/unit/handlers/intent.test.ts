@@ -6325,6 +6325,98 @@ define role ZTEST_DCL {
       const parsed = JSON.parse(result.content[0]?.text ?? '[]');
       expect(parsed).toHaveLength(2);
     });
+
+    it('history returns object transport data as JSON', async () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <LOCKS>
+        <HEADER><TRKORR>A4HK900123</TRKORR></HEADER>
+      </LOCKS>
+      <TRANSPORTS>
+        <headers>
+          <TRKORR>A4HK900124</TRKORR>
+          <AS4TEXT>Refactor ZCL_TEST</AS4TEXT>
+          <AS4USER>DEVELOPER</AS4USER>
+        </headers>
+      </TRANSPORTS>
+    </DATA>
+  </asx:values>
+</asx:abap>`;
+      mockFetch.mockResolvedValue(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'history',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.object).toEqual({
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        uri: '/sap/bc/adt/oo/classes/ZCL_TEST',
+      });
+      expect(parsed.lockedTransport).toBe('A4HK900123');
+      expect(parsed.relatedTransports[0]?.id).toBe('A4HK900123');
+      expect(Array.isArray(parsed.candidateTransports)).toBe(true);
+      expect(parsed.summary).toContain('locked in transport A4HK900123');
+    });
+
+    it('history falls back to transportchecks when /transports is empty', async () => {
+      const objectStructure = `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="Z_MY_PKG"/>
+      </adtcore:objectReferences>`;
+      const fallbackXml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+        <asx:values><DATA>
+          <DEVCLASS>Z_MY_PKG</DEVCLASS>
+          <DLVUNIT>SAP</DLVUNIT>
+          <RECORDING>X</RECORDING>
+          <TRANSPORTS>
+            <headers>
+              <TRKORR>A4HK900500</TRKORR>
+              <AS4TEXT>Fallback candidate</AS4TEXT>
+              <AS4USER>DEVELOPER</AS4USER>
+            </headers>
+          </TRANSPORTS>
+        </DATA></asx:values>
+      </asx:abap>`;
+
+      mockFetch.mockImplementation((url: string) => {
+        const target = String(url);
+        if (target.includes('/sap/bc/adt/oo/classes/ZCL_TEST/transports')) {
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        }
+        if (target.includes('/sap/bc/adt/oo/classes/ZCL_TEST')) {
+          return Promise.resolve(mockResponse(200, objectStructure, { 'x-csrf-token': 'T' }));
+        }
+        if (target.includes('/sap/bc/adt/cts/transportchecks')) {
+          return Promise.resolve(mockResponse(200, fallbackXml, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'history',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.relatedTransports).toEqual([]);
+      expect(parsed.candidateTransports).toHaveLength(1);
+      expect(parsed.candidateTransports[0]?.id).toBe('A4HK900500');
+      expect(parsed.summary).toContain('available for assignment');
+    });
+
+    it('history requires type and name', async () => {
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'history',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"type" and "name" are required');
+    });
   });
 
   // ─── CDS Pre-Write Validation ───────────────────────────────────────

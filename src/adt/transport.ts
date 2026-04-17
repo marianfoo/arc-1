@@ -265,6 +265,46 @@ export async function getTransportInfo(
   return parseTransportInfo(resp.body);
 }
 
+/**
+ * List transport requests related to an ABAP object via the per-object
+ * `/transports` endpoint.
+ *
+ * Empty body is a normal outcome for local/untracked objects.
+ */
+export async function getObjectTransports(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objectUrl: string,
+): Promise<{
+  lockedTransport?: string;
+  relatedTransports: Array<{ id: string; description: string; owner: string; status: string }>;
+  candidateTransports: Array<{ id: string; description: string; owner: string }>;
+}> {
+  checkOperation(safety, OperationType.Read, 'GetObjectTransports');
+
+  const resp = await http.get(`${objectUrl}/transports`, { Accept: 'application/vnd.sap.as+xml' });
+  if (!resp.body || resp.body.trim() === '') {
+    return { relatedTransports: [], candidateTransports: [] };
+  }
+
+  const info = parseTransportInfo(resp.body);
+  const relatedTransports: Array<{ id: string; description: string; owner: string; status: string }> = [];
+  if (info.lockedTransport) {
+    relatedTransports.push({
+      id: info.lockedTransport,
+      description: '',
+      owner: '',
+      status: 'D',
+    });
+  }
+
+  return {
+    ...(info.lockedTransport ? { lockedTransport: info.lockedTransport } : {}),
+    relatedTransports,
+    candidateTransports: info.existingTransports,
+  };
+}
+
 /** Parse transport check response XML */
 function parseTransportInfo(xml: string): TransportInfo {
   const parsed = parseXml(xml);

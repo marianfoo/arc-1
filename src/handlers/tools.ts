@@ -245,7 +245,8 @@ const SAPTRANSPORT_DESC_ONPREM =
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
   'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
-  'check (check if a package requires a transport — provide type, name, package). ' +
+  'check (check if a package requires a transport — provide type, name, package), ' +
+  'history (find transports referencing an object — provide type, name; read-only, works without --enable-transports). ' +
   'Transport IDs look like A4HK900123. Status: D=modifiable, R=released.';
 
 const SAPTRANSPORT_DESC_BTP =
@@ -253,7 +254,8 @@ const SAPTRANSPORT_DESC_BTP =
   'Actions: list (defaults to current user, modifiable transports — both Workbench and Customizing), ' +
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
   'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
-  'check (check if a package requires a transport — provide type, name, package). ' +
+  'check (check if a package requires a transport — provide type, name, package), ' +
+  'history (find transports referencing an object — provide type, name; read-only, works without --enable-transports). ' +
   'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
   'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
 
@@ -1010,7 +1012,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check'],
+            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check', 'history'],
             description:
               'list: show transports (defaults to current user, modifiable only). ' +
               'get: fetch transport details including tasks and objects. ' +
@@ -1019,7 +1021,8 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'delete: delete a transport (use recursive=true to delete tasks first). ' +
               'reassign: change transport owner (use recursive=true for tasks too). ' +
               'release_recursive: release all unreleased tasks first, then the transport itself. ' +
-              'check: check if a transport is needed for a package/object (requires type, name, package).',
+              'check: check if a transport is needed for a package/object (requires type, name, package). ' +
+              'history: list transports referencing an object (reverse lookup; requires type, name; works without --enable-transports).',
           },
           id: {
             type: 'string',
@@ -1027,7 +1030,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
               'Transport request ID, e.g. A4HK900123 (required for get/release/delete/reassign/release_recursive)',
           },
           description: { type: 'string', description: 'Transport description text (required for create)' },
-          name: { type: 'string', description: 'Object name (for check action)' },
+          name: { type: 'string', description: 'Object name (for check or history actions)' },
           package: { type: 'string', description: 'Package name (for check action)' },
           user: {
             type: 'string',
@@ -1041,7 +1044,7 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           type: {
             type: 'string',
             description:
-              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check: object type (PROG, CLAS, DDLS, etc.)',
+              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check/history: object type (PROG, CLAS, DDLS, etc.)',
           },
           owner: { type: 'string', description: 'New owner SAP username (required for reassign)' },
           recursive: {

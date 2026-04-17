@@ -311,4 +311,48 @@ describe('E2E SAPTransport Tests', () => {
       }
     });
   });
+
+  // ── SAPTransport history (reverse lookup) ──────────────────────
+
+  describe('SAPTransport history action', () => {
+    it('returns valid JSON for an existing class fixture', async (ctx) => {
+      // By design this is read-only and should work independently from transport write enablement.
+      const result = await callTool(client, 'SAPTransport', {
+        action: 'history',
+        type: 'CLAS',
+        name: 'ZCL_ARC1_TEST',
+      });
+
+      if (result.isError) {
+        const text = result.content?.[0]?.text ?? '';
+        if (text.includes('transports not enabled') || text.includes('Unknown tool')) {
+          return ctx.skip('SAPTransport tool not available on MCP server');
+        }
+        if (text.toLowerCase().includes('not found')) {
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.NO_FIXTURE}: ZCL_ARC1_TEST not found — run npm run test:e2e:fixtures first`,
+          );
+        }
+      }
+
+      const payload = JSON.parse(expectToolSuccess(result));
+      expect(payload.object.type).toBe('CLAS');
+      expect(payload.object.name).toBe('ZCL_ARC1_TEST');
+      expect(Array.isArray(payload.relatedTransports)).toBe(true);
+      expect(typeof payload.summary).toBe('string');
+      expect(payload.summary.length).toBeGreaterThan(0);
+    });
+
+    it('returns an error when type or name is missing', async (ctx) => {
+      const result = await callTool(client, 'SAPTransport', { action: 'history' });
+      if (result.isError && (result.content?.[0]?.text ?? '').includes('Unknown tool')) {
+        return ctx.skip('SAPTransport tool not available on MCP server');
+      }
+      expectToolError(result);
+      const text = result.content?.[0]?.text ?? '';
+      expect(text.toLowerCase()).toMatch(/type|name/);
+    });
+  });
 });

@@ -87,6 +87,7 @@ import { checkOperation, checkPackage, isOperationAllowed, OperationType } from 
 import {
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   getTransportInfo,
   listTransports,
@@ -94,7 +95,7 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../adt/transport.js';
-import type { ClassHierarchy, ResolvedFeatures } from '../adt/types.js';
+import type { ClassHierarchy, ObjectTransportHistory, ResolvedFeatures } from '../adt/types.js';
 import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
@@ -3027,9 +3028,52 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
         ),
       );
     }
+    case 'history': {
+      const objectType = String(args.type ?? '');
+      const objectName = String(args.name ?? '');
+      if (!objectType || !objectName) {
+        return errorResult('"type" and "name" are required for "history" action.');
+      }
+
+      const objectUrl = objectUrlForType(objectType, objectName);
+      const primary = await getObjectTransports(client.http, client.safety, objectUrl);
+      let candidateTransports = primary.candidateTransports;
+
+      // Fallback: if per-object transport lookup is empty, derive the package via
+      // the object metadata endpoint and ask transportchecks for candidate transports.
+      if (primary.relatedTransports.length === 0 && candidateTransports.length === 0) {
+        try {
+          const pkg = await client.resolveObjectPackage(objectUrl);
+          if (pkg && pkg !== '$TMP') {
+            const info = await getTransportInfo(client.http, client.safety, objectUrl, pkg, '');
+            candidateTransports = info.existingTransports;
+          }
+        } catch {
+          // best-effort-fallback
+        }
+      }
+
+      const summary = primary.lockedTransport
+        ? `Object ${objectName} is locked in transport ${primary.lockedTransport}.`
+        : primary.relatedTransports.length > 0
+          ? `Object ${objectName} is referenced by ${primary.relatedTransports.length} transport(s).`
+          : candidateTransports.length > 0
+            ? `Object ${objectName} has no active lock; ${candidateTransports.length} transport(s) available for assignment.`
+            : `Object ${objectName} has no related or candidate transports (likely $TMP / local object).`;
+
+      const history: ObjectTransportHistory = {
+        object: { type: objectType, name: objectName, uri: objectUrl },
+        ...(primary.lockedTransport ? { lockedTransport: primary.lockedTransport } : {}),
+        relatedTransports: primary.relatedTransports,
+        candidateTransports,
+        summary,
+      };
+
+      return textResult(JSON.stringify(history, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check`,
+        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check, history`,
       );
   }
 }

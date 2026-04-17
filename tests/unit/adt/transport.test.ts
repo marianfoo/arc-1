@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
@@ -8,6 +10,7 @@ import {
   CTS_NAMESPACE_TM,
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   getTransportInfo,
   listTransports,
@@ -15,6 +18,9 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../../../src/adt/transport.js';
+
+const fixturesDir = join(import.meta.dirname, '../../fixtures/xml');
+const loadFixture = (name: string) => readFileSync(join(fixturesDir, name), 'utf-8');
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -810,6 +816,58 @@ describe('Transport Management', () => {
       );
       expect(info.existingTransports).toEqual([]);
       expect(info.recording).toBe(true);
+    });
+  });
+
+  // ─── getObjectTransports ──────────────────────────────────────────
+
+  describe('getObjectTransports', () => {
+    it('calls /transports endpoint with XML accept header', async () => {
+      const http = mockHttp(loadFixture('object-transports-related.xml'));
+      await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+
+      const call = (http.get as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call?.[0]).toBe('/sap/bc/adt/oo/classes/zcl_test/transports');
+      expect(call?.[1]).toEqual({ Accept: 'application/vnd.sap.as+xml' });
+    });
+
+    it('returns empty arrays for empty response body', async () => {
+      const http = mockHttp(loadFixture('object-transports-empty.xml'));
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+      expect(result).toEqual({ relatedTransports: [], candidateTransports: [] });
+      expect(result.lockedTransport).toBeUndefined();
+    });
+
+    it('extracts locked transport and candidate transports from payload', async () => {
+      const http = mockHttp(loadFixture('object-transports-related.xml'));
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+      expect(result.lockedTransport).toBe('A4HK900123');
+      expect(result.candidateTransports).toHaveLength(2);
+      expect(result.candidateTransports[0]).toEqual({
+        id: 'A4HK900124',
+        description: 'Refactor ZCL_ORDER',
+        owner: 'DEVELOPER',
+      });
+    });
+
+    it('maps locked transport into relatedTransports', async () => {
+      const http = mockHttp(loadFixture('object-transports-related.xml'));
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+      expect(result.relatedTransports).toHaveLength(1);
+      expect(result.relatedTransports[0]?.id).toBe('A4HK900123');
+      expect(result.relatedTransports[0]?.status).toBe('D');
+    });
+
+    it('is read-only safe but blocked when read operations are disallowed', async () => {
+      const xml = loadFixture('object-transports-related.xml');
+      const readOnlySafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const disallowedReadSafety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
+      await expect(
+        getObjectTransports(mockHttp(xml), readOnlySafety, '/sap/bc/adt/oo/classes/zcl_test'),
+      ).resolves.toBeDefined();
+      await expect(
+        getObjectTransports(mockHttp(xml), disallowedReadSafety, '/sap/bc/adt/oo/classes/zcl_test'),
+      ).rejects.toThrow(AdtSafetyError);
     });
   });
 });

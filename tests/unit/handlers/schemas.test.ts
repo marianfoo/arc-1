@@ -499,6 +499,16 @@ describe('SAPTransportSchema', () => {
     const result = SAPTransportSchema.safeParse({ action: 'invalid' });
     expect(result.success).toBe(false);
   });
+
+  it('accepts history with type and name', () => {
+    const result = SAPTransportSchema.safeParse({ action: 'history', type: 'CLAS', name: 'ZCL_X' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts history without type/name at schema level', () => {
+    const result = SAPTransportSchema.safeParse({ action: 'history' });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('SAPContextSchema', () => {

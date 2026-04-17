@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-17 (FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
+_Last updated: 2026-04-17 (FEAT-49 implemented: object → transport reverse lookup via `SAPTransport(action="history")`; FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
 
 ## Legend
 - ✅ = Supported
@@ -169,7 +169,8 @@ _Last updated: 2026-04-17 (FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; 
 | Release transport | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (recursive) |
 | Recursive release | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ (recursive) |
 | Delete transport | ✅ (recursive) | ❌ | ❌ | ��� | ❌ | ❌ | N/A | ❌ | ✅ |
-| Transport contents | ⚠️ (parsed when available) | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (-rrr objects) |
+| Transport contents | ⚠️ (forward lookup: `SAPTransport get`) | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (-rrr objects) |
+| Object → transport reverse lookup | ✅ (history action) | ❌ | ⚠️ (URI resolve only) | ❌ | ❌ | ❌ | N/A | ⚠️ (URI resolve only) | ❌ |
 | Transport assign | ✅ (reassign owner) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (reassign owner) |
 | Transport gating | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Inactive objects list | ✅ | ✅ | ��� | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
