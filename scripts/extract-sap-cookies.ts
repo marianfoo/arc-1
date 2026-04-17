@@ -1,21 +1,23 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
+import { pathToFileURL } from 'node:url';
 import { config as loadDotEnv } from 'dotenv';
 
 type BrowserChoice = 'chrome' | 'firefox' | 'edge';
 
 interface ScriptArgs {
   browser: BrowserChoice;
-  output: string;
+  output?: string;
   yes: boolean;
   help: boolean;
 }
 
 interface ServerArgs {
   url?: string;
+  cookieFile?: string;
 }
 
 export interface ExtractionPlanInput {
@@ -70,7 +72,7 @@ function parseScriptArgs(args: string[]): ScriptArgs {
 
   return {
     browser,
-    output: getFlag(args, 'output') ?? './cookies.txt',
+    output: getFlag(args, 'output'),
     yes: args.includes('--yes'),
     help: args.includes('--help') || args.includes('-h'),
   };
@@ -78,7 +80,10 @@ function parseScriptArgs(args: string[]): ScriptArgs {
 
 // Keep this helper local to mirror the server config precedence for --url.
 export function parseServerArgs(args: string[], env: NodeJS.ProcessEnv = process.env): ServerArgs {
-  return { url: getFlag(args, 'url') ?? env.SAP_URL };
+  return {
+    url: getFlag(args, 'url') ?? env.SAP_URL,
+    cookieFile: env.SAP_COOKIE_FILE,
+  };
 }
 
 function commandExists(command: string): boolean {
@@ -87,6 +92,18 @@ function commandExists(command: string): boolean {
 }
 
 function resolveBrowserBinary(browser: BrowserChoice, platform: NodeJS.Platform): string {
+  const win32Paths = (relativePath: string, exe: string): string[] => {
+    const PF = process.env.PROGRAMFILES;
+    const PF86 = process.env['PROGRAMFILES(X86)'];
+    const LAD = process.env.LOCALAPPDATA;
+    return [
+      LAD ? `${LAD}\\${relativePath}` : undefined,
+      PF ? `${PF}\\${relativePath}` : undefined,
+      PF86 ? `${PF86}\\${relativePath}` : undefined,
+      exe,
+    ].filter((c): c is string => Boolean(c));
+  };
+
   const candidates: Record<BrowserChoice, string[]> = {
     chrome:
       platform === 'darwin'
@@ -97,19 +114,25 @@ function resolveBrowserBinary(browser: BrowserChoice, platform: NodeJS.Platform)
             'chromium',
             'chromium-browser',
           ]
-        : ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'],
+        : platform === 'win32'
+          ? win32Paths('Google\\Chrome\\Application\\chrome.exe', 'chrome.exe')
+          : ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'],
     firefox:
       platform === 'darwin'
         ? ['/Applications/Firefox.app/Contents/MacOS/firefox', 'firefox']
-        : ['firefox', 'firefox-esr'],
+        : platform === 'win32'
+          ? win32Paths('Mozilla Firefox\\firefox.exe', 'firefox.exe')
+          : ['firefox', 'firefox-esr'],
     edge:
       platform === 'darwin'
         ? ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', 'microsoft-edge', 'microsoft-edge-stable']
-        : ['microsoft-edge', 'microsoft-edge-stable'],
+        : platform === 'win32'
+          ? win32Paths('Microsoft\\Edge\\Application\\msedge.exe', 'msedge.exe')
+          : ['microsoft-edge', 'microsoft-edge-stable'],
   };
 
   for (const candidate of candidates[browser]) {
-    if (candidate.includes('/')) {
+    if (isAbsolute(candidate)) {
       if (existsSync(candidate)) return candidate;
       continue;
     }
@@ -199,7 +222,13 @@ function startBrowser(browserBinary: string, browser: BrowserChoice, url: string
   return spawn(browserBinary, args, { stdio: 'ignore' });
 }
 
+function cookieMatchesHost(cookieDomain: string, hostname: string): boolean {
+  const normalized = cookieDomain.startsWith('.') ? cookieDomain.slice(1) : cookieDomain;
+  return hostname === normalized || hostname.endsWith(`.${normalized}`);
+}
+
 async function fetchCookiesViaCdp(wsUrl: string, origin: string): Promise<CdpCookie[]> {
+  const hostname = new URL(origin).hostname;
   return new Promise<CdpCookie[]>((resolvePromise, rejectPromise) => {
     const ws = new WebSocket(wsUrl);
     let nextId = 1;
@@ -254,10 +283,10 @@ async function fetchCookiesViaCdp(wsUrl: string, origin: string): Promise<CdpCoo
 
     ws.onopen = async () => {
       try {
-        await send('Network.enable');
-        const result = (await send('Network.getCookies', { urls: [origin] })) as { cookies?: CdpCookie[] };
+        const result = (await send('Storage.getCookies')) as { cookies?: CdpCookie[] };
         ws.close();
-        settleOnce(() => resolvePromise(result.cookies ?? []));
+        const filtered = (result.cookies ?? []).filter((c) => cookieMatchesHost(c.domain, hostname));
+        settleOnce(() => resolvePromise(filtered));
       } catch (error) {
         ws.close();
         const message = error instanceof Error ? error.message : String(error);
@@ -303,7 +332,7 @@ export function planExtraction(input: ExtractionPlanInput): ExtractionPlan {
     origin: parsedUrl.origin,
     browser: scriptArgs.browser,
     browserBinary,
-    outputPath: resolve(input.cwd, scriptArgs.output),
+    outputPath: resolve(input.cwd, scriptArgs.output ?? serverArgs.cookieFile ?? './cookies.txt'),
     yes: scriptArgs.yes,
   };
 }
@@ -355,7 +384,7 @@ async function run(): Promise<void> {
   }
 }
 
-if (import.meta.url === new URL(process.argv[1] ?? '', 'file:').href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   run().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);
