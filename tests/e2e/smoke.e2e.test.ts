@@ -176,6 +176,24 @@ describe('E2E Smoke Tests', () => {
     expect(Array.isArray(issues)).toBe(true);
   });
 
+  it('SAPLint — formats ABAP source via ADT PrettyPrinter', async () => {
+    const result = await callTool(client, 'SAPLint', {
+      action: 'format',
+      source: 'report ztest.\ndata lv type string.\n',
+    });
+    const text = expectToolSuccess(result);
+    expect(text).toContain('REPORT');
+    expect(text).toContain('DATA');
+  });
+
+  it('SAPLint — reads formatter settings', async () => {
+    const result = await callTool(client, 'SAPLint', { action: 'get_formatter_settings' });
+    const text = expectToolSuccess(result);
+    const settings = JSON.parse(text);
+    expect(typeof settings.indentation).toBe('boolean');
+    expect(['keywordUpper', 'keywordLower', 'keywordAuto', 'none']).toContain(settings.style);
+  });
+
   // ── SAPManage ──────────────────────────────────────────────────
 
   it('SAPManage probe — detects system features', async () => {

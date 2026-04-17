@@ -4,16 +4,19 @@ import {
   activateBatch,
   applyFixProposal,
   getFixProposals,
+  getPrettyPrinterSettings,
   parseActivationResult,
+  prettyPrint,
   publishServiceBinding,
   runAtcCheck,
   runUnitTests,
+  setPrettyPrinterSettings,
   syntaxCheck,
   unpublishServiceBinding,
 } from '../../../src/adt/devtools.js';
 import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
-import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -132,6 +135,95 @@ describe('DevTools', () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
       await expect(syntaxCheck(http, safety, '/sap/bc/adt/programs/programs/ZTEST')).rejects.toThrow(AdtSafetyError);
+    });
+  });
+
+  // ─── prettyPrint ──────────────────────────────────────────────────
+
+  describe('prettyPrint', () => {
+    it('returns formatted source on success', async () => {
+      const formatted = 'REPORT ztest.\nDATA lv TYPE string.\n';
+      const http = mockHttp(formatted);
+      const result = await prettyPrint(http, unrestrictedSafetyConfig(), 'report ztest.\ndata lv type string.\n');
+      expect(result).toBe(formatted);
+    });
+
+    it('passes text/plain content type and accept header', async () => {
+      const http = mockHttp('REPORT ztest.\n');
+      await prettyPrint(http, unrestrictedSafetyConfig(), 'report ztest.\n');
+      expect(http.post).toHaveBeenCalledWith(
+        '/sap/bc/adt/abapsource/prettyprinter',
+        'report ztest.\n',
+        'text/plain; charset=utf-8',
+        { Accept: 'text/plain' },
+      );
+    });
+
+    it('hits the PrettyPrinter endpoint path', async () => {
+      const http = mockHttp('REPORT ztest.\n');
+      await prettyPrint(http, unrestrictedSafetyConfig(), 'report ztest.\n');
+      const path = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+      expect(path).toBe('/sap/bc/adt/abapsource/prettyprinter');
+    });
+
+    it('is allowed in read-only mode (intelligence operation)', async () => {
+      const http = mockHttp('REPORT ztest.\n');
+      await expect(prettyPrint(http, defaultSafetyConfig(), 'report ztest.\n')).resolves.toBe('REPORT ztest.\n');
+    });
+  });
+
+  // ─── PrettyPrinter settings ───────────────────────────────────────
+
+  describe('getPrettyPrinterSettings', () => {
+    it('parses formatter settings from XML response', async () => {
+      const xml =
+        '<abapformatter:PrettyPrinterSettings abapformatter:indentation="true" abapformatter:style="keywordUpper" xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>';
+      const http = mockHttp(xml);
+      const settings = await getPrettyPrinterSettings(http, unrestrictedSafetyConfig());
+      expect(settings).toEqual({ indentation: true, style: 'keywordUpper' });
+    });
+
+    it('parses false indentation and lowercase keyword style', async () => {
+      const xml =
+        '<abapformatter:PrettyPrinterSettings abapformatter:indentation="false" abapformatter:style="keywordLower" xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>';
+      const http = mockHttp(xml);
+      const settings = await getPrettyPrinterSettings(http, unrestrictedSafetyConfig());
+      expect(settings).toEqual({ indentation: false, style: 'keywordLower' });
+    });
+
+    it('falls back to defaults when attributes are missing', async () => {
+      const xml =
+        '<abapformatter:PrettyPrinterSettings xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>';
+      const http = mockHttp(xml);
+      const settings = await getPrettyPrinterSettings(http, unrestrictedSafetyConfig());
+      expect(settings).toEqual({ indentation: true, style: 'keywordUpper' });
+    });
+  });
+
+  describe('setPrettyPrinterSettings', () => {
+    it('sends expected XML body with formatter attributes', async () => {
+      const http = mockHttp('');
+      await setPrettyPrinterSettings(http, unrestrictedSafetyConfig(), { indentation: false, style: 'keywordLower' });
+      const body = (http.put as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('abapformatter:indentation="false"');
+      expect(body).toContain('abapformatter:style="keywordLower"');
+    });
+
+    it('uses ppsettings v2 content type', async () => {
+      const http = mockHttp('');
+      await setPrettyPrinterSettings(http, unrestrictedSafetyConfig(), { indentation: true, style: 'keywordUpper' });
+      expect(http.put).toHaveBeenCalledWith(
+        '/sap/bc/adt/abapsource/prettyprinter/settings',
+        expect.any(String),
+        'application/vnd.sap.adt.ppsettings.v2+xml',
+      );
+    });
+
+    it('is blocked in read-only mode', async () => {
+      const http = mockHttp('');
+      await expect(
+        setPrettyPrinterSettings(http, defaultSafetyConfig(), { indentation: true, style: 'keywordUpper' }),
+      ).rejects.toThrow(AdtSafetyError);
     });
   });
 
