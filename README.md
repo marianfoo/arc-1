@@ -6,7 +6,7 @@ ARC-1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MC
 
 
 
-**[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
+**[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Quickstart](https://marianfoo.github.io/arc-1/quickstart/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
 
 ## Why ARC-1?
 
@@ -99,7 +99,9 @@ ARC-1 probes the SAP system at startup and adapts its behavior:
 npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
 ```
 
-For Docker, BTP deployment, client configuration (Claude Desktop, Claude Code, VS Code, Copilot Studio), and all authentication methods, see the **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)**.
+- **Trying it out on your laptop?** → [Quickstart](https://marianfoo.github.io/arc-1/quickstart/)
+- **Full local dev setup (Docker, cookie extractor, client configs)?** → [Local Development](https://marianfoo.github.io/arc-1/local-development/)
+- **Deploying for a team / BTP?** → [Deployment](https://marianfoo.github.io/arc-1/deployment/)
 
 ## Documentation
 
@@ -107,12 +109,14 @@ Full documentation is available at **[marianfoo.github.io/arc-1](https://marianf
 
 | Guide | Description |
 |-------|-------------|
-| [Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/) | Deployment options, auth methods, client configuration |
+| [Quickstart](https://marianfoo.github.io/arc-1/quickstart/) | 5-minute npx + Claude Desktop setup |
+| [Local Development](https://marianfoo.github.io/arc-1/local-development/) | Full local dev — all install methods, MCP client configs, SSO cookie extractor |
+| [Deployment](https://marianfoo.github.io/arc-1/deployment/) | Multi-user deployment — Docker, BTP Cloud Foundry, BTP ABAP |
+| [Configuration](https://marianfoo.github.io/arc-1/configuration-reference/) | Every flag and env var, one table |
+| [Updating](https://marianfoo.github.io/arc-1/updating/) | Update procedures per install method |
+| [Enterprise Auth](https://marianfoo.github.io/arc-1/enterprise-auth/) | Layer A / Layer B auth internals, coexistence matrix |
 | [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 11 tools |
 | [Architecture](https://marianfoo.github.io/arc-1/architecture/) | System architecture with diagrams |
-| [Docker Guide](https://marianfoo.github.io/arc-1/docker/) | Docker deployment reference |
-| [Enterprise Auth](https://marianfoo.github.io/arc-1/enterprise-auth/) | All authentication methods |
-| [BTP Deployment](https://marianfoo.github.io/arc-1/phase4-btp-deployment/) | Cloud Foundry deployment on SAP BTP |
 | [AI Usage Patterns](https://marianfoo.github.io/arc-1/mcp-usage/) | Agent workflow patterns and best practices |
 
 ## Development

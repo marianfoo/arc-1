@@ -75,6 +75,12 @@ export interface ServerConfig {
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
   ppStrict: boolean; // If true, PP failure = error (no fallback to shared client)
+  /** Opt-in: allow shared cookie auth to coexist with PP (shared client only) */
+  ppAllowSharedCookies: boolean;
+
+  // --- SAML Behavior ---
+  /** Opt-in: disable SAML redirect for ADT requests (X-SAP-SAML2 + saml2=disabled) */
+  disableSaml2: boolean;
 
   // --- Logging ---
   logFile?: string;
@@ -139,6 +145,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   btpOAuthCallbackPort: 0,
   ppEnabled: false,
   ppStrict: false,
+  ppAllowSharedCookies: false,
+  disableSaml2: false,
   toolMode: 'standard',
   lintBeforeWrite: true,
   cacheMode: 'auto',

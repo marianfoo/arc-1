@@ -1,5 +1,8 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseCookieFileContent, parseCookieString } from '../../../src/adt/cookies.js';
+import { parseCookieFileContent, parseCookieString, resolveCookies } from '../../../src/adt/cookies.js';
 
 describe('parseCookieString', () => {
   it('parses simple cookie string', () => {
@@ -77,5 +80,43 @@ describe('parseCookieFileContent', () => {
 
   it('handles empty file', () => {
     expect(parseCookieFileContent('')).toEqual({});
+  });
+});
+
+describe('resolveCookies', () => {
+  function writeCookieFixture(content: string): { file: string; cleanup: () => void } {
+    const dir = mkdtempSync(join(tmpdir(), 'arc1-cookies-test-'));
+    const file = join(dir, 'cookies.txt');
+    writeFileSync(file, content, 'utf-8');
+    return {
+      file,
+      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    };
+  }
+
+  it('returns undefined when neither source is set', () => {
+    expect(resolveCookies(undefined, undefined)).toBeUndefined();
+  });
+
+  it('loads cookies from cookie file', () => {
+    const fixture = writeCookieFixture('.example.com\tTRUE\t/\tFALSE\t0\tSAP_SESSIONID\txyz789\n');
+    try {
+      expect(resolveCookies(fixture.file, undefined)).toEqual({ SAP_SESSIONID: 'xyz789' });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('loads cookies from cookie string', () => {
+    expect(resolveCookies(undefined, 'a=1; b=2')).toEqual({ a: '1', b: '2' });
+  });
+
+  it('cookie string overrides cookie file on collision', () => {
+    const fixture = writeCookieFixture('.example.com\tTRUE\t/\tFALSE\t0\ta\tfrom-file\n');
+    try {
+      expect(resolveCookies(fixture.file, 'a=override; b=2')).toEqual({ a: 'override', b: '2' });
+    } finally {
+      fixture.cleanup();
+    }
   });
 });

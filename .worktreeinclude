@@ -12,3 +12,5 @@ mta.yaml
 
 # arc1 runtime config (may contain credentials)
 .arc1*.json
+
+INFRASTRUCTURE.md

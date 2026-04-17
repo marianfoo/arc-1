@@ -732,7 +732,7 @@ docker run -i --rm \
 
 ## Updating the Image
 
-For a comprehensive update guide covering all deployment modes (Docker, BTP, npm), see **[setup-guide.md — Updating arc1](setup-guide.md#updating-arc1)**.
+For a comprehensive update guide covering all deployment modes (Docker, BTP, npm), see **[updating.md](updating.md)**.
 
 ### Quick reference
 

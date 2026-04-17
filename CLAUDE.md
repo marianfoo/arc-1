@@ -101,6 +101,8 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
 | `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
+| `SAP_PP_ALLOW_SHARED_COOKIES` / `--pp-allow-shared-cookies` | Opt-in escape hatch allowing `SAP_COOKIE_FILE`/`SAP_COOKIE_STRING` to coexist with `SAP_PP_ENABLED`. Cookies stay on shared client only. (default: false) |
+| `SAP_DISABLE_SAML` / `--disable-saml` | Opt-in: disable SAML redirect via `X-SAP-SAML2: disabled` + `?saml2=disabled`. Do NOT use on BTP ABAP or S/4 Public Cloud. (default: false) |
 | `ARC1_PROFILE` / `--profile` | Safety profile shortcut: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql` |
 
 ## Codebase Structure
@@ -210,6 +212,8 @@ tests/
 | Modify scope enforcement | `src/handlers/intent.ts` (TOOL_SCOPES), `src/server/server.ts` (tool listing filter) |
 | Modify OIDC token handling | `src/server/http.ts` (validateOidcToken, ~line 274) |
 | Add/modify auth scopes | `xs-security.json`, `src/server/xsuaa.ts`, `src/server/http.ts`, `src/handlers/intent.ts` |
+| Add / modify auth combination rule | `src/server/config.ts` (validateConfig at ~line 305), `src/server/types.ts` (ServerConfig), `tests/unit/server/config.test.ts`, `docs/enterprise-auth.md` (Coexistence Matrix) |
+| Add Layer B auth mechanism | `src/adt/http.ts` (applyAuthHeader at ~line 830, fetchCsrfToken at ~line 669), `src/server/server.ts` (buildAdtConfig — perUser flag), `tests/unit/adt/http.test.ts` |
 | Add safety config option | `src/adt/safety.ts`, `src/server/config.ts`, `src/server/types.ts` |
 | Add feature probe | `src/adt/features.ts` |
 | Add feature-gated write guard | `src/handlers/intent.ts` (checkRapAvailable pattern), `src/adt/features.ts` |
@@ -476,6 +480,7 @@ Automated via [release-please](https://github.com/googleapis/release-please). No
 - Sensitive fields (password, token, cookie) are redacted in logs
 - CSRF tokens are auto-managed by `src/adt/http.ts` (fetch via HEAD, refresh on 403)
 - **Safety config is the server ceiling** — per-user scopes (JWT) can only restrict further, never expand beyond server config
+- **Per-user auth never inherits shared credentials.** `buildAdtConfig(config, btpProxy?, bearerTokenProvider?, { perUser: true })` strips `username`/`password`/`cookies`. Any new Layer B field must respect this flag. Never add auth fields directly to `createPerUserClient`'s `adtConfig` without going through `buildAdtConfig`.
 - **All ADT endpoints have safety guards** — every `http.get/post/put/delete` call is preceded by `checkOperation()`. No unguarded HTTP calls.
 - **Error types matter**: `AdtApiError` (SAP HTTP error), `AdtSafetyError` (blocked by config), `AdtNetworkError` (connectivity). `intent.ts` formats these with LLM-friendly hints.
 - **Stateful sessions**: Lock→modify→unlock sequences must use `http.withStatefulSession()` to share cookies/CSRF tokens across requests

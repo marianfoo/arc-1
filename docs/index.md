@@ -172,16 +172,22 @@ arc1 --allowed-ops "RSQ"                      # whitelist operations
 
 | Doc | Description |
 |-----|-------------|
-| [setup-guide.md](setup-guide.md) | **Start here** — deployment options, auth methods, decision tree |
-| [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
+| [quickstart.md](quickstart.md) | **Start here** — 5-minute npx + Claude Desktop setup |
+| [local-development.md](local-development.md) | Full local dev — npx/npm/Docker/git, `.env`, SSO cookie extractor, MCP client configs |
+| [deployment.md](deployment.md) | Multi-user deployment — Docker on a VM, BTP Cloud Foundry, BTP ABAP |
+| [configuration-reference.md](configuration-reference.md) | Every flag and env var, one table |
+| [updating.md](updating.md) | Update procedures (npx / Docker / BTP / git) |
+| [enterprise-auth.md](enterprise-auth.md) | Auth internals — Layer A / Layer B, coexistence matrix |
+| [authorization.md](authorization.md) | Scopes, roles, safety profiles |
 | [tools.md](tools.md) | Complete tool reference (11 intent-based tools) |
-| [caching.md](caching.md) | Object caching — memory, SQLite, pre-warmer, reverse dep lookup |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
-| [docker.md](docker.md) | Full Docker reference |
-| [btp-abap-environment.md](btp-abap-environment.md) | **BTP ABAP Environment** — direct connection via service key + OAuth |
-| [enterprise-auth.md](enterprise-auth.md) | Enterprise authentication (all methods) |
-| [security-guide.md](security-guide.md) | Security hardening checklist for production deployments |
+| [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
+| [caching.md](caching.md) | Object caching — memory, SQLite, pre-warmer, reverse dep lookup |
+| [security-guide.md](security-guide.md) | Security hardening checklist for production |
 | [cli-guide.md](cli-guide.md) | CLI commands and configuration |
+| [docker.md](docker.md) | Full Docker reference |
+| [btp-abap-environment.md](btp-abap-environment.md) | BTP ABAP Environment — direct connection via service key + OAuth |
+| [phase4-btp-deployment.md](phase4-btp-deployment.md) | BTP Cloud Foundry deployment details |
 | [sap-trial-setup.md](sap-trial-setup.md) | SAP BTP trial setup |
 | [roadmap.md](roadmap.md) | Planned features |
 

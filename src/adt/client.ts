@@ -85,7 +85,9 @@ export class AdtClient {
       cookies: config.cookies,
       btpProxy: config.btpProxy,
       sapConnectivityAuth: config.sapConnectivityAuth,
+      ppProxyAuth: config.ppProxyAuth,
       bearerTokenProvider: config.bearerTokenProvider,
+      disableSaml: config.disableSaml,
       semaphore: config.maxConcurrent ? new Semaphore(config.maxConcurrent) : undefined,
     };
 
