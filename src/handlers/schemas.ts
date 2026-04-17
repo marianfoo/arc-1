@@ -392,9 +392,11 @@ export const SAPNavigateSchema = z.object({
 // ─── SAPLint ────────────────────────────────────────────────────────
 
 export const SAPLintSchema = z.object({
-  action: z.enum(['lint', 'lint_and_fix', 'list_rules']),
+  action: z.enum(['lint', 'lint_and_fix', 'list_rules', 'format', 'get_formatter_settings', 'set_formatter_settings']),
   source: z.string().optional(),
   name: z.string().optional(),
+  indentation: z.coerce.boolean().optional(),
+  style: z.enum(['keywordUpper', 'keywordLower', 'keywordAuto', 'none']).optional(),
   rules: z.record(z.string(), z.any()).optional(),
 });
 

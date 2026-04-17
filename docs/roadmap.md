@@ -45,39 +45,38 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~—~~ | ~~COMPAT-02~~ | ~~CSRF HEAD→GET fallback (S/4HANA Public Cloud)~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
 | ~~—~~ | ~~COMPAT-03~~ | ~~V4 SRVB publish endpoint bug~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-15~~ |
 | 1 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
-| 2 | FEAT-10 | PrettyPrint (Code Formatting) | P1 | XS | Features |
-| 3 | FEAT-20 | Source Version / Revision History | P1 | S | Features |
+| 2 | FEAT-20 | Source Version / Revision History | P1 | S | Features |
 | ~~—~~ | ~~FEAT-49~~ | ~~Object Transport History (Reverse Lookup)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
-| 5 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
-| 6 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
-| 7 | FEAT-24 | CompareSource (Diff) | P2 ↑ | S | Features |
-| 8 | FEAT-32 | Table Pagination / Offset | P2 | XS | Features |
-| 9 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
-| 10 | FEAT-28 | SAP Compatibility Hardening | P2 | S | Features |
-| 11 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
-| 12 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
-| 13 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
+| 3 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
+| 4 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
+| 5 | FEAT-24 | CompareSource (Diff) | P2 ↑ | S | Features |
+| 6 | FEAT-32 | Table Pagination / Offset | P2 | XS | Features |
+| 7 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
+| 8 | FEAT-28 | SAP Compatibility Hardening | P2 | S | Features |
+| 9 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
+| 10 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
+| 11 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
 | ~~—~~ | ~~FEAT-43~~ | ~~DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations)~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
-| 15 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
-| 16 | SEC-05 | Rate Limiting | P2 | S | Security |
-| 17 | FEAT-31 | Code Coverage from Unit Tests | P2 | S | Features |
-| ~~18~~ | ~~FEAT-33~~ | ~~CDS Impact Analysis~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
-| 19 | FEAT-26 | MCP Client Config Snippets | P2 | S | Features |
-| 20 | FEAT-25 | CDS Unit Tests | P2 | S | Features |
-| 21 | FEAT-23 | GetProgFullCode (Include Traversal) | P2 | S | Features |
-| 22 | FEAT-36 | Type Information (SAPNavigate) | P2 | S | Features |
-| 23 | FEAT-27 | Migration Analysis (ECC->S/4) | P2 | S | Features |
-| 24 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
-| 25 | FEAT-03 | Enhancement Framework (BAdI) | P2 | M | Features |
-| 26 | FEAT-22 | gCTS/abapGit Integration | P2 | M | Features |
-| 27 | FEAT-34 | i18n Translation Management | P2 | M | Features |
-| 28 | FEAT-30 | ABAP Cleaner Integration | P2 | M | Features |
-| 29 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
+| 12 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
+| 13 | SEC-05 | Rate Limiting | P2 | S | Security |
+| 14 | FEAT-31 | Code Coverage from Unit Tests | P2 | S | Features |
+| ~~—~~ | ~~FEAT-33~~ | ~~CDS Impact Analysis~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
+| 15 | FEAT-26 | MCP Client Config Snippets | P2 | S | Features |
+| 16 | FEAT-25 | CDS Unit Tests | P2 | S | Features |
+| 17 | FEAT-23 | GetProgFullCode (Include Traversal) | P2 | S | Features |
+| 18 | FEAT-36 | Type Information (SAPNavigate) | P2 | S | Features |
+| 19 | FEAT-27 | Migration Analysis (ECC->S/4) | P2 | S | Features |
+| 20 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
+| 21 | FEAT-03 | Enhancement Framework (BAdI) | P2 | M | Features |
+| 22 | FEAT-22 | gCTS/abapGit Integration | P2 | M | Features |
+| 23 | FEAT-34 | i18n Translation Management | P2 | M | Features |
+| 24 | FEAT-30 | ABAP Cleaner Integration | P2 | M | Features |
+| 25 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
 | — | COMPAT-04 | BTP transport omission in safeUpdateSource() — verify only | P2 | XS | Compatibility |
-| 30 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
-| 31 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
-| 32 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
-| 33 | OPS-03 | Multi-System Routing | P3 | L | Ops |
+| 28 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
+| 29 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
+| 30 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
+| 31 | OPS-03 | Multi-System Routing | P3 | L | Ops |
 
 ---
 
@@ -86,8 +85,9 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
 | FEAT-49 | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
-| FEAT-33 | CDS Impact Analysis | 2026-04-16 | Features |
+| FEAT-10 | PrettyPrint (Code Formatting) | 2026-04-17 | Features |
 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
+| FEAT-33 | CDS Impact Analysis | 2026-04-16 | Features |
 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
 | FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
 | FEAT-37 | DCL (Access Control) Read/Write | 2026-04-15 | Features |
@@ -147,7 +147,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 > Priorities are assigned based on which [core design principle](#vision) a feature serves. Sourced from 4 competitor trackers ([fr0ster](../compare/fr0ster/overview.md), [VSP](../compare/vibing-steampunk/overview.md), [abap-adt-api](../compare/abap-adt-api/overview.md), [dassian-adt](../compare/07-dassian-adt.md)) and the [cross-project feature matrix](../compare/00-feature-matrix.md).
 >
-> **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
+> **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1, completed 2026-04-17). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
 >
 > **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) identified COMPAT-01..03 plus verify item COMPAT-04. Follow-up confirmed COMPAT-03 had already been fixed in PR #130 (commit `9b0601c`, completed 2026-04-15). COMPAT-01 and COMPAT-02 were fixed in this follow-up (completed 2026-04-16). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of recurring 423 lock errors and surfaced S/4HANA Public Cloud CSRF HEAD incompatibility (#104). PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API. Added **FEAT-49** (Object Transport History) at P1 — reverse lookup ("which transports contain this object?") is the missing link for transport-scoped code review (fr0ster#30). Enriched **FEAT-20** (revisions) with concrete ADT endpoint details; upgraded **FEAT-24** (diff) rationale — the trio (FEAT-49→FEAT-20→FEAT-24) enables the full code review workflow no competitor has end-to-end. Overview table re-sorted by actual priority (P0→P1→P2→P3).
 
@@ -181,7 +181,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 13. ~~**FEAT-44** TABL (Database Table) Create (S)~~ — **completed 2026-04-14** (source-based TABL create/update/delete + batch_create support in SAPWrite)
 14. ~~**FEAT-45** DEVC (Package) Create (S)~~ — **completed 2026-04-14**. Endpoint: `/sap/bc/adt/packages`.
 15. **FEAT-18** Function Group Bulk Fetch (S) — token/round-trip savings. dassian-adt has parallel fetch (objectstructure + Promise.all pattern confirmed).
-16. **FEAT-10** PrettyPrint (XS) — **↑ Upgraded from P2:** dassian-adt and VSP both have this. XS effort, high visibility.
+16. ~~**FEAT-10** PrettyPrint (XS)~~ — **completed 2026-04-17** (`SAPLint` actions: `format`, `get_formatter_settings`, `set_formatter_settings`).
 17. **FEAT-20** Source Version / Revision History (S) — **↑ Upgraded from P2:** dassian-adt added `abap_get_revisions`. Enables diff and rollback workflows. ADT endpoints confirmed: `{sourceUrl}/versions` (Atom feed) + `{versionUri}` for source at revision.
 18. ~~**FEAT-49** Object Transport History / Reverse Lookup (S)~~ — **completed 2026-04-17.** Implemented as `SAPTransport(action="history")` using per-object `GET {objectUrl}/transports` endpoint with `transportchecks` fallback for candidate transports.
 19. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
@@ -189,12 +189,11 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
 13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
-14. ~~**FEAT-10** PrettyPrint (XS) — **promoted to P1/Phase B** (dassian-adt + VSP have it)~~
-15. ~~**FEAT-11** Inactive Objects List (XS)~~ — **completed** (via SAPRead type=INACTIVE_OBJECTS)
-16. ~~**FEAT-19** Transport Contents (XS)~~ — **completed** (subsumed by FEAT-39)
-17. **FEAT-21** ABAP Documentation / F1 Help (XS) — real docs instead of hallucination
-18. **FEAT-28** SAP Compatibility Hardening (S) — 7 compat fixes bundled (expanded Apr 8)
-19. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
+14. ~~**FEAT-11** Inactive Objects List (XS)~~ — **completed** (via SAPRead type=INACTIVE_OBJECTS)
+15. ~~**FEAT-19** Transport Contents (XS)~~ — **completed** (subsumed by FEAT-39)
+16. **FEAT-21** ABAP Documentation / F1 Help (XS) — real docs instead of hallucination
+17. **FEAT-28** SAP Compatibility Hardening (S) — 7 compat fixes bundled (expanded Apr 8)
+18. **OPS-02** Health Check Enhancements (XS) — `/health/deep` with SAP connectivity check
 
 ### Phase D: ADT Feature Parity (P2) — Larger Items
 20. ~~**FEAT-46** SRVB (Service Binding) Create (S)~~ — **completed 2026-04-14** (SAPWrite now supports SRVB create/update/delete + batch_create; create guidance points to activate + publish flow).
@@ -562,18 +561,18 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 ### FEAT-10: PrettyPrint (Code Formatting)
 | Field | Value |
 |-------|-------|
-| **Priority** | P2 |
+| **Priority** | P1 |
 | **Effort** | XS (< 1 day) |
 | **Risk** | Low |
 | **Usefulness** | Medium — code formatting via ADT API |
-| **Status** | Not started |
+| **Status** | Done |
 | **Source** | [Feature matrix #14](../compare/00-feature-matrix.md) |
 
 **What:** Format ABAP source code via ADT's PrettyPrint API. VSP and mcp-abap-abap-adt-api have this. Also includes get/set PrettyPrinter settings.
 
 **Why:** Consistent code formatting is important for readability and team standards.
 
-**Why not:** `SAPLint` with auto-fix already handles code formatting (indentation, spacing, line breaks, keyword casing) via `@abaplint/core` — locally, without a SAP round-trip. ADT PrettyPrint adds 100ms+ network latency for zero additional value over the local formatter. Code formatting is stateless and doesn't need SAP's ADT. Users who want IDE-style formatting use their IDE, not an MCP server.
+**Resolution:** Implemented as three `SAPLint` actions: `format` (server-side ADT PrettyPrint), `get_formatter_settings`, and `set_formatter_settings`. Formatter settings are read/written via `/sap/bc/adt/abapsource/prettyprinter/settings`, while source formatting uses `/sap/bc/adt/abapsource/prettyprinter`. See implementation plan and checklist in [docs/plans/completed/prettyprint-adt-formatter.md](./plans/completed/prettyprint-adt-formatter.md).
 
 ---
 

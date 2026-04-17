@@ -196,6 +196,7 @@ tests/
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
 | Add XML response parser | `src/adt/xml-parser.ts` |
 | Add safety check | `src/adt/safety.ts` |
+| Add/modify PrettyPrint action | `src/adt/devtools.ts`, `src/handlers/intent.ts` (handleSAPLint), `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add lint rule config | `src/lint/lint.ts`, `src/lint/config-builder.ts`, `src/lint/presets/` |
 | Add dependency pattern | `src/context/deps.ts` |
 | Add CDS dependency pattern | `src/context/cds-deps.ts` |

@@ -51,9 +51,13 @@ import {
   activateBatch,
   applyFixProposal,
   getFixProposals,
+  getPrettyPrinterSettings,
+  type PrettyPrinterSettings,
+  prettyPrint,
   publishServiceBinding,
   runAtcCheck,
   runUnitTests,
+  setPrettyPrinterSettings,
   syntaxCheck,
   unpublishServiceBinding,
 } from '../adt/devtools.js';
@@ -1072,10 +1076,9 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
   }
 }
 
-// _client unused: SAPLint runs offline via @abaplint/core (no SAP round-trip).
-// Signature matches other handlers for consistency with handleToolCall dispatch.
+// Some SAPLint actions run offline (@abaplint/core), others call SAP ADT formatter APIs.
 async function handleSAPLint(
-  _client: AdtClient,
+  client: AdtClient,
   args: Record<string, unknown>,
   config: ServerConfig,
 ): Promise<ToolResult> {
@@ -1122,9 +1125,33 @@ async function handleSAPLint(
         ),
       );
     }
+    case 'format': {
+      const source = String(args.source ?? '');
+      if (!source) return errorResult('"source" is required for format action.');
+      const formatted = await prettyPrint(client.http, client.safety, source);
+      return textResult(formatted);
+    }
+    case 'get_formatter_settings': {
+      const settings = await getPrettyPrinterSettings(client.http, client.safety);
+      return textResult(JSON.stringify(settings, null, 2));
+    }
+    case 'set_formatter_settings': {
+      const indentation = args.indentation as boolean | undefined;
+      const style = args.style as PrettyPrinterSettings['style'] | undefined;
+      if (indentation === undefined && style === undefined) {
+        return errorResult('At least one of "indentation" or "style" is required for set_formatter_settings.');
+      }
+      const current = await getPrettyPrinterSettings(client.http, client.safety);
+      const next: PrettyPrinterSettings = {
+        indentation: indentation ?? current.indentation,
+        style: style ?? current.style,
+      };
+      await setPrettyPrinterSettings(client.http, client.safety, next);
+      return textResult(JSON.stringify(next, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPLint action: "${action}". Supported: lint, lint_and_fix, list_rules. For atc/syntax/unittest, use SAPDiagnose instead.`,
+        `Unknown SAPLint action: "${action}". Supported: lint, lint_and_fix, list_rules, format, get_formatter_settings, set_formatter_settings. For atc/syntax/unittest, use SAPDiagnose instead.`,
       );
   }
 }

@@ -427,6 +427,20 @@ describe('SAPLintSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts formatter actions', () => {
+    expect(SAPLintSchema.safeParse({ action: 'format', source: 'report ztest.' }).success).toBe(true);
+    expect(SAPLintSchema.safeParse({ action: 'get_formatter_settings' }).success).toBe(true);
+    expect(SAPLintSchema.safeParse({ action: 'set_formatter_settings', style: 'keywordLower' }).success).toBe(true);
+  });
+
+  it('coerces indentation for set_formatter_settings', () => {
+    const result = SAPLintSchema.safeParse({ action: 'set_formatter_settings', indentation: 0 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.indentation).toBe(false);
+    }
+  });
+
   it('rejects invalid action', () => {
     const result = SAPLintSchema.safeParse({ action: 'invalid' });
     expect(result.success).toBe(false);
