@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.9](https://github.com/marianfoo/arc-1/compare/v0.6.8...v0.6.9) (2026-04-17)
+
+
+### Features
+
+* Add CDS-specific impact analysis ([#143](https://github.com/marianfoo/arc-1/issues/143)) ([0dab061](https://github.com/marianfoo/arc-1/commit/0dab061bbb0ef97bf4ae36d622499b48fdd7cd3b))
+* FEAT-43 SAPRead for AUTH, FTG2, ENHO (on-prem) ([#142](https://github.com/marianfoo/arc-1/issues/142)) ([2a827a1](https://github.com/marianfoo/arc-1/commit/2a827a15276e92f1edd35e3094018ca4510aaadf))
+* fix cookie→PP leak, gate saml2=disabled, wire cookies & verbose CLI ([#149](https://github.com/marianfoo/arc-1/issues/149)) ([74111ff](https://github.com/marianfoo/arc-1/commit/74111ff80f783f8212aa1100416ed10d389a397b))
+* SAPLint PrettyPrint (ADT code formatter) ([#145](https://github.com/marianfoo/arc-1/issues/145)) ([af6da11](https://github.com/marianfoo/arc-1/commit/af6da115c709f5da08e6c87da7420e96c5e3539f))
+* SAPTransport history action (object transport reverse lookup) ([#146](https://github.com/marianfoo/arc-1/issues/146)) ([8cae8f2](https://github.com/marianfoo/arc-1/commit/8cae8f26997f647f8bf093361516a0b98f218ea9))
+* Source Version / Revision History (on-prem) ([#144](https://github.com/marianfoo/arc-1/issues/144)) ([92f6ef2](https://github.com/marianfoo/arc-1/commit/92f6ef225433ca219bab9430fad9d43e7914260e))
+
+
+### Bug Fixes
+
+* modificationSupport guard + CSRF HEAD→GET fallback for S/4HANA Public Cloud ([#140](https://github.com/marianfoo/arc-1/issues/140)) ([9fcd4aa](https://github.com/marianfoo/arc-1/commit/9fcd4aae43d3e1268baecd0a73a4f47c6bf2debf))
+
+
+### Tests
+
+* restructure LLM evals by feature bucket + live MCP backend ([#147](https://github.com/marianfoo/arc-1/issues/147)) ([27f4f51](https://github.com/marianfoo/arc-1/commit/27f4f513d44273c22eb6d2a29f72939045746198))
+
 ## [0.6.8](https://github.com/marianfoo/arc-1/compare/v0.6.7...v0.6.8) (2026-04-16)
 
 
