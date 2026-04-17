@@ -1,24 +1,18 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+<?xml version="1.0" encoding="utf-8"?>
+<asx:abap version="1.0" xmlns:asx="http://www.sap.com/abapxml">
   <asx:values>
     <DATA>
-      <LOCKS>
-        <HEADER>
-          <TRKORR>A4HK900123</TRKORR>
-        </HEADER>
-      </LOCKS>
-      <TRANSPORTS>
-        <headers>
-          <TRKORR>A4HK900124</TRKORR>
-          <AS4TEXT>Refactor ZCL_ORDER</AS4TEXT>
-          <AS4USER>DEVELOPER</AS4USER>
-        </headers>
-        <headers>
-          <TRKORR>A4HK900125</TRKORR>
-          <AS4TEXT>Bugfix</AS4TEXT>
-          <AS4USER>DEVELOPER</AS4USER>
-        </headers>
-      </TRANSPORTS>
+      <LOCK_HANDLE/>
+      <CORRNR>A4HK900123</CORRNR>
+      <CORRUSER>DEVELOPER</CORRUSER>
+      <CORRTEXT>Refactor ZCL_ORDER</CORRTEXT>
+      <IS_LOCAL/>
+      <IS_LINK_UP/>
+      <MODIFICATION_SUPPORT/>
+      <LINK_UP_MODE/>
+      <CORR_LOCKS/>
+      <CORR_CONTENTS/>
+      <SCOPE_MESSAGES/>
     </DATA>
   </asx:values>
 </asx:abap>

@@ -6327,20 +6327,17 @@ define role ZTEST_DCL {
     });
 
     it('history returns object transport data as JSON', async () => {
+      // Real /transports response shape: com.sap.adt.lock.result2 with flat
+      // CORRNR/CORRUSER/CORRTEXT on DATA. CORRNR is already the parent
+      // K-request (SAP resolves task→parent automatically).
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
     <DATA>
-      <LOCKS>
-        <HEADER><TRKORR>A4HK900123</TRKORR></HEADER>
-      </LOCKS>
-      <TRANSPORTS>
-        <headers>
-          <TRKORR>A4HK900124</TRKORR>
-          <AS4TEXT>Refactor ZCL_TEST</AS4TEXT>
-          <AS4USER>DEVELOPER</AS4USER>
-        </headers>
-      </TRANSPORTS>
+      <LOCK_HANDLE/>
+      <CORRNR>A4HK900123</CORRNR>
+      <CORRUSER>DEVELOPER</CORRUSER>
+      <CORRTEXT>Refactor ZCL_TEST</CORRTEXT>
     </DATA>
   </asx:values>
 </asx:abap>`;
@@ -6358,9 +6355,14 @@ define role ZTEST_DCL {
         uri: '/sap/bc/adt/oo/classes/ZCL_TEST',
       });
       expect(parsed.lockedTransport).toBe('A4HK900123');
-      expect(parsed.relatedTransports[0]?.id).toBe('A4HK900123');
-      expect(Array.isArray(parsed.candidateTransports)).toBe(true);
-      expect(parsed.summary).toContain('locked in transport A4HK900123');
+      expect(parsed.relatedTransports[0]).toEqual({
+        id: 'A4HK900123',
+        description: 'Refactor ZCL_TEST',
+        owner: 'DEVELOPER',
+        status: 'D',
+      });
+      expect(parsed.candidateTransports).toEqual([]);
+      expect(parsed.summary).toBe('Object ZCL_TEST is locked in transport A4HK900123 by DEVELOPER.');
     });
 
     it('history falls back to transportchecks when /transports is empty', async () => {

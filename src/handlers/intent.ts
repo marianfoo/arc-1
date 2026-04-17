@@ -3053,13 +3053,12 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
         }
       }
 
+      const lockOwner = primary.relatedTransports[0]?.owner;
       const summary = primary.lockedTransport
-        ? `Object ${objectName} is locked in transport ${primary.lockedTransport}.`
-        : primary.relatedTransports.length > 0
-          ? `Object ${objectName} is referenced by ${primary.relatedTransports.length} transport(s).`
-          : candidateTransports.length > 0
-            ? `Object ${objectName} has no active lock; ${candidateTransports.length} transport(s) available for assignment.`
-            : `Object ${objectName} has no related or candidate transports (likely $TMP / local object).`;
+        ? `Object ${objectName} is locked in transport ${primary.lockedTransport}${lockOwner ? ` by ${lockOwner}` : ''}.`
+        : candidateTransports.length > 0
+          ? `Object ${objectName} has no active lock; ${candidateTransports.length} transport(s) available for assignment.`
+          : `Object ${objectName} has no related or candidate transports (likely $TMP / local object).`;
 
       const history: ObjectTransportHistory = {
         object: { type: objectType, name: objectName, uri: objectUrl },
