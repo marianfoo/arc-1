@@ -239,7 +239,7 @@ _Last updated: 2026-04-18 (SEC-09 Auth Safety landed 2026-04-17: fixed cookie→
 
 ## Priority Action Items
 
-> All prioritized items with evaluation details are maintained in the [roadmap](../docs/roadmap.md#prioritized-execution-order). The feature matrix tables above are the source of truth for _what exists_; the roadmap is the source of truth for _what to build next and why_.
+> All prioritized items with evaluation details are maintained in the [roadmap](../docs_page/roadmap.md#prioritized-execution-order). The feature matrix tables above are the source of truth for _what exists_; the roadmap is the source of truth for _what to build next and why_.
 
 ---
 

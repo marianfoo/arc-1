@@ -457,17 +457,7 @@ Restrict all write operations to specific packages. Supports wildcards:
 
 Read operations (`R`, `S`) are not restricted by this filter — the AI can still
 read objects from any package; it just cannot modify objects outside the
-allowlist.
-
-#### Package restrictions
-
-By default, write access is limited to `$TMP` (local objects). To allow writing to custom packages:
-
-```bash
--e SAP_ALLOWED_PACKAGES="Z*,$TMP"
-```
-
-This allows writing to any Z-package and `$TMP`. Use `"*"` for unrestricted access.
+allowlist. Use `"*"` for unrestricted write access.
 
 ---
 

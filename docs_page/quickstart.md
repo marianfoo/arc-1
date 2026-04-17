@@ -75,15 +75,46 @@ Claude should call `SAPRead` and return the ABAP source.
 
 ---
 
-## What you just got
+## What you just got — read-only by default
 
-- **Read-only** by default. No writes, no SQL, no table preview, no transport actions.
-- **Basic auth** as YOUR_USER. SAP audit log shows your user.
-- **Safe package scope**: writes (when you enable them) are restricted to `$TMP`.
+Out of the box every destructive or data-exposing capability is blocked:
+
+| Blocked by default | What it disables |
+|---|---|
+| `SAP_READ_ONLY=true` | `SAPWrite` (create/update/delete), `SAPActivate`, FLP workflow actions |
+| `SAP_BLOCK_FREE_SQL=true` | `SAPQuery action=run_query` (free-form SELECT) |
+| `SAP_BLOCK_DATA=true` | `SAPQuery action=table_contents` (named table preview) |
+| `SAP_ENABLE_TRANSPORTS=false` | **all** `SAPTransport` actions — including list/get |
+| `SAP_ALLOWED_PACKAGES=$TMP` | Writes go to `$TMP` only (reads are **never** restricted by package) |
+
+Auth is Basic Auth as YOUR_USER — SAP's audit log shows your actual username.
+
+## Enable more capabilities
+
+Pick the smallest thing that unblocks your task. All three examples go in the same `env` block as the SAP credentials above.
+
+**Writes only (CLAS/INTF/PROG create/update/delete in `$TMP`):**
+
+```json
+"env": { "SAP_READ_ONLY": "false" }
+```
+
+**Writes to custom Z-packages too:**
+
+```json
+"env": { "SAP_READ_ONLY": "false", "SAP_ALLOWED_PACKAGES": "Z*,$TMP" }
+```
+
+**Everything on (writes + transports + SQL + table preview, all packages):**
+
+```json
+"env": { "ARC1_PROFILE": "developer-sql", "SAP_ALLOWED_PACKAGES": "*" }
+```
+
+Profiles are shortcuts — `developer-sql` expands to `readOnly=false`, `blockData=false`, `blockFreeSQL=false`, `enableTransports=true`. Full matrix and per-capability recipes: [local-development.md → Safety profiles](local-development.md#safety-profiles).
 
 ## Next steps
 
-- **Want writes?** Add `ARC1_PROFILE=developer` and `SAP_ALLOWED_PACKAGES=Z*,$TMP` to the `env` block. See [local-development.md](local-development.md#safety-profiles).
 - **Your SAP uses SSO (SAML / SPNEGO / X.509)?** Basic Auth won't work. See [local-development.md → SSO-only on-prem](local-development.md#sso-only-on-prem-cookie-extractor).
 - **Running on BTP or deploying for a team?** → [deployment.md](deployment.md).
 - **Full flag reference** → [configuration-reference.md](configuration-reference.md).

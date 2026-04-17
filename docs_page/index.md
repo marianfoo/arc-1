@@ -74,7 +74,7 @@ Add to `~/.config/claude/claude_desktop_config.json`:
 }
 ```
 
-By default, write access is limited to `$TMP` (local objects). To write to custom packages, set `SAP_ALLOWED_PACKAGES` (e.g., `"Z*,$TMP"` for Z-packages, or `"*"` for unrestricted):
+**ARC-1 is read-only by default** — no writes, no free SQL, no table preview, no transport actions. To enable writes and widen the package scope, add safety flags to the `env` block. The example below unlocks everything (writes + SQL + transports + all packages):
 
 ```json
 {
@@ -87,12 +87,15 @@ By default, write access is limited to `$TMP` (local objects). To write to custo
         "SAP_USER": "your-username",
         "SAP_PASSWORD": "your-password",
         "SAP_CLIENT": "100",
+        "ARC1_PROFILE": "developer-sql",
         "SAP_ALLOWED_PACKAGES": "*"
       }
     }
   }
 }
 ```
+
+For fine-grained control, see [Admin Controls (Safety)](#admin-controls-safety) below or [local-development.md → Safety profiles](local-development.md#safety-profiles).
 
 ### Claude Code
 
@@ -157,16 +160,25 @@ Full reference: **[tools.md](tools.md)**
 
 ## Admin Controls (Safety)
 
-Safe by default — read-only, no SQL, no data preview, no transports. Enable capabilities explicitly:
+Safe by default — read-only, no SQL, no data preview, no transports. Writes are restricted to `$TMP`. Enable capabilities explicitly:
 
 ```bash
-arc1 --profile developer                      # enable writes + transports
-arc1 --profile developer-sql                  # enable writes + SQL + data + transports
-arc1 --read-only=false                        # enable writes only
-arc1 --block-free-sql=false                   # enable free SQL only
-arc1 --allowed-packages "ZPROD*,$TMP"         # restrict write packages
-arc1 --allowed-ops "RSQ"                      # whitelist operations
+# Enable everything (writes + transports + SQL + data, all packages)
+arc1 --profile developer-sql --allowed-packages "*"
+
+# Writes + transports, no SQL/data (default developer preset)
+arc1 --profile developer
+
+# Fine-grained individual flags
+arc1 --read-only=false                        # writes only (still $TMP)
+arc1 --read-only=false --allowed-packages "ZPROD*,$TMP"
+arc1 --block-free-sql=false                   # free SQL only
+arc1 --block-data=false                       # table preview only
+arc1 --enable-transports=true                 # SAPTransport (all actions)
+arc1 --allowed-ops "RSQ"                      # whitelist operation codes
 ```
+
+Full recipe reference: [local-development.md → Safety profiles](local-development.md#safety-profiles). Profile expansions: [configuration-reference.md → Profile expansions](configuration-reference.md#profile-expansions).
 
 ## Documentation
 

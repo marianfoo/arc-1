@@ -1037,7 +1037,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | High — visibility and adoption |
-| **Status** | Draft exists ([Report 023](../reports/2025-12-05-023-arc1-for-abap-developers.md)) |
+| **Status** | Draft exists ([Report 023](../docs/reports/2025-12-05-023-arc1-for-abap-developers.md)) |
 
 **What:** Publish on SAP Community: "ARC-1: Connecting SAP ABAP to Microsoft Copilot Studio via MCP" covering architecture, security model, and setup.
 
@@ -1662,7 +1662,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 **Implemented:** Scope-based where-used analysis in SAPNavigate. Uses ADT endpoint `/sap/bc/adt/repository/informationsystem/usageReferences`. Supports filtering by scope (local, package, system-wide).
 
 **References:**
-- [Report 001: Feature Parity](../reports/2026-03-24-001-feature-parity-implementation.md) — Item #1
+- [Report 001: Feature Parity](../docs/reports/2026-03-24-001-feature-parity-implementation.md) — Item #1
 
 ---
 
@@ -1860,12 +1860,12 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 ## Key References
 
 ### Internal Reports
-- [Enterprise Copilot Studio Plan](../reports/2026-03-23-001-enterprise-copilot-studio-plan.md)
-- [Feature Parity Analysis](../reports/2026-03-24-001-feature-parity-implementation.md)
-- [Enterprise Bridge Gap Analysis](../reports/2026-03-24-002-enterprise-bridge-gap-analysis.md)
-- [Enterprise Auth Research](../reports/2026-03-25-001-enterprise-auth-research.md)
-- [Centralized Auth Architecture](../reports/2026-03-25-003-centralized-mcp-auth-architecture.md)
-- [BTP Deployment Report](../reports/2026-03-25-001-btp-copilot-studio-deployment.md)
+- [Enterprise Copilot Studio Plan](../docs/reports/2026-03-23-001-enterprise-copilot-studio-plan.md)
+- [Feature Parity Analysis](../docs/reports/2026-03-24-001-feature-parity-implementation.md)
+- [Enterprise Bridge Gap Analysis](../docs/reports/2026-03-24-002-enterprise-bridge-gap-analysis.md)
+- [Enterprise Auth Research](../docs/reports/2026-03-25-001-enterprise-auth-research.md)
+- [Centralized Auth Architecture](../docs/reports/2026-03-25-003-centralized-mcp-auth-architecture.md)
+- [BTP Deployment Report](../docs/reports/2026-03-25-001-btp-copilot-studio-deployment.md)
 
 ### External References & Implementations
 - [lemaiwo/btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server) — TypeScript MCP server with XSUAA OAuth proxy, BTP Destination Service, principal propagation

@@ -452,6 +452,6 @@ SAPQuery (freestyle SQL) requires the `sql` scope, not just `data`. Assign MCPSq
 - [XSUAA Setup](xsuaa-setup.md) — Configuring XSUAA scopes and roles on BTP
 - [OAuth / JWT Setup](oauth-jwt-setup.md) — Using external OIDC providers
 - [Principal Propagation Setup](principal-propagation-setup.md) — Per-user SAP identity
-- [Authorization Concept (Research)](../research/authorization-concept.md) — Detailed SAP authorization object mapping and endpoint inventory
+- [Authorization Concept (Research)](../docs/research/authorization-concept.md) — Detailed SAP authorization object mapping and endpoint inventory
 - [SAP ADT Authorization](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/authorization) — Official SAP documentation on ADT authorization objects
 - [OAuth 2.0 Scopes (RFC 6749 Section 3.3)](https://datatracker.ietf.org/doc/html/rfc6749#section-3.3) — OAuth scope specification

@@ -112,30 +112,50 @@ Full reference: [xsuaa-setup.md](xsuaa-setup.md).
 
 ## Safety / scopes / profiles
 
-| Flag | Env Var | Default | Description |
+**Every gate below defaults to the restrictive setting.** ARC-1 starts read-only: no writes, no free SQL, no named table preview, no transport actions, writes confined to `$TMP`. Flip flags or set a profile to enable specific capabilities.
+
+| Flag | Env Var | Default | What it blocks when enabled |
 |---|---|---|---|
-| `--read-only` | `SAP_READ_ONLY` | `true` | Block all write operations |
-| `--block-data` | `SAP_BLOCK_DATA` | `true` | Block table preview |
-| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `true` | Block RunQuery / free SQL |
-| `--allowed-ops` | `SAP_ALLOWED_OPS` | — | Whitelist operation types (e.g. `RSQ`) |
-| `--disallowed-ops` | `SAP_DISALLOWED_OPS` | — | Blacklist operation types |
-| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Restrict writes to packages (wildcards; `*` = unrestricted) |
-| `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` | Enable CTS transport management |
-| `--profile` | `ARC1_PROFILE` | — | `viewer` / `viewer-data` / `viewer-sql` / `developer` / `developer-data` / `developer-sql` |
+| `--read-only` | `SAP_READ_ONLY` | `true` | `SAPWrite` (create/update/delete/edit_method), `SAPActivate`, FLP workflow actions — i.e. ops `C`, `U`, `D`, `A`, `W` |
+| `--block-data` | `SAP_BLOCK_DATA` | `true` | `SAPQuery action=table_contents` (op `Q`) |
+| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `true` | `SAPQuery action=run_query` (op `F`) |
+| `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` | When `false`, **all** `SAPTransport` actions are blocked — list, get, create, release, delete, reassign |
+| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Writes targeting packages outside this list fail. Comma-separated, trailing `*` wildcard only (`Z*,Y*,$TMP`). `*` alone = unrestricted. **Reads are never package-filtered.** |
+| `--allowed-ops` | `SAP_ALLOWED_OPS` | — | Whitelist operation codes (e.g. `RSQ`) — anything not listed is blocked |
+| `--disallowed-ops` | `SAP_DISALLOWED_OPS` | — | Blacklist operation codes — listed codes are blocked, rest allowed |
+| `--profile` | `ARC1_PROFILE` | — | Preset — expands to multiple flags, see [profile expansions](#profile-expansions) below |
 | `--tool-mode` | `ARC1_TOOL_MODE` | `standard` | `standard` (11 tools) / `hyperfocused` (1 tool, ~200 tokens) |
 | `--abaplint-config` | `SAP_ABAPLINT_CONFIG` | — | Path to custom abaplint.jsonc |
 | `--lint-before-write` | `SAP_LINT_BEFORE_WRITE` | `true` | Pre-write lint validation |
+
+### Profile expansions
+
+Profiles are shortcuts. Individual flags set alongside a profile **override** the profile's values.
+
+| Profile | `readOnly` | `blockData` | `blockFreeSQL` | `enableTransports` | `allowedPackages` |
+|---|:---:|:---:|:---:|:---:|---|
+| *(none)* | `true` | `true` | `true` | `false` | `$TMP` |
+| `viewer` | `true` | `true` | `true` | `false` | (default) |
+| `viewer-data` | `true` | `false` | `true` | `false` | (default) |
+| `viewer-sql` | `true` | `false` | `false` | `false` | (default) |
+| `developer` | `false` | `true` | `true` | `true` | `$TMP` |
+| `developer-data` | `false` | `false` | `true` | `true` | `$TMP` |
+| `developer-sql` | `false` | `false` | `false` | `true` | `$TMP` |
+
+**"Enable everything" recipe:** `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*`.
 
 ### Operation-type codes
 
 Used in `--allowed-ops` / `--disallowed-ops`:
 
 ```
-R = Read       S = Search     Q = Query (table preview)   F = FreeSQL
-C = Create     U = Update     D = Delete                  A = Activate
-T = Test       L = Lock       I = Intelligence             W = Workflow
-X = Transport
+Reads:  R = Read       S = Search     I = Intelligence (findRef, whereUsed, completion)
+        Q = Query (table preview)     F = FreeSQL
+Writes: C = Create     U = Update     D = Delete     A = Activate     W = Workflow (FLP)
+Other:  T = Test (unit)   L = Lock   X = Transport
 ```
+
+Write operations `C`, `D`, `U`, `A`, `W` are all blocked when `readOnly=true`, regardless of the op filter.
 
 ---
 
