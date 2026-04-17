@@ -57,6 +57,14 @@ export interface WhereUsedResult {
   packageName: string;
   snippet: string;
   objectDescription: string;
+  parentUri?: string;
+  isResult?: boolean;
+  canHaveChildren?: boolean;
+  usageInformation?: {
+    direct: boolean;
+    productive: boolean;
+    raw: string;
+  };
 }
 
 /** Navigate to definition of a symbol */
@@ -198,6 +206,11 @@ export async function findWhereUsed(
   for (const ref of refs) {
     const adtObj = (ref.adtObject ?? {}) as Record<string, unknown>;
     const pkgRef = (adtObj.packageRef ?? {}) as Record<string, unknown>;
+    const usageInfoRaw = String(ref['@_usageInformation'] ?? '');
+    const usageTokens = usageInfoRaw
+      .split(',')
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
     results.push({
       uri: String(ref['@_uri'] ?? ''),
       type: String(adtObj['@_type'] ?? ''),
@@ -207,10 +220,36 @@ export async function findWhereUsed(
       packageName: String(pkgRef['@_name'] ?? ''),
       snippet: '',
       objectDescription: String(adtObj['@_description'] ?? ''),
+      parentUri: asOptionalString(ref['@_parentUri']),
+      isResult: parseOptionalBoolean(ref['@_isResult']),
+      canHaveChildren: parseOptionalBoolean(ref['@_canHaveChildren']),
+      usageInformation:
+        usageInfoRaw.length > 0
+          ? {
+              direct: usageTokens.includes('gradeDirect'),
+              productive: usageTokens.includes('includeProductive'),
+              raw: usageInfoRaw,
+            }
+          : undefined,
     });
   }
 
   return results;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  const str = String(value);
+  return str.length > 0 ? str : undefined;
+}
+
+function parseOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  const str = String(value).trim().toLowerCase();
+  if (str === 'true') return true;
+  if (str === 'false') return false;
+  return undefined;
 }
 
 /** Get code completion proposals */

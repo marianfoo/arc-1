@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-17
+**Last Updated:** 2026-04-16
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -61,7 +61,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 15 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
 | 16 | SEC-05 | Rate Limiting | P2 | S | Security |
 | 17 | FEAT-31 | Code Coverage from Unit Tests | P2 | S | Features |
-| 18 | FEAT-33 | CDS Impact Analysis | P2 | S | Features |
+| ~~18~~ | ~~FEAT-33~~ | ~~CDS Impact Analysis~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
 | 19 | FEAT-26 | MCP Client Config Snippets | P2 | S | Features |
 | 20 | FEAT-25 | CDS Unit Tests | P2 | S | Features |
 | 21 | FEAT-23 | GetProgFullCode (Include Traversal) | P2 | S | Features |
@@ -86,6 +86,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
 | FEAT-49 | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
+| FEAT-33 | CDS Impact Analysis | 2026-04-16 | Features |
 | FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
 | FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
 | FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
@@ -207,7 +208,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
 26. ~~**FEAT-20** Source Version / Revision History (S) — **promoted to P1/Phase B** (dassian-adt added revisions tool)~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
-28. **FEAT-33** CDS Impact Analysis (S) — VSP has this (Apr 4)
+28. ~~**FEAT-33** CDS Impact Analysis (S)~~ — **completed 2026-04-16** (`SAPContext(action="impact")` for DDLS upstream+downstream analysis)
 25. **FEAT-24** CompareSource / Diff (S) — **↑ Upgraded:** with FEAT-20 (revisions) + FEAT-49 (object transport history), transport-scoped code review now viable (fr0ster#30). Client-side diff of two revision sources — ADT has no server-side diff endpoint.
 26. **FEAT-26** MCP Client Config Snippets (S) — onboarding UX
 27. **FEAT-25** CDS Unit Tests (S) — CDS test-driven development
@@ -224,7 +225,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 ### Phase E: New Capabilities from Competitor Sprint (P2-P3)
 33. **FEAT-31** Code Coverage from Unit Tests (S) — VSP added line-level coverage metrics
 34. **FEAT-32** Table Pagination / Offset (XS) — VSP added offset + columns_only to table contents
-35. **FEAT-33** CDS Impact Analysis (S) — VSP added downstream consumer tracing for CDS views
+35. ~~**FEAT-33** CDS Impact Analysis (S)~~ — **completed 2026-04-16** (RAP-aware downstream consumer classification)
 36. **FEAT-34** i18n Translation Management (M) — VSP added 7 translation tools
 
 ### Phase F: Future / Niche (P3)
@@ -911,14 +912,14 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — increasingly important as S/4 moves logic into CDS |
-| **Status** | Not started |
+| **Status** | Done (2026-04-16) |
 | **Source** | [VSP eval](../compare/vibing-steampunk/evaluations/6c67140-cds-impact.md) |
 
-**What:** CDS-specific impact analysis: trace downstream consumers of a CDS view, get column-level metadata. VSP added CDS impact analysis and element info tools (commit 6c67140, Apr 4). Could extend SAPNavigate or SAPContext.
+**What:** CDS-specific impact analysis is now available via `SAPContext(action="impact", type="DDLS", name="...")`. It returns upstream CDS AST dependencies and downstream RAP-classified where-used consumers in one response.
 
 **Why:** CDS views are the foundation of S/4HANA — understanding downstream impact is critical before making changes.
 
-**Why not:** `SAPContext` with AST-based dependency extraction already returns dependent views, associations, and consumers for CDS entities. ADT doesn't expose a "consumption graph" endpoint — full downstream tracing requires multiple queries or SQL against system tables. Comprehensive impact analysis spans multiple layers (CDS -> OData service -> Fiori app -> transactional programs), which is out of scope for a single MCP tool call.
+**Scope:** Scoped intentionally to the RAP stack immediately around a CDS view (projection chain, BDEF, SRVD, SRVB, DCLS, DDLX, direct ABAP consumers). Multi-level transitive tracing remains out of scope for a single call — follow-up analysis can be done via `SAPNavigate(action="references")` on individual consumers when needed.
 
 ---
 

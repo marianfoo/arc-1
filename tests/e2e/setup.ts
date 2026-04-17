@@ -129,8 +129,37 @@ async function activateObject(client: Client, type: string, name: string): Promi
   }
 }
 
+// Types SAPWrite(action="delete") accepts. SAP-generated siblings like STOB (structure
+// objects auto-created when a DDLS is activated) are not directly deletable and are
+// cleaned up implicitly when their parent DDLS is removed — filter them out so we don't
+// fail the fixture sync on a phantom cleanup step.
+const DELETABLE_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'INCL',
+  'DDLS',
+  'DCLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'SKTD',
+  'TABL',
+  'DOMA',
+  'DTEL',
+  'MSAG',
+]);
+
 async function deleteObjectTypes(client: Client, name: string, types: string[], sink: string[]): Promise<void> {
   for (const type of types) {
+    if (!DELETABLE_TYPES.has(type.toUpperCase())) {
+      console.warn(
+        `    [setup] delete skipped for ${type} ${name}: type not directly deletable (likely SAP-generated sibling)`,
+      );
+      continue; // best-effort-cleanup
+    }
     const deleteResult = await callTool(client, 'SAPWrite', {
       action: 'delete',
       type,
@@ -139,6 +168,10 @@ async function deleteObjectTypes(client: Client, name: string, types: string[], 
     if (deleteResult.isError) {
       const text = toolText(deleteResult);
       if (/not found|does not exist|unknown/i.test(text)) continue;
+      if (/still in use|dependent object|used by|cannot be deleted/i.test(text)) {
+        console.warn(`    [setup] delete skipped for ${type} ${name}: ${text.slice(0, 240)}`);
+        continue; // best-effort-cleanup
+      }
       throw new Error(`Failed to delete ${type} ${name}: ${text}`);
     }
     sink.push(`${type} ${name}`);

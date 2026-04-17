@@ -140,6 +140,7 @@ src/
 │   ├── devtools.ts             # Syntax check, activate, publish SRVB, unit tests
 │   ├── diagnostics.ts          # Short dumps (ST22), ABAP profiler traces
 │   ├── codeintel.ts            # Find def, refs, where-used, completion
+│   ├── cds-impact.ts           # CDS downstream impact classifier (RAP-oriented buckets)
 │   ├── ui5-repository.ts       # UI5 ABAP Repository OData client
 │   ├── flp.ts                  # FLP PAGE_BUILDER_CUST OData client
 │   └── transport.ts            # CTS transport management
@@ -189,6 +190,7 @@ tests/
 | Modify ADT service discovery / MIME types | `src/adt/discovery.ts`, `src/adt/http.ts` |
 | Improve DDIC save diagnostics + SAP-domain error hints (T100/line + lock/auth/dependency hints) | `src/adt/errors.ts` (`extractDdicDiagnostics`, `formatDdicDiagnostics`, `classifySapDomainError`), `src/handlers/intent.ts` (`enrichWithSapDetails`, `formatErrorForLLM`) |
 | Add SAP error classification | `src/adt/errors.ts` (`extractExceptionType`, `extractLockOwner`, `classifySapDomainError`), `src/handlers/intent.ts` (`formatErrorForLLM`, `classifyError`) |
+| Add CDS impact classifier / extend downstream grouping | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts` (`findWhereUsed`), `tests/unit/adt/cds-impact.test.ts` |
 | Add inactive syntax-check support | `src/adt/devtools.ts` (`syntaxCheck` options.version), `src/handlers/intent.ts` (`tryPostSaveSyntaxCheck`) |
 | Add method-level surgery | `src/context/method-surgery.ts` |
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
