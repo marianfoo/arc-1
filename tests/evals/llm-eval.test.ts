@@ -2,42 +2,45 @@
  * LLM Eval Test Suite
  *
  * Tests whether LLMs correctly select and parameterize ARC-1 MCP tools.
- * Runs against Ollama (local) or Anthropic (API) providers.
+ * Scenarios live under `tests/evals/scenarios/<feature>.ts` and are
+ * aggregated by `scenarios/index.ts`. See `tests/evals/README.md` for the
+ * full filter matrix and the rules for adding a new scenario.
  *
- * Usage:
- *   # Run with Ollama (default: qwen3:8b)
- *   EVAL_MODEL=qwen3:8b npm run test:eval
+ * Filtering (precedence: high → low):
+ *   EVAL_SCENARIO=<id>        — single scenario by id (most specific)
+ *   EVAL_FILE=<name>[,<name>] — feature bucket(s); name matches key in SCENARIO_FILES
+ *   EVAL_TAG=<tag>[,<tag>]    — scenarios with ANY of the listed tags
+ *   EVAL_CATEGORY=<category>  — legacy category filter
  *
- *   # Run with a specific Ollama model
- *   EVAL_MODEL=llama3.1:70b npm run test:eval
+ * Backend:
+ *   EVAL_BACKEND=mock (default) — scenario.mockResponses feed the LLM
+ *   EVAL_BACKEND=live           — real MCP server at EVAL_MCP_URL (default
+ *                                 http://localhost:3000/mcp). Skips gracefully
+ *                                 when the server is unreachable.
  *
- *   # Run with Anthropic Claude
- *   EVAL_PROVIDER=anthropic EVAL_MODEL=claude-sonnet-4-20250514 ANTHROPIC_API_KEY=sk-... npm run test:eval
+ * Provider:
+ *   EVAL_PROVIDER=ollama (default) | anthropic
+ *   EVAL_MODEL=<model-id>        (default: qwen3:8b for ollama,
+ *                                 claude-sonnet-4-20250514 for anthropic)
  *
- *   # Filter by category
- *   EVAL_CATEGORY=read npm run test:eval
+ * Scoring:
+ *   EVAL_PASS_THRESHOLD=0.5 (default)
  *
- *   # Filter by specific scenario
- *   EVAL_SCENARIO=read-program npm run test:eval
- *
- * Environment variables:
- *   EVAL_PROVIDER    - "ollama" (default) or "anthropic"
- *   EVAL_MODEL       - Model name (default: "qwen3:8b" for ollama)
- *   EVAL_CATEGORY    - Filter scenarios by category
- *   EVAL_SCENARIO    - Run a single scenario by ID
- *   EVAL_PASS_THRESHOLD - Score threshold for pass (default: 0.5)
- *   OLLAMA_BASE_URL  - Ollama API URL (default: http://localhost:11434)
- *   ANTHROPIC_API_KEY - Required for anthropic provider
+ * Results are printed to the console and persisted under
+ *   test-results/evals/<ISO-timestamp>-<provider>-<model>-<backend>.json
  */
 
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getToolDefinitions } from '../../src/handlers/tools.js';
 import { DEFAULT_CONFIG } from '../../src/server/types.js';
 import { formatResults, runScenario, toOpenAITools } from './harness.js';
+import { checkLiveBackendAvailable, connectLiveBackend, type LiveBackend } from './live-backend.js';
 import { checkAnthropicAvailable, createAnthropicProvider } from './providers/anthropic.js';
 import { checkOllamaAvailable, createOllamaProvider } from './providers/ollama.js';
-import { TOOL_SELECTION_SCENARIOS } from './scenarios/tool-selection.js';
-import type { EvalRunResult, LLMProvider, ScenarioScore, ToolDefinitionForLLM } from './types.js';
+import { ALL_SCENARIOS, FILE_OF_SCENARIO, SCENARIO_FILES } from './scenarios/index.js';
+import type { EvalRunResult, EvalScenario, LLMProvider, ScenarioScore, ToolDefinitionForLLM } from './types.js';
 
 // ─── Configuration ──────────────────────────────────────────────────
 
@@ -45,20 +48,66 @@ const PROVIDER_NAME = process.env.EVAL_PROVIDER ?? 'ollama';
 const DEFAULT_OLLAMA_MODEL = 'qwen3:8b';
 const MODEL =
   process.env.EVAL_MODEL ?? (PROVIDER_NAME === 'ollama' ? DEFAULT_OLLAMA_MODEL : 'claude-sonnet-4-20250514');
-const CATEGORY_FILTER = process.env.EVAL_CATEGORY;
+
+const BACKEND = (process.env.EVAL_BACKEND ?? 'mock').toLowerCase();
 const SCENARIO_FILTER = process.env.EVAL_SCENARIO;
+const FILE_FILTER = parseList(process.env.EVAL_FILE);
+const TAG_FILTER = parseList(process.env.EVAL_TAG ?? process.env.EVAL_TAGS);
+const CATEGORY_FILTER = process.env.EVAL_CATEGORY;
 const PASS_THRESHOLD = Number(process.env.EVAL_PASS_THRESHOLD ?? '0.5');
+
+function parseList(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const items = value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
+}
+
+function matchesFilters(scenario: EvalScenario): boolean {
+  if (SCENARIO_FILTER && scenario.id !== SCENARIO_FILTER) return false;
+  if (FILE_FILTER) {
+    const file = FILE_OF_SCENARIO[scenario.id];
+    if (!file || !FILE_FILTER.includes(file)) return false;
+  }
+  if (TAG_FILTER) {
+    const tags = scenario.tags ?? [];
+    if (!tags.some((tag) => TAG_FILTER.includes(tag))) return false;
+  }
+  if (CATEGORY_FILTER && scenario.category !== CATEGORY_FILTER) return false;
+  return true;
+}
+
+// ─── Results Persistence ────────────────────────────────────────────
+
+function persistResults(result: EvalRunResult): string | null {
+  try {
+    const timestamp = result.timestamp.replace(/[:.]/g, '-');
+    const safeModel = MODEL.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const outPath = resolve(
+      process.cwd(),
+      `test-results/evals/${timestamp}-${PROVIDER_NAME}-${safeModel}-${BACKEND}.json`,
+    );
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, JSON.stringify(result, null, 2));
+    return outPath;
+  } catch (err) {
+    console.warn(`    [eval] Failed to persist results: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
 
 // ─── Test Setup ─────────────────────────────────────────────────────
 
-let provider: LLMProvider;
+let provider: LLMProvider | undefined;
 let tools: ToolDefinitionForLLM[];
-let scenarios: typeof TOOL_SELECTION_SCENARIOS;
+let live: LiveBackend | undefined;
 const allScores: ScenarioScore[] = [];
 
-describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL}`, () => {
+describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
   beforeAll(async () => {
-    // Check provider availability
+    // Provider setup
     if (PROVIDER_NAME === 'ollama') {
       const check = await checkOllamaAvailable(MODEL);
       if (!check.available) {
@@ -77,29 +126,48 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL}`, () => {
       throw new Error(`Unknown provider: ${PROVIDER_NAME}. Use "ollama" or "anthropic".`);
     }
 
-    // Get tool definitions from ARC-1 (reusing production code!)
+    // Live backend (optional)
+    if (BACKEND === 'live') {
+      const check = await checkLiveBackendAvailable();
+      if (!check.available) {
+        console.log(`\n  ⚠️  Skipping eval: live backend unavailable (${check.reason})\n`);
+        provider = undefined; // cause individual tests to no-op
+        return;
+      }
+      live = await connectLiveBackend();
+      console.log(`  Live backend: ${live.url}`);
+    }
+
+    // Tool definitions (same as production MCP server surface)
     const arcTools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false });
     tools = toOpenAITools(arcTools);
 
     console.log(`\n  Provider: ${PROVIDER_NAME}/${MODEL}`);
-    console.log(`  Tools: ${arcTools.map((t) => t.name).join(', ')}`);
-    console.log(`  Pass threshold: ${PASS_THRESHOLD}`);
+    console.log(`  Backend:  ${BACKEND}`);
+    console.log(`  Tools:    ${arcTools.map((t) => t.name).join(', ')}`);
+    console.log(`  Files available: ${Object.keys(SCENARIO_FILES).join(', ')}`);
+    console.log(`  Threshold: ${PASS_THRESHOLD}`);
 
-    // Filter scenarios
-    scenarios = TOOL_SELECTION_SCENARIOS;
-    if (SCENARIO_FILTER) {
-      scenarios = scenarios.filter((s) => s.id === SCENARIO_FILTER);
-    } else if (CATEGORY_FILTER) {
-      scenarios = scenarios.filter((s) => s.category === CATEGORY_FILTER);
-    }
-
-    console.log(`  Scenarios: ${scenarios.length} (of ${TOOL_SELECTION_SCENARIOS.length} total)\n`);
+    // Filter summary
+    const filteredCount = ALL_SCENARIOS.filter(matchesFilters).length;
+    const activeFilters: string[] = [];
+    if (SCENARIO_FILTER) activeFilters.push(`scenario=${SCENARIO_FILTER}`);
+    if (FILE_FILTER) activeFilters.push(`file=${FILE_FILTER.join(',')}`);
+    if (TAG_FILTER) activeFilters.push(`tag=${TAG_FILTER.join(',')}`);
+    if (CATEGORY_FILTER) activeFilters.push(`category=${CATEGORY_FILTER}`);
+    console.log(
+      `  Scenarios: ${filteredCount}/${ALL_SCENARIOS.length}` +
+        (activeFilters.length ? ` (filters: ${activeFilters.join(', ')})` : '') +
+        '\n',
+    );
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    if (live) {
+      await live.close().catch(() => undefined);
+    }
     if (allScores.length === 0) return;
 
-    // Build and print summary
     const total = allScores.length;
     const passed = allScores.filter((s) => s.passed).length;
     const avgToolSelection = allScores.reduce((sum, s) => sum + s.toolSelectionScore, 0) / total;
@@ -128,31 +196,34 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL}`, () => {
     };
 
     console.log(formatResults(result));
+
+    const path = persistResults(result);
+    if (path) console.log(`  Results written to: ${path}\n`);
   });
 
-  // Generate a test case for each scenario
-  // This runs sequentially to avoid overwhelming Ollama
-  for (const scenario of TOOL_SELECTION_SCENARIOS) {
-    // Apply filters at the test level too (for vitest filtering)
-    const shouldSkip =
-      (SCENARIO_FILTER && scenario.id !== SCENARIO_FILTER) ||
-      (CATEGORY_FILTER && scenario.category !== CATEGORY_FILTER);
-
+  // Generate a test case for each scenario.
+  // We iterate ALL_SCENARIOS (not the pre-filtered list) so vitest shows the
+  // full matrix in its reporter with non-matching scenarios visibly skipped.
+  for (const scenario of ALL_SCENARIOS) {
+    const shouldSkip = !matchesFilters(scenario);
     const testFn = shouldSkip ? it.skip : it;
+    const fileTag = FILE_OF_SCENARIO[scenario.id] ?? '?';
 
     testFn(
-      `[${scenario.category}] ${scenario.id}: ${scenario.description}`,
+      `[${fileTag}] ${scenario.id}: ${scenario.description}`,
       async () => {
-        // Skip if provider not available (checked in beforeAll)
         if (!provider) return;
 
-        const score = await runScenario(provider, scenario, tools, { passThreshold: PASS_THRESHOLD });
+        const score = await runScenario(provider, scenario, tools, {
+          passThreshold: PASS_THRESHOLD,
+          liveExecutor: live?.execute,
+        });
         allScores.push(score);
 
-        // Log individual result
         const status = score.passed ? '✅' : '❌';
         console.log(
-          `    ${status} ${scenario.id} — tool:${(score.toolSelectionScore * 100).toFixed(0)}% params:${(score.parameterScore * 100).toFixed(0)}% calls:${score.toolCallCount} ${score.durationMs}ms`,
+          `    ${status} ${scenario.id} — tool:${(score.toolSelectionScore * 100).toFixed(0)}% ` +
+            `params:${(score.parameterScore * 100).toFixed(0)}% calls:${score.toolCallCount} ${score.durationMs}ms`,
         );
         if (!score.passed) {
           console.log(`       ${score.explanation}`);
@@ -163,13 +234,10 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL}`, () => {
           }
         }
 
-        // The test "passes" in vitest if the LLM scored above threshold
-        // We don't fail the CI build on LLM eval — it's informational
-        // But we do assert so the test shows red/green in the output
         expect(score.overallScore, score.explanation).toBeGreaterThanOrEqual(PASS_THRESHOLD);
       },
-      // Long timeout for LLM calls (120s per scenario)
-      120_000,
+      // 180s per scenario — LLM + (optional) real SAP latency.
+      180_000,
     );
   }
 });
