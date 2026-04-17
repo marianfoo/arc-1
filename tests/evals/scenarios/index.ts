@@ -25,6 +25,7 @@ import { SCENARIOS as MANAGE } from './manage.js';
 import { SCENARIOS as NAVIGATE } from './navigate.js';
 import { SCENARIOS as QUERY } from './query.js';
 import { SCENARIOS as READ_BASIC } from './read-basic.js';
+import { SCENARIOS as REVISIONS } from './revisions.js';
 import { SCENARIOS as SEARCH } from './search.js';
 import { SCENARIOS as TRANSPORT } from './transport.js';
 import { SCENARIOS as WRITE } from './write.js';
@@ -43,6 +44,7 @@ export const SCENARIO_FILES: Record<string, EvalScenario[]> = {
   navigate: NAVIGATE,
   query: QUERY,
   'read-basic': READ_BASIC,
+  revisions: REVISIONS,
   search: SEARCH,
   transport: TRANSPORT,
   write: WRITE,
