@@ -12,7 +12,14 @@
 import type { LLMProvider, LLMResponse, LLMToolCall, Message, ToolDefinitionForLLM } from '../types.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
+
+/** Default model. Claude Haiku 4.5 — fast + strong tool calling. */
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+
+/** Lazy so .env loaded by the test entry is picked up. */
+function getAnthropicApiKey(): string {
+  return process.env.ANTHROPIC_API_KEY ?? '';
+}
 
 /** Convert our Message format to Anthropic Messages API format */
 function toAnthropicMessages(messages: Message[]): {
@@ -83,8 +90,9 @@ export function createAnthropicProvider(model: string): LLMProvider {
     model,
 
     async chat(messages: Message[], tools: ToolDefinitionForLLM[]): Promise<LLMResponse> {
-      if (!ANTHROPIC_API_KEY) {
-        throw new Error('ANTHROPIC_API_KEY not set');
+      const apiKey = getAnthropicApiKey();
+      if (!apiKey) {
+        throw new Error('ANTHROPIC_API_KEY not set (add it to .env)');
       }
 
       const { system, messages: apiMessages } = toAnthropicMessages(messages);
@@ -101,7 +109,7 @@ export function createAnthropicProvider(model: string): LLMProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_API_KEY,
+          'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify(body),
@@ -148,8 +156,8 @@ export function createAnthropicProvider(model: string): LLMProvider {
 
 /** Check if Anthropic API key is configured */
 export function checkAnthropicAvailable(): { available: boolean; reason?: string } {
-  if (!ANTHROPIC_API_KEY) {
-    return { available: false, reason: 'ANTHROPIC_API_KEY not set' };
+  if (!getAnthropicApiKey()) {
+    return { available: false, reason: 'ANTHROPIC_API_KEY not set (add it to .env)' };
   }
   return { available: true };
 }

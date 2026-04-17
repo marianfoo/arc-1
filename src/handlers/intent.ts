@@ -12,6 +12,7 @@
 
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { classifyCdsImpact } from '../adt/cds-impact.js';
 import type { AdtClient } from '../adt/client.js';
 import {
   findDefinition,
@@ -50,9 +51,13 @@ import {
   activateBatch,
   applyFixProposal,
   getFixProposals,
+  getPrettyPrinterSettings,
+  type PrettyPrinterSettings,
+  prettyPrint,
   publishServiceBinding,
   runAtcCheck,
   runUnitTests,
+  setPrettyPrinterSettings,
   syntaxCheck,
   unpublishServiceBinding,
 } from '../adt/devtools.js';
@@ -87,6 +92,7 @@ import { checkOperation, checkPackage, isOperationAllowed, OperationType } from 
 import {
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   getTransportInfo,
   listTransports,
@@ -94,11 +100,11 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../adt/transport.js';
-import type { ClassHierarchy, ResolvedFeatures } from '../adt/types.js';
+import type { ClassHierarchy, ObjectTransportHistory, ResolvedFeatures } from '../adt/types.js';
 import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
-import { extractCdsElements } from '../context/cds-deps.js';
+import { extractCdsDependencies, extractCdsElements } from '../context/cds-deps.js';
 import { compressCdsContext, compressContext } from '../context/compressor.js';
 import { extractMethod, formatMethodListing, listMethods, spliceMethod } from '../context/method-surgery.js';
 import {
@@ -1118,10 +1124,9 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
   }
 }
 
-// _client unused: SAPLint runs offline via @abaplint/core (no SAP round-trip).
-// Signature matches other handlers for consistency with handleToolCall dispatch.
+// Some SAPLint actions run offline (@abaplint/core), others call SAP ADT formatter APIs.
 async function handleSAPLint(
-  _client: AdtClient,
+  client: AdtClient,
   args: Record<string, unknown>,
   config: ServerConfig,
 ): Promise<ToolResult> {
@@ -1168,9 +1173,33 @@ async function handleSAPLint(
         ),
       );
     }
+    case 'format': {
+      const source = String(args.source ?? '');
+      if (!source) return errorResult('"source" is required for format action.');
+      const formatted = await prettyPrint(client.http, client.safety, source);
+      return textResult(formatted);
+    }
+    case 'get_formatter_settings': {
+      const settings = await getPrettyPrinterSettings(client.http, client.safety);
+      return textResult(JSON.stringify(settings, null, 2));
+    }
+    case 'set_formatter_settings': {
+      const indentation = args.indentation as boolean | undefined;
+      const style = args.style as PrettyPrinterSettings['style'] | undefined;
+      if (indentation === undefined && style === undefined) {
+        return errorResult('At least one of "indentation" or "style" is required for set_formatter_settings.');
+      }
+      const current = await getPrettyPrinterSettings(client.http, client.safety);
+      const next: PrettyPrinterSettings = {
+        indentation: indentation ?? current.indentation,
+        style: style ?? current.style,
+      };
+      await setPrettyPrinterSettings(client.http, client.safety, next);
+      return textResult(JSON.stringify(next, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPLint action: "${action}". Supported: lint, lint_and_fix, list_rules. For atc/syntax/unittest, use SAPDiagnose instead.`,
+        `Unknown SAPLint action: "${action}". Supported: lint, lint_and_fix, list_rules, format, get_formatter_settings, set_formatter_settings. For atc/syntax/unittest, use SAPDiagnose instead.`,
       );
   }
 }
@@ -3075,9 +3104,51 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
         ),
       );
     }
+    case 'history': {
+      const objectType = String(args.type ?? '');
+      const objectName = String(args.name ?? '');
+      if (!objectType || !objectName) {
+        return errorResult('"type" and "name" are required for "history" action.');
+      }
+
+      const objectUrl = objectUrlForType(objectType, objectName);
+      const primary = await getObjectTransports(client.http, client.safety, objectUrl);
+      let candidateTransports = primary.candidateTransports;
+
+      // Fallback: if per-object transport lookup is empty, derive the package via
+      // the object metadata endpoint and ask transportchecks for candidate transports.
+      if (primary.relatedTransports.length === 0 && candidateTransports.length === 0) {
+        try {
+          const pkg = await client.resolveObjectPackage(objectUrl);
+          if (pkg && pkg !== '$TMP') {
+            const info = await getTransportInfo(client.http, client.safety, objectUrl, pkg, '');
+            candidateTransports = info.existingTransports;
+          }
+        } catch {
+          // best-effort-fallback
+        }
+      }
+
+      const lockOwner = primary.relatedTransports[0]?.owner;
+      const summary = primary.lockedTransport
+        ? `Object ${objectName} is locked in transport ${primary.lockedTransport}${lockOwner ? ` by ${lockOwner}` : ''}.`
+        : candidateTransports.length > 0
+          ? `Object ${objectName} has no active lock; ${candidateTransports.length} transport(s) available for assignment.`
+          : `Object ${objectName} has no related or candidate transports (likely $TMP / local object).`;
+
+      const history: ObjectTransportHistory = {
+        object: { type: objectType, name: objectName, uri: objectUrl },
+        ...(primary.lockedTransport ? { lockedTransport: primary.lockedTransport } : {}),
+        relatedTransports: primary.relatedTransports,
+        candidateTransports,
+        summary,
+      };
+
+      return textResult(JSON.stringify(history, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check`,
+        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check, history`,
       );
   }
 }
@@ -3090,7 +3161,11 @@ async function handleSAPContext(
   cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
-  const type = normalizeObjectType(String(args.type ?? ''));
+  // action="impact" is DDLS-only on the server side — default the type so LLMs
+  // don't have to supply it redundantly (and don't get a validation retry when
+  // they don't). Any non-DDLS value still fails the guardrail below.
+  const rawType = String(args.type ?? '');
+  const type = normalizeObjectType(rawType || (action === 'impact' ? 'DDLS' : ''));
   const name = String(args.name ?? '');
   const maxDeps = Number(args.maxDeps ?? 20);
   const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);
@@ -3131,6 +3206,49 @@ async function handleSAPContext(
     const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
+
+  if (action === 'impact') {
+    if (type !== 'DDLS') {
+      return errorResult(
+        'SAPContext(action="impact") supports DDLS only. For non-CDS objects, use SAPNavigate(action="references").',
+      );
+    }
+
+    const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
+    const upstream = buildCdsUpstream(extractCdsDependencies(ddlSource));
+    const includeIndirect = args.includeIndirect === true;
+    let downstream = classifyCdsImpact([], { includeIndirect });
+    const warnings: string[] = [];
+
+    try {
+      const whereUsed = await findWhereUsed(client.http, client.safety, objectUrlForType('DDLS', name));
+      downstream = classifyCdsImpact(whereUsed, { includeIndirect });
+    } catch (err) {
+      if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+        warnings.push('Where-used endpoint not available on this system');
+      } else {
+        throw err;
+      }
+    }
+
+    const upstreamCount =
+      upstream.tables.length + upstream.views.length + upstream.associations.length + upstream.compositions.length;
+
+    const response = {
+      name,
+      type: 'DDLS',
+      upstream,
+      downstream,
+      summary: {
+        upstreamCount,
+        downstreamTotal: downstream.summary.total,
+        downstreamDirect: downstream.summary.direct,
+      },
+      ...(warnings.length > 0 ? { warnings } : {}),
+    };
+
+    return textResult(JSON.stringify(response, null, 2));
+  }
 
   // Get source — either provided or fetched from SAP
   let source: string;
@@ -3207,6 +3325,58 @@ async function handleSAPContext(
 
   const result = await compressContext(client, source, name, type, maxDeps, depth, abaplintVersion, cachingLayer);
   return textResult(result.output);
+}
+
+function buildCdsUpstream(
+  deps: Array<{
+    name: string;
+    kind: 'data_source' | 'association' | 'composition' | 'projection_base';
+  }>,
+): {
+  tables: Array<{ name: string }>;
+  views: Array<{ name: string }>;
+  associations: Array<{ name: string }>;
+  compositions: Array<{ name: string }>;
+} {
+  const tableNames = new Set<string>();
+  const viewNames = new Set<string>();
+  const associationNames = new Set<string>();
+  const compositionNames = new Set<string>();
+
+  for (const dep of deps) {
+    const upperName = dep.name.toUpperCase();
+    if (dep.kind === 'association') {
+      associationNames.add(upperName);
+      continue;
+    }
+    if (dep.kind === 'composition') {
+      compositionNames.add(upperName);
+      continue;
+    }
+    if (dep.kind === 'projection_base') {
+      viewNames.add(upperName);
+      continue;
+    }
+    if (isLikelyCdsViewName(upperName)) {
+      viewNames.add(upperName);
+    } else {
+      tableNames.add(upperName);
+    }
+  }
+
+  return {
+    tables: [...tableNames].sort().map((name) => ({ name })),
+    views: [...viewNames].sort().map((name) => ({ name })),
+    associations: [...associationNames].sort().map((name) => ({ name })),
+    compositions: [...compositionNames].sort().map((name) => ({ name })),
+  };
+}
+
+function isLikelyCdsViewName(name: string): boolean {
+  if (name.startsWith('/')) {
+    return /\/[ICRPAZ][A-Z0-9_]*_/.test(name);
+  }
+  return /^(ZI_|ZC_|ZR_|ZP_|I_|C_|R_|P_)/.test(name);
 }
 
 // ─── SAPManage Handler ────────────────────────────────────────────────

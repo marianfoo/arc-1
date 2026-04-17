@@ -115,7 +115,7 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPQuery');
   });
 
-  it('SAPLint only exposes lint action (atc/syntax moved to SAPDiagnose)', () => {
+  it('SAPLint exposes lint + formatter actions (atc/syntax moved to SAPDiagnose)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapLint = tools.find((t) => t.name === 'SAPLint')!;
     const schema = sapLint.inputSchema as Record<string, any>;
@@ -126,13 +126,79 @@ describe('Tool Definitions', () => {
     expect(actionEnum).not.toContain('syntax');
     expect(actionEnum).toContain('lint_and_fix');
     expect(actionEnum).toContain('list_rules');
-    expect(actionEnum).toHaveLength(3);
+    expect(actionEnum).toContain('format');
+    expect(actionEnum).toContain('get_formatter_settings');
+    expect(actionEnum).toContain('set_formatter_settings');
+    expect(actionEnum).toHaveLength(6);
+    expect(schema.properties.indentation).toBeDefined();
+    expect(schema.properties.style).toBeDefined();
   });
 
   it('SAPLint description mentions SAPDiagnose for server-side checks', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapLint = tools.find((t) => t.name === 'SAPLint')!;
     expect(sapLint.description).toContain('SAPDiagnose');
+  });
+
+  describe('SAPContext discoverability — impact action must be findable by LLMs', () => {
+    it('lists impact first in the action enum so LLMs anchor on it in ambiguous cases', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const actionEnum: string[] = schema.properties.action.enum;
+      expect(actionEnum[0]).toBe('impact');
+      expect(actionEnum).toContain('deps');
+      expect(actionEnum).toContain('usages');
+    });
+
+    it('SAPContext tool description contains blast-radius trigger phrases', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      // Trigger phrases that map the user's natural question to action="impact".
+      expect(sapContext.description).toMatch(/blast.?radius/i);
+      expect(sapContext.description).toMatch(/what breaks if/i);
+      expect(sapContext.description).toMatch(/who consumes/i);
+    });
+
+    it('SAPContext action description steers LLMs away from SAPQuery-against-DDDDLSRC', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const actionDesc: string = schema.properties.action.description;
+      expect(actionDesc).toContain('DDDDLSRC');
+      expect(actionDesc).toMatch(/impact/);
+    });
+
+    it('SAPQuery description redirects CDS impact questions to SAPContext(action="impact")', () => {
+      // SAPQuery is only registered when free SQL is allowed.
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
+      const sapQuery = tools.find((t) => t.name === 'SAPQuery')!;
+      expect(sapQuery.description).toContain('DDDDLSRC');
+      expect(sapQuery.description).toContain('SAPContext');
+      expect(sapQuery.description).toMatch(/action="impact"/);
+    });
+
+    it('SAPNavigate description redirects CDS where-used questions to SAPContext(action="impact")', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapNavigate = tools.find((t) => t.name === 'SAPNavigate')!;
+      expect(sapNavigate.description).toContain('SAPContext');
+      expect(sapNavigate.description).toMatch(/action="impact"/);
+      expect(sapNavigate.description).toMatch(/DDLS/);
+    });
+
+    it('SAPContext type property description marks type as optional for action="impact"', () => {
+      // Regression for Sonnet 4.6 transcript: LLMs call
+      //   SAPContext({ action: "impact", name: "I_COUNTRY" })
+      // without `type` because impact is DDLS-only and the type is redundant.
+      // The schema description must make that contract explicit so LLMs know
+      // not to guess, and the handler defaults type=DDLS.
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const typeDesc: string = schema.properties.type.description;
+      expect(typeDesc).toMatch(/optional.*action="impact"|action="impact".*optional/i);
+      expect(typeDesc).toMatch(/defaults to DDLS/i);
+    });
   });
 
   it('SAPDiagnose exposes syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces', () => {

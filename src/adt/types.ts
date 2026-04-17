@@ -152,6 +152,19 @@ export interface TransportTask {
   objects: TransportObject[];
 }
 
+/** Result of looking up transports related to a given ABAP object. */
+export interface ObjectTransportHistory {
+  object: { type: string; name: string; uri: string };
+  /** Transport currently holding a lock on this object (if any). */
+  lockedTransport?: string;
+  /** All transports the object is referenced from (active + queued). Empty when none. */
+  relatedTransports: Array<{ id: string; description: string; owner: string; status: string }>;
+  /** Transports the object could be added to (from transportchecks fallback). */
+  candidateTransports: Array<{ id: string; description: string; owner: string }>;
+  /** Human-readable summary used by SAPTransport response. */
+  summary: string;
+}
+
 /** Source code search result */
 export interface SourceSearchResult {
   objectType: string;

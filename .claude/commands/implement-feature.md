@@ -36,6 +36,7 @@ Based on the feature description, identify and read all relevant source files. U
 | Add transport feature | `src/adt/transport.ts`, `src/handlers/intent.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add context feature | `src/context/compressor.ts`, `src/context/deps.ts` |
+| Add CDS impact analysis context | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts` (`findWhereUsed`), `src/handlers/intent.ts` (`SAPContext action="impact"`), `tests/unit/adt/cds-impact.test.ts` |
 | Add diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
 
 ### 1c. Read existing tests for the affected area
