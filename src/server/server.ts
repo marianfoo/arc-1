@@ -13,6 +13,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
+import { resolveCookies } from '../adt/cookies.js';
 import { deriveUserSafety } from '../adt/safety.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
@@ -40,6 +41,7 @@ function buildAdtConfig(
   btpProxy?: BTPProxyConfig,
   bearerTokenProvider?: () => Promise<string>,
 ): Partial<AdtClientConfig> {
+  const cookies = resolveCookies(config.cookieFile, config.cookieString);
   return {
     baseUrl: config.url,
     username: config.username,
@@ -47,6 +49,7 @@ function buildAdtConfig(
     client: config.client,
     language: config.language,
     insecure: config.insecure,
+    ...(cookies ? { cookies } : {}),
     btpProxy,
     bearerTokenProvider,
     maxConcurrent: config.maxConcurrent,

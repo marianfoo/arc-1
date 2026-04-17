@@ -51,6 +51,21 @@ export function parseCookieFileContent(content: string): Record<string, string> 
 }
 
 /**
+ * Resolve cookies from file and/or inline string. Inline entries win on conflict.
+ * Returns undefined when neither source is provided so callers can omit the field.
+ */
+export function resolveCookies(
+  cookieFile: string | undefined,
+  cookieString: string | undefined,
+): Record<string, string> | undefined {
+  if (!cookieFile && !cookieString) return undefined;
+  const cookies: Record<string, string> = {};
+  if (cookieFile) Object.assign(cookies, loadCookiesFromFile(cookieFile));
+  if (cookieString) Object.assign(cookies, parseCookieString(cookieString));
+  return cookies;
+}
+
+/**
  * Parse a cookie string in the format "key1=val1; key2=val2".
  * Used with --cookie-string CLI flag or SAP_COOKIE_STRING env var.
  */

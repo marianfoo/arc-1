@@ -823,6 +823,10 @@ export class AdtHttpClient {
       url.searchParams.set('sap-language', this.config.language);
     }
 
+    // Skip SAML2 — its browser-based redirect flow returns an HTML login page (200 OK)
+    // that programmatic HTTP clients can't follow; forces ICF to use Basic/cookie auth.
+    url.searchParams.set('saml2', 'disabled');
+
     return url.toString();
   }
 
