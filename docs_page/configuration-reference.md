@@ -52,8 +52,10 @@ Profiles are shortcuts. Individual flags set alongside a profile **override** th
 | Read + named table preview | `ARC1_PROFILE=viewer-data` | Enables `SAPQuery action=table_contents`, still no writes or free SQL |
 | Read + SQL + table preview | `ARC1_PROFILE=viewer-sql` | Enables both `SAPQuery` modes, still no writes or transports |
 | Writes + transports in `$TMP` | `ARC1_PROFILE=developer` | Local development preset without SQL or table preview |
-| Full local development | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'` | Writes + SQL + table preview + transports, unrestricted packages |
-| Power-user operation filter | `SAP_ALLOWED_OPS=RSQ` or `SAP_DISALLOWED_OPS=CDUA` | Exact per-op gating when profiles are too broad |
+| Full local development | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*` | Writes + SQL + table preview + transports, unrestricted packages |
+| Power-user operation filter | Start from a profile or explicit safety flags, then add `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` | Fine-grained op gating layered on top of `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, and `SAP_BLOCK_FREE_SQL` |
+
+The recipes above show raw config values. When you pass them through a shell flag such as `-e`, quote shell-sensitive package patterns like `*` or `$TMP`: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`. In JSON, `.env`, and `--env-file`, use the raw value without extra shell quotes.
 
 ### Safety flags
 

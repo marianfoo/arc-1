@@ -270,9 +270,9 @@ docker run -d --rm \
 
 Keep credentials and stable connection settings in `.env`; layer temporary overrides with `-e`.
 
-For what `ARC1_PROFILE`, `SAP_ENABLE_TRANSPORTS`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes) — translate each `ENV=value` into `-e ENV=value` or add it to your `--env-file`.
+For what `ARC1_PROFILE`, `SAP_ENABLE_TRANSPORTS`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
 
-If you pass `$TMP` in `SAP_ALLOWED_PACKAGES`, use single quotes so the shell does not expand it: `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
+If you pass package patterns like `*` or `$TMP` through `-e SAP_ALLOWED_PACKAGES=...`, use single quotes so the shell does not expand them: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
 
 ### Cookie files inside the container
 
