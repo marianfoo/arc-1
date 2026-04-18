@@ -452,14 +452,19 @@ Restrict all write operations to specific packages. Supports wildcards:
 
 ```bash
 # Only allow writes to custom packages and $TMP
--e SAP_ALLOWED_PACKAGES="Z*,$TMP"
+-e SAP_ALLOWED_PACKAGES='Z*,$TMP'
 
 # Only one specific package
--e SAP_ALLOWED_PACKAGES="\$ZRAY_DEV"
+-e SAP_ALLOWED_PACKAGES='$ZRAY_DEV'
 
 # Multiple packages (comma-separated)
--e SAP_ALLOWED_PACKAGES="ZMYAPP,ZMYAPP_TEST,\$TMP"
+-e SAP_ALLOWED_PACKAGES='ZMYAPP,ZMYAPP_TEST,$TMP'
 ```
+
+> **Use single quotes.** Double quotes let bash expand `$TMP` to the shell's
+> `$TMP` variable (often empty), turning your allowlist into `,,`. Single quotes
+> pass the value literally. If your shell parser requires double quotes, escape
+> the `$`: `"Z*,\$TMP"`.
 
 Read operations (`R`, `S`) are not restricted by this filter — the AI can still
 read objects from any package; it just cannot modify objects outside the
@@ -696,7 +701,7 @@ docker run -i --rm \
   -e SAP_USER=developer \
   -e SAP_PASSWORD=secret \
   -e SAP_READ_ONLY=false \
-  -e SAP_ALLOWED_PACKAGES="Z*,\$TMP" \
+  -e SAP_ALLOWED_PACKAGES='Z*,$TMP' \
   -e SAP_DISALLOWED_OPS=D \
   ghcr.io/marianfoo/arc-1:latest
 ```

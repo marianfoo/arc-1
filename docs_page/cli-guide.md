@@ -108,7 +108,8 @@ arc1 --block-free-sql=false      # Enable free SQL
 arc1 --block-data=false          # Enable table preview
 
 # Restrict write operations to specific packages (reads are not restricted by package)
-arc1 --allowed-packages "ZPROD*,$TMP"
+# Use single quotes — bash expands $TMP inside double quotes.
+arc1 --allowed-packages 'ZPROD*,$TMP'
 
 # Whitelist operations
 arc1 --allowed-ops "RSQ"

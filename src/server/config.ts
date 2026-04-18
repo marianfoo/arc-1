@@ -8,6 +8,7 @@
  * for drop-in compatibility with existing deployments and documentation.
  */
 
+import { logger } from './logger.js';
 import type { FeatureToggle, ServerConfig, TransportType } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
 
@@ -204,7 +205,17 @@ export function parseArgs(args: string[]): ServerConfig {
   config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
   const pkgs = getFlag('allowed-packages') ?? process.env.SAP_ALLOWED_PACKAGES;
-  if (pkgs) config.allowedPackages = pkgs.split(',').map((p) => p.trim());
+  if (pkgs) {
+    const raw = pkgs.split(',').map((p) => p.trim());
+    const filtered = raw.filter((p) => p.length > 0);
+    if (raw.length !== filtered.length) {
+      logger.warn(
+        "SAP_ALLOWED_PACKAGES contained empty entries — likely shell expansion of unset $VARs. Use single quotes: SAP_ALLOWED_PACKAGES='$TMP,Z*'",
+        { raw: pkgs, parsed: filtered },
+      );
+    }
+    config.allowedPackages = filtered;
+  }
   const enableTransportsExplicit = getFlag('enable-transports') ?? process.env.SAP_ENABLE_TRANSPORTS;
   if (enableTransportsExplicit !== undefined)
     config.enableTransports = enableTransportsExplicit === 'true' || enableTransportsExplicit === '1';

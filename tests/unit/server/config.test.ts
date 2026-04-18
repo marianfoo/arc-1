@@ -149,6 +149,19 @@ describe('parseArgs', () => {
     expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
   });
 
+  it('filters out empty entries from SAP_ALLOWED_PACKAGES (e.g. shell-expanded unset $VARs)', () => {
+    // Simulates `SAP_ALLOWED_PACKAGES=$tmp,$locals,$*` with unset shell vars → ",,"
+    process.env.SAP_ALLOWED_PACKAGES = ',,';
+    const config = parseArgs([]);
+    expect(config.allowedPackages).toEqual([]);
+  });
+
+  it('filters empty entries but keeps valid ones', () => {
+    process.env.SAP_ALLOWED_PACKAGES = 'Z*,,$TMP,';
+    const config = parseArgs([]);
+    expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
+  });
+
   it('parses cookie auth options', () => {
     const config = parseArgs(['--cookie-file', '/path/cookies.txt', '--cookie-string', 'a=b; c=d']);
     expect(config.cookieFile).toBe('/path/cookies.txt');

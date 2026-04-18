@@ -171,7 +171,7 @@ arc1 --profile developer
 
 # Fine-grained individual flags
 arc1 --read-only=false                        # writes only (still $TMP)
-arc1 --read-only=false --allowed-packages "ZPROD*,$TMP"
+arc1 --read-only=false --allowed-packages 'ZPROD*,$TMP'   # single quotes: bash expands $TMP inside "..."
 arc1 --block-free-sql=false                   # free SQL only
 arc1 --block-data=false                       # table preview only
 arc1 --enable-transports=true                 # SAPTransport (all actions)
