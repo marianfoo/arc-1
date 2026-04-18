@@ -40,14 +40,7 @@ Hit `Ctrl+C` to stop. If this failed, check TLS (`--insecure` for self-signed de
 
 ## 2. Wire it into Claude Desktop
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-Use the same `command` and `args` either way:
-
-- `command`: `npx`
-- `args`: `["-y", "arc-1@latest"]`
-
-Then pick one `env` block for local development.
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) and pick one of the two paths below.
 
 ### Path A — read and search only
 
@@ -55,11 +48,19 @@ Then pick one `env` block for local development.
 
 ```json
 {
-  "SAP_URL": "https://your-sap-host:44300",
-  "SAP_USER": "YOUR_USER",
-  "SAP_PASSWORD": "YOUR_PASS",
-  "SAP_CLIENT": "100",
-  "ARC1_PROFILE": "viewer"
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100",
+        "ARC1_PROFILE": "viewer"
+      }
+    }
+  }
 }
 ```
 
@@ -75,16 +76,24 @@ Then pick one `env` block for local development.
 
 ### Path B — full local development
 
-Use this only on a dev or sandbox system you are comfortable modifying.
+Same structure as Path A — only the `env` block changes. Use this only on a dev or sandbox system you are comfortable modifying.
 
 ```json
 {
-  "SAP_URL": "https://your-sap-host:44300",
-  "SAP_USER": "YOUR_USER",
-  "SAP_PASSWORD": "YOUR_PASS",
-  "SAP_CLIENT": "100",
-  "ARC1_PROFILE": "developer-sql",
-  "SAP_ALLOWED_PACKAGES": "*"
+  "mcpServers": {
+    "sap": {
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100",
+        "ARC1_PROFILE": "developer-sql",
+        "SAP_ALLOWED_PACKAGES": "*"
+      }
+    }
+  }
 }
 ```
 

@@ -270,7 +270,7 @@ docker run -d --rm \
 
 Keep credentials and stable connection settings in `.env`; layer temporary overrides with `-e`.
 
-For what `ARC1_PROFILE`, `SAP_ENABLE_TRANSPORTS`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md).
+For what `ARC1_PROFILE`, `SAP_ENABLE_TRANSPORTS`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes) — translate each `ENV=value` into `-e ENV=value` or add it to your `--env-file`.
 
 If you pass `$TMP` in `SAP_ALLOWED_PACKAGES`, use single quotes so the shell does not expand it: `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
 
