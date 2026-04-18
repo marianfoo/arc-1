@@ -87,7 +87,10 @@ export function parseServerArgs(args: string[], env: NodeJS.ProcessEnv = process
 }
 
 function commandExists(command: string): boolean {
-  const result = spawnSync('command', ['-v', command], { stdio: 'ignore' });
+  const result =
+    process.platform === 'win32'
+      ? spawnSync('where.exe', [command], { stdio: 'ignore' })
+      : spawnSync('command', ['-v', command], { stdio: 'ignore' });
   return result.status === 0;
 }
 
@@ -158,7 +161,7 @@ function printUsage(): void {
 Options:
   --url <url>               Target SAP URL (required). Precedence: CLI > env > .env
   --browser <name>          Browser to launch: chrome | firefox | edge (default: chrome)
-  --output <path>           Output cookie file path (default: ./cookies.txt)
+  --output <path>           Output cookie file path. Precedence: CLI > SAP_COOKIE_FILE env > ./cookies.txt
   --yes                     Skip the DEV-ONLY confirmation prompt
   --help, -h                Show this help
 `);
