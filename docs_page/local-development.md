@@ -159,7 +159,7 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 
 - `ARC1_PROFILE=viewer` or nothing: read/search only, same safe default.
 - `ARC1_PROFILE=developer`: writes + transports in `$TMP`, still no SQL or named table preview.
-- `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*`: full local development access.
+- `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'`: full local development access. (In shell, quote the `*` — otherwise the shell expands it to filenames before ARC-1 sees it.)
 
 Need something in between? The full profile matrix and recipes live in [configuration-reference.md](configuration-reference.md#common-recipes).
 

@@ -52,7 +52,7 @@ Profiles are shortcuts. Individual flags set alongside a profile **override** th
 | Read + named table preview | `ARC1_PROFILE=viewer-data` | Enables `SAPQuery action=table_contents`, still no writes or free SQL |
 | Read + SQL + table preview | `ARC1_PROFILE=viewer-sql` | Enables both `SAPQuery` modes, still no writes or transports |
 | Writes + transports in `$TMP` | `ARC1_PROFILE=developer` | Local development preset without SQL or table preview |
-| Full local development | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*` | Writes + SQL + table preview + transports, unrestricted packages |
+| Full local development | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'` | Writes + SQL + table preview + transports, unrestricted packages |
 | Power-user operation filter | `SAP_ALLOWED_OPS=RSQ` or `SAP_DISALLOWED_OPS=CDUA` | Exact per-op gating when profiles are too broad |
 
 ### Safety flags

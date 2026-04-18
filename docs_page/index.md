@@ -164,7 +164,7 @@ Safe by default — read-only, no SQL, no data preview, no transports. Writes ar
 
 - `ARC1_PROFILE=viewer` or nothing: read/search only.
 - `ARC1_PROFILE=developer`: writes + transports in `$TMP`, still no SQL or named table preview.
-- `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*`: full local development access.
+- `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'`: full local development access. (Quote the `*` in shell so it isn't globbed to filenames.)
 
 Profiles never widen a stricter server flag. Example: `ARC1_PROFILE=developer` + `SAP_READ_ONLY=true` is still read-only.
 
