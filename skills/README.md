@@ -85,6 +85,13 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | [explain-abap-code](explain-abap-code.md) | Reads an ABAP object, fetches all dependencies via SAPContext, and produces a structured explanation | Onboarding to unfamiliar code, investigating bugs, documenting undocumented objects |
 | [migrate-custom-code](migrate-custom-code.md) | Runs ATC readiness checks, groups findings by priority, and generates replacement code | Preparing custom code for S/4HANA migration or ABAP Cloud readiness |
 
+### System Context & Local Workflow
+
+| Skill | What it does | When to use |
+|---|---|---|
+| [bootstrap-system-context](bootstrap-system-context.md) | Probes SID, release, installed components, feature flags, and lint preset; writes a local `system-info.md` | First step of a session against an unfamiliar system — grounds the assistant in real constraints before any code work |
+| [setup-abap-mirror](setup-abap-mirror.md) | Creates a local abapGit-style mirror of a package or object list for IDE context and `git diff` | Onboarding a codebase, pre-migration snapshotting, feeding local context to tools that can't call MCP per-read |
+
 ### Meta / Quality
 
 | Skill | What it does | When to use |
@@ -96,9 +103,19 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 Skills are designed to chain together. A typical RAP development flow:
 
 ```
-1. generate-rap-service-researched  →  Create the service stack
-2. generate-rap-logic               →  Add business logic (validations, determinations)
-3. generate-abap-unit-test          →  Generate tests for the behavior pool
-4. generate-cds-unit-test           →  Generate tests for the CDS views
-5. analyze-chat-session             →  Review what worked, file improvements
+1. bootstrap-system-context         →  Capture SID, release, features, lint preset
+2. generate-rap-service-researched  →  Create the service stack (uses system-info.md)
+3. generate-rap-logic               →  Add business logic (validations, determinations)
+4. generate-abap-unit-test          →  Generate tests for the behavior pool
+5. generate-cds-unit-test           →  Generate tests for the CDS views
+6. analyze-chat-session             →  Review what worked, file improvements
+```
+
+For codebase onboarding or pre-migration work:
+
+```
+1. bootstrap-system-context  →  Know the system
+2. setup-abap-mirror         →  Pull the target package(s) into abapGit-style files
+3. explain-abap-code         →  Understand key objects with dependency context
+4. migrate-custom-code       →  Run ATC readiness checks and group findings
 ```
