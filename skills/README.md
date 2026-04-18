@@ -59,9 +59,9 @@ These skills assume you have:
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [generate-rap-service](generate-rap-service.md) | Creates a complete RAP OData service stack (table, CDS views, BDEF, SRVD, SRVB, class) from a natural language description | Quick prototyping, simple CRUD with standard patterns, user knows exactly what they want |
-| [generate-rap-service-researched](generate-rap-service-researched.md) | Same output as above, but researches the target system first (existing naming conventions, architecture patterns, SAP docs) and builds an approved plan before creating anything | Production-quality services in transportable packages, complex domains, "measure twice, cut once" mode |
-| [generate-rap-logic](generate-rap-logic.md) | Implements determination and validation methods in an existing RAP behavior pool | After creating a RAP service — fills in the empty method stubs with ABAP Cloud logic |
+| [generate-rap-service](generate-rap-service.md) | Creates a complete RAP OData service stack (table, CDS views, BDEF, SRVD, SRVB, class) from a natural language description, with provider-contract-aware service generation | Quick prototyping, simple CRUD, standard UI service generation |
+| [generate-rap-service-researched](generate-rap-service-researched.md) | Same output as above, but researches the target system first (existing naming conventions, architecture patterns, revisions, docs, formatter settings, impact) and builds an approved plan before creating anything | Production-quality services in transportable packages, complex domains, "measure twice, cut once" mode |
+| [generate-rap-logic](generate-rap-logic.md) | Implements determination and validation methods in an existing RAP behavior pool using structured class reads, version-aware edits, and quickfix-aware validation | After creating a RAP service — fills in the empty method stubs with ABAP Cloud logic |
 | [generate-cds-unit-test](generate-cds-unit-test.md) | Generates ABAP Unit tests for CDS entities using the CDS Test Double Framework | When a CDS view has calculations, CASE expressions, WHERE filters, JOINs, or aggregations worth testing |
 | [generate-abap-unit-test](generate-abap-unit-test.md) | Generates ABAP Unit tests for classes with dependency analysis and test doubles | When a class has non-trivial business logic and uses dependency injection |
 
@@ -77,6 +77,15 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | **Plan approval** | Shows artifact table, asks to proceed | Full implementation plan with architecture decisions, requires explicit approval |
 | **Best for** | Quick prototyping, proof of concept, simple CRUD | Production services, complex domains, teams with established conventions |
 | **Guardrails** | Managed only, UUID, single entity, standard CRUD | Any scenario — managed/unmanaged, compositions, custom keys |
+
+### Recent ARC-1 Features These Skills Use
+
+- `SAPContext(action="impact")` for RAP/CDS reuse and "what breaks if I change this?" analysis
+- `SAPRead(type="VERSIONS")` and `SAPRead(type="VERSION_SOURCE")` for pattern mining and safer edits of existing RAP stacks
+- `SAPTransport(action="history")` for object-to-transport traceability during later iterations
+- `SAPLint(action="format" | "get_formatter_settings")` for SAP-native keyword case and indentation
+- `SAPRead` / `SAPWrite` for `SKTD` so generated RAP services can carry attached Markdown documentation
+- `SAPGit` when a package is already part of an abapGit or gCTS-backed delivery flow
 
 ### Analyzing & Understanding
 
@@ -108,7 +117,8 @@ Skills are designed to chain together. A typical RAP development flow:
 3. generate-rap-logic               →  Add business logic (validations, determinations)
 4. generate-abap-unit-test          →  Generate tests for the behavior pool
 5. generate-cds-unit-test           →  Generate tests for the CDS views
-6. analyze-chat-session             →  Review what worked, file improvements
+6. optional: attach SKTD docs / inspect revisions / inspect transport history
+7. analyze-chat-session             →  Review what worked, file improvements
 ```
 
 For codebase onboarding or pre-migration work:

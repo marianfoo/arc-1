@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit backend integration and `--enable-git` safety gate; SEC-09 Auth Safety landed 2026-04-17: fixed cookie→PP leak, added `X-SAP-SAML2` opt-in handling, added HTML-login-page detection; FEAT-20 implemented: VERSIONS/VERSION_SOURCE SAPRead support; FEAT-10 implemented: ADT PrettyPrint + formatter settings via SAPLint; FEAT-49 implemented: object → transport reverse lookup via `SAPTransport(action="history")`; FEAT-33 implemented: CDS impact analysis via `SAPContext(action="impact")`; FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
+_Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit backend integration and `--enable-git` safety gate; DOC-04 completed: RAP/common-use-case skill pack refresh now exploits provider-contract guidance plus impact/history/formatter/SKTD/git primitives; SEC-09 Auth Safety landed 2026-04-17: fixed cookie→PP leak, added `X-SAP-SAML2` opt-in handling, added HTML-login-page detection; FEAT-20 implemented: VERSIONS/VERSION_SOURCE SAPRead support; FEAT-10 implemented: ADT PrettyPrint + formatter settings via SAPLint; FEAT-49 implemented: object → transport reverse lookup via `SAPTransport(action="history")`; FEAT-33 implemented: CDS impact analysis via `SAPContext(action="impact")`; FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
 
 ## Legend
 - ✅ = Supported
@@ -297,7 +297,8 @@ The following items were incorrectly marked in the previous version and have sin
 6. **MCP elicitation** — Interactive parameter collection for destructive ops.
 7. **Audit logging** — BTP Audit Log sink for compliance.
 8. **Context compression** — AST-based dependency extraction with depth control.
-9. **npm + Docker + release-please** — Most professional distribution pipeline.
+9. **First-party workflow skills** — researched RAP/common-use-case playbooks can encode provider-contract choices, clean-core guardrails, and recent primitives (`impact`, revisions, formatter settings, SKTD, `SAPGit`) on top of the compact intent-tool surface.
+10. **npm + Docker + release-please** — Most professional distribution pipeline.
 
 ### Biggest Competitive Threats
 1. **vibing-steampunk** (279 stars) — Community favorite. Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening, RecoverFailedCreate primitive. Defaults to hyperfocused mode (1 tool). Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (fix in 22517d4), CSRF HEAD 403 on S/4HANA public cloud (#104), SAProuter support (#103).
@@ -313,9 +314,12 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~RAP completeness~~ → DDLX/SRVB read, DDLS/DDLX/BDEF/SRVD write, batch activation
 - ~~DDIC completeness~~ → STRU, DOMA, DTEL, TRAN read
 - ~~Token efficiency~~ → method-level surgery, hyperfocused mode, context compression
+- ~~Workflow/productization gap~~ → first-party RAP/common-use-case skills now codify provider contracts, draft/auth defaults, impact analysis, revision history, formatter settings, SKTD docs, and SAPGit delivery context.
 
-**Recently merged:**
+**Recently merged / productized:**
 - ~~**SKTD (Knowledge Transfer Documents)**~~ — **✅ Merged PR #134 (2026-04-16)** by lemaiwo. Full read/write for Markdown docs attached to ABAP objects. Unique to ARC-1 among all competitors.
+- **RAP/common-use-case skill refresh (2026-04-18)** — `generate-rap-service-researched`, `generate-rap-service`, and `generate-rap-logic` now explicitly use `SAPContext(action="impact")`, `SAPRead(type="VERSIONS")`, `SAPTransport(action="history")`, `SAPLint(action="format"/"get_formatter_settings")`, `SAPRead/SAPWrite(type="SKTD")`, and `SAPGit`.
+- **Workflow research conclusion** — external steering/skill repos (`sap-abap-base`, `sap-skills`) reinforce that the next differentiation layer is codified workflows, not raw tool-count inflation. ARC-1 is now positioned to ship tighter first-party playbooks on top of its intent-tool model.
 
 **P0 — production blockers:**
 - ~~415/406 content-type auto-retry (SAP version compatibility)~~ — ✅ Implemented. [Deep dive](fr0ster/evaluations/v4.5.0-release-deep-dive.md)
@@ -327,17 +331,18 @@ The following items were incorrectly marked in the previous version and have sin
 - ~~**V4 SRVB publish endpoint bug**~~ — ✅ fixed 2026-04-15 in PR #130 (`9b0601c`). Publish/unpublish now respect resolved service binding type (`odatav2`/`odatav4`). [Eval](fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
 - ~~**BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable.** ARC-1's centralized `safeUpdateSource()` already uses `transport ?? (lock.corrNr || undefined)` for all types — fr0ster's bug was per-handler (only `UpdateInterface` was missing it). Verify with BTP INTF update integration test. [Eval](fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
 
-**P1 — high-value gaps:**
-- Where-Used analysis, fix proposals
-- ~~DDIC write (DOMA/DTEL)~~, ~~namespace encoding audit~~, error intelligence
-- Type auto-mappings, function group bulk fetch
+**P1 — remaining high-value gaps:**
+- Function group bulk fetch
 - Documentation (Copilot Studio guide, Basis Admin guide)
+- Expand first-party workflow skills beyond RAP into transport review, diagnostics, clean-core checks, and Git-backed change review
 
 **P2+ — future gaps:**
 - System messages (SM02) — AI agent situational awareness. fr0ster v5.0.0 added this.
 - Gateway error log (IWFND) — OData/Gateway debugging with source code + call stack. fr0ster v5.0.0, on-prem only.
-- SQL traces, PrettyPrint, transport contents, source versions
-- Cloud readiness assessment, gCTS/abapGit, enhancement framework
+- Compare/diff on top of FEAT-20 + FEAT-49
+- ABAP documentation / F1 help, table pagination / offset
+- SQL traces, coverage/reporting enhancements
+- Cloud readiness assessment, enhancement framework
 - Multi-system routing, rate limiting
 - Dynpro (screen) metadata — ADT endpoint `/sap/bc/adt/programs/programs/<PROG>/dynpros` (abap-adt-api #44)
 - RecoverFailedCreate — partial-create recovery on 5xx (VSP f00356a)

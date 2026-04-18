@@ -50,6 +50,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ~~—~~ | ~~FEAT-49~~ | ~~Object Transport History (Reverse Lookup)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
 | 3 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
 | 4 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
+| ~~—~~ | ~~DOC-04~~ | ~~RAP & Common ABAP Workflow Skill Pack Refresh~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-18~~ |
 | 5 | FEAT-24 | CompareSource (Diff) | P2 ↑ | S | Features |
 | 6 | FEAT-32 | Table Pagination / Offset | P2 | XS | Features |
 | 7 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
@@ -85,6 +86,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| DOC-04 | RAP & Common ABAP Workflow Skill Pack Refresh | 2026-04-18 | Docs |
 | FEAT-22 | gCTS/abapGit Integration (`SAPGit` tool + `--enable-git` safety gate) | 2026-04-18 | Features |
 | SEC-09 | Auth Safety & Configurability (cookie→PP leak fix, applyAuthHeader guard, fail-fast validation, auth summary log, SAML disable opt-in, HTML login detection) | 2026-04-17 | Security |
 | FEAT-20 | Source Version / Revision History | 2026-04-17 | Features |
@@ -154,6 +156,8 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 > **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1, completed 2026-04-17). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
 >
 > **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) identified COMPAT-01..03 plus verify item COMPAT-04. Follow-up confirmed COMPAT-03 had already been fixed in PR #130 (commit `9b0601c`, completed 2026-04-15). COMPAT-01 and COMPAT-02 were fixed in this follow-up (completed 2026-04-16). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of recurring 423 lock errors and surfaced S/4HANA Public Cloud CSRF HEAD incompatibility (#104). PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API. Added **FEAT-49** (Object Transport History) at P1 — reverse lookup ("which transports contain this object?") is the missing link for transport-scoped code review (fr0ster#30). Enriched **FEAT-20** (revisions) with concrete ADT endpoint details; upgraded **FEAT-24** (diff) rationale — the trio (FEAT-49→FEAT-20→FEAT-24) enables the full code review workflow no competitor has end-to-end. Overview table re-sorted by actual priority (P0→P1→P2→P3).
+>
+> **2026-04-18 additions:** First-party workflow skills became an explicit productization layer. Research across SAP Help / ABAP docs, the `mcp-sap-docs` server, `sap-abap-base` steering docs, and `sap-skills` showed that common success patterns are workflow-level: system bootstrap, provider-contract selection, draft/auth defaults, impact-driven change analysis, revision/history inspection, formatter alignment, documentation capture, and Git/delivery context. ARC-1 now has enough primitives (`impact`, `VERSIONS`, `SAPTransport(action="history")`, `SAPLint` formatting/settings, `SKTD`, `SAPGit`) to encode those workflows directly in first-party RAP/common-use-case skills instead of just adding more raw endpoints.
 
 ### Phase A: Production Blockers (P0)
 1. ~~**FEAT-02** API Release Status / Clean Core (S)~~ — **completed 2026-04-10**
@@ -190,6 +194,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 18. ~~**FEAT-49** Object Transport History / Reverse Lookup (S)~~ — **completed 2026-04-17.** Implemented as `SAPTransport(action="history")` using per-object `GET {objectUrl}/transports` endpoint with `transportchecks` fallback for candidate transports.
 19. **DOC-01** Copilot Studio Setup Guide (S) — critical for enterprise adoption
 20. **DOC-02** Basis Admin Security Guide (S) — admin audience needs clear guidance
+21. ~~**DOC-04** RAP & Common ABAP Workflow Skill Pack Refresh (S)~~ — **completed 2026-04-18.** Refreshed first-party RAP skills to use provider-contract guidance, `SAPContext(action="impact")`, revision/history reads, formatter settings, SKTD docs, and `SAPGit`; updated `skills/README.md` and `docs_page/skills.md` to document the new workflow layer.
 
 ### Phase C: ADT Feature Parity (P2) — Quick Wins
 13. **FEAT-32** Table Pagination / Offset (XS) — VSP has this, practical improvement
@@ -246,6 +251,8 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 4. **ARC-1's safety system, multi-client support, and enterprise auth are not in SAP's scope** — the managed gateway model remains unique
 5. **Risk**: SAP's official server may reduce demand for community alternatives for ABAP Cloud customers
 6. **Opportunity**: ARC-1 serves the vast on-premise + RISE customer base that SAP's cloud-only offering won't reach
+7. **Product implication**: raw tool parity is no longer enough; first-party workflow skills for RAP and common ABAP tasks are now a core adoption layer
+8. **Execution consequence**: recent features (`impact`, revisions, transport history, formatter settings, SKTD, `SAPGit`) should be packaged into repeatable playbooks faster than competitors can accumulate more endpoints
 
 ---
 
@@ -1056,6 +1063,30 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+### DOC-04: RAP & Common ABAP Workflow Skill Pack Refresh
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — converts raw RAP/tool capability into repeatable workflows |
+| **Status** | Completed (2026-04-18) |
+
+**What:** Refresh first-party skill markdown for RAP service generation, RAP logic implementation, and common ABAP bootstrap flow so the workflow explicitly uses the newest ARC-1 features and up-to-date SAP guidance. This includes:
+- Provider-contract aware service exposure defaults (`odata_v4_ui` vs `odata_v4_webapi`)
+- Draft/auth guidance aligned with current RAP docs (`#MANDATORY` + DCL, total ETag, draft constraints)
+- `SAPContext(action="impact")` and revision/history reads before edits
+- `SAPLint` formatter settings + optional formatting step before writeback
+- `SKTD` read/write for attached knowledge-transfer docs
+- `SAPGit` context for repo-managed packages
+- Stronger `mcp-sap-docs` usage patterns for RAP research prompts
+
+**Why:** SAP's own MCP direction starts with RAP UI service generation. ARC-1 already has the tool primitives; the missing layer was codified workflow guidance that turns those primitives into consistent outcomes for common use cases.
+
+**Outcome (2026-04-18):** Updated `skills/generate-rap-service-researched.md`, `skills/generate-rap-service.md`, `skills/generate-rap-logic.md`, `skills/README.md`, and `docs_page/skills.md`. Research also incorporated ideas from `sap-abap-base` steering docs and `sap-skills`: treat workflow/steering quality as a first-class differentiator instead of chasing tool-count inflation.
+
+---
+
 ### FEAT-37: DCL (Access Control) Read/Write
 | Field | Value |
 |-------|-------|
@@ -1788,7 +1819,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | LLM Search UX | Auto-transliteration, field-name hints, cache indicators |
 | HTTP Client | Native fetch + undici (replaced axios) (#35) |
 | Test Coverage | 1,300+ unit + ~150 integration + ~60 E2E + 28 BTP integration + 5 BTP smoke tests (vitest); coverage telemetry is informational |
-| Documentation | Architecture, auth guides, Docker guide, setup phases, security guide |
+| Documentation | Architecture, auth guides, Docker guide, setup phases, security guide, RAP/common-use-case workflow skills |
 
 ---
 
@@ -1838,8 +1869,8 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
 | **ARC-1** | TypeScript | 12 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,500+ tests across unit/integration/E2E |
-| **vibing-steampunk** | Go 1.24 | 1-99+ (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 242 stars, **Streamable HTTP (v2.38.0)**, native parser, massive feature sprint (i18n, gCTS, API release state, version history, code coverage) |
-| **fr0ster/mcp-abap-adt** | TypeScript | 287 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
+| **vibing-steampunk** | Go 1.24 | 1-99+ (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 279 stars, **Streamable HTTP (v2.38.0)**, native parser, massive feature sprint (i18n, gCTS, API release state, version history, code coverage) |
+| **fr0ster/mcp-abap-adt** | TypeScript | ~320 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
 | lemaiwo/btp-sap-odata-to-mcp-server | TypeScript | ~10 | XSUAA OAuth proxy | XSUAA roles | BTP CF (MTA) | XSUAA OAuth proxy, principal propagation |
 | dassian-adt / abap-mcpb | JavaScript | 25+ | Basic, Browser login | MCP elicitation | Node.js / MCPB | Error intelligence, batch activation, find_definition, edit_method (Apr sprint) |
@@ -1855,14 +1886,15 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 7. **Context compression + method-level surgery** — AST-based 7-30x + 95% method-level reduction
 8. **MCP elicitation** — interactive confirmations for destructive operations
 9. **1,500+ automated tests** with CI on Node 22/24, integration/E2E reliability telemetry, and BTP smoke lane
-10. **npm + Docker + release-please** — most professional distribution pipeline
-11. **RFC 9700 OAuth security** — state + PKCE, loopback binding, audience validation
+10. **First-party workflow skills** — researched RAP/common-use-case playbooks that exploit provider-contract guidance, impact/history/context tools, formatter alignment, SKTD docs, and Git context
+11. **npm + Docker + release-please** — most professional distribution pipeline
+12. **RFC 9700 OAuth security** — state + PKCE, loopback binding, audience validation
 
 **Key competitive threats** (tracked in [`compare/`](../compare/)):
-1. **vibing-steampunk** (242 stars) — community favorite. **Major threat escalation (Apr 2026)**: massive sprint added Streamable HTTP, API release state, i18n (7 tools), gCTS (10 tools), version history, code coverage, dead code analysis, rename preview, health analysis, CDS impact. ARC-1 has now closed the prioritized gCTS/abapGit gap via FEAT-22, but VSP remains strong on breadth and release velocity.
-2. **fr0ster** (v4.8.7, 85+ releases in 5 months) — closest enterprise competitor. 9 auth providers, TLS, RFC, embeddable. Search TSV format optimization. Watch for convergence on enterprise features.
-3. **dassian-adt** — newly active (Apr 2026): batch activation, find_definition, edit_method, BDEF creation. No safety system is a concern but rapid iteration.
-4. **btp-odata-mcp** (119 stars) — different category (OData) but high adoption. Could expand into ADT territory.
+1. **vibing-steampunk** (279 stars) — community favorite. **Major threat escalation (Apr 2026)**: massive sprint added Streamable HTTP, API release state, i18n (7 tools), gCTS (10 tools), version history, code coverage, health analysis, rename preview, dead code analysis, CDS impact, and recovery primitives. ARC-1 has now closed the prioritized gCTS/abapGit gap via FEAT-22, but VSP remains strong on breadth and release velocity.
+2. **fr0ster** (v6.1.0, 100+ releases, 35 stars) — closest enterprise competitor. 9 auth providers, TLS, RFC, embeddable, and broad operational breadth. Watch for convergence on enterprise features.
+3. **dassian-adt / abap-mcpb** (33 stars, 53 tools) — fast April sprint added OAuth/XSUAA, multi-system support, more transport tooling, trace flows, and test/include helpers. No safety system is still a major gap, but the pace is notable.
+4. **btp-odata-mcp** (120 stars) — different category (OData) but high adoption. Could expand into ADT territory.
 
 ---
 

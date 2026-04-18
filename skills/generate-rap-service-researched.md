@@ -12,10 +12,11 @@ This skill produces an implementation plan informed by the target SAP system's a
 | Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
 | Behavior scenario | Managed | Framework handles CRUD, most common |
 | OData version | V4 | Current SAP standard |
-| Draft | Yes on BTP, No on-prem | BTP Fiori Elements expects draft |
-| Strict mode | `strict ( 2 )` | Current RAP best practice |
+| Draft | Prefer for transactional Fiori Elements UI services; verify against system release and BO constraints | Best default for editable FE apps, but not every RAP service needs draft |
+| Strict mode | `strict ( 2 )` unless system patterns or SAP constraints justify otherwise | Current RAP best practice, but not universal |
 | Naming | SAP standard (see reference section) | Overridden by existing system patterns if found |
 | Admin fields | System-appropriate (`syuname`/`timestampl` or `abp_*`) | Detected from system type |
+| Service exposure | OData V4 UI provider contract by default | Best fit for Fiori Elements unless the use case is an API-first service |
 
 These defaults are starting points — research in Phase 1 may override them based on existing system patterns.
 
@@ -61,10 +62,15 @@ Research the target system thoroughly before designing anything. Every finding i
 
 ### 1a. System Capabilities & Version
 
-Detect what the system supports — this determines available RAP features, syntax, and patterns.
+Detect what the system supports — this determines available RAP features, syntax, naming, and safe defaults.
+
+If `./system-info.md` already exists from `bootstrap-system-context`, use it as input. Otherwise, reproduce the critical reads inline:
 
 ```
+SAPRead(type="SYSTEM")
+SAPRead(type="COMPONENTS")
 SAPManage(action="probe")
+SAPLint(action="list_rules")
 ```
 
 **Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
@@ -74,8 +80,9 @@ Extract and note:
 - **ABAP language version**: Cloud (strict, released APIs only) vs. Standard (full ABAP)
 - **RAP support level**: Managed, unmanaged, abstract BOs? Draft support? Late numbering? Determination on modify vs. save?
 - **CDS capabilities**: View entities vs. classic views? Table entities? Metadata extensions? Access control?
-- **Available features**: ATC, syntax check, unit test runner, transport management, FLP customization
+- **Available features**: ATC, syntax check, unit test runner, transport management, FLP customization, abapGit/gCTS, version history
 - **FLP support**: If `flp` feature is available, the service can be registered in the Fiori Launchpad after creation
+- **Lint profile**: cloud vs on-prem preset, active ABAP version, formatter style
 
 ### 1b. Existing RAP Projects — Pattern Mining
 
@@ -95,6 +102,10 @@ SAPSearch(query="SRVB Z*", maxResults=20)
 
 ```
 SAPSearch(query="DCLS Z*", maxResults=20)
+```
+
+```
+SAPSearch(query="DDLX Z*", maxResults=20)
 ```
 
 **If NO Z* BDEFs are found**, you MUST still ground yourself in at least one real system example before writing any code. Use this deterministic fallback:
@@ -131,7 +142,19 @@ SAPRead(type="DDLX", name="<found_metadata_ext>")
 ```
 
 ```
-SAPContext(type="DDLS", name="<found_interface_view>")
+SAPRead(type="SRVB", name="<found_service_binding>")
+```
+
+```
+SAPContext(type="DDLS", name="<found_interface_view>", action="impact")
+```
+
+```
+SAPRead(type="VERSIONS", name="<found_interface_view>", objectType="DDLS")
+```
+
+```
+SAPRead(type="SKTD", name="<found_interface_view>")
 ```
 
 From these, extract:
@@ -143,7 +166,24 @@ From these, extract:
 - **Key strategy**: UUID (`sysuuid_x16`)? Semantic keys? Number ranges?
 - **Behavior patterns**: Which determinations/validations are standard? Authorization pattern?
 - **Draft handling**: `with draft` present? Draft table naming? Draft actions included?
-- **OData version**: V2 or V4 bindings?
+- **OData exposure**: UI vs Web API bindings? V2 or V4? Service definition/provider contract style?
+- **Recent evolution**: Did the revision history show stable patterns or an ongoing migration?
+- **Documentation presence**: Are SKTD notes attached to important RAP artifacts?
+
+### 1b2. Optional Git / Delivery Context
+
+If `SAPManage(action="probe")` shows `abapGit` or gCTS support and the target package may already belong to a repo-backed workflow, inspect that context before creating new artifacts:
+
+```
+SAPGit(action="list_repos")
+SAPGit(action="objects", repoId="<repo_id>")
+SAPGit(action="history", repoId="<repo_id>", limit=20)
+```
+
+Use this to learn:
+- Whether the target package is already repo-managed
+- Which naming/branching conventions are active
+- Whether the package is under active delivery and should align with an existing repo layout
 
 ### 1c. Existing Database Tables & Domain Objects
 
@@ -177,10 +217,16 @@ SAPRead(type="API_STATE", name="<found_table_or_view>", objectType="TABL")
 
 If an object is deprecated (C2) or not released, avoid building on it — search for its released successor instead.
 
-To understand what already depends on a found object (reverse dependency):
+To understand what already depends on a found CDS object, use CDS-specific impact instead of generic where-used:
 
 ```
-SAPContext(type="DDLS", name="<found_view>", action="usages")
+SAPContext(type="DDLS", name="<found_view>", action="impact")
+```
+
+Use generic reverse dependencies only for non-DDLS objects:
+
+```
+SAPContext(type="CLAS", name="<found_class>", action="usages")
 ```
 
 ### 1d. Code Guidelines & Quality Standards
@@ -191,29 +237,42 @@ Check if the system has ATC configuration or custom check variants that indicate
 SAPDiagnose(action="atc", type="CLAS", name="<any_existing_class>", variant="DEFAULT")
 ```
 
-If existing RAP classes were found in 1b, run lint on one to understand the baseline:
+If existing RAP classes were found in 1b, read one and run lint + formatter discovery to understand the baseline:
 
 ```
-SAPLint(type="CLAS", name="<found_bp_class>")
+SAPRead(type="CLAS", name="<found_bp_class>")
+SAPLint(action="lint", source="<class_source>", name="<found_bp_class>")
+SAPLint(action="get_formatter_settings")
 ```
 
-This reveals what lint rules and strictness levels are enforced.
+This reveals what lint rules, strictness levels, and keyword/indentation preferences are enforced.
 
 ### 1e. Best Practices Research — SAP Documentation
 
-Use the SAP documentation MCP server to research current RAP best practices relevant to the user's request. The search terms below are **starting suggestions** — adapt them based on the user's specific business requirement and the architecture decisions that need to be made. Craft search queries that target the gaps in your knowledge for this particular service.
+Use the SAP documentation MCP server deliberately, not as a generic keyword dump.
 
-**Example search terms** (adapt to the user's spec):
+1. Start with **official/reference-oriented** queries:
+   - `includeSamples=false`
+   - `abapFlavor="cloud"` on BTP / ABAP Cloud systems
+   - `abapFlavor="standard"` on classic on-prem systems when relevant
+2. Then run **example-oriented** queries:
+   - `includeSamples=true`
+3. Use `fetch(...)` on the top hits you actually rely on.
+4. Use `sap_community_search(...)` only for edge cases, undocumented errors, or workaround hunting after official docs are insufficient.
+
+The search terms below are **starting suggestions** — adapt them based on the user's specific business requirement and the architecture decisions that need to be made. Craft search queries that target the gaps in your knowledge for this particular service.
+
+**Architecture and layering**:
 
 ```
-search("RAP managed business object implementation best practices")
-search("RAP behavior definition managed scenario CDS view entity")
+search(query="RAP projection BO vs RAP BO interface", includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="RAP service definition provider contracts odata_v4_ui odata_v4_webapi", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 **Domain-specific** — tailor to the user's business domain:
 
 ```
-search("<business_domain> RAP example SAP")
+search(query="<business_domain> RAP example SAP", includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
 For example, if the user wants a travel app: `search("RAP travel booking managed scenario example")`
@@ -221,20 +280,32 @@ For example, if the user wants a travel app: `search("RAP travel booking managed
 **Architecture decisions** — search only for topics relevant to this service:
 
 ```
-search("RAP managed vs unmanaged scenario when to use")
-search("RAP draft handling best practices Fiori Elements")
-search("RAP compositions parent child entity")
+search(query="RAP managed vs unmanaged scenario when to use", includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="RAP draft handling total etag draft-enabled associations", includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="RAP compositions parent child entity", includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
-**Specific patterns** — search if the requirement suggests them:
+**UI / service behavior** — search if the service is UI-facing:
 
 ```
-search("RAP custom actions determination validation")
-search("RAP value help CDS annotation")
-search("RAP access control authorization")
+search(query="RAP value help metadata extension additional binding OData V4", includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="RAP feature control side effects authorization control", includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="metadata-driven UI metadata extension RAP Fiori Elements", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
-**Important:** Don't just run these searches verbatim. Analyze the user's spec and craft targeted queries that fill specific knowledge gaps. If the user asks for something unusual (e.g., integration with a specific SAP module, specific field types, custom numbering), search for those specifics.
+**Clean core / released APIs** — for BTP or released-object reuse:
+
+```
+search(query="ABAP API release RAP business object interface C1 C0", includeSamples=false, abapFlavor="cloud")
+```
+
+**Edge cases / troubleshooting only after official docs fail:**
+
+```
+sap_community_search(query="<exact error text or obscure RAP symptom>")
+```
+
+**Important:** Don't just run these searches verbatim. Analyze the user's spec and craft targeted queries that fill specific knowledge gaps. If the user asks for something unusual (for example, integration with a specific SAP module, specific field types, custom numbering, collaborative draft, or released BO interface consumption), search for those specifics.
 
 No need to research naming conventions at runtime — the official SAP naming schema is documented below in the "SAP Official Naming Conventions" reference section. Use it directly as the default.
 
@@ -255,17 +326,20 @@ Before proceeding, compile a structured research summary. Present this to the us
 - Architecture: [e.g., "All existing BOs use managed with draft, strict(2), UUID keys"]
 - Field Style: [e.g., "CamelCase aliases, abp_ admin field types on BTP"]
 - Annotation Style: [e.g., "Metadata extensions for all UI annotations, facet-based layout"]
+- Service exposure: [e.g., "projection view + OData V4 UI binding, provider contract aligned"]
 - N existing RAP services found: [list names]
 
 ### Domain Research
 - Related existing objects: [tables, views, classes found]
 - SAP standard objects in domain: [relevant standard CDS views, BAPIs]
+- Clean core posture: [released APIs confirmed / successor required / custom tables only]
 - Best practices from docs: [key findings]
 
 ### Quality Baseline
 - ATC variant: [DEFAULT / custom]
 - Lint findings: [clean / N issues on existing code]
 - Strictness: [strict(2) / strict / none]
+- Formatter settings: [keywordUpper / keywordLower / keywordAuto, indentation on/off]
 ```
 
 ---
@@ -314,24 +388,33 @@ For each question, lead with a concrete recommendation based on the user's spec 
 >
 > Which key strategy fits your use case?
 
-**4. OData version & draft**
-> I recommend **OData V4 with draft** because V4 is the current SAP standard for Fiori Elements applications and draft is the default interaction pattern for V4 transactional services.
+**4. Service exposure / provider contract**
+> I recommend **OData V4 UI** if this is a Fiori Elements-facing service, or **OData V4 Web API** if it is primarily for programmatic consumers. The service definition provider contract and the service binding type must match.
 >
-> **Important context on OData V2 vs V4 and draft:**
-> - **V4 + draft** (recommended default): Standard for Fiori Elements List Report / Object Page. Draft is essentially built-in — V4 transactional services expect draft.
-> - **V2 without draft**: Better suited for non-draft transactional apps and SAP UI5 freestyle applications. V2 is more common in the freestyle world and has broader legacy support.
-> - **V4 without draft**: Not a standard pattern — V4 transactional services are designed around draft. Possible for read-only analytical services, but not for CRUD apps.
-> - **V2 with draft**: Supported but less common. Use only if V2 is required and draft is needed.
+> **Important context on service exposure:**
+> - **OData V4 UI**: Best default for Fiori Elements List Report / Object Page apps.
+> - **OData V4 Web API**: Better when the primary consumer is integration code, tests, or external apps.
+> - **OData V2**: Use only if there is a hard legacy/UI client requirement.
 >
-> Unless your requirements specifically suggest a non-draft or freestyle app, V4 with draft is the right choice. Is there any reason to deviate?
+> Which consumer is primary: Fiori UI or API/integration?
 
-**4b. Authorization model**
-> I recommend **enforced CDS access control** (`@AccessControl.authorizationCheck: #CHECK` + `DCLS`) so the service has explicit row-level authorization from day one.
+**4b. Draft model**
+> I recommend **draft** for transactional Fiori Elements applications unless your use case is explicitly non-draft, API-only, or constrained by system/version realities.
+>
+> Important constraints from SAP docs:
+> - Draft requires a dedicated draft table and total ETag.
+> - Every child in a draft-enabled composition hierarchy must be represented in the BDEF.
+> - Some OData/Fiori behaviors differ between V2 and V4.
+>
+> Should this service be draft-enabled?
+
+**4c. Authorization model**
+> I recommend **`@AccessControl.authorizationCheck: #MANDATORY` + DCLS** so the service has explicit row-level authorization from day one. SAP's RAP docs recommend `#MANDATORY` instead of `#CHECK` for RAP BOs.
 >
 > Your options:
 > | Option | Upside | Downside |
 > |--------|--------|----------|
-> | **#CHECK + DCLS** | Correct security baseline, production-ready authorization model | Requires access-control design decisions |
+> | **#MANDATORY + DCLS** | Correct RAP baseline, production-ready authorization model | Requires access-control design decisions |
 > | **#NOT_ALLOWED / #NOT_REQUIRED** | Faster prototyping | Not suitable for production authorization |
 >
 > Should I generate a strict baseline DCLS now (with inheriting conditions) and mark domain-specific rules as follow-up?
@@ -398,6 +481,15 @@ For each question, lead with a concrete recommendation based on the user's spec 
 >
 > If no (freestyle UI5 app or non-UI consumer), we can simplify the annotations.
 
+**9b. Backend-driven UI features**
+> If this is a Fiori Elements app, should I plan any of these from the start?
+> - Field-level read-only / mandatory behavior
+> - Value helps
+> - Side effects
+> - Feature control for actions or updates
+>
+> Note: feature control and side effects are RAP concepts, but they are primarily consumable by Fiori Elements UIs.
+
 **10. Searchable fields**
 > Which fields should be searchable (appear in the search bar)?
 
@@ -438,11 +530,13 @@ Create a comprehensive design table:
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Scenario | Managed / Unmanaged | [why] |
+| Service exposure | OData V4 UI / OData V4 Web API / OData V2 | [why] |
 | Draft | Yes / No | [why] |
 | Key strategy | UUID / Semantic / NumberRange | [why] |
-| OData version | V4 / V2 | [why] |
+| Provider contract | `odata_v4_ui` / `odata_v4_webapi` / `odata_v2_*` | [why] |
 | Strict mode | strict(2) / strict | [system dependent] |
 | Admin fields | syuname+timestampl / abp_* types | [system dependent] |
+| Authorization | `#MANDATORY + DCLS` / prototype-only | [why] |
 
 ### Entity Model
 | Entity | Role | Key Fields | Business Fields |
@@ -495,8 +589,10 @@ Create a comprehensive design table:
 
 ### Quality Checks Planned
 - Lint validation before each write (automatic via arc-1)
+- PrettyPrint of ABAP sources using SAP formatter settings before CLAS writes
 - Syntax check after each activation
 - ATC check after full stack activation
+- Revision/history readback if iterating on pre-existing artifacts
 - [If behavior logic]: Unit test skeleton
 ```
 
@@ -642,6 +738,8 @@ Use the source code templates from the plan. Adapt them based on research findin
 - **On-Prem systems**: Use `syuname`/`timestampl` types, classic or Cloud syntax depending on what existing code uses
 - **Follow existing patterns**: If existing RAP projects use a specific annotation style or field naming pattern, match it exactly
 - **Draft**: Include draft table, draft actions in interface BDEF, `use draft` in projection BDEF
+- **Service exposure**: Ensure the service definition provider contract matches the planned binding type
+- **ABAP formatting**: Run `SAPLint(action="format", source="<abap_source>", name="<class_name>")` on generated ABAP classes before writing them if you want SAP-native keyword case/indentation
 
 ### 4d. Post-Creation Validation
 
@@ -669,9 +767,11 @@ After all artifacts are created and activated:
    SAPRead(type="SRVD", name="ZSD_<entity>")
    ```
 
-4. **Lint check** the behavior pool:
+5. **Lint + formatter check** the behavior pool:
    ```
-   SAPLint(type="CLAS", name="ZBP_I_<entity>")
+   SAPRead(type="CLAS", name="ZBP_I_<entity>")
+   SAPLint(action="lint", source="<behavior_pool_source>", name="ZBP_I_<entity>")
+   SAPLint(action="get_formatter_settings")
    ```
 
 Fix any issues found. Re-activate if needed.
@@ -703,7 +803,7 @@ Verify the publish status and service URL:
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
 
-⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true` and a service URL. If not published, retry `publish_srvb`.
+⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true`, the expected binding type, and a service URL. For OData V4 bindings, publish/unpublish applies to the whole binding, not per service version.
 
 ### 4f. Preview the Service
 
@@ -776,6 +876,9 @@ Offer follow-up actions based on the plan:
   - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileId="Z_<ENTITY>_T")`
 8. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
 9. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", transport="<TR>")` to release tasks and parent in one step
+10. **Attach generated documentation** (optional) → use `SAPWrite(action="create", type="SKTD", refObjectType="SRVD", name="<service_doc_name>", source="<architecture_summary_markdown>")`
+11. **Review transport + revision context on later iterations** → use `SAPTransport(action="history", objectType="SRVD", objectName="ZSD_<ENTITY>")` and `SAPRead(type="VERSIONS", name="ZSD_<ENTITY>", objectType="SRVD")`
+12. **If the package is repo-managed** → use `SAPGit` (`list_repos`, `objects`, `history`) before changing naming or branch conventions
 ```
 
 ---
@@ -883,7 +986,7 @@ This skill prioritizes **correctness and consistency** over speed. The extra res
 
 ### What This Skill Does NOT Do (yet)
 
-- **Multi-entity compositions** in a single run (plan them, create root entity, suggest Phase 2)
+- **Very large multi-BO landscapes** in a single run — keep one business capability per execution
 - **Unmanaged save** implementation (plan it, implement the managed wrapper, note the save handler as a follow-up)
 - **Custom CDS functions/actions** (plan them, implement standard CRUD, add as follow-up)
 - **Fiori app generation** (generates the OData service; Fiori Elements app is auto-generated from annotations)

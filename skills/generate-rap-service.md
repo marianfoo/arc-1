@@ -14,11 +14,12 @@ This skill replicates SAP Joule's "RAP Service Generation" capability by combini
 | Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
 | Behavior scenario | Managed | Framework handles CRUD |
 | OData version | V4 | Current SAP standard |
-| Draft | Yes on BTP, No on-prem | BTP Fiori Elements expects draft |
+| Draft | Prefer for transactional Fiori Elements UI services; verify against release/constraints | Best default for editable FE apps, but not every RAP service needs draft |
 | Admin fields | `syuname`/`timestampl` (on-prem) or `abp_*` types (BTP) | System-appropriate |
-| Strict mode | `strict ( 2 )` | Current RAP best practice |
+| Strict mode | `strict ( 2 )` unless system patterns or SAP constraints justify otherwise | Current RAP best practice, but not universal |
 | Entity prefix | `Z` + entity name (e.g., `ZTRAVEL`) | SAP standard Z namespace |
 | Naming | SAP standard: `ZI_`, `ZC_`, `ZSD_`, `ZSB_`, `ZBP_I_` | Consistent with SAP docs |
+| Service exposure | OData V4 UI provider contract by default | Best fit for Fiori Elements unless the use case is API-first |
 
 ## Input
 
@@ -39,6 +40,14 @@ Verify the SAP system supports RAP/CDS and detect the system type.
 
 ```
 SAPManage(action="probe")
+```
+
+If you need a firmer baseline for syntax and formatter behavior, also read:
+
+```
+SAPRead(type="SYSTEM")
+SAPLint(action="list_rules")
+SAPLint(action="get_formatter_settings")
 ```
 
 **Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
@@ -63,6 +72,12 @@ This checks if a transport is required and returns existing transports for the p
    ```
 
 **If transport is required but unavailable, STOP** — all write operations will fail without a valid transport for non-`$TMP` packages.
+
+If the package does not exist yet and the user wants a new one, create it first:
+
+```
+SAPManage(action="create_package", name="<package>", description="<description>", transport="<transport_if_required>")
+```
 
 ### BTP vs On-Prem Differences
 
@@ -145,21 +160,25 @@ Ask the user: **"Should I proceed with this design? (yes / modify fields / chang
 
 ## Step 3: (Optional) Research RAP Patterns
 
-If mcp-sap-docs is available, fetch current RAP best practices:
+If mcp-sap-docs is available, fetch current RAP best practices. Start with reference-style queries (`includeSamples=false`) and then use examples (`includeSamples=true`) only where needed:
 
 ```
-search("RAP managed business object CDS behavior definition")
-```
-
-```
-search("RAP draft handling total ETag")
+search(query="RAP projection BO vs RAP BO interface", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 ```
-search("CDS annotation Fiori Elements list report")
+search(query="RAP draft handling total etag draft-enabled associations", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
-Use the returned documentation to inform correct annotation patterns, draft handling, and behavior definition syntax.
+```
+search(query="service definition provider contracts odata_v4_ui odata_v4_webapi", includeSamples=false, abapFlavor="<cloud|standard>")
+```
+
+```
+search(query="metadata-driven UI metadata extension RAP Fiori Elements", includeSamples=false, abapFlavor="<cloud|standard>")
+```
+
+Use the returned documentation to inform correct annotation patterns, draft handling, provider contracts, and behavior definition syntax.
 
 ## Batch Creation (Preferred)
 
@@ -231,7 +250,7 @@ SAPWrite(action="create", type="DDLS", name="ZI_<entity>", package="<package>", 
 ### Interface View DDL Template
 
 ```cds
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: '<Entity description>'
 define root view entity ZI_<Entity>
   as select from <table_name>
@@ -410,7 +429,7 @@ SAPWrite(action="create", type="DDLS", name="ZC_<entity>", package="<package>", 
 ### Projection View DDL Template
 
 ```cds
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: '<Entity description> - Projection'
 @Metadata.allowExtensions: true
 @Search.searchable: true
@@ -577,7 +596,19 @@ SAPWrite(action="create", type="SRVD", name="ZSD_<entity>", package="<package>",
 
 ```cds
 @EndUserText.label: '<Entity description> Service'
-define service ZSD_<Entity> {
+define service ZSD_<Entity>
+  provider contracts odata_v4_ui
+{
+  expose ZC_<Entity> as <Entity>;
+}
+```
+
+If the primary consumer is an API/integration use case rather than Fiori Elements, switch the provider contract and binding type together:
+
+```cds
+define service ZSD_<Entity>
+  provider contracts odata_v4_webapi
+{
   expose ZC_<Entity> as <Entity>;
 }
 ```
@@ -591,6 +622,12 @@ SAPActivate(type="SRVD", name="ZSD_<entity>")
 ## Step 11: Create Behavior Pool Class
 
 Create the behavior pool class BEFORE batch activation — the interface BDEF references this class via `implementation in class ZBP_I_<Entity>`.
+
+Before writing, optionally run the SAP PrettyPrinter so the class source matches the system's keyword style and indentation:
+
+```
+SAPLint(action="format", source="<class_source>", name="ZBP_I_<entity>")
+```
 
 ```
 SAPWrite(action="create", type="CLAS", name="ZBP_I_<entity>", package="<package>", transport="<transport>", source="<class_source>")
@@ -686,7 +723,7 @@ Verify the publish status and service URL:
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
 
-⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true` and a service URL. If not published, retry `publish_srvb`.
+⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true`, the expected binding type, and a service URL. For OData V4 bindings, publish/unpublish applies to the whole binding.
 
 ## Step 14: Verify Complete Service
 
@@ -725,6 +762,8 @@ Next steps:
   - Generate unit tests (use generate-abap-unit-test skill)
   - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
   - Create proper DOMA/DTEL for reusable typing (use SAPWrite with type=DOMA/DTEL)
+  - Attach SKTD documentation to the service or BDEF (optional)
+  - Review later iterations with `SAPTransport(action="history")` + `SAPRead(type="VERSIONS", ...)`
 ```
 
 ## Error Handling
@@ -750,7 +789,7 @@ Next steps:
 
 ### BTP vs On-Prem Summary
 
-- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables must be explicitly created (framework manages draft data at runtime), V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax.
+- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables must be explicitly created (framework manages draft data at runtime), V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax, released SAP APIs only.
 - **On-Prem**: More namespace flexibility, classic ABAP allowed in behavior pool (not recommended), explicit draft table creation may be needed, V2 or V4, `strict` level depends on release.
 
 ### What This Skill Does NOT Do (v1)
@@ -759,6 +798,7 @@ Next steps:
 - **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
 - **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
+- **Feature control / side effects**: No backend-driven UI behavior beyond standard CRUD. Add manually when the UI needs dynamic enablement or recalculation hints.
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
 - **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
 - **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.

@@ -39,9 +39,9 @@ These skills assume:
 
 | Skill | What it does | Best for |
 |---|---|---|
-| [generate-rap-service](https://github.com/marianfoo/arc-1/blob/main/skills/generate-rap-service.md) | Creates a complete RAP service stack from a natural-language description | Fast prototyping and standard CRUD |
-| [generate-rap-service-researched](https://github.com/marianfoo/arc-1/blob/main/skills/generate-rap-service-researched.md) | Researches the target system first, then plans and creates the RAP stack | Production-quality work in real packages |
-| [generate-rap-logic](https://github.com/marianfoo/arc-1/blob/main/skills/generate-rap-logic.md) | Implements RAP determinations and validations in an existing behavior pool | Filling in business logic after stack creation |
+| [generate-rap-service](https://github.com/marianfoo/arc-1/blob/main/skills/generate-rap-service.md) | Creates a complete RAP service stack from a natural-language description, with provider-contract-aware UI/Web API generation | Fast prototyping and standard CRUD |
+| [generate-rap-service-researched](https://github.com/marianfoo/arc-1/blob/main/skills/generate-rap-service-researched.md) | Researches the target system first, then plans and creates the RAP stack using impact analysis, revision history, formatter settings, and SAP docs | Production-quality work in real packages |
+| [generate-rap-logic](https://github.com/marianfoo/arc-1/blob/main/skills/generate-rap-logic.md) | Implements RAP determinations and validations in an existing behavior pool with structured class reads and quickfix-aware validation | Filling in business logic after stack creation |
 | [generate-cds-unit-test](https://github.com/marianfoo/arc-1/blob/main/skills/generate-cds-unit-test.md) | Generates CDS unit tests using the CDS Test Double Framework | CDS entities with calculations, joins, filters, or aggregations |
 | [generate-abap-unit-test](https://github.com/marianfoo/arc-1/blob/main/skills/generate-abap-unit-test.md) | Generates ABAP Unit tests with dependency analysis and test doubles | Classes with meaningful business logic |
 
@@ -73,6 +73,15 @@ These skills assume:
 - Start with `generate-rap-service-researched` when writing into transportable packages or when team conventions matter.
 - Use `explain-abap-code` before editing unfamiliar objects.
 - Use the unit-test skills after generating or modifying non-trivial behavior.
+
+## Recent ARC-1 Features These Skills Exploit
+
+- `SAPContext(action="impact")` for RAP/CDS reuse and dependency analysis
+- `SAPRead(type="VERSIONS")` / `SAPRead(type="VERSION_SOURCE")` for safer edits of existing RAP stacks
+- `SAPTransport(action="history")` for object-to-transport traceability
+- `SAPLint(action="format" | "get_formatter_settings")` for SAP-native formatting
+- `SAPRead` / `SAPWrite` for `SKTD` so RAP artifacts can carry attached Markdown documentation
+- `SAPGit` for abapGit / gCTS-aware package workflows when available
 
 ## Why The Files Stay In `skills/`
 

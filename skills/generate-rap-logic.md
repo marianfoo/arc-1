@@ -72,10 +72,25 @@ Understand underlying tables, associations, and related entities. Useful for cro
 Find the behavior pool class name from the BDEF source (`implementation in class <name>`), then:
 
 ```
+SAPRead(type="CLAS", name="<bp_class>", format="structured")
+```
+
+Use the structured read as the default because it returns metadata, includes, and existing test classes in one response. If you need a concise method catalog afterward, add:
+
+```
 SAPRead(type="CLAS", name="<bp_class>", method="*")
 ```
 
-List all methods with their signatures. Identify which methods are empty stubs (body is just comments, `RETURN`, or blank).
+Identify which methods are empty stubs (body is just comments, `RETURN`, or blank).
+
+### 1e. Optional history / documentation context
+
+If this is an existing RAP BO that has already been modified by others, inspect recent changes and any attached documentation before overwriting logic:
+
+```
+SAPRead(type="VERSIONS", name="<bp_class>", objectType="CLAS")
+SAPRead(type="SKTD", name="<bp_class>")
+```
 
 ## Step 2: Identify Target Methods
 
@@ -99,23 +114,29 @@ If the user provided a natural language description, map it to the appropriate m
 
 ## Step 3: Research RAP Patterns
 
-Use mcp-sap-docs to fetch current RAP implementation patterns:
+Use mcp-sap-docs to fetch current RAP implementation patterns. Start with reference-style queries (`includeSamples=false`) and then fetch examples (`includeSamples=true`) only when you need executable patterns:
 
 ```
-search("RAP validation implementation ABAP example")
+search(query="RAP validation implementation ABAP example", includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
 ```
-search("RAP determination on save trigger")
+search(query="RAP determination on save trigger", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 For specific logic patterns:
 ```
-search("RAP calculate total price determination")
+search(query="RAP calculate total price determination", includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
 ```
-search("RAP status validation transition")
+search(query="RAP status validation transition", includeSamples=true, abapFlavor="<cloud|standard>")
+```
+
+For backend-driven UI behavior that frequently accompanies logic changes:
+
+```
+search(query="RAP feature control side effects authorization control", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 Use documentation to inform correct ABAP Cloud patterns:
@@ -123,6 +144,7 @@ Use documentation to inform correct ABAP Cloud patterns:
 - `MODIFY ENTITIES OF <entity> IN LOCAL MODE` for updating entity data
 - Proper `FAILED` / `REPORTED` structure handling
 - Correct method signatures for determinations vs validations
+- Feature control checks are **not** evaluated for EML with `IN LOCAL MODE`
 
 ## Step 4: Generate Method Implementation
 
@@ -202,6 +224,12 @@ Before writing, optionally lint-check the generated code to catch issues before 
 SAPLint(action="lint", source="<generated_method_code>", name="<bp_class>")
 ```
 
+If you want the generated method body to follow SAP's formatter settings before it is written back:
+
+```
+SAPLint(action="format", source="<generated_method_code>", name="<bp_class>")
+```
+
 Write each method implementation using method-level surgery:
 
 ```
@@ -244,6 +272,12 @@ Optionally, if a test class exists, run the unit tests:
 
 ```
 SAPDiagnose(action="unittest", type="CLAS", name="<bp_class>")
+```
+
+If ATC is available and the change is non-trivial, run it too:
+
+```
+SAPDiagnose(action="atc", type="CLAS", name="<bp_class>")
 ```
 
 Present a summary:
@@ -468,8 +502,8 @@ ENDMETHOD.
 ### What This Skill Does NOT Do
 
 - **Custom actions**: Only determinations and validations. For custom actions (e.g., `action approve`), implement manually following a similar pattern.
-- **Side effects**: No `side effects` implementation (UI refresh triggers). Add manually if needed.
-- **Feature control**: No dynamic feature control (`instance_features`). Add manually.
+- **Side effects**: No end-to-end `side effects` implementation (UI refresh triggers). Add manually if needed.
+- **Feature control**: No end-to-end dynamic feature control (`instance_features` / `global_features`). Add manually, especially when the UI should disable actions or updates.
 - **Authorization**: No `authorization master` implementation. Add authorization checks manually.
 - **Cross-BO logic**: No inter-business-object operations. Each determination/validation operates within its own BO.
 - **Message class creation**: Uses hardcoded text for messages. For production services, create a message class afterward: `SAPWrite(action="create", type="MSAG", name="Z<MSG_CLASS>", ...)` and replace `new_message_with_text()` with `new_message()` referencing the message class.
