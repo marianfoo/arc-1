@@ -12,7 +12,7 @@ For the grouped template with inline commentary, see [`.env.example`](https://gi
 
 ARC-1 has three independent gates:
 
-1. **Server safety config = ceiling.** `SAP_READ_ONLY`, `SAP_ALLOWED_PACKAGES`, `SAP_ENABLE_TRANSPORTS`, and related flags define the maximum power this process will expose.
+1. **Server safety config = ceiling.** `SAP_READ_ONLY`, `SAP_ALLOWED_PACKAGES`, `SAP_ENABLE_TRANSPORTS`, `SAP_ENABLE_GIT`, and related flags define the maximum power this process will expose.
 2. **Profiles and MCP auth scopes = gate beneath that ceiling.** Use `ARC1_PROFILE` first for local development. API-key profiles and JWT scopes can only restrict further; they never widen the server ceiling.
 3. **SAP authorization = final per-user check.** Even if ARC-1 allows an action, SAP can still reject it based on the SAP user's own permissions.
 
@@ -21,6 +21,8 @@ These gates combine with **AND**, not OR.
 **Precedence example:** `ARC1_PROFILE=developer` + `SAP_READ_ONLY=true` stays read-only. The profile enables writes and transports first, then the explicit flag overrides that part of the profile again.
 
 **Transport note:** `SAP_ENABLE_TRANSPORTS` is still explicit. Today it turns on only via a developer profile or `SAP_ENABLE_TRANSPORTS=true`; it is not auto-derived from `SAP_ALLOWED_PACKAGES`.
+
+**Git note:** `SAP_ENABLE_GIT` is always explicit — **no profile turns it on**, not even `developer-sql`. Reads (`list_repos`, `whoami`, `config`, `branches`, `history`, `objects`, `external_info`, `check`) work without it; writes (`clone`, `pull`, `push`, `commit`, `stage`, `switch_branch`, `create_branch`, `unlink`) are blocked until you set `SAP_ENABLE_GIT=true` / `--enable-git`. `SAP_ALLOWED_PACKAGES` still applies to `clone` (the target package). `SAP_READ_ONLY` also blocks git writes independently.
 
 ---
 
@@ -65,6 +67,7 @@ The recipes above show raw config values. When you pass them through a shell fla
 | `--block-data` | `SAP_BLOCK_DATA` | `true` | `SAPQuery action=table_contents` (op `Q`) |
 | `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `true` | `SAPQuery action=run_query` (op `F`) |
 | `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` | When `false`, **all** `SAPTransport` actions are blocked — list, get, create, release, delete, reassign. Current behavior: stays off unless a developer profile or this flag enables it |
+| `--enable-git` | `SAP_ENABLE_GIT` | `false` | When `false`, **all** `SAPGit` write actions are blocked — clone, pull, push, commit, stage, switch_branch, create_branch, unlink. Reads (list_repos, whoami, config, branches, history, objects, external_info, check) are unaffected. **Not set by any profile** — explicit opt-in only |
 | `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Writes targeting packages outside this list fail. Comma-separated, trailing `*` wildcard only (`Z*,Y*,$TMP`). `*` alone = unrestricted. **Reads are never package-filtered.** |
 | `--allowed-ops` | `SAP_ALLOWED_OPS` | — | Whitelist operation codes (e.g. `RSQ`) — anything not listed is blocked. Power-user knob when profiles are too coarse |
 | `--disallowed-ops` | `SAP_DISALLOWED_OPS` | — | Blacklist operation codes — listed codes are blocked, rest allowed |

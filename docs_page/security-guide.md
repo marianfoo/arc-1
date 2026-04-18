@@ -104,6 +104,7 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 | `--allowed-packages` | `Z*,Y*,$TMP` | Restricts write operations (create, update, delete) to custom code packages (defaults to `$TMP` if not set). Read operations are not restricted by package. |
 | `--pp-strict` | `true` when PP is enabled | Rejects requests without user identity (no fallback to shared account) |
 | `--enable-transports` | `false` unless needed | Transport management is opt-in |
+| `--enable-git` | `false` unless needed | `SAPGit` write actions (clone/pull/push/commit/stage/...) are opt-in. Reads are not gated |
 
 ### Profile Reference
 

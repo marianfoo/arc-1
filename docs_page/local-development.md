@@ -153,6 +153,7 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 | Free SQL | **off** | `SAP_BLOCK_FREE_SQL=true` | `SAPQuery action=run_query` |
 | Named table preview | **off** | `SAP_BLOCK_DATA=true` | `SAPQuery action=table_contents` |
 | Transports | **off** | `SAP_ENABLE_TRANSPORTS=false` | **all** `SAPTransport` actions — including list/get |
+| Git writes | **off** | `SAP_ENABLE_GIT=false` | `SAPGit` writes (clone/pull/push/commit/stage/switch_branch/create_branch/unlink). Reads (list_repos/whoami/branches/history/external_info/check) still work. **Not enabled by any profile** — explicit opt-in only |
 | Package scope for writes | `$TMP` only | `SAP_ALLOWED_PACKAGES` | Writes to packages outside the allowlist fail. **Reads are never restricted by package.** |
 
 ### Common local starting points

@@ -157,6 +157,7 @@ Independent of scopes, the server administrator can set a global safety configur
 | Disallowed operations | `--disallowed-ops` / `SAP_DISALLOWED_OPS` | (none) | Blacklist of operation type codes |
 | Allowed packages | `--allowed-packages` / `SAP_ALLOWED_PACKAGES` | `$TMP` | Restrict to specific ABAP packages (supports wildcards). Defaults to `$TMP` (local objects only). Set to `'*'` for unrestricted or `'Z*,$TMP'` for custom packages (single quotes in shell so `$TMP` isn't expanded). |
 | Enable transports | `--enable-transports` / `SAP_ENABLE_TRANSPORTS` | `false` | Allow transport management |
+| Enable git writes | `--enable-git` / `SAP_ENABLE_GIT` | `false` | Allow `SAPGit` write actions (clone/pull/push/commit/stage/switch_branch/create_branch/unlink). Reads unaffected. Not set by any profile |
 
 ### How Safety and Scopes Interact
 

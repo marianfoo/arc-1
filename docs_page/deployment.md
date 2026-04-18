@@ -169,6 +169,7 @@ For any deployment visible to a network, before you open the gate:
 - [ ] `SAP_ALLOWED_PACKAGES` set to a specific allowlist, not `*`
 - [ ] `SAP_BLOCK_DATA=true` and `SAP_BLOCK_FREE_SQL=true` unless you need them
 - [ ] `SAP_ENABLE_TRANSPORTS=false` unless you need CTS management
+- [ ] `SAP_ENABLE_GIT=false` unless you need gCTS/abapGit writes (reads are always allowed when the backends are available)
 - [ ] If using cookies: `SAP_PP_ENABLED=true` and cookies both set? → refuses unless `SAP_PP_ALLOW_SHARED_COOKIES=true` escape hatch is explicit
 - [ ] Audit log sink configured (file or BTP Audit Log Service)
 - [ ] Image pinned to an exact version (`:0.7.0`), not `:latest`
