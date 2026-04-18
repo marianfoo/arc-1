@@ -64,9 +64,20 @@ docker run -d --name arc1 -p 8080:8080 \
   -e SAP_URL=https://your-sap-host:44300 \
   -e SAP_USER=SVC_ARC1 -e SAP_PASSWORD=... \
   -e SAP_OIDC_ISSUER=https://login.microsoftonline.com/{tenant}/v2.0 \
-  -e SAP_OIDC_AUDIENCE=api://arc1 \
+  -e SAP_OIDC_AUDIENCE={client-id-guid} \
   ghcr.io/marianfoo/arc-1:latest
 ```
+
+This example only turns on OIDC validation for the MCP endpoint. It does **not** widen the server's safety ceiling: ARC-1 still defaults to read-only, no SQL, no named table preview, no transports, and writes restricted to `$TMP` unless you set a profile or explicit safety flags.
+
+If this shared server should allow development work, add these flags to the same `docker run` command:
+
+```bash
+-e ARC1_PROFILE=developer \
+-e SAP_ALLOWED_PACKAGES='Z*,$TMP'
+```
+
+JWT scopes and profiles sit **beneath** that server ceiling. A token with `write` or `sql` scopes still cannot bypass `SAP_READ_ONLY=true` or other stricter server flags. Full matrix: [configuration-reference.md](configuration-reference.md). Scope model and ceiling interaction: [authorization.md](authorization.md#how-safety-and-scopes-interact).
 
 ARC-1 audit logs show the real MCP user; SAP audit logs show the shared service account. Trade-off — good compromise when you can't use PP.
 

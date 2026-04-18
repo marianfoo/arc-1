@@ -124,6 +124,37 @@ export SAP_OIDC_CLOCK_TOLERANCE='5'                  # seconds, optional (defaul
 
 > **Note:** `SAP_OIDC_AUDIENCE` must match the exact `aud` claim in your tokens. For Entra ID v2 access tokens, this is typically the raw client ID GUID. Validate with a real token from your tenant.
 
+### How ARC-1 permissions are derived
+
+OIDC answers **who the MCP caller is**. It does not, by itself, grant write access or override ARC-1 safety settings.
+
+ARC-1 combines three things on each request:
+
+1. The user's JWT scopes from the `scope` or `scp` claim. For ARC-1 these should be `read`, `write`, `data`, and `sql`.
+2. The server's safety/profile configuration such as `ARC1_PROFILE`, `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, `SAP_BLOCK_FREE_SQL`, `SAP_ENABLE_TRANSPORTS`, and `SAP_ALLOWED_PACKAGES`.
+3. The SAP user's own authorization, which still runs after ARC-1 allows the request.
+
+These gates combine with **AND**, not OR:
+
+- If the token has `write` but the server runs with `SAP_READ_ONLY=true`, writes are still blocked.
+- If the token has `sql` but the server keeps `SAP_BLOCK_FREE_SQL=true`, free SQL is still blocked.
+- If the token has no `scope` or `scp` claim at all, ARC-1 falls back to read-only access and logs a warning.
+
+For a shared development server, a common setup is:
+
+```bash
+export ARC1_PROFILE=developer
+export SAP_ALLOWED_PACKAGES='Z*,$TMP'
+```
+
+Then let your IdP assign JWT scopes per user:
+
+- `read` for reviewers
+- `read write` for developers
+- `read write data sql` only for users who should access SAP data through ARC-1
+
+Full flag/profile reference: [configuration-reference.md](configuration-reference.md). Full scope and role model: [authorization.md](authorization.md).
+
 ## Client Configuration
 
 ### VS Code (with OAuth)
