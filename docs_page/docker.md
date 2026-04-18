@@ -16,25 +16,16 @@ without spawning a new process per session.
 2. [Pre-Built Images (GHCR)](#pre-built-images-ghcr)
 3. [Building the Image](#building-the-image)
 4. [How arc1 Runs in Docker](#how-arc1-runs-in-docker)
-5. [Configuration Reference](#configuration-reference)
-   - [Connection](#connection)
-   - [Authentication](#authentication)
-   - [Safety / Read-Only](#safety--read-only)
-   - [Transport Management](#transport-management)
-   - [Feature Flags](#feature-flags)
-   - [Debugger](#debugger)
-   - [Network / TLS](#network--tls)
+5. [Passing Configuration into Docker](#passing-configuration-into-docker)
+   - [Env vars and env files](#env-vars-and-env-files)
+   - [Cookie files inside the container](#cookie-files-inside-the-container)
+   - [Proxy, TLS, and networking](#proxy-tls-and-networking)
 6. [MCP Client Integration](#mcp-client-integration)
    - [Claude Desktop](#claude-desktop)
    - [Gemini CLI / Other Agents](#gemini-cli--other-agents)
-7. [Common Configurations](#common-configurations)
-   - [Read-Only for Production Review](#read-only-for-production-review)
-   - [Sandboxed AI (Z* packages only)](#sandboxed-ai-z-packages-only)
-   - [Cookie Authentication](#cookie-authentication)
-   - [Corporate Proxy](#corporate-proxy)
-8. [Updating the Image](#updating-the-image)
-9. [Security Notes](#security-notes)
-10. [Troubleshooting](#troubleshooting)
+7. [Updating the Image](#updating-the-image)
+8. [Security Notes](#security-notes)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -249,277 +240,56 @@ MCP Client
 
 ---
 
-## Configuration Reference
+## Passing Configuration into Docker
 
-All configuration is done through **environment variables** with the `SAP_`
-prefix. CLI flags map 1:1 to env vars:
+All ARC-1 env vars, CLI flags, profiles, and safety recipes live in [configuration-reference.md](configuration-reference.md). This page only covers the Docker-specific part: how to pass that config into a container.
 
-| CLI flag | Env variable | Default |
-|---|---|---|
-| `--url` | `SAP_URL` | *(required)* |
-| `--user` | `SAP_USER` | |
-| `--password` | `SAP_PASSWORD` | |
-| `--client` | `SAP_CLIENT` | `100` |
-| `--language` | `SAP_LANGUAGE` | `EN` |
-| `--insecure` | `SAP_INSECURE` | `false` |
-| `--read-only` | `SAP_READ_ONLY` | `true` |
-| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `true` |
-| `--allowed-ops` | `SAP_ALLOWED_OPS` | |
-| `--disallowed-ops` | `SAP_DISALLOWED_OPS` | |
-| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` |
-| `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` |
-| `--feature-abapgit` | `SAP_FEATURE_ABAPGIT` | `auto` |
-| `--feature-rap` | `SAP_FEATURE_RAP` | `auto` |
-| `--feature-amdp` | `SAP_FEATURE_AMDP` | `auto` |
-| `--feature-ui5` | `SAP_FEATURE_UI5` | `auto` |
-| `--feature-transport` | `SAP_FEATURE_TRANSPORT` | `auto` |
-| `--feature-hana` | `SAP_FEATURE_HANA` | `auto` |
-| `--feature-ui5repo` | `SAP_FEATURE_UI5REPO` | `auto` |
-| `--feature-flp` | `SAP_FEATURE_FLP` | `auto` |
-| `--transport` | `SAP_TRANSPORT` | `http-streamable` *(image default)* |
-| `--http-addr` | `SAP_HTTP_ADDR` | `0.0.0.0:8080` *(image default)* |
-| `--verbose` | `SAP_VERBOSE` | `false` |
-| **MCP Client Auth** | | |
-| `--api-key` | `ARC1_API_KEY` | |
-| `--api-keys` | `ARC1_API_KEYS` | |
-| `--oidc-issuer` | `SAP_OIDC_ISSUER` | |
-| `--oidc-audience` | `SAP_OIDC_AUDIENCE` | |
-| `--xsuaa-auth` | `SAP_XSUAA_AUTH` | `false` |
-| `--pp-enabled` | `SAP_PP_ENABLED` | `false` |
-| `--pp-strict` | `SAP_PP_STRICT` | `false` |
-| `--profile` | `ARC1_PROFILE` | |
-| *(BTP destination)* | `SAP_BTP_DESTINATION` | |
-| *(BTP PP destination)* | `SAP_BTP_PP_DESTINATION` | |
+### Env vars and env files
 
----
-
-### Connection
+Use `-e` for short examples and `--env-file` when the list gets long:
 
 ```bash
-SAP_URL=https://host:44300    # Required. Include scheme and port.
-SAP_CLIENT=001                # SAP client number (3 digits)
-SAP_LANGUAGE=EN               # ABAP session language (2-char ISO)
+# Keep connection/auth settings in .env, add a profile at runtime
+docker run -d --rm \
+  -p 8080:8080 \
+  --env-file .env \
+  -e ARC1_PROFILE=developer \
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
----
-
-### Authentication
-
-arc1 supports multiple auth methods for connecting to SAP, plus optional MCP client authentication.
-
-#### MCP Client Authentication (Hop 1: Client → arc1)
-
-When running arc1 as a shared server, protect it with API key or OAuth:
+For the "everything on" local-dev path:
 
 ```bash
-# API Key (simplest)
--e ARC1_API_KEY='your-secret-key'
-
-# OAuth/OIDC JWT validation (enterprise)
--e SAP_OIDC_ISSUER='https://login.microsoftonline.com/{tenant}/v2.0' \
--e SAP_OIDC_AUDIENCE='<expected-aud-claim>'
-
-# Principal Propagation (BTP Destination + Cloud Connector path)
--e SAP_BTP_DESTINATION=SAP_TRIAL \
--e SAP_BTP_PP_DESTINATION=SAP_TRIAL_PP \
--e SAP_PP_ENABLED=true
+docker run -d --rm \
+  -p 8080:8080 \
+  --env-file .env \
+  -e ARC1_PROFILE=developer-sql \
+  -e SAP_ALLOWED_PACKAGES='*' \
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
-See the [Authentication guides](enterprise-auth.md) for detailed setup.
+Keep credentials and stable connection settings in `.env`; layer temporary overrides with `-e`.
 
-#### SAP Authentication (Hop 2: arc1 → SAP)
+For what `ARC1_PROFILE`, `SAP_ENABLE_TRANSPORTS`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md).
 
-arc1 supports these mutually exclusive SAP auth methods. Use exactly one.
+If you pass `$TMP` in `SAP_ALLOWED_PACKAGES`, use single quotes so the shell does not expand it: `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
 
-#### Basic auth (username + password)
+### Cookie files inside the container
 
-```bash
--e SAP_USER=myuser -e SAP_PASSWORD=mypassword
-```
-
-#### Cookie file (Netscape format)
-
-Mount a cookie file into the container and reference it:
+Mount a Netscape-format cookie file into the container and reference it with `SAP_COOKIE_FILE`:
 
 ```bash
 docker run -i --rm \
   -e SAP_URL=https://host:44300 \
   -e SAP_COOKIE_FILE=/cookies/cookies.txt \
   -v /path/to/local/cookies.txt:/cookies/cookies.txt:ro \
-  arc1
+  ghcr.io/marianfoo/arc-1:latest
 ```
 
-The cookie file must use the Netscape format exported by browser extensions like
-*Edit This Cookie* or *Cookie-Editor*.
+The cookie file must use the Netscape format exported by browser extensions like *Edit This Cookie* or *Cookie-Editor*.
 
-#### Cookie string
-
-```bash
--e SAP_COOKIE_STRING="sap-usercontext=sap-client=001; SAP_SESSIONID_ABC=xyz"
-```
-
-> **Never bake credentials into the image** with `ENV` in a downstream
-> Dockerfile. Always pass them at runtime via `-e` or `--env-file`.
-
-#### Using `--env-file`
-
-Keep credentials in a local `.env` file (never committed to git):
-
-```bash
-# .env
-SAP_URL=https://host:44300
-SAP_USER=developer
-SAP_PASSWORD=s3cr3t
-```
-
-```bash
-docker run -i --rm --env-file .env arc1
-```
-
----
-
-### Safety / Read-Only
-
-ARC-1 is safe by default — read-only, no free SQL, no table preview, no transports. Use profiles or explicit flags to enable capabilities.
-
-#### Default (safest)
-
-Out of the box, all write operations, free SQL, and table preview are blocked. No additional flags needed for read-only access.
-
-#### Enable developer access
-
-Use a profile to enable writes and transports:
-
-```bash
--e ARC1_PROFILE=developer
-```
-
-#### Enable free SQL
-
-To allow arbitrary SELECT statements via `RunQuery`:
-
-```bash
--e SAP_BLOCK_FREE_SQL=false
-```
-
-#### Operation allowlist
-
-Only permit specific operation types. The operation codes are:
-
-| Code | Meaning |
-|---|---|
-| `R` | Read (GetSource, GetObject, etc.) |
-| `S` | Search (SearchObjects, GrepSource, etc.) |
-| `I` | Intelligence (findRef, whereUsed, completion) |
-| `Q` | Query (named table preview) |
-| `F` | Free SQL (`RunQuery`) |
-| `C` | Create |
-| `U` | Update (EditSource, WriteSource) |
-| `D` | Delete |
-| `A` | Activate |
-| `W` | Workflow (FLP actions) |
-| `T` | Test (unit tests) |
-| `L` | Lock |
-| `X` | Transport |
-
-Example — allow only read and search (equivalent to read-only but explicit):
-
-```bash
--e SAP_ALLOWED_OPS=RS
-```
-
-Example — allow read, search, and query but no writes:
-
-```bash
--e SAP_ALLOWED_OPS=RSQ
-```
-
-#### Operation blocklist
-
-Block specific operation types while allowing everything else:
-
-```bash
-# Block create, delete, update, activate (but allow read/search/query)
--e SAP_DISALLOWED_OPS=CDUA
-```
-
-> `SAP_ALLOWED_OPS` and `SAP_DISALLOWED_OPS` are mutually exclusive. Use one or
-> the other, not both.
-
-#### Package restriction
-
-Restrict all write operations to specific packages. Supports wildcards:
-
-```bash
-# Only allow writes to custom packages and $TMP
--e SAP_ALLOWED_PACKAGES='Z*,$TMP'
-
-# Only one specific package
--e SAP_ALLOWED_PACKAGES='$ZRAY_DEV'
-
-# Multiple packages (comma-separated)
--e SAP_ALLOWED_PACKAGES='ZMYAPP,ZMYAPP_TEST,$TMP'
-```
-
-> **Use single quotes.** Double quotes let bash expand `$TMP` to the shell's
-> `$TMP` variable (often empty), turning your allowlist into `,,`. Single quotes
-> pass the value literally. If your shell parser requires double quotes, escape
-> the `$`: `"Z*,\$TMP"`.
-
-Read operations (`R`, `S`) are not restricted by this filter — the AI can still
-read objects from any package; it just cannot modify objects outside the
-allowlist. Use `"*"` for unrestricted write access.
-
----
-
-### Transport Management
-
-CTS transport tools are **disabled by default** to prevent accidental releases.
-
-```bash
-# Enable transport tools
--e SAP_ENABLE_TRANSPORTS=true
-```
-
----
-
-### Feature Flags
-
-Feature flags control whether optional SAP features are enabled. The default
-`auto` mode probes the SAP system on startup and enables a feature only if the
-corresponding ABAP components are installed.
-
-Use `on` or `off` to skip the probe and force the behavior:
-
-| Variable | Feature | Notes |
-|---|---|---|
-| `SAP_FEATURE_RAP` | RAP/OData development | BDEF, SRVD, SRVB tools |
-| `SAP_FEATURE_AMDP` | AMDP/HANA debugger | Expert mode only |
-| `SAP_FEATURE_UI5` | UI5/Fiori BSP | BSP app management |
-| `SAP_FEATURE_TRANSPORT` | CTS transport | Superset of `--enable-transports` |
-| `SAP_FEATURE_HANA` | HANA detection | AMDP, HANA SQL tools |
-| `SAP_FEATURE_UI5REPO` | UI5 ABAP Repository OData | BSP deploy metadata reads |
-| `SAP_FEATURE_FLP` | FLP PAGE_BUILDER_CUST OData | SAPManage FLP catalog/group/tile actions |
-
-```bash
-# Force all features off — fastest startup, smallest tool surface
--e SAP_FEATURE_ABAPGIT=off \
--e SAP_FEATURE_RAP=off \
--e SAP_FEATURE_AMDP=off \
--e SAP_FEATURE_UI5=off \
--e SAP_FEATURE_TRANSPORT=off \
--e SAP_FEATURE_HANA=off
-
-# Force abapGit on without probing
--e SAP_FEATURE_ABAPGIT=on
-```
-
-Setting features to `off` reduces the number of registered MCP tools, which
-keeps the AI's tool list shorter and lowers token usage.
-
----
-
-### Network / TLS
+> **Never bake credentials into the image** with `ENV` in a downstream Dockerfile. Always pass them at runtime via `-e` or `--env-file`.
+### Proxy, TLS, and networking
 
 #### Self-signed or internal CA certificates
 
@@ -672,62 +442,6 @@ Clients that support HTTP MCP can connect to `http://localhost:8080/mcp` directl
 once the container is running. For stdio-only clients use `docker run -i` with
 `-e SAP_TRANSPORT=stdio`. See [local-development.md → MCP client configuration](local-development.md#mcp-client-configuration) for agent-specific
 configuration examples.
-
----
-
-## Common Configurations
-
-### Read-Only for Production Review
-
-Default configuration is already read-only — safe for production:
-
-```bash
-docker run -d --rm \
-  -p 8080:8080 \
-  -e SAP_URL=https://prod:44300 \
-  -e SAP_USER=s_ai_viewer \
-  -e SAP_PASSWORD=secret \
-  -e SAP_VERBOSE=true \
-  ghcr.io/marianfoo/arc-1:latest
-```
-
-### Sandboxed AI (Z* packages only)
-
-AI can read anything but only write to custom development packages:
-
-```bash
-docker run -i --rm \
-  -e SAP_URL=https://dev:44300 \
-  -e SAP_USER=developer \
-  -e SAP_PASSWORD=secret \
-  -e SAP_READ_ONLY=false \
-  -e SAP_ALLOWED_PACKAGES='Z*,$TMP' \
-  -e SAP_DISALLOWED_OPS=D \
-  ghcr.io/marianfoo/arc-1:latest
-```
-
-This setup lets the AI read system objects, write only to custom packages, and
-prevents deletions. Free SQL and table preview remain blocked (defaults).
-
-### Cookie Authentication
-
-```bash
-docker run -i --rm \
-  -e SAP_URL=https://host:44300 \
-  -e SAP_COOKIE_FILE=/cookies/cookies.txt \
-  -v "${HOME}/.sap-cookies/my-system.txt:/cookies/cookies.txt:ro" \
-  ghcr.io/marianfoo/arc-1:latest
-```
-
-### Corporate Proxy
-
-```bash
-docker run -i --rm \
-  --env-file .env \
-  -e HTTPS_PROXY=http://proxy.corp.example:3128 \
-  -e NO_PROXY=localhost,127.0.0.1 \
-  ghcr.io/marianfoo/arc-1:latest
-```
 
 ---
 

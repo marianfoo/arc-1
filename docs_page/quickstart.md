@@ -42,24 +42,65 @@ Hit `Ctrl+C` to stop. If this failed, check TLS (`--insecure` for self-signed de
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
+Use the same `command` and `args` either way:
+
+- `command`: `npx`
+- `args`: `["-y", "arc-1@latest"]`
+
+Then pick one `env` block for local development.
+
+### Path A — read and search only
+
+`viewer` is the same as the built-in default, but keeping it explicit makes the intent obvious in local configs.
+
 ```json
 {
-  "mcpServers": {
-    "sap": {
-      "command": "npx",
-      "args": ["-y", "arc-1@latest"],
-      "env": {
-        "SAP_URL": "https://your-sap-host:44300",
-        "SAP_USER": "YOUR_USER",
-        "SAP_PASSWORD": "YOUR_PASS",
-        "SAP_CLIENT": "100"
-      }
-    }
-  }
+  "SAP_URL": "https://your-sap-host:44300",
+  "SAP_USER": "YOUR_USER",
+  "SAP_PASSWORD": "YOUR_PASS",
+  "SAP_CLIENT": "100",
+  "ARC1_PROFILE": "viewer"
 }
 ```
 
-Restart Claude Desktop. The SAP tools (`SAPRead`, `SAPSearch`, etc.) should appear in the tool picker.
+#### What you just got — read-only by default
+
+| Capability | Result |
+|---|---|
+| Writes | Off |
+| Free SQL | Off |
+| Named table preview | Off |
+| Transports | Off |
+| Package scope | `$TMP` if you later enable writes |
+
+### Path B — full local development
+
+Use this only on a dev or sandbox system you are comfortable modifying.
+
+```json
+{
+  "SAP_URL": "https://your-sap-host:44300",
+  "SAP_USER": "YOUR_USER",
+  "SAP_PASSWORD": "YOUR_PASS",
+  "SAP_CLIENT": "100",
+  "ARC1_PROFILE": "developer-sql",
+  "SAP_ALLOWED_PACKAGES": "*"
+}
+```
+
+#### What you just got — writes, SQL, data, and transports
+
+| Capability | Result |
+|---|---|
+| Writes | On |
+| Free SQL | On |
+| Named table preview | On |
+| Transports | On |
+| Package scope | `*` (all packages) |
+
+Need something in between? Start from `ARC1_PROFILE=developer` for writes in `$TMP`, or pick a narrower recipe in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes).
+
+Restart Claude Desktop after updating the config. The SAP tools (`SAPRead`, `SAPSearch`, etc.) should appear in the tool picker.
 
 Other MCP clients (Claude Code, Cursor, VS Code Copilot, Gemini CLI, Goose): same shape, see [local-development.md](local-development.md#mcp-client-configuration).
 
@@ -75,46 +116,8 @@ Claude should call `SAPRead` and return the ABAP source.
 
 ---
 
-## What you just got — read-only by default
-
-Out of the box every destructive or data-exposing capability is blocked:
-
-| Blocked by default | What it disables |
-|---|---|
-| `SAP_READ_ONLY=true` | `SAPWrite` (create/update/delete), `SAPActivate`, FLP workflow actions |
-| `SAP_BLOCK_FREE_SQL=true` | `SAPQuery action=run_query` (free-form SELECT) |
-| `SAP_BLOCK_DATA=true` | `SAPQuery action=table_contents` (named table preview) |
-| `SAP_ENABLE_TRANSPORTS=false` | **all** `SAPTransport` actions — including list/get |
-| `SAP_ALLOWED_PACKAGES=$TMP` | Writes go to `$TMP` only (reads are **never** restricted by package) |
-
-Auth is Basic Auth as YOUR_USER — SAP's audit log shows your actual username.
-
-## Enable more capabilities
-
-Pick the smallest thing that unblocks your task. All three examples go in the same `env` block as the SAP credentials above.
-
-**Writes only (CLAS/INTF/PROG create/update/delete in `$TMP`):**
-
-```json
-"env": { "SAP_READ_ONLY": "false" }
-```
-
-**Writes to custom Z-packages too:**
-
-```json
-"env": { "SAP_READ_ONLY": "false", "SAP_ALLOWED_PACKAGES": "Z*,$TMP" }
-```
-
-**Everything on (writes + transports + SQL + table preview, all packages):**
-
-```json
-"env": { "ARC1_PROFILE": "developer-sql", "SAP_ALLOWED_PACKAGES": "*" }
-```
-
-Profiles are shortcuts — `developer-sql` expands to `readOnly=false`, `blockData=false`, `blockFreeSQL=false`, `enableTransports=true`, and keeps `allowedPackages=$TMP` (widen it with `SAP_ALLOWED_PACKAGES`). Full matrix and per-capability recipes: [local-development.md → Safety profiles](local-development.md#safety-profiles).
-
 ## Next steps
 
 - **Your SAP uses SSO (SAML / SPNEGO / X.509)?** Basic Auth won't work. See [local-development.md → SSO-only on-prem](local-development.md#sso-only-on-prem-cookie-extractor).
 - **Running on BTP or deploying for a team?** → [deployment.md](deployment.md).
-- **Full flag reference** → [configuration-reference.md](configuration-reference.md).
+- **Full flag and profile reference** → [configuration-reference.md](configuration-reference.md).

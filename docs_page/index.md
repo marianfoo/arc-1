@@ -95,7 +95,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-For fine-grained control, see [Admin Controls (Safety)](#admin-controls-safety) below or [local-development.md → Safety profiles](local-development.md#safety-profiles).
+Profiles are the main local-dev knob. Start with `ARC1_PROFILE=viewer` or `ARC1_PROFILE=developer-sql`, then use [configuration-reference.md](configuration-reference.md) for the full matrix and individual flags.
 
 ### Claude Code
 
@@ -160,25 +160,15 @@ Full reference: **[tools.md](tools.md)**
 
 ## Admin Controls (Safety)
 
-Safe by default — read-only, no SQL, no data preview, no transports. Writes are restricted to `$TMP`. Enable capabilities explicitly:
+Safe by default — read-only, no SQL, no data preview, no transports. Writes are restricted to `$TMP`.
 
-```bash
-# Enable everything (writes + transports + SQL + data, all packages)
-arc1 --profile developer-sql --allowed-packages "*"
+- `ARC1_PROFILE=viewer` or nothing: read/search only.
+- `ARC1_PROFILE=developer`: writes + transports in `$TMP`, still no SQL or named table preview.
+- `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*`: full local development access.
 
-# Writes + transports, no SQL/data (default developer preset)
-arc1 --profile developer
+Profiles never widen a stricter server flag. Example: `ARC1_PROFILE=developer` + `SAP_READ_ONLY=true` is still read-only.
 
-# Fine-grained individual flags
-arc1 --read-only=false                        # writes only (still $TMP)
-arc1 --read-only=false --allowed-packages 'ZPROD*,$TMP'   # single quotes: bash expands $TMP inside "..."
-arc1 --block-free-sql=false                   # free SQL only
-arc1 --block-data=false                       # table preview only
-arc1 --enable-transports=true                 # SAPTransport (all actions)
-arc1 --allowed-ops "RSQ"                      # whitelist operation codes
-```
-
-Full recipe reference: [local-development.md → Safety profiles](local-development.md#safety-profiles). Profile expansions: [configuration-reference.md → Profile expansions](configuration-reference.md#profile-expansions).
+Full env/CLI reference, profile expansions, and recipes: [configuration-reference.md](configuration-reference.md).
 
 ## Documentation
 

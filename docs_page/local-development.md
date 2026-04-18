@@ -143,9 +143,9 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 
 ## Safety profiles
 
-> **ARC-1 ships read-only.** Writes, free SQL, named table preview, and transport actions are all blocked by default. Nothing the AI can do here will modify your SAP system until you flip a flag.
+> **ARC-1 ships read-only.** For local development, start with a profile first and reach for individual flags only when you need a custom mix.
 
-### What's blocked by default, and by which flag
+### What's blocked by default
 
 | Capability | Default | Flag that blocks it | Tools/actions disabled when blocked |
 |---|---|---|---|
@@ -155,75 +155,15 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 | Transports | **off** | `SAP_ENABLE_TRANSPORTS=false` | **all** `SAPTransport` actions — including list/get |
 | Package scope for writes | `$TMP` only | `SAP_ALLOWED_PACKAGES` | Writes to packages outside the allowlist fail. **Reads are never restricted by package.** |
 
-### Profiles (shortcuts)
+### Common local starting points
 
-A profile sets several flags at once. Pick the closest, then widen specifics with individual flags.
+- `ARC1_PROFILE=viewer` or nothing: read/search only, same safe default.
+- `ARC1_PROFILE=developer`: writes + transports in `$TMP`, still no SQL or named table preview.
+- `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*`: full local development access.
 
-| Profile | Writes | SQL | Data preview | Transports | Packages |
-|---|---|---|---|---|---|
-| *(none set)* | ❌ | ❌ | ❌ | ❌ | `$TMP` |
-| `viewer` | ❌ | ❌ | ❌ | ❌ | `$TMP` |
-| `viewer-data` | ❌ | ❌ | ✅ | ❌ | `$TMP` |
-| `viewer-sql` | ❌ | ✅ | ✅ | ❌ | `$TMP` |
-| `developer` | ✅ | ❌ | ❌ | ✅ | `$TMP` |
-| `developer-data` | ✅ | ❌ | ✅ | ✅ | `$TMP` |
-| `developer-sql` | ✅ | ✅ | ✅ | ✅ | `$TMP` |
+Need something in between? The full profile matrix and recipes live in [configuration-reference.md](configuration-reference.md#common-recipes).
 
-### Recipes — enable exactly what you need
-
-Put these in the `env` block of your MCP client config (or in `.env` / CLI flags). Individual flags override profile values, so you can combine them.
-
-**Enable writes (stay in `$TMP`):**
-
-```bash
-SAP_READ_ONLY=false
-```
-
-**Enable writes to Z-packages as well:**
-
-```bash
-SAP_READ_ONLY=false
-SAP_ALLOWED_PACKAGES=Z*,$TMP            # trailing * wildcard, comma-separated
-```
-
-**Enable free SQL (`SAPQuery run_query`):**
-
-```bash
-SAP_BLOCK_FREE_SQL=false
-```
-
-**Enable named table preview (`SAPQuery table_contents`):**
-
-```bash
-SAP_BLOCK_DATA=false
-```
-
-**Enable transport management (`SAPTransport` list/create/release/delete):**
-
-```bash
-SAP_ENABLE_TRANSPORTS=true
-```
-
-**Enable everything — writes, transports, SQL, data, unrestricted packages:**
-
-```bash
-ARC1_PROFILE=developer-sql
-SAP_ALLOWED_PACKAGES=*
-```
-
-**Developer defaults (writes + transports, no SQL/data, `$TMP` only):**
-
-```bash
-ARC1_PROFILE=developer
-```
-
-### Package allowlist rules
-
-- Comma-separated; trailing `*` wildcard only. `Z*,Y*,$TMP` matches `ZTEST`, `YFOO`, `$TMP`. Case-insensitive.
-- `*` alone means unrestricted.
-- Applies to **writes only** — `SAPRead`, `SAPSearch`, `SAPContext`, `SAPNavigate` are never package-filtered.
-
-Full flag table: [configuration-reference.md](configuration-reference.md#safety-scopes-profiles). Production hardening recommendations: [security-guide.md](security-guide.md).
+For surgical policies, `SAP_ALLOWED_OPS` and `SAP_DISALLOWED_OPS` are real power-user knobs. Use one or the other when profiles are too broad. Full flag table: [configuration-reference.md](configuration-reference.md). Production hardening recommendations: [security-guide.md](security-guide.md).
 
 ---
 
