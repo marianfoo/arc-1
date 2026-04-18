@@ -17,6 +17,7 @@ export type FeatureMode = 'auto' | 'on' | 'off';
 export interface FeatureConfig {
   hana: FeatureMode;
   abapGit: FeatureMode;
+  gcts: FeatureMode;
   rap: FeatureMode;
   amdp: FeatureMode;
   ui5: FeatureMode;
@@ -30,6 +31,7 @@ export function defaultFeatureConfig(): FeatureConfig {
   return {
     hana: 'auto',
     abapGit: 'auto',
+    gcts: 'auto',
     rap: 'auto',
     amdp: 'auto',
     ui5: 'auto',

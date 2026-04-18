@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-18 (SEC-09 Auth Safety landed 2026-04-17: fixed cookie→PP leak, added `X-SAP-SAML2` opt-in handling, added HTML-login-page detection; FEAT-20 implemented: VERSIONS/VERSION_SOURCE SAPRead support; FEAT-10 implemented: ADT PrettyPrint + formatter settings via SAPLint; FEAT-49 implemented: object → transport reverse lookup via `SAPTransport(action="history")`; FEAT-33 implemented: CDS impact analysis via `SAPContext(action="impact")`; FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
+_Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit backend integration and `--enable-git` safety gate; SEC-09 Auth Safety landed 2026-04-17: fixed cookie→PP leak, added `X-SAP-SAML2` opt-in handling, added HTML-login-page detection; FEAT-20 implemented: VERSIONS/VERSION_SOURCE SAPRead support; FEAT-10 implemented: ADT PrettyPrint + formatter settings via SAPLint; FEAT-49 implemented: object → transport reverse lookup via `SAPTransport(action="history")`; FEAT-33 implemented: CDS impact analysis via `SAPContext(action="impact")`; FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
 
 ## Legend
 - ✅ = Supported
@@ -17,7 +17,7 @@ _Last updated: 2026-04-18 (SEC-09 Auth Safety landed 2026-04-17: fixed cookie→
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
 | Language | TypeScript | Go 1.24 | TypeScript | TypeScript | Python 3.12 | TypeScript | TypeScript | JavaScript (compiled TS) | Python 3.10+ |
-| Tool count | 11 intent-based | 1-99 (3 modes) | ~15 | 13 | 15 | 316 (4 tiers) | 3 (hierarchical) | 53 | 28+ CLI commands (not MCP) |
+| Tool count | 12 intent-based | 1-99 (3 modes) | ~15 | 13 | 15 | 316 (4 tiers) | 3 (hierarchical) | 53 | 28+ CLI commands (not MCP) |
 | ADT client | Custom (undici/fetch) | Custom (Go) | abap-adt-api | Custom (axios) | Custom (aiohttp) | Custom (axios) | SAP Cloud SDK | abap-adt-api | Custom (requests) |
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) | N/A (Python, git install) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -194,10 +194,10 @@ _Last updated: 2026-04-18 (SEC-09 Auth Safety landed 2026-04-17: fixed cookie→
 
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
-| Feature auto-detection | ✅ (7 probes + ADT discovery/MIME) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (ADT discovery/MIME) |
+| Feature auto-detection | ✅ (8 probes + ADT discovery/MIME) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (ADT discovery/MIME) |
 | Caching (SQLite) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | UI5/Fiori BSP | ❌ | ⚠️ (3 read-only; 4 write tools disabled — ADT filestore returns 405) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (OData upload/download) |
-| abapGit/gCTS | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (full gCTS + checkout/checkin) |
+| abapGit/gCTS | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (full gCTS + checkout/checkin) |
 | BTP Destination Service | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Cloud Connector proxy | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Multi-system support | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ (SAP UI Landscape XML, Apr 2026) | ✅ (kubeconfig contexts) |
@@ -219,11 +219,11 @@ _Last updated: 2026-04-18 (SEC-09 Auth Safety landed 2026-04-17: fixed cookie→
 
 | Feature | ARC-1 | vibing-steampunk | fr0ster | sapcli |
 |---------|-------|-----------------|---------|--------|
-| Schema token cost | ~200 (hyperfocused) / ~moderate (11 tools) | ~200 (hyperfocused) / ~14K (focused) / ~40K (expert) | ~high (303 tools) | N/A (CLI) |
+| Schema token cost | ~200 (hyperfocused) / ~moderate (12 tools) | ~200 (hyperfocused) / ~14K (focused) / ~40K (expert) | ~high (303 tools) | N/A (CLI) |
 | Context compression | ✅ SAPContext (7-30x) | ✅ Auto-append (7-30x) | ❌ | N/A |
 | Method-level surgery | ✅ (95% source reduction) | ✅ (95% source reduction) | ❌ | N/A |
 | Hyperfocused mode (1 tool) | ✅ (~200 tokens) | ✅ (~200 tokens) | ❌ | N/A |
-| Compact/intent mode | ✅ (11 intent tools) | N/A | ✅ (22 compact tools) | N/A |
+| Compact/intent mode | ✅ (12 intent tools) | N/A | ✅ (22 compact tools) | N/A |
 
 ## 13. Testing & Quality
 
@@ -289,7 +289,7 @@ The following items were incorrectly marked in the previous version and have sin
 ## Competitive Positioning Summary
 
 ### ARC-1 Unique Strengths (no other project has all of these)
-1. **Intent-based routing** — 11 tools vs 25-303. Simplest LLM decision surface.
+1. **Intent-based routing** — 12 tools vs 25-303. Simplest LLM decision surface.
 2. **Declarative safety system** — Read-only, op filter, pkg filter, SQL blocking, transport gating, dry-run. Most comprehensive.
 3. **MCP scope system** — OAuth scope-gated tool access (read/write/admin).
 4. **BTP ABAP Environment** — Full OAuth 2.0 browser login, direct connectivity.

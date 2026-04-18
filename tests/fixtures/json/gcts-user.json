@@ -1,0 +1,14 @@
+{
+  "user": {
+    "user": "DEVELOPER",
+    "scope": {
+      "system": [
+        { "scope": "config", "level": "admin" },
+        { "scope": "teams", "level": "admin" },
+        { "scope": "registry", "level": "admin" },
+        { "scope": "repository", "level": "admin" },
+        { "scope": "tms", "level": "admin" }
+      ]
+    }
+  }
+}

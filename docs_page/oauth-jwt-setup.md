@@ -131,7 +131,7 @@ OIDC answers **who the MCP caller is**. It does not, by itself, grant write acce
 ARC-1 combines three things on each request:
 
 1. The user's JWT scopes from the `scope` or `scp` claim. For ARC-1 these should be `read`, `write`, `data`, and `sql`.
-2. The server's safety/profile configuration such as `ARC1_PROFILE`, `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, `SAP_BLOCK_FREE_SQL`, `SAP_ENABLE_TRANSPORTS`, and `SAP_ALLOWED_PACKAGES`.
+2. The server's safety/profile configuration such as `ARC1_PROFILE`, `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, `SAP_BLOCK_FREE_SQL`, `SAP_ENABLE_TRANSPORTS`, `SAP_ENABLE_GIT`, and `SAP_ALLOWED_PACKAGES`.
 3. The SAP user's own authorization, which still runs after ARC-1 allows the request.
 
 These gates combine with **AND**, not OR:

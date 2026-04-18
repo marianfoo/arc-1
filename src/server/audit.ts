@@ -120,7 +120,18 @@ export type AuditEvent =
 
 /** Sanitize tool call arguments — remove values that might contain sensitive data */
 export function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = ['password', 'token', 'secret', 'cookie', 'authorization', 'csrf', 'apikey'];
+  const sensitiveKeys = [
+    'password',
+    'token',
+    'secret',
+    'cookie',
+    'authorization',
+    'csrf',
+    'apikey',
+    'authpwd',
+    'authtoken',
+    'remotepassword',
+  ];
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
     if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {

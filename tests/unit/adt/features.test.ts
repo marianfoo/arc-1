@@ -18,6 +18,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'on',
         abapGit: 'on',
+        gcts: 'on',
         rap: 'on',
         amdp: 'on',
         ui5: 'on',
@@ -30,6 +31,7 @@ describe('Feature Detection', () => {
       expect(result.hana.available).toBe(true);
       expect(result.hana.mode).toBe('on');
       expect(result.abapGit.available).toBe(true);
+      expect(result.gcts.available).toBe(true);
       expect(result.rap.available).toBe(true);
     });
 
@@ -37,6 +39,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'off',
         abapGit: 'off',
+        gcts: 'off',
         rap: 'off',
         amdp: 'off',
         ui5: 'off',
@@ -49,12 +52,14 @@ describe('Feature Detection', () => {
       expect(result.hana.available).toBe(false);
       expect(result.hana.mode).toBe('off');
       expect(result.abapGit.available).toBe(false);
+      expect(result.gcts.available).toBe(false);
     });
 
     it('auto defaults to unavailable without probing', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -72,6 +77,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'on',
         abapGit: 'off',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'on',
         ui5: 'off',
@@ -83,6 +89,7 @@ describe('Feature Detection', () => {
 
       expect(result.hana.available).toBe(true);
       expect(result.abapGit.available).toBe(false);
+      expect(result.gcts.available).toBe(false);
       expect(result.rap.available).toBe(false);
       expect(result.amdp.available).toBe(true);
       expect(result.ui5.available).toBe(false);
@@ -93,6 +100,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'on',
         abapGit: 'off',
+        gcts: 'on',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -104,6 +112,7 @@ describe('Feature Detection', () => {
 
       expect(result.hana.message).toContain('Forced on');
       expect(result.abapGit.message).toContain('Disabled');
+      expect(result.gcts.message).toContain('Forced on');
       expect(result.rap.message).toContain('not available');
     });
 
@@ -111,6 +120,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -127,6 +137,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -144,6 +155,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -160,6 +172,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -258,6 +271,7 @@ describe('Feature Detection', () => {
     const defaultConfig: FeatureConfig = {
       hana: 'auto',
       abapGit: 'auto',
+      gcts: 'auto',
       rap: 'auto',
       amdp: 'auto',
       ui5: 'auto',

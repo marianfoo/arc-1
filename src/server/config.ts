@@ -216,6 +216,9 @@ export function parseArgs(args: string[]): ServerConfig {
     }
     config.allowedPackages = filtered;
   }
+  const enableGitExplicit = getFlag('enable-git') ?? process.env.SAP_ENABLE_GIT;
+  if (enableGitExplicit !== undefined) config.enableGit = enableGitExplicit === 'true' || enableGitExplicit === '1';
+  else if (!profileName) config.enableGit = false;
   const enableTransportsExplicit = getFlag('enable-transports') ?? process.env.SAP_ENABLE_TRANSPORTS;
   if (enableTransportsExplicit !== undefined)
     config.enableTransports = enableTransportsExplicit === 'true' || enableTransportsExplicit === '1';
@@ -223,6 +226,7 @@ export function parseArgs(args: string[]): ServerConfig {
 
   // --- Features ---
   config.featureAbapGit = resolveFeature('feature-abapgit', 'SAP_FEATURE_ABAPGIT');
+  config.featureGcts = resolveFeature('feature-gcts', 'SAP_FEATURE_GCTS');
   config.featureRap = resolveFeature('feature-rap', 'SAP_FEATURE_RAP');
   config.featureAmdp = resolveFeature('feature-amdp', 'SAP_FEATURE_AMDP');
   config.featureUi5 = resolveFeature('feature-ui5', 'SAP_FEATURE_UI5');

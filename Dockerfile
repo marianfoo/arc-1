@@ -69,6 +69,11 @@ ENV SAP_HTTP_ADDR="0.0.0.0:8080"
 # ─── Transport Management ───────────────────────────────────────────────────
 ENV SAP_ENABLE_TRANSPORTS="false"
 
+# ─── Git Integration (gCTS / abapGit write ops) ─────────────────────────────
+# Reads (list_repos, whoami, branches, history, external_info, check) work without this.
+# Writes (clone, pull, push, commit, stage, switch_branch, create_branch, unlink) require true.
+ENV SAP_ENABLE_GIT="false"
+
 # ─── System Type ────────────────────────────────────────────────────────────
 # auto = detect from SAP_CLOUD component, btp = BTP ABAP, onprem = on-premise
 ENV SAP_SYSTEM_TYPE="auto"

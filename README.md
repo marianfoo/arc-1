@@ -19,6 +19,7 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Package restrictions** — limit AI write operations (create, update, delete) to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`). Read operations are not restricted by package — use SAP's native authorization for read-level access control
 - **Data access control** — enable table data preview (`--block-data=false`) or free-form SQL (`--block-free-sql=false`)
 - **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only. Update/delete operations auto-use the lock correction number when no explicit transport is provided
+- **Git workflow safety** — Git operations are disabled by default. Enable explicitly with `--enable-git` / `SAP_ENABLE_GIT=true`
 - **Safety profiles** — preconfigured roles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
 - **Writes restricted to `$TMP` when enabled** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
@@ -42,7 +43,7 @@ Deploy ARC-1 as a Cloud Foundry app on SAP BTP with full platform integration:
 
 ### Token Efficiency
 
-- **11 intent-based tools** (~5K schema tokens) instead of 200+ individual tools — keeps the LLM's context window small
+- **12 intent-based tools** (~5K schema tokens) instead of 200+ individual tools — keeps the LLM's context window small
 - **Method-level read/edit** — read or update a single class method, not the whole source (up to 20x fewer tokens)
 - **Context compression** — `SAPContext` returns public API contracts of all dependencies in one call (7-30x compression)
 
@@ -66,7 +67,7 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 ### Tools Refined for Real-World Usage
 
-The 11 tools are designed from real LLM interaction feedback:
+The 12 tools are designed from real LLM interaction feedback:
 
 | Tool | What it does |
 |------|-------------|
@@ -77,6 +78,7 @@ The 11 tools are designed from real LLM interaction feedback:
 | **SAPNavigate** | Go-to-definition, find references, code completion |
 | **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
 | **SAPTransport** | CTS transport management (list/create/release/delete/reassign), transport requirement checks, and reverse lookup history (`action="history"`) |
+| **SAPGit** | Git-based ABAP workflows across gCTS and abapGit (list/clone/pull/push/commit/branch/unlink) with backend auto-selection and safety gating (`--enable-git`) |
 | **SAPContext** | Compressed dependency context (`action="deps"`), reverse dependency lookup (`action="usages"`), and CDS upstream/downstream impact analysis (`action="impact"` for DDLS) |
 | **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) + ADT PrettyPrint (server-side formatting) |
 | **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps, profiler traces |
@@ -88,7 +90,7 @@ Tool definitions automatically adapt to the target system (BTP vs on-premise), r
 
 ARC-1 probes the SAP system at startup and adapts its behavior:
 
-- Detects HANA, abapGit, RAP/CDS, AMDP, UI5, and transport availability
+- Detects HANA, gCTS, abapGit, RAP/CDS, AMDP, UI5, and transport availability
 - Auto-detects BTP vs on-premise systems
 - Maps SAP_BASIS release to the correct ABAP language version
 - Each feature can be forced on/off or left on auto-detect
@@ -115,7 +117,7 @@ Full documentation is available at **[marianfoo.github.io/arc-1](https://marianf
 | [Configuration](https://marianfoo.github.io/arc-1/configuration-reference/) | Every flag and env var, one table |
 | [Updating](https://marianfoo.github.io/arc-1/updating/) | Update procedures per install method |
 | [Enterprise Auth](https://marianfoo.github.io/arc-1/enterprise-auth/) | Layer A / Layer B auth internals, coexistence matrix |
-| [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 11 tools |
+| [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 12 tools |
 | [Architecture](https://marianfoo.github.io/arc-1/architecture/) | System architecture with diagrams |
 | [AI Usage Patterns](https://marianfoo.github.io/arc-1/mcp-usage/) | Agent workflow patterns and best practices |
 

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <namespace id="com.sap.adt">com.sap.adt</namespace>
+  <type id="ExceptionMethodNotSupported"/>
+  <exc:localizedMessage lang="EN">Method GET not supported for this resource</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SADT_HTTP</entry>
+    <entry key="T100KEY-MSGNO">405</entry>
+  </exc:properties>
+</exc:exception>

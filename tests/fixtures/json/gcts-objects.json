@@ -1,0 +1,16 @@
+{
+  "result": [
+    {
+      "type": "CLAS",
+      "name": "ZCL_ARC1_TEST",
+      "package": "ZARC1",
+      "path": "src/classes/zcl_arc1_test.clas.abap"
+    },
+    {
+      "type": "INTF",
+      "name": "ZIF_ARC1_TEST",
+      "package": "ZARC1",
+      "path": "src/interfaces/zif_arc1_test.intf.abap"
+    }
+  ]
+}

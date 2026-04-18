@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapgitexternalrepo:externalRepoInfo xmlns:abapgitexternalrepo="http://www.sap.com/adt/abapgit/externalRepo" abapgitexternalrepo:accessMode="PUBLIC" abapgitexternalrepo:defaultBranch="main" abapgitexternalrepo:selectedBranch="main">
+  <abapgitexternalrepo:user abapgitexternalrepo:name="abapGit Bot" abapgitexternalrepo:email="bot@example.com"/>
+  <abapgitexternalrepo:branch abapgitexternalrepo:name="HEAD" abapgitexternalrepo:head="true" abapgitexternalrepo:sha1="aaaaaaaa"/>
+  <abapgitexternalrepo:branch abapgitexternalrepo:name="main" abapgitexternalrepo:head="false" abapgitexternalrepo:sha1="bbbbbbbb"/>
+  <abapgitexternalrepo:branch abapgitexternalrepo:name="german" abapgitexternalrepo:head="false" abapgitexternalrepo:sha1="cccccccc"/>
+</abapgitexternalrepo:externalRepoInfo>

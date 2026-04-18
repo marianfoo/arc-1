@@ -12,6 +12,18 @@
 
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import {
+  checkRepo as abapGitCheckRepo,
+  createBranch as abapGitCreateBranch,
+  createRepo as abapGitCreateRepo,
+  getExternalInfo as abapGitGetExternalInfo,
+  listRepos as abapGitListRepos,
+  pullRepo as abapGitPullRepo,
+  pushRepo as abapGitPushRepo,
+  stageRepo as abapGitStageRepo,
+  switchBranch as abapGitSwitchBranch,
+  unlinkRepo as abapGitUnlinkRepo,
+} from '../adt/abapgit.js';
 import { classifyCdsImpact } from '../adt/cds-impact.js';
 import type { AdtClient } from '../adt/client.js';
 import {
@@ -87,6 +99,21 @@ import {
   listGroups,
   listTiles,
 } from '../adt/flp.js';
+import {
+  type GctsCloneParams,
+  cloneRepo as gctsCloneRepo,
+  commitRepo as gctsCommitRepo,
+  createBranch as gctsCreateBranch,
+  deleteRepo as gctsDeleteRepo,
+  getCommitHistory as gctsGetCommitHistory,
+  getConfig as gctsGetConfig,
+  getUserInfo as gctsGetUserInfo,
+  listBranches as gctsListBranches,
+  listRepoObjects as gctsListRepoObjects,
+  listRepos as gctsListRepos,
+  pullRepo as gctsPullRepo,
+  switchBranch as gctsSwitchBranch,
+} from '../adt/gcts.js';
 import { changePackage } from '../adt/refactoring.js';
 import { checkOperation, checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
@@ -142,6 +169,7 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPRead: 'read',
   SAPSearch: 'read',
   SAPQuery: 'sql',
+  SAPGit: 'read',
   SAPNavigate: 'read',
   SAPContext: 'read',
   SAPLint: 'read',
@@ -150,6 +178,25 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPActivate: 'write',
   SAPManage: 'write',
   SAPTransport: 'write',
+};
+
+const SAPGIT_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
+  list_repos: 'read',
+  whoami: 'read',
+  config: 'read',
+  branches: 'read',
+  external_info: 'read',
+  history: 'read',
+  objects: 'read',
+  check: 'read',
+  clone: 'write',
+  pull: 'write',
+  push: 'write',
+  commit: 'write',
+  stage: 'write',
+  switch_branch: 'write',
+  create_branch: 'write',
+  unlink: 'write',
 };
 
 /**
@@ -504,6 +551,9 @@ export async function handleToolCall(
           break;
         case 'SAPTransport':
           result = await handleSAPTransport(client, args);
+          break;
+        case 'SAPGit':
+          result = await handleSAPGit(client, args, authInfo);
           break;
         case 'SAPContext':
           result = await handleSAPContext(client, args, cachingLayer);
@@ -3010,6 +3060,222 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
         `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces`,
       );
   }
+}
+
+// ─── SAPGit Handler ──────────────────────────────────────────────────
+
+type SapGitBackend = 'gcts' | 'abapgit';
+
+function resolveSapGitBackend(args: Record<string, unknown>): { backend?: SapGitBackend; error?: string } {
+  const forced = args.backend as SapGitBackend | undefined;
+  const hasGcts = Boolean(cachedFeatures?.gcts?.available);
+  const hasAbapGit = Boolean(cachedFeatures?.abapGit?.available);
+
+  if (!hasGcts && !hasAbapGit) {
+    return {
+      error:
+        'Neither gCTS nor abapGit is available on this SAP system. Run SAPManage(action="probe") to refresh feature detection.',
+    };
+  }
+
+  if (forced) {
+    if (forced === 'gcts' && !hasGcts) return { error: 'gCTS backend is not available on this SAP system.' };
+    if (forced === 'abapgit' && !hasAbapGit) return { error: 'abapGit backend is not available on this SAP system.' };
+    return { backend: forced };
+  }
+
+  return { backend: hasGcts ? 'gcts' : 'abapgit' };
+}
+
+async function loadAbapGitRepo(client: AdtClient, repoId: string) {
+  const repos = await abapGitListRepos(client.http, client.safety);
+  const repo = repos.find((candidate) => candidate.key === repoId);
+  if (!repo) {
+    throw new Error(
+      `abapGit repository "${repoId}" was not found. Run SAPGit(action="list_repos", backend="abapgit").`,
+    );
+  }
+  return repo;
+}
+
+async function handleSAPGit(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  authInfo?: AuthInfo,
+): Promise<ToolResult> {
+  const action = String(args.action ?? '');
+  const scope = SAPGIT_ACTION_SCOPES[action];
+  if (!scope) {
+    return errorResult(`Unknown SAPGit action: ${action}`);
+  }
+
+  if (authInfo && !hasRequiredScope(authInfo, scope)) {
+    return errorResult(
+      `Insufficient scope: '${scope}' required for SAPGit(action="${action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
+    );
+  }
+
+  const resolved = resolveSapGitBackend(args);
+  if (!resolved.backend) {
+    return errorResult(resolved.error ?? 'Unable to resolve SAPGit backend.');
+  }
+
+  const backend = resolved.backend;
+  const repoId = String(args.repoId ?? '').trim();
+  const url = String(args.url ?? '').trim();
+  const branch = String(args.branch ?? '').trim();
+  const packageName = String(args.package ?? '').trim();
+  const user = String(args.user ?? '').trim() || undefined;
+  const password = String(args.password ?? '').trim() || undefined;
+  const token = String(args.token ?? '').trim() || undefined;
+  const limit = Number(args.limit ?? 20);
+
+  const gctsOnlyActions = new Set(['whoami', 'config', 'branches', 'history', 'objects', 'commit']);
+  const abapGitOnlyActions = new Set(['external_info', 'check', 'stage', 'push']);
+  if (backend === 'abapgit' && gctsOnlyActions.has(action)) {
+    return errorResult(`Action '${action}' is only supported by gCTS; this system uses abapGit.`);
+  }
+  if (backend === 'gcts' && abapGitOnlyActions.has(action)) {
+    return errorResult(`Action '${action}' is only supported by abapGit; this system uses gCTS.`);
+  }
+
+  let result: unknown;
+  switch (action) {
+    case 'list_repos':
+      result =
+        backend === 'gcts'
+          ? await gctsListRepos(client.http, client.safety)
+          : await abapGitListRepos(client.http, client.safety);
+      break;
+    case 'whoami':
+      result = await gctsGetUserInfo(client.http, client.safety);
+      break;
+    case 'config':
+      result = await gctsGetConfig(client.http, client.safety, repoId || undefined);
+      break;
+    case 'branches':
+      if (!repoId) return errorResult('SAPGit(action="branches") requires repoId.');
+      result = await gctsListBranches(client.http, client.safety, repoId);
+      break;
+    case 'external_info':
+      if (!url) return errorResult('SAPGit(action="external_info") requires url.');
+      result = await abapGitGetExternalInfo(client.http, client.safety, url, user, password);
+      break;
+    case 'history':
+      if (!repoId) return errorResult('SAPGit(action="history") requires repoId.');
+      result = await gctsGetCommitHistory(client.http, client.safety, repoId, Number.isFinite(limit) ? limit : 20);
+      break;
+    case 'objects':
+      if (!repoId) return errorResult('SAPGit(action="objects") requires repoId.');
+      result = await gctsListRepoObjects(client.http, client.safety, repoId);
+      break;
+    case 'check': {
+      if (!repoId) return errorResult('SAPGit(action="check") requires repoId.');
+      const repo = await loadAbapGitRepo(client, repoId);
+      result = await abapGitCheckRepo(client.http, client.safety, repo);
+      break;
+    }
+    case 'stage': {
+      if (!repoId) return errorResult('SAPGit(action="stage") requires repoId.');
+      const repo = await loadAbapGitRepo(client, repoId);
+      result = await abapGitStageRepo(client.http, client.safety, repo);
+      break;
+    }
+    case 'clone':
+      if (!url) return errorResult('SAPGit(action="clone") requires url.');
+      if (backend === 'gcts') {
+        const params: GctsCloneParams = {
+          rid: repoId || undefined,
+          name: repoId || undefined,
+          url,
+          ...(packageName ? { package: packageName } : {}),
+          user,
+          password,
+          token,
+        };
+        result = await gctsCloneRepo(client.http, client.safety, params);
+      } else {
+        if (!packageName) return errorResult('SAPGit(action="clone", backend="abapgit") requires package.');
+        result = await abapGitCreateRepo(client.http, client.safety, {
+          package: packageName,
+          url,
+          branchName: branch || undefined,
+          transportRequest: String(args.transport ?? '').trim() || undefined,
+          user,
+          password,
+        });
+      }
+      break;
+    case 'pull':
+      if (!repoId) return errorResult('SAPGit(action="pull") requires repoId.');
+      if (backend === 'gcts') {
+        result = await gctsPullRepo(client.http, client.safety, repoId, String(args.commit ?? '').trim() || undefined);
+      } else {
+        result = await abapGitPullRepo(client.http, client.safety, repoId, {
+          ...(packageName ? { package: packageName } : {}),
+          ...(url ? { url } : {}),
+          ...(branch ? { branchName: branch } : {}),
+          transportRequest: String(args.transport ?? '').trim() || undefined,
+          user,
+          password,
+        });
+      }
+      break;
+    case 'push': {
+      if (!repoId) return errorResult('SAPGit(action="push") requires repoId.');
+      const repo = await loadAbapGitRepo(client, repoId);
+      const staging =
+        Array.isArray(args.objects) && args.objects.length > 0
+          ? { repoKey: repo.key, branchName: repo.branchName, objects: args.objects as Array<Record<string, unknown>> }
+          : await abapGitStageRepo(client.http, client.safety, repo);
+      await abapGitPushRepo(client.http, client.safety, repo, staging);
+      result = { ok: true };
+      break;
+    }
+    case 'commit':
+      if (!repoId) return errorResult('SAPGit(action="commit") requires repoId.');
+      result = await gctsCommitRepo(client.http, client.safety, repoId, {
+        message: String(args.message ?? '').trim() || undefined,
+        description: String(args.description ?? '').trim() || undefined,
+        objects: Array.isArray(args.objects) ? (args.objects as Array<{ type?: string; name?: string }>) : undefined,
+      });
+      break;
+    case 'switch_branch':
+      if (!repoId || !branch) return errorResult('SAPGit(action="switch_branch") requires repoId and branch.');
+      if (backend === 'gcts') {
+        result = await gctsSwitchBranch(client.http, client.safety, repoId, branch);
+      } else {
+        await abapGitSwitchBranch(client.http, client.safety, repoId, branch, false);
+        result = { ok: true };
+      }
+      break;
+    case 'create_branch':
+      if (!repoId || !branch) return errorResult('SAPGit(action="create_branch") requires repoId and branch.');
+      if (backend === 'gcts') {
+        result = await gctsCreateBranch(client.http, client.safety, repoId, {
+          branch,
+          ...(packageName ? { package: packageName } : {}),
+        });
+      } else {
+        await abapGitCreateBranch(client.http, client.safety, repoId, branch);
+        result = { ok: true };
+      }
+      break;
+    case 'unlink':
+      if (!repoId) return errorResult('SAPGit(action="unlink") requires repoId.');
+      if (backend === 'gcts') {
+        await gctsDeleteRepo(client.http, client.safety, repoId);
+      } else {
+        await abapGitUnlinkRepo(client.http, client.safety, repoId);
+      }
+      result = { ok: true };
+      break;
+    default:
+      return errorResult(`Unknown SAPGit action: ${action}`);
+  }
+
+  const payload = backend === 'gcts' || backend === 'abapgit' ? { backend, result } : result;
+  return textResult(JSON.stringify(payload, null, 2));
 }
 
 // ─── SAPTransport Handler ────────────────────────────────────────────

@@ -45,6 +45,17 @@ export interface SapErrorClassification {
   details?: Record<string, string>;
 }
 
+export interface GctsErrorClassification {
+  exception?: string;
+  logMessage?: string;
+}
+
+export interface AbapGitErrorClassification {
+  namespace?: string;
+  message?: string;
+  t100Key?: string;
+}
+
 /** HTTP-level API error from SAP ADT */
 export class AdtApiError extends AdtError {
   constructor(
@@ -390,6 +401,59 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   }
 
   return undefined;
+}
+
+/**
+ * Parse gCTS JSON error payloads.
+ *
+ * Known shapes:
+ * - {"exception":"..."}
+ * - {"log":[{"severity":"ERROR","message":"..."}]}
+ */
+export function classifyGctsError(body: string): GctsErrorClassification {
+  if (!body) return {};
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const exception = typeof parsed.exception === 'string' ? parsed.exception : undefined;
+
+    const logs = Array.isArray(parsed.log) ? parsed.log : [];
+    const errorLog = logs.find(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        String((entry as Record<string, unknown>).severity ?? '').toUpperCase() === 'ERROR',
+    ) as Record<string, unknown> | undefined;
+    const logMessage = typeof errorLog?.message === 'string' ? errorLog.message : undefined;
+
+    return {
+      ...(exception ? { exception } : {}),
+      ...(logMessage ? { logMessage } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Parse abapGit bridge/framework XML errors from /sap/bc/adt/abapgit/*.
+ */
+export function classifyAbapgitError(xmlBody: string): AbapGitErrorClassification {
+  if (!xmlBody) return {};
+
+  const namespace =
+    xmlBody.match(/<(?:\w+:)?namespace[^>]*\sid="([^"]+)"/i)?.[1] ??
+    xmlBody.match(/<(?:\w+:)?namespace[^>]*>([^<]+)</i)?.[1];
+  const message = AdtApiError.extractCleanMessage(xmlBody);
+  const props = AdtApiError.extractProperties(xmlBody);
+  const msgId = props['T100KEY-MSGID'];
+  const msgNo = props['T100KEY-MSGNO'] ?? props['T100KEY-NO'];
+  const t100Key = msgId || msgNo ? `${msgId ?? '?'}/${msgNo ?? '?'}` : undefined;
+
+  return {
+    ...(namespace ? { namespace } : {}),
+    ...(message && message !== 'Unknown error' ? { message } : {}),
+    ...(t100Key ? { t100Key } : {}),
+  };
 }
 
 function parseOptionalInt(value: string | undefined): number | undefined {

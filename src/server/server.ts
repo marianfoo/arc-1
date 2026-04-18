@@ -1,7 +1,7 @@
 /**
  * MCP Server for ARC-1.
  *
- * Creates and starts the MCP server with 11 intent-based tools.
+ * Creates and starts the MCP server with 12 intent-based tools.
  * Supports two transports:
  * - stdio (default): for local MCP clients (Claude Desktop, Claude Code, Cursor)
  * - http-streamable: for remote/containerized deployments
@@ -96,6 +96,7 @@ export function buildAdtConfig(
       disallowedOps: config.disallowedOps,
       allowedPackages: config.allowedPackages,
       dryRun: false,
+      enableGit: config.enableGit,
       enableTransports: config.enableTransports,
       transportReadOnly: false,
       allowedTransports: [],
@@ -219,6 +220,7 @@ export function runStartupProbe(
       const fc = defaultFeatureConfig();
       fc.hana = config.featureHana as 'auto' | 'on' | 'off';
       fc.abapGit = config.featureAbapGit as 'auto' | 'on' | 'off';
+      fc.gcts = config.featureGcts as 'auto' | 'on' | 'off';
       fc.rap = config.featureRap as 'auto' | 'on' | 'off';
       fc.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
       fc.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
@@ -288,7 +290,7 @@ export function createServer(
       await Promise.race([startupProbePromise, new Promise((resolve) => setTimeout(resolve, 10_000))]);
     }
     const features = getCachedFeatures();
-    let tools = getToolDefinitions(config, features?.textSearch?.available);
+    let tools = getToolDefinitions(config, features?.textSearch?.available, features);
 
     // When authenticated, only show tools the user has scopes for
     if (extra.authInfo) {

@@ -459,6 +459,54 @@ export const SAPTransportSchema = z.object({
   recursive: z.boolean().optional(),
 });
 
+// ─── SAPGit ─────────────────────────────────────────────────────────
+
+export const SAPGitSchema = z.object({
+  action: z.enum([
+    'list_repos',
+    'whoami',
+    'config',
+    'branches',
+    'external_info',
+    'history',
+    'objects',
+    'check',
+    'stage',
+    'clone',
+    'pull',
+    'push',
+    'commit',
+    'switch_branch',
+    'create_branch',
+    'unlink',
+  ]),
+  repoId: z.string().optional(),
+  url: z.string().optional(),
+  branch: z.string().optional(),
+  package: z.string().optional(),
+  transport: z.string().optional(),
+  commit: z.string().optional(),
+  message: z.string().optional(),
+  description: z.string().optional(),
+  objects: z
+    .array(
+      z.object({
+        type: z.string(),
+        name: z.string(),
+        package: z.string().optional(),
+        path: z.string().optional(),
+        state: z.string().optional(),
+        operation: z.string().optional(),
+      }),
+    )
+    .optional(),
+  user: z.string().optional(),
+  password: z.string().optional(),
+  token: z.string().optional(),
+  backend: z.enum(['gcts', 'abapgit']).optional(),
+  limit: z.coerce.number().optional(),
+});
+
 // ─── SAPContext ─────────────────────────────────────────────────────
 
 const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC', 'DDLS'] as const;
@@ -571,6 +619,8 @@ export function getToolSchema(toolName: string, isBtp: boolean, textSearchAvaila
       return SAPDiagnoseSchema;
     case 'SAPTransport':
       return SAPTransportSchema;
+    case 'SAPGit':
+      return SAPGitSchema;
     case 'SAPContext':
       return isBtp ? SAPContextSchemaBtp : SAPContextSchema;
     case 'SAPManage':
