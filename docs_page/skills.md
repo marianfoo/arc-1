@@ -52,6 +52,13 @@ These skills assume:
 | [explain-abap-code](https://github.com/marianfoo/arc-1/blob/main/skills/explain-abap-code.md) | Reads an ABAP object, pulls dependency context, and explains it in structure | Onboarding, debugging, and code comprehension |
 | [migrate-custom-code](https://github.com/marianfoo/arc-1/blob/main/skills/migrate-custom-code.md) | Runs migration-oriented checks and groups findings by priority | S/4HANA migration and ABAP Cloud readiness |
 
+### System Context And Local Workflow
+
+| Skill | What it does | Best for |
+|---|---|---|
+| [bootstrap-system-context](https://github.com/marianfoo/arc-1/blob/main/skills/bootstrap-system-context.md) | Probes the target system and writes a local `system-info.md` with SID, release, installed components, feature flags, and lint preset | First step of a session against an unfamiliar system — grounds later prompts in real constraints |
+| [setup-abap-mirror](https://github.com/marianfoo/arc-1/blob/main/skills/setup-abap-mirror.md) | Creates a local abapGit-style mirror of a package or object list using ARC-1's existing reads | Onboarding a codebase, pre-migration snapshotting, feeding IDE context to tools that cannot call MCP per read |
+
 ### Meta And Quality
 
 | Skill | What it does | Best for |
@@ -60,6 +67,8 @@ These skills assume:
 
 ## Recommended Starting Points
 
+- Run `bootstrap-system-context` first when starting a session against an unfamiliar system — it grounds every later prompt in real constraints.
+- Run `setup-abap-mirror` after bootstrap to pull a package into local abapGit-style files for IDE context and `git diff`.
 - Start with `generate-rap-service` when the goal is speed and the design is straightforward.
 - Start with `generate-rap-service-researched` when writing into transportable packages or when team conventions matter.
 - Use `explain-abap-code` before editing unfamiliar objects.
