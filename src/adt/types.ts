@@ -42,6 +42,7 @@ export type DiscoveryMap = Map<string, string[]>;
 export interface ResolvedFeatures {
   hana: FeatureStatus;
   abapGit: FeatureStatus;
+  gcts: FeatureStatus;
   rap: FeatureStatus;
   amdp: FeatureStatus;
   ui5: FeatureStatus;
@@ -58,6 +59,162 @@ export interface ResolvedFeatures {
   authProbe?: AuthProbeResult;
   /** ADT discovery MIME map used by HTTP content negotiation */
   discoveryMap?: DiscoveryMap;
+}
+
+// ─── gCTS / abapGit Types ───────────────────────────────────────────
+
+export interface GctsScope {
+  scope: string;
+  level: string;
+}
+
+export interface GctsUserInfo {
+  user: {
+    user: string;
+    scope?: {
+      system?: GctsScope[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+}
+
+export interface GctsSystemStatus {
+  id?: string;
+  name?: string;
+  status?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsSystemInfo {
+  result: {
+    sid?: string;
+    name?: string;
+    sapsid?: string;
+    workstate?: string;
+    config?: unknown;
+    status?: GctsSystemStatus[];
+    client?: string;
+    servername?: string;
+    version?: string;
+    availableVsid?: string[];
+    [key: string]: unknown;
+  };
+}
+
+export interface GctsConfig {
+  ckey: string;
+  ctype?: string;
+  datatype?: string;
+  defaultValue?: string;
+  description?: string;
+  category?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsRepo {
+  rid: string;
+  name?: string;
+  url?: string;
+  branch?: string;
+  package?: string;
+  role?: string;
+  type?: string;
+  vSID?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsBranch {
+  name?: string;
+  branch?: string;
+  isSymbolic?: boolean;
+  isPeeled?: boolean;
+  type?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsCommit {
+  commit?: string;
+  author?: string;
+  email?: string;
+  date?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsObject {
+  type?: string;
+  name?: string;
+  package?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsCloneResult {
+  rid?: string;
+  result?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface AbapGitLink {
+  rel: string;
+  href: string;
+  type?: string;
+  title?: string;
+}
+
+export interface AbapGitRepo {
+  key: string;
+  package: string;
+  url: string;
+  branchName: string;
+  selectedBranch?: string;
+  deserializedBy?: string;
+  writeProtected?: boolean;
+  createdBy?: string;
+  createdAt?: string;
+  dotAbapGit?: string;
+  links: AbapGitLink[];
+}
+
+export interface AbapGitBranch {
+  name: string;
+  isHead?: boolean;
+  sha1?: string;
+}
+
+export interface AbapGitUser {
+  name?: string;
+  email?: string;
+}
+
+export interface AbapGitExternalInfo {
+  accessMode?: string;
+  defaultBranch?: string;
+  selectedBranch?: string;
+  branches: AbapGitBranch[];
+  user?: AbapGitUser;
+}
+
+export interface AbapGitObject {
+  type?: string;
+  name?: string;
+  package?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
+export interface AbapGitStagingObject extends AbapGitObject {
+  state?: string;
+  operation?: string;
+}
+
+export interface AbapGitStaging {
+  repoKey?: string;
+  branchName?: string;
+  objects: AbapGitStagingObject[];
 }
 
 /** Authorization probe result from startup probing */

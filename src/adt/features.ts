@@ -35,6 +35,7 @@ interface FeatureProbe {
 const PROBES: FeatureProbe[] = [
   { id: 'hana', endpoint: '/sap/bc/adt/ddic/sysinfo/hanainfo', description: 'HANA database' },
   { id: 'abapGit', endpoint: '/sap/bc/adt/abapgit/repos', description: 'abapGit integration' },
+  { id: 'gcts', endpoint: '/sap/bc/cts_abapvcs/system', description: 'gCTS (git-enabled CTS)' },
   { id: 'rap', endpoint: '/sap/bc/adt/ddic/ddl/sources', description: 'RAP/CDS development' },
   { id: 'amdp', endpoint: '/sap/bc/adt/debugger/amdp', description: 'AMDP debugging' },
   { id: 'ui5', endpoint: '/sap/bc/adt/filestore/ui5-bsp', description: 'UI5/Fiori BSP' },
@@ -80,6 +81,7 @@ export async function probeFeatures(
   const modeMap: Record<string, FeatureMode> = {
     hana: config.hana,
     abapGit: config.abapGit,
+    gcts: config.gcts,
     rap: config.rap,
     amdp: config.amdp,
     ui5: config.ui5,
@@ -348,6 +350,7 @@ export function resolveWithoutProbing(config: FeatureConfig): ResolvedFeatures {
   const descriptions: Record<string, string> = {
     hana: 'HANA database',
     abapGit: 'abapGit integration',
+    gcts: 'gCTS (git-enabled CTS)',
     rap: 'RAP/CDS development',
     amdp: 'AMDP debugging',
     ui5: 'UI5/Fiori BSP',

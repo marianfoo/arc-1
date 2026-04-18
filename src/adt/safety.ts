@@ -49,6 +49,7 @@ export interface SafetyConfig {
   disallowedOps: string;
   allowedPackages: string[];
   dryRun: boolean;
+  enableGit: boolean;
   enableTransports: boolean;
   transportReadOnly: boolean;
   allowedTransports: string[];
@@ -64,6 +65,7 @@ export function defaultSafetyConfig(): SafetyConfig {
     disallowedOps: '',
     allowedPackages: [],
     dryRun: false,
+    enableGit: false,
     enableTransports: false,
     transportReadOnly: false,
     allowedTransports: [],
@@ -80,6 +82,7 @@ export function unrestrictedSafetyConfig(): SafetyConfig {
     disallowedOps: '',
     allowedPackages: [],
     dryRun: false,
+    enableGit: true,
     enableTransports: false,
     transportReadOnly: false,
     allowedTransports: [],
@@ -192,6 +195,15 @@ export function checkTransport(config: SafetyConfig, transport: string, opName: 
   }
 }
 
+/** Check git operation and throw AdtSafetyError if blocked */
+export function checkGit(config: SafetyConfig, operation: string): void {
+  if (!config.enableGit) {
+    throw new AdtSafetyError(
+      `Git operation "${operation}" is disabled. Set SAP_ENABLE_GIT=true or pass --enable-git to enable.`,
+    );
+  }
+}
+
 /**
  * Expand implied scopes: `write` implies `read`, `sql` implies `data`.
  * Returns a new array with implied scopes added.
@@ -222,6 +234,7 @@ export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): 
   // No write scope → force read-only and disable transports
   if (!expanded.includes('write')) {
     effective.readOnly = true;
+    effective.enableGit = false;
     effective.enableTransports = false;
   }
 

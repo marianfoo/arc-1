@@ -74,6 +74,49 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPTransport');
   });
 
+  it('hides SAPGit when neither gCTS nor abapGit is available', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG, undefined, {
+      gcts: { id: 'gcts', available: false, mode: 'auto' },
+      abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+    } as any);
+    const names = tools.map((t) => t.name);
+    expect(names).not.toContain('SAPGit');
+  });
+
+  it('shows SAPGit when gCTS is available', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG, undefined, {
+      gcts: { id: 'gcts', available: true, mode: 'auto' },
+      abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+    } as any);
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('SAPGit');
+  });
+
+  it('shows SAPGit when abapGit is available', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG, undefined, {
+      gcts: { id: 'gcts', available: false, mode: 'auto' },
+      abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+    } as any);
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('SAPGit');
+  });
+
+  it('SAPGit schema includes backend override and action matrix', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG, undefined, {
+      gcts: { id: 'gcts', available: true, mode: 'auto' },
+      abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+    } as any);
+    const sapGit = tools.find((t) => t.name === 'SAPGit');
+    expect(sapGit).toBeDefined();
+    const schema = sapGit!.inputSchema as Record<string, any>;
+    const actions: string[] = schema.properties.action.enum;
+    expect(actions).toContain('list_repos');
+    expect(actions).toContain('external_info');
+    expect(actions).toContain('commit');
+    expect(actions).toContain('unlink');
+    expect(schema.properties.backend.enum).toEqual(['gcts', 'abapgit']);
+  });
+
   it('all tools have required schema properties', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     for (const tool of tools) {

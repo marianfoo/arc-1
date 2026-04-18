@@ -165,7 +165,7 @@ Troubleshooting guidance should reuse ARC-1's SAP-domain error intelligence:
 ### 4c. Test with hyperfocused mode (if applicable)
 
 If the feature adds or modifies a tool, verify it works in both:
-- Standard mode (11 tools) — `src/handlers/tools.ts`
+- Standard mode (12 tools) — `src/handlers/tools.ts`
 - Hyperfocused mode (1 tool) — `src/handlers/hyperfocused.ts`
 
 ---

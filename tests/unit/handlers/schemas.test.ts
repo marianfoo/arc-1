@@ -5,6 +5,7 @@ import {
   SAPContextSchema,
   SAPContextSchemaBtp,
   SAPDiagnoseSchema,
+  SAPGitSchema,
   SAPHyperfocusedSchema,
   SAPLintSchema,
   SAPManageSchema,
@@ -554,6 +555,46 @@ describe('SAPTransportSchema', () => {
   });
 });
 
+describe('SAPGitSchema', () => {
+  it('accepts valid read action payload', () => {
+    const result = SAPGitSchema.safeParse({ action: 'list_repos', backend: 'gcts' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects unknown action', () => {
+    const result = SAPGitSchema.safeParse({ action: 'status' });
+    expect(result.success).toBe(false);
+  });
+
+  it('restricts backend enum to gcts|abapgit', () => {
+    expect(SAPGitSchema.safeParse({ action: 'list_repos', backend: 'gcts' }).success).toBe(true);
+    expect(SAPGitSchema.safeParse({ action: 'list_repos', backend: 'abapgit' }).success).toBe(true);
+    expect(SAPGitSchema.safeParse({ action: 'list_repos', backend: 'unknown' }).success).toBe(false);
+  });
+
+  it('validates objects array shape', () => {
+    const ok = SAPGitSchema.safeParse({
+      action: 'commit',
+      repoId: 'ZARC1',
+      objects: [{ type: 'CLAS', name: 'ZCL_ARC1_TEST', operation: 'M' }],
+    });
+    expect(ok.success).toBe(true);
+
+    const invalid = SAPGitSchema.safeParse({
+      action: 'commit',
+      repoId: 'ZARC1',
+      objects: [{ type: 'CLAS' }],
+    });
+    expect(invalid.success).toBe(false);
+  });
+
+  it('coerces limit from string to number', () => {
+    const result = SAPGitSchema.safeParse({ action: 'history', repoId: 'ZARC1', limit: '25' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.limit).toBe(25);
+  });
+});
+
 describe('SAPContextSchema', () => {
   it('accepts minimal input (name only)', () => {
     const result = SAPContextSchema.safeParse({ name: 'ZCL_ORDER' });
@@ -728,7 +769,7 @@ describe('getToolSchema', () => {
     expect(getToolSchema('UnknownTool', false)).toBeUndefined();
   });
 
-  it('returns schema for all 11 tools + hyperfocused', () => {
+  it('returns schema for all 12 tools + hyperfocused', () => {
     const tools = [
       'SAPRead',
       'SAPSearch',
@@ -739,6 +780,7 @@ describe('getToolSchema', () => {
       'SAPLint',
       'SAPDiagnose',
       'SAPTransport',
+      'SAPGit',
       'SAPContext',
       'SAPManage',
       'SAP',

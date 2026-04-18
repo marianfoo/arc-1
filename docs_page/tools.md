@@ -2,7 +2,7 @@
 
 Complete documentation for all MCP tools available in ARC-1.
 
-ARC-1 exposes **11 intent-based tools** designed for AI agents. Instead of 200+ individual tools (one per object type per operation), ARC-1 groups by *intent* with a `type` parameter for routing. This keeps the LLM's tool selection simple and the context window small (~5K schema tokens).
+ARC-1 exposes **12 intent-based tools** designed for AI agents. Instead of 200+ individual tools (one per object type per operation), ARC-1 groups by *intent* with a `type` parameter for routing. This keeps the LLM's tool selection simple and the context window small (~5K schema tokens).
 
 **Error intelligence:** ARC-1 enriches many SAP ADT failures with concise, actionable hints (for example lock conflicts, enqueue issues, missing authorizations, and transport/corrNr problems). Hints can include SAP transaction references like `SM12` (locks), `SU53` (authorization), and `SE09` (transport checks) to speed up troubleshooting.
 
@@ -403,6 +403,55 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 **Protocol compatibility:** ARC-1 uses startup ADT service discovery (`/sap/bc/adt/discovery`) to proactively select endpoint MIME types, with endpoint-specific CTS media types and a one-retry 406/415 fallback as defense-in-depth.
 
 **Note:** Most actions require `--enable-transports`. The `check` and `history` actions work without it (read-only).
+
+---
+
+## SAPGit
+
+Git-based ABAP repository workflows with backend auto-selection: **gCTS** is preferred when available, otherwise ARC-1 uses the **abapGit ADT bridge**.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | `list_repos`, `whoami`, `config`, `branches`, `external_info`, `history`, `objects`, `check`, `stage`, `clone`, `pull`, `push`, `commit`, `switch_branch`, `create_branch`, `unlink` |
+| `backend` | string | No | Optional backend override: `gcts` or `abapgit` |
+| `repoId` | string | No | Repository ID/key (required by most repo-scoped actions) |
+| `url` | string | No | Remote Git URL (required for `clone`, and for abapGit `external_info`) |
+| `branch` | string | No | Branch name (for switch/create branch) |
+| `package` | string | No | ABAP package (required for clone/create on package-bound backends) |
+| `transport` | string | No | Transport request (backend-dependent) |
+| `commit` | string | No | Commit SHA (for gCTS `pull` by commit) |
+| `message` | string | No | Commit message (for gCTS `commit`) |
+| `objects` | array | No | Commit/staging object list (`[{type,name,...}]`) |
+| `user` | string | No | Optional remote Git username |
+| `password` | string | No | Optional remote Git password |
+| `token` | string | No | Optional remote Git token (gCTS) |
+| `limit` | number | No | Limit for history queries (gCTS) |
+
+**Backend support matrix:**
+
+- **Both backends:** `list_repos`, `clone`, `pull`, `switch_branch`, `create_branch`, `unlink`
+- **gCTS only:** `whoami`, `config`, `branches`, `history`, `objects`, `commit`
+- **abapGit only:** `external_info`, `check`, `stage`, `push`
+
+**Safety and scope rules:**
+
+- Read actions require `read` scope (HTTP auth mode).
+- Write actions (`clone`, `pull`, `push`, `commit`, `stage`, `switch_branch`, `create_branch`, `unlink`) require `write` scope.
+- All write actions are blocked unless `--enable-git` / `SAP_ENABLE_GIT=true` is set.
+- Package-bound create/clone operations must pass the configured package allowlist.
+
+**Examples:**
+```
+SAPGit(action="list_repos")
+SAPGit(action="whoami", backend="gcts")
+SAPGit(action="config", backend="gcts")
+SAPGit(action="history", backend="gcts", repoId="ZARC1", limit=20)
+SAPGit(action="external_info", backend="abapgit", url="https://github.com/abapGit-tests/CLAS.git")
+SAPGit(action="switch_branch", repoId="000000000006", branch="main", backend="abapgit")
+SAPGit(action="clone", backend="abapgit", package="$TMP", url="https://github.com/org/repo.git")
+```
 
 ---
 

@@ -74,6 +74,28 @@ describe('parseArgs', () => {
     expect(config.blockFreeSQL).toBe(true);
   });
 
+  it('parses --enable-git flag', () => {
+    const config = parseArgs(['--enable-git', 'true']);
+    expect(config.enableGit).toBe(true);
+  });
+
+  it('parses SAP_ENABLE_GIT env var', () => {
+    process.env.SAP_ENABLE_GIT = '1';
+    const config = parseArgs([]);
+    expect(config.enableGit).toBe(true);
+  });
+
+  it('defaults enableGit to false without explicit configuration', () => {
+    const config = parseArgs([]);
+    expect(config.enableGit).toBe(false);
+  });
+
+  it('--enable-git takes precedence over SAP_ENABLE_GIT env', () => {
+    process.env.SAP_ENABLE_GIT = 'false';
+    const config = parseArgs(['--enable-git', 'true']);
+    expect(config.enableGit).toBe(true);
+  });
+
   it('parses transport type', () => {
     const config = parseArgs(['--transport', 'http-streamable']);
     expect(config.transport).toBe('http-streamable');
@@ -121,10 +143,26 @@ describe('parseArgs', () => {
   });
 
   it('parses feature toggles', () => {
-    const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off', '--feature-flp', 'on']);
+    const config = parseArgs([
+      '--feature-abapgit',
+      'on',
+      '--feature-gcts',
+      'off',
+      '--feature-rap',
+      'off',
+      '--feature-flp',
+      'on',
+    ]);
     expect(config.featureAbapGit).toBe('on');
+    expect(config.featureGcts).toBe('off');
     expect(config.featureRap).toBe('off');
     expect(config.featureFlp).toBe('on');
+  });
+
+  it('parses SAP_FEATURE_GCTS env var', () => {
+    process.env.SAP_FEATURE_GCTS = 'on';
+    const config = parseArgs([]);
+    expect(config.featureGcts).toBe('on');
   });
 
   it('defaults unknown feature toggle to auto', () => {

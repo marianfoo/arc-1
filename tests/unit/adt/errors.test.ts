@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AdtApiError,
+  classifyAbapgitError,
+  classifyGctsError,
   classifySapDomainError,
   extractExceptionType,
   extractLockOwner,
@@ -482,6 +484,42 @@ describe('AdtApiError', () => {
       );
       expect(err.responseBody).toContain('exc:exception'); // Raw body preserved for debugging
       expect(err.message).not.toContain('<'); // No XML in message
+    });
+  });
+
+  describe('classifyGctsError', () => {
+    it('extracts exception and first ERROR log message', () => {
+      const classified = classifyGctsError(
+        '{"exception":"No relation between system and repository","log":[{"severity":"INFO","message":"x"},{"severity":"ERROR","message":"remote failed"}]}',
+      );
+      expect(classified.exception).toBe('No relation between system and repository');
+      expect(classified.logMessage).toBe('remote failed');
+    });
+
+    it('returns empty classification for malformed JSON', () => {
+      expect(classifyGctsError('{not-json')).toEqual({});
+    });
+  });
+
+  describe('classifyAbapgitError', () => {
+    it('extracts namespace, message, and T100 key from XML payload', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <namespace id="org.abapgit.adt">org.abapgit.adt</namespace>
+  <exc:localizedMessage lang="EN">Repository not found in database. Key: REPO, 000000009999</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SADT_HTTP</entry>
+    <entry key="T100KEY-MSGNO">404</entry>
+  </exc:properties>
+</exc:exception>`;
+      const classified = classifyAbapgitError(xml);
+      expect(classified.namespace).toBe('org.abapgit.adt');
+      expect(classified.message).toContain('Repository not found in database');
+      expect(classified.t100Key).toBe('SADT_HTTP/404');
+    });
+
+    it('returns empty object for empty payload', () => {
+      expect(classifyAbapgitError('')).toEqual({});
     });
   });
 });

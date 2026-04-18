@@ -1,0 +1,18 @@
+{
+  "result": [
+    {
+      "name": "main",
+      "branch": "refs/heads/main",
+      "isSymbolic": false,
+      "isPeeled": false,
+      "type": "head"
+    },
+    {
+      "name": "feature/new-api",
+      "branch": "refs/heads/feature/new-api",
+      "isSymbolic": false,
+      "isPeeled": false,
+      "type": "head"
+    }
+  ]
+}

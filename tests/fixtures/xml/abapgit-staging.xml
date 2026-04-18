@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapgitrepo:objects xmlns:abapgitrepo="http://www.sap.com/adt/abapgit/repository">
+  <abapgitrepo:object abapgitrepo:type="CLAS" abapgitrepo:name="ZCL_ARC1_TEST" abapgitrepo:package="$TMP" abapgitrepo:path="src/classes/zcl_arc1_test.clas.abap" abapgitrepo:state="M" abapgitrepo:operation="M"/>
+  <abapgitrepo:object abapgitrepo:type="INTF" abapgitrepo:name="ZIF_ARC1_TEST" abapgitrepo:package="$TMP" abapgitrepo:path="src/interfaces/zif_arc1_test.intf.abap" abapgitrepo:state="A" abapgitrepo:operation="A"/>
+</abapgitrepo:objects>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <namespace id="org.abapgit.adt">org.abapgit.adt</namespace>
+  <exc:localizedMessage lang="EN">Repository not found in database. Key: REPO, 000000009999</exc:localizedMessage>
+</exc:exception>

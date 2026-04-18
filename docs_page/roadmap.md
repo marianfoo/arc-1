@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-17
+**Last Updated:** 2026-04-18
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -69,7 +69,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 19 | FEAT-27 | Migration Analysis (ECC->S/4) | P2 | S | Features |
 | 20 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
 | 21 | FEAT-03 | Enhancement Framework (BAdI) | P2 | M | Features |
-| 22 | FEAT-22 | gCTS/abapGit Integration | P2 | M | Features |
+| ~~—~~ | ~~FEAT-22~~ | ~~gCTS/abapGit Integration~~ | ~~P2~~ | ~~M~~ | ~~Completed 2026-04-18~~ |
 | 23 | FEAT-34 | i18n Translation Management | P2 | M | Features |
 | 24 | FEAT-30 | ABAP Cleaner Integration | P2 | M | Features |
 | 25 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
@@ -85,6 +85,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-22 | gCTS/abapGit Integration (`SAPGit` tool + `--enable-git` safety gate) | 2026-04-18 | Features |
 | SEC-09 | Auth Safety & Configurability (cookie→PP leak fix, applyAuthHeader guard, fail-fast validation, auth summary log, SAML disable opt-in, HTML login detection) | 2026-04-17 | Security |
 | FEAT-20 | Source Version / Revision History | 2026-04-17 | Features |
 | FEAT-49 | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
@@ -218,7 +219,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 29. **FEAT-27** Migration Analysis ECC->S/4 (S) — custom code migration
 30. **FEAT-06** Cloud Readiness Assessment (M) — ATC cloud checks + abaplint
 31. **FEAT-03** Enhancement Framework / BAdI (M) — customization scenarios
-32. **FEAT-22** gCTS/abapGit Integration (M) — Git-based ABAP workflows (VSP has 10 tools now)
+32. ~~**FEAT-22** gCTS/abapGit Integration (M)~~ — **completed 2026-04-18** (`SAPGit` with backend auto-selection and git safety gate)
 33. **FEAT-34** i18n Translation Management (M) — VSP has 7 tools (Apr 5)
 34. **OPS-03** Multi-System Routing (L) — one instance -> multiple SAP systems
 35. **DOC-03** SAP Community Blog Post (S) — visibility and adoption
@@ -513,7 +514,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 **Why:** BAdIs are the primary extensibility mechanism in SAP — LLMs helping with customization need to discover and understand them. fr0ster (v6.1.0, 35 stars) and sapcli both have this. Having confirmed ADT endpoints removes the implementation uncertainty.
 
-**Why not:** BAdI discovery is primarily a human-driven IDE task (Eclipse ADT, SE80) — LLMs almost never implement BAdIs autonomously. Reading BAdI definitions overlaps with what `SAPRead CLAS` already provides (method signatures of the implementing class). Adding enhancement-specific tools violates the "11 intent-based" design philosophy. The on-prem-only restriction means BTP users can't use this feature.
+**Why not:** BAdI discovery is primarily a human-driven IDE task (Eclipse ADT, SE80) — LLMs almost never implement BAdIs autonomously. Reading BAdI definitions overlaps with what `SAPRead CLAS` already provides (method signatures of the implementing class). Adding enhancement-specific tools violates the "12 intent-based" design philosophy. The on-prem-only restriction means BTP users can't use this feature.
 
 ---
 
@@ -693,16 +694,24 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 | **Effort** | M (3-5 days) |
 | **Risk** | Low |
 | **Usefulness** | Medium — Git-based ABAP workflows |
-| **Status** | Not started |
+| **Status** | Complete (2026-04-18) |
 | **Source** | Dassian, [VSP eval](../compare/vibing-steampunk/evaluations/81cce41-gcts-tools.md), abap-adt-api |
 
-**What:** List Git repositories, pull changes, check repo status. Multiple competitors have this (VSP, dassian, abap-adt-api). Enables Git-based ABAP development workflows.
+**What was delivered:**
+- New `SAPGit` intent tool with backend auto-selection (prefers gCTS, falls back to abapGit).
+- New backend clients: `src/adt/gcts.ts` (JSON `/sap/bc/cts_abapvcs/*`) and `src/adt/abapgit.ts` (XML/HATEOAS `/sap/bc/adt/abapgit/*`).
+- New safety gate `--enable-git` / `SAP_ENABLE_GIT` (default `false`) for all git write operations.
+- Feature probing extended with gCTS detection; tool registration is feature-gated.
+- End-to-end coverage added (unit + integration + e2e for SAPGit read paths and safety behavior).
 
-**Why:** Git-based workflows are increasingly standard in ABAP development.
+**Backend coverage:**
+- **Both:** `list_repos`, `clone`, `pull`, `switch_branch`, `create_branch`, `unlink`
+- **gCTS-only:** `whoami`, `config`, `branches`, `history`, `objects`, `commit`
+- **abapGit-only:** `external_info`, `check`, `stage`, `push`
 
-**Why not:** gCTS and abapGit are full version control systems with their own workflows (commit, branch, merge, conflict resolution). Wrapping both in MCP tools is massive scope creep — like adding git to an SQL client. Version control is a deployment concern, not a development task; LLMs don't decide "commit to Git" — that's a human/CI decision. Both tools have their own APIs with different maturity levels, adding maintenance burden. Users should use dedicated Git tooling, not route through an MCP server.
+**Result:** FEAT-22 is closed; ARC-1 now has parity on gCTS/abapGit workflows with leading competitors while preserving ARC-1's safety model.
 
-**Competitive update (2026-04-08):** VSP added 10 gCTS tools (commit 81cce41, Apr 5): repo management, branch operations, commit history, pull/push. Closes VSP issue #39. Three competitors now have gCTS (VSP, dassian, abap-adt-api).
+**Competitive update:** VSP's gCTS lead is closed for the prioritized workflow set via `SAPGit`.
 
 ---
 
@@ -1588,7 +1597,7 @@ The following features are tracked but not planned for near-term implementation.
 **How it works:**
 - `read` scope -> SAPRead, SAPSearch, SAPQuery, SAPNavigate, SAPContext, SAPLint, SAPDiagnose (7 tools)
 - `write` scope -> adds SAPWrite, SAPActivate, SAPManage (10 tools)
-- `admin` scope -> adds SAPTransport (11 tools)
+- `admin` scope -> adds SAPTransport (+ SAPGit when backend is available; up to 12 tools total)
 - XSUAA role collections assign scopes to users via BTP cockpit
 
 **Why this matters for basis admins:**
@@ -1728,7 +1737,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 **What was done:**
 - Full Go -> TypeScript migration in a single session
 - Custom ADT HTTP client (axios-based, CSRF lifecycle, cookie persistence, session isolation)
-- 11 intent-based tools ported with identical behavior
+- 12 intent-based tools ported with identical behavior (including feature-gated `SAPGit`)
 - Safety system ported (read-only, package filter, operation filter, transport guard)
 - HTTP Streamable transport with per-request server isolation (Copilot Studio compatible)
 - API key + OIDC/JWT authentication (jose library)
@@ -1748,7 +1757,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Area | Status |
 |------|--------|
 | TypeScript Migration | Complete — Go code removed, pure TypeScript |
-| Core MCP Server | 11 intent-based tools + hyperfocused mode (1 tool), HTTP Streamable + stdio |
+| Core MCP Server | 12 intent-based tools + hyperfocused mode (1 tool), HTTP Streamable + stdio |
 | Safety System | Read-only, package filter (default: `$TMP`), operation filter, transport guard, dry-run |
 | Input Validation | Zod v4 runtime validation for all MCP tool inputs (v0.5.0) |
 | Phase 1: API Key Auth | `ARC1_API_KEY` Bearer token + multi-key profiles |
@@ -1788,7 +1797,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Phase | Description | Status |
 |-------|-------------|--------|
 | Go v1.x-v2.32 | ADT client, 40+ tools, CRUD, debugging, WebSocket, Lua scripting | Complete (Go) |
-| Enterprise Rename | vsp -> ARC-1, 11 intent-based tools | Complete |
+| Enterprise Rename | vsp -> ARC-1, intent-based tool architecture (now 12 tools) | Complete |
 | Auth Phase 1: API Key | `ARC1_API_KEY` Bearer token | Complete |
 | Auth Phase 2: OAuth/OIDC | Entra ID JWT validation via `jose` library | Complete |
 | Auth Phase 4: BTP CF | Docker on CF with Destination Service + Cloud Connector | Complete |
@@ -1828,7 +1837,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 11 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,500+ tests across unit/integration/E2E |
+| **ARC-1** | TypeScript | 12 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,500+ tests across unit/integration/E2E |
 | **vibing-steampunk** | Go 1.24 | 1-99+ (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 242 stars, **Streamable HTTP (v2.38.0)**, native parser, massive feature sprint (i18n, gCTS, API release state, version history, code coverage) |
 | **fr0ster/mcp-abap-adt** | TypeScript | 287 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |
@@ -1837,7 +1846,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | AWS ABAP Accelerator | Python | ~15 | OAuth, X.509 | Basic | AWS Lambda | Cloud readiness assessment, migration |
 
 **ARC-1 differentiators (no other project has all of these):**
-1. **Intent-based routing** — 11 tools vs 25-287, simplest LLM decision surface
+1. **Intent-based routing** — 12 tools vs 25-287, simplest LLM decision surface
 2. **Principal propagation** — per-user SAP authentication via BTP Destination Service + Cloud Connector
 3. **Two-dimensional authorization** — scopes (read/write/admin) x roles x safety config, with per-tool filtering
 4. **Three auth modes coexist** — XSUAA OAuth + Entra ID OIDC + API key on the same endpoint
@@ -1850,7 +1859,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 11. **RFC 9700 OAuth security** — state + PKCE, loopback binding, audience validation
 
 **Key competitive threats** (tracked in [`compare/`](../compare/)):
-1. **vibing-steampunk** (242 stars) — community favorite. **Major threat escalation (Apr 2026)**: massive sprint added Streamable HTTP, API release state, i18n (7 tools), gCTS (10 tools), version history, code coverage, dead code analysis, rename preview, health analysis, CDS impact. Still lacks enterprise auth/safety but rapidly closing feature gaps. ~40 commits in 6 days.
+1. **vibing-steampunk** (242 stars) — community favorite. **Major threat escalation (Apr 2026)**: massive sprint added Streamable HTTP, API release state, i18n (7 tools), gCTS (10 tools), version history, code coverage, dead code analysis, rename preview, health analysis, CDS impact. ARC-1 has now closed the prioritized gCTS/abapGit gap via FEAT-22, but VSP remains strong on breadth and release velocity.
 2. **fr0ster** (v4.8.7, 85+ releases in 5 months) — closest enterprise competitor. 9 auth providers, TLS, RFC, embeddable. Search TSV format optimization. Watch for convergence on enterprise features.
 3. **dassian-adt** — newly active (Apr 2026): batch activation, find_definition, edit_method, BDEF creation. No safety system is a concern but rapid iteration.
 4. **btp-odata-mcp** (119 stars) — different category (OData) but high adoption. Could expand into ADT territory.

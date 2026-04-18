@@ -1,12 +1,12 @@
 /**
- * Tool definitions for ARC-1's 11 intent-based MCP tools.
+ * Tool definitions for ARC-1's 12 intent-based MCP tools.
  *
  * Each tool has:
  * - name: The MCP tool name (SAPRead, SAPWrite, etc.)
  * - description: Rich LLM-friendly description
  * - inputSchema: JSON Schema for tool arguments
  *
- * The 11 intent-based design is ARC-1's key differentiator:
+ * The 12 intent-based design is ARC-1's key differentiator:
  * instead of 200+ individual tools (one per object type per operation),
  * we group by *intent* with a `type` parameter for routing.
  * This keeps the LLM's tool selection simple and the context window small.
@@ -17,6 +17,7 @@
  * - On-premise: full tool set with all types and descriptions
  */
 
+import type { ResolvedFeatures } from '../adt/types.js';
 import type { ServerConfig } from '../server/types.js';
 import { getHyperfocusedToolDefinition } from './hyperfocused.js';
 
@@ -299,6 +300,18 @@ const SAPMANAGE_DESC_BTP =
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
 
+// ─── SAPGit ─────────────────────────────────────────────────────────
+
+const SAPGIT_DESC_ONPREM =
+  'Git-based ABAP repository workflows with backend auto-selection: gCTS is preferred when available, otherwise abapGit bridge is used. ' +
+  'Actions: list_repos (both), whoami/config/branches/history/objects (gCTS only), external_info/check/stage/push (abapGit only), clone/pull/commit/switch_branch/create_branch/unlink (backend-specific implementation). ' +
+  'Use backend="gcts" or backend="abapgit" to force a backend. Write actions require --enable-git and package allowlist compliance.';
+
+const SAPGIT_DESC_BTP =
+  'Git-based ABAP repository workflows for BTP ABAP and S/4 systems. Backend auto-selection prefers gCTS and falls back to abapGit bridge when gCTS is unavailable. ' +
+  'Actions: list_repos (both), whoami/config/branches/history/objects (gCTS only), external_info/check/stage/push (abapGit only), clone/pull/commit/switch_branch/create_branch/unlink (backend-specific implementation). ' +
+  'Use backend="gcts" or backend="abapgit" to force a backend. Write actions require --enable-git and package allowlist compliance.';
+
 // ─── SAPSearch Builder ─────────────────────────────────────────────
 
 /** Strip source_code-specific lines from a SAPSearch description when textSearch is unavailable */
@@ -367,7 +380,11 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
 
 // ─── Main Tool Definitions ──────────────────────────────────────────
 
-export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: boolean): ToolDefinition[] {
+export function getToolDefinitions(
+  config: ServerConfig,
+  textSearchAvailable?: boolean,
+  resolvedFeatures?: ResolvedFeatures,
+): ToolDefinition[] {
   // Hyperfocused mode: single universal SAP tool (~200 tokens)
   if (config.toolMode === 'hyperfocused') {
     return [getHyperfocusedToolDefinition(config)];
@@ -1082,6 +1099,113 @@ export function getToolDefinitions(config: ServerConfig, textSearchAvailable?: b
           recursive: {
             type: 'boolean',
             description: 'Apply recursively to child tasks (for delete/reassign). release_recursive always recurses.',
+          },
+        },
+        required: ['action'],
+      },
+    });
+  }
+
+  // SAPGit — registered only when gCTS or abapGit backend is available
+  if (resolvedFeatures?.gcts?.available || resolvedFeatures?.abapGit?.available) {
+    tools.push({
+      name: 'SAPGit',
+      description: btp ? SAPGIT_DESC_BTP : SAPGIT_DESC_ONPREM,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: [
+              'list_repos',
+              'whoami',
+              'config',
+              'branches',
+              'external_info',
+              'history',
+              'objects',
+              'check',
+              'stage',
+              'clone',
+              'pull',
+              'push',
+              'commit',
+              'switch_branch',
+              'create_branch',
+              'unlink',
+            ],
+            description:
+              'Git action. Read: list_repos, whoami, config, branches, external_info, history, objects, check. ' +
+              'Write (requires --enable-git): clone, pull, push, commit, stage, switch_branch, create_branch, unlink.',
+          },
+          backend: {
+            type: 'string',
+            enum: ['gcts', 'abapgit'],
+            description: 'Optional backend override. Omit to auto-select (gCTS preferred over abapGit).',
+          },
+          repoId: {
+            type: 'string',
+            description: 'Repository ID/key for repo-specific actions.',
+          },
+          url: {
+            type: 'string',
+            description: 'Remote Git URL (required for clone and abapGit external_info).',
+          },
+          branch: {
+            type: 'string',
+            description: 'Branch name for switch_branch/create_branch.',
+          },
+          package: {
+            type: 'string',
+            description: 'ABAP package for clone/create operations (checked against allowedPackages).',
+          },
+          transport: {
+            type: 'string',
+            description: 'Optional transport request where supported by the backend.',
+          },
+          commit: {
+            type: 'string',
+            description: 'Commit SHA for history/pull-by-commit actions.',
+          },
+          message: {
+            type: 'string',
+            description: 'Commit message for gCTS commit.',
+          },
+          description: {
+            type: 'string',
+            description: 'Optional commit description for gCTS commit.',
+          },
+          objects: {
+            type: 'array',
+            description: 'Optional object list for commit/push payloads.',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                name: { type: 'string' },
+                package: { type: 'string' },
+                path: { type: 'string' },
+                state: { type: 'string' },
+                operation: { type: 'string' },
+              },
+              required: ['type', 'name'],
+            },
+          },
+          user: {
+            type: 'string',
+            description: 'Optional remote repository username.',
+          },
+          password: {
+            type: 'string',
+            description: 'Optional remote repository password/token secret.',
+          },
+          token: {
+            type: 'string',
+            description: 'Optional remote repository access token.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional limit for history queries.',
           },
         },
         required: ['action'],

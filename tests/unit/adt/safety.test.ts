@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
 import {
+  checkGit,
   checkOperation,
   checkPackage,
   checkTransport,
@@ -110,11 +111,13 @@ describe('Safety System', () => {
       expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
+      expect(cfg.enableGit).toBe(false);
     });
 
     it('unrestricted config allows Query', () => {
       const cfg = unrestrictedSafetyConfig();
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
+      expect(cfg.enableGit).toBe(true);
     });
   });
 
@@ -214,6 +217,18 @@ describe('Safety System', () => {
     });
   });
 
+  describe('checkGit', () => {
+    it('throws when git operations are disabled', () => {
+      const cfg = config({ enableGit: false });
+      expect(() => checkGit(cfg, 'clone')).toThrow(AdtSafetyError);
+    });
+
+    it('allows git operations when enabled', () => {
+      const cfg = config({ enableGit: true });
+      expect(() => checkGit(cfg, 'clone')).not.toThrow();
+    });
+  });
+
   describe('checkPackage with $TMP default', () => {
     it('default config (allowedPackages: [$TMP]) allows $TMP', () => {
       const cfg = config({ allowedPackages: ['$TMP'] });
@@ -274,9 +289,10 @@ describe('Safety System', () => {
 
   describe('deriveUserSafety', () => {
     it('no write scope → readOnly=true, enableTransports=false', () => {
-      const server = config({ readOnly: false, enableTransports: true });
+      const server = config({ readOnly: false, enableGit: true, enableTransports: true });
       const result = deriveUserSafety(server, ['read', 'data']);
       expect(result.readOnly).toBe(true);
+      expect(result.enableGit).toBe(false);
       expect(result.enableTransports).toBe(false);
     });
 

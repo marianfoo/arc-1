@@ -41,10 +41,12 @@ export interface ServerConfig {
   allowedOps: string;
   disallowedOps: string;
   allowedPackages: string[];
+  enableGit: boolean;
   enableTransports: boolean;
 
   // --- Feature Detection ---
   featureAbapGit: FeatureToggle;
+  featureGcts: FeatureToggle;
   featureRap: FeatureToggle;
   featureAmdp: FeatureToggle;
   featureUi5: FeatureToggle;
@@ -88,7 +90,7 @@ export interface ServerConfig {
   logFormat: 'text' | 'json';
 
   // --- Tool Mode ---
-  /** Tool mode: 'standard' (11 intent tools) or 'hyperfocused' (1 universal SAP tool, ~200 tokens) */
+  /** Tool mode: 'standard' (12 intent tools, SAPGit feature-gated) or 'hyperfocused' (1 universal SAP tool, ~200 tokens) */
   toolMode: 'standard' | 'hyperfocused';
 
   // --- Lint ---
@@ -131,8 +133,10 @@ export const DEFAULT_CONFIG: ServerConfig = {
   allowedOps: '',
   disallowedOps: '',
   allowedPackages: ['$TMP'],
+  enableGit: false,
   enableTransports: false,
   featureAbapGit: 'auto',
+  featureGcts: 'auto',
   featureRap: 'auto',
   featureAmdp: 'auto',
   featureUi5: 'auto',

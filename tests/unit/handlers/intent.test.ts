@@ -2250,11 +2250,179 @@ ENDCLASS.`,
     });
   });
 
+  // ─── SAPGit ────────────────────────────────────────────────────────
+
+  describe('SAPGit', () => {
+    const gctsReposJson = '{"result":[{"rid":"ZARC1","url":"https://github.com/example/arc1.git"}]}';
+    const abapGitReposXml = `<?xml version="1.0" encoding="utf-8"?>
+<abapgitrepo:repositories xmlns:abapgitrepo="http://www.sap.com/adt/abapgit/repository" xmlns:atom="http://www.w3.org/2005/Atom">
+  <abapgitrepo:repository abapgitrepo:key="000000000001" abapgitrepo:package="$TMP" abapgitrepo:url="https://github.com/example/repo.git" abapgitrepo:branchName="main">
+    <atom:link rel="http://www.sap.com/adt/abapgit/relations/stage" href="/sap/bc/adt/abapgit/repos/000000000001/stage" type="stage_link"/>
+    <atom:link rel="http://www.sap.com/adt/abapgit/relations/push" href="/sap/bc/adt/abapgit/repos/000000000001/push" type="push_link"/>
+    <atom:link rel="http://www.sap.com/adt/abapgit/relations/check" href="/sap/bc/adt/abapgit/repos/000000000001/checks" type="check_link"/>
+  </abapgitrepo:repository>
+</abapgitrepo:repositories>`;
+    const stagingXml = `<?xml version="1.0" encoding="utf-8"?>
+<abapgitrepo:objects xmlns:abapgitrepo="http://www.sap.com/adt/abapgit/repository">
+  <abapgitrepo:object abapgitrepo:type="CLAS" abapgitrepo:name="ZCL_ARC1_TEST" abapgitrepo:operation="M"/>
+</abapgitrepo:objects>`;
+
+    function readAuth(): AuthInfo {
+      return {
+        token: 'test-token',
+        clientId: 'test-client',
+        scopes: ['read'],
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      };
+    }
+
+    afterEach(() => {
+      resetCachedFeatures();
+    });
+
+    it('auto-selects gCTS when both backends are available', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+      } as ResolvedFeatures);
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, gctsReposJson));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', { action: 'list_repos' });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.backend).toBe('gcts');
+      expect(parsed.result[0].rid).toBe('ZARC1');
+    });
+
+    it('honors explicit backend override to abapgit', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+      } as ResolvedFeatures);
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, abapGitReposXml));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', {
+        action: 'list_repos',
+        backend: 'abapgit',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.backend).toBe('abapgit');
+      expect(parsed.result[0].key).toBe('000000000001');
+    });
+
+    it('returns helpful error when no backend is available', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: false, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+      } as ResolvedFeatures);
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', { action: 'list_repos' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Neither gCTS nor abapGit is available');
+    });
+
+    it('blocks write actions for read-only scoped users', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+      } as ResolvedFeatures);
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPGit',
+        { action: 'clone', backend: 'gcts', url: 'https://github.com/example/repo.git', package: '$TMP' },
+        readAuth(),
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+    });
+
+    it('returns backend-mismatch error for gCTS-only action on abapGit backend', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: false, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+      } as ResolvedFeatures);
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', {
+        action: 'whoami',
+        backend: 'abapgit',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('only supported by gCTS');
+    });
+
+    it('dispatches stage action to abapGit backend and returns JSON payload', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: false, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+      } as ResolvedFeatures);
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, abapGitReposXml));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, stagingXml));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', {
+        action: 'stage',
+        backend: 'abapgit',
+        repoId: '000000000001',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.backend).toBe('abapgit');
+      expect(parsed.result.objects[0].type).toBe('CLAS');
+    });
+
+    it('surfaces AdtSafetyError from git write operations', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+      } as ResolvedFeatures);
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), enableGit: false },
+      });
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPGit', {
+        action: 'clone',
+        backend: 'gcts',
+        url: 'https://github.com/example/repo.git',
+        package: '$TMP',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Git operation');
+    });
+
+    it('surfaces AdtApiError details from backend calls', async () => {
+      setCachedFeatures({
+        gcts: { id: 'gcts', available: true, mode: 'auto' },
+        abapGit: { id: 'abapGit', available: false, mode: 'auto' },
+      } as ResolvedFeatures);
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(500, '{"exception":"No relation between system and repository"}', {
+          'content-type': 'application/json',
+        }),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', {
+        action: 'list_repos',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('No relation between system and repository');
+    });
+
+    it('rejects unknown SAPGit action through schema validation', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPGit', { action: 'unknown_action' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPGit');
+    });
+  });
+
   // ─── TOOL_SCOPES mapping ──────────────────────────────────────────
 
   describe('TOOL_SCOPES', () => {
     it('maps read tools to read scope', () => {
-      for (const tool of ['SAPRead', 'SAPSearch', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose']) {
+      for (const tool of ['SAPRead', 'SAPSearch', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose', 'SAPGit']) {
         expect(TOOL_SCOPES[tool]).toBe('read');
       }
     });
@@ -2269,8 +2437,8 @@ ENDCLASS.`,
       expect(TOOL_SCOPES.SAPQuery).toBe('sql');
     });
 
-    it('covers all 11 tools', () => {
-      expect(Object.keys(TOOL_SCOPES)).toHaveLength(11);
+    it('covers all 12 tools', () => {
+      expect(Object.keys(TOOL_SCOPES)).toHaveLength(12);
     });
   });
 
