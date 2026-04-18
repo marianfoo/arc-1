@@ -83,8 +83,11 @@ function findRepoLink(repo: AbapGitRepo, type: 'stage_link' | 'push_link' | 'che
 
     if (candidateType === type) return true;
     if (rel.endsWith(`/${relNeedle}`) || rel.includes(`/${relNeedle}/`)) return true;
-    if (relNeedle === 'check' && (rel.endsWith('/checks') || rel.includes('/checks/'))) return true;
-    return href.endsWith(`/${relNeedle}`) || href.includes(`/${relNeedle}/`) || href.endsWith('/checks');
+    if (relNeedle === 'check') {
+      if (rel.endsWith('/checks') || rel.includes('/checks/')) return true;
+      if (href.endsWith('/checks') || href.includes('/checks/')) return true;
+    }
+    return href.endsWith(`/${relNeedle}`) || href.includes(`/${relNeedle}/`);
   });
 
   if (!link) {
@@ -395,11 +398,21 @@ export async function checkRepo(
   checkOperation(safety, OperationType.Read, 'AbapGitCheckRepo');
 
   const link = findRepoLink(repo, 'check_link');
-  const resp = await requestAbapGit(link.href, () =>
-    http.post(link.href, '', undefined, {
-      Accept: REPO_V3,
-    }),
-  );
+  // Live trial returns 5xx with `<namespace id="org.abapgit.adt"/>` + message like
+  // "HTTP error 421" when the remote Git registry is unreachable. That's diagnostic
+  // info the LLM should see — normalise to {ok:false,message} rather than throwing.
+  let resp: Awaited<ReturnType<AdtHttpClient['post']>>;
+  try {
+    resp = await http.post(link.href, '', undefined, { Accept: REPO_V3 });
+  } catch (err) {
+    if (err instanceof AdtApiError) {
+      const parsed = classifyAbapgitError(err.responseBody ?? '');
+      if (parsed.namespace === 'org.abapgit.adt') {
+        return { ok: false, message: parsed.message ?? AdtApiError.extractCleanMessage(err.responseBody ?? '') };
+      }
+    }
+    throw err;
+  }
 
   if (!resp.body || resp.body.trim().length === 0) {
     return { ok: true, message: null };

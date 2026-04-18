@@ -110,6 +110,21 @@ describe('gCTS client helpers', () => {
     ).rejects.toThrow(AdtSafetyError);
   });
 
+  it('cloneRepo requires explicit package when allowedPackages is set', async () => {
+    const http = mockHttp(loadFixture('gcts-repository.json'));
+    const safety = { ...gitSafety, allowedPackages: ['$TMP'] };
+    await expect(cloneRepo(http, safety, { url: 'https://github.com/example/arc1.git' })).rejects.toThrow(
+      AdtSafetyError,
+    );
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
+  it('cloneRepo allows missing package when no allowlist configured', async () => {
+    const http = mockHttp(loadFixture('gcts-repository.json'));
+    const safety = { ...gitSafety, allowedPackages: [] };
+    await expect(cloneRepo(http, safety, { url: 'https://github.com/example/arc1.git' })).resolves.toBeDefined();
+  });
+
   it('cloneRepo injects per-request repo credentials into config entries', async () => {
     const http = mockHttp(loadFixture('gcts-repository.json'));
     await cloneRepo(http, gitSafety, {

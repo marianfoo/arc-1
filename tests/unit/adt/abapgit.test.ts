@@ -170,6 +170,57 @@ describe('abapGit client helpers', () => {
     expect(result).toEqual({ ok: true, message: null });
   });
 
+  it('checkRepo normalises bridge-namespace 5xx into {ok:false,message} instead of throwing', async () => {
+    const bridgeError = `<?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="org.abapgit.adt"/><type id=""/><message lang="EN">HTTP error 421 reaching remote</message><localizedMessage lang="EN">HTTP error 421 reaching remote</localizedMessage></exc:exception>`;
+    const http = mockHttp('');
+    (http.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new AdtApiError(
+        'HTTP error 421 reaching remote',
+        500,
+        '/sap/bc/adt/abapgit/repos/000000000001/checks',
+        bridgeError,
+      ),
+    );
+    const repo = firstRepo();
+    const result = await checkRepo(http, gitSafety, repo);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('HTTP error 421');
+  });
+
+  it('checkRepo re-throws framework-namespace errors (e.g. 405/406) rather than swallowing', async () => {
+    const frameworkError = `<?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><namespace id="com.sap.adt"/><type id="ExceptionMethodNotSupported"/><message lang="EN">Method not supported</message><localizedMessage lang="EN">Method not supported</localizedMessage></exc:exception>`;
+    const http = mockHttp('');
+    (http.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new AdtApiError('Method not supported', 405, '/sap/bc/adt/abapgit/repos/000000000001/checks', frameworkError),
+    );
+    const repo = firstRepo();
+    await expect(checkRepo(http, gitSafety, repo)).rejects.toThrow(AdtApiError);
+  });
+
+  it('stageRepo resolves the correct link via rel when type attr is missing', async () => {
+    const http = mockHttp(loadFixture('abapgit-staging.xml'));
+    const repos = parseAbapGitRepos(loadFixture('abapgit-repos-v2.xml'));
+    const repoWithoutTypes = repos[1]!; // /DMO/FLIGHT — all 4 links lack type attr
+    const staging = await stageRepo(http, gitSafety, repoWithoutTypes);
+    const [url] = (http.get as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+    expect(url).toBe('/sap/bc/adt/abapgit/repos/000000000006/stage');
+    expect(staging.repoKey).toBe('000000000006');
+  });
+
+  it('pushRepo resolves push link by rel only (does not cross-match /checks)', async () => {
+    const http = mockHttp('');
+    const repos = parseAbapGitRepos(loadFixture('abapgit-repos-v2.xml'));
+    const repoWithoutTypes = repos[1]!;
+    await pushRepo(http, gitSafety, repoWithoutTypes, {
+      repoKey: repoWithoutTypes.key,
+      branchName: repoWithoutTypes.branchName,
+      objects: [{ type: 'CLAS', name: 'Z' }],
+    });
+    const [url] = (http.post as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+    expect(url).toBe('/sap/bc/adt/abapgit/repos/000000000006/push');
+    expect(url).not.toContain('/checks');
+  });
+
   it('pushRepo posts serialized staging payload to push link', async () => {
     const http = mockHttp('');
     const repo = firstRepo();

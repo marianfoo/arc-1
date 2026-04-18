@@ -4,7 +4,7 @@
  * gCTS uses JSON payloads under /sap/bc/cts_abapvcs/*.
  */
 
-import { AdtApiError, classifyGctsError } from './errors.js';
+import { AdtApiError, AdtSafetyError, classifyGctsError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkGit, checkOperation, checkPackage, OperationType, type SafetyConfig } from './safety.js';
 import type {
@@ -162,6 +162,14 @@ export async function cloneRepo(
 ): Promise<GctsCloneResult> {
   checkOperation(safety, OperationType.Create, 'GctsCloneRepo');
   checkGit(safety, 'clone');
+  // When an allowlist is configured, the package is not optional: gCTS would
+  // otherwise bind the repo to a server-derived default (possibly outside the
+  // allowlist). Force the caller to declare the target package up-front.
+  if (safety.allowedPackages.length > 0 && !params.package) {
+    throw new AdtSafetyError(
+      `GctsCloneRepo requires an explicit 'package' when allowedPackages is configured (allowed: ${JSON.stringify(safety.allowedPackages)})`,
+    );
+  }
   if (params.package) checkPackage(safety, params.package);
 
   const path = `${GCTS_BASE}/repository`;
