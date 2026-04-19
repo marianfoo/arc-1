@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/aps/iam/auth",
+  "method": "GET",
+  "statusCode": 403,
+  "body": "User lacks S_DEVELOP for this object",
+  "durationMs": 31
+}

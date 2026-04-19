@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/ddic/tables",
+  "method": "GET",
+  "statusCode": 200,
+  "body": "<atom:feed xmlns:atom=\"http://www.w3.org/2005/Atom\"/>",
+  "durationMs": 42
+}

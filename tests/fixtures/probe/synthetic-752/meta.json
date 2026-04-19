@@ -1,0 +1,16 @@
+{
+  "baseUrl": "http://synthetic-nw752:50000",
+  "client": "100",
+  "abapRelease": "752",
+  "systemType": "onprem",
+  "discoveryMapKeys": [
+    "/sap/bc/adt/programs/programs",
+    "/sap/bc/adt/oo/classes",
+    "/sap/bc/adt/ddic/tables",
+    "/sap/bc/adt/ddic/domains",
+    "/sap/bc/adt/ddic/dataelements",
+    "/sap/bc/adt/ddic/ddl/sources"
+  ],
+  "probedAt": "2026-04-19T12:00:00.000Z",
+  "note": "Synthetic fixture representing a NW 7.52 on-prem system. Hand-crafted for CI — does not come from a real system."
+}

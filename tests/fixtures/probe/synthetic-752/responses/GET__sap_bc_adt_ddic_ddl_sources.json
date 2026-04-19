@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/ddic/ddl/sources",
+  "method": "GET",
+  "statusCode": 400,
+  "body": "<exc:exception><exc:message><exc:text>Parameter name is required</exc:text></exc:message></exc:exception>",
+  "durationMs": 23
+}
