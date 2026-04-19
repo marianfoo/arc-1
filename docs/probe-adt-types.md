@@ -68,12 +68,14 @@ FTG2   AVAILABLE (medium)    N     ok-400-bad-params 400  —              758>=
 
 ```
 tests/fixtures/probe/<system-name>/
-  meta.json                     # baseUrl, client, abapRelease, discovery keys
+  meta.json                     # baseUrl, client, abapRelease, products[], discovery keys
   responses/
     GET__sap_bc_adt_ddic_tables.json
     GET__sap_bc_adt_ddic_tables_T000.json
     ...
 ```
+
+`meta.json` captures the full installed-components list under `products[]` (e.g. `SAP_BASIS 758`, `S4FND 108`, `SAP_CLOUD ...`). This matters: SAP_BASIS alone does not distinguish plain NetWeaver 7.58 from S/4HANA 2023 on 7.58, but `S4FND 108` does. Name your fixture directory after the actual product line (`s4hana-2023-onprem`, `nw-752-sp18`, `btp-abap-2604`) rather than just the BASIS level.
 
 These fixtures are read back by [`tests/unit/probe/replay.test.ts`](../tests/unit/probe/replay.test.ts) via `createReplayFetcher(dir)`. No SAP connection needed; the unit tests guarantee the classifier keeps making the right decisions on the recorded bytes forever.
 

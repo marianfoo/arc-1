@@ -228,7 +228,9 @@ export function parseTableContents(xml: string): { columns: string[]; rows: Reco
  *
  * The title field is semicolon-separated: release;sp_name;sp_level;description
  */
-export function parseInstalledComponents(xml: string): Array<{ name: string; release: string; description: string }> {
+export function parseInstalledComponents(
+  xml: string,
+): Array<{ name: string; release: string; spName: string; spLevel: string; description: string }> {
   const parsed = parseXml(xml);
 
   // After removeNSPrefix: atom:feed → feed, atom:entry → entry
@@ -241,6 +243,8 @@ export function parseInstalledComponents(xml: string): Array<{ name: string; rel
     return {
       name,
       release: parts[0]?.trim() ?? '',
+      spName: parts[1]?.trim() ?? '',
+      spLevel: parts[2]?.trim() ?? '',
       description: parts[3]?.trim() ?? title,
     };
   });

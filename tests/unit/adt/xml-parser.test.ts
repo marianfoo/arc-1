@@ -205,13 +205,31 @@ describe('XML Parser', () => {
       const components = parseInstalledComponents(xml);
 
       expect(components).toHaveLength(3);
-      expect(components[0]).toEqual({
+      expect(components[0]).toMatchObject({
         name: 'SAP_BASIS',
         release: '753',
         description: 'SAP Basis Component',
       });
       expect(components[1]?.name).toBe('SAP_ABA');
       expect(components[2]?.name).toBe('SAP_GWFND');
+    });
+
+    it('exposes SP name and SP level from the title', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:id>SAP_BASIS</atom:id>
+    <atom:title>758;SAPK-75802INSAPBASIS;0002;SAP Basis Component</atom:title>
+  </atom:entry>
+</atom:feed>`;
+      const components = parseInstalledComponents(xml);
+      expect(components[0]).toEqual({
+        name: 'SAP_BASIS',
+        release: '758',
+        spName: 'SAPK-75802INSAPBASIS',
+        spLevel: '0002',
+        description: 'SAP Basis Component',
+      });
     });
 
     it('handles empty feed', () => {
@@ -233,7 +251,7 @@ describe('XML Parser', () => {
 </atom:feed>`;
       const components = parseInstalledComponents(xml);
       expect(components).toHaveLength(1);
-      expect(components[0]).toEqual({
+      expect(components[0]).toMatchObject({
         name: 'S4CORE',
         release: '108',
         description: 'SAP S/4HANA Core',

@@ -101,12 +101,30 @@ export interface TypeResult {
   reason: string;
 }
 
+/**
+ * One installed software component as reported by /sap/bc/adt/system/components.
+ * Captured so future readers of a fixture can tell a plain NW 7.58 apart from
+ * an S/4HANA 2023 — SAP_BASIS alone is not enough signal.
+ */
+export interface InstalledProduct {
+  /** Component id (e.g. "SAP_BASIS", "S4FND"). */
+  name: string;
+  /** Numeric release (e.g. "758", "108"). */
+  release: string;
+  /** Support package level (e.g. "0002"), if reported. */
+  spLevel?: string;
+  /** Human-readable description (e.g. "SAP Basis Component"). */
+  description?: string;
+}
+
 /** System-level info the probe captures for context. */
 export interface ProbedSystem {
   baseUrl: string;
   client?: string;
   abapRelease?: string;
   systemType?: 'onprem' | 'btp' | 'unknown';
+  /** Full component list from /sap/bc/adt/system/components when available. */
+  products?: InstalledProduct[];
   discoveryMapSize: number;
   probedAt: string;
 }

@@ -57,6 +57,15 @@ export function formatTable(report: ProbeReport): string {
   lines.push(`SAP client:       ${report.system.client ?? '(default)'}`);
   lines.push(`Discovery size:   ${report.system.discoveryMapSize} collections`);
   lines.push(`Probed at:        ${report.system.probedAt}`);
+  if (report.system.products && report.system.products.length > 0) {
+    // Surface the product-line markers that matter for "which SAP is this really".
+    const markers = ['SAP_BASIS', 'SAP_ABA', 'S4FND', 'S4CORE', 'SAP_CLOUD', 'SAP_UI'];
+    const shown = report.system.products.filter((p) => markers.includes(p.name.toUpperCase()));
+    if (shown.length > 0) {
+      const joined = shown.map((p) => `${p.name} ${p.release}${p.spLevel ? ` SP${p.spLevel}` : ''}`).join(', ');
+      lines.push(`Key components:   ${joined}`);
+    }
+  }
   lines.push('');
 
   const header = [
