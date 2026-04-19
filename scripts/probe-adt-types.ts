@@ -35,7 +35,7 @@ import { createRecordingFetcher } from '../src/probe/fixtures.js';
 import { formatTable } from '../src/probe/format.js';
 import { computeQuality } from '../src/probe/quality.js';
 import { type HttpProbeFn, type ProbeFetchResult, probeType } from '../src/probe/runner.js';
-import type { ProbeReport, ProbedSystem } from '../src/probe/types.js';
+import type { InstalledProduct, ProbeReport, ProbedSystem } from '../src/probe/types.js';
 
 interface CliArgs {
   format: 'table' | 'json';
@@ -155,15 +155,23 @@ function buildFetcher(client: AdtClient): HttpProbeFn {
 async function detectSystem(client: AdtClient): Promise<{
   abapRelease?: string;
   systemType?: 'onprem' | 'btp' | 'unknown';
+  products?: InstalledProduct[];
 }> {
   try {
     const resp = await client.http.get('/sap/bc/adt/system/components');
     const components = parseInstalledComponents(resp.body);
     const basis = components.find((c) => c.name.toUpperCase() === 'SAP_BASIS');
     const hasCloud = components.some((c) => c.name.toUpperCase() === 'SAP_CLOUD');
+    const products: InstalledProduct[] = components.map((c) => ({
+      name: c.name,
+      release: c.release,
+      spLevel: c.spLevel || undefined,
+      description: c.description || undefined,
+    }));
     return {
       abapRelease: basis?.release || undefined,
       systemType: hasCloud ? 'btp' : 'onprem',
+      products,
     };
   } catch {
     return { systemType: 'unknown' };
@@ -216,6 +224,7 @@ async function run(): Promise<void> {
     client: creds.client,
     abapRelease: sysinfo.abapRelease,
     systemType: sysinfo.systemType,
+    products: sysinfo.products,
     discoveryMapSize: discoveryMap.size,
     probedAt: new Date().toISOString(),
   };
@@ -233,6 +242,7 @@ async function run(): Promise<void> {
       client: system.client,
       abapRelease: system.abapRelease,
       systemType: system.systemType,
+      products: system.products,
       discoveryMapKeys: [...discoveryMap.keys()].sort(),
       probedAt: system.probedAt,
     });

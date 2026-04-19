@@ -11,6 +11,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HttpProbeFn, ProbeFetchResult } from './runner.js';
+import type { InstalledProduct } from './types.js';
 
 /** A single recorded HTTP request/response, stored as JSON on disk. */
 export interface RecordedResponse {
@@ -29,6 +30,12 @@ export interface FixtureMeta {
   client?: string;
   abapRelease?: string;
   systemType?: 'onprem' | 'btp' | 'unknown';
+  /**
+   * Full installed-components list. Captured so a replay-test reader can tell
+   * apart e.g. plain NW 7.58 from S/4HANA 2023 — SAP_BASIS alone isn't enough.
+   * Optional for backward compatibility with earlier fixture files.
+   */
+  products?: InstalledProduct[];
   discoveryMapKeys: string[];
   probedAt: string;
   note?: string;

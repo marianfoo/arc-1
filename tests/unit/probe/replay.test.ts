@@ -18,7 +18,7 @@ import { computeQuality } from '../../../src/probe/quality.js';
 import { probeType } from '../../../src/probe/runner.js';
 
 const SYNTHETIC_752 = 'tests/fixtures/probe/synthetic-752';
-const NW_ONPREM = 'tests/fixtures/probe/nw-onprem';
+const S4HANA_2023 = 'tests/fixtures/probe/s4hana-2023-onprem';
 
 describe('probe replay — synthetic 7.52 fixture', () => {
   it('classifies each recorded type correctly', async () => {
@@ -78,9 +78,18 @@ describe('probe replay — synthetic 7.52 fixture', () => {
   });
 });
 
-describe('probe replay — nw-onprem 7.58 fixture (recorded from real A4H)', () => {
-  it('reports all RAP types as available on a modern on-prem 7.58 system', async () => {
-    const { fetcher, meta } = createReplayFetcher(NW_ONPREM);
+describe('probe replay — s4hana-2023-onprem fixture (recorded from real A4H)', () => {
+  it('captures S/4HANA 2023 product markers (not just SAP_BASIS)', async () => {
+    const { meta } = createReplayFetcher(S4HANA_2023);
+    expect(meta.abapRelease).toBe('758');
+    // S4FND 108 is the canonical marker for S/4HANA 2023 — proves this fixture
+    // is not a plain NetWeaver system. Guards against label drift.
+    const s4fnd = meta.products?.find((p) => p.name.toUpperCase() === 'S4FND');
+    expect(s4fnd?.release).toBe('108');
+  });
+
+  it('reports all RAP types as available on a modern on-prem 7.58 S/4 system', async () => {
+    const { fetcher, meta } = createReplayFetcher(S4HANA_2023);
     const discoveryMap = discoveryMapFromMeta(meta);
 
     expect(meta.abapRelease).toBe('758');
@@ -97,7 +106,7 @@ describe('probe replay — nw-onprem 7.58 fixture (recorded from real A4H)', () 
   });
 
   it('reports zero unavailable or ambiguous types on the recorded 7.58 run', async () => {
-    const { fetcher, meta } = createReplayFetcher(NW_ONPREM);
+    const { fetcher, meta } = createReplayFetcher(S4HANA_2023);
     const discoveryMap = discoveryMapFromMeta(meta);
 
     const results = [];
