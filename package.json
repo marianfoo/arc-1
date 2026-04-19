@@ -48,6 +48,7 @@
     "typecheck": "tsc --noEmit",
     "cli": "tsx src/cli.ts",
     "extract-sap-cookies": "tsx scripts/extract-sap-cookies.ts",
+    "probe": "tsx scripts/probe-adt-types.ts",
     "prepare": "husky || true",
     "prepublishOnly": "npm run build",
     "test:eval": "node scripts/run-evals.mjs",

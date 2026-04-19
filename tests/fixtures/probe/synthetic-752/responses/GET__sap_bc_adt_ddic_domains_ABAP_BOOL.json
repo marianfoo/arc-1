@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/ddic/domains/ABAP_BOOL",
+  "method": "GET",
+  "statusCode": 200,
+  "body": "<ddi:wbobj adtcore:name=\"ABAP_BOOL\" adtcore:type=\"DOMA\"/>",
+  "durationMs": 45
+}
