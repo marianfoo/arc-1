@@ -93,6 +93,14 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 |---|---|---|
 | [explain-abap-code](explain-abap-code.md) | Reads an ABAP object, fetches all dependencies via SAPContext, and produces a structured explanation | Onboarding to unfamiliar code, investigating bugs, documenting undocumented objects |
 | [migrate-custom-code](migrate-custom-code.md) | Runs ATC readiness checks, groups findings by priority, and generates replacement code | Preparing custom code for S/4HANA migration or ABAP Cloud readiness |
+| [sap-object-documenter](sap-object-documenter.md) | Batch-documents many custom objects at once — purpose, style (Classic/Modern/Mixed), dependencies — as Markdown | Onboarding packages, handoffs, seeding a repo wiki (vs. explain-abap-code which is single-object interactive) |
+
+### Clean Core & Custom Code Retirement
+
+| Skill | What it does | When to use |
+|---|---|---|
+| [sap-clean-core-atc](sap-clean-core-atc.md) | Audits a package of custom code and buckets every Z/Y object into Clean Core Levels A–D using mcp-sap-docs + ATC | Planning an ECC→S/4HANA Cloud or BTP move; quarterly custom-code health check |
+| [sap-unused-code](sap-unused-code.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_BLOCK_FREE_SQL=false` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
 
 ### System Context & Local Workflow
 
@@ -128,4 +136,14 @@ For codebase onboarding or pre-migration work:
 2. setup-abap-mirror         →  Pull the target package(s) into abapGit-style files
 3. explain-abap-code         →  Understand key objects with dependency context
 4. migrate-custom-code       →  Run ATC readiness checks and group findings
+```
+
+For clean-core / custom-code retirement planning:
+
+```
+1. bootstrap-system-context  →  Know the system
+2. sap-unused-code           →  Scope the retirement (what even runs?)
+3. sap-clean-core-atc        →  Classify the USED code into Levels A–D
+4. sap-object-documenter     →  Document the keepers before rewriting
+5. migrate-custom-code       →  Fix the Level B/C/D findings one at a time
 ```
