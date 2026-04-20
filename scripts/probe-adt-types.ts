@@ -26,6 +26,7 @@ import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { config as loadDotEnv } from 'dotenv';
 import { AdtClient } from '../src/adt/client.js';
+import { resolveCookies } from '../src/adt/cookies.js';
 import { fetchDiscoveryDocument } from '../src/adt/discovery.js';
 import { AdtApiError } from '../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../src/adt/safety.js';
@@ -87,11 +88,13 @@ Options:
 
 Env (read from .env, TEST_SAP_* preferred over SAP_*):
   TEST_SAP_URL / SAP_URL           SAP system URL (required)
-  TEST_SAP_USER / SAP_USER         SAP username (required)
-  TEST_SAP_PASSWORD / SAP_PASSWORD SAP password (required)
+  TEST_SAP_USER / SAP_USER         SAP username (required unless cookies set)
+  TEST_SAP_PASSWORD / SAP_PASSWORD SAP password (required unless cookies set)
   TEST_SAP_CLIENT / SAP_CLIENT     SAP client (default: 100)
   TEST_SAP_LANGUAGE / SAP_LANGUAGE SAP language (default: EN)
   TEST_SAP_INSECURE / SAP_INSECURE Skip TLS verification (default: false)
+  SAP_COOKIE_FILE                  Path to Netscape-format cookie file
+  SAP_COOKIE_STRING                Inline cookies (key1=val1; key2=val2)
 `);
 }
 
@@ -102,6 +105,7 @@ function readCreds(): {
   client: string;
   language: string;
   insecure: boolean;
+  cookies?: Record<string, string>;
 } {
   const baseUrl = process.env.TEST_SAP_URL ?? process.env.SAP_URL ?? '';
   const username = process.env.TEST_SAP_USER ?? process.env.SAP_USER ?? '';
@@ -109,13 +113,16 @@ function readCreds(): {
   const client = process.env.TEST_SAP_CLIENT ?? process.env.SAP_CLIENT ?? '100';
   const language = process.env.TEST_SAP_LANGUAGE ?? process.env.SAP_LANGUAGE ?? 'EN';
   const insecure = (process.env.TEST_SAP_INSECURE ?? process.env.SAP_INSECURE ?? '') === 'true';
-  if (!baseUrl || !username || !password) {
+  const cookies = resolveCookies(process.env.SAP_COOKIE_FILE, process.env.SAP_COOKIE_STRING);
+  if (!baseUrl) {
+    throw new Error('Missing SAP_URL / TEST_SAP_URL. See --help for details.');
+  }
+  if (!cookies && (!username || !password)) {
     throw new Error(
-      'Missing SAP credentials. Set TEST_SAP_URL/TEST_SAP_USER/TEST_SAP_PASSWORD in .env ' +
-        '(or SAP_URL/SAP_USER/SAP_PASSWORD). See --help for details.',
+      'Missing SAP credentials. Set TEST_SAP_USER/TEST_SAP_PASSWORD (or SAP_COOKIE_FILE / SAP_COOKIE_STRING). See --help for details.',
     );
   }
-  return { baseUrl, username, password, client, language, insecure };
+  return { baseUrl, username, password, client, language, insecure, cookies };
 }
 
 /**
@@ -188,7 +195,8 @@ async function run(): Promise<void> {
   }
 
   const creds = readCreds();
-  process.stderr.write(`Probing ${creds.baseUrl} (client ${creds.client}, user ${creds.username})…\n`);
+  const authLabel = creds.cookies && !creds.username ? 'cookies' : `user ${creds.username}`;
+  process.stderr.write(`Probing ${creds.baseUrl} (client ${creds.client}, ${authLabel})…\n`);
 
   const client = new AdtClient({
     baseUrl: creds.baseUrl,
@@ -197,6 +205,7 @@ async function run(): Promise<void> {
     client: creds.client,
     language: creds.language,
     insecure: creds.insecure,
+    cookies: creds.cookies ?? {},
     safety: unrestrictedSafetyConfig(),
   });
 

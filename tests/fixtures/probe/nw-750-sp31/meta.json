@@ -1,0 +1,1024 @@
+{
+  "baseUrl": "https://sap-host:44300/",
+  "client": "100",
+  "abapRelease": "750",
+  "systemType": "onprem",
+  "products": [
+    {
+      "name": "EA-DFPS",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Enterprise Extension Defense Forces &amp"
+    },
+    {
+      "name": "EA-FINSERV",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Enterprise Extension Financial Services"
+    },
+    {
+      "name": "EA-GLTRADE",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Enterprise Extension Global Trade"
+    },
+    {
+      "name": "EA-HR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "SAP Enterprise Extension HR"
+    },
+    {
+      "name": "EA-HRCAE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCAE of EA-HR"
+    },
+    {
+      "name": "EA-HRCAR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCAR of EA-HR"
+    },
+    {
+      "name": "EA-HRCAT",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCAT of EA-HR"
+    },
+    {
+      "name": "EA-HRCAU",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCAU of EA-HR"
+    },
+    {
+      "name": "EA-HRCBE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCBE of EA-HR"
+    },
+    {
+      "name": "EA-HRCBG",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCBG of EA-HR"
+    },
+    {
+      "name": "EA-HRCBR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCBR of EA-HR"
+    },
+    {
+      "name": "EA-HRCCA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCCA of EA-HR"
+    },
+    {
+      "name": "EA-HRCCH",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCCH of EA-HR"
+    },
+    {
+      "name": "EA-HRCCL",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCCL of EA-HR"
+    },
+    {
+      "name": "EA-HRCCN",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCCN of EA-HR"
+    },
+    {
+      "name": "EA-HRCCO",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCCO of EA-HR"
+    },
+    {
+      "name": "EA-HRCCZ",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCCZ of EA-HR"
+    },
+    {
+      "name": "EA-HRCDE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCDE of EA-HR"
+    },
+    {
+      "name": "EA-HRCDK",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCDK of EA-HR"
+    },
+    {
+      "name": "EA-HRCEG",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCEG of EA-HR"
+    },
+    {
+      "name": "EA-HRCES",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCES of EA-HR"
+    },
+    {
+      "name": "EA-HRCFI",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCFI of EA-HR"
+    },
+    {
+      "name": "EA-HRCFR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCFR of EA-HR"
+    },
+    {
+      "name": "EA-HRCGB",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCGB of EA-HR"
+    },
+    {
+      "name": "EA-HRCGR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCGR of EA-HR"
+    },
+    {
+      "name": "EA-HRCHK",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCHK of EA-HR"
+    },
+    {
+      "name": "EA-HRCHR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCHR of EA-HR"
+    },
+    {
+      "name": "EA-HRCHU",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCHU of EA-HR"
+    },
+    {
+      "name": "EA-HRCID",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCID of EA-HR"
+    },
+    {
+      "name": "EA-HRCIE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCIE of EA-HR"
+    },
+    {
+      "name": "EA-HRCIN",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCIN of EA-HR"
+    },
+    {
+      "name": "EA-HRCIT",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCIT of EA-HR"
+    },
+    {
+      "name": "EA-HRCJP",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCJP of EA-HR"
+    },
+    {
+      "name": "EA-HRCKR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCKR of EA-HR"
+    },
+    {
+      "name": "EA-HRCKW",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCKW of EA-HR"
+    },
+    {
+      "name": "EA-HRCKZ",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCKZ of EA-HR"
+    },
+    {
+      "name": "EA-HRCMX",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCMX of EA-HR"
+    },
+    {
+      "name": "EA-HRCMY",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCMY of EA-HR"
+    },
+    {
+      "name": "EA-HRCNL",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCNL of EA-HR"
+    },
+    {
+      "name": "EA-HRCNO",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCNO of EA-HR"
+    },
+    {
+      "name": "EA-HRCNZ",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCNZ of EA-HR"
+    },
+    {
+      "name": "EA-HRCOM",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCOM of EA-HR"
+    },
+    {
+      "name": "EA-HRCPH",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCPH of EA-HR"
+    },
+    {
+      "name": "EA-HRCPL",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCPL of EA-HR"
+    },
+    {
+      "name": "EA-HRCPT",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCPT of EA-HR"
+    },
+    {
+      "name": "EA-HRCQA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCQA of EA-HR"
+    },
+    {
+      "name": "EA-HRCRO",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCRO of EA-HR"
+    },
+    {
+      "name": "EA-HRCRU",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCRU of EA-HR"
+    },
+    {
+      "name": "EA-HRCSA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCSA of EA-HR"
+    },
+    {
+      "name": "EA-HRCSE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCSE of EA-HR"
+    },
+    {
+      "name": "EA-HRCSG",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCSG of EA-HR"
+    },
+    {
+      "name": "EA-HRCSI",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCSI of EA-HR"
+    },
+    {
+      "name": "EA-HRCSK",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCSK of EA-HR"
+    },
+    {
+      "name": "EA-HRCTH",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCTH of EA-HR"
+    },
+    {
+      "name": "EA-HRCTR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCTR of EA-HR"
+    },
+    {
+      "name": "EA-HRCTW",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCTW of EA-HR"
+    },
+    {
+      "name": "EA-HRCUA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCUA of EA-HR"
+    },
+    {
+      "name": "EA-HRCUN",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component EA-HRCUN of EA-HR"
+    },
+    {
+      "name": "EA-HRCUS",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCUS of EA-HR"
+    },
+    {
+      "name": "EA-HRCVE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCVE of EA-HR"
+    },
+    {
+      "name": "EA-HRCZA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRCZA of EA-HR"
+    },
+    {
+      "name": "EA-HRGXX",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRGXX of EA-HR"
+    },
+    {
+      "name": "EA-HRRXX",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent EA-HRRXX of EA-HR"
+    },
+    {
+      "name": "EA-IPPE",
+      "release": "618",
+      "spLevel": "0009",
+      "description": "SAP iPPE"
+    },
+    {
+      "name": "EA-PS",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Enterprise Extension Public Services"
+    },
+    {
+      "name": "EA-RETAIL",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Enterprise Extension Retail"
+    },
+    {
+      "name": "ECC-DIMP",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "DIMP"
+    },
+    {
+      "name": "ECC-SE",
+      "release": "605",
+      "spLevel": "0023",
+      "description": "ECC-SE"
+    },
+    {
+      "name": "ERECRUIT",
+      "release": "617",
+      "spLevel": "0027",
+      "description": "E-Recruiting"
+    },
+    {
+      "name": "FI-CA",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "FI-CA"
+    },
+    {
+      "name": "FI-CAX",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "FI-CA Extended"
+    },
+    {
+      "name": "FINBASIS",
+      "release": "748",
+      "spLevel": "0023",
+      "description": "Financial Basis"
+    },
+    {
+      "name": "FSCM_CCD",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "FSCM_CCD"
+    },
+    {
+      "name": "GBX01HR",
+      "release": "600",
+      "spLevel": "0019",
+      "description": "FIORI X1 HCM"
+    },
+    {
+      "name": "GBX01HR5",
+      "release": "605",
+      "spLevel": "0031",
+      "description": "FIORI X1 HCM"
+    },
+    {
+      "name": "INSURANCE",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Insurance"
+    },
+    {
+      "name": "IS-CWM",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "Industry Solution Catch Weight Management"
+    },
+    {
+      "name": "IS-H",
+      "release": "618",
+      "spLevel": "0039",
+      "description": "SAP Healthcare"
+    },
+    {
+      "name": "IS-M",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP MEDIA"
+    },
+    {
+      "name": "IS-OIL",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "IS-OIL"
+    },
+    {
+      "name": "IS-PRA",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP IS-PRA"
+    },
+    {
+      "name": "IS-PS-CA",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "IS-PUBLIC SECTOR CONTRACT ACCOUNTING"
+    },
+    {
+      "name": "IS-UT",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP Utilities/Telecommunication"
+    },
+    {
+      "name": "LSOFE",
+      "release": "617",
+      "spLevel": "0026",
+      "description": "SAP Learning Solution Front-End"
+    },
+    {
+      "name": "MDG_APPL",
+      "release": "619",
+      "spLevel": "0024",
+      "description": "MDG Applications"
+    },
+    {
+      "name": "MDG_FND",
+      "release": "749",
+      "spLevel": "0024",
+      "description": "MDG Foundation"
+    },
+    {
+      "name": "MDG_MDC",
+      "release": "100",
+      "spLevel": "0024",
+      "description": "Master Data Consolidation"
+    },
+    {
+      "name": "MDG_UX",
+      "release": "619",
+      "spLevel": "0024",
+      "description": "MDG Additional User Interface"
+    },
+    {
+      "name": "PCAI_ENT",
+      "release": "100",
+      "spLevel": "0000",
+      "description": "PCAI_ENT 100"
+    },
+    {
+      "name": "PLMWUI",
+      "release": "748",
+      "spLevel": "0023",
+      "description": "SAP PLM Web UI"
+    },
+    {
+      "name": "SAP_ABA",
+      "release": "750",
+      "spLevel": "0031",
+      "description": "Cross-Application Component"
+    },
+    {
+      "name": "SAP_AP",
+      "release": "750",
+      "spLevel": "0021",
+      "description": "SAP Application Platform"
+    },
+    {
+      "name": "SAP_APPL",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "Logistics and Accounting"
+    },
+    {
+      "name": "SAP_BASIS",
+      "release": "750",
+      "spLevel": "0031",
+      "description": "SAP Basis Component"
+    },
+    {
+      "name": "SAP_BS_FND",
+      "release": "748",
+      "spLevel": "0023",
+      "description": "SAP Business Suite Foundation"
+    },
+    {
+      "name": "SAP_BW",
+      "release": "750",
+      "spLevel": "0031",
+      "description": "SAP Business Warehouse"
+    },
+    {
+      "name": "SAP_FIN",
+      "release": "618",
+      "spLevel": "0023",
+      "description": "SAP_FIN"
+    },
+    {
+      "name": "SAP_GWFND",
+      "release": "750",
+      "spLevel": "0032",
+      "description": "SAP Gateway Foundation"
+    },
+    {
+      "name": "SAP_HR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Human Resources"
+    },
+    {
+      "name": "SAP_HRCAE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCAE of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCAR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCAR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCAT",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCAT of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCAU",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCAU of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCBE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCBE of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCBG",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCBG of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCBR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCBR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCCA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCCA of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCCH",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCCH of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCCL",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCCL of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCCN",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCCN of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCCO",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCCO of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCCZ",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCCZ of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCDE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCDE of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCDK",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCDK of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCEG",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCEG of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCES",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCES of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCFI",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCFI of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCFR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCFR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCGB",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCGB of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCGR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCGR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCHK",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCHK of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCHR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCHR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCHU",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCHU of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCID",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCID of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCIE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCIE of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCIN",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCIN of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCIT",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCIT of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCJP",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCJP of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCKR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCKR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCKW",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCKW of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCKZ",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCKZ of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCMX",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCMX of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCMY",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCMY of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCNL",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCNL of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCNO",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCNO of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCNZ",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCNZ of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCOM",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCOM of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCPH",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCPH of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCPL",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCPL of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCPT",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCPT of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCQA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCQA of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCRO",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCRO of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCRU",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCRU of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCSA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCSA of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCSE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCSE of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCSG",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCSG of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCSI",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCSI of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCSK",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCSK of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCTH",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCTH of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCTR",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCTR of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCTW",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCTW of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCUA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCUA of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCUN",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Sub component SAP_HRCUN of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCUS",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCUS of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCVE",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCVE of SAP_HR"
+    },
+    {
+      "name": "SAP_HRCZA",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRCZA of SAP_HR"
+    },
+    {
+      "name": "SAP_HRGXX",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRGXX of SAP_HR"
+    },
+    {
+      "name": "SAP_HRRXX",
+      "release": "608",
+      "spLevel": "0137",
+      "description": "Subcomponent SAP_HRRXX of SAP_HR"
+    },
+    {
+      "name": "SAP_UI",
+      "release": "754",
+      "spLevel": "0017",
+      "description": "User Interface Technology"
+    },
+    {
+      "name": "SEM-BW",
+      "release": "748",
+      "spLevel": "0023",
+      "description": "SEM-BW: Strategic Enterprise Management"
+    },
+    {
+      "name": "ST-A%2fPI",
+      "release": "01X_731",
+      "spLevel": "0000",
+      "description": "Servicetools for SAP Basis 731 and higher"
+    },
+    {
+      "name": "ST-PI",
+      "release": "740",
+      "spLevel": "0034",
+      "description": "SAP Solution Tools Plug-In"
+    },
+    {
+      "name": "WEBCUIF",
+      "release": "748",
+      "spLevel": "0023",
+      "description": "SAP Web UI Framework"
+    }
+  ],
+  "discoveryMapKeys": [
+    "/sap/bc/adt/abapsource/abapdoc/exportjobs",
+    "/sap/bc/adt/ato/settings",
+    "/sap/bc/adt/basic/object/properties",
+    "/sap/bc/adt/bopf/businessobjects",
+    "/sap/bc/adt/classifications",
+    "/sap/bc/adt/cmp_code_composer/cmpt",
+    "/sap/bc/adt/cmp_code_composer/cmptare",
+    "/sap/bc/adt/cmp_code_composer/cmptfun",
+    "/sap/bc/adt/cts/transports",
+    "/sap/bc/adt/ddic/dataelements",
+    "/sap/bc/adt/ddic/ddl/formatter/identifiers",
+    "/sap/bc/adt/ddic/structures",
+    "/sap/bc/adt/ddic/typegroups",
+    "/sap/bc/adt/dlp/locationinfo",
+    "/sap/bc/adt/dlp/logpoints",
+    "/sap/bc/adt/dummygroup/wbttt1a",
+    "/sap/bc/adt/dummygroup/wbttt2a",
+    "/sap/bc/adt/enhancements/enhoxh",
+    "/sap/bc/adt/enhancements/enhsxs",
+    "/sap/bc/adt/functions/groups",
+    "/sap/bc/adt/objtype_admin/sval",
+    "/sap/bc/adt/objtype_admin/wgrp",
+    "/sap/bc/adt/oo/classes",
+    "/sap/bc/adt/oo/interfaces",
+    "/sap/bc/adt/programs/includes",
+    "/sap/bc/adt/programs/programs",
+    "/sap/bc/adt/quickfixes/evaluation",
+    "/sap/bc/adt/solutionmanager/cm/checkruns",
+    "/sap/bc/adt/solutionmanager/cm/confirmations",
+    "/sap/bc/adt/wdy/componentcontrollers",
+    "/sap/bc/adt/wdy/components",
+    "/sap/bc/adt/wdy/customcontrollers",
+    "/sap/bc/adt/wdy/views",
+    "/sap/bc/adt/wdy/windows",
+    "/sap/bc/adt/xslt/transformations"
+  ],
+  "probedAt": "2026-04-20T18:57:51.284Z"
+}

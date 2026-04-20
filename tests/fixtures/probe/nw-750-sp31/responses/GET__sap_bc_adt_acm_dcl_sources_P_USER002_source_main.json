@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/acm/dcl/sources/P_USER002/source/main",
+  "method": "GET",
+  "statusCode": 200,
+  "body": "@EndUserText.label: 'User Information, Profile and Roles'\r\n@MappingRole: true\r\ndefine role P_user002 {\r\n grant select on P_USER002\r\n          where\r\n            (class)   = aspect pfcg_auth( S_USER_GRP, CLASS, ACTVT   = '03' );\r\n}",
+  "durationMs": 49
+}
