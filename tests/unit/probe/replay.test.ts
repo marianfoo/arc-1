@@ -183,7 +183,12 @@ describe('probe replay — npl-750-sp02-dev-edition fixture (recorded from real 
 
     expect(q.coverage.discovery).toBe(1);
     expect(q.coverage.collection).toBe(1);
-    expect(q.coverage.knownObject).toBe(0.6);
+    // Known-object coverage rose from 0.6 → 0.7 after #162 contributor added
+    // seed objects for DDLS (I_LANGUAGE), DCLS (P_USER002), and INCL (LSLOGTOP).
+    // `discoveryAccuracyVsKnownObject` is unchanged: on the NPL SP 0002 fixture
+    // the new URLs aren't recorded, so those known-object probes return
+    // synthetic network errors (kind='error'), which don't count in the ratio.
+    expect(q.coverage.knownObject).toBe(0.7);
     expect(q.coverage.release).toBe(1);
     expect(q.discoveryAccuracyVsKnownObject).toBe(6 / 7);
 

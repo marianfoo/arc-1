@@ -63,7 +63,9 @@ export const CATALOG: CatalogEntry[] = [
     type: 'INCL',
     collectionUrl: '/sap/bc/adt/programs/includes',
     objectUrlTemplate: '/sap/bc/adt/programs/includes/{name}/source/main',
-    knownObjects: ['RSDBCPRE'],
+    // LSLOGTOP ships on NW 7.50 kernels where RSDBCPRE is not always present
+    // (contributed from #162 probe run against SAP_BASIS 750 SP 0031).
+    knownObjects: ['RSDBCPRE', 'LSLOGTOP'],
     minRelease: 700,
   },
   {
@@ -117,10 +119,9 @@ export const CATALOG: CatalogEntry[] = [
     type: 'DDLS',
     collectionUrl: '/sap/bc/adt/ddic/ddl/sources',
     objectUrlTemplate: '/sap/bc/adt/ddic/ddl/sources/{name}/source/main',
-    // No universally-shipped DDLS: demos ship on some systems but not others.
-    // Leaving empty is intentional — shows up in the "uncoveredByKnownObject"
-    // quality metric so we know this type is a blind spot.
-    knownObjects: [],
+    // I_LANGUAGE is SAP-shipped on every release with CDS support (contributed
+    // from #162 probe run — fills what was previously a known blind spot).
+    knownObjects: ['I_LANGUAGE'],
     minRelease: 740,
     note: 'CDS introduced in 7.40 SP05; full ADT read support from 7.50+',
   },
@@ -128,9 +129,12 @@ export const CATALOG: CatalogEntry[] = [
     type: 'DCLS',
     collectionUrl: '/sap/bc/adt/acm/dcl/sources',
     objectUrlTemplate: '/sap/bc/adt/acm/dcl/sources/{name}/source/main',
-    knownObjects: [],
-    minRelease: 751,
-    note: 'CDS access controls — no universally-shipped DCLS',
+    // P_USER002 is SAP-shipped on NW 7.50+ (contributed from #162 probe run
+    // against SAP_BASIS 750 SP 0031). DCLS is available on 750 with a more
+    // limited CDS syntax — floor lowered from 751 accordingly.
+    knownObjects: ['P_USER002'],
+    minRelease: 750,
+    note: 'CDS access controls — available on NW 7.50+ with limited syntax vs. newer releases',
   },
   {
     type: 'DDLX',
