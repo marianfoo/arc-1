@@ -19,6 +19,7 @@ import { probeType } from '../../../src/probe/runner.js';
 
 const SYNTHETIC_752 = 'tests/fixtures/probe/synthetic-752';
 const S4HANA_2023 = 'tests/fixtures/probe/s4hana-2023-onprem';
+const NPL_750 = 'tests/fixtures/probe/npl-750-sp02-dev-edition';
 
 describe('probe replay — synthetic 7.52 fixture', () => {
   it('classifies each recorded type correctly', async () => {
@@ -124,5 +125,73 @@ describe('probe replay — s4hana-2023-onprem fixture (recorded from real A4H)',
       q.verdictHistogram['available-medium'] +
       q.verdictHistogram['auth-blocked'];
     expect(verdictSum).toBe(CATALOG.length);
+  });
+});
+
+describe('probe replay — npl-750-sp02-dev-edition fixture (recorded from real NW 7.50 SP02)', () => {
+  it('captures the expected NetWeaver 7.50 product markers', async () => {
+    const { meta } = createReplayFetcher(NPL_750);
+
+    expect(meta.abapRelease).toBe('750');
+
+    const basis = meta.products?.find((p) => p.name.toUpperCase() === 'SAP_BASIS');
+    const ui = meta.products?.find((p) => p.name.toUpperCase() === 'SAP_UI');
+
+    expect(basis?.release).toBe('750');
+    expect(basis?.spLevel).toBe('0002');
+    expect(ui?.release).toBe('750');
+    expect(ui?.spLevel).toBe('0002');
+  });
+
+  it('reports classic ABAP repository types as available and RAP-era types as unavailable or ambiguous', async () => {
+    const { fetcher, meta } = createReplayFetcher(NPL_750);
+    const discoveryMap = discoveryMapFromMeta(meta);
+
+    expect(meta.abapRelease).toBe('750');
+
+    for (const type of ['PROG', 'CLAS', 'INTF']) {
+      const entry = getCatalogEntry(type);
+      if (!entry) throw new Error(`Missing catalog entry for ${type}`);
+      const result = await probeType(fetcher, entry, discoveryMap, meta.abapRelease);
+      expect(result.verdict, `${type} on 7.50 should be available`).toBe('available-high');
+    }
+
+    for (const type of ['BDEF', 'SRVD', 'SRVB', 'AUTH', 'FTG2']) {
+      const entry = getCatalogEntry(type);
+      if (!entry) throw new Error(`Missing catalog entry for ${type}`);
+      const result = await probeType(fetcher, entry, discoveryMap, meta.abapRelease);
+      expect(result.verdict, `${type} on 7.50 should be unavailable`).toBe('unavailable-high');
+    }
+
+    for (const type of ['DDLS', 'DCLS']) {
+      const entry = getCatalogEntry(type);
+      if (!entry) throw new Error(`Missing catalog entry for ${type}`);
+      const result = await probeType(fetcher, entry, discoveryMap, meta.abapRelease);
+      expect(result.verdict, `${type} on 7.50 should stay ambiguous`).toBe('ambiguous');
+    }
+  });
+
+  it('keeps the recorded 7.50 quality profile stable', async () => {
+    const { fetcher, meta } = createReplayFetcher(NPL_750);
+    const discoveryMap = discoveryMapFromMeta(meta);
+
+    const results = [];
+    for (const entry of CATALOG) {
+      results.push(await probeType(fetcher, entry, discoveryMap, meta.abapRelease));
+    }
+    const q = computeQuality(results);
+
+    expect(q.coverage.discovery).toBe(1);
+    expect(q.coverage.collection).toBe(1);
+    expect(q.coverage.knownObject).toBe(0.6);
+    expect(q.coverage.release).toBe(1);
+    expect(q.discoveryAccuracyVsKnownObject).toBe(6 / 7);
+
+    expect(q.verdictHistogram['available-high']).toBe(8);
+    expect(q.verdictHistogram['available-medium']).toBe(0);
+    expect(q.verdictHistogram['unavailable-high']).toBe(6);
+    expect(q.verdictHistogram['unavailable-likely']).toBe(3);
+    expect(q.verdictHistogram['auth-blocked']).toBe(0);
+    expect(q.verdictHistogram.ambiguous).toBe(3);
   });
 });
