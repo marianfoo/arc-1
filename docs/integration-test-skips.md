@@ -1,10 +1,14 @@
-# Integration test skips — taxonomy
+# Integration + E2E test skips — taxonomy
 
-The integration suite is designed to **skip cleanly** (never fail) when the target SAP system lacks a feature, fixture, or policy permission required by a test. A healthy run on *any* system reports some skips — the question is whether the skips match that system's profile.
+Both the **integration** suite (`npm run test:integration`) and the **E2E** suite (`npm run test:e2e`) are designed to **skip cleanly** (never fail) when the target SAP system lacks a feature, fixture, or policy permission required by a test. A healthy run on *any* system reports some skips — the question is whether the skips match that system's profile.
 
 This doc is the map. When you see a `↓ [SkipReason.…]` line in a test run, look up the category here to understand (a) why it's firing, (b) whether it's expected on your system, and (c) when investigation would be warranted.
 
-For a runtime summary that aggregates skips per category after a run, see [scripts/ci/summarize-skips.mjs](../scripts/ci/summarize-skips.mjs) (run via `npm run test:integration:skip-summary`).
+Runtime summaries per category are available via:
+- `npm run test:integration:skip-summary` (integration suite)
+- `npm run test:e2e:skip-summary` (E2E suite)
+
+Both use [scripts/ci/summarize-skips.mjs](../scripts/ci/summarize-skips.mjs) with the same taxonomy.
 
 > **Note on counts:** the summary tool parses per-test `↓` lines, which vitest emits for tests skipped via `ctx.skip()` / `requireOrSkip()`. **File- or describe-level skips** — like the whole BTP ABAP suite skipping when `TEST_BTP_SERVICE_KEY_FILE` isn't set, or the gCTS suite when the backend doesn't have gCTS — are rolled up in the `Test Files … skipped` summary line instead. The summary tool reads both and reports the delta; see the "Note:" line at the end of its output if your run shows more total skipped tests than per-test `↓` lines.
 
@@ -102,7 +106,7 @@ Tests typically suffix these with a specific clause explaining *which* fixture o
 | `NO_DDLS — no DDLS readable on this system` | CDS-related dep/impact tests | Pre-CDS systems |
 | `NO_DUMPS — no short dumps on this system` | diagnostics dump tests | Freshly booted systems |
 
-## Typical skip profile per system
+## Typical skip profile per system (integration)
 
 A quick sanity-check for "is my run healthy?":
 
@@ -113,6 +117,46 @@ A quick sanity-check for "is my run healthy?":
 | **BTP ABAP (cloud)** | ~80 / 207 tests | Cat 1 (no /DMO), Cat 2 (DDIC changes on cloud), Cat 5 (policy) |
 
 Large deviations from these counts on a given system are the signal. If an S/4HANA box suddenly skips 120+ tests, something broke in fixture sync or auth — the matrix helps identify which category lit up.
+
+## E2E-specific skip sources
+
+The E2E suite calls tools end-to-end through a running MCP server. The integration categories above still apply, plus a few E2E-only ones.
+
+### E2E cat α — Fixture sync failure cascade
+
+E2E's fixture sync (`tests/e2e/sync-fixtures.ts`) seeds managed Z-namespace persistent objects (`ZCL_ARC1_TEST`, `ZI_ARC1_I33_ROOT`, etc.) before tests run. If sync fails for a given fixture because of a **backend quirk** (same 7.50 lock-handle 423 issue, DTEL 415, DOMA 404), that single fixture goes into a `summary.skipped` list and the suite continues — tests that expect it then auto-skip via `expectToolSuccessOrSkip()`.
+
+| Skip message fragment | Root cause | Typical on |
+|---|---|---|
+| `NO_FIXTURE (ZCL_ARC1_TEST) — run npm run test:e2e once to seed` | Fixture not materialized on target system | Fresh SAP box, systems where sync was skipped |
+| `NO_FIXTURE (ZI_ARC1_I33_ROOT) — fixture sync skipped this object` | DDLS create failed during sync (likely lock-handle 423 on 7.50) | NW 7.50 trial |
+| `NO_FIXTURE (/DMO/CL_FLIGHT_LEGACY) — S/4 Flight Reference Scenario, not on this release` | Upstream S/4 demo content not shipped on plain NetWeaver | Plain NW, BTP ABAP |
+
+### E2E cat β — Soft "placeholder" responses from read tools
+
+Several SAPRead types return a human-readable placeholder (not an MCP error) when the requested object doesn't exist. Tests that parse the result as JSON need to detect the placeholder first.
+
+| Placeholder string | Handled in | Action |
+|---|---|---|
+| `"No metadata extension (DDLX) found for ..."` | `rap.e2e.test.ts` DDLX tests | Treated as `NO_FIXTURE` skip |
+| `"No version ..."` (plain-text, not JSON) | `revisions.e2e.test.ts` | Detected before `JSON.parse` via `parseVersionsOrSkip()` helper |
+| `"Version source endpoint unavailable or fixture missing"` | Version-history tests | Same path — skip |
+| Empty `tran.program` on `TRAN` read | `smoke.e2e.test.ts` SE38 read | Skip with backend-unsupported reason |
+| `"Table ... not found"` from `SAPQuery` | `smoke.e2e.test.ts` | Fallback for absent `/datapreview/ddic` endpoint |
+
+### E2E cat γ — PrettyPrinter keyword-case preference
+
+`SAPLint action=format` honors the SAP user's configured keyword case (`keywordUpper`, `keywordLower`, `keywordAuto`, `none`). Tests must probe `get_formatter_settings` before asserting specific casing, rather than hardcoding `REPORT`/`DATA` uppercase. Not a skip per se — a test-robustness fix in `smoke.e2e.test.ts`.
+
+### Typical E2E skip profile
+
+| System | Typical E2E skip count | Categories that dominate |
+|---|---|---|
+| **NW 7.50 trial** | ~50 / 122 tests | Cat 2 (release gap), Cat 3 (lock-handle 423), E2E-α (fixture sync partial), Cat 1 (/DMO missing) |
+| **S/4HANA 2023** | 3 / 122 tests | Cat 5 (no transport package / `--enable-git`) |
+| **BTP ABAP** | ~30 / 122 tests | Cat 5 (policy), some of Cat 1 |
+
+Anything over ~5 skips on S/4HANA is a regression signal — most likely a broken fixture sync or an unintended breaking change to a SAPRead handler output.
 
 ## Adding a new skip
 

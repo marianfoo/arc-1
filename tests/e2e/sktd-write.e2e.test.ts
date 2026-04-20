@@ -13,7 +13,7 @@
 
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
+import { callTool, connectClient, expectToolError, expectToolSuccess, expectToolSuccessOrSkip } from './helpers.js';
 
 function uniqueName(prefix: string): string {
   const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e5)
@@ -94,7 +94,7 @@ describe('E2E SKTD (Knowledge Transfer Document) tests', () => {
     expectToolError(result, 'refObjectType');
   });
 
-  it('SKTD full CRUD lifecycle: create DDLS → create KTD → update with Markdown → read → activate → delete', async () => {
+  it('SKTD full CRUD lifecycle: create DDLS → create KTD → update with Markdown → read → activate → delete', async (ctx) => {
     if (!sktdSupported) return;
     // Use a unique name to avoid collisions across test runs
     const objectName = uniqueName('ZARC1SKTD');
@@ -119,7 +119,7 @@ define view entity ${objectName}
       package: '$TMP',
       source: ddlSource,
     });
-    expectToolSuccess(createDdls);
+    expectToolSuccessOrSkip(ctx, createDdls);
 
     try {
       // Step 2: Activate the DDLS (KTD needs an active parent to attach to)

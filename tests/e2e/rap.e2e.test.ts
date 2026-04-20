@@ -10,7 +10,7 @@
 
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
+import { callTool, connectClient, expectToolError, expectToolSuccess, expectToolSuccessOrSkip } from './helpers.js';
 
 function parsePossiblyCachedJson(text: string): any {
   return JSON.parse(text.replace(/^\[cached\]\n/, ''));
@@ -34,23 +34,38 @@ describe('E2E RAP Completeness Tests', () => {
   // ── DDLX Read ─────────────────────────────────────────────────────
 
   describe('SAPRead DDLX (Metadata Extensions)', () => {
-    it('reads a DDLX metadata extension source', async () => {
+    it('reads a DDLX metadata extension source', async (ctx) => {
       const result = await callTool(client, 'SAPRead', {
         type: 'DDLX',
         name: '/DMO/C_AGENCYTP',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
+      // SAPRead DDLX returns a soft "No metadata extension (DDLX) found"
+      // placeholder when the DDLX doesn't exist — which is the state on any
+      // system that didn't ship the /DMO/ Flight Reference scenario.
+      if (/No metadata extension \(DDLX\) found/i.test(text)) {
+        ctx.skip(
+          'Required test fixture not found on SAP system (/DMO/C_AGENCYTP DDLX) — S/4 Flight Reference Scenario',
+        );
+        return;
+      }
       // DDLX source contains annotation layer and annotate keyword
       expect(text).toContain('@Metadata.layer');
       expect(text).toContain('annotate');
     });
 
-    it('reads a DDLX with UI annotations for Fiori Elements', async () => {
+    it('reads a DDLX with UI annotations for Fiori Elements', async (ctx) => {
       const result = await callTool(client, 'SAPRead', {
         type: 'DDLX',
         name: '/DMO/C_TRAVEL_A_D',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
+      if (/No metadata extension \(DDLX\) found/i.test(text)) {
+        ctx.skip(
+          'Required test fixture not found on SAP system (/DMO/C_TRAVEL_A_D DDLX) — S/4 Flight Reference Scenario',
+        );
+        return;
+      }
       expect(text).toContain('@UI');
       // Should contain facet definitions and line item annotations
       expect(text).toContain('lineItem');
@@ -70,12 +85,12 @@ describe('E2E RAP Completeness Tests', () => {
   // ── SRVB Read ─────────────────────────────────────────────────────
 
   describe('SAPRead SRVB (Service Bindings)', () => {
-    it('reads a V4 service binding as structured JSON', async () => {
+    it('reads a V4 service binding as structured JSON', async (ctx) => {
       const result = await callTool(client, 'SAPRead', {
         type: 'SRVB',
         name: '/DMO/UI_AGENCY_O4',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
       const parsed = parsePossiblyCachedJson(text);
 
       expect(parsed.name).toBe('/DMO/UI_AGENCY_O4');
@@ -87,12 +102,12 @@ describe('E2E RAP Completeness Tests', () => {
       expect(parsed.package).toBeTruthy();
     });
 
-    it('reads a V2 service binding', async () => {
+    it('reads a V2 service binding', async (ctx) => {
       const result = await callTool(client, 'SAPRead', {
         type: 'SRVB',
         name: '/DMO/UI_TRAVEL_U_V2',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
       const parsed = parsePossiblyCachedJson(text);
 
       expect(parsed.name).toBe('/DMO/UI_TRAVEL_U_V2');
@@ -100,12 +115,12 @@ describe('E2E RAP Completeness Tests', () => {
       expect(parsed.bindingType).toBe('ODATA');
     });
 
-    it('returns publish status for service bindings', async () => {
+    it('returns publish status for service bindings', async (ctx) => {
       const result = await callTool(client, 'SAPRead', {
         type: 'SRVB',
         name: '/DMO/UI_TRAVEL_D_D_O4',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
       const parsed = parsePossiblyCachedJson(text);
 
       // Binding should have publish status and service definition reference
@@ -156,7 +171,7 @@ describe('E2E RAP Completeness Tests', () => {
   describe('SAPWrite + SAPActivate lifecycle', () => {
     const WRITE_NAME = 'ZARC1_E2E_WRITE';
 
-    it('creates a program, updates source, activates, reads back, deletes', async () => {
+    it('creates a program, updates source, activates, reads back, deletes', async (ctx) => {
       // Pre-cleanup: delete stale object from a previous run that failed mid-lifecycle
       try {
         await callTool(client, 'SAPWrite', {
@@ -177,7 +192,7 @@ describe('E2E RAP Completeness Tests', () => {
         source: "REPORT zarc1_e2e_write.\nWRITE: / 'original'.",
         package: '$TMP',
       });
-      expectToolSuccess(createResult);
+      expectToolSuccessOrSkip(ctx, createResult);
 
       try {
         // Step 2: Activate the created program
