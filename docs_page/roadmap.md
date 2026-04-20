@@ -79,6 +79,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 29 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
 | 30 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
 | 31 | OPS-03 | Multi-System Routing | P3 | L | Ops |
+| 32 | FEAT-50 | ADT Probe Fixture Coverage (contributed fixtures) | P3 | XS-each | Diagnostics |
 
 ---
 
@@ -240,6 +241,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 37. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress) for TLS termination; in-app TLS is edge case
 38. **FEAT-05** Code Refactoring (L) — rename, extract method *(change package completed 2026-04-15)*
 39. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
+40. **FEAT-50** ADT Probe Fixture Coverage — contributor-driven; widen fixture coverage for [`classifyVerdict`](../src/probe/runner.ts) across SAP product lines (BTP ABAP, S/4 Cloud, plain NW, ECC EhP7, …)
 
 ### Strategic Context: SAP Official ABAP MCP Server (Q2 2026)
 
@@ -1465,6 +1467,47 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 **Why:** This is the missing link that makes FEAT-20 and FEAT-24 actionable. Without knowing *which* transport changed an object, the user can't ask for versioned source or a diff. The fr0ster#30 use case ("code review of the last transport") requires all three features working together. No competitor has the full trio as a cohesive workflow — implementing this puts ARC-1 ahead.
 
 **Why not (deferred scope):** Full historical transport lineage via E071/E070 is intentionally deferred because it depends on free SQL/data-preview access, can conflict with safe defaults, and bypasses some clean per-user ADT authorization boundaries.
+
+---
+
+### FEAT-50: ADT Probe Fixture Coverage
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | XS per contributed fixture |
+| **Risk** | None (diagnostic-only; fixtures are recorded bytes, not product behavior) |
+| **Usefulness** | Medium — each fixture permanently hardens [`classifyVerdict`](../src/probe/runner.ts) against regressions on that product line |
+| **Status** | Ongoing / contributor-driven |
+| **Source** | Issue [#162](https://github.com/marianfoo/arc-1/issues/162), PR [#163](https://github.com/marianfoo/arc-1/pull/163), PR [#170](https://github.com/marianfoo/arc-1/pull/170) |
+| **Related** | [`docs/probe-adt-types.md`](../docs/probe-adt-types.md) |
+
+**What:** Grow the set of recorded fixtures that [`tests/unit/probe/replay.test.ts`](../tests/unit/probe/replay.test.ts) runs against, so the probe classifier is regression-tested against the full variety of real SAP landscapes rather than a handful of hand-picked systems. Each fixture is ~40 JSON files totaling <1 MB and requires no live SAP connection in CI.
+
+**Currently covered:**
+- `synthetic-752` — hand-crafted 7.52 fixture, covers every `classifyVerdict` decision branch (the #94 HTTP-400 regression guard lives here)
+- `s4hana-2023-onprem-abap-trial` — SAP_BASIS 758 + S4FND 108 (ABAP developer trial, RAP-complete)
+- `npl-750-sp02-dev-edition` — NPL 7.50 SP02 developer edition (classic ABAP, RAP absent)
+- `ecc-ehp8-nw750-sp31-onprem-prod` — productive ECC 6.0 EhP8 on NW 7.50 SP31 (DDLS/DCLS via known-object despite collection 500s)
+
+**Gaps worth filling (ordered by classifier value):**
+
+| # | System | Why it matters for the classifier |
+|---|--------|-----------------------------------|
+| 1 | **BTP ABAP Environment (Steampunk)** | Cloud-only shape: `SAP_CLOUD` component, different discovery surface, RAP-first, some classic endpoints 404. Exercises the `hasCloud → btp` systemType branch and cloud-specific endpoint patterns no current fixture hits. |
+| 2 | **S/4HANA Public Cloud, Embedded Steampunk** | Released/restricted ABAP Cloud. Many legacy types should come back `unavailable-high` from 404, but RAP types should be `available-high`. Validates the "modern Cloud rejects classic, accepts RAP" polarity. |
+| 3 | **S/4HANA Cloud Private Edition** | Between on-prem S/4 and Public Cloud; same BASIS line as on-prem but with cloud-only traits. Tells us whether classifier behaves consistently across the S/4 family. |
+| 4 | **Plain NetWeaver productive (non-ERP)** — SolMan 7.2, GRC, PI/PO, CRM 7, SRM | Real productive NW without `SAP_APPL`. Exercises the "no ECC/S/4 product markers" discrimination path and confirms the classifier isn't quietly relying on ECC-shaped responses. |
+| 5 | **ECC 6.0 EhP7 (NW 7.40)** | Lower release floor for DDLS (7.40); many real ECC systems still run there. Pins the "release == floor, not above" edge case. |
+| 6 | **NetWeaver 7.52 productive** | Would let us shrink the hand-crafted `synthetic-752` to just the branches a real 7.52 doesn't emit, instead of carrying the whole synthetic. |
+| 7 | **NetWeaver 7.56 / 7.57** | Fill the gap between `synthetic-752` and `s4hana-2023` (BASIS 758). Catches regressions that only surface at intermediate releases. |
+| 8 | **S/4HANA on-prem 2020 / 2021 / 2022** | RAP features evolved across releases; our S/4 coverage currently jumps straight to 2023. Intermediate captures pin the release-floor ordering. |
+| 9 | **System with restrictive authorization** (probe user lacks `S_DEVELOP` / `S_ADT_RES`) | Exercises the `auth-blocked` verdict with real 401/403 patterns, not the hand-crafted pair in `synthetic-752`. |
+| 10 | **System fronted by SSO / SAML / MFA** (captured via cookie auth from PR [#170](https://github.com/marianfoo/arc-1/pull/170)) | Validates the cookie-auth contribution path end-to-end — meta.json shouldn't leak the session cookie, responses should still be probeable. |
+
+**How to contribute:** See the "How to contribute a fixture set from your own system" section in [docs/probe-adt-types.md](../docs/probe-adt-types.md). Each contributed fixture needs a short replay-test block in [`tests/unit/probe/replay.test.ts`](../tests/unit/probe/replay.test.ts) asserting the verdicts the contributor observes on their system — that's what turns the fixture into a permanent regression guard.
+
+**Why P3:** The probe is diagnostic-only; it does not change product behavior. Missing fixtures reduce confidence in classifier stability across SAP landscapes but do not cause user-visible defects. Priority rises if a regression in `classifyVerdict` ships undetected, or if issue [#162](https://github.com/marianfoo/arc-1/issues/162)-style "what types does my system actually support?" questions become a recurring support channel.
 
 ---
 
