@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.10](https://github.com/marianfoo/arc-1/compare/v0.6.9...v0.6.10) (2026-04-20)
+
+
+### Features
+
+* add SAPGit tool with gCTS and abapGit integration ([#159](https://github.com/marianfoo/arc-1/issues/159)) ([196b8a0](https://github.com/marianfoo/arc-1/commit/196b8a02a20410466d7f8b0d6c640638e800fe9f))
+* diagnostic ADT type-availability probe ([#163](https://github.com/marianfoo/arc-1/issues/163)) ([6bf4365](https://github.com/marianfoo/arc-1/commit/6bf43655370a7e13aeb0234fbf4c9a52b816272c))
+
+
+### Bug Fixes
+
+* DTEL v2→v1 content-type fallback + SICF-aware error hints ([#169](https://github.com/marianfoo/arc-1/issues/169)) ([1b6760f](https://github.com/marianfoo/arc-1/commit/1b6760f173cd106c66c7f2e1d247d5b74917de5b))
+* **e2e:** make E2E suite pass cleanly on NetWeaver 7.50 ([#168](https://github.com/marianfoo/arc-1/issues/168)) ([750be05](https://github.com/marianfoo/arc-1/commit/750be05e583c4feac672da808b82d12af7d66c4d))
+* filter empty SAP_ALLOWED_PACKAGES entries and clarify docker docs ([#156](https://github.com/marianfoo/arc-1/issues/156)) ([81001da](https://github.com/marianfoo/arc-1/commit/81001dac40805bf5d2ac68947c1a6280cd864427))
+* integration suite passes cleanly on NW 7.50 ([#167](https://github.com/marianfoo/arc-1/issues/167)) ([1bc2984](https://github.com/marianfoo/arc-1/commit/1bc298453a1767dd156b41be0f62f4a31e5ac4f1))
+* make extract-sap-cookies work on Windows + Edge (fix [#149](https://github.com/marianfoo/arc-1/issues/149)) ([#154](https://github.com/marianfoo/arc-1/issues/154)) ([8e87600](https://github.com/marianfoo/arc-1/commit/8e876006b233c46681b526a996b93a96cdba6d2e))
+
 ## [0.6.9](https://github.com/marianfoo/arc-1/compare/v0.6.8...v0.6.9) (2026-04-17)
 
 

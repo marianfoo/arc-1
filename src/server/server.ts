@@ -33,7 +33,7 @@ import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
 /** ARC-1 version */
-export const VERSION = '0.6.9'; // x-release-please-version
+export const VERSION = '0.6.10'; // x-release-please-version
 
 export function logAuthSummary(config: ServerConfig): void {
   const mcpMethods: string[] = [];
