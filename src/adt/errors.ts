@@ -346,21 +346,11 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
     return {
       category: 'enqueue-error',
       hint:
-        'Lock handle is invalid or expired. Retry the operation so ARC-1 acquires a fresh lock — ' +
-        'transient expiry is the common case. If 423 persists on the first PUT after a successful ' +
-        'LOCK, known causes (in likelihood order): ' +
-        '(1) Known ABAP Development Tools bug on older SAP_BASIS kernels / low SP levels — ' +
-        'the lock handle is not stable in some cases (e.g. SAP Note 2727890 "ADT: fix unstable ' +
-        'adt lock handle" for handles containing `+`; broader ADT handler fixes across subsequent ' +
-        'SPs). Apply a more recent support package or the relevant ADT notes (component BC-DWB-AIE). ' +
-        '(2) SAP backend is not issuing the `sap-contextid` cookie that pairs the lock handle with ' +
-        'a stateful ADT session. Capture the raw LOCK response headers with curl and look for ' +
-        '`Set-Cookie: sap-contextid=SID...; path=/sap/bc/adt` — if absent, verify SICF_SESSIONS ' +
-        'is activated and profile params `http/security_session_timeout` + ' +
-        '`http/security_context_cache_size` are set (tcode `RZ10`). ' +
-        '(3) Reverse proxy / load balancer filtering cookies or `sap-*` response headers in transit. ' +
-        'Rule out by curling the SAP ICM directly (bypass the proxy) and comparing headers.',
-      transaction: 'SICF_SESSIONS',
+        'Lock handle is invalid or expired. First, retry — transient expiry is the common case. ' +
+        'If 423 persists on the first PUT after a successful LOCK, see SAP Note 2727890 ' +
+        '"ADT: fix unstable adt lock handle" (component BC-DWB-AIE) — a known ABAP Development ' +
+        'Tools bug where the lock handle is not stable under certain conditions. Apply the note ' +
+        'or a support package that includes it.',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }

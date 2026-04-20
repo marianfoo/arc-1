@@ -375,17 +375,12 @@ describe('AdtApiError', () => {
     it('classifies enqueue errors for 423', () => {
       const classification = classifySapDomainError(423, 'Lock handle invalid');
       expect(classification?.category).toBe('enqueue-error');
-      expect(classification?.hint).toContain('fresh lock');
-      // Cites the specific SAP Note (2727890) for the known ADT lock-handle
-      // instability bug on older SP levels — this is the most common cause
-      // on NW 7.50 / 7.51 low SPs that operators might not have discovered.
+      // First-line advice: retry (transient expiry is the common case).
+      expect(classification?.hint).toContain('retry');
+      // Cites the specific SAP Note verified via the SAP Knowledge Base
+      // search — the concrete grounded reference for persistent 423s.
       expect(classification?.hint).toContain('2727890');
       expect(classification?.hint).toContain('BC-DWB-AIE');
-      // Also covers the stateful-session backend cause for systems where
-      // the handle bug has been fixed but the cookie isn't being issued.
-      expect(classification?.hint).toContain('sap-contextid');
-      expect(classification?.hint).toContain('SICF_SESSIONS');
-      expect(classification?.transaction).toBe('SICF_SESSIONS');
     });
 
     it('classifies 404 "No suitable resource found" as ICF handler not bound', () => {

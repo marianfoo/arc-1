@@ -77,7 +77,7 @@ Not fixable from ARC-1 client code. The error classifier (`classifySapDomainErro
 
 ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8`. Older SAP_BASIS releases (pre-7.52) only accept the v1 MIME type `…dataelements.v1+xml` — same XML body, different MIME version suffix.
 
-**Fixed** in `src/adt/crud.ts` via a static `CONTENT_TYPE_FALLBACKS` map: on HTTP 415 for the v2 MIME type, `createObject` and `updateObject` transparently retry once with the v1 MIME type. DTEL create now works across releases. Follow-up DTEL updates (lock → PUT) may still hit a stateful-session issue on systems without `sap-contextid` cookie support — see the lock-handle 423 section below.
+**Fixed** in `src/adt/crud.ts` via a static `CONTENT_TYPE_FALLBACKS` map: on HTTP 415 for the v2 MIME type, `createObject` and `updateObject` transparently retry once with the v1 MIME type. DTEL create now works across releases. Follow-up DTEL updates (lock → PUT) may still hit the lock-handle 423 issue on systems missing SAP Note 2727890 — see below.
 
 ## Category 3 — Backend quirk (trial systems, unstable services)
 
@@ -85,38 +85,13 @@ ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.s
 
 | Skip message fragment | Affected tests | Typical on | Should NOT skip on |
 |---|---|---|---|
-| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle, DTEL CRUD update step, RAP write + SKTD + MSAG on E2E | Systems without HTTP security session management enabled | Systems with `SICF_SESSIONS` activated for the target client |
+| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle, DTEL CRUD update step, RAP write + SKTD + MSAG on E2E | Systems missing SAP Note 2727890 (ADT lock-handle bug) | Systems with the note / a later SP applied |
 
 ### Root cause: persistent lock-handle 423 after successful LOCK
 
-Verified via wire-level `curl` diff between a healthy SAP system and a system where this error reproduces:
+Known ABAP Development Tools bug — [SAP Note 2727890 "ADT: fix unstable adt lock handle"](https://me.sap.com/notes/2727890/E), component `BC-DWB-AIE`, released 2018-12-11. Apply the note (or a support package that includes it) on the target system.
 
-- **Healthy:** the `LOCK` response on `/sap/bc/adt/.../{name}` includes `Set-Cookie: sap-contextid=SID%3a…; path=/sap/bc/adt`. The stateful ADT session carries this token through the subsequent `PUT .../source/main`, and the lock handle is correctly paired with the session.
-- **Broken:** the `LOCK` response has **no `Set-Cookie` header at all**. The subsequent `PUT` arrives without a `sap-contextid` cookie; the server can't correlate the lock handle with a stateful session and returns `423 "Resource INCLUDE Z… is not locked (invalid lock handle)"`.
-
-The cookies that may still be present (e.g. `SAP_SESSIONID_<SID>_<CLIENT>`, `MYSAPSSO2`, `sap-usercontext`) are ICF-level authentication / load-balancer cookies, not the ADT stateful context cookie.
-
-**This is not an ARC-1 client bug.** Diagnostic order (investigate in this sequence):
-
-1. **Capture the raw `LOCK` response headers** with curl and check whether `Set-Cookie: sap-contextid=SID...; path=/sap/bc/adt` is present. A healthy SAP system always sets this cookie on ADT LOCK responses. Example on a known-good system:
-   ```
-   HTTP/1.1 200 OK
-   set-cookie: sap-contextid=SID%3aANON%3a...; path=/sap/bc/adt   ← must be present
-   sap-server: true
-   sap-cache-control: +0
-   ```
-   If these are absent, move to step 2.
-
-2. **Rule out a reverse proxy / load balancer** by curl-ing the SAP ICM directly (bypass the proxy). If `sap-contextid` is present there but missing through the proxy, fix the proxy config (`proxy_hide_header`, restrictive `proxy_pass_headers`, or `proxy_cookie_path` rewrites). If `sap-contextid` is missing **even on direct ICM access**, the SAP backend isn't issuing it — move to step 3.
-
-3. **Verify ABAP backend session management:**
-   - **`tcode SICF_SESSIONS`** — target client must show as active
-   - **Profile parameters (`tcode RZ10`)** — `http/security_session_timeout` (default 1800s), `http/security_context_cache_size` (default 2500), `login/create_sso2_ticket` set appropriately
-   - If these are correct and the backend still doesn't set the cookie, move to step 4.
-
-4. **ADT framework bug on the SAP_BASIS / SP combination.** Verified observation against `SAP_BASIS 750 SP 0002`: with SICF_SESSIONS active, profile params correct, and no reverse-proxy filtering, the ICM still returns LOCK responses with zero `Set-Cookie` / `sap-*` headers, and the follow-up PUT returns 423 even with a "clean" (no `+`, no `/`) lock handle. The concrete known-fix for this class of issue on NW 7.50 is **[SAP Note 2727890 "ADT: fix unstable adt lock handle"](https://me.sap.com/notes/2727890/E)** (component `BC-DWB-AIE`, released 2018-12). Depending on your specific SP level, broader ADT handler fixes may also be needed — apply a recent support package or the relevant BC-DWB-AIE notes. This is a Basis-level intervention, not a client config change.
-
-The 423 error hint (`category: enqueue-error`) now walks operators through this diagnostic sequence in its text so the first places checked are the ones most likely to reveal the cause.
+Not fixable from ARC-1 client code; the error hint (`category: enqueue-error`) now cites the note directly so operators can jump to the SAP Knowledge Base entry.
 | `BACKEND_UNSUPPORTED: PageChipInstances service unstable on this release` | `adt.integration.test.ts` FLP lists tiles | NW 7.50, some older S/4 | Recent S/4 |
 | `BACKEND_UNSUPPORTED: scope denied` (transport test) | `transport.integration.test.ts` type-W/R (customizing, repair) | Systems where user lacks `S_TRANSPRT` for non-K types | Full-privilege users |
 
