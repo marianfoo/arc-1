@@ -70,7 +70,10 @@ export async function getTransport(
   });
 
   const transports = parseTransportList(resp.body);
-  return transports[0] ?? null;
+  // NW 7.50 returns HTTP 200 with the caller's full transport list when the
+  // requested ID doesn't exist, instead of 404. Verify the parsed id matches.
+  const match = transports.find((t) => t.id === transportId);
+  return match ?? null;
 }
 
 /** Create a new transport request */
