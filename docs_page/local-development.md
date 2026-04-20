@@ -82,7 +82,7 @@ Full grouped template with every option: see [`.env.example`](https://github.com
 
 ## MCP client configuration
 
-All MCP clients that speak stdio work the same way — they spawn `npx arc-1` as a subprocess and talk JSON-RPC over stdin/stdout. The `env` block is where credentials and safety flags go.
+All MCP clients that speak stdio work the same way — they spawn `npx arc-1` as a subprocess and talk JSON-RPC over stdin/stdout. The `env` block is where credentials and safety flags go, so this is also where you put `ARC1_PROFILE` for `viewer`, `viewer-sql`, `developer`, and the other presets.
 
 ### Claude Desktop
 
@@ -104,6 +104,8 @@ All MCP clients that speak stdio work the same way — they spawn `npx arc-1` as
   }
 }
 ```
+
+To keep the same local setup but allow SQL + named table preview while staying read-only, add `"ARC1_PROFILE": "viewer-sql"` inside that same `env` block.
 
 ### Claude Code
 
@@ -127,10 +129,19 @@ Then in VS Code MCP settings:
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "sap": { "url": "http://localhost:3000/mcp" }
   }
 }
+```
+
+If you want `viewer-sql` in VS Code / Copilot, change the command that starts ARC-1, not the MCP JSON. The JSON only tells VS Code where the already-running server lives:
+
+```bash
+ARC1_PROFILE=viewer-sql \
+npx arc-1@latest --url https://host:44300 --user dev --password secret \
+                 --client 100 \
+                 --transport http-streamable --http-addr 127.0.0.1:3000
 ```
 
 > For a local loop, bind to `127.0.0.1` not `0.0.0.0` — stops other machines on the network from hitting your instance. If you bind `0.0.0.0`, add an API key: see [api-key-setup.md](api-key-setup.md).
@@ -159,6 +170,8 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 ### Common local starting points
 
 - `ARC1_PROFILE=viewer` or nothing: read/search only, same safe default.
+- `ARC1_PROFILE=viewer-data`: still read-only, but enables named table preview.
+- `ARC1_PROFILE=viewer-sql`: still read-only, but enables both named table preview and free SQL.
 - `ARC1_PROFILE=developer`: writes + transports in `$TMP`, still no SQL or named table preview.
 - `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'`: full local development access. (In shell, quote the `*` — otherwise the shell expands it to filenames before ARC-1 sees it.)
 

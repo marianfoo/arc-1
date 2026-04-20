@@ -74,7 +74,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**ARC-1 is read-only by default** — no writes, no free SQL, no table preview, no transport actions. To enable writes and widen the package scope, add safety flags to the `env` block. The example below unlocks everything (writes + SQL + transports + all packages):
+**ARC-1 is read-only by default** — no writes, no free SQL, no table preview, no transport actions. To change that, edit the same `env` block that starts ARC-1. For example, `ARC1_PROFILE=viewer-sql` keeps the server read-only but enables SQL + named table preview. The example below shows the "everything on" variant (writes + SQL + transports + all packages):
 
 ```json
 {
@@ -95,7 +95,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-Profiles are the main local-dev knob. Start with `ARC1_PROFILE=viewer` or `ARC1_PROFILE=developer-sql`, then use [configuration-reference.md](configuration-reference.md) for the full matrix and individual flags.
+Profiles are the main local-dev knob. Start with `ARC1_PROFILE=viewer`, `ARC1_PROFILE=viewer-sql`, or `ARC1_PROFILE=developer-sql`, then use [configuration-reference.md](configuration-reference.md) for the full matrix and individual flags.
 
 ### Claude Code
 
@@ -131,13 +131,15 @@ Add to VS Code / Copilot MCP config:
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "sap": {
       "url": "http://localhost:3000/mcp"
     }
   }
 }
 ```
+
+For VS Code / Copilot HTTP mode, profiles go on the ARC-1 startup command, not in the MCP JSON. Example: `ARC1_PROFILE=viewer-sql npx arc-1@latest --transport http-streamable ...`
 
 HTTP Streamable is also the transport for **Copilot Studio** (Microsoft Power Platform integrations).
 
@@ -163,6 +165,7 @@ Full reference: **[tools.md](tools.md)**
 Safe by default — read-only, no SQL, no data preview, no transports. Writes are restricted to `$TMP`.
 
 - `ARC1_PROFILE=viewer` or nothing: read/search only.
+- `ARC1_PROFILE=viewer-sql`: still read-only, but enables SQL + named table preview.
 - `ARC1_PROFILE=developer`: writes + transports in `$TMP`, still no SQL or named table preview.
 - `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'`: full local development access. (Quote the `*` in shell so it isn't globbed to filenames.)
 

@@ -32,6 +32,17 @@ These gates combine with **AND**, not OR.
 
 Profiles are the primary knob. Pick the closest preset first, then use individual flags only when you need a custom mix.
 
+### Where you actually set a profile
+
+A recipe like `ARC1_PROFILE=viewer-sql` only takes effect on the ARC-1 process that receives it. The tables below show the value you need, but you still have to put that value into the place that starts ARC-1:
+
+- **stdio MCP clients** (Claude Desktop, Claude Code, Cursor): add `ARC1_PROFILE` to the same `env` block that already contains `SAP_URL`, `SAP_USER`, and the other SAP settings.
+- **Direct shell / `npx`**: prefix the startup command or export it first.
+- **VS Code / Copilot HTTP mode**: set the profile on the command that starts ARC-1. The MCP JSON only points the client at `http://.../mcp`; it does not set server safety flags.
+- **Docker / Cloud Foundry**: pass `-e ARC1_PROFILE=viewer-sql` / `cf set-env arc1 ARC1_PROFILE viewer-sql` on the server or container.
+
+`--profile viewer-sql` and `ARC1_PROFILE=viewer-sql` are the same setting.
+
 ### Profile expansions
 
 Profiles are shortcuts. Individual flags set alongside a profile **override** the profile's values.
@@ -56,6 +67,8 @@ Profiles are shortcuts. Individual flags set alongside a profile **override** th
 | Writes + transports in `$TMP` | `ARC1_PROFILE=developer` | Local development preset without SQL or table preview |
 | Full local development | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*` | Writes + SQL + table preview + transports, unrestricted packages |
 | Power-user operation filter | Start from a profile or explicit safety flags, then add `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` | Fine-grained op gating layered on top of `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, and `SAP_BLOCK_FREE_SQL` |
+
+If you want read-only access plus both SQL and named table preview, set only `ARC1_PROFILE=viewer-sql`. That profile keeps writes and transports off; you do **not** need to turn off `SAP_READ_ONLY`.
 
 The recipes above show raw config values. When you pass them through a shell flag such as `-e`, quote shell-sensitive package patterns like `*` or `$TMP`: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`. In JSON, `.env`, and `--env-file`, use the raw value without extra shell quotes.
 

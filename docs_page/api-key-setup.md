@@ -92,6 +92,8 @@ export ARC1_API_KEYS="$VIEWER_KEY:viewer,$DEV_KEY:developer,$SQL_KEY:developer-s
 arc1
 ```
 
+The profile mapping lives on the ARC-1 server, not in the client config. If you want a read-only SQL key, use `viewer-sql` in `ARC1_API_KEYS`, for example `"$VIEWER_KEY:viewer,$SQL_KEY:viewer-sql,$DEV_KEY:developer"`. The client still sends only `Authorization: Bearer ...`, and stricter global server flags still win.
+
 Each key gets both scopes (tool visibility) and safety restrictions from its profile:
 
 | Key | Profile | Can Do | Cannot Do |

@@ -74,6 +74,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 | Transports | Off |
 | Package scope | `$TMP` if you later enable writes |
 
+Want the same safe setup but with SQL + named table preview? Change only the profile line in that same `env` block to `"ARC1_PROFILE": "viewer-sql"`. That keeps writes off and enables both `SAPQuery` modes.
+
 ### Path B — full local development
 
 Same structure as Path A — only the `env` block changes. Use this only on a dev or sandbox system you are comfortable modifying.
@@ -107,7 +109,7 @@ Same structure as Path A — only the `env` block changes. Use this only on a de
 | Transports | On |
 | Package scope | `*` (all packages) |
 
-Need something in between? Start from `ARC1_PROFILE=developer` for writes in `$TMP`, or pick a narrower recipe in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes).
+Need something in between? Start from `ARC1_PROFILE=viewer-sql` for read-only + SQL, `ARC1_PROFILE=developer` for writes in `$TMP`, or pick another recipe in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes).
 
 Restart Claude Desktop after updating the config. The SAP tools (`SAPRead`, `SAPSearch`, etc.) should appear in the tool picker.
 

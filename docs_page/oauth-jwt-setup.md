@@ -147,6 +147,8 @@ export ARC1_PROFILE=developer
 export SAP_ALLOWED_PACKAGES='Z*,$TMP'
 ```
 
+Those are server-side variables on the ARC-1 process. If you want a read-only shared server with SQL + named table preview, use `export ARC1_PROFILE=viewer-sql` instead. Do **not** put `viewer-sql` in `.vscode/mcp.json`; that file only tells the client which MCP URL to call.
+
 Then let your IdP assign JWT scopes per user:
 
 - `read` for reviewers
