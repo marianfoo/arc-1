@@ -1,0 +1,8 @@
+{
+  "url": "/sap/bc/adt/businessservices/bindings",
+  "method": "GET",
+  "statusCode": 404,
+  "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><exc:exception xmlns:exc=\"http://www.sap.com/abapxml/types/communicationframework\"><namespace id=\"com.sap.adt\"/><type id=\"ExceptionResourceNotFound\"/><message lang=\"EN\">Resource  /sap/bc/adt/businessservices/bindings does not exist.</message><localizedMessage lang=\"EN\">Resource  /sap/bc/adt/businessservices/bindings does not exist.</localizedMessage><properties/></exc:exception>",
+  "errorMessage": "ADT API error: status 404 at /sap/bc/adt/businessservices/bindings: Resource  /sap/bc/adt/businessservices/bindings does not exist.",
+  "durationMs": 89
+}
