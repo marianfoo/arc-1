@@ -346,15 +346,21 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
     return {
       category: 'enqueue-error',
       hint:
-        'Lock handle is invalid or expired. First: retry the operation so ARC-1 acquires a fresh ' +
-        'lock — transient expiry is the common case. If 423 persists after retry (especially on the ' +
-        'first PUT immediately after a successful LOCK), the backend is not issuing the `sap-contextid` ' +
-        'cookie needed to pair the lock handle with a stateful ADT session. This is a system-level ' +
-        'setting, not a per-service SICF flag: HTTP security session management must be activated via ' +
-        'tcode `SICF_SESSIONS` for the target client, and profile parameters `http/security_session_timeout` ' +
-        'and `http/security_context_cache_size` must be set (tcode `RZ10`). This is a Basis-level ' +
-        'configuration; if unsure, ask your Basis admin to verify stateful session support for ' +
-        '`/sap/bc/adt`.',
+        'Lock handle is invalid or expired. Retry the operation so ARC-1 acquires a fresh lock — ' +
+        'transient expiry is the common case. If 423 persists on the first PUT after a successful ' +
+        'LOCK, the SAP backend is likely not issuing the `sap-contextid` cookie that pairs the lock ' +
+        'handle with a stateful ADT session. Diagnostic steps for your Basis admin: ' +
+        '(a) capture the raw `LOCK` response headers with a tool like curl and check whether ' +
+        '`Set-Cookie: sap-contextid=SID...; path=/sap/bc/adt` is present; ' +
+        '(b) if missing, check that HTTP security session management is activated (tcode ' +
+        '`SICF_SESSIONS`) and that profile params `http/security_session_timeout` + ' +
+        '`http/security_context_cache_size` are set (tcode `RZ10`); ' +
+        '(c) if the above is already configured correctly and the cookie still is not issued, ' +
+        'the ADT handler on this SAP_BASIS/SP combination may not activate stateful sessions — ' +
+        'search SAP Notes for "ADT stateful session" / "sap-contextid" for your release, or ' +
+        'apply a more recent SP. ' +
+        'If there is a reverse proxy or load balancer between the client and ICM, also verify ' +
+        'it is not filtering cookies or `sap-*` response headers.',
       transaction: 'SICF_SESSIONS',
       details: typeId ? { exceptionType: typeId } : undefined,
     };

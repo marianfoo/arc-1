@@ -96,14 +96,27 @@ Verified via wire-level `curl` diff between a healthy SAP system and a system wh
 
 The cookies that may still be present (e.g. `SAP_SESSIONID_<SID>_<CLIENT>`, `MYSAPSSO2`, `sap-usercontext`) are ICF-level authentication / load-balancer cookies, not the ADT stateful context cookie.
 
-**This is a server-side SAP configuration, not an ARC-1 client bug.** It is **not** a per-service SICF toggle. The correct lever is system-wide HTTP security session management:
+**This is not an ARC-1 client bug.** Diagnostic order (investigate in this sequence):
 
-1. **`tcode SICF_SESSIONS`** — activate HTTP security session management for the target client.
-2. **Profile parameters (`tcode RZ10`)** — `http/security_session_timeout` (default 1800s), `http/security_context_cache_size` (default 2500), `login/create_sso2_ticket` (set appropriately when session management is enabled).
+1. **Capture the raw `LOCK` response headers** with curl and check whether `Set-Cookie: sap-contextid=SID...; path=/sap/bc/adt` is present. A healthy SAP system always sets this cookie on ADT LOCK responses. Example on a known-good system:
+   ```
+   HTTP/1.1 200 OK
+   set-cookie: sap-contextid=SID%3aANON%3a...; path=/sap/bc/adt   ← must be present
+   sap-server: true
+   sap-cache-control: +0
+   ```
+   If these are absent, move to step 2.
 
-If these are already set and the server still doesn't issue `sap-contextid`, it's a Basis-level issue — the `/sap/bc/adt` handler might be bypassing the session cookie or the ICM is configured with session management disabled globally. Worth a Basis admin ticket.
+2. **Rule out a reverse proxy / load balancer** by curl-ing the SAP ICM directly (bypass the proxy). If `sap-contextid` is present there but missing through the proxy, fix the proxy config (`proxy_hide_header`, restrictive `proxy_pass_headers`, or `proxy_cookie_path` rewrites). If `sap-contextid` is missing **even on direct ICM access**, the SAP backend isn't issuing it — move to step 3.
 
-The 423 error hint (`category: enqueue-error`) now points at `SICF_SESSIONS` + the relevant profile parameters so operators hit the right lever instead of chasing per-service SICF config.
+3. **Verify ABAP backend session management:**
+   - **`tcode SICF_SESSIONS`** — target client must show as active
+   - **Profile parameters (`tcode RZ10`)** — `http/security_session_timeout` (default 1800s), `http/security_context_cache_size` (default 2500), `login/create_sso2_ticket` set appropriately
+   - If these are correct and the backend still doesn't set the cookie, move to step 4.
+
+4. **ADT framework gap on the SAP_BASIS / SP combination.** On very low SP levels (e.g. `SAP_BASIS 750 SP 0002` from the 2015 kernel) the ADT handler code may not invoke the stateful-session setter for LOCK operations. Verified observation: with SICF_SESSIONS active, profile params correct, and no reverse-proxy filtering, the ICM still returns the LOCK response with zero `Set-Cookie` and zero `sap-*` headers. The fix is a kernel/SP update or a specific SAP Note — search notes for "ADT stateful session", "sap-contextid", or your release-specific ADT support package. This is a Basis-level intervention, not a client config change.
+
+The 423 error hint (`category: enqueue-error`) now walks operators through this diagnostic sequence in its text so the first places checked are the ones most likely to reveal the cause.
 | `BACKEND_UNSUPPORTED: PageChipInstances service unstable on this release` | `adt.integration.test.ts` FLP lists tiles | NW 7.50, some older S/4 | Recent S/4 |
 | `BACKEND_UNSUPPORTED: scope denied` (transport test) | `transport.integration.test.ts` type-W/R (customizing, repair) | Systems where user lacks `S_TRANSPRT` for non-K types | Full-privilege users |
 

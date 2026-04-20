@@ -376,12 +376,16 @@ describe('AdtApiError', () => {
       const classification = classifySapDomainError(423, 'Lock handle invalid');
       expect(classification?.category).toBe('enqueue-error');
       expect(classification?.hint).toContain('fresh lock');
-      // Hints at the stateful-session root cause (sap-contextid) so users who
-      // hit persistent 423 after retry know where to look.
+      // Mentions sap-contextid — the underlying mechanism — so users
+      // who already tried retries know to move to backend diagnostics.
       expect(classification?.hint).toContain('sap-contextid');
-      // Points at the correct tcode (SICF_SESSIONS for system-wide session
-      // management, NOT per-service SICF config).
+      // Concrete diagnostic step: capture LOCK response headers with curl.
+      expect(classification?.hint).toContain('curl');
+      // Points at backend session management (the most common fix).
       expect(classification?.hint).toContain('SICF_SESSIONS');
+      // Acknowledges that on older SAP_BASIS/SP levels the ADT framework
+      // itself may be the gap (apply SP / SAP Note).
+      expect(classification?.hint).toMatch(/SAP Note|SP /);
       expect(classification?.transaction).toBe('SICF_SESSIONS');
     });
 
