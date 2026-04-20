@@ -14,7 +14,14 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
-import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
+import {
+  callTool,
+  classifyToolErrorSkip,
+  connectClient,
+  expectToolError,
+  expectToolSuccess,
+  expectToolSuccessOrSkip,
+} from './helpers.js';
 
 describe('E2E SAPTransport Tests', () => {
   let client: Client;
@@ -48,6 +55,13 @@ describe('E2E SAPTransport Tests', () => {
       if (result.isError && result.content?.[0]?.text?.includes('transports not enabled')) {
         transportsEnabled = false;
         return ctx.skip('Transports not enabled on MCP server (--enable-transports)');
+      }
+      // Known NW 7.50 backend gap: transport create returns 400
+      // "user action is not supported". All downstream tests depend on this.
+      const releaseSkip = classifyToolErrorSkip(result);
+      if (releaseSkip !== null) {
+        transportsEnabled = false;
+        return ctx.skip(releaseSkip);
       }
 
       const text = expectToolSuccess(result);
@@ -144,6 +158,11 @@ describe('E2E SAPTransport Tests', () => {
         transportsEnabled = false;
         return ctx.skip('Transports not enabled on MCP server');
       }
+      const backendSkip = classifyToolErrorSkip(createResult);
+      if (backendSkip !== null) {
+        transportsEnabled = false;
+        return ctx.skip(backendSkip);
+      }
       const createText = expectToolSuccess(createResult);
       const match = createText.match(/([A-Z0-9]+K\d+)/);
       expect(match).toBeTruthy();
@@ -167,7 +186,7 @@ describe('E2E SAPTransport Tests', () => {
           description: `ARC-1 E2E type-W ${Date.now()}`,
           type: 'W',
         });
-        const text = expectToolSuccess(result);
+        const text = expectToolSuccessOrSkip(ctx, result);
         const match = text.match(/([A-Z0-9]+\w\d+)/);
         expect(match).toBeTruthy();
         id = match![1];
@@ -192,7 +211,7 @@ describe('E2E SAPTransport Tests', () => {
           action: 'create',
           description: `ARC-1 E2E reassign test ${Date.now()}`,
         });
-        const createText = expectToolSuccess(createResult);
+        const createText = expectToolSuccessOrSkip(ctx, createResult);
         const match = createText.match(/([A-Z0-9]+K\d+)/);
         expect(match).toBeTruthy();
         id = match![1];
@@ -227,7 +246,7 @@ describe('E2E SAPTransport Tests', () => {
         action: 'create',
         description: `ARC-1 E2E recursive-release ${Date.now()}`,
       });
-      const createText = expectToolSuccess(createResult);
+      const createText = expectToolSuccessOrSkip(ctx, createResult);
       const match = createText.match(/([A-Z0-9]+K\d+)/);
       expect(match).toBeTruthy();
       const id = match![1];

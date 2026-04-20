@@ -21,6 +21,46 @@ export interface FixtureSyncSummary {
   recreated: string[];
   unchanged: string[];
   deleted: string[];
+  /**
+   * Fixtures whose create/recreate hit a known backend quirk (e.g. NW 7.50
+   * lock-handle 423, DOMA/DTEL endpoint 404) — recorded here instead of
+   * aborting the whole sync so tests can cleanly skip via `requireOrSkip` /
+   * `expectToolSuccessOrSkip` based on the same taxonomy.
+   */
+  skipped: Array<{ label: string; reason: string }>;
+}
+
+/**
+ * Classify a fixture-sync error message against the release-gap / backend-quirk
+ * taxonomy. Kept in sync with `classifyToolErrorSkip()` in tests/e2e/helpers.ts
+ * and `ddicSkipReason()` in tests/integration/crud.lifecycle.integration.test.ts
+ * (see docs/integration-test-skips.md).
+ */
+export function classifyFixtureError(message: string): string | null {
+  if (/status 423.*invalid lock handle/i.test(message)) {
+    return 'NW 7.50 lock-handle session correlation differs — create+PUT sequence returns 423 on this release';
+  }
+  // A stale partial-create from a previous failed sync run: the object shell
+  // exists on SAP but wasn't indexed / populated, so our SAPSearch returns empty
+  // yet SAPWrite(create) fails with 500 "already exists". Rather than fighting
+  // it here — which would need a delete-under-lock that may also 423 on 7.50 —
+  // skip cleanly and surface the situation to the operator.
+  if (/A program or include already exists/i.test(message) || /does already exist/i.test(message)) {
+    return 'Stale partial-create detected (object exists on SAP but not indexed) — delete manually via SE80 and re-run sync';
+  }
+  if (/\/sap\/bc\/adt\/ddic\/domains(?:\/|\b).*(?:does not exist|not found)/i.test(message)) {
+    return '/ddic/domains endpoint not available on this release';
+  }
+  if (/\/sap\/bc\/adt\/ddic\/dataelements\b.*Unsupported Media Type/i.test(message)) {
+    return 'DTEL v2 content type not supported on this release';
+  }
+  if (/\/sap\/bc\/adt\/ddic\/tables(?:\?|\b).*(?:does not exist|not found)/i.test(message)) {
+    return '/ddic/tables collection not available on this release';
+  }
+  if (/\/sap\/bc\/adt\/packages\b.*(?:No suitable|does not exist)/i.test(message)) {
+    return '/packages endpoint not available on this release';
+  }
+  return null;
 }
 
 /**
@@ -33,6 +73,7 @@ export async function syncPersistentFixtures(client: Client): Promise<FixtureSyn
     recreated: [],
     unchanged: [],
     deleted: [],
+    skipped: [],
   };
 
   for (const obj of PERSISTENT_OBJECTS) {
@@ -44,9 +85,17 @@ export async function syncPersistentFixtures(client: Client): Promise<FixtureSyn
 
     if (!hasExpectedType && existingTypes.length === 0) {
       console.log(`    [setup] ${label}: missing -> creating from ${obj.fixture}`);
-      await createObjectFromFixture(client, obj);
-      await activateObject(client, obj.type, obj.name);
-      summary.created.push(label);
+      try {
+        await createObjectFromFixture(client, obj);
+        await activateObject(client, obj.type, obj.name);
+        summary.created.push(label);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const reason = classifyFixtureError(msg);
+        if (reason === null) throw err;
+        console.warn(`    [setup] ${label}: skipping — ${reason}`);
+        summary.skipped.push({ label, reason });
+      }
       continue;
     }
 
@@ -76,14 +125,27 @@ export async function syncPersistentFixtures(client: Client): Promise<FixtureSyn
     }
 
     console.log(`    [setup] ${label}: recreating from ${obj.fixture}`);
-    await createObjectFromFixture(client, obj);
-    await activateObject(client, obj.type, obj.name);
-    summary.recreated.push(label);
+    try {
+      await createObjectFromFixture(client, obj);
+      await activateObject(client, obj.type, obj.name);
+      summary.recreated.push(label);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const reason = classifyFixtureError(msg);
+      if (reason === null) throw err;
+      console.warn(`    [setup] ${label}: skipping recreate — ${reason}`);
+      summary.skipped.push({ label, reason });
+    }
   }
 
   console.log(
-    `    [setup] Fixture sync summary: created=${summary.created.length}, recreated=${summary.recreated.length}, unchanged=${summary.unchanged.length}, deleted=${summary.deleted.length}`,
+    `    [setup] Fixture sync summary: created=${summary.created.length}, recreated=${summary.recreated.length}, unchanged=${summary.unchanged.length}, deleted=${summary.deleted.length}, skipped=${summary.skipped.length}`,
   );
+  if (summary.skipped.length > 0) {
+    console.log(
+      `    [setup] Some fixtures skipped due to known backend gaps — affected tests will auto-skip. See docs/integration-test-skips.md.`,
+    );
+  }
   return summary;
 }
 
@@ -172,6 +234,14 @@ async function deleteObjectTypes(client: Client, name: string, types: string[], 
         console.warn(`    [setup] delete skipped for ${type} ${name}: ${text.slice(0, 240)}`);
         continue; // best-effort-cleanup
       }
+      // NW 7.50 lock-handle 423 quirk — the same pattern that breaks create+PUT
+      // also breaks lock+DELETE. Treat as skip so the sync doesn't abort.
+      if (/status 423.*invalid lock handle/i.test(text)) {
+        console.warn(
+          `    [setup] delete skipped for ${type} ${name}: NW 7.50 lock-handle 423 quirk (object remains; tests that need a fresh fixture will skip)`,
+        );
+        continue;
+      }
       throw new Error(`Failed to delete ${type} ${name}: ${text}`);
     }
     sink.push(`${type} ${name}`);
@@ -197,7 +267,11 @@ async function findExistingObjectTypes(client: Client, name: string): Promise<st
     const objectName = getString(entry, 'objectName');
     const objectType = getString(entry, 'objectType');
     if (!objectName || !objectType) continue;
-    if (objectName.toUpperCase() !== name.toUpperCase()) continue;
+    // On NW 7.50 the search result decorates the name with a display suffix
+    // like "ZIF_ARC1_TEST (Interface)". Normalize by stripping anything after
+    // the first space or "(" so equality matches the bare object name.
+    const bareName = objectName.split(/\s|\(/)[0];
+    if (bareName.toUpperCase() !== name.toUpperCase()) continue;
     types.add(objectType.split('/')[0].toUpperCase());
   }
   return [...types];

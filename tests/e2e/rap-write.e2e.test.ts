@@ -11,7 +11,13 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { requireOrSkip } from '../helpers/skip-policy.js';
-import { callTool, connectClient, expectToolSuccess } from './helpers.js';
+import {
+  callTool,
+  connectClient,
+  expectToolSuccess,
+  expectToolSuccessOrSkip,
+  skipOnBatchCreateFailure,
+} from './helpers.js';
 
 /** Generate a collision-safe unique name with a given prefix (max 30 chars).
  *  Uses letters-only encoding to avoid ABAP/CDS identifier issues —
@@ -75,7 +81,7 @@ describe('E2E RAP write lifecycle tests', () => {
 
   // ── Test 1: TABL table entity lifecycle (via TABL endpoint) ─────────
 
-  it('SAPManage create_package, verify, delete', async () => {
+  it('SAPManage create_package, verify, delete', async (ctx) => {
     // Use $-prefix: $TMP has software component LOCAL which only allows TEST* and $* names.
     // Z-namespace packages need a different software component (system-specific).
     const packageName = uniqueName('$ARC1T_');
@@ -86,7 +92,7 @@ describe('E2E RAP write lifecycle tests', () => {
       description: 'ARC-1 E2E test package',
       superPackage: '$TMP',
     });
-    expectToolSuccess(createResult);
+    expectToolSuccessOrSkip(ctx, createResult);
 
     try {
       const readResult = await callTool(client, 'SAPRead', {
@@ -133,7 +139,7 @@ describe('E2E RAP write lifecycle tests', () => {
       source: ddlSource,
       package: '$TMP',
     });
-    expectToolSuccess(createResult);
+    expectToolSuccessOrSkip(ctx, createResult);
 
     try {
       // Activate the table entity
@@ -197,7 +203,7 @@ describe('E2E RAP write lifecycle tests', () => {
       package: '$TMP',
       source: createSource,
     });
-    expectToolSuccess(createResult);
+    expectToolSuccessOrSkip(ctx, createResult);
 
     try {
       const readCreatedResult = await callTool(client, 'SAPRead', {
@@ -265,7 +271,7 @@ describe('E2E RAP write lifecycle tests', () => {
       source: tableSource,
       package: '$TMP',
     });
-    expectToolSuccess(createTableResult);
+    expectToolSuccessOrSkip(ctx, createTableResult);
 
     // Activate the table before building on top of it
     const activateTableResult = await callTool(client, 'SAPActivate', {
@@ -426,7 +432,8 @@ describe('E2E RAP write lifecycle tests', () => {
     ].join('\n');
 
     try {
-      expectToolSuccess(
+      expectToolSuccessOrSkip(
+        ctx,
         await callTool(client, 'SAPWrite', {
           action: 'create',
           type: 'TABL',
@@ -504,7 +511,7 @@ describe('E2E RAP write lifecycle tests', () => {
       source: tableSource,
       package: '$TMP',
     });
-    expectToolSuccess(createTableResult);
+    expectToolSuccessOrSkip(ctx, createTableResult);
 
     const activateTableResult = await callTool(client, 'SAPActivate', {
       type: 'TABL',
@@ -650,7 +657,8 @@ describe('E2E RAP write lifecycle tests', () => {
     ].join('\n');
 
     try {
-      expectToolSuccess(
+      expectToolSuccessOrSkip(
+        ctx,
         await callTool(client, 'SAPWrite', {
           action: 'create',
           type: 'TABL',
@@ -809,7 +817,10 @@ describe('E2E RAP write lifecycle tests', () => {
         },
       ],
     });
-    expectToolSuccess(batchResult);
+    // batch_create may surface aggregated failures via isError=true or via a
+    // success-shaped summary; handle both paths.
+    const batchText = expectToolSuccessOrSkip(ctx, batchResult);
+    if (skipOnBatchCreateFailure(ctx, batchText)) return;
 
     try {
       // Verify both objects were created by reading them back
@@ -845,7 +856,7 @@ describe('E2E RAP write lifecycle tests', () => {
   });
 
   // ─── Test 6: MSAG message class create → read → update → delete ──
-  it('SAPWrite create MSAG, read, update with messages, delete', async () => {
+  it('SAPWrite create MSAG, read, update with messages, delete', async (ctx) => {
     const msagName = uniqueName('ZARC1MC').slice(0, 20);
 
     try {
@@ -857,7 +868,7 @@ describe('E2E RAP write lifecycle tests', () => {
         package: '$TMP',
         description: 'ARC-1 test message class',
       });
-      const createText = expectToolSuccess(createResult);
+      const createText = expectToolSuccessOrSkip(ctx, createResult);
       expect(createText).toContain(`Created MSAG ${msagName}`);
 
       // Step 2: Read the message class — should return structured JSON
@@ -880,7 +891,7 @@ describe('E2E RAP write lifecycle tests', () => {
           { number: '002', shortText: 'Another message' },
         ],
       });
-      const updateText = expectToolSuccess(updateResult);
+      const updateText = expectToolSuccessOrSkip(ctx, updateResult);
       expect(updateText).toContain(`updated MSAG ${msagName}`);
 
       // Step 4: Read again — should have messages
