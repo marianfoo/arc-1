@@ -195,6 +195,53 @@ describe('CRUD lifecycle', () => {
     }
   }, 90_000);
 
+  it('DTEL create + delete (no PUT — exercises v2→v1 content-type fallback)', async (ctx) => {
+    // This test exercises ONLY the content-negotiated create path — not the
+    // full CRUD lifecycle that needs stateful lock+PUT (which hits the NW 7.50
+    // lock-handle session-correlation quirk). It catches the DTEL v1 fallback
+    // regression on older releases while staying green on modern systems too.
+    const name = generateUniqueName('ZARC1_DTCV1');
+    const url = `/sap/bc/adt/ddic/dataelements/${name}`;
+
+    try {
+      const xml = buildCreateXml('DTEL', name, '$TMP', 'ARC-1 DTEL v1 fallback test', {
+        typeKind: 'predefinedAbapType',
+        dataType: 'CHAR',
+        length: 10,
+      });
+      // The handler posts with DATAELEMENT_V2_CONTENT_TYPE. On SAP_BASIS < 7.52
+      // the server returns 415; createObject transparently retries with the
+      // v1 MIME type. Either way, the POST must succeed.
+      await createObject(client.http, client.safety, '/sap/bc/adt/ddic/dataelements', xml, DATAELEMENT_V2_CONTENT_TYPE);
+      registry.register(url, 'DTEL', name);
+
+      // Verify via SAPRead that the shell was created. Only assert the name —
+      // release-specific differences in how `predefinedAbapType` vs `domain`
+      // is stored for a shell DTEL (and how fields roundtrip via v1 vs v2)
+      // aren't what this test is about. The full semantics are covered by
+      // the `DTEL CRUD lifecycle` test on modern systems.
+      const created = await client.getDataElement(name);
+      expect(created.name).toBe(name);
+    } catch (err) {
+      const skip = ddicSkipReason(err);
+      if (skip) {
+        requireOrSkip(ctx, undefined, skip);
+      }
+      throw err;
+    } finally {
+      if (registry.getAll().some((entry) => entry.name === name)) {
+        try {
+          // Delete uses lock+DELETE which hits 423 on NW 7.50. Best-effort;
+          // the SM12 cleanup is the operator's problem on that release.
+          await deleteWithLock(url);
+          registry.remove(name);
+        } catch {
+          // best-effort-cleanup
+        }
+      }
+    }
+  }, 60_000);
+
   it('DTEL CRUD lifecycle', async (ctx) => {
     const dataElementName = generateUniqueName('ZARC1_TDEL');
     const dataElementUrl = `/sap/bc/adt/ddic/dataelements/${dataElementName}`;

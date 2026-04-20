@@ -356,7 +356,11 @@ describe('ADT Integration Tests', () => {
         const result = await client.getRevisions('CLAS', 'ZCL_ARC1_TEST', { include: 'main' });
         const first = result.revisions[0];
         requireOrSkip(ctx, first, 'No CLAS revisions available for ZCL_ARC1_TEST include=main');
-        expect(first.uri).toContain('/includes/main/versions/');
+        // Release-specific URI shape:
+        //   newer: .../includes/main/versions/<id>
+        //   older: .../source/main  (NW 7.50 — no /versions/ segment)
+        // Both are valid ADT paths — assert the anchor that's invariant.
+        expect(first.uri.startsWith('/sap/bc/adt/oo/classes/ZCL_ARC1_TEST')).toBe(true);
       } catch (err) {
         expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
         requireOrSkip(ctx, undefined, 'Persistent fixture ZCL_ARC1_TEST is missing on this system');
@@ -368,7 +372,8 @@ describe('ADT Integration Tests', () => {
         const result = await client.getRevisions('CLAS', 'ZCL_ARC1_TEST', { include: 'definitions' });
         const first = result.revisions[0];
         requireOrSkip(ctx, first, 'No CLAS definition revisions available for ZCL_ARC1_TEST');
-        expect(first.uri).toContain('/includes/definitions/versions/');
+        // Older releases return just the class-level URI; newer ones drill into /includes/definitions/versions/.
+        expect(first.uri.startsWith('/sap/bc/adt/oo/classes/ZCL_ARC1_TEST')).toBe(true);
       } catch (err) {
         expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
         requireOrSkip(
@@ -384,7 +389,8 @@ describe('ADT Integration Tests', () => {
         const result = await client.getRevisions('INTF', 'ZIF_ARC1_TEST');
         const first = result.revisions[0];
         requireOrSkip(ctx, first, 'No INTF revisions available for ZIF_ARC1_TEST');
-        expect(first.uri).toContain('/oo/interfaces/ZIF_ARC1_TEST/source/main/versions/');
+        // URI shape varies by release — /source/main (7.50) vs /source/main/versions/<id> (newer).
+        expect(first.uri).toContain('/oo/interfaces/ZIF_ARC1_TEST');
       } catch (err) {
         expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
         requireOrSkip(ctx, undefined, 'Persistent fixture ZIF_ARC1_TEST is missing on this system');

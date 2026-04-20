@@ -39,7 +39,8 @@ export interface SapErrorClassification {
     | 'activation-dependency'
     | 'transport-issue'
     | 'object-exists'
-    | 'method-not-supported';
+    | 'method-not-supported'
+    | 'icf-handler-not-bound';
   hint: string;
   transaction?: string;
   details?: Record<string, string>;
@@ -344,8 +345,30 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   if (typeId === 'ExceptionResourceInvalidLockHandle' || statusCode === 423) {
     return {
       category: 'enqueue-error',
-      hint: 'Lock handle is invalid or expired. The lock may have timed out. Retry the operation so ARC-1 acquires a fresh lock. If the error persists, check SM12 for stale lock entries.',
+      hint:
+        'Lock handle is invalid or expired. Retry the operation so ARC-1 acquires a fresh lock. ' +
+        'If this fails repeatedly, the SAP server may not be issuing the `sap-contextid` cookie needed ' +
+        'for stateful ADT sessions — check the `/sap/bc/adt` node in SICF (tcode `SICF`) and confirm ' +
+        'that server-cache / stateful-session mode is active. This is a common gap on NW 7.50 trial systems.',
       transaction: 'SM12',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  // /sap/bc/adt/datapreview/ddic and similar handlers can be registered in the
+  // ICF tree (visible in the discovery doc) but have no implementation class
+  // bound — every verb returns "No suitable resource found". Distinct from a
+  // generic 404 on a missing object: the message is service-routing, not
+  // resource-lookup. Surface a hint about activating the handler in SICF.
+  if (statusCode === 404 && /No suitable resource found/i.test(bodyRaw)) {
+    return {
+      category: 'icf-handler-not-bound',
+      hint:
+        'This ADT endpoint is registered in the ICF tree but its implementation class is not bound ' +
+        '(all verbs return 404). In tcode `SICF`, navigate to the service node and verify that its ' +
+        'handler class is active. Common on NW 7.50 trial systems for `/datapreview/ddic`, `/datapreview/cds`, ' +
+        'and `/datapreview/freestyle`.',
+      transaction: 'SICF',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }

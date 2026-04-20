@@ -63,13 +63,36 @@ Tests typically suffix these with a specific clause explaining *which* fixture o
 
 **When to investigate:** If `DOMA reads not supported` fires on a ≥ 7.54 system, double-check that the ICF service `/sap/bc/adt/ddic` is active in SICF. If `transport create not supported` fires on a production NW system, this is worth a bug report — our backend-compat probing may need tightening.
 
+### Root cause: `/datapreview/ddic` on NW 7.50 trials
+
+The endpoint IS registered in the NW 7.50 discovery doc with full template links (confirmed by `curl` against a live NPL 7.50 SP02 system), but every verb (GET, POST with SQL body, POST with empty body, the `/metadata` sub-resource, the `/freestyle` alternate) returns `HTTP 404 No suitable resource found`. The ICF service node exists but the ABAP **implementation class is not bound**.
+
+This is a server-side SICF configuration on the target trial VM, **not fixable from ARC-1 client code**. User workaround: `tcode SICF` → navigate to the `/sap/bc/adt/datapreview/ddic` node → verify that its handler class is active. The error classifier (`classifySapDomainError`) surfaces this exact hint when a `404 "No suitable resource found"` comes back (category: `icf-handler-not-bound`).
+
+### Root cause: DTEL v2 content-type 415 on pre-7.52
+
+ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8`. On NW 7.50/7.51 the backend only accepts the versionless `…dataelements.v1+xml` — same XML body, different MIME version suffix.
+
+**Fixed** in `src/adt/crud.ts` via a static `CONTENT_TYPE_FALLBACKS` map: on HTTP 415 for the v2 MIME type, `createObject` and `updateObject` transparently retry once with the v1 MIME type. DTEL create now works on NW 7.50. The follow-up DTEL update (lock → PUT) still hits the lock-handle 423 on 7.50 trials (see next category), so the full DTEL CRUD lifecycle on 7.50 remains gated by that separate issue.
+
 ## Category 3 — Backend quirk (trial systems, unstable services)
 
 **What it is:** Individual SAP services that either behave quirkily on trial editions or have known release-specific bugs (ABAP dumps, session-correlation oddities).
 
 | Skip message fragment | Affected tests | Typical on | Should NOT skip on |
 |---|---|---|---|
-| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle | NW 7.50 trial VM | Any other system |
+| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle, DTEL CRUD update step, RAP write + SKTD + MSAG on E2E | NW 7.50 trial VM | Any other system |
+
+### Root cause: lock-handle 423 on NW 7.50 trials
+
+Verified via wire-level `curl` diff between a working S/4HANA 2023 (`a4h.marianzeis.de`) and a failing NW 7.50 SP02 (`npl.marianzeis.de`):
+
+- **A4H (working):** the `LOCK` response includes `Set-Cookie: sap-contextid=SID%3aANON%3a…; path=/sap/bc/adt`. The stateful ADT session carries this token through the subsequent `PUT source/main`, and the lock handle is correctly paired with the session.
+- **NPL 7.50 (broken):** the `LOCK` response has **no `Set-Cookie` header at all**. The subsequent `PUT` arrives without a `sap-contextid` cookie; the server can't correlate the lock handle with a stateful session and returns `423 "Resource INCLUDE Z… is not locked (invalid lock handle)"`.
+
+The cookies that ARE present on NPL 7.50 (`SAP_SESSIONID_NPL_001`, `MYSAPSSO2`, `sap-usercontext`) are ICF-level session cookies, not the ADT stateful context cookie. This is an SAP server-side configuration: the trial VM's SICF profile doesn't have stateful-session support enabled for the `/sap/bc/adt` path. **Not fixable from ARC-1 client code.**
+
+User workaround: in `tcode SICF`, verify that the `/sap/bc/adt` service node has stateful session mode active (profile parameter `icm/HTTP/stateful_session_timeout` and service configuration). The 423 error hint (`category: enqueue-error`) now surfaces this pointer.
 | `BACKEND_UNSUPPORTED: PageChipInstances service unstable on this release` | `adt.integration.test.ts` FLP lists tiles | NW 7.50, some older S/4 | Recent S/4 |
 | `BACKEND_UNSUPPORTED: scope denied` (transport test) | `transport.integration.test.ts` type-W/R (customizing, repair) | Systems where user lacks `S_TRANSPRT` for non-K types | Full-privilege users |
 

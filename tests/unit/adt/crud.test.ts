@@ -281,6 +281,61 @@ describe('CRUD Operations', () => {
       const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
       await expect(createObject(http, safety, '/url', '<xml/>')).rejects.toThrow(AdtSafetyError);
     });
+
+    // ─── DTEL v1 content-type fallback (pre-7.52 compat) ────────────────
+
+    it('retries DTEL v2 create with v1 MIME on HTTP 415', async () => {
+      const http = mockHttp();
+      // First call: 415 on the versioned v2 type (what NW 7.50 returns).
+      // Second call: 201 after falling back to v1.
+      const error415 = new AdtApiError('Unsupported Media Type', 415, '/sap/bc/adt/ddic/dataelements', '');
+      (http.post as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(error415)
+        .mockResolvedValueOnce({ statusCode: 201, body: '<created/>', headers: {} });
+
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/ddic/dataelements',
+        '<wbobj/>',
+        'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8',
+      );
+
+      const calls = (http.post as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls).toHaveLength(2);
+      // First call used v2
+      expect(calls[0][2]).toBe('application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8');
+      // Second call used v1
+      expect(calls[1][2]).toBe('application/vnd.sap.adt.dataelements.v1+xml; charset=utf-8');
+    });
+
+    it('does not retry when 415 is returned for a non-fallback content type', async () => {
+      const http = mockHttp();
+      const error415 = new AdtApiError('Unsupported Media Type', 415, '/sap/bc/adt/oo/classes', '');
+      (http.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(error415);
+
+      await expect(
+        createObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes', '<xml/>', 'application/xml'),
+      ).rejects.toThrow(error415);
+      expect(http.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry on non-415 errors even for fallback-capable content types', async () => {
+      const http = mockHttp();
+      const error400 = new AdtApiError('Bad Request', 400, '/sap/bc/adt/ddic/dataelements', '');
+      (http.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(error400);
+
+      await expect(
+        createObject(
+          http,
+          unrestrictedSafetyConfig(),
+          '/sap/bc/adt/ddic/dataelements',
+          '<wbobj/>',
+          'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8',
+        ),
+      ).rejects.toThrow(error400);
+      expect(http.post).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ─── updateSource ──────────────────────────────────────────────────
