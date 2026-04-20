@@ -20,6 +20,7 @@ import { probeType } from '../../../src/probe/runner.js';
 const SYNTHETIC_752 = 'tests/fixtures/probe/synthetic-752';
 const S4HANA_2023 = 'tests/fixtures/probe/s4hana-2023-onprem-abap-trial';
 const NPL_750 = 'tests/fixtures/probe/npl-750-sp02-dev-edition';
+const ECC_EHP8_750_SP31 = 'tests/fixtures/probe/ecc-ehp8-nw750-sp31-onprem-prod';
 
 describe('probe replay — synthetic 7.52 fixture', () => {
   it('classifies each recorded type correctly', async () => {
@@ -198,5 +199,68 @@ describe('probe replay — npl-750-sp02-dev-edition fixture (recorded from real 
     expect(q.verdictHistogram['unavailable-likely']).toBe(3);
     expect(q.verdictHistogram['auth-blocked']).toBe(0);
     expect(q.verdictHistogram.ambiguous).toBe(3);
+  });
+});
+
+describe('probe replay — ecc-ehp8-nw750-sp31-onprem-prod fixture (contributed via #170, real ECC EhP8 on NW 7.50 SP31)', () => {
+  it('captures ECC EhP8 product markers (SAP_APPL 618)', async () => {
+    const { meta } = createReplayFetcher(ECC_EHP8_750_SP31);
+
+    expect(meta.abapRelease).toBe('750');
+
+    const basis = meta.products?.find((p) => p.name.toUpperCase() === 'SAP_BASIS');
+    const appl = meta.products?.find((p) => p.name.toUpperCase() === 'SAP_APPL');
+
+    // SAP_APPL 618 is the canonical marker for ECC 6.0 EhP8 — proves this fixture
+    // is a real productive ERP system, not a plain NetWeaver or trial edition.
+    expect(basis?.release).toBe('750');
+    expect(basis?.spLevel).toBe('0031');
+    expect(appl?.release).toBe('618');
+  });
+
+  it('classifies DDLS and DCLS as available via known-object reads despite collection 500s', async () => {
+    const { fetcher, meta } = createReplayFetcher(ECC_EHP8_750_SP31);
+    const discoveryMap = discoveryMapFromMeta(meta);
+
+    // On this system the CDS/DCL collection endpoints return HTTP 500 ("No URI-Mapping
+    // defined for URI") — but I_LANGUAGE and P_USER002 read back cleanly. This is
+    // exactly the "known-object trumps collection" scenario the probe was designed for,
+    // and the regression guard for the #170 contribution.
+    for (const type of ['DDLS', 'DCLS']) {
+      const entry = getCatalogEntry(type);
+      if (!entry) throw new Error(`Missing catalog entry for ${type}`);
+      const result = await probeType(fetcher, entry, discoveryMap, meta.abapRelease);
+      expect(result.verdict, `${type} on EhP8/7.50 should be available via known object`).toBe('available-high');
+    }
+  });
+
+  it('reports RAP-era types (BDEF, SRVD, SRVB) as unavailable on this EhP8 system', async () => {
+    const { fetcher, meta } = createReplayFetcher(ECC_EHP8_750_SP31);
+    const discoveryMap = discoveryMapFromMeta(meta);
+
+    for (const type of ['BDEF', 'SRVD', 'SRVB']) {
+      const entry = getCatalogEntry(type);
+      if (!entry) throw new Error(`Missing catalog entry for ${type}`);
+      const result = await probeType(fetcher, entry, discoveryMap, meta.abapRelease);
+      expect(result.verdict, `${type} on EhP8/7.50 should be unavailable`).toBe('unavailable-high');
+    }
+  });
+
+  it('runs the full catalog without throwing and produces a sensible quality profile', async () => {
+    const { fetcher, meta } = createReplayFetcher(ECC_EHP8_750_SP31);
+    const discoveryMap = discoveryMapFromMeta(meta);
+
+    const results = [];
+    for (const entry of CATALOG) {
+      results.push(await probeType(fetcher, entry, discoveryMap, meta.abapRelease));
+    }
+    const q = computeQuality(results);
+
+    expect(q.coverage.discovery).toBe(1);
+    expect(q.coverage.release).toBe(1);
+    // At least one available verdict (the core ABAP types plus DDLS/DCLS) —
+    // a regression here would mean classification broke for this fixture.
+    const availableSum = q.verdictHistogram['available-high'] + q.verdictHistogram['available-medium'];
+    expect(availableSum).toBeGreaterThan(0);
   });
 });
