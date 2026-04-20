@@ -20,7 +20,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AdtClient } from '../../src/adt/client.js';
 import { CachingLayer } from '../../src/cache/caching-layer.js';
 import { MemoryCache } from '../../src/cache/memory.js';
@@ -28,26 +28,70 @@ import { SqliteCache } from '../../src/cache/sqlite.js';
 import { runWarmup } from '../../src/cache/warmup.js';
 import { handleToolCall } from '../../src/handlers/intent.js';
 import { DEFAULT_CONFIG } from '../../src/server/types.js';
+import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { getTestClient, requireSapCredentials } from './helpers.js';
 
-/** Known Z class on this SAP system — small, fast to fetch */
-const TEST_CLASS = 'ZCL_MCPT_26256';
-/** Known Z class with dependencies — used for dep graph tests */
+/**
+ * Known Z class on the target SAP system — small, fast to fetch.
+ * Use one of the persistent e2e fixtures (see `tests/e2e/fixtures.ts`) so this
+ * works on any system where `npm run test:e2e` has been run once.
+ *
+ * Before: `ZCL_MCPT_26256` was hardcoded here — a leaked test-run artifact
+ * from the original author's machine that would never exist on any other
+ * system. That caused the cache suite to hard-fail on every fresh SAP box.
+ */
+const TEST_CLASS = 'ZCL_ARC1_TEST';
+/** Known Z class with dependencies — used for dep graph tests. S/4-only BOBF demo. */
 const TEST_CLASS_WITH_DEPS = 'ZCL_DEMO_D_CALC_AMOUNT';
 /** Package that contains the test classes with deps */
 const _TEST_PACKAGE = '$DEMO_SOI_DRAFT';
 
 describe('Cache Integration Tests', () => {
   let client: AdtClient;
+  let hasTestClass = false;
+  let hasTestClassWithDeps = false;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     requireSapCredentials();
     client = getTestClient();
+    // Probe fixture availability once — each test then skips cleanly if absent.
+    try {
+      await client.getClass(TEST_CLASS);
+      hasTestClass = true;
+    } catch {
+      hasTestClass = false;
+    }
+    try {
+      await client.getClass(TEST_CLASS_WITH_DEPS);
+      hasTestClassWithDeps = true;
+    } catch {
+      hasTestClassWithDeps = false;
+    }
   });
+
+  /** Gate a test on the base-cache fixture being present. */
+  function requireCacheFixture(ctx: import('vitest').TaskContext): void {
+    if (!hasTestClass) {
+      requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (${TEST_CLASS}) — run npm run test:e2e once to seed`);
+    }
+  }
+
+  /** Gate a test on the dep-graph fixture (S/4 BOBF demo) being present. */
+  function requireDepGraphFixture(ctx: import('vitest').TaskContext): void {
+    if (!hasTestClassWithDeps) {
+      requireOrSkip(
+        ctx,
+        undefined,
+        `${SkipReason.NO_FIXTURE} (${TEST_CLASS_WITH_DEPS}) — S/4 BOBF demo not on this system`,
+      );
+    }
+  }
 
   // ─── Source Cache (Memory) ─────────────────────────────────────────
 
   describe('MemoryCache source caching', () => {
+    beforeEach((ctx) => requireCacheFixture(ctx));
+
     it('returns MISS then HIT for same object', async () => {
       const cache = new MemoryCache();
       const cl = new CachingLayer(cache);
@@ -72,8 +116,10 @@ describe('Cache Integration Tests', () => {
       await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
       const hitMs = Date.now() - t1;
 
-      // Cache hit should be at least 10x faster than network fetch
-      expect(hitMs).toBeLessThan(Math.max(missMs / 10, 5));
+      // Cache hit should be dramatically faster than a network fetch.
+      // Floor of 50ms absorbs scheduler jitter on slow/remote SAP systems
+      // (observed ~80ms on a trans-Atlantic 7.50 trial VM).
+      expect(hitMs).toBeLessThan(Math.max(missMs / 10, 50));
     }, 15000);
 
     it('invalidation causes next fetch to go to SAP', async () => {
@@ -130,6 +176,8 @@ describe('Cache Integration Tests', () => {
       dbPath = path.join(os.tmpdir(), `arc1-cache-test-${Date.now()}.db`);
     });
 
+    beforeEach((ctx) => requireCacheFixture(ctx));
+
     afterAll(() => {
       try {
         fs.unlinkSync(dbPath);
@@ -173,6 +221,14 @@ describe('Cache Integration Tests', () => {
   // ─── Dependency Graph Caching via handleToolCall ──────────────────
 
   describe('dep graph caching (via SAPContext handler)', () => {
+    // Dep-graph tests use the BOBF demo class which only exists on S/4 systems.
+    // The third test (SAPRead) uses TEST_CLASS instead; both gates keep the
+    // suite honest on any system.
+    beforeEach((ctx) => {
+      requireCacheFixture(ctx);
+      requireDepGraphFixture(ctx);
+    });
+
     it('first SAPContext deps call is not cached; second is cached', async () => {
       const cl = new CachingLayer(new MemoryCache());
 
@@ -230,7 +286,8 @@ describe('Cache Integration Tests', () => {
       const cachedMs = Date.now() - t1;
 
       // Cache hit should be at least 10x faster
-      expect(cachedMs).toBeLessThan(Math.max(firstMs / 10, 5));
+      // 50ms floor absorbs scheduler jitter on slow/remote SAP systems.
+      expect(cachedMs).toBeLessThan(Math.max(firstMs / 10, 50));
     }, 30000);
 
     it('SAPRead for same object in same session returns instantly from cache', async () => {
@@ -260,14 +317,16 @@ describe('Cache Integration Tests', () => {
       );
       const cachedMs = Date.now() - t1;
 
-      expect(cachedMs).toBeLessThan(Math.max(firstMs / 10, 5));
+      // 50ms floor absorbs scheduler jitter on slow/remote SAP systems.
+      expect(cachedMs).toBeLessThan(Math.max(firstMs / 10, 50));
     }, 15000);
   });
 
   // ─── SAPManage Cache Stats ────────────────────────────────────────
 
   describe('SAPManage cache_stats', () => {
-    it('returns stats after reads', async () => {
+    it('returns stats after reads', async (ctx) => {
+      requireCacheFixture(ctx);
       const cl = new CachingLayer(new MemoryCache());
 
       // Do a read to populate cache
@@ -315,7 +374,8 @@ describe('Cache Integration Tests', () => {
   // ─── Usages: Error Message Without Warmup ─────────────────────────
 
   describe('SAPContext usages without warmup', () => {
-    it('returns informative error when warmup not run', async () => {
+    it('returns informative error when warmup not run', async (ctx) => {
+      requireDepGraphFixture(ctx);
       const cl = new CachingLayer(new MemoryCache()); // no warmup
 
       const r = await handleToolCall(
@@ -336,19 +396,29 @@ describe('Cache Integration Tests', () => {
   // ─── Warmup ───────────────────────────────────────────────────────
 
   describe('warmup', () => {
-    it('TADIR query returns custom CLAS/INTF objects (Z prefix)', async () => {
+    it('TADIR query returns custom CLAS/INTF objects (Z prefix)', async (ctx) => {
       // Verify enumeration works directly
       const cl = new CachingLayer(new MemoryCache());
       const result = await runWarmup(client, cl, 'Z*,Y*,$DEMO_SOI_DRAFT,$TMP');
-      // At minimum the Z* object names should be found (regardless of package)
-      // Note: package filter is by DEVCLASS, so $DEMO_SOI_DRAFT should match those classes
+      // A fresh SAP system may have zero custom objects — that's a valid state,
+      // not a product bug. Skip rather than pretend warmup is broken.
+      if (result.totalObjects === 0) {
+        requireOrSkip(
+          ctx,
+          undefined,
+          'No custom CLAS/INTF found — system has no Z*/Y* or $DEMO_SOI_DRAFT/$TMP objects',
+        );
+      }
       expect(result.totalObjects).toBeGreaterThan(0);
     }, 60000);
 
-    it('warmup indexes objects into cache (nodes + sources)', async () => {
+    it('warmup indexes objects into cache (nodes + sources)', async (ctx) => {
       const cl = new CachingLayer(new MemoryCache());
       const result = await runWarmup(client, cl, '$DEMO_SOI_DRAFT,$TMP');
 
+      if (result.totalObjects === 0) {
+        requireOrSkip(ctx, undefined, 'No objects in $DEMO_SOI_DRAFT/$TMP — system has nothing to index');
+      }
       const stats = cl.stats();
       // Objects should be indexed
       expect(result.fetched).toBeGreaterThan(0);
@@ -376,7 +446,8 @@ describe('Cache Integration Tests', () => {
       expect(run2.fetched).toBe(0); // nothing new to fetch
     }, 120000);
 
-    it('usages returns reverse deps after warmup', async () => {
+    it('usages returns reverse deps after warmup', async (ctx) => {
+      requireDepGraphFixture(ctx);
       const cl = new CachingLayer(new MemoryCache());
       // Use package that contains classes with known inter-dependencies
       await runWarmup(client, cl, '$DEMO_SOI_DRAFT');
@@ -390,7 +461,8 @@ describe('Cache Integration Tests', () => {
       expect(Array.isArray(usages)).toBe(true);
     }, 120000);
 
-    it('SAPContext usages action returns result after warmup', async () => {
+    it('SAPContext usages action returns result after warmup', async (ctx) => {
+      requireDepGraphFixture(ctx);
       const cl = new CachingLayer(new MemoryCache());
       await runWarmup(client, cl, '$DEMO_SOI_DRAFT');
 
@@ -414,7 +486,8 @@ describe('Cache Integration Tests', () => {
   // ─── Cache-Aware compressContext ─────────────────────────────────
 
   describe('compressContext with caching layer', () => {
-    it('dep graph is stored in cache after first compressContext', async () => {
+    it('dep graph is stored in cache after first compressContext', async (ctx) => {
+      requireDepGraphFixture(ctx);
       const cl = new CachingLayer(new MemoryCache());
 
       const source = await client.getClass(TEST_CLASS_WITH_DEPS);
