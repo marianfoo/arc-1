@@ -376,8 +376,13 @@ describe('AdtApiError', () => {
       const classification = classifySapDomainError(423, 'Lock handle invalid');
       expect(classification?.category).toBe('enqueue-error');
       expect(classification?.hint).toContain('fresh lock');
+      // Hints at the stateful-session root cause (sap-contextid) so users who
+      // hit persistent 423 after retry know where to look.
       expect(classification?.hint).toContain('sap-contextid');
-      expect(classification?.transaction).toBe('SM12');
+      // Points at the correct tcode (SICF_SESSIONS for system-wide session
+      // management, NOT per-service SICF config).
+      expect(classification?.hint).toContain('SICF_SESSIONS');
+      expect(classification?.transaction).toBe('SICF_SESSIONS');
     });
 
     it('classifies 404 "No suitable resource found" as ICF handler not bound', () => {
@@ -387,6 +392,9 @@ describe('AdtApiError', () => {
       );
       expect(classification?.category).toBe('icf-handler-not-bound');
       expect(classification?.hint).toContain('SICF');
+      // The hint distinguishes the ADT-framework-level "No suitable resource"
+      // path from a regular missing-object 404.
+      expect(classification?.hint).toContain('Handler List');
       expect(classification?.transaction).toBe('SICF');
     });
 

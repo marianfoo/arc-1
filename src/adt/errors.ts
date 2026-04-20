@@ -346,28 +346,37 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
     return {
       category: 'enqueue-error',
       hint:
-        'Lock handle is invalid or expired. Retry the operation so ARC-1 acquires a fresh lock. ' +
-        'If this fails repeatedly, the SAP server may not be issuing the `sap-contextid` cookie needed ' +
-        'for stateful ADT sessions — check the `/sap/bc/adt` node in SICF (tcode `SICF`) and confirm ' +
-        'that server-cache / stateful-session mode is active. This is a common gap on NW 7.50 trial systems.',
-      transaction: 'SM12',
+        'Lock handle is invalid or expired. First: retry the operation so ARC-1 acquires a fresh ' +
+        'lock — transient expiry is the common case. If 423 persists after retry (especially on the ' +
+        'first PUT immediately after a successful LOCK), the backend is not issuing the `sap-contextid` ' +
+        'cookie needed to pair the lock handle with a stateful ADT session. This is a system-level ' +
+        'setting, not a per-service SICF flag: HTTP security session management must be activated via ' +
+        'tcode `SICF_SESSIONS` for the target client, and profile parameters `http/security_session_timeout` ' +
+        'and `http/security_context_cache_size` must be set (tcode `RZ10`). This is a Basis-level ' +
+        'configuration; if unsure, ask your Basis admin to verify stateful session support for ' +
+        '`/sap/bc/adt`.',
+      transaction: 'SICF_SESSIONS',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }
 
-  // /sap/bc/adt/datapreview/ddic and similar handlers can be registered in the
-  // ICF tree (visible in the discovery doc) but have no implementation class
-  // bound — every verb returns "No suitable resource found". Distinct from a
-  // generic 404 on a missing object: the message is service-routing, not
-  // resource-lookup. Surface a hint about activating the handler in SICF.
+  // Some ADT endpoints return `HTTP 404 "No suitable resource found"` for every
+  // verb while still appearing in `/discovery` — this is the ADT framework's
+  // way of saying the resource URI didn't match any registered handler inside
+  // the ADT framework (or the ICF service is active but its handler class is
+  // not bound). Distinct from a regular "does not exist" 404 on a missing
+  // object. See `icf-handler-not-bound`.
   if (statusCode === 404 && /No suitable resource found/i.test(bodyRaw)) {
     return {
       category: 'icf-handler-not-bound',
       hint:
-        'This ADT endpoint is registered in the ICF tree but its implementation class is not bound ' +
-        '(all verbs return 404). In tcode `SICF`, navigate to the service node and verify that its ' +
-        'handler class is active. Common on NW 7.50 trial systems for `/datapreview/ddic`, `/datapreview/cds`, ' +
-        'and `/datapreview/freestyle`.',
+        'The ADT framework returned "No suitable resource found" — this endpoint is listed in ' +
+        '`/sap/bc/adt/discovery` but no handler matches the URI. In tcode `SICF`, navigate to the ' +
+        'service node under `/default_host/sap/bc/adt/...` and verify (a) the service is activated ' +
+        'and (b) its "Handler List" tab references the correct ADT handler class. If the service ' +
+        'looks active, the ADT framework itself may be missing the internal resource registration ' +
+        '(often caused by incomplete activation after an upgrade or on minimally-configured ' +
+        'systems). Consult your Basis admin or SAP KBA 3128830 (Troubleshooting ICF 404 Errors).',
       transaction: 'SICF',
       details: typeId ? { exceptionType: typeId } : undefined,
     };

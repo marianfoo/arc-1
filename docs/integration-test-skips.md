@@ -63,17 +63,21 @@ Tests typically suffix these with a specific clause explaining *which* fixture o
 
 **When to investigate:** If `DOMA reads not supported` fires on a ≥ 7.54 system, double-check that the ICF service `/sap/bc/adt/ddic` is active in SICF. If `transport create not supported` fires on a production NW system, this is worth a bug report — our backend-compat probing may need tightening.
 
-### Root cause: `/datapreview/ddic` on NW 7.50 trials
+### Root cause: `/datapreview/ddic` 404 "No suitable resource found"
 
-The endpoint IS registered in the NW 7.50 discovery doc with full template links (confirmed by `curl` against a live NPL 7.50 SP02 system), but every verb (GET, POST with SQL body, POST with empty body, the `/metadata` sub-resource, the `/freestyle` alternate) returns `HTTP 404 No suitable resource found`. The ICF service node exists but the ABAP **implementation class is not bound**.
+We've seen this on minimally-configured systems where the endpoint IS registered in the discovery doc with full template links, but every verb (GET, POST with SQL body, POST with empty body, the `/metadata` sub-resource, the `/freestyle` alternate) returns `HTTP 404 "No suitable resource found"`. Same class of issue can surface on any SAP release — it just means the ADT framework can't route the URI to any handler.
 
-This is a server-side SICF configuration on the target trial VM, **not fixable from ARC-1 client code**. User workaround: `tcode SICF` → navigate to the `/sap/bc/adt/datapreview/ddic` node → verify that its handler class is active. The error classifier (`classifySapDomainError`) surfaces this exact hint when a `404 "No suitable resource found"` comes back (category: `icf-handler-not-bound`).
+Two possible root causes:
+1. The ICF service node is activated but its handler class isn't bound (check the **Handler List** tab in `tcode SICF`).
+2. The service is active with a handler class, but the ADT framework's internal resource registration is missing (typically after incomplete upgrades or on trial/dev-edition SAP installations).
 
-### Root cause: DTEL v2 content-type 415 on pre-7.52
+Not fixable from ARC-1 client code. The error classifier (`classifySapDomainError`) surfaces a detailed hint when this comes back (category: `icf-handler-not-bound`), pointing at `tcode SICF` → Handler List + SAP KBA 3128830 ("Troubleshooting ICF 404 Errors").
 
-ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8`. On NW 7.50/7.51 the backend only accepts the versionless `…dataelements.v1+xml` — same XML body, different MIME version suffix.
+### Root cause: DTEL v2 content-type 415 on older releases
 
-**Fixed** in `src/adt/crud.ts` via a static `CONTENT_TYPE_FALLBACKS` map: on HTTP 415 for the v2 MIME type, `createObject` and `updateObject` transparently retry once with the v1 MIME type. DTEL create now works on NW 7.50. The follow-up DTEL update (lock → PUT) still hits the lock-handle 423 on 7.50 trials (see next category), so the full DTEL CRUD lifecycle on 7.50 remains gated by that separate issue.
+ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8`. Older SAP_BASIS releases (pre-7.52) only accept the v1 MIME type `…dataelements.v1+xml` — same XML body, different MIME version suffix.
+
+**Fixed** in `src/adt/crud.ts` via a static `CONTENT_TYPE_FALLBACKS` map: on HTTP 415 for the v2 MIME type, `createObject` and `updateObject` transparently retry once with the v1 MIME type. DTEL create now works across releases. Follow-up DTEL updates (lock → PUT) may still hit a stateful-session issue on systems without `sap-contextid` cookie support — see the lock-handle 423 section below.
 
 ## Category 3 — Backend quirk (trial systems, unstable services)
 
@@ -81,18 +85,25 @@ ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.s
 
 | Skip message fragment | Affected tests | Typical on | Should NOT skip on |
 |---|---|---|---|
-| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle, DTEL CRUD update step, RAP write + SKTD + MSAG on E2E | NW 7.50 trial VM | Any other system |
+| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle, DTEL CRUD update step, RAP write + SKTD + MSAG on E2E | Systems without HTTP security session management enabled | Systems with `SICF_SESSIONS` activated for the target client |
 
-### Root cause: lock-handle 423 on NW 7.50 trials
+### Root cause: persistent lock-handle 423 after successful LOCK
 
-Verified via wire-level `curl` diff between a working S/4HANA 2023 (`a4h.marianzeis.de`) and a failing NW 7.50 SP02 (`npl.marianzeis.de`):
+Verified via wire-level `curl` diff between a healthy SAP system and a system where this error reproduces:
 
-- **A4H (working):** the `LOCK` response includes `Set-Cookie: sap-contextid=SID%3aANON%3a…; path=/sap/bc/adt`. The stateful ADT session carries this token through the subsequent `PUT source/main`, and the lock handle is correctly paired with the session.
-- **NPL 7.50 (broken):** the `LOCK` response has **no `Set-Cookie` header at all**. The subsequent `PUT` arrives without a `sap-contextid` cookie; the server can't correlate the lock handle with a stateful session and returns `423 "Resource INCLUDE Z… is not locked (invalid lock handle)"`.
+- **Healthy:** the `LOCK` response on `/sap/bc/adt/.../{name}` includes `Set-Cookie: sap-contextid=SID%3a…; path=/sap/bc/adt`. The stateful ADT session carries this token through the subsequent `PUT .../source/main`, and the lock handle is correctly paired with the session.
+- **Broken:** the `LOCK` response has **no `Set-Cookie` header at all**. The subsequent `PUT` arrives without a `sap-contextid` cookie; the server can't correlate the lock handle with a stateful session and returns `423 "Resource INCLUDE Z… is not locked (invalid lock handle)"`.
 
-The cookies that ARE present on NPL 7.50 (`SAP_SESSIONID_NPL_001`, `MYSAPSSO2`, `sap-usercontext`) are ICF-level session cookies, not the ADT stateful context cookie. This is an SAP server-side configuration: the trial VM's SICF profile doesn't have stateful-session support enabled for the `/sap/bc/adt` path. **Not fixable from ARC-1 client code.**
+The cookies that may still be present (e.g. `SAP_SESSIONID_<SID>_<CLIENT>`, `MYSAPSSO2`, `sap-usercontext`) are ICF-level authentication / load-balancer cookies, not the ADT stateful context cookie.
 
-User workaround: in `tcode SICF`, verify that the `/sap/bc/adt` service node has stateful session mode active (profile parameter `icm/HTTP/stateful_session_timeout` and service configuration). The 423 error hint (`category: enqueue-error`) now surfaces this pointer.
+**This is a server-side SAP configuration, not an ARC-1 client bug.** It is **not** a per-service SICF toggle. The correct lever is system-wide HTTP security session management:
+
+1. **`tcode SICF_SESSIONS`** — activate HTTP security session management for the target client.
+2. **Profile parameters (`tcode RZ10`)** — `http/security_session_timeout` (default 1800s), `http/security_context_cache_size` (default 2500), `login/create_sso2_ticket` (set appropriately when session management is enabled).
+
+If these are already set and the server still doesn't issue `sap-contextid`, it's a Basis-level issue — the `/sap/bc/adt` handler might be bypassing the session cookie or the ICM is configured with session management disabled globally. Worth a Basis admin ticket.
+
+The 423 error hint (`category: enqueue-error`) now points at `SICF_SESSIONS` + the relevant profile parameters so operators hit the right lever instead of chasing per-service SICF config.
 | `BACKEND_UNSUPPORTED: PageChipInstances service unstable on this release` | `adt.integration.test.ts` FLP lists tiles | NW 7.50, some older S/4 | Recent S/4 |
 | `BACKEND_UNSUPPORTED: scope denied` (transport test) | `transport.integration.test.ts` type-W/R (customizing, repair) | Systems where user lacks `S_TRANSPRT` for non-K types | Full-privilege users |
 
