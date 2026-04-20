@@ -5,7 +5,7 @@ This guide documents a repeatable way to run `SAP NetWeaver AS ABAP 7.50 SP02 De
 It is based on:
 - SAP's `7.50 SP02` developer-edition installation guidance
 - SAP's official getting-started guide for the `NPL` appliance family
-- the working KVM installation used for ARC-1 on `65.109.59.210`
+- a working KVM installation used for ARC-1 validation
 
 This guide intentionally skips the dead ends and only keeps the steps that mattered in the final working setup.
 
@@ -46,7 +46,7 @@ This guide uses:
 
 - guest hostname `vhcalnplci`
 - SAP SID `NPL`
-- guest IP `10.0.2.15`
+- guest IP `<guest-ip>`
 - host ports `7522`, `7520`, `7530`, `7500`, `7543`
 
 You can change the public port numbers, but do not change the SAP-internal SID or instance numbers.
@@ -301,7 +301,7 @@ Set the hostname mapping to the real guest IP in:
 Use a line like:
 
 ```text
-10.0.2.15 vhcalnplci.localdomain vhcalnplci
+<guest-ip> vhcalnplci.localdomain vhcalnplci
 ```
 
 Then verify:
@@ -326,7 +326,7 @@ If ASE is only on `127.0.1.1:4901`, update:
 /sybase/NPL/interfaces
 ```
 
-The `NPL`, `NPL_BS`, and `NPL_JSAGENT` entries must point to the real guest IP, for example `10.0.2.15`. Use a real editor and real tab-separated formatting. Do not write escaped `\t` strings into the file.
+The `NPL`, `NPL_BS`, and `NPL_JSAGENT` entries must point to the real guest IP, for example `<guest-ip>`. Use a real editor and real tab-separated formatting. Do not write escaped `\t` strings into the file.
 
 Restart ASE after the edit and verify it now listens on the guest IP.
 
