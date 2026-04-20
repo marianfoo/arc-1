@@ -18,7 +18,7 @@ import { computeQuality } from '../../../src/probe/quality.js';
 import { probeType } from '../../../src/probe/runner.js';
 
 const SYNTHETIC_752 = 'tests/fixtures/probe/synthetic-752';
-const S4HANA_2023 = 'tests/fixtures/probe/s4hana-2023-onprem';
+const S4HANA_2023 = 'tests/fixtures/probe/s4hana-2023-onprem-abap-trial';
 const NPL_750 = 'tests/fixtures/probe/npl-750-sp02-dev-edition';
 
 describe('probe replay — synthetic 7.52 fixture', () => {
@@ -79,7 +79,7 @@ describe('probe replay — synthetic 7.52 fixture', () => {
   });
 });
 
-describe('probe replay — s4hana-2023-onprem fixture (recorded from real A4H)', () => {
+describe('probe replay — s4hana-2023-onprem-abap-trial fixture (recorded from A4H, abap-cloud-developer-trial:2023)', () => {
   it('captures S/4HANA 2023 product markers (not just SAP_BASIS)', async () => {
     const { meta } = createReplayFetcher(S4HANA_2023);
     expect(meta.abapRelease).toBe('758');
