@@ -30,6 +30,20 @@ npm run probe -- --types BDEF,SRVD,DDLS
 
 Env is read from `.env`. `TEST_SAP_URL`/`TEST_SAP_USER`/`TEST_SAP_PASSWORD` take precedence over `SAP_URL`/`SAP_USER`/`SAP_PASSWORD` so you can point the probe at a dedicated scratch system without touching your dev config.
 
+### Cookie-based authentication
+
+For systems that front ADT with SSO / SAML / MFA (where username + password won't authenticate directly), use a session cookie instead. Grab a live session cookie from the browser after you've logged in, then:
+
+```bash
+# Either: Netscape-format cookie file (exported via a browser extension)
+SAP_COOKIE_FILE=/path/to/cookies.txt npm run probe
+
+# Or: inline "k=v; k=v" header string
+SAP_COOKIE_STRING='MYSAPSSO2=...; sap-contextid=...' npm run probe
+```
+
+When cookies are set, `TEST_SAP_USER` / `TEST_SAP_PASSWORD` are optional.
+
 ## Reading the output
 
 ```
@@ -79,10 +93,14 @@ tests/fixtures/probe/<system-name>/
 
 These fixtures are read back by [`tests/unit/probe/replay.test.ts`](../tests/unit/probe/replay.test.ts) via `createReplayFetcher(dir)`. No SAP connection needed; the unit tests guarantee the classifier keeps making the right decisions on the recorded bytes forever.
 
+### Why there's a `synthetic-752` fixture next to the real ones
+
+Real-system fixtures are rich but non-exhaustive — a given SAP system may never emit the HTTP 400 "valid endpoint, bad params" response or the uniform 401/403 "auth blocked" pattern. The hand-crafted `synthetic-752` fixture deterministically covers every decision branch in [`classifyVerdict`](../src/probe/runner.ts), most importantly the `ok-400-bad-params` path which is the [#94 / #95 regression guard](https://github.com/marianfoo/arc-1/pull/96) against classifying HTTP 400 as "unavailable". Keep it even as real fixtures accumulate — it's the branch-coverage fixture, not a redundant sample.
+
 ### How to contribute a fixture set from your own system
 
-1. Run `npm run probe -- --save-fixtures tests/fixtures/probe/<name>` against your SAP (use a descriptive name: `s4-2023-onprem`, `btp-abap-2604`, `nw-750-sp18`, …).
-2. Eyeball the generated `meta.json` and `responses/*.json`. Make sure nothing sensitive leaked (bodies are truncated, but double-check).
+1. Run `npm run probe -- --save-fixtures tests/fixtures/probe/<name>` against your SAP. Use the product-line + edition naming convention introduced above — e.g. `s4hana-2023-onprem-abap-trial`, `ecc-ehp8-nw750-sp31-onprem-prod`, `btp-abap-2604`. Just `nw-750-sp18` is too coarse: it hides whether the system is trial / dev-edition / productive ERP, which often matters for the verdicts.
+2. Eyeball the generated `meta.json` and `responses/*.json`. Make sure nothing sensitive leaked (bodies are truncated, but double-check — SAP error payloads sometimes echo URLs or user names).
 3. Add a new test case in [`tests/unit/probe/replay.test.ts`](../tests/unit/probe/replay.test.ts) asserting the verdicts you expect for *your* system.
 4. Open a PR. Each fixture set strengthens the regression guard around `classifyVerdict`.
 
