@@ -376,16 +376,15 @@ describe('AdtApiError', () => {
       const classification = classifySapDomainError(423, 'Lock handle invalid');
       expect(classification?.category).toBe('enqueue-error');
       expect(classification?.hint).toContain('fresh lock');
-      // Mentions sap-contextid — the underlying mechanism — so users
-      // who already tried retries know to move to backend diagnostics.
+      // Cites the specific SAP Note (2727890) for the known ADT lock-handle
+      // instability bug on older SP levels — this is the most common cause
+      // on NW 7.50 / 7.51 low SPs that operators might not have discovered.
+      expect(classification?.hint).toContain('2727890');
+      expect(classification?.hint).toContain('BC-DWB-AIE');
+      // Also covers the stateful-session backend cause for systems where
+      // the handle bug has been fixed but the cookie isn't being issued.
       expect(classification?.hint).toContain('sap-contextid');
-      // Concrete diagnostic step: capture LOCK response headers with curl.
-      expect(classification?.hint).toContain('curl');
-      // Points at backend session management (the most common fix).
       expect(classification?.hint).toContain('SICF_SESSIONS');
-      // Acknowledges that on older SAP_BASIS/SP levels the ADT framework
-      // itself may be the gap (apply SP / SAP Note).
-      expect(classification?.hint).toMatch(/SAP Note|SP /);
       expect(classification?.transaction).toBe('SICF_SESSIONS');
     });
 

@@ -348,19 +348,18 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
       hint:
         'Lock handle is invalid or expired. Retry the operation so ARC-1 acquires a fresh lock — ' +
         'transient expiry is the common case. If 423 persists on the first PUT after a successful ' +
-        'LOCK, the SAP backend is likely not issuing the `sap-contextid` cookie that pairs the lock ' +
-        'handle with a stateful ADT session. Diagnostic steps for your Basis admin: ' +
-        '(a) capture the raw `LOCK` response headers with a tool like curl and check whether ' +
-        '`Set-Cookie: sap-contextid=SID...; path=/sap/bc/adt` is present; ' +
-        '(b) if missing, check that HTTP security session management is activated (tcode ' +
-        '`SICF_SESSIONS`) and that profile params `http/security_session_timeout` + ' +
-        '`http/security_context_cache_size` are set (tcode `RZ10`); ' +
-        '(c) if the above is already configured correctly and the cookie still is not issued, ' +
-        'the ADT handler on this SAP_BASIS/SP combination may not activate stateful sessions — ' +
-        'search SAP Notes for "ADT stateful session" / "sap-contextid" for your release, or ' +
-        'apply a more recent SP. ' +
-        'If there is a reverse proxy or load balancer between the client and ICM, also verify ' +
-        'it is not filtering cookies or `sap-*` response headers.',
+        'LOCK, known causes (in likelihood order): ' +
+        '(1) Known ABAP Development Tools bug on older SAP_BASIS kernels / low SP levels — ' +
+        'the lock handle is not stable in some cases (e.g. SAP Note 2727890 "ADT: fix unstable ' +
+        'adt lock handle" for handles containing `+`; broader ADT handler fixes across subsequent ' +
+        'SPs). Apply a more recent support package or the relevant ADT notes (component BC-DWB-AIE). ' +
+        '(2) SAP backend is not issuing the `sap-contextid` cookie that pairs the lock handle with ' +
+        'a stateful ADT session. Capture the raw LOCK response headers with curl and look for ' +
+        '`Set-Cookie: sap-contextid=SID...; path=/sap/bc/adt` — if absent, verify SICF_SESSIONS ' +
+        'is activated and profile params `http/security_session_timeout` + ' +
+        '`http/security_context_cache_size` are set (tcode `RZ10`). ' +
+        '(3) Reverse proxy / load balancer filtering cookies or `sap-*` response headers in transit. ' +
+        'Rule out by curling the SAP ICM directly (bypass the proxy) and comparing headers.',
       transaction: 'SICF_SESSIONS',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
