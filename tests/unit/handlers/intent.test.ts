@@ -3846,7 +3846,11 @@ ENDCLASS.`;
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Lock handle is invalid or expired');
-      expect(result.content[0]?.text).toContain('SM12');
+      // Hint cites SAP Note 2727890 (component BC-DWB-AIE) — verified via the
+      // SAP Knowledge Base as the concrete known-fix for ADT lock-handle
+      // instability. Replaces the previous generic SM12 transaction pointer.
+      expect(result.content[0]?.text).toContain('2727890');
+      expect(result.content[0]?.text).toContain('BC-DWB-AIE');
     });
 
     it('403 authorization XML returns SU53/PFCG hint', async () => {

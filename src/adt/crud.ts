@@ -61,6 +61,22 @@ export async function unlockObject(http: AdtHttpClient, objectUrl: string, lockH
   await http.post(`${objectUrl}?_action=UNLOCK&lockHandle=${encodeURIComponent(lockHandle)}`);
 }
 
+/**
+ * Some vendor content types are versioned, and the server-side release
+ * determines which versions are accepted. DTEL is a concrete case: modern
+ * systems (SAP_BASIS ≥ 7.52) accept `…dataelements.v2+xml`, NW 7.50/7.51
+ * only accept `…dataelements.v1+xml` — same XML body, different MIME version
+ * suffix. On HTTP 415, retry once with the fallback.
+ *
+ * Kept as a narrow static map so a backport never falls back into an
+ * unintended retry loop for unrelated content types.
+ */
+const CONTENT_TYPE_FALLBACKS: Record<string, string> = {
+  'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8':
+    'application/vnd.sap.adt.dataelements.v1+xml; charset=utf-8',
+  'application/vnd.sap.adt.dataelements.v2+xml': 'application/vnd.sap.adt.dataelements.v1+xml',
+};
+
 /** Create a new ABAP object */
 export async function createObject(
   http: AdtHttpClient,
@@ -82,8 +98,22 @@ export async function createObject(
   }
   const url = params.length > 0 ? `${objectUrl}?${params.join('&')}` : objectUrl;
 
-  const resp = await http.post(url, body, contentType);
-  return resp.body;
+  try {
+    const resp = await http.post(url, body, contentType);
+    return resp.body;
+  } catch (err) {
+    const fallback = CONTENT_TYPE_FALLBACKS[contentType];
+    if (fallback && isUnsupportedMediaTypeError(err)) {
+      const resp = await http.post(url, body, fallback);
+      return resp.body;
+    }
+    throw err;
+  }
+}
+
+function isUnsupportedMediaTypeError(err: unknown): boolean {
+  if (!(err instanceof AdtApiError)) return false;
+  return err.statusCode === 415;
 }
 
 /** Update source code of an ABAP object (requires lock) */
@@ -130,7 +160,16 @@ export async function updateObject(
     url += (url.includes('?') ? '&' : '?') + params.join('&');
   }
 
-  await http.put(url, body, contentType);
+  try {
+    await http.put(url, body, contentType);
+  } catch (err) {
+    const fallback = CONTENT_TYPE_FALLBACKS[contentType];
+    if (fallback && isUnsupportedMediaTypeError(err)) {
+      await http.put(url, body, fallback);
+      return;
+    }
+    throw err;
+  }
 }
 
 /** Delete an ABAP object (requires lock) */

@@ -39,7 +39,8 @@ export interface SapErrorClassification {
     | 'activation-dependency'
     | 'transport-issue'
     | 'object-exists'
-    | 'method-not-supported';
+    | 'method-not-supported'
+    | 'icf-handler-not-bound';
   hint: string;
   transaction?: string;
   details?: Record<string, string>;
@@ -344,8 +345,34 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   if (typeId === 'ExceptionResourceInvalidLockHandle' || statusCode === 423) {
     return {
       category: 'enqueue-error',
-      hint: 'Lock handle is invalid or expired. The lock may have timed out. Retry the operation so ARC-1 acquires a fresh lock. If the error persists, check SM12 for stale lock entries.',
-      transaction: 'SM12',
+      hint:
+        'Lock handle is invalid or expired. First, retry — transient expiry is the common case. ' +
+        'If 423 persists on the first PUT after a successful LOCK, see SAP Note 2727890 ' +
+        '"ADT: fix unstable adt lock handle" (component BC-DWB-AIE) — a known ABAP Development ' +
+        'Tools bug where the lock handle is not stable under certain conditions. Apply the note ' +
+        'or a support package that includes it.',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  // Some ADT endpoints return `HTTP 404 "No suitable resource found"` for every
+  // verb while still appearing in `/discovery` — this is the ADT framework's
+  // way of saying the resource URI didn't match any registered handler inside
+  // the ADT framework (or the ICF service is active but its handler class is
+  // not bound). Distinct from a regular "does not exist" 404 on a missing
+  // object. See `icf-handler-not-bound`.
+  if (statusCode === 404 && /No suitable resource found/i.test(bodyRaw)) {
+    return {
+      category: 'icf-handler-not-bound',
+      hint:
+        'The ADT framework returned "No suitable resource found" — this endpoint is listed in ' +
+        '`/sap/bc/adt/discovery` but no handler matches the URI. In tcode `SICF`, navigate to the ' +
+        'service node under `/default_host/sap/bc/adt/...` and verify (a) the service is activated ' +
+        'and (b) its "Handler List" tab references the correct ADT handler class. If the service ' +
+        'looks active, the ADT framework itself may be missing the internal resource registration ' +
+        '(often caused by incomplete activation after an upgrade or on minimally-configured ' +
+        'systems). Consult your Basis admin or SAP KBA 3128830 (Troubleshooting ICF 404 Errors).',
+      transaction: 'SICF',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }

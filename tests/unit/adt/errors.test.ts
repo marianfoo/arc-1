@@ -375,8 +375,36 @@ describe('AdtApiError', () => {
     it('classifies enqueue errors for 423', () => {
       const classification = classifySapDomainError(423, 'Lock handle invalid');
       expect(classification?.category).toBe('enqueue-error');
-      expect(classification?.hint).toContain('fresh lock');
-      expect(classification?.transaction).toBe('SM12');
+      // First-line advice: retry (transient expiry is the common case).
+      expect(classification?.hint).toContain('retry');
+      // Cites the specific SAP Note verified via the SAP Knowledge Base
+      // search — the concrete grounded reference for persistent 423s.
+      expect(classification?.hint).toContain('2727890');
+      expect(classification?.hint).toContain('BC-DWB-AIE');
+    });
+
+    it('classifies 404 "No suitable resource found" as ICF handler not bound', () => {
+      const classification = classifySapDomainError(
+        404,
+        '<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><type id="ExceptionResourceNotFound"/><message lang="EN">No suitable resource found</message></exc:exception>',
+      );
+      expect(classification?.category).toBe('icf-handler-not-bound');
+      expect(classification?.hint).toContain('SICF');
+      // The hint distinguishes the ADT-framework-level "No suitable resource"
+      // path from a regular missing-object 404.
+      expect(classification?.hint).toContain('Handler List');
+      expect(classification?.transaction).toBe('SICF');
+    });
+
+    it('does NOT treat generic 404 "does not exist" as ICF handler not bound', () => {
+      // "does not exist" is the normal missing-object path and gets no domain
+      // classification — the default "not found" message already tells the LLM
+      // what to do.
+      const classification = classifySapDomainError(
+        404,
+        '<exc:exception><type id="ExceptionResourceNotFound"/><message>Resource /sap/bc/adt/ddic/domains does not exist.</message></exc:exception>',
+      );
+      expect(classification).toBeUndefined();
     });
 
     it('classifies authorization errors via XML type', () => {

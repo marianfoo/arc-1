@@ -63,13 +63,35 @@ Tests typically suffix these with a specific clause explaining *which* fixture o
 
 **When to investigate:** If `DOMA reads not supported` fires on a ≥ 7.54 system, double-check that the ICF service `/sap/bc/adt/ddic` is active in SICF. If `transport create not supported` fires on a production NW system, this is worth a bug report — our backend-compat probing may need tightening.
 
+### Root cause: `/datapreview/ddic` 404 "No suitable resource found"
+
+We've seen this on minimally-configured systems where the endpoint IS registered in the discovery doc with full template links, but every verb (GET, POST with SQL body, POST with empty body, the `/metadata` sub-resource, the `/freestyle` alternate) returns `HTTP 404 "No suitable resource found"`. Same class of issue can surface on any SAP release — it just means the ADT framework can't route the URI to any handler.
+
+Two possible root causes:
+1. The ICF service node is activated but its handler class isn't bound (check the **Handler List** tab in `tcode SICF`).
+2. The service is active with a handler class, but the ADT framework's internal resource registration is missing (typically after incomplete upgrades or on trial/dev-edition SAP installations).
+
+Not fixable from ARC-1 client code. The error classifier (`classifySapDomainError`) surfaces a detailed hint when this comes back (category: `icf-handler-not-bound`), pointing at `tcode SICF` → Handler List + SAP KBA 3128830 ("Troubleshooting ICF 404 Errors").
+
+### Root cause: DTEL v2 content-type 415 on older releases
+
+ARC-1 originally posted DTEL create/update with `Content-Type: application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8`. Older SAP_BASIS releases (pre-7.52) only accept the v1 MIME type `…dataelements.v1+xml` — same XML body, different MIME version suffix.
+
+**Fixed** in `src/adt/crud.ts` via a static `CONTENT_TYPE_FALLBACKS` map: on HTTP 415 for the v2 MIME type, `createObject` and `updateObject` transparently retry once with the v1 MIME type. DTEL create now works across releases. Follow-up DTEL updates (lock → PUT) may still hit the lock-handle 423 issue on systems missing SAP Note 2727890 — see below.
+
 ## Category 3 — Backend quirk (trial systems, unstable services)
 
 **What it is:** Individual SAP services that either behave quirkily on trial editions or have known release-specific bugs (ABAP dumps, session-correlation oddities).
 
 | Skip message fragment | Affected tests | Typical on | Should NOT skip on |
 |---|---|---|---|
-| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle | NW 7.50 trial VM | Any other system |
+| `BACKEND_UNSUPPORTED: lock-handle session correlation differs on this release` | `crud.lifecycle.integration.test.ts` full PROG lifecycle, DTEL CRUD update step, RAP write + SKTD + MSAG on E2E | Systems missing SAP Note 2727890 (ADT lock-handle bug) | Systems with the note / a later SP applied |
+
+### Root cause: persistent lock-handle 423 after successful LOCK
+
+Known ABAP Development Tools bug — [SAP Note 2727890 "ADT: fix unstable adt lock handle"](https://me.sap.com/notes/2727890/E), component `BC-DWB-AIE`, released 2018-12-11. Apply the note (or a support package that includes it) on the target system.
+
+Not fixable from ARC-1 client code; the error hint (`category: enqueue-error`) now cites the note directly so operators can jump to the SAP Knowledge Base entry.
 | `BACKEND_UNSUPPORTED: PageChipInstances service unstable on this release` | `adt.integration.test.ts` FLP lists tiles | NW 7.50, some older S/4 | Recent S/4 |
 | `BACKEND_UNSUPPORTED: scope denied` (transport test) | `transport.integration.test.ts` type-W/R (customizing, repair) | Systems where user lacks `S_TRANSPRT` for non-K types | Full-privilege users |
 
