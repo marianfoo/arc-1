@@ -26,6 +26,7 @@ import {
 } from '../adt/abapgit.js';
 import {
   buildSiblingExtensionFinding,
+  type CdsImpactDownstream,
   classifyCdsImpact,
   deriveSiblingStem,
   isSiblingNameMatch,
@@ -228,6 +229,62 @@ function errorResult(message: string): ToolResult {
 
 const DDIC_SAVE_HINT_TYPES = new Set(['TABL', 'DDLS', 'DCLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX', 'DOMA', 'DTEL']);
 const DDIC_POST_SAVE_CHECK_TYPES = new Set(['TABL', 'DDLS', 'DCLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX']);
+const CDS_DEPENDENCY_SENSITIVE_TYPES = new Set(['DDLS', 'DCLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB', 'TABL']);
+
+type CdsImpactBucket = Exclude<keyof CdsImpactDownstream, 'summary'>;
+
+const CDS_IMPACT_BUCKET_ORDER: CdsImpactBucket[] = [
+  'projectionViews',
+  'bdefs',
+  'serviceDefinitions',
+  'serviceBindings',
+  'accessControls',
+  'metadataExtensions',
+  'abapConsumers',
+  'tables',
+  'documentation',
+  'other',
+];
+
+const CDS_IMPACT_BUCKET_LABEL: Record<CdsImpactBucket, string> = {
+  projectionViews: 'Projection views (DDLS)',
+  bdefs: 'Behavior definitions (BDEF)',
+  serviceDefinitions: 'Service definitions (SRVD)',
+  serviceBindings: 'Service bindings (SRVB)',
+  accessControls: 'Access controls (DCLS)',
+  metadataExtensions: 'Metadata extensions (DDLX)',
+  abapConsumers: 'ABAP consumers',
+  tables: 'Tables',
+  documentation: 'Documentation (SKTD)',
+  other: 'Other',
+};
+
+const CDS_REACTIVATION_BUCKET_ORDER: CdsImpactBucket[] = [
+  'projectionViews',
+  'accessControls',
+  'metadataExtensions',
+  'bdefs',
+  'serviceDefinitions',
+  'serviceBindings',
+  'other',
+];
+
+const CDS_DELETE_BUCKET_ORDER: CdsImpactBucket[] = [
+  'serviceBindings',
+  'serviceDefinitions',
+  'bdefs',
+  'metadataExtensions',
+  'accessControls',
+  'projectionViews',
+  'other',
+];
+
+interface CdsOrderedObject {
+  type: string;
+  name: string;
+}
+
+const CDS_ORDERABLE_TYPES = new Set(['DDLS', 'DCLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB']);
 
 // ─── Search Helpers ─────────────────────────────────────────────────
 
@@ -485,6 +542,191 @@ function enrichWithSapDetails(err: AdtApiError, message: string): string {
   }
 
   return parts.join('\n');
+}
+
+function isDeleteDependencyError(err: AdtApiError): boolean {
+  const clean = AdtApiError.extractCleanMessage(err.responseBody ?? err.message).toLowerCase();
+  const body = (err.responseBody ?? '').toLowerCase();
+  const diagnostics = err.responseBody ? AdtApiError.extractDdicDiagnostics(err.responseBody) : [];
+
+  if (diagnostics.some((diag) => diag.messageNumber === '039')) return true;
+
+  return /could not be deleted|cannot be deleted|still in use|used by|dependent object|existing reference/.test(
+    `${clean}\n${body}`,
+  );
+}
+
+function formatCdsImpactBuckets(downstream: CdsImpactDownstream, maxNames = 4): string[] {
+  const lines: string[] = [];
+
+  for (const bucket of CDS_IMPACT_BUCKET_ORDER) {
+    const entries = downstream[bucket];
+    if (entries.length === 0) continue;
+    const unique = Array.from(
+      new Set(
+        entries.map((entry) => {
+          const mainType = entry.type.split('/')[0] || entry.type || '?';
+          return `${entry.name} (${mainType})`;
+        }),
+      ),
+    );
+    const listed = unique.slice(0, maxNames).join(', ');
+    const more = unique.length > maxNames ? ` (+${unique.length - maxNames} more)` : '';
+    lines.push(`- ${CDS_IMPACT_BUCKET_LABEL[bucket]}: ${listed}${more}`);
+  }
+
+  return lines;
+}
+
+function mainObjectType(type: string): string {
+  return type.split('/')[0]?.toUpperCase() ?? '';
+}
+
+function collectOrderedCdsObjects(
+  downstream: CdsImpactDownstream,
+  bucketOrder: readonly CdsImpactBucket[],
+): CdsOrderedObject[] {
+  const seen = new Set<string>();
+  const ordered: CdsOrderedObject[] = [];
+
+  for (const bucket of bucketOrder) {
+    for (const entry of downstream[bucket]) {
+      const type = mainObjectType(entry.type);
+      const name = String(entry.name ?? '').toUpperCase();
+      if (!type || !name || !CDS_ORDERABLE_TYPES.has(type)) continue;
+      const key = `${type}:${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ordered.push({ type, name });
+    }
+  }
+
+  return ordered;
+}
+
+function dedupeCdsObjects(objects: readonly CdsOrderedObject[]): CdsOrderedObject[] {
+  const seen = new Set<string>();
+  const deduped: CdsOrderedObject[] = [];
+  for (const obj of objects) {
+    const key = `${obj.type}:${obj.name.toUpperCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(obj);
+  }
+  return deduped;
+}
+
+function formatCdsObjectList(objects: readonly CdsOrderedObject[], max = 8): string {
+  if (objects.length === 0) return '';
+  const listed = objects
+    .slice(0, max)
+    .map((obj) => `${obj.type} ${obj.name}`)
+    .join(', ');
+  return objects.length > max ? `${listed} (+${objects.length - max} more)` : listed;
+}
+
+function formatCdsActivationPayload(objects: readonly CdsOrderedObject[], max = 8): string {
+  if (objects.length === 0) return '[]';
+  const listed = objects
+    .slice(0, max)
+    .map((obj) => `{type:"${obj.type}",name:"${obj.name}"}`)
+    .join(', ');
+  return objects.length > max ? `[${listed}, ...] (+${objects.length - max} more)` : `[${listed}]`;
+}
+
+async function loadCdsImpactDownstream(client: AdtClient, objectUrl: string): Promise<CdsImpactDownstream | undefined> {
+  try {
+    const whereUsed = await findWhereUsed(client.http, client.safety, objectUrl);
+    return classifyCdsImpact(whereUsed, { includeIndirect: true });
+  } catch (err) {
+    if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+      return undefined;
+    }
+    return undefined;
+  }
+}
+
+async function buildCdsUpdateCrudHint(client: AdtClient, name: string, objectUrl: string): Promise<string> {
+  const lines: string[] = [];
+  lines.push(`CDS update follow-up for ${name}:`);
+
+  const downstream = await loadCdsImpactDownstream(client, objectUrl);
+  let orderedReactivation: CdsOrderedObject[] = [];
+  if (downstream) {
+    const bucketLines = formatCdsImpactBuckets(downstream);
+    if (bucketLines.length > 0) {
+      lines.push(`- Downstream consumers in ADT where-used index: ${downstream.summary.total}`);
+      lines.push(...bucketLines);
+      orderedReactivation = collectOrderedCdsObjects(downstream, CDS_REACTIVATION_BUCKET_ORDER);
+    } else {
+      lines.push('- No downstream consumers found in the current ADT where-used index.');
+    }
+  } else {
+    lines.push('- Where-used index is unavailable on this system (impact list could not be fetched).');
+  }
+
+  lines.push(`- SAPWrite(update) stores inactive source only. Run SAPActivate(type="DDLS", name="${name}").`);
+  lines.push('- Field/alias/signature changes may require re-activation of dependent DDLS/BDEF/SRVD/DDLX objects.');
+  if (orderedReactivation.length > 0) {
+    const activationPlan = dedupeCdsObjects([{ type: 'DDLS', name }, ...orderedReactivation]);
+    lines.push(`- Suggested re-activation order: ${formatCdsObjectList(activationPlan)}.`);
+    lines.push(`- Batch call template: SAPActivate(objects=${formatCdsActivationPayload(activationPlan)}).`);
+  }
+
+  return lines.join('\n');
+}
+
+async function buildCdsDeleteDependencyHint(
+  client: AdtClient,
+  type: string,
+  name: string,
+  objectUrl: string,
+): Promise<string | undefined> {
+  const downstream = await loadCdsImpactDownstream(client, objectUrl);
+  if (!downstream || downstream.summary.total === 0) {
+    return undefined;
+  }
+
+  const lines: string[] = [];
+  lines.push(`Blocking dependents for ${type} ${name} (ADT where-used):`);
+  lines.push(...formatCdsImpactBuckets(downstream));
+  const orderedDelete = collectOrderedCdsObjects(downstream, CDS_DELETE_BUCKET_ORDER);
+  if (orderedDelete.length > 0) {
+    lines.push(`Suggested delete order: ${formatCdsObjectList(orderedDelete)}, then ${type} ${name}.`);
+  }
+  lines.push(
+    `Delete/refactor these dependents first, then retry SAPWrite(action="delete", type="${type}", name="${name}").`,
+  );
+  lines.push(
+    'For cyclic CDS projection graphs, temporarily strip redirected/composition associations, activate stripped DDLS, then delete.',
+  );
+  lines.push('If source was already stripped, activate first — delete checks active version dependencies.');
+
+  return lines.join('\n');
+}
+
+async function buildCdsActivationDependencyHint(client: AdtClient, name: string, objectUrl: string): Promise<string> {
+  const lines: string[] = [];
+  const downstream = await loadCdsImpactDownstream(client, objectUrl);
+  let orderedReactivation: CdsOrderedObject[] = [];
+
+  lines.push(`CDS activation impact for ${name}:`);
+  if (!downstream || downstream.summary.total === 0) {
+    lines.push('- No downstream consumers found in ADT where-used index, or index is unavailable.');
+  } else {
+    lines.push(...formatCdsImpactBuckets(downstream));
+    orderedReactivation = collectOrderedCdsObjects(downstream, CDS_REACTIVATION_BUCKET_ORDER);
+  }
+  lines.push('- When fields/elements change, dependents may fail until re-activated in dependency order.');
+  if (orderedReactivation.length > 0) {
+    const activationPlan = dedupeCdsObjects([{ type: 'DDLS', name }, ...orderedReactivation]);
+    lines.push(`- Suggested re-activation order: ${formatCdsObjectList(activationPlan)}.`);
+    lines.push(`- Batch call template: SAPActivate(objects=${formatCdsActivationPayload(activationPlan)}).`);
+  } else {
+    lines.push(`- Try SAPActivate(objects=[{type:"DDLS",name:"${name}"}, ...dependents...]).`);
+  }
+
+  return lines.join('\n');
 }
 
 async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
@@ -2309,7 +2551,8 @@ async function handleSAPWrite(
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
       cachingLayer?.invalidate(type, name);
       const msg = `Successfully updated ${type} ${name}.`;
-      const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
+      const cdsUpdateHint = type === 'DDLS' ? await buildCdsUpdateCrudHint(client, name, objectUrl) : undefined;
+      const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings, cdsUpdateHint);
       return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
     }
     case 'create': {
@@ -2784,19 +3027,29 @@ async function handleSAPWrite(
       await enforcePackageForExistingObject();
 
       // Lock, delete, unlock pattern (works for all types including SKTD) — auto-propagate lock corrNr if no explicit transport
-      await client.http.withStatefulSession(async (session) => {
-        const lock = await lockObject(session, client.safety, objectUrl);
-        const effectiveTransport = transport ?? (lock.corrNr || undefined);
-        try {
-          await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
-        } finally {
+      try {
+        await client.http.withStatefulSession(async (session) => {
+          const lock = await lockObject(session, client.safety, objectUrl);
+          const effectiveTransport = transport ?? (lock.corrNr || undefined);
           try {
-            await unlockObject(session, objectUrl, lock.lockHandle);
-          } catch {
-            // Object may already be deleted — unlock failure is expected
+            await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
+          } finally {
+            try {
+              await unlockObject(session, objectUrl, lock.lockHandle);
+            } catch {
+              // Object may already be deleted — unlock failure is expected
+            }
+          }
+        });
+      } catch (err) {
+        if (err instanceof AdtApiError && CDS_DEPENDENCY_SENSITIVE_TYPES.has(type) && isDeleteDependencyError(err)) {
+          const hint = await buildCdsDeleteDependencyHint(client, type, name, objectUrl);
+          if (hint) {
+            err.message += `\n\n${hint}`;
           }
         }
-      });
+        throw err;
+      }
       cachingLayer?.invalidate(type, name);
       return textResult(`Deleted ${type} ${name}.`);
     }
@@ -3295,7 +3548,11 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   if (result.success) {
     return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
-  return errorResult(`Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`);
+  let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`;
+  if (type === 'DDLS') {
+    activationError += `\n\n${await buildCdsActivationDependencyHint(client, name, objectUrl)}`;
+  }
+  return errorResult(activationError);
 }
 
 /** Format activation result messages with structured detail (line numbers, URIs) when available */

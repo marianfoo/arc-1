@@ -210,6 +210,12 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 This helps pinpoint the exact failing field/annotation instead of retrying blindly.
 
+**CDS dependency-aware CRUD hints (DDLS):**
+- `SAPWrite(action="update", type="DDLS", ...)` appends downstream where-used impact buckets and a concrete re-activation order + `SAPActivate(objects=[...])` template.
+- `SAPWrite(action="delete", type="DDLS", ...)` enriches dependency-style delete failures (for example DDIC `[?/039]`) with blocking dependents and suggested delete order.
+- Delete hints include cycle-break guidance for mutually-dependent projection graphs (strip redirected/composition clauses, activate stripped versions, then delete).
+- If the where-used endpoint is unavailable on the backend, ARC-1 keeps the CRUD action behavior unchanged and adds a short "impact unavailable" note instead of failing the call.
+
 **Blue framework package handling:** `TABL` and `BDEF` create calls now pass package in both the XML (`packageRef`) and URL query (`_package=<pkg>`), alongside transport (`corrNr`) when provided.
 
 **CDS pre-write validation:**
@@ -295,6 +301,8 @@ Activate (publish) ABAP objects. Supports single object or batch activation.
 | `objects` | array | No | For batch: array of `{type, name}` objects to activate together |
 
 Use batch activation for RAP stacks where objects depend on each other (DDLS, BDEF, SRVD, DDLX, SRVB must be activated together). Batch responses include per-object status (`active`, `warning`, `error`) with attached messages, so failed members can be retried selectively.
+
+For failed `DDLS` activation, ARC-1 appends CDS dependency impact buckets and a concrete batch re-activation template derived from where-used results.
 
 **Examples:**
 ```

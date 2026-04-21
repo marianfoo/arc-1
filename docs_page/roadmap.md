@@ -113,6 +113,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-51 | CDS CRUD Dependency Guidance (`SAPWrite` DDLS delete emits where-used blocker list + suggested delete order; ordered DDIC diagnostics → remediation) (PR #176) | 2026-04-23 | Features |
 | [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
 | [FEAT-55](#feat-55) | System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose (PR #174) | 2026-04-21 | Features |
 | — | RAP authoring hardening (`SAPWrite` deterministic RAP preflight, `scaffold_rap_handlers`, per-object batch activation statuses) | 2026-04-21 | Features |
