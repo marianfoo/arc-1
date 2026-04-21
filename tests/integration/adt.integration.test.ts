@@ -11,7 +11,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { classifyCdsImpact } from '../../src/adt/cds-impact.js';
 import type { AdtClient } from '../../src/adt/client.js';
 import { findWhereUsed } from '../../src/adt/codeintel.js';
-import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
+import {
+  getDump,
+  getGatewayErrorDetail,
+  listDumps,
+  listGatewayErrors,
+  listSystemMessages,
+  listTraces,
+} from '../../src/adt/diagnostics.js';
 import { fetchDiscoveryDocument, resolveAcceptType } from '../../src/adt/discovery.js';
 import { AdtApiError } from '../../src/adt/errors.js';
 import {
@@ -948,6 +955,62 @@ describe('ADT Integration Tests', () => {
           expect(traces[0]).toHaveProperty('title');
           expect(traces[0]).toHaveProperty('timestamp');
         }
+      });
+    });
+
+    describe('runtime feeds', () => {
+      it('lists system messages when supported', async (ctx) => {
+        try {
+          const messages = await listSystemMessages(client.http, unrestrictedSafetyConfig(), { maxResults: 5 });
+          expect(Array.isArray(messages)).toBe(true);
+        } catch (err) {
+          expectSapFailureClass(err, [400, 403, 404, 500], [/systemmessages|not found|unsupported|forbidden/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: /runtime/systemmessages endpoint not available on this system`,
+          );
+        }
+      });
+
+      it('lists gateway errors on on-prem systems', async (ctx) => {
+        try {
+          const errors = await listGatewayErrors(client.http, unrestrictedSafetyConfig(), { maxResults: 5 });
+          expect(Array.isArray(errors)).toBe(true);
+        } catch (err) {
+          expectSapFailureClass(err, [400, 403, 404, 500], [/gw\/errorlog|not found|unsupported|forbidden/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: /gw/errorlog endpoint not available on this system`,
+          );
+        }
+      });
+
+      it('reads gateway error detail when entries are available', async (ctx) => {
+        let errors: Awaited<ReturnType<typeof listGatewayErrors>> | undefined;
+        try {
+          errors = await listGatewayErrors(client.http, unrestrictedSafetyConfig(), { maxResults: 5 });
+        } catch (err) {
+          expectSapFailureClass(err, [400, 403, 404, 500], [/gw\/errorlog|not found|unsupported|forbidden/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: /gw/errorlog endpoint not available on this system`,
+          );
+          return;
+        }
+
+        if (!errors || errors.length === 0 || !errors[0]?.detailUrl) {
+          ctx.skip(`${SkipReason.NO_FIXTURE}: no gateway error detail URL available`);
+          return;
+        }
+
+        const detail = await getGatewayErrorDetail(client.http, unrestrictedSafetyConfig(), {
+          detailUrl: errors[0].detailUrl,
+        });
+        expect(detail).toHaveProperty('transactionId');
+        expect(detail).toHaveProperty('shortText');
       });
     });
   });

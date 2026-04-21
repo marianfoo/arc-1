@@ -91,7 +91,7 @@ describe('E2E Diagnostics Tests', () => {
       console.log(`    ${dumps.length} dumps for user ${user}`);
     });
 
-    it('reads dump detail with formatted text', async (ctx) => {
+    it('reads dump detail with focused sections by default', async (ctx) => {
       // Get a dump ID to read
       const listResult = await callTool(client, 'SAPDiagnose', {
         action: 'dumps',
@@ -121,19 +121,20 @@ describe('E2E Diagnostics Tests', () => {
       expect(detail.user).toBeTruthy();
       expect(detail.timestamp).toBeTruthy();
 
-      // Formatted text should contain the error type
-      expect(detail.formattedText).toBeTruthy();
-      expect(detail.formattedText.length).toBeGreaterThan(100);
-      expect(detail.formattedText).toContain(detail.error);
+      // Section-focused payload should be present by default (full formattedText is opt-in)
+      expect(typeof detail.sections).toBe('object');
+      expect(Object.keys(detail.sections ?? {}).length).toBeGreaterThan(0);
+      expect(detail.formattedText).toBeUndefined();
 
       // Chapters should exist
       expect(Array.isArray(detail.chapters)).toBe(true);
       expect(detail.chapters.length).toBeGreaterThan(0);
       expect(detail.chapters[0]).toHaveProperty('title');
       expect(detail.chapters[0]).toHaveProperty('category');
+      expect(detail.chapters[0]).toHaveProperty('line');
 
       console.log(`    Dump: ${detail.error} (${detail.exception}) in ${detail.program}`);
-      console.log(`    Chapters: ${detail.chapters.length}, Text: ${detail.formattedText.length} chars`);
+      console.log(`    Chapters: ${detail.chapters.length}, Sections: ${Object.keys(detail.sections ?? {}).length}`);
       if (detail.terminationUri) {
         console.log(`    Termination: ${detail.terminationUri}`);
       }
@@ -235,8 +236,8 @@ describe('E2E Diagnostics Tests', () => {
         });
         const detail = JSON.parse(expectToolSuccess(detailResult));
         expect(detail.error).toBe(ourDump.error);
-        expect(detail.formattedText).toBeTruthy();
-        console.log(`    Detail read OK: ${detail.formattedText.length} chars`);
+        expect(Object.keys(detail.sections ?? {}).length).toBeGreaterThan(0);
+        console.log(`    Detail read OK: ${Object.keys(detail.sections ?? {}).length} sections`);
       } else if (allDumps.length > 0) {
         console.log(`    No COMPUTE_INT_ZERODIVIDE dump found, but ${allDumps.length} other dumps available`);
         // Verify we can read at least one — validates API shape with available data
@@ -245,7 +246,7 @@ describe('E2E Diagnostics Tests', () => {
           id: allDumps[0].id,
         });
         const detail = JSON.parse(expectToolSuccess(detailResult));
-        expect(detail.formattedText).toBeTruthy();
+        expect(Object.keys(detail.sections ?? {}).length).toBeGreaterThan(0);
       } else {
         // Write steps succeeded but no dumps on system — program exists but
         // wasn't executed (we can't execute programs via MCP).
@@ -272,6 +273,42 @@ describe('E2E Diagnostics Tests', () => {
         expect(traces[0]).toHaveProperty('timestamp');
         console.log(`    First trace: "${traces[0].title}" at ${traces[0].timestamp}`);
       }
+    });
+  });
+
+  describe('SAPDiagnose runtime feeds', () => {
+    it('lists system messages when endpoint is available', async (ctx) => {
+      const result = await callTool(client, 'SAPDiagnose', {
+        action: 'system_messages',
+        maxResults: 5,
+      });
+
+      if (result.isError) {
+        const err = result.content?.[0]?.text ?? '';
+        if (/not found|unsupported|not available|404/i.test(err)) {
+          return ctx.skip(`System messages endpoint unavailable on this system: ${err.slice(0, 200)}`);
+        }
+      }
+
+      const messages = JSON.parse(expectToolSuccess(result));
+      expect(Array.isArray(messages)).toBe(true);
+    });
+
+    it('lists gateway errors on supported systems', async (ctx) => {
+      const result = await callTool(client, 'SAPDiagnose', {
+        action: 'gateway_errors',
+        maxResults: 5,
+      });
+
+      if (result.isError) {
+        const err = result.content?.[0]?.text ?? '';
+        if (/not available on BTP|not found|unsupported|404/i.test(err)) {
+          return ctx.skip(`Gateway error log unavailable on this system: ${err.slice(0, 200)}`);
+        }
+      }
+
+      const errors = JSON.parse(expectToolSuccess(result));
+      expect(Array.isArray(errors)).toBe(true);
     });
   });
 

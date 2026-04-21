@@ -484,7 +484,13 @@ describe('SAPDiagnoseSchema', () => {
   });
 
   it('accepts dumps with optional filters', () => {
-    const result = SAPDiagnoseSchema.safeParse({ action: 'dumps', user: 'DEVELOPER', maxResults: 10 });
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'dumps',
+      user: 'DEVELOPER',
+      maxResults: 10,
+      sections: ['kap0', 'kap3'],
+      includeFullText: false,
+    });
     expect(result.success).toBe(true);
   });
 
@@ -496,6 +502,44 @@ describe('SAPDiagnoseSchema', () => {
   it('rejects invalid analysis type', () => {
     const result = SAPDiagnoseSchema.safeParse({ action: 'traces', id: '123', analysis: 'invalid' });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts system_messages feed filters', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'system_messages',
+      user: 'BASISADM',
+      maxResults: '25',
+      from: '20260401090000',
+      to: '20260401120000',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.maxResults).toBe(25);
+    }
+  });
+
+  it('accepts gateway_errors list and detail modes', () => {
+    expect(
+      SAPDiagnoseSchema.safeParse({
+        action: 'gateway_errors',
+        maxResults: 20,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SAPDiagnoseSchema.safeParse({
+        action: 'gateway_errors',
+        detailUrl: '/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC123',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SAPDiagnoseSchema.safeParse({
+        action: 'gateway_errors',
+        id: 'ABC123',
+        errorType: 'Frontend Error',
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts quickfix with source position fields', () => {

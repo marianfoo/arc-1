@@ -817,15 +817,27 @@ export function getToolDefinitions(
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
         '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
         '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column.\n' +
-        '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns full dump detail including formatted text, error analysis, source code extract, and call stack.\n' +
+        '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns focused chapter sections by default; set includeFullText=true to include the full formatted dump blob. Optional sections=[kap0,kap3,...] to request specific chapter IDs.\n' +
         '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).\n\n' +
+        '- "system_messages": List SM02 system messages via ADT feed (filter by user, maxResults, from, to).\n' +
+        '- "gateway_errors": List SAP Gateway error log entries (/IWFND/ERROR_LOG, on-prem). For detail mode provide detailUrl (preferred) or id+errorType.\n\n' +
         'Quickfix workflow: run syntax/ATC first to identify issues and line positions, then call quickfix to retrieve SAP-verified proposals, then apply_quickfix to get exact text deltas, and finally write the updated source via SAPWrite.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['syntax', 'unittest', 'atc', 'dumps', 'traces', 'quickfix', 'apply_quickfix'],
+            enum: [
+              'syntax',
+              'unittest',
+              'atc',
+              'dumps',
+              'traces',
+              'system_messages',
+              'gateway_errors',
+              'quickfix',
+              'apply_quickfix',
+            ],
             description: 'Diagnostic action',
           },
           name: { type: 'string', description: 'Object name (for syntax/unittest/atc)' },
@@ -855,8 +867,43 @@ export function getToolDefinitions(
             type: 'string',
             description: 'Dump or trace ID (for dumps/traces actions). Omit to list, provide to get details.',
           },
+          detailUrl: {
+            type: 'string',
+            description:
+              'ADT detail URL for gateway_errors detail mode (preferred over id+errorType). Accepts absolute or /sap/bc/adt/... path.',
+          },
+          errorType: {
+            type: 'string',
+            description:
+              'Gateway error type for gateway_errors detail by id (for example "Frontend Error"). Required when using id without detailUrl.',
+          },
           user: { type: 'string', description: 'Filter dumps by SAP user (for dumps action)' },
-          maxResults: { type: 'number', description: 'Maximum results to return (for dumps action, default 50)' },
+          from: {
+            type: 'string',
+            description:
+              'Optional lower time boundary for feed-based diagnostics actions (system_messages/gateway_errors).',
+          },
+          to: {
+            type: 'string',
+            description:
+              'Optional upper time boundary for feed-based diagnostics actions (system_messages/gateway_errors).',
+          },
+          maxResults: {
+            type: 'number',
+            description:
+              'Maximum results to return for dumps/system_messages/gateway_errors (default 50, bounded to a safe cap).',
+          },
+          sections: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Dump chapter IDs to include for dumps detail mode (for example ["kap0","kap3","kap8"]). Omit to use focused defaults.',
+          },
+          includeFullText: {
+            type: 'boolean',
+            description:
+              'For dumps detail mode only: include full formattedText blob. Default false to reduce token usage.',
+          },
           analysis: {
             type: 'string',
             enum: ['hitlist', 'statements', 'dbAccesses'],

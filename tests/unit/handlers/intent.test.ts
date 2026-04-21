@@ -1735,6 +1735,199 @@ ENDCLASS.`;
     });
   });
 
+  describe('SAPDiagnose runtime diagnostics', () => {
+    function mockDumpDetailResponses(formattedText?: string): void {
+      const xml = `<?xml version="1.0"?>
+<dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="STRING_OFFSET_TOO_LARGE" author="DEVELOPER" exception="CX_SY_RANGE_OUT_OF_BOUNDS" terminatedProgram="SAPLSUSR_CERTRULE" datetime="2026-03-28T20:19:14Z">
+  <dump:links>
+    <dump:link relation="http://www.sap.com/adt/relations/runtime/dump/termination" uri="adt://A4H/sap/bc/adt/functions/groups/susr_certrule/includes/lsusr_certrulef01/source/main#start=27"/>
+  </dump:links>
+  <dump:chapters>
+    <dump:chapter name="kap0" title="Short Text" category="ABAP Developer View" line="1" chapterOrder="1" categoryOrder="1"/>
+    <dump:chapter name="kap1" title="What happened?" category="User View" line="4" chapterOrder="2" categoryOrder="1"/>
+    <dump:chapter name="kap3" title="Error analysis" category="ABAP Developer View" line="7" chapterOrder="3" categoryOrder="1"/>
+    <dump:chapter name="kap8" title="Source Code Extract" category="ABAP Developer View" line="10" chapterOrder="4" categoryOrder="1"/>
+    <dump:chapter name="kap11" title="Active Calls/Events" category="ABAP Developer View" line="13" chapterOrder="5" categoryOrder="1"/>
+  </dump:chapters>
+</dump:dump>`;
+      const text =
+        formattedText ??
+        [
+          'Short Text',
+          'S1',
+          '',
+          'What happened?',
+          'W1',
+          '',
+          'Error analysis',
+          'E1',
+          '',
+          'Source Code Extract',
+          'C1',
+          '',
+          'Active Calls/Events',
+          'A1',
+        ].join('\n');
+
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/runtime/dump/DUMP_ID/formatted')) {
+          return Promise.resolve(mockResponse(200, text, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/runtime/dump/DUMP_ID')) {
+          return Promise.resolve(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+    }
+
+    it('returns focused dump sections by default (without formattedText blob)', async () => {
+      mockDumpDetailResponses();
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'DUMP_ID',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.sections.kap0).toContain('Short Text');
+      expect(parsed.sections.kap8).toContain('Source Code Extract');
+      expect(parsed).not.toHaveProperty('formattedText');
+    });
+
+    it('includes full formatted dump text only when includeFullText=true', async () => {
+      mockDumpDetailResponses('Short Text\nSECRET_DUMP_CONTENT');
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'DUMP_ID',
+        includeFullText: true,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.formattedText).toContain('SECRET_DUMP_CONTENT');
+    });
+
+    it('supports explicit dump section filtering by chapter id and title text', async () => {
+      mockDumpDetailResponses();
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'DUMP_ID',
+        sections: ['kap1', 'Source Code Extract'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(Object.keys(parsed.sections)).toEqual(['kap1', 'kap8']);
+      expect(parsed.sections.kap1).toContain('What happened?');
+      expect(parsed.sections.kap8).toContain('Source Code Extract');
+    });
+
+    it('dispatches system_messages action to runtime/systemmessages feed', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          '<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"><atom:entry><atom:id>MSG1</atom:id><atom:title>Maintenance</atom:title></atom:entry></atom:feed>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'system_messages',
+        user: 'ADMIN',
+        maxResults: 3,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/sap/bc/adt/runtime/systemmessages');
+      expect(calledUrl).toMatch(/%24top=3|\$top=3/);
+      expect(decodeURIComponent(calledUrl)).toContain('equals(user,ADMIN)');
+    });
+
+    it('dispatches gateway_errors list action to /sap/bc/adt/gw/errorlog', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          '<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"><atom:entry><atom:id>/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC</atom:id><atom:title>Gateway fail</atom:title><atom:link rel="self" href="/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC"/></atom:entry></atom:feed>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'gateway_errors',
+        maxResults: 2,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/sap/bc/adt/gw/errorlog');
+      expect(calledUrl).toMatch(/%24top=2|\$top=2/);
+    });
+
+    it('returns a BTP guardrail for gateway_errors action', async () => {
+      setCachedFeatures({ abapRelease: '757', systemType: 'btp' } as ResolvedFeatures);
+      try {
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+          action: 'gateway_errors',
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('not available on BTP ABAP Environment');
+      } finally {
+        resetCachedFeatures();
+      }
+    });
+
+    it('uses diagnostics-specific not-found hint for missing dump IDs', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValue(
+        new AdtApiError('Not Found', 404, '/sap/bc/adt/runtime/dump/MISSING', '<error>not found</error>'),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'MISSING',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Dump ID "MISSING" was not found');
+      expect(result.content[0]?.text).toContain('Re-list dumps');
+    });
+
+    it('sanitizes audit preview for dump details', async () => {
+      const auditSpy = vi.spyOn(logger, 'emitAudit');
+      try {
+        mockDumpDetailResponses('Short Text\nSECRET_DUMP_CONTENT_SHOULD_NOT_BE_LOGGED');
+        await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+          action: 'dumps',
+          id: 'DUMP_ID',
+          includeFullText: true,
+        });
+
+        const endEvent = auditSpy.mock.calls
+          .map(([event]) => event)
+          .find(
+            (event) =>
+              typeof event === 'object' &&
+              event !== null &&
+              (event as { event?: string; status?: string }).event === 'tool_call_end' &&
+              (event as { event?: string; status?: string }).status === 'success',
+          ) as { resultPreview?: string } | undefined;
+
+        expect(endEvent?.resultPreview).toContain('[omitted');
+        expect(endEvent?.resultPreview).not.toContain('SECRET_DUMP_CONTENT_SHOULD_NOT_BE_LOGGED');
+      } finally {
+        auditSpy.mockRestore();
+      }
+    });
+  });
+
   // ─── SAPWrite Package Enforcement ──────────────────────────────
 
   describe('SAPWrite package enforcement', () => {

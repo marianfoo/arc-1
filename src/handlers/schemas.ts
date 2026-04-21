@@ -1,5 +1,5 @@
 /**
- * Zod v4 input schemas for all 11 MCP tools.
+ * Zod v4 input schemas for all 12 MCP tools.
  *
  * These schemas provide runtime validation via safeParse() in handleToolCall().
  * JSON Schema generation via z.toJSONSchema() is planned for a future PR
@@ -429,7 +429,17 @@ export const SAPLintSchema = z.object({
 // ─── SAPDiagnose ────────────────────────────────────────────────────
 
 export const SAPDiagnoseSchema = z.object({
-  action: z.enum(['syntax', 'unittest', 'atc', 'dumps', 'traces', 'quickfix', 'apply_quickfix']),
+  action: z.enum([
+    'syntax',
+    'unittest',
+    'atc',
+    'dumps',
+    'traces',
+    'system_messages',
+    'gateway_errors',
+    'quickfix',
+    'apply_quickfix',
+  ]),
   name: z.string().optional(),
   type: z.string().optional(),
   source: z.string().optional(),
@@ -439,8 +449,14 @@ export const SAPDiagnoseSchema = z.object({
   proposalUserContent: z.string().optional(),
   variant: z.string().optional(),
   id: z.string().optional(),
+  detailUrl: z.string().optional(),
+  errorType: z.string().optional(),
   user: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
   maxResults: z.coerce.number().optional(),
+  sections: z.array(z.string()).optional(),
+  includeFullText: z.coerce.boolean().optional(),
   analysis: z.enum(['hitlist', 'statements', 'dbAccesses']).optional(),
 });
 

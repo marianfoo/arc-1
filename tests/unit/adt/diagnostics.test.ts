@@ -3,13 +3,19 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   getDump,
+  getGatewayErrorDetail,
   getTraceDbAccesses,
   getTraceHitlist,
   getTraceStatements,
   listDumps,
+  listGatewayErrors,
+  listSystemMessages,
   listTraces,
   parseDumpDetail,
   parseDumpList,
+  parseGatewayErrorDetail,
+  parseGatewayErrors,
+  parseSystemMessages,
   parseTraceDbAccesses,
   parseTraceHitlist,
   parseTraceList,
@@ -79,7 +85,7 @@ describe('Runtime Diagnostics', () => {
     it('sends correct Accept header', async () => {
       const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
       await listDumps(http, unrestrictedSafetyConfig());
-      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/runtime/dumps', {
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/runtime/dumps?$top=50', {
         Accept: 'application/atom+xml;type=feed',
       });
     });
@@ -98,6 +104,17 @@ describe('Runtime Diagnostics', () => {
       await listDumps(http, unrestrictedSafetyConfig(), { maxResults: 10 });
       const url = (http.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(url).toContain('$top=10');
+    });
+
+    it('clamps maxResults to safe bounds', async () => {
+      const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
+      await listDumps(http, unrestrictedSafetyConfig(), { maxResults: 9999 });
+      const highUrl = (http.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(highUrl).toContain('$top=200');
+
+      await listDumps(http, unrestrictedSafetyConfig(), { maxResults: 0 });
+      const lowUrl = (http.get as ReturnType<typeof vi.fn>).mock.calls[1][0] as string;
+      expect(lowUrl).toContain('$top=1');
     });
 
     it('returns empty array for empty feed', async () => {
@@ -157,11 +174,17 @@ describe('Runtime Diagnostics', () => {
         name: 'kap0',
         title: 'Short Text',
         category: 'ABAP Developer View',
+        line: 11,
+        chapterOrder: 1,
+        categoryOrder: 3,
       });
       expect(result.chapters).toContainEqual({
         name: 'kap1',
         title: 'What happened?',
         category: 'User View',
+        line: 16,
+        chapterOrder: 2,
+        categoryOrder: 2,
       });
     });
 
@@ -212,6 +235,25 @@ describe('Runtime Diagnostics', () => {
       expect(result[0]!.id).toBe('DUMP_001');
     });
 
+    it('extracts dump ID from atom:id when self link is missing', () => {
+      const xml = `<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+        <atom:entry>
+          <atom:author><atom:name>USER</atom:name></atom:author>
+          <atom:category term="MESSAGE_TYPE_X" label="Laufzeitfehler"/>
+          <atom:category term="ZTEST_PROG" label="Beendetes ABAP-Programm"/>
+          <atom:id>/sap/bc/adt/vit/runtime/dumps/DUMP_FROM_ATOM_ID</atom:id>
+          <atom:published>2026-04-01T10:00:00Z</atom:published>
+        </atom:entry>
+      </atom:feed>`;
+
+      const result = parseDumpList(xml);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.id).toBe('DUMP_FROM_ATOM_ID');
+      // Localized labels should still map by category order fallback.
+      expect(result[0]!.error).toBe('MESSAGE_TYPE_X');
+      expect(result[0]!.program).toBe('ZTEST_PROG');
+    });
+
     it('handles empty feed', () => {
       const xml = '<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>';
       expect(parseDumpList(xml)).toEqual([]);
@@ -230,6 +272,18 @@ describe('Runtime Diagnostics', () => {
 
       const result = parseDumpList(xml);
       expect(result[0]!.id).toBe('20260328%20%20ID%20WITH%20SPACES');
+    });
+
+    it('ignores entries without any extractable dump ID', () => {
+      const xml = `<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+        <atom:entry>
+          <atom:author><atom:name>USER</atom:name></atom:author>
+          <atom:category term="ERROR" label="ABAP runtime error"/>
+          <atom:category term="PROG" label="Terminated ABAP program"/>
+          <atom:id>UNRELATED_ENTRY_ID</atom:id>
+        </atom:entry>
+      </atom:feed>`;
+      expect(parseDumpList(xml)).toEqual([]);
     });
   });
 
@@ -263,7 +317,314 @@ describe('Runtime Diagnostics', () => {
         name: 'kap0',
         title: 'Short Text',
         category: 'ABAP Developer View',
+        line: 11,
+        chapterOrder: 1,
+        categoryOrder: 3,
       });
+    });
+
+    it('splits formatted dump text into chapter sections', () => {
+      const xml = `<?xml version="1.0"?>
+<dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="ERR" author="USR" exception="CX" terminatedProgram="ZPROG" datetime="2026-01-01T00:00:00Z">
+  <dump:chapters>
+    <dump:chapter name="kap0" title="Short Text" category="ABAP Developer View" line="1" chapterOrder="1" categoryOrder="1"/>
+    <dump:chapter name="kap1" title="What happened?" category="User View" line="4" chapterOrder="2" categoryOrder="1"/>
+    <dump:chapter name="kap3" title="Error analysis" category="ABAP Developer View" line="7" chapterOrder="3" categoryOrder="1"/>
+  </dump:chapters>
+</dump:dump>`;
+      const formatted = ['Short Text', 'S1', '', 'What happened?', 'W1', '', 'Error analysis', 'E1'].join('\n');
+      const result = parseDumpDetail(xml, formatted, 'ID');
+
+      expect(result.sections.kap0).toContain('Short Text');
+      expect(result.sections.kap1).toContain('What happened?');
+      expect(result.sections.kap3).toContain('Error analysis');
+    });
+
+    it('normalizes wrapped backslash lines in source/code-stack sections', () => {
+      const xml = `<?xml version="1.0"?>
+<dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="ERR" author="USR" exception="CX" terminatedProgram="ZPROG" datetime="2026-01-01T00:00:00Z">
+  <dump:chapters>
+    <dump:chapter name="kap8" title="Source Code Extract" category="ABAP Developer View" line="1" chapterOrder="1" categoryOrder="1"/>
+    <dump:chapter name="kap9" title="End" category="ABAP Developer View" line="4" chapterOrder="2" categoryOrder="1"/>
+  </dump:chapters>
+</dump:dump>`;
+      const formatted = ['Line A with wrap\\', '  continued', 'Line B', 'END'].join('\n');
+      const result = parseDumpDetail(xml, formatted, 'ID');
+
+      expect(result.sections.kap8).toContain('Line A with wrapcontinued');
+      expect(result.sections.kap8).not.toContain('wrap\\\n');
+    });
+  });
+
+  // ─── System Messages ───────────────────────────────────────────────
+
+  describe('listSystemMessages', () => {
+    it('calls system messages endpoint with default limit', async () => {
+      const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
+      await listSystemMessages(http, unrestrictedSafetyConfig());
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/runtime/systemmessages?$top=50', {
+        Accept: 'application/atom+xml;type=feed',
+      });
+    });
+
+    it('passes user filter and maxResults', async () => {
+      const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
+      await listSystemMessages(http, unrestrictedSafetyConfig(), { user: 'DEVELOPER', maxResults: 7 });
+      const url = (http.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(url).toContain('$top=7');
+      expect(url).toContain('$query=');
+      expect(url).toContain('equals(user%2CDEVELOPER)');
+    });
+  });
+
+  describe('parseSystemMessages', () => {
+    it('parses system message feed entries', () => {
+      const xml = `<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+        <atom:entry validFrom="2026-04-01T10:00:00Z" validTo="2026-04-01T12:00:00Z">
+          <atom:id>MSG_001</atom:id>
+          <atom:title>Maintenance window</atom:title>
+          <atom:updated>2026-04-01T10:00:00Z</atom:updated>
+          <atom:author><atom:name>BASISADM</atom:name></atom:author>
+          <atom:summary>System restart planned.</atom:summary>
+          <atom:category term="WARN"/>
+          <atom:link rel="self" href="/sap/bc/adt/runtime/systemmessages/MSG_001"/>
+        </atom:entry>
+      </atom:feed>`;
+
+      const result = parseSystemMessages(xml);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        id: 'MSG_001',
+        title: 'Maintenance window',
+        text: 'System restart planned.',
+        severity: 'WARN',
+        validFrom: '2026-04-01T10:00:00Z',
+        validTo: '2026-04-01T12:00:00Z',
+        createdBy: 'BASISADM',
+        timestamp: '2026-04-01T10:00:00Z',
+        detailUrl: '/sap/bc/adt/runtime/systemmessages/MSG_001',
+      });
+    });
+  });
+
+  // ─── Gateway Error Log ─────────────────────────────────────────────
+
+  describe('listGatewayErrors', () => {
+    it('calls gateway error log endpoint with default limit', async () => {
+      const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
+      await listGatewayErrors(http, unrestrictedSafetyConfig());
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/gw/errorlog?$top=50', {
+        Accept: 'application/atom+xml;type=feed',
+      });
+    });
+
+    it('uses username filter in query expression', async () => {
+      const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
+      await listGatewayErrors(http, unrestrictedSafetyConfig(), { user: 'ADMIN' });
+      const url = (http.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(url).toContain('equals(username%2CADMIN)');
+    });
+  });
+
+  describe('getGatewayErrorDetail', () => {
+    it('loads detail by explicit detail URL', async () => {
+      const xml = `<errorlog:errorEntry xmlns:errorlog="http://www.sap.com/adt/gateway/errorlog"/>`;
+      const http = mockHttp(xml);
+      await getGatewayErrorDetail(http, unrestrictedSafetyConfig(), {
+        detailUrl: '/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC123',
+      });
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC123', {
+        Accept: 'text/html, application/xhtml+xml, application/xml;q=0.5',
+      });
+    });
+
+    it('builds detail URL from errorType + id (normalizes display form "Frontend Error" to URL form "FrontendError")', async () => {
+      const xml = `<errorlog:errorEntry xmlns:errorlog="http://www.sap.com/adt/gateway/errorlog"/>`;
+      const http = mockHttp(xml);
+      await getGatewayErrorDetail(http, unrestrictedSafetyConfig(), { id: 'ABC123', errorType: 'Frontend Error' });
+      // SAP URL paths require the compact "FrontendError" form, not "Frontend%20Error".
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/gw/errorlog/FrontendError/ABC123', {
+        Accept: 'text/html, application/xhtml+xml, application/xml;q=0.5',
+      });
+    });
+
+    it('builds detail URL when errorType is already in compact form', async () => {
+      const xml = `<errorlog:errorEntry xmlns:errorlog="http://www.sap.com/adt/gateway/errorlog"/>`;
+      const http = mockHttp(xml);
+      await getGatewayErrorDetail(http, unrestrictedSafetyConfig(), { id: 'ABC123', errorType: 'FrontendError' });
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/gw/errorlog/FrontendError/ABC123', {
+        Accept: 'text/html, application/xhtml+xml, application/xml;q=0.5',
+      });
+    });
+
+    it('builds detail URL from bare atom:id form "FrontendError/TXID"', async () => {
+      const xml = `<errorlog:errorEntry xmlns:errorlog="http://www.sap.com/adt/gateway/errorlog"/>`;
+      const http = mockHttp(xml);
+      await getGatewayErrorDetail(http, unrestrictedSafetyConfig(), {
+        id: 'FrontendError/1E81ABCDEF0123456789',
+      });
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/gw/errorlog/FrontendError/1E81ABCDEF0123456789', {
+        Accept: 'text/html, application/xhtml+xml, application/xml;q=0.5',
+      });
+    });
+
+    it('does not double-encode percent-encoded atom:id segments', async () => {
+      const xml = `<errorlog:errorEntry xmlns:errorlog="http://www.sap.com/adt/gateway/errorlog"/>`;
+      const http = mockHttp(xml);
+      await getGatewayErrorDetail(http, unrestrictedSafetyConfig(), {
+        id: 'Frontend%20Error/1E81ABCDEF0123456789',
+      });
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/gw/errorlog/Frontend%20Error/1E81ABCDEF0123456789', {
+        Accept: 'text/html, application/xhtml+xml, application/xml;q=0.5',
+      });
+    });
+  });
+
+  describe('parseGatewayErrors', () => {
+    it('parses gateway feed entries', () => {
+      const xml = `<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+        <atom:entry>
+          <atom:id>/sap/bc/adt/gw/errorlog/Frontend%20Error/66BF65D1A9DD1FD18D97D52042DF3925</atom:id>
+          <atom:title>Request failed</atom:title>
+          <atom:updated>2026-04-01T10:00:00Z</atom:updated>
+          <atom:author><atom:name>DEVELOPER</atom:name></atom:author>
+          <atom:category term="Frontend Error"/>
+          <atom:link rel="self" href="/sap/bc/adt/gw/errorlog/Frontend%20Error/66BF65D1A9DD1FD18D97D52042DF3925"/>
+        </atom:entry>
+      </atom:feed>`;
+
+      const result = parseGatewayErrors(xml);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.type).toBe('Frontend Error');
+      expect(result[0]?.shortText).toBe('Request failed');
+      expect(result[0]?.transactionId).toBe('66BF65D1A9DD1FD18D97D52042DF3925');
+      expect(result[0]?.detailUrl).toContain('/sap/bc/adt/gw/errorlog/Frontend%20Error/');
+    });
+
+    it('parses real SAP feed with bare atom:id (no category/self link)', () => {
+      // Real NetWeaver response: atom:id is bare "{ErrorType}/{TransactionId}",
+      // no atom:category, no atom:link rel="self", title has "Type: text" format,
+      // and summary is an HTML fragment with header cells.
+      const xml = `<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+        <atom:entry>
+          <atom:id>FrontendError/1E81ABCDEF0123456789</atom:id>
+          <atom:title>Frontend Error: Communication failure</atom:title>
+          <atom:updated>2026-04-10T08:45:12Z</atom:updated>
+          <atom:author><atom:name>DEVELOPER</atom:name></atom:author>
+          <atom:summary type="html">&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Type&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frontend Error&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</atom:summary>
+        </atom:entry>
+      </atom:feed>`;
+
+      const result = parseGatewayErrors(xml);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.type).toBe('Frontend Error');
+      expect(result[0]?.shortText).toBe('Communication failure');
+      expect(result[0]?.transactionId).toBe('1E81ABCDEF0123456789');
+      expect(result[0]?.detailUrl).toBe('/sap/bc/adt/gw/errorlog/FrontendError/1E81ABCDEF0123456789');
+      expect(result[0]?.username).toBe('DEVELOPER');
+    });
+
+    it('decodes encoded atom:id segments before deriving detail URL', () => {
+      const xml = `<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+        <atom:entry>
+          <atom:id>/sap/bc/adt/gw/errorlog/Frontend%20Error/1E81ABCDEF0123456789</atom:id>
+          <atom:title>Frontend Error: Communication failure</atom:title>
+          <atom:updated>2026-04-10T08:45:12Z</atom:updated>
+          <atom:author><atom:name>DEVELOPER</atom:name></atom:author>
+        </atom:entry>
+      </atom:feed>`;
+
+      const result = parseGatewayErrors(xml);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.type).toBe('Frontend Error');
+      expect(result[0]?.detailUrl).toBe('/sap/bc/adt/gw/errorlog/Frontend%20Error/1E81ABCDEF0123456789');
+    });
+  });
+
+  describe('parseGatewayErrorDetail', () => {
+    it('parses gateway error detail with source and call stack', () => {
+      const xml = `<?xml version="1.0"?>
+<errorlog:errorEntry xmlns:errorlog="http://www.sap.com/adt/gateway/errorlog" type="Frontend Error">
+  <errorlog:shortText>Request failed</errorlog:shortText>
+  <errorlog:transactionId>ABC123</errorlog:transactionId>
+  <errorlog:dateTime>2026-04-01T10:00:00Z</errorlog:dateTime>
+  <errorlog:username>DEVELOPER</errorlog:username>
+  <errorlog:serviceInfo namespace="/SAP/" serviceName="Z_SRV" serviceVersion="0001"/>
+  <errorlog:errorContext>
+    <errorlog:errorInfo>Gateway runtime error</errorlog:errorInfo>
+    <errorlog:exceptions>
+      <errorlog:exception type="CX_ROOT" raiseLocation="ZCL_X=>RUN">Root exception</errorlog:exception>
+    </errorlog:exceptions>
+  </errorlog:errorContext>
+  <errorlog:sourceCode errorLine="2">
+    <errorlog:line number="1">line 1</errorlog:line>
+    <errorlog:line number="2" isError="true">line 2</errorlog:line>
+  </errorlog:sourceCode>
+  <errorlog:callStack>
+    <errorlog:entry number="1" event="METHOD" program="ZCL_X" name="RUN" line="2"/>
+  </errorlog:callStack>
+</errorlog:errorEntry>`;
+
+      const result = parseGatewayErrorDetail(xml);
+      expect(result.type).toBe('Frontend Error');
+      expect(result.transactionId).toBe('ABC123');
+      expect(result.serviceInfo.serviceName).toBe('Z_SRV');
+      expect(result.errorContext.exceptions[0]).toEqual({
+        type: 'CX_ROOT',
+        text: 'Root exception',
+        raiseLocation: 'ZCL_X=>RUN',
+      });
+      expect(result.sourceCode.errorLine).toBe(2);
+      expect(result.sourceCode.lines[1]).toEqual({
+        number: 2,
+        content: 'line 2',
+        isError: true,
+      });
+      expect(result.callStack[0]).toEqual({
+        number: 1,
+        event: 'METHOD',
+        program: 'ZCL_X',
+        name: 'RUN',
+        line: 2,
+      });
+    });
+
+    it('parses real SAP HTML fragment detail payload', () => {
+      // Real NetWeaver /sap/bc/adt/gw/errorlog/{Type}/{Tx} returns HTML, not XML.
+      // Mimics the real NetWeaver /sap/bc/adt/gw/errorlog/{Type}/{Tx} payload:
+      // HTML fragment with <h4 id="HEADER|SERVICE|CONTEXT|SOURCE|STACK"> markers and
+      // label/value rows where the label is wrapped in <b>...</b> inside a <td>.
+      const html = `<h4 id="HEADER">Error Header</h4>
+<table>
+  <tr><td><b>Type</b></td><td>Frontend Error</td></tr>
+  <tr><td><b>Short Text</b></td><td>Communication failure</td></tr>
+  <tr><td><b>Transaction ID</b></td><td>1E81ABCDEF0123456789</td></tr>
+  <tr><td><b>Date/Time</b></td><td>2026-04-10 08:45:12</td></tr>
+  <tr><td><b>Username</b></td><td>DEVELOPER</td></tr>
+  <tr><td><b>Client</b></td><td>100</td></tr>
+</table>
+<h4 id="SERVICE">Service</h4>
+<table>
+  <tr><td><b>Service Namespace</b></td><td>/SAP/</td></tr>
+  <tr><td><b>Service Name</b></td><td>Z_SRV</td></tr>
+  <tr><td><b>Service Version</b></td><td>0001</td></tr>
+</table>
+<h4 id="CONTEXT">Error Context</h4>
+<table>
+  <tr><td><b>ERROR_INFO</b></td><td>Gateway runtime failure detected</td></tr>
+</table>
+<h4 id="STACK">Call Stack</h4>`;
+
+      const result = parseGatewayErrorDetail(html);
+      expect(result.type).toBe('Frontend Error');
+      expect(result.shortText).toBe('Communication failure');
+      expect(result.transactionId).toBe('1E81ABCDEF0123456789');
+      expect(result.username).toBe('DEVELOPER');
+      expect(result.client).toBe('100');
+      expect(result.serviceInfo.serviceName).toBe('Z_SRV');
+      expect(result.serviceInfo.serviceVersion).toBe('0001');
+      expect(result.serviceInfo.namespace).toBe('/SAP/');
+      expect(result.errorContext.errorInfo).toContain('Gateway runtime failure detected');
     });
   });
 

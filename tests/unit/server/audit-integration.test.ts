@@ -202,4 +202,44 @@ describe('Audit Logging Integration', () => {
     expect(toolStart.tool).toBe('SAPRead');
     expect(toolEnd.status).toBe('success');
   });
+
+  it('sanitizes SAPDiagnose dump detail resultPreview in audit events', async () => {
+    const events: AuditEvent[] = [];
+    const captureSink = { write: (e: AuditEvent) => events.push(e) };
+    const { logger } = await import('../../../src/server/logger.js');
+    logger.addSink(captureSink);
+
+    mockFetch.mockReset();
+    const dumpXml = `<?xml version="1.0"?>
+<dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="ERR" author="USR" exception="CX" terminatedProgram="ZPROG" datetime="2026-01-01T00:00:00Z">
+  <dump:chapters>
+    <dump:chapter name="kap0" title="Short Text" category="ABAP Developer View" line="1" chapterOrder="1" categoryOrder="1"/>
+  </dump:chapters>
+</dump:dump>`;
+    mockFetch.mockImplementation((url: string | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/runtime/dump/DUMP_ID/formatted')) {
+        return Promise.resolve(
+          mockResponse(200, 'SECRET_DUMP_CONTENT_SHOULD_NOT_APPEAR_IN_AUDIT_PREVIEW', { 'x-csrf-token': 'T' }),
+        );
+      }
+      if (urlStr.includes('/runtime/dump/DUMP_ID')) {
+        return Promise.resolve(mockResponse(200, dumpXml, { 'x-csrf-token': 'T' }));
+      }
+      return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+    });
+
+    await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+      action: 'dumps',
+      id: 'DUMP_ID',
+      includeFullText: true,
+    });
+
+    const end = events.find((e) => e.event === 'tool_call_end' && (e as any).status === 'success') as
+      | Record<string, unknown>
+      | undefined;
+    const preview = String(end?.resultPreview ?? '');
+    expect(preview).toContain('[omitted');
+    expect(preview).not.toContain('SECRET_DUMP_CONTENT_SHOULD_NOT_APPEAR_IN_AUDIT_PREVIEW');
+  });
 });

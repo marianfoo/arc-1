@@ -244,7 +244,7 @@ describe('Tool Definitions', () => {
     });
   });
 
-  it('SAPDiagnose exposes syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces', () => {
+  it('SAPDiagnose exposes runtime diagnostics + quickfix actions', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapDiagnose = tools.find((t) => t.name === 'SAPDiagnose')!;
     const schema = sapDiagnose.inputSchema as Record<string, any>;
@@ -257,11 +257,17 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('apply_quickfix');
     expect(actionEnum).toContain('dumps');
     expect(actionEnum).toContain('traces');
+    expect(actionEnum).toContain('system_messages');
+    expect(actionEnum).toContain('gateway_errors');
     expect(schema.properties.source).toBeDefined();
     expect(schema.properties.line).toBeDefined();
     expect(schema.properties.column).toBeDefined();
     expect(schema.properties.proposalUri).toBeDefined();
     expect(schema.properties.proposalUserContent).toBeDefined();
+    expect(schema.properties.sections).toBeDefined();
+    expect(schema.properties.includeFullText).toBeDefined();
+    expect(schema.properties.detailUrl).toBeDefined();
+    expect(schema.properties.errorType).toBeDefined();
   });
 
   // ─── textSearch-based SAPSearch adaptation ───────────────────────

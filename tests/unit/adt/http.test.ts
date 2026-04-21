@@ -369,6 +369,34 @@ describe('AdtHttpClient', () => {
       });
     });
 
+    it('throws AdtApiError(401) when ADT path returns a DOCTYPE logon document', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '<!DOCTYPE html>\n<html><head><title>System Logon</title></head></html>', {
+          'content-type': 'text/html; charset=UTF-8',
+        }),
+      );
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/sap/bc/adt/core/discovery')).rejects.toMatchObject({
+        statusCode: 401,
+        message: expect.stringContaining('HTML login page'),
+      });
+    });
+
+    it('passes through HTML fragment responses (e.g. gateway error log detail)', async () => {
+      // Real /sap/bc/adt/gw/errorlog/{type}/{tx} returns HTML fragments that
+      // start with <h4 id="..."> and have text/html content-type — they must
+      // not trigger the login-page heuristic.
+      const fragment = '<h4 id="OVERVIEW"><u>Content</u></h4><a href="#HEADER">Header Information</a><br>';
+      mockFetch.mockResolvedValueOnce(mockResponse(200, fragment, { 'content-type': 'text/html; charset=utf-8' }));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const response = await client.get('/sap/bc/adt/gw/errorlog/FrontendError/ABC123');
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe(fragment);
+    });
+
     it('accepts XML response on ADT path', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(200, '<adt/>', { 'content-type': 'application/xml' }));
 

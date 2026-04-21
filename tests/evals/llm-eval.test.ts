@@ -157,9 +157,7 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
     } else if (PROVIDER_NAME === 'anthropic') {
       const check = checkAnthropicAvailable();
       if (!check.available) {
-        throw new Error(
-          `Anthropic provider unavailable: ${check.reason}\n` + '  Add ANTHROPIC_API_KEY=sk-ant-... to .env.',
-        );
+        throw new Error(`Anthropic provider unavailable: ${check.reason}\n  Add ANTHROPIC_API_KEY=sk-ant-... to .env.`);
       }
       provider = createAnthropicProvider(MODEL);
     } else if (PROVIDER_NAME === 'claude-code') {

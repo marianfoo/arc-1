@@ -363,6 +363,12 @@ export interface DumpChapter {
   name: string;
   title: string;
   category: string;
+  /** 1-based start line in formatted dump text */
+  line: number;
+  /** Chapter order from ADT metadata */
+  chapterOrder: number;
+  /** Category order from ADT metadata */
+  categoryOrder: number;
 }
 
 /** Full dump detail from /sap/bc/adt/runtime/dump/{id} */
@@ -383,6 +389,8 @@ export interface DumpDetail {
   chapters: DumpChapter[];
   /** Full formatted plain text dump content */
   formattedText: string;
+  /** Chapter-sliced dump text keyed by stable section IDs (chapter names) */
+  sections: Record<string, string>;
   /** ADT URI to the termination source location */
   terminationUri?: string;
 }
@@ -445,6 +453,92 @@ export interface TraceDbAccess {
   bufferedCount: number;
   /** Total access time (microseconds) */
   accessTime: number;
+}
+
+/** SM02 system message entry */
+export interface SystemMessageEntry {
+  id: string;
+  title: string;
+  text: string;
+  severity: string;
+  validFrom: string;
+  validTo: string;
+  createdBy: string;
+  timestamp: string;
+  detailUrl?: string;
+}
+
+/** Gateway error entry from /sap/bc/adt/gw/errorlog feed */
+export interface GatewayErrorEntry {
+  /** Gateway error type (for example "Frontend Error") */
+  type: string;
+  /** Short text from feed title */
+  shortText: string;
+  /** Transaction/error ID */
+  transactionId: string;
+  /** Timestamp */
+  dateTime: string;
+  /** SAP user */
+  username: string;
+  /** ADT detail URL for this error entry */
+  detailUrl: string;
+  package?: string;
+  applicationComponent?: string;
+  client?: string;
+  requestKind?: string;
+}
+
+export interface GatewayServiceInfo {
+  namespace: string;
+  serviceName: string;
+  serviceVersion: string;
+  groupId: string;
+  serviceRepository: string;
+  destination: string;
+}
+
+export interface GatewayExceptionInfo {
+  type: string;
+  text: string;
+  raiseLocation: string;
+}
+
+export interface GatewaySourceLine {
+  number: number;
+  content: string;
+  isError: boolean;
+}
+
+export interface GatewayCallStackEntry {
+  number: number;
+  event: string;
+  program: string;
+  name: string;
+  line: number;
+}
+
+/** Detailed gateway error payload */
+export interface GatewayErrorDetail {
+  type: string;
+  shortText: string;
+  transactionId: string;
+  package: string;
+  applicationComponent: string;
+  dateTime: string;
+  username: string;
+  client: string;
+  requestKind: string;
+  serviceInfo: GatewayServiceInfo;
+  errorContext: {
+    errorInfo: string;
+    resolution: Record<string, string>;
+    exceptions: GatewayExceptionInfo[];
+  };
+  sourceCode: {
+    lines: GatewaySourceLine[];
+    errorLine: number;
+  };
+  callStack: GatewayCallStackEntry[];
 }
 
 // ─── Message Class Types ────────────────────────────────────────────
