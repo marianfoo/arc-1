@@ -46,6 +46,56 @@ describe('extractRapHandlerRequirements', () => {
     expect(segmentAction?.entityAlias).toBe('Segment');
     expect(segmentAction?.targetHandlerClass).toBe('lhc_segment');
   });
+
+  it('extracts factory, internal, and static action variants and omits RESULT when BDEF has none', () => {
+    const source = `managed implementation in class zbp_i_travel unique;
+define behavior for zi_travel alias travel
+authorization master ( global )
+{
+  action  ( features: instance ) acceptTravel result [1] $self;
+  internal action reCalcTotalPrice;
+  factory action copyTravel [1];
+  static action doStaticThing;
+  static factory action staticCreate;
+}`;
+    const requirements = extractRapHandlerRequirements(source);
+    const accept = requirements.find((req) => req.methodName === 'accepttravel');
+    expect(accept?.signature).toContain('FOR ACTION travel~acceptTravel RESULT result');
+
+    const recalc = requirements.find((req) => req.methodName === 'recalctotalprice');
+    expect(recalc).toBeDefined();
+    expect(recalc?.signature).toContain('FOR ACTION travel~reCalcTotalPrice.');
+    expect(recalc?.signature).not.toContain('RESULT');
+
+    const copy = requirements.find((req) => req.methodName === 'copytravel');
+    expect(copy, 'factory action should be detected').toBeDefined();
+    expect(copy?.signature).toContain('FOR ACTION travel~copyTravel.');
+    expect(copy?.signature).not.toContain('RESULT');
+
+    const staticThing = requirements.find((req) => req.methodName === 'dostaticthing');
+    expect(staticThing, 'static action should be detected').toBeDefined();
+    expect(staticThing?.signature).not.toContain('RESULT');
+
+    const staticCreate = requirements.find((req) => req.methodName === 'staticcreate');
+    expect(staticCreate, 'static factory action should be detected').toBeDefined();
+  });
+
+  it('detects RESULT clause even when action declaration spans multiple lines', () => {
+    const source = `define behavior for zi_travel alias travel
+authorization master ( global )
+{
+  action acceptTravel
+    result [1] $self;
+  action cancelTravel
+    ;
+}`;
+    const requirements = extractRapHandlerRequirements(source);
+    const accept = requirements.find((req) => req.methodName === 'accepttravel');
+    expect(accept?.signature).toContain('RESULT result');
+
+    const cancel = requirements.find((req) => req.methodName === 'canceltravel');
+    expect(cancel?.signature).not.toContain('RESULT');
+  });
 });
 
 describe('findMissingRapHandlerRequirements', () => {

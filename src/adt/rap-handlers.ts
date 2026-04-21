@@ -45,6 +45,19 @@ function countChar(value: string, char: string): number {
   return value.split(char).length - 1;
 }
 
+function collectStatement(lines: string[], startIdx: number): string {
+  let statement = lines[startIdx] ?? '';
+  if (statement.includes(';')) return statement;
+  for (let j = startIdx + 1; j < lines.length; j += 1) {
+    const next = lines[j] ?? '';
+    statement += ` ${next}`;
+    if (next.includes(';')) break;
+    // Safety cutoff: behavior blocks shouldn't have single statements > 20 lines.
+    if (j - startIdx > 20) break;
+  }
+  return statement;
+}
+
 function normalizeMethodName(name: string): string {
   return name.replace(/\.$/, '').trim().toLowerCase();
 }
@@ -137,10 +150,18 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
       const line = block.lines[idx] ?? '';
       const declarationLine = block.startLine + idx;
 
-      const actionMatch = line.match(/^\s*(?:internal\s+)?action(?:\s*\([^)]*\))?\s+([A-Za-z_]\w*)\b/i);
+      // Match: [static] [factory|internal] action [(features...)] <name>
+      // Examples: "action Foo", "internal action Foo", "factory action Foo",
+      //           "static factory action Foo", "action ( features: instance ) Foo".
+      const actionMatch = line.match(
+        /^\s*(?:static\s+)?(?:(?:internal|factory)\s+)*action(?:\s*\([^)]*\))?\s+([A-Za-z_]\w*)\b/i,
+      );
       if (actionMatch?.[1]) {
         const actionName = actionMatch[1];
         const methodName = normalizeMethodName(actionName);
+        const actionDecl = collectStatement(block.lines, idx);
+        const hasResult = /\bresult\b/i.test(actionDecl);
+        const resultPart = hasResult ? ' RESULT result' : '';
         pushRequirement(
           requirements,
           {
@@ -151,8 +172,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
             targetHandlerClass,
             declarationLine,
             signature:
-              `METHODS ${methodName} FOR MODIFY\n` +
-              `  IMPORTING keys FOR ACTION ${alias}~${actionName} RESULT result.`,
+              `METHODS ${methodName} FOR MODIFY\n` + `  IMPORTING keys FOR ACTION ${alias}~${actionName}${resultPart}.`,
           },
           seen,
         );
