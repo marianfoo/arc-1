@@ -84,7 +84,7 @@ const SAPREAD_CLAS_INCLUDES = ['main', 'testclasses', 'definitions', 'implementa
 const SAPREAD_DDLS_INCLUDES = ['elements'] as const;
 
 function validateSapReadInput(
-  input: { type: string; include?: string; versionUri?: string },
+  input: { type: string; include?: string; versionUri?: string; sqlFilter?: string },
   ctx: { addIssue: (issue: { code: 'custom'; path: string[]; message: string }) => void },
 ): void {
   if (input.include) {
@@ -124,6 +124,34 @@ function validateSapReadInput(
         code: 'custom',
         path: ['versionUri'],
         message: 'VERSION_SOURCE versionUri must start with /sap/bc/adt/.',
+      });
+    }
+  }
+
+  if (input.type === 'TABLE_CONTENTS' && input.sqlFilter) {
+    const sqlFilter = input.sqlFilter.trim();
+    if (/^select\b/i.test(sqlFilter)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must be a condition expression only (no SELECT statement). Example: "MANDT = \'100\'" or "MATNR LIKE \'Z%\'".',
+      });
+    }
+    if (/^where\b/i.test(sqlFilter)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must not start with WHERE. Pass only the condition expression, for example: "MANDT = \'100\'".',
+      });
+    }
+    if (sqlFilter.includes(';')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must contain exactly one condition expression (no semicolons or multiple statements).',
       });
     }
   }

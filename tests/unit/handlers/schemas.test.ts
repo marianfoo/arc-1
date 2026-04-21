@@ -57,6 +57,60 @@ describe('SAPReadSchema', () => {
     }
   });
 
+  it('accepts TABLE_CONTENTS sqlFilter as condition expression', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "MANDT = '100' AND MATNR LIKE 'Z%'",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts TABLE_CONTENTS sqlFilter when identifier contains SELECT as substring', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'ZTAB',
+      sqlFilter: "SELECTFLAG = 'X' AND MANDT = '100'",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects TABLE_CONTENTS sqlFilter that starts with SELECT', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "SELECT * FROM MARA WHERE MANDT = '100'",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('condition expression only');
+    }
+  });
+
+  it('rejects TABLE_CONTENTS sqlFilter that starts with WHERE', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "WHERE MANDT = '100'",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('must not start with WHERE');
+    }
+  });
+
+  it('rejects TABLE_CONTENTS sqlFilter with semicolons', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "MANDT = '100'; DELETE FROM T000",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('no semicolons');
+    }
+  });
+
   it('coerces boolean expand_includes from string', () => {
     const result = SAPReadSchema.safeParse({ type: 'FUGR', expand_includes: 'true' });
     expect(result.success).toBe(true);

@@ -1,6 +1,6 @@
 # Bootstrap System Context
 
-Ground the assistant in the target SAP system before any coding work. Produces a local `system-info.md` file that captures SID, release, installed components, detected features, and ARC-1's active lint preset — so later prompts stop guessing at constraints.
+Ground the assistant in the target SAP system before any coding work. Produces a local `system-info.md` file that captures SID, release, installed components, detected features, RAP-relevant constraints, and ARC-1's active lint preset — so later prompts stop guessing at constraints.
 
 Run this once per session when working against an unfamiliar system, or again after a system upgrade.
 
@@ -12,6 +12,7 @@ Run this once per session when working against an unfamiliar system, or again af
 | Overwrite | Yes, if file exists | Fresh probe results are authoritative |
 | Probe features | Yes | Feature flags (RAP, UI5, transports) drive downstream decisions |
 | Include lint preset | Yes | Cloud vs on-prem lint rules matter for generated code |
+| Include RAP constraints snapshot | Yes | Helps RAP skills avoid known 7.5x pitfalls immediately |
 
 ## Input
 
@@ -44,6 +45,16 @@ SAPManage(action="probe")
 Returns feature flags for: `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `ui5repo`, `transport`, `flp`. Each has `available` (bool), `mode`, and a `message`. These drive decisions like "can I generate a RAP stack?" or "is FLP catalog management wired in?"
 
 If the user requested to skip this step, mark features as "not probed" in the output.
+
+## Step 3b: Derive RAP Constraints Snapshot
+
+Derive a compact RAP constraints block from release + probe + lint context. This is heuristic guidance for skill prompts, not a hard API contract.
+
+Include at minimum:
+- Is RAP creation likely viable (`rap.available`, plus whether DDLS/BDEF reads work)
+- On-prem 7.5x guardrails (TABL typing pitfalls, projection BDEF header limits, DDLX annotation scope caveats)
+- Whether pre-write lint likely covers DDLS only vs broader RAP artifacts
+- Whether draft should default to deferred/two-pass for safety
 
 ## Step 4: Read Lint Preset
 
@@ -104,6 +115,15 @@ _Generated: <ISO timestamp>_ · _Source: ARC-1_
 - **Enabled rules**: <count>
 - **Disabled rules**: <count>
 
+## RAP Constraints Snapshot
+
+- **RAP endpoint status**: <available / unavailable / not probed>
+- **Recommended build mode**: <single-pass / two-pass>
+- **TABL admin type guidance**: <syuname+timestampl on on-prem, abp_* on BTP>
+- **Known projection BDEF caveat**: <e.g., use `projection;` header only on 7.5x>
+- **Known DDLX scope caveat**: <e.g., headerInfo/search/objectmodel placement limits>
+- **Lint coverage hint**: <ABAP+DDLS only / broader>
+
 ## Coding Guidance
 
 - Target ABAP dialect: **<abapVersion>** — do not use syntax beyond this level without verifying per object.
@@ -120,6 +140,7 @@ After writing the file, report in 3-5 lines:
 - Which system was probed (SID, type, release)
 - The ABAP dialect ceiling
 - Which headline features are available (RAP, UI5, transports)
+- Key RAP constraints (for example: two-pass recommendation or strict/draft cautions)
 - File path written
 
 Do not dump the full file contents into chat — the user can open the file.

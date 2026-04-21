@@ -161,6 +161,19 @@ Suggestions for the user's workflow:
 - "Use the explain-abap-code skill first to understand objects before modifying them"
 - "Provide object type when possible to avoid search round-trips"
 
+### 3d. Delivery Triage (Quick Wins vs Planned Work)
+
+For every recommendation, classify delivery scope explicitly:
+
+| Bucket | Definition |
+|---|---|
+| **Quick Win (This Session)** | Low-risk prompt/skill/doc tweak that can be implemented immediately without new backend primitives |
+| **Needs Plan + Implementation Phase** | Requires code changes, new ADT integration, schema/tool contract updates, or live SAP regression testing |
+
+Output two lists:
+1. **Quick wins to execute now** (ordered by leverage)
+2. **Planned items** (grouped into the minimum number of implementation plans)
+
 ---
 
 ## Phase 4: Produce the Report
@@ -204,6 +217,13 @@ Generate a report structured for creating a GitHub issue. Use this template:
 
 #### <Improvement 2 Title>
 ...
+
+### Delivery Triage
+- **Quick Wins (this chat):**
+  - <item>
+- **Needs Plan + Implementation Phase:**
+  - <item>
+  - <item>
 
 ### Prompt Strategy Recommendations
 - <numbered list of approach improvements for future sessions>

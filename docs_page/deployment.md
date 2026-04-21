@@ -80,6 +80,7 @@ If this shared server should allow development work, add these flags to the same
 JWT scopes and profiles sit **beneath** that server ceiling. A token with `write` or `sql` scopes still cannot bypass `SAP_READ_ONLY=true` or other stricter server flags. Full matrix: [configuration-reference.md](configuration-reference.md). Scope model and ceiling interaction: [authorization.md](authorization.md#how-safety-and-scopes-interact).
 
 ARC-1 audit logs show the real MCP user; SAP audit logs show the shared service account. Trade-off — good compromise when you can't use PP.
+For this shared-user mode, ARC-1 runs a startup auth preflight (`/sap/bc/adt/core/discovery`) and blocks SAP tool calls on 401/403 with a clear remediation message. This avoids hammering SAP with repeated failed logins when the technical password/client is wrong.
 
 **Full references:**
 - [docker.md](docker.md) — image tags, build, ports, troubleshooting

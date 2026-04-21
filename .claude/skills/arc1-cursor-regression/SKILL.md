@@ -1,16 +1,16 @@
 ---
 name: arc1-cursor-regression
-description: Use when user asks to generate Cursor MCP config + regression prompts for ARC-1. Adaptive: derive tests from PR diff or chat findings and build targeted setup/prompts for changed features/fixes.
+description: Use when user asks to generate Cursor MCP config + regression prompts for ARC-1. Adaptive: derive tests from PR diff or chat findings and build targeted setup/prompts for changed features/fixes, including optional auth/sqlFilter/blockData quick presets.
 ---
 
 # ARC-1 Cursor Regression Skill (Generic + Adaptive)
 
-This skill creates **tailored** Cursor setup and prompts based on:
+This skill creates tailored Cursor setup and prompts based on:
 1. PR scope (preferred)
 2. Current chat findings
 3. Changed files in the local branch
 
-It must not output a hardcoded one-scenario checklist unless the user explicitly asks for that.
+It must not output a hardcoded one-scenario checklist unless the user explicitly asks for that scenario.
 
 ## Trigger conditions
 
@@ -20,6 +20,7 @@ Use this skill when user asks for:
 - “verify this PR/fix/feature” prompts
 - “create config + prompts so I can run quickly”
 - “run the env prep for me”
+- auth/sqlFilter/blockData focused MCP regression
 
 ### Composite request shortcut (must support)
 
@@ -40,7 +41,7 @@ then treat it as a single composite workflow:
 
 ### 0) Resolve active ARC-1 root + branch/worktree (mandatory)
 
-Always bind generated config/scripts/prompts to the **actual target repo root** (not a remembered path).
+Always bind generated config/scripts/prompts to the actual target repo root (not a remembered path).
 
 Run:
 
@@ -108,16 +109,17 @@ Always include `module_connectivity_precheck` unless user requests static-only.
 
 ## Cursor setup strategy
 
-Default: **command-mode MCP servers** (most reliable in Cursor).
+Default: command-mode MCP servers (most reliable in Cursor).
 Use URL mode only if user explicitly asks.
 
 Generate only needed profiles for selected modules:
 - `arc1-good` for positive behavior
 - `arc1-bad` for auth-negative checks (only if auth/preflight module selected)
-- optional profiles like `arc1-good-blockdata`, `arc1-good-readonly`, `arc1-good-hyperfocused` depending on module set
+- `arc1-good-blockdata` for data-block safety checks
+- optional profiles like `arc1-good-readonly`, `arc1-good-hyperfocused` depending on module set
 
 Path/worktree requirements for generated config:
-- MCP command/script must resolve to the **same root** used for PR diff analysis.
+- MCP command/script must resolve to the same root used for PR diff analysis.
 - If scripts are generated under `<root>/.cursor/scripts`, they must compute root relative to script location, with `ARC1_ROOT` override.
 - Mention the resolved root in output so user can quickly verify it before running tests.
 
@@ -223,6 +225,22 @@ When generating runnable instructions, always provide both:
   - run build unless user explicitly asked to skip
   - run `bash -n` syntax validation on generated scripts
   - return prepared paths + default env file path used
+
+## Optional fixed preset (auth/sqlFilter/blockData)
+
+Use this only when the user explicitly asks for the legacy 3-server quick regression profile.
+
+Preset behavior:
+1. Precheck connectivity for `arc1-good`, `arc1-good-blockdata`, `arc1-bad`
+2. Run:
+   - `arc1-good` → `SAPRead(type="SYSTEM")`
+   - `arc1-good` → invalid `TABLE_CONTENTS` sqlFilter (`SELECT * ...`) to verify validation
+   - `arc1-good-blockdata` → `TABLE_CONTENTS` with condition filter to verify blockData enforcement
+   - `arc1-good` → three `SAPQuery` calls
+   - `arc1-bad` → `SAPRead SYSTEM` + `SAPSearch Z*` (auth-negative)
+   - `arc1-good` → `SAPRead SYSTEM` (post-check)
+3. Use `SAPQuery` args `sql` + `maxRows`; do not use `UP TO ... ROWS` in SQL text.
+4. Return PASS/FAIL table + raw responses + checked-at comparison when requested.
 
 ## Prompt generation contract
 

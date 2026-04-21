@@ -89,7 +89,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: SAP auth preflight (integration)
+        id: sap_auth
+        shell: bash
+        env:
+          TEST_SAP_URL: ${{ secrets.TEST_SAP_URL }}
+          TEST_SAP_USER: ${{ secrets.TEST_SAP_USER }}
+          TEST_SAP_PASSWORD: ${{ secrets.TEST_SAP_PASSWORD }}
+          TEST_SAP_CLIENT: ${{ secrets.TEST_SAP_CLIENT }}
+        run: |
+          base_url="${TEST_SAP_URL%/}"
+          probe_url="${base_url}/sap/bc/adt/core/discovery?sap-client=${TEST_SAP_CLIENT}"
+          status="$(curl --silent --show-error --location --output /tmp/adt-discovery-integration.xml --write-out "%{http_code}" \
+            -u "${TEST_SAP_USER}:${TEST_SAP_PASSWORD}" "${probe_url}" || true)"
+          echo "status=${status}"
+          if [ "${status}" = "401" ]; then
+            echo "auth_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Integration skipped::SAP auth preflight returned HTTP 401 (logon failed). Skipping integration tests for this run."
+          else
+            echo "auth_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run integration tests
+        if: steps.sap_auth.outputs.auth_ok == 'true'
         run: npm run test:integration
         env:
           TEST_SAP_URL: ${{ secrets.TEST_SAP_URL }}
@@ -138,10 +160,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: SAP auth preflight (e2e)
+        id: sap_auth
+        shell: bash
+        env:
+          SAP_URL: ${{ secrets.SAP_URL }}
+          SAP_USER: ${{ secrets.SAP_USER }}
+          SAP_PASSWORD: ${{ secrets.SAP_PASSWORD }}
+          SAP_CLIENT: '001'
+        run: |
+          base_url="${SAP_URL%/}"
+          probe_url="${base_url}/sap/bc/adt/core/discovery?sap-client=${SAP_CLIENT}"
+          status="$(curl --silent --show-error --location --output /tmp/adt-discovery-e2e.xml --write-out "%{http_code}" \
+            -u "${SAP_USER}:${SAP_PASSWORD}" "${probe_url}" || true)"
+          echo "status=${status}"
+          if [ "${status}" = "401" ]; then
+            echo "auth_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=E2E skipped::SAP auth preflight returned HTTP 401 (logon failed). Skipping E2E tests for this run."
+          else
+            echo "auth_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build
+        if: steps.sap_auth.outputs.auth_ok == 'true'
         run: npm run build
 
       - name: Start MCP server (local)
+        if: steps.sap_auth.outputs.auth_ok == 'true'
         run: npm run test:e2e:start
         env:
           SAP_URL: ${{ secrets.SAP_URL }}
@@ -150,6 +195,7 @@ jobs:
           SAP_CLIENT: '001'
 
       - name: Run E2E tests
+        if: steps.sap_auth.outputs.auth_ok == 'true'
         run: npm run test:e2e
         env:
           E2E_MCP_URL: http://localhost:3000/mcp

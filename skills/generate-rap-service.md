@@ -4,7 +4,7 @@ Generate a complete RAP OData UI service from a natural language description of 
 
 This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
-**v1 Guardrails** (matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
+**v1 Guardrails** (fast path): managed scenario only, UUID internal early numbering, single root entity by default, standard CRUD first, draft optional, OData V4 preferred. For multi-entity compositions or heavy custom actions, prefer `generate-rap-service-researched`.
 
 ## Smart Defaults (apply silently, do NOT ask)
 
@@ -50,7 +50,7 @@ SAPLint(action="list_rules")
 SAPLint(action="get_formatter_settings")
 ```
 
-**Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
+**Critical gate:** If probe clearly reports RAP/CDS unavailable, stop and tell the user RAP object creation cannot proceed via ARC-1 until the endpoint/system setup is fixed.
 
 Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
 
@@ -89,6 +89,14 @@ SAPManage(action="create_package", name="<package>", description="<description>"
 | OData version | V4 preferred | V2 or V4 |
 | Behavior pool | `ABSTRACT` class, ABAP Cloud only | `ABSTRACT` class, classic ABAP allowed |
 | Table entity | `DEFINE TABLE ENTITY` DDL syntax | Classic DDIC table (SE11) or table entity |
+
+### On-Prem 7.5x Fast Guardrails
+
+- In TABL source, use `syuname` + `timestampl` (not `abap.uname` / `abap.utclong`).
+- Use `abap.char(1)` for boolean-like flags in TABL (not `abap.boolean`).
+- Every `abap.curr(...)` field needs `@Semantics.amount.currencyCode` above it.
+- Keep projection BDEF header as `projection;` (do not add `use etag` header lines).
+- If behavior-pool full-class writes fail with generic save errors, use quickfix-generated signatures + `SAPWrite(action="edit_method")` for method bodies.
 
 ## Step 2: Design the Data Model
 
@@ -690,6 +698,10 @@ If batch activation fails, activate sequentially in dependency order:
 8. Metadata extension
 9. Service definition
 
+If behavior pool activation fails because `METHODS ... FOR ...` signatures are missing:
+- Use `SAPDiagnose(action="quickfix", ...)` and `SAPDiagnose(action="apply_quickfix", ...)` when proposals are available.
+- Fallback to ADT editor quick-fix generation, then patch method bodies with `SAPWrite(action="edit_method", ...)`.
+
 For any failing object, run syntax check to identify the issue:
 
 ```
@@ -773,17 +785,19 @@ Next steps:
 | Error | Cause | Fix |
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
-| Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
+| `Resource X does already exist` on create | Existing object or stub collision | Switch to `SAPWrite(action="update", ...)` and resend full source. Do not retry create blindly. |
 | Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
 | Field mapping incomplete | BDEF field names don't match CDS aliases | Verify CDS field aliases match BDEF field references exactly |
 | ETag field not found | `LocalLastChangedAt` missing or misnamed | Verify admin fields exist in CDS view with correct aliases |
 | Behavior pool not found | Class name doesn't match BDEF `implementation in class` | Ensure class name in BDEF matches the created class exactly |
-| BDEF creation fails | Generic XML template issue | Try creating with minimal source, then update with full source |
+| BDEF creation/save fails with generic `[?/011]` | Behavior-pool full-class save path is unstable for RAP handler declarations | Keep class minimal, generate signatures via quickfix (MCP or ADT), then use `edit_method` for bodies |
 | Lint blocks write | Generated code has lint warnings | Review lint findings, adjust code patterns to pass lint rules |
 | Table entity creation not supported | Older on-prem system | Create table via SE11 manually, provide field list |
 | Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Step 1b |
 | Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
+| Currency reference annotation missing | `abap.curr` field has no currency semantics annotation | Add `@Semantics.amount.currencyCode` above each amount field and ensure a `abap.cuky` field exists |
+| `"draft or side" was expected, not "etag"` | Invalid projection BDEF header syntax on 7.5x | Keep header as `projection;` only |
 
 ## Notes
 
@@ -794,7 +808,7 @@ Next steps:
 
 ### What This Skill Does NOT Do (v1)
 
-- **Compositions / child entities**: No parent-child relationships. Use this skill for the root entity, then manually add compositions.
+- **Complex compositions / child hierarchies**: Use `generate-rap-service-researched` for multi-entity BOs and two-pass rollout.
 - **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
 - **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
