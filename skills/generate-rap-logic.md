@@ -1,6 +1,6 @@
 # Generate RAP Business Logic
 
-Generate RAP determination and validation implementations for an existing behavior definition. Reads the RAP stack, identifies empty method stubs in the behavior pool, and generates ABAP Cloud implementation code.
+Generate RAP determination, validation, and custom action implementations for an existing behavior definition. Reads the RAP stack, identifies empty method stubs (or missing handler signatures) in the behavior pool, and generates ABAP Cloud implementation code.
 
 This skill replicates SAP Joule's "RAP Logic Prediction" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
@@ -81,7 +81,7 @@ Use the structured read as the default because it returns metadata, includes, an
 SAPRead(type="CLAS", name="<bp_class>", method="*")
 ```
 
-Identify which methods are empty stubs (body is just comments, `RETURN`, or blank).
+Identify which methods are empty stubs (body is just comments, `RETURN`, or blank) and which BDEF-declared handlers are missing entirely from the class signature.
 
 ### 1e. Optional history / documentation context
 
@@ -111,6 +111,16 @@ Methods in behavior pool ZBP_I_TRAVEL:
 Ask the user: **"Which methods should I implement? (all empty / specific numbers / skip any?)"**
 
 If the user provided a natural language description, map it to the appropriate method(s).
+
+### 2b. Missing Handler Signature Recovery
+
+If the BDEF declares action/determination/validation handlers that do not exist in the class definition:
+
+1. Try MCP quick-fix flow first:
+   - `SAPDiagnose(action="quickfix", ...)`
+   - `SAPDiagnose(action="apply_quickfix", ...)`
+2. If no suitable proposal is available, use ADT quick-fix to generate the missing `METHODS ... FOR ...` signature.
+3. Re-read method list with `SAPRead(type="CLAS", name="<bp_class>", method="*")` before writing bodies.
 
 ## Step 3: Research RAP Patterns
 
@@ -208,6 +218,34 @@ METHOD <validation_name>.
 ENDMETHOD.
 ```
 
+### Action Template
+
+```abap
+METHOD <action_name>.
+  READ ENTITIES OF <interface_view> IN LOCAL MODE
+    ENTITY <alias>
+      FIELDS ( <action_input_fields> )
+      WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_entities).
+
+  LOOP AT lt_entities ASSIGNING FIELD-SYMBOL(<entity>).
+    " --- Action logic here ---
+  ENDLOOP.
+
+  MODIFY ENTITIES OF <interface_view> IN LOCAL MODE
+    ENTITY <alias>
+      UPDATE FIELDS ( <action_output_fields> )
+      WITH VALUE #( FOR entity IN lt_entities
+        ( %tky = entity-%tky
+          <field> = entity-<field> ) )
+    REPORTED DATA(lt_reported)
+    FAILED DATA(lt_failed).
+
+  reported = CORRESPONDING #( DEEP lt_reported ).
+  failed   = CORRESPONDING #( DEEP lt_failed ).
+ENDMETHOD.
+```
+
 ### Output to User
 
 Show the generated code for each method and ask:
@@ -230,13 +268,15 @@ If you want the generated method body to follow SAP's formatter settings before 
 SAPLint(action="format", source="<generated_method_code>", name="<bp_class>")
 ```
 
+Before calling `edit_method`, confirm the target method exists in `SAPRead(..., method="*")`. If it does not exist yet, generate the signature first via quick-fix flow (`quickfix` + `apply_quickfix`) or ADT quick-fix fallback.
+
 Write each method implementation using method-level surgery:
 
 ```
 SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method_name>", source="<generated_code>", transport="<transport>")
 ```
 
-**Note:** The `transport` parameter is recommended but not always required for edit_method. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied. Pre-write lint validation runs automatically when enabled (default: on).
+**Note:** The `transport` parameter is recommended but not always required for edit_method. ARC-1 auto-propagates the lock-provided `corrNr` when no explicit transport is supplied. Pre-write lint validation runs automatically when enabled (default: on). Prefer `edit_method` over full-class rewrites for behavior pools.
 
 After writing all methods, run a syntax check:
 
@@ -483,6 +523,7 @@ ENDMETHOD.
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Method not found in behavior pool | Class name in BDEF doesn't match actual class | Check `implementation in class` in BDEF source, verify class exists |
+| Missing `METHODS ... FOR ...` handler signature | BDEF declaration exists but class signature not generated yet | Run `SAPDiagnose(action="quickfix")` + `apply_quickfix` when available, or use ADT quick-fix, then retry `edit_method` |
 | Syntax error: `<entity>` unknown in `READ ENTITIES` | Wrong entity name or alias | Use the exact alias from the BDEF `define behavior for ... alias <Alias>` |
 | Syntax error: field `<Field>` unknown | Field alias doesn't match CDS view | Check CDS view field aliases — BDEF uses CDS aliases, not table field names |
 | Activation fails | BDEF and class are incompatible | Activate BDEF and class together: `SAPActivate(objects=[...])` |
@@ -490,6 +531,7 @@ ENDMETHOD.
 | `IN LOCAL MODE` missing | Missing clause causes authorization check | Always use `IN LOCAL MODE` for internal reads/writes within the behavior pool |
 | `%tky` not available | Method signature doesn't provide transactional key | Check method signature — determinations use `keys`, validations use `keys` |
 | Runtime error on `MODIFY ENTITIES` | Trying to modify read-only fields | Don't modify fields marked `field ( readonly )` in BDEF |
+| Generic save error `[?/011]` on full class write | Behavior-pool full-class update path is unstable on some systems | Keep class signature generated via quickfix, then patch method bodies via `edit_method` only |
 
 ## Notes
 
@@ -501,7 +543,7 @@ ENDMETHOD.
 
 ### What This Skill Does NOT Do
 
-- **Custom actions**: Only determinations and validations. For custom actions (e.g., `action approve`), implement manually following a similar pattern.
+- **Automatic BDEF declaration authoring**: This skill assumes declarations exist in BDEF; it does not redesign BDEF contracts for you.
 - **Side effects**: No end-to-end `side effects` implementation (UI refresh triggers). Add manually if needed.
 - **Feature control**: No end-to-end dynamic feature control (`instance_features` / `global_features`). Add manually, especially when the UI should disable actions or updates.
 - **Authorization**: No `authorization master` implementation. Add authorization checks manually.

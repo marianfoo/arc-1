@@ -705,20 +705,33 @@ Objects are created in array order — put dependencies first.
 
 ### 4b. Sequential Fallback
 
-If batch creation fails or the stack is complex (compositions, multiple entities), create sequentially following the dependency order from the plan:
+If batch creation fails or the stack is complex (compositions, multiple entities), create sequentially in **two passes**. This avoids BDEF↔behavior-pool deadlocks and reduces retries on on-prem 7.5x.
 
-1. **Table entity/entities** → Create + Activate each
-2. **Draft table(s)** (if draft) → Create + Activate each
-3. **Interface CDS view(s)** → Create + Activate each
-4. **Interface access control (DCLS)** → Create + Activate
-5. **Behavior pool class(es)** → Create + Activate
-6. **Interface behavior definition(s)** → Create (do NOT activate individually — depends on class)
-7. **Projection CDS view(s)** → Create + Activate
-8. **Projection behavior definition(s)** → Create (do NOT activate individually)
-9. **Metadata extension(s)** → Create + Activate
-10. **Service definition** → Create + Activate
+**Pass 1 — minimal working BO (CRUD + compositions):**
 
-After all artifacts are created, batch activate the interdependent ones:
+1. **Active tables only** → Create + Activate each. Defer draft tables.
+2. **Child interface CDS view(s)** → Create + Activate.
+3. **Root interface CDS view** with compositions (`composition [0..*]`) → Create + Activate.
+4. **Empty behavior pool class** (no `METHODS ... FOR ...` declarations) → Create + Activate.
+5. **Interface BDEF** with CRUD + composition create only. No actions, no determinations/validations, no strict/auth hardening yet.
+6. **Projection CDS view(s)** with redirects → Create + Activate.
+7. **Projection BDEF** (`projection;` header only, use-clauses only) → Create + Activate.
+8. **Service definition + service binding** → Create + Activate + publish.
+
+At this point the service is previewable and stable.
+
+**Pass 2 — business logic + hardening:**
+
+9. Add actions/determinations/validations to interface BDEF and activate.
+10. Generate missing behavior handler signatures:
+   - First preference: `SAPDiagnose(action="quickfix", ...)` + `SAPDiagnose(action="apply_quickfix", ...)` if proposals are available.
+   - Fallback: ADT quick-fix in editor if no MCP quick-fix proposal is exposed.
+11. Implement method bodies with `SAPWrite(action="edit_method", ...)` (avoid full-class rewrites when behavior pools are unstable).
+12. Add `strict ( 2 )` and authorization handlers only after signatures and method bodies are active.
+13. Add draft last. Prefer generated draft tables (ADT quick-fix) over hand-written draft table definitions.
+14. Create/activate DCLS and DDLX after BO logic is green.
+
+After pass 2 changes, batch activate interdependent objects:
 
 ```
 SAPActivate(objects=[
@@ -906,16 +919,19 @@ define table <name> {
 
 ### TABL field types — use qualified names
 
-| Correct | Wrong (causes 007) |
-|---------|-------------------|
+| Correct | Wrong (causes 007 / activation failure) |
+|---------|-----------------------------------------|
 | `abap.int4` | `int4` |
 | `abap.char(N)` | `char(N)` |
 | `abap.numc(N)` | `numc(N)` |
 | `abap.dec(N,M)` | `dec(N,M)` |
 | `abap.clnt` | `clnt` |
 | `sysuuid_x16` | `raw(16)` for UUID |
-| `timestampl` | (correct as-is) |
-| `dats` | (correct as-is) |
+| `timestampl` | `abap.utclong` in TABL |
+| `syuname` | `abap.uname` in TABL |
+| `abap.cuky` | `cuky` |
+| `abap.curr(N,M)` | `curr(N,M)` without reference annotation |
+| `abap.char(1)` (X/space booleans) | `abap.boolean` in TABL |
 
 ### Client handling
 
@@ -934,7 +950,7 @@ Activate the **child view entity first**, then the root. The root's `composition
 
 ### Lint and non-ABAP types
 
-The pre-write lint (abaplint) only understands ABAP statements. It automatically skips DDLS, BDEF, SRVD, TABL, DDLX, DOMA, DTEL. For ABAP types (PROG, CLAS, INTF), lint runs by default. If lint blocks a valid ABAP program, use `lintBeforeWrite: false` in the SAPWrite call to override for that specific call.
+Pre-write lint runs by default for ABAP sources and DDLS. BDEF/SRVD/SRVB/DDLX/TABL/DOMA/DTEL still need activation or preflight validation for most semantic checks. If lint blocks a known-valid case, use `lintBeforeWrite: false` for that specific write and keep the override local.
 
 ---
 
@@ -963,13 +979,21 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 | Error | Cause | Fix |
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
-| Object already exists | Name collision | Search existing object, propose different name or offer to update |
+| `Resource X does already exist` on create | Prior stub or name collision | Switch immediately to `SAPWrite(action="update", ...)` and resend the full source. Do not retry `create` with the same payload. |
 | Feature not supported | System version too old | Adapt plan to available features |
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |
 | Lint blocks write | Code doesn't match lint rules | Adjust generated code to pass lint, or check if lint config is too strict |
 | BDEF syntax error | Wrong field aliases or entity references | Cross-check CDS aliases with BDEF field references |
 | Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Phase 1-pre |
 | Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
+| `Annotation with reference to currency code for field X is missing` | `abap.curr` field has no currency reference | Add `@Semantics.amount.currencyCode` directly above each amount field; pair with `abap.cuky` field. |
+| `"global or instance" was expected, not "none"` | Invalid BDEF auth enum on 7.5x | Use `( global )` or `( instance )`, or defer auth until handler exists. |
+| `dependent entity cannot have the identically named field ... as the etag master entity` | Root and child etag names collide | Use different etag field names for root vs dependent entities. |
+| `"draft or side" was expected, not "etag"` in projection BDEF | `use etag` header is invalid on 7.5x | Keep projection header as `projection;` only. |
+| `not a suitable draft persistency ... there is no "X" field` | Hand-written draft table column naming mismatch | Generate draft table via quick-fix (preferred), or follow CDS-name derivation exactly. |
+| `Annotation 'UI.headerInfo.X' used at wrong position` in DDLX | Unsupported annotation scope in DDLX on 7.5x | Move `@UI.headerInfo`, `@Search.searchable`, `@ObjectModel.*` to projection DDLS source. |
+| `Multiple entries with same name 'X' not allowed` in DDLX | Duplicate annotation blocks on same field | Consolidate field annotations into one block. |
+| `[?/011]` while updating behavior pool class | Full-class behavior-pool write path unstable for `METHODS ... FOR ...` | Keep class minimal, generate signatures via quick-fix, then patch bodies with `SAPWrite(action="edit_method", ...)`. |
 
 ---
 
