@@ -123,6 +123,12 @@ import {
   pullRepo as gctsPullRepo,
   switchBranch as gctsSwitchBranch,
 } from '../adt/gcts.js';
+import {
+  applyRapHandlerSignatures,
+  extractRapHandlerRequirements,
+  findMissingRapHandlerRequirements,
+} from '../adt/rap-handlers.js';
+import { formatRapPreflightFindings, validateRapSource } from '../adt/rap-preflight.js';
 import { changePackage } from '../adt/refactoring.js';
 import { checkOperation, checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
@@ -313,6 +319,10 @@ function formatErrorForLLM(err: unknown, message: string, tool: string, args: Re
           `sqlFilter="MANDT = '100'" or sqlFilter="MATNR LIKE 'Z%'".`
         );
       }
+    }
+    const behaviorPoolHint = getBehaviorPoolSaveFailureHint(err, args);
+    if (behaviorPoolHint) {
+      return `${enriched}\n\nHint: ${behaviorPoolHint}`;
     }
     if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType)) {
       return (
@@ -545,6 +555,40 @@ function getTransportHint(err: AdtApiError): string | undefined {
   }
 
   return undefined;
+}
+
+function inferBdefNameFromBehaviorPoolSource(source: string): string | undefined {
+  const match = source.match(/\bfor\s+behavior\s+of\s+([A-Za-z_][\w/]+)/i);
+  return match?.[1];
+}
+
+function getBehaviorPoolSaveFailureHint(err: AdtApiError, args: Record<string, unknown>): string | undefined {
+  const type = normalizeObjectType(String(args.type ?? ''));
+  if (type !== 'CLAS') return undefined;
+
+  const name = String(args.name ?? '');
+  const source = String(args.source ?? '');
+  const clean = AdtApiError.extractCleanMessage(err.responseBody ?? '').toLowerCase();
+  const body = (err.responseBody ?? '').toLowerCase();
+  const isGenericSaveFailure =
+    clean.includes('an error occured during the save operation') ||
+    clean.includes('an error occurred during the save operation') ||
+    body.includes('an error occured during the save operation') ||
+    body.includes('an error occurred during the save operation');
+  if (!isGenericSaveFailure) return undefined;
+
+  const looksLikeBehaviorPool = /\bfor\s+behavior\s+of\b/i.test(source) || /^zbp_/i.test(name) || /^ybp_/i.test(name);
+  if (!looksLikeBehaviorPool) return undefined;
+
+  const inferredBdef = inferBdefNameFromBehaviorPoolSource(source);
+  const bdefHint = inferredBdef ? `, bdefName="${inferredBdef}"` : ', bdefName="<interface_bdef_name>"';
+
+  return (
+    `Behavior-pool class save failed on handler declarations. Use ` +
+    `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="${name}"${bdefHint}) ` +
+    `to list missing RAP handler signatures, then rerun with autoApply=true to inject declarations. ` +
+    `If SAP still rejects the full-class write, use ADT quick-fix to stamp signatures and continue with SAPWrite(action="edit_method").`
+  );
 }
 
 function classifyError(err: unknown): string {
@@ -2171,6 +2215,11 @@ function sourceUrlForType(type: string, name: string): string {
   return `${objectUrlForType(type, name)}/source/main`;
 }
 
+/** Get a CLAS include URL (definitions/implementations/macros/testclasses) */
+function classIncludeUrl(name: string, include: 'definitions' | 'implementations' | 'macros' | 'testclasses'): string {
+  return `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${include}`;
+}
+
 // ─── SAPWrite Handler ────────────────────────────────────────────────
 
 async function handleSAPWrite(
@@ -2185,6 +2234,7 @@ async function handleSAPWrite(
   const source = String(args.source ?? '');
   const transport = args.transport as string | undefined;
   const lintOverride = args.lintBeforeWrite as boolean | undefined;
+  const preflightOverride = args.preflightBeforeWrite as boolean | undefined;
 
   // type and name are required for all actions except batch_create
   if (action !== 'batch_create' && (!type || !name)) {
@@ -2194,7 +2244,7 @@ async function handleSAPWrite(
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
-  // Helper: enforce allowedPackages for existing objects (update/delete/edit_method).
+  // Helper: enforce allowedPackages for existing objects (update/delete/edit_method/scaffold_rap_handlers).
   // Only fetches metadata when package restrictions are configured — no extra HTTP call otherwise.
   async function enforcePackageForExistingObject(): Promise<string | undefined> {
     if (client.safety.allowedPackages.length === 0) return undefined;
@@ -2235,6 +2285,17 @@ async function handleSAPWrite(
         return textResult(`Successfully updated ${type} ${name}.`);
       }
 
+      // RAP deterministic preflight validation
+      const preflightWarnings = runRapPreflightValidation(
+        source,
+        type,
+        name,
+        cachedFeatures,
+        config.systemType,
+        preflightOverride,
+      );
+      if (preflightWarnings.blocked) return preflightWarnings.result!;
+
       // CDS pre-write validation: reject unsupported syntax early
       const cdsGuardUpdate = guardCdsSyntax(type, source, cachedFeatures);
       if (cdsGuardUpdate) return cdsGuardUpdate;
@@ -2246,7 +2307,8 @@ async function handleSAPWrite(
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
       cachingLayer?.invalidate(type, name);
       const msg = `Successfully updated ${type} ${name}.`;
-      return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+      const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
+      return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
     }
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
@@ -2292,6 +2354,17 @@ async function handleSAPWrite(
       // CDS pre-write validation: reject unsupported syntax early
       const cdsGuard = guardCdsSyntax(type, source, cachedFeatures);
       if (cdsGuard) return cdsGuard;
+
+      // RAP deterministic preflight validation (before object creation to avoid stubs)
+      const preflightWarnings = runRapPreflightValidation(
+        source,
+        type,
+        name,
+        cachedFeatures,
+        config.systemType,
+        preflightOverride,
+      );
+      if (preflightWarnings.blocked) return preflightWarnings.result!;
 
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
@@ -2443,7 +2516,8 @@ async function handleSAPWrite(
         await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
         cachingLayer?.invalidate(type, name);
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
-        return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+        const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
+        return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
       }
 
       return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
@@ -2480,6 +2554,202 @@ async function handleSAPWrite(
       cachingLayer?.invalidate(type, name);
       const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+    }
+    case 'scaffold_rap_handlers': {
+      if (type !== 'CLAS') {
+        return errorResult('scaffold_rap_handlers is only supported for type=CLAS behavior pool classes.');
+      }
+      const bdefName = String(args.bdefName ?? '').trim();
+      if (!bdefName) {
+        return errorResult('"bdefName" is required for scaffold_rap_handlers (interface behavior definition name).');
+      }
+      const autoApply = Boolean(args.autoApply ?? false);
+      const targetAlias = String(args.targetAlias ?? '')
+        .trim()
+        .toLowerCase();
+
+      await enforcePackageForExistingObject();
+
+      // Behavior pools frequently keep handler class declarations in CLAS include
+      // "definitions" or even "implementations" on older templates.
+      // Read structured class parts so we can inspect/apply across all sections.
+      const classStructured = await client.getClassStructured(name);
+      const classMainSource = classStructured.main ?? '';
+      const classDefinitionsSource = classStructured.definitions ?? '';
+      const classImplementationsSource = classStructured.implementations ?? '';
+      const classCombinedSource = [classMainSource, classDefinitionsSource, classImplementationsSource]
+        .filter(Boolean)
+        .join('\n\n');
+      const bdefSource = cachingLayer
+        ? (await cachingLayer.getSource('BDEF', bdefName, () => client.getBdef(bdefName))).source
+        : await client.getBdef(bdefName);
+
+      let requirements = extractRapHandlerRequirements(bdefSource);
+      if (targetAlias) {
+        requirements = requirements.filter((req) => req.entityAlias.toLowerCase() === targetAlias);
+      }
+
+      if (requirements.length === 0) {
+        const allAliases = Array.from(new Set(extractRapHandlerRequirements(bdefSource).map((req) => req.entityAlias)));
+        const aliasHint =
+          targetAlias && allAliases.length > 0
+            ? ` Available aliases in ${bdefName}: ${allAliases.join(', ')}.`
+            : ' No RAP action/determination/validation/auth handler declarations were found in the BDEF source.';
+        return errorResult(`No RAP handler requirements were found for the requested scope.${aliasHint}`);
+      }
+
+      const missing = findMissingRapHandlerRequirements(requirements, classCombinedSource);
+      const summary = {
+        className: name,
+        bdefName,
+        targetAlias: targetAlias || undefined,
+        scannedSections: [
+          'main',
+          classDefinitionsSource ? 'definitions' : undefined,
+          classImplementationsSource ? 'implementations' : undefined,
+        ].filter(Boolean),
+        requiredCount: requirements.length,
+        missingCount: missing.length,
+        missing,
+      };
+
+      if (!autoApply || missing.length === 0) {
+        return textResult(JSON.stringify({ ...summary, applied: false }, null, 2));
+      }
+
+      const applyMain = applyRapHandlerSignatures(classMainSource, missing);
+      let pending = applyMain.skipped.map((entry) => entry.requirement);
+
+      let applyDefinitions:
+        | ReturnType<typeof applyRapHandlerSignatures>
+        | {
+            updatedSource: string;
+            inserted: [];
+            skipped: typeof applyMain.skipped;
+            changed: false;
+          }
+        | undefined;
+      if (pending.length > 0 && classDefinitionsSource) {
+        applyDefinitions = applyRapHandlerSignatures(classDefinitionsSource, pending);
+        pending = applyDefinitions.skipped.map((entry) => entry.requirement);
+      }
+
+      let applyImplementations:
+        | ReturnType<typeof applyRapHandlerSignatures>
+        | {
+            updatedSource: string;
+            inserted: [];
+            skipped: typeof applyMain.skipped;
+            changed: false;
+          }
+        | undefined;
+      if (pending.length > 0 && classImplementationsSource) {
+        applyImplementations = applyRapHandlerSignatures(classImplementationsSource, pending);
+        pending = applyImplementations.skipped.map((entry) => entry.requirement);
+      }
+
+      const changedMain = applyMain.changed;
+      const changedDefinitions = applyDefinitions?.changed ?? false;
+      const changedImplementations = applyImplementations?.changed ?? false;
+      if (!changedMain && !changedDefinitions && !changedImplementations) {
+        return textResult(
+          JSON.stringify(
+            {
+              ...summary,
+              applied: false,
+              applyResult: {
+                main: applyMain,
+                definitions: applyDefinitions,
+                implementations: applyImplementations,
+                unresolved: pending,
+              },
+            },
+            null,
+            2,
+          ),
+        );
+      }
+
+      // Run lint for every section we are about to update; block before any write to avoid partial state.
+      let lintWarningsMain: PreWriteLintResult | undefined;
+      if (changedMain) {
+        lintWarningsMain = runPreWriteLint(applyMain.updatedSource, type, name, config, lintOverride);
+        if (lintWarningsMain.blocked) return lintWarningsMain.result!;
+      }
+      let lintWarningsDefinitions: PreWriteLintResult | undefined;
+      if (changedDefinitions && applyDefinitions) {
+        lintWarningsDefinitions = runPreWriteLint(applyDefinitions.updatedSource, type, name, config, lintOverride);
+        if (lintWarningsDefinitions.blocked) return lintWarningsDefinitions.result!;
+      }
+      let lintWarningsImplementations: PreWriteLintResult | undefined;
+      if (changedImplementations && applyImplementations) {
+        lintWarningsImplementations = runPreWriteLint(
+          applyImplementations.updatedSource,
+          type,
+          name,
+          config,
+          lintOverride,
+        );
+        if (lintWarningsImplementations.blocked) return lintWarningsImplementations.result!;
+      }
+
+      if (changedMain) {
+        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, applyMain.updatedSource, transport);
+      }
+      if (changedDefinitions && applyDefinitions) {
+        await safeUpdateSource(
+          client.http,
+          client.safety,
+          objectUrl,
+          classIncludeUrl(name, 'definitions'),
+          applyDefinitions.updatedSource,
+          transport,
+        );
+      }
+      if (changedImplementations && applyImplementations) {
+        await safeUpdateSource(
+          client.http,
+          client.safety,
+          objectUrl,
+          classIncludeUrl(name, 'implementations'),
+          applyImplementations.updatedSource,
+          transport,
+        );
+      }
+      cachingLayer?.invalidate(type, name);
+
+      const insertedCount =
+        applyMain.inserted.length +
+        (applyDefinitions?.inserted.length ?? 0) +
+        (applyImplementations?.inserted.length ?? 0);
+      const updatedSections = [
+        changedMain ? 'main' : undefined,
+        changedDefinitions ? 'definitions' : undefined,
+        changedImplementations ? 'implementations' : undefined,
+      ].filter(Boolean);
+      const msg =
+        `Scaffolded ${insertedCount} RAP handler signature(s) in ${type} ${name} from BDEF ${bdefName}. ` +
+        `Updated section(s): ${updatedSections.join(', ')}.`;
+      const warnings = mergePreWriteWarnings(
+        lintWarningsMain?.warnings,
+        lintWarningsDefinitions?.warnings,
+        lintWarningsImplementations?.warnings,
+      );
+      const details = JSON.stringify(
+        {
+          ...summary,
+          applied: true,
+          applyResult: {
+            main: applyMain,
+            definitions: applyDefinitions,
+            implementations: applyImplementations,
+            unresolved: pending,
+          },
+        },
+        null,
+        2,
+      );
+      return warnings ? textResult(`${msg}\n\n${warnings}\n\n${details}`) : textResult(`${msg}\n\n${details}`);
     }
     case 'delete': {
       await enforcePackageForExistingObject();
@@ -2546,6 +2816,7 @@ async function handleSAPWrite(
       }
 
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
+      const batchWarnings: string[] = [];
 
       for (const obj of objects) {
         const objType = normalizeObjectType(String(obj.type ?? ''));
@@ -2570,6 +2841,27 @@ async function handleSAPWrite(
           // Pre-validate source with lint BEFORE creating the object to avoid orphaned objects.
           // Metadata objects (DOMA/DTEL) are XML-only and intentionally skip source lint.
           if (!metadataObject && objSource) {
+            const preflightWarnings = runRapPreflightValidation(
+              objSource,
+              objType,
+              objName,
+              cachedFeatures,
+              config.systemType,
+              preflightOverride,
+            );
+            if (preflightWarnings.blocked) {
+              results.push({
+                type: objType,
+                name: objName,
+                status: 'failed',
+                error: preflightWarnings.result!.content[0].text,
+              });
+              break;
+            }
+            if (preflightWarnings.warnings) {
+              batchWarnings.push(`${objType} ${objName}: ${preflightWarnings.warnings}`);
+            }
+
             const lintWarnings = runPreWriteLint(objSource, objType, objName, config, lintOverride);
             if (lintWarnings.blocked) {
               results.push({
@@ -2669,6 +2961,8 @@ async function handleSAPWrite(
         .join(', ');
       const successCount = results.filter((r) => r.status === 'success').length;
       const hasFailure = results.some((r) => r.status === 'failed');
+      const warningSuffix =
+        batchWarnings.length > 0 ? `\n\nRAP preflight warnings:\n- ${batchWarnings.join('\n- ')}` : '';
 
       if (hasFailure) {
         const cleanupHint =
@@ -2676,14 +2970,14 @@ async function handleSAPWrite(
             ? ` Note: ${successCount} already-created object(s) remain on the SAP system and may need manual cleanup.`
             : '';
         return errorResult(
-          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}`,
+          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}${warningSuffix}`,
         );
       }
-      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}`);
+      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}${warningSuffix}`);
     }
     default:
       return errorResult(
-        `Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method, batch_create`,
+        `Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method, batch_create, scaffold_rap_handlers`,
       );
   }
 }
@@ -2696,6 +2990,70 @@ interface PreWriteLintResult {
   result?: ToolResult;
   /** Warning text to append to success message */
   warnings?: string;
+}
+
+/** Pre-write RAP preflight check result */
+interface PreWriteRapPreflightResult {
+  /** Whether the write was blocked by RAP preflight errors */
+  blocked: boolean;
+  /** Error result to return if blocked */
+  result?: ToolResult;
+  /** Warning text to append to success message */
+  warnings?: string;
+}
+
+/**
+ * Run deterministic RAP preflight checks for non-ABAP RAP artifact types.
+ *
+ * Unlike lint, this check is intentionally narrow and rule-based. It focuses on
+ * known activation churn patterns (TABL curr/quan semantics, BDEF enum/header
+ * misuse, DDLX scope/duplicate annotations) and can cover types that offline
+ * abaplint does not parse well.
+ */
+function runRapPreflightValidation(
+  source: string,
+  type: string,
+  name: string,
+  features: ResolvedFeatures | undefined,
+  configSystemType: ServerConfig['systemType'],
+  perCallOverride?: boolean,
+): PreWriteRapPreflightResult {
+  const enabled = perCallOverride ?? true;
+  if (!enabled || !source) {
+    return { blocked: false };
+  }
+
+  const systemType = features?.systemType ?? (configSystemType !== 'auto' ? configSystemType : undefined);
+  const result = validateRapSource(type, source, {
+    systemType,
+    abapRelease: features?.abapRelease,
+  });
+
+  if (result.errors.length > 0) {
+    const details = formatRapPreflightFindings(result.errors);
+    return {
+      blocked: true,
+      result: errorResult(
+        `RAP preflight validation failed for ${type} ${name}. Fix these issues before writing:\n${details}\n\n` +
+          'Set preflightBeforeWrite=false only when you intentionally need to bypass these checks.',
+      ),
+    };
+  }
+
+  if (result.warnings.length > 0) {
+    return {
+      blocked: false,
+      warnings: `RAP preflight warnings:\n${formatRapPreflightFindings(result.warnings)}`,
+    };
+  }
+
+  return { blocked: false };
+}
+
+function mergePreWriteWarnings(...warnings: Array<string | undefined>): string | undefined {
+  const parts = warnings.filter((w): w is string => Boolean(w));
+  if (parts.length === 0) return undefined;
+  return parts.join('\n\n');
 }
 
 /**
@@ -2886,18 +3244,18 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
       const objType = normalizeObjectType(String(o.type ?? type));
       const objName = String(o.name ?? '');
-      return { url: objectUrlForType(objType, objName), name: objName };
+      return { type: objType, name: objName, url: objectUrlForType(objType, objName) };
     });
 
     const result = await activateBatch(client.http, client.safety, objects, activateOpts);
     const names = objects.map((o) => o.name).join(', ');
+    const batchStatuses = buildBatchActivationStatuses(objects, result);
+    const statusDetails = formatBatchActivationStatuses(batchStatuses);
 
     if (result.success) {
-      return textResult(
-        `Successfully activated ${objects.length} objects: ${names}.${formatActivationMessages(result)}`,
-      );
+      return textResult(`Successfully activated ${objects.length} objects: ${names}.${statusDetails}`);
     }
-    return errorResult(`Batch activation failed for: ${names}.\n${formatActivationMessages(result)}`);
+    return errorResult(`Batch activation failed for: ${names}.${statusDetails}`);
   }
 
   // Single activation (existing behavior)
@@ -2943,6 +3301,72 @@ function formatActivationMessages(result: ActivationResult): string {
   }
 
   return parts.length > 0 ? `\n${parts.join('\n')}` : '';
+}
+
+interface BatchActivationObject {
+  type: string;
+  name: string;
+  url: string;
+}
+
+interface BatchActivationObjectStatus {
+  type: string;
+  name: string;
+  status: 'active' | 'warning' | 'error';
+  messages: string[];
+}
+
+function normalizeActivationUri(uri: string | undefined): string | undefined {
+  if (!uri) return undefined;
+  return uri.replace(/#.*$/, '').replace(/\/+$/, '');
+}
+
+function buildBatchActivationStatuses(
+  objects: BatchActivationObject[],
+  result: ActivationResult,
+): BatchActivationObjectStatus[] {
+  const byUri = new Map<string, Array<{ severity: 'error' | 'warning' | 'info'; text: string }>>();
+  const unassigned: string[] = [];
+
+  for (const detail of result.details) {
+    const key = normalizeActivationUri(detail.uri);
+    if (!key) {
+      const prefix = detail.line ? `[line ${detail.line}] ` : '';
+      unassigned.push(`${prefix}${detail.text}`);
+      continue;
+    }
+    const list = byUri.get(key) ?? [];
+    const prefix = detail.line ? `[line ${detail.line}] ` : '';
+    list.push({ severity: detail.severity, text: `${prefix}${detail.text}` });
+    byUri.set(key, list);
+  }
+
+  return objects.map((obj, index) => {
+    const key = normalizeActivationUri(obj.url) ?? '';
+    const details = byUri.get(key) ?? [];
+    const hasError = details.some((detail) => detail.severity === 'error');
+    const hasWarning = details.some((detail) => detail.severity === 'warning');
+    const status: BatchActivationObjectStatus['status'] = hasError ? 'error' : hasWarning ? 'warning' : 'active';
+    const messages = details.map((detail) => detail.text);
+    if (index === 0 && unassigned.length > 0) {
+      messages.push(...unassigned);
+    }
+    return {
+      type: obj.type,
+      name: obj.name,
+      status,
+      messages,
+    };
+  });
+}
+
+function formatBatchActivationStatuses(statuses: BatchActivationObjectStatus[]): string {
+  if (statuses.length === 0) return '';
+  const lines = statuses.map((status) => {
+    const messages = status.messages.length > 0 ? ` — ${status.messages.join('; ')}` : '';
+    return `- ${status.name} (${status.type}): ${status.status}${messages}`;
+  });
+  return `\nPer-object status:\n${lines.join('\n')}`;
 }
 
 // ─── SAPNavigate Handler ─────────────────────────────────────────────

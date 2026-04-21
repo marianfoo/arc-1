@@ -29,6 +29,11 @@ import {
   listGroups,
   listTiles,
 } from '../../src/adt/flp.js';
+import {
+  applyRapHandlerSignatures,
+  extractRapHandlerRequirements,
+  findMissingRapHandlerRequirements,
+} from '../../src/adt/rap-handlers.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
@@ -1107,6 +1112,114 @@ describe('ADT Integration Tests', () => {
         expectSapFailureClass(err, [403, 404, 500], [/not found/i, /forbidden/i, /usageReferences/i]);
         requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
       }
+    });
+  });
+
+  // ─── RAP Handler Scaffolding Helpers ───────────────────────────────
+
+  describe('RAP handler scaffolding helpers', () => {
+    const bdefFixture = '/DMO/I_CARRIERSLOCKSINGLETON_S';
+
+    async function readRapFixture(ctx: import('vitest').TaskContext): Promise<{
+      bdefSource: string;
+      behaviorPoolClass: string;
+      classStructured: Awaited<ReturnType<AdtClient['getClassStructured']>>;
+    }> {
+      try {
+        const bdefSource = await client.getBdef(bdefFixture);
+        const behaviorPoolClass = bdefSource.match(/implementation\s+in\s+class\s+([^\s;]+)/i)?.[1];
+        requireOrSkip(ctx, behaviorPoolClass, `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no implementation class`);
+        const classStructured = await client.getClassStructured(behaviorPoolClass);
+        return { bdefSource, behaviorPoolClass, classStructured };
+      } catch (err) {
+        expectSapFailureClass(err, [403, 404], [/not found/i, /forbidden/i]);
+        requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (${bdefFixture}) — RAP demo fixture not available`);
+      }
+    }
+
+    it('extracts handler requirements from live BDEF source', async (ctx) => {
+      const { bdefSource } = await readRapFixture(ctx);
+      const requirements = extractRapHandlerRequirements(bdefSource);
+      const firstRequirement = requirements[0];
+      requireOrSkip(
+        ctx,
+        firstRequirement,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no action/validation/auth requirements in BDEF`,
+      );
+
+      expect(requirements.length).toBeGreaterThan(0);
+      expect(requirements.some((req) => req.kind === 'validation' || req.kind === 'action')).toBe(true);
+    });
+
+    it('matches requirements against live class source across includes', async (ctx) => {
+      const { bdefSource, classStructured } = await readRapFixture(ctx);
+      const requirements = extractRapHandlerRequirements(bdefSource);
+      const firstRequirement = requirements[0];
+      requireOrSkip(
+        ctx,
+        firstRequirement,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no requirements to match against class source`,
+      );
+
+      const combinedClassSource = [
+        classStructured.main,
+        classStructured.definitions ?? '',
+        classStructured.implementations ?? '',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      const missing = findMissingRapHandlerRequirements(requirements, combinedClassSource);
+
+      expect(missing.length).toBeLessThanOrEqual(requirements.length);
+      expect(
+        missing.every((missingReq) =>
+          requirements.some(
+            (requirement) =>
+              requirement.targetHandlerClass === missingReq.targetHandlerClass &&
+              requirement.methodName === missingReq.methodName,
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it('can re-insert a deliberately removed signature in the live implementation include', async (ctx) => {
+      const { bdefSource, classStructured } = await readRapFixture(ctx);
+      const requirements = extractRapHandlerRequirements(bdefSource);
+      const implementationSource = classStructured.implementations;
+      requireOrSkip(
+        ctx,
+        implementationSource,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no implementations include available`,
+      );
+
+      const requirement = requirements.find(
+        (req) =>
+          req.targetHandlerClass.toLowerCase() === 'lhc_carrier' &&
+          (req.kind === 'validation' || req.kind === 'action'),
+      );
+      requireOrSkip(
+        ctx,
+        requirement,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — expected handler requirement not found`,
+      );
+
+      const declarationRegex = new RegExp(
+        `(^|\\n)\\s*METHODS\\s+${requirement.methodName}\\b[\\s\\S]*?\\.\\s*(?=\\n\\s*(?:METHODS\\b|ENDCLASS\\.))`,
+        'i',
+      );
+      if (!declarationRegex.test(implementationSource)) {
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.NO_FIXTURE} (${bdefFixture}) — method declaration ${requirement.methodName} not present in fixture`,
+        );
+      }
+      const stripped = implementationSource.replace(declarationRegex, '\n');
+
+      const apply = applyRapHandlerSignatures(stripped, [requirement]);
+      expect(apply.changed).toBe(true);
+      expect(apply.inserted).toHaveLength(1);
+      expect(apply.updatedSource.toLowerCase()).toContain(`methods ${requirement.methodName}`);
     });
   });
 

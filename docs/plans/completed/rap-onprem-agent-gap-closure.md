@@ -82,12 +82,12 @@ Use one consolidated implementation stream with three technical tracks executed 
 
 Create a deterministic preflight validator for high-frequency RAP static-rule failures so the user gets actionable diagnostics before activation round-trips.
 
-- [ ] Implement `validateRapSource(type, source, context)` in `src/adt/rap-preflight.ts` with typed findings (`severity`, `ruleId`, `message`, `line?`, `column?`, `suggestion?`).
-- [ ] Cover initial deterministic rules from session feedback: TABL currency/unit semantics, forbidden TABL types for on-prem 7.5x, BDEF enum/header misuse, projection BDEF header misuse, DDLX duplicate annotation and scope misuse checks.
-- [ ] Add a guarded call in `handleSAPWrite` pre-write flow to include preflight findings in write-time response/hints (blocking only on clearly invalid syntax/state; warnings otherwise).
-- [ ] Expose a per-call escape hatch (`preflightBeforeWrite: false`) in schema/tool docs, mirroring existing lint override behavior.
-- [ ] Add unit tests (~20) for parser/validator rules and intent-level integration of findings.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Implement `validateRapSource(type, source, context)` in `src/adt/rap-preflight.ts` with typed findings (`severity`, `ruleId`, `message`, `line?`, `column?`, `suggestion?`).
+- [x] Cover initial deterministic rules from session feedback: TABL currency/unit semantics, forbidden TABL types for on-prem 7.5x, BDEF enum/header misuse, projection BDEF header misuse, DDLX duplicate annotation and scope misuse checks.
+- [x] Add a guarded call in `handleSAPWrite` pre-write flow to include preflight findings in write-time response/hints (blocking only on clearly invalid syntax/state; warnings otherwise).
+- [x] Expose a per-call escape hatch (`preflightBeforeWrite: false`) in schema/tool docs, mirroring existing lint override behavior.
+- [x] Add unit tests (~20) for parser/validator rules and intent-level integration of findings.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 2: Automate RAP Behavior Handler Scaffolding And Quick-Fix Flow
 
@@ -103,12 +103,12 @@ Create a deterministic preflight validator for high-frequency RAP static-rule fa
 
 Provide an MCP-native path to generate/apply RAP handler signatures and reduce dependency on manual ADT editor quick-fixes.
 
-- [ ] Add a RAP-oriented helper action (under existing tool families) that maps BDEF declarations to required behavior-pool method signatures and returns missing signatures with exact insertion targets.
-- [ ] Implement optional auto-apply mode that uses existing quickfix/apply_quickfix ADT plumbing where possible, and falls back to safe method-level patching when full-class update is unstable.
-- [ ] Ensure create/update flows detect behavior-pool signature mismatch failures and return explicit guidance referencing the new helper action.
-- [ ] Add unit tests (~15) for signature extraction/matching, helper responses, and fallback logic.
-- [ ] Add integration tests (~4) against live SAP test system for end-to-end handler-signature scaffolding on a scratch RAP object set.
-- [ ] Run `npm test` and targeted integration tests — all must pass.
+- [x] Add a RAP-oriented helper action (under existing tool families) that maps BDEF declarations to required behavior-pool method signatures and returns missing signatures with exact insertion targets.
+- [x] Implement optional auto-apply mode that uses existing quickfix/apply_quickfix ADT plumbing where possible, and falls back to safe method-level patching when full-class update is unstable.
+- [x] Ensure create/update flows detect behavior-pool signature mismatch failures and return explicit guidance referencing the new helper action.
+- [x] Add unit tests (~15) for signature extraction/matching, helper responses, and fallback logic.
+- [x] Add integration tests (~4) against live SAP test system for end-to-end handler-signature scaffolding on a scratch RAP object set.
+- [x] Run `npm test` and targeted integration tests — all must pass.
 
 ### Task 3: Improve Error And Activation Ergonomics For RAP Authoring
 
@@ -121,11 +121,11 @@ Provide an MCP-native path to generate/apply RAP handler signatures and reduce d
 
 Improve high-frequency friction points that still cause unnecessary retries.
 
-- [ ] Add explicit create-collision recovery hint for `Resource X does already exist` to recommend `action="update"` with full source payload.
-- [ ] Extend batch activation response formatting to always include per-object status and message arrays when mixed success/failure occurs.
-- [ ] Add targeted classification/hint for behavior-pool full-class save failures (`[?/011]`) with clear remediation path.
-- [ ] Add unit tests (~10) covering new hint conditions and batch activation response shape.
-- [ ] Run `npm test` — all tests must pass.
+- [x] Add explicit create-collision recovery hint for `Resource X does already exist` to recommend `action="update"` with full source payload.
+- [x] Extend batch activation response formatting to always include per-object status and message arrays when mixed success/failure occurs.
+- [x] Add targeted classification/hint for behavior-pool full-class save failures (`[?/011]`) with clear remediation path.
+- [x] Add unit tests (~10) covering new hint conditions and batch activation response shape.
+- [x] Run `npm test` — all tests must pass.
 
 ### Task 4: Skill And Documentation Alignment
 
@@ -141,11 +141,11 @@ Improve high-frequency friction points that still cause unnecessary retries.
 
 Align skill workflows and public docs with the new RAP capabilities and operationally-proven fallback strategy.
 
-- [ ] Update RAP generation skills to call out deterministic preflight behavior, reduced activation churn, and the behavior-handler scaffolding action.
-- [ ] Update bootstrap skill to record RAP-relevant constraints block (including known on-prem 7.5x pitfalls and feature flags).
-- [ ] Update chat-analysis skill to produce a mandatory triage section: `Quick Wins In-Session` vs `Needs Planned Implementation`.
-- [ ] Update tool docs/roadmap/CLAUDE references for any new or changed RAP actions/parameters.
-- [ ] Run `npm run lint` and `npm run typecheck` — no errors.
+- [x] Update RAP generation skills to call out deterministic preflight behavior, reduced activation churn, and the behavior-handler scaffolding action.
+- [x] Update bootstrap skill to record RAP-relevant constraints block (including known on-prem 7.5x pitfalls and feature flags).
+- [x] Update chat-analysis skill to produce a mandatory triage section: `Quick Wins In-Session` vs `Needs Planned Implementation`.
+- [x] Update tool docs/roadmap/CLAUDE references for any new or changed RAP actions/parameters.
+- [x] Run `npm run lint` and `npm run typecheck` — no errors.
 
 ### Task 5: Final Verification
 
@@ -156,8 +156,14 @@ Align skill workflows and public docs with the new RAP capabilities and operatio
 - Read: `skills/generate-rap-service-researched.md`
 - Read: `docs_page/tools.md`
 
-- [ ] Run full test suite: `npm test` — all tests pass.
-- [ ] Run typecheck: `npm run typecheck` — no errors.
-- [ ] Run lint: `npm run lint` — no errors.
-- [ ] Run RAP-focused integration tests against SAP test system with configured credentials and capture pass/fail evidence.
-- [ ] Move this plan to `docs/plans/completed/` once implementation is fully complete.
+- [x] Run full test suite: `npm test` — all tests pass.
+- [x] Run typecheck: `npm run typecheck` — no errors.
+- [x] Run lint: `npm run lint` — no errors.
+- [x] Run RAP-focused integration tests against SAP test system with configured credentials and capture pass/fail evidence.
+- [x] Move this plan to `docs/plans/completed/` once implementation is fully complete.
+
+### Verification Notes (2026-04-21)
+
+- RAP integration coverage was validated during implementation with SAP credentials:
+  `npm run test:integration -- --run tests/integration/adt.integration.test.ts -t "RAP handler scaffolding helpers"` → `3 passed, 76 skipped`.
+- A subsequent rerun in a clean shell failed setup due missing `TEST_SAP_*`/`SAP_*` credentials, while unit/typecheck/lint remained green.

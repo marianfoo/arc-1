@@ -157,14 +157,19 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, or `batch_create` |
+| `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, `batch_create`, or `scaffold_rap_handlers` |
 | `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `INCL`, `DDLS`, `DCLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions). Slash/case aliases are auto-normalized (e.g., `CLAS/OC` or `clas` → `CLAS`). |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
+| `bdefName` | string | No | For `scaffold_rap_handlers`: interface BDEF name used to derive required handler signatures |
+| `autoApply` | boolean | No | For `scaffold_rap_handlers`: when `true`, inject missing signatures into behavior pool class declarations and write back |
+| `targetAlias` | string | No | For `scaffold_rap_handlers`: optional RAP entity alias filter (scaffold only one alias/handler class) |
 | `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number. For `update` and `delete`, if omitted ARC-1 auto-uses the correction number returned by the SAP lock (if any). Explicit value takes precedence. |
+| `lintBeforeWrite` | boolean | No | Override server lint setting for this call (`false` to bypass pre-write lint) |
+| `preflightBeforeWrite` | boolean | No | Override deterministic RAP preflight checks for this call (`false` to bypass TABL/BDEF/DDLX/DDLS static checks) |
 | `dataType` | string | No | DOMA/DTEL: ABAP data type (`CHAR`, `NUMC`, `DEC`, ...) |
 | `length` | number | No | DOMA/DTEL: data type length |
 | `decimals` | number | No | DOMA/DTEL: decimal places |
@@ -213,11 +218,26 @@ This helps pinpoint the exact failing field/annotation instead of retrying blind
 - **Reserved keyword warnings:** CDS field names like `position`, `value`, `type`, `data` etc. may be CDS reserved keywords that cause silent DDL save failures. ARC-1 detects these and includes an advisory warning (non-blocking) suggesting renamed alternatives.
 - **Empty DDLS source:** When reading a DDLS that exists but has no stored source, ARC-1 returns an explicit warning instead of silent empty content.
 
+**RAP deterministic preflight validation:**
+
+- Runs before `create`/`update`/`batch_create` for RAP-prone source types (`TABL`, `BDEF`, `DDLX`, `DDLS`).
+- Blocks writes on deterministic rule errors (for example: missing `@Semantics.amount.currencyCode` for `abap.curr`, invalid `authorization master ( none )`, unsupported DDLX scope annotations on on-prem 7.5x).
+- Emits warning-only findings for non-fatal patterns (for example: explicit client in DDLS select list).
+- Per-call override: `preflightBeforeWrite=false`.
+
 **Batch creation:**
 
 `batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, DCLS after DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
+
+**RAP handler scaffolding:**
+
+`scaffold_rap_handlers` derives required behavior-pool `METHODS ... FOR ...` signatures from an interface BDEF, computes missing signatures, and can optionally inject declarations into the behavior pool class:
+
+- Scans class sections from `source/main`, `includes/definitions`, and `includes/implementations`
+- Supports dry-run listing (`autoApply=false`, default) and write-back mode (`autoApply=true`)
+- Helps recover from generic behavior-pool save errors by generating exact signatures for actions/determinations/validations/authorization handlers
 
 ```
 SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
@@ -243,6 +263,9 @@ SAPWrite(action="create", type="DTEL", name="ZSTATUS", package="$TMP",
 
 SAPWrite(action="create", type="SRVB", name="ZSB_TRAVEL_O4", package="$TMP",
   serviceDefinition="ZSD_TRAVEL", category="0")
+
+SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="ZBP_I_TRAVELREQ",
+  bdefName="ZI_TRAVELREQ", autoApply=true)
 ```
 
 **Transport behavior:**
@@ -271,7 +294,7 @@ Activate (publish) ABAP objects. Supports single object or batch activation.
 | `preaudit` | boolean | No | Request pre-activation audit from SAP (default: `true`). Set `false` to skip pre-audit for faster activation. |
 | `objects` | array | No | For batch: array of `{type, name}` objects to activate together |
 
-Use batch activation for RAP stacks where objects depend on each other (DDLS, BDEF, SRVD, DDLX, SRVB must be activated together).
+Use batch activation for RAP stacks where objects depend on each other (DDLS, BDEF, SRVD, DDLX, SRVB must be activated together). Batch responses include per-object status (`active`, `warning`, `error`) with attached messages, so failed members can be retried selectively.
 
 **Examples:**
 ```

@@ -174,6 +174,8 @@ Output two lists:
 1. **Quick wins to execute now** (ordered by leverage)
 2. **Planned items** (grouped into the minimum number of implementation plans)
 
+This triage section is mandatory in `issue` and `internal` outputs.
+
 ---
 
 ## Phase 4: Produce the Report

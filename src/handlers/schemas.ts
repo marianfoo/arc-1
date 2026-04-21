@@ -326,7 +326,7 @@ const batchObjectSchemaBtp = z.object({
 });
 
 export const SAPWriteSchema = z.object({
-  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create']),
+  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create', 'scaffold_rap_handlers']),
   type: z.enum(SAPWRITE_TYPES_ONPREM).optional(),
   name: z.string().optional(),
   source: z.string().optional(),
@@ -362,14 +362,18 @@ export const SAPWriteSchema = z.object({
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
+  preflightBeforeWrite: z.coerce.boolean().optional(),
   refObjectType: z.string().optional(),
   refObjectName: z.string().optional(),
   refObjectDescription: z.string().optional(),
+  bdefName: z.string().optional(),
+  autoApply: z.coerce.boolean().optional(),
+  targetAlias: z.string().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
 export const SAPWriteSchemaBtp = z.object({
-  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create']),
+  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create', 'scaffold_rap_handlers']),
   type: z.enum(SAPWRITE_TYPES_BTP).optional(),
   name: z.string().optional(),
   source: z.string().optional(),
@@ -405,9 +409,13 @@ export const SAPWriteSchemaBtp = z.object({
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
+  preflightBeforeWrite: z.coerce.boolean().optional(),
   refObjectType: z.string().optional(),
   refObjectName: z.string().optional(),
   refObjectDescription: z.string().optional(),
+  bdefName: z.string().optional(),
+  autoApply: z.coerce.boolean().optional(),
+  targetAlias: z.string().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 

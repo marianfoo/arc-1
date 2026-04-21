@@ -54,6 +54,7 @@ Include at minimum:
 - Is RAP creation likely viable (`rap.available`, plus whether DDLS/BDEF reads work)
 - On-prem 7.5x guardrails (TABL typing pitfalls, projection BDEF header limits, DDLX annotation scope caveats)
 - Whether pre-write lint likely covers DDLS only vs broader RAP artifacts
+- Whether ARC-1 RAP preflight/scaffolding helpers should be the default path (`preflightBeforeWrite`, `scaffold_rap_handlers`)
 - Whether draft should default to deferred/two-pass for safety
 
 ## Step 4: Read Lint Preset
@@ -123,6 +124,7 @@ _Generated: <ISO timestamp>_ · _Source: ARC-1_
 - **Known projection BDEF caveat**: <e.g., use `projection;` header only on 7.5x>
 - **Known DDLX scope caveat**: <e.g., headerInfo/search/objectmodel placement limits>
 - **Lint coverage hint**: <ABAP+DDLS only / broader>
+- **RAP helper path**: <`scaffold_rap_handlers` available / use quick-fix fallback>
 
 ## Coding Guidance
 
