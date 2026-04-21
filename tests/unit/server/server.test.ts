@@ -55,6 +55,44 @@ describe('MCP Server', () => {
     expect(actionEnum).toContain('flp_delete_catalog');
     expect(filtered.map((tool) => tool.name)).toContain('SAPWrite');
   });
+
+  it('prunes hyperfocused SAP actions for read-scoped users', () => {
+    const tools = getToolDefinitions({
+      ...DEFAULT_CONFIG,
+      toolMode: 'hyperfocused',
+      readOnly: false,
+      blockFreeSQL: false,
+      enableTransports: true,
+    });
+    const filtered = filterToolsByAuthScope(tools, ['read']);
+    const sap = filtered.find((tool) => tool.name === 'SAP');
+    expect(sap).toBeDefined();
+    const schema = sap!.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toContain('read');
+    expect(actionEnum).toContain('manage');
+    expect(actionEnum).not.toContain('query');
+    expect(actionEnum).not.toContain('write');
+    expect(actionEnum).not.toContain('activate');
+    expect(actionEnum).not.toContain('transport');
+  });
+
+  it('keeps only query for sql-scoped users in hyperfocused mode', () => {
+    const tools = getToolDefinitions({
+      ...DEFAULT_CONFIG,
+      toolMode: 'hyperfocused',
+      readOnly: false,
+      blockFreeSQL: false,
+      enableTransports: true,
+    });
+    const filtered = filterToolsByAuthScope(tools, ['sql']);
+    const sap = filtered.find((tool) => tool.name === 'SAP');
+    expect(sap).toBeDefined();
+    const schema = sap!.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+    expect(actionEnum).toEqual(['query']);
+  });
 });
 
 describe('buildAdtConfig', () => {

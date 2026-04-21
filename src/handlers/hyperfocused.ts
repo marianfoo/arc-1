@@ -95,7 +95,16 @@ export function getHyperfocusedToolDefinition(config: ServerConfig): ToolDefinit
   // `manage` is always exposed because SAPManage has read-only sub-actions
   // (features/probe/cache_stats). Mutating sub-actions are enforced downstream
   // via SAPMANAGE_ACTION_SCOPES and the safety config.
-  const readActions = ['read', 'search', 'query', 'navigate', 'context', 'lint', 'diagnose', 'manage'];
+  const readActions = [
+    'read',
+    'search',
+    ...(config.blockFreeSQL ? [] : ['query']),
+    'navigate',
+    'context',
+    'lint',
+    'diagnose',
+    'manage',
+  ];
   const writeActions = config.readOnly ? [] : ['write', 'activate'];
   const adminActions = config.enableTransports ? ['transport'] : [];
   const allActions = [...readActions, ...writeActions, ...adminActions];

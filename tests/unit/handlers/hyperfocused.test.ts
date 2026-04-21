@@ -122,11 +122,12 @@ describe('hyperfocused mode', () => {
     });
 
     it('includes all actions in non-readOnly mode', () => {
-      const config = { ...DEFAULT_CONFIG, readOnly: false, enableTransports: true };
+      const config = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, enableTransports: true };
       const tool = getHyperfocusedToolDefinition(config);
       const schema = tool.inputSchema as Record<string, any>;
       const actions = schema.properties.action.enum as string[];
       expect(actions).toContain('read');
+      expect(actions).toContain('query');
       expect(actions).toContain('write');
       expect(actions).toContain('transport');
     });
@@ -137,12 +138,21 @@ describe('hyperfocused mode', () => {
       const schema = tool.inputSchema as Record<string, any>;
       const actions = schema.properties.action.enum as string[];
       expect(actions).toContain('read');
+      expect(actions).not.toContain('query');
       expect(actions).not.toContain('write');
       expect(actions).not.toContain('activate');
       // manage stays visible because its read sub-actions (features/probe/cache_stats)
       // are always usable; write sub-actions are guarded by SAPMANAGE_ACTION_SCOPES
       // and the safety config downstream.
       expect(actions).toContain('manage');
+    });
+
+    it('excludes query action when free SQL is blocked', () => {
+      const config = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: true };
+      const tool = getHyperfocusedToolDefinition(config);
+      const schema = tool.inputSchema as Record<string, any>;
+      const actions = schema.properties.action.enum as string[];
+      expect(actions).not.toContain('query');
     });
   });
 

@@ -18,6 +18,7 @@ import { deriveUserSafety } from '../adt/safety.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
+import { getHyperfocusedScope } from '../handlers/hyperfocused.js';
 import {
   getCachedDiscovery,
   getCachedFeatures,
@@ -65,6 +66,42 @@ function pruneSapManageActionsForScope(tool: ToolDefinition, scopes: string[]): 
   };
 }
 
+function pruneHyperfocusedActionsForScope(
+  tool: ToolDefinition,
+  hasScope: (requiredScope: string) => boolean,
+): ToolDefinition {
+  if (tool.name !== 'SAP') return tool;
+
+  const schema = tool.inputSchema as Record<string, unknown>;
+  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+  const actionDef = (properties.action as Record<string, unknown> | undefined) ?? {};
+  const actionEnum = Array.isArray(actionDef.enum) ? actionDef.enum.map(String) : [];
+
+  const filteredActionEnum = actionEnum.filter((action) => hasScope(getHyperfocusedScope(action)));
+
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...properties,
+        action: {
+          ...actionDef,
+          enum: filteredActionEnum,
+        },
+      },
+    },
+  };
+}
+
+function hasNonEmptyActionEnum(tool: ToolDefinition): boolean {
+  const schema = tool.inputSchema as Record<string, unknown>;
+  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+  const actionDef = (properties.action as Record<string, unknown> | undefined) ?? {};
+  if (!Array.isArray(actionDef.enum)) return true;
+  return actionDef.enum.length > 0;
+}
+
 export function filterToolsByAuthScope(tools: ToolDefinition[], scopes: string[]): ToolDefinition[] {
   const hasScope = (requiredScope: string): boolean => {
     if (scopes.includes(requiredScope)) return true;
@@ -78,7 +115,8 @@ export function filterToolsByAuthScope(tools: ToolDefinition[], scopes: string[]
       const requiredScope = TOOL_SCOPES[tool.name];
       return !requiredScope || hasScope(requiredScope);
     })
-    .map((tool) => pruneSapManageActionsForScope(tool, scopes));
+    .map((tool) => pruneSapManageActionsForScope(pruneHyperfocusedActionsForScope(tool, hasScope), scopes))
+    .filter(hasNonEmptyActionEnum);
 }
 
 export function logAuthSummary(config: ServerConfig): void {
