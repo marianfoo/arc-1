@@ -101,8 +101,11 @@ describe('hyperfocused mode', () => {
     it('returns write scope for write actions', () => {
       expect(getHyperfocusedScope('write')).toBe('write');
       expect(getHyperfocusedScope('activate')).toBe('write');
-      expect(getHyperfocusedScope('manage')).toBe('write');
       expect(getHyperfocusedScope('transport')).toBe('write');
+    });
+
+    it('returns read scope for manage (action-level scope enforced downstream)', () => {
+      expect(getHyperfocusedScope('manage')).toBe('read');
     });
 
     it('returns sql scope for query', () => {
@@ -128,7 +131,7 @@ describe('hyperfocused mode', () => {
       expect(actions).toContain('transport');
     });
 
-    it('excludes write actions in readOnly mode', () => {
+    it('excludes write actions in readOnly mode but keeps manage for read sub-actions', () => {
       const config = { ...DEFAULT_CONFIG, readOnly: true };
       const tool = getHyperfocusedToolDefinition(config);
       const schema = tool.inputSchema as Record<string, any>;
@@ -136,7 +139,10 @@ describe('hyperfocused mode', () => {
       expect(actions).toContain('read');
       expect(actions).not.toContain('write');
       expect(actions).not.toContain('activate');
-      expect(actions).not.toContain('manage');
+      // manage stays visible because its read sub-actions (features/probe/cache_stats)
+      // are always usable; write sub-actions are guarded by SAPMANAGE_ACTION_SCOPES
+      // and the safety config downstream.
+      expect(actions).toContain('manage');
     });
   });
 
