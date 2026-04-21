@@ -149,6 +149,54 @@ ENDCLASS.`;
     const methods = parseClassDefinitionMethods(source);
     expect(methods.get('lhc_carrier')?.has('validatename')).toBe(true);
   });
+
+  it('indexes FOR ACTION binding keys so semantic method names satisfy BDEF actions', () => {
+    // This is the shape used by SAP's shipped /DMO/BP_TRAVEL_M: the method
+    // name (`set_status_accepted`) is semantic, bound to BDEF action
+    // `acceptTravel` via `FOR ACTION travel~accepttravel`. The scaffolder
+    // compares against BDEF identifiers, so the binding key MUST also be
+    // indexed — otherwise we'd falsely report `accepttravel` as missing and
+    // try to re-inject it as a duplicate METHOD declaration.
+    const source = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS set_status_accepted FOR MODIFY
+      IMPORTING keys FOR ACTION travel~accepttravel RESULT result.
+    METHODS recalc_total FOR DETERMINE ON MODIFY
+      IMPORTING keys FOR travel~recalctotalprice.
+ENDCLASS.`;
+    const methods = parseClassDefinitionMethods(source);
+    const travel = methods.get('lhc_travel');
+    expect(travel).toBeDefined();
+    // Method names are present…
+    expect(travel?.has('set_status_accepted')).toBe(true);
+    expect(travel?.has('recalc_total')).toBe(true);
+    // …AND their binding keys are also indexed so the BDEF identifier
+    // matches.
+    expect(travel?.has('accepttravel')).toBe(true);
+    expect(travel?.has('recalctotalprice')).toBe(true);
+  });
+});
+
+describe('findMissingRapHandlerRequirements with semantic method names', () => {
+  it('treats a BDEF action as fulfilled when bound via FOR ACTION alias~name', () => {
+    // Regression for the /DMO/BP_TRAVEL_M pattern — without binding-key
+    // extraction the scaffolder would incorrectly consider `accepttravel`
+    // missing even though the hand-crafted pool fully implements it.
+    const bdef = `managed implementation in class zbp_i_travel unique;
+define behavior for zi_travel alias travel
+authorization master ( global )
+{
+  action acceptTravel result [1] $self;
+}`;
+    const classSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS set_status_accepted FOR MODIFY
+      IMPORTING keys FOR ACTION travel~accepttravel RESULT result.
+ENDCLASS.`;
+    const requirements = extractRapHandlerRequirements(bdef);
+    const missing = findMissingRapHandlerRequirements(requirements, classSource);
+    expect(missing.some((req) => req.methodName === 'accepttravel')).toBe(false);
+  });
 });
 
 describe('applyRapHandlerSignatures', () => {

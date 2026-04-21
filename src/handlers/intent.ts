@@ -48,6 +48,7 @@ import {
   safeUpdateSource,
   unlockObject,
   updateObject,
+  updateSource,
 } from '../adt/crud.js';
 import {
   buildDataElementXml,
@@ -2556,6 +2557,22 @@ async function handleSAPWrite(
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
     }
     case 'scaffold_rap_handlers': {
+      // What this action does:
+      //   Given a behavior-pool class (ZBP_*) and its interface BDEF, inspect
+      //   the class for every `lhc_<alias>` local handler class and make
+      //   sure it declares a METHOD for every action / determination /
+      //   validation / authorization master the BDEF requires. When autoApply
+      //   is true, the missing METHODS signatures are inserted directly and
+      //   the class is saved.
+      //
+      // Why this exists:
+      //   Without it, the LLM agent trying to author a RAP behavior pool has
+      //   to manually read the BDEF, compute the required handler signatures,
+      //   paste them into the correct local class, and then save — a
+      //   boilerplate-heavy step that is easy to get wrong (alias case,
+      //   RESULT vs no RESULT, factory/static modifiers). The activation
+      //   errors for an incomplete pool are particularly unhelpful. See
+      //   docs/plans/completed/rap-onprem-agent-gap-closure.md.
       if (type !== 'CLAS') {
         return errorResult('scaffold_rap_handlers is only supported for type=CLAS behavior pool classes.');
       }
@@ -2570,9 +2587,18 @@ async function handleSAPWrite(
 
       await enforcePackageForExistingObject();
 
-      // Behavior pools frequently keep handler class declarations in CLAS include
-      // "definitions" or even "implementations" on older templates.
-      // Read structured class parts so we can inspect/apply across all sections.
+      // Why scan all three CLAS includes (main, definitions, implementations):
+      //   Behavior-pool handler classes CAN live in any of the three, and
+      //   which include they occupy depends on how the pool was generated:
+      //     - "main" (source/main) — unusual; some hand-written pools put
+      //       lhc_* alongside the global class definition
+      //     - "definitions" (CCDEF) — the ADT "Create Behavior Impl Class"
+      //       wizard default target
+      //     - "implementations" (CCIMP) — older SAP templates and every
+      //       example under /DMO/* ship the handler classes here
+      //   We read all three so the diff (findMissingRapHandlerRequirements)
+      //   reflects what's actually declared anywhere in the class, and the
+      //   apply flow can fall through main → definitions → implementations.
       const classStructured = await client.getClassStructured(name);
       const classMainSource = classStructured.main ?? '';
       const classDefinitionsSource = classStructured.definitions ?? '';
@@ -2617,6 +2643,12 @@ async function handleSAPWrite(
         return textResult(JSON.stringify({ ...summary, applied: false }, null, 2));
       }
 
+      // Apply fall-through: try main first, then feed anything `applyRap...`
+      // couldn't place (handler class not present in that include) into the
+      // next include. The `pending` list carries the un-placed requirements
+      // forward; anything still pending after implementations genuinely has
+      // no matching `lhc_<alias>` class anywhere in the pool and will be
+      // reported as `unresolved` in the response for the user to fix.
       const applyMain = applyRapHandlerSignatures(classMainSource, missing);
       let pending = applyMain.skipped.map((entry) => entry.requirement);
 
@@ -2693,29 +2725,56 @@ async function handleSAPWrite(
         if (lintWarningsImplementations.blocked) return lintWarningsImplementations.result!;
       }
 
-      if (changedMain) {
-        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, applyMain.updatedSource, transport);
-      }
-      if (changedDefinitions && applyDefinitions) {
-        await safeUpdateSource(
-          client.http,
-          client.safety,
-          objectUrl,
-          classIncludeUrl(name, 'definitions'),
-          applyDefinitions.updatedSource,
-          transport,
-        );
-      }
-      if (changedImplementations && applyImplementations) {
-        await safeUpdateSource(
-          client.http,
-          client.safety,
-          objectUrl,
-          classIncludeUrl(name, 'implementations'),
-          applyImplementations.updatedSource,
-          transport,
-        );
-      }
+      // All modified includes share one lock so we never end up in a partial-state
+      // (e.g. main written, implementations errored → handler class declares but
+      // doesn't implement methods → class cannot activate). The lock is taken once
+      // at the class object URL, and every include PUT carries the same lockHandle.
+      // This mirrors how ADT-in-Eclipse saves a multi-include class in one commit.
+      await client.http.withStatefulSession(async (session) => {
+        const lock = await lockObject(session, client.safety, objectUrl);
+        const effectiveTransport = transport ?? (lock.corrNr || undefined);
+        try {
+          if (changedMain) {
+            await updateSource(
+              session,
+              client.safety,
+              srcUrl,
+              applyMain.updatedSource,
+              lock.lockHandle,
+              effectiveTransport,
+            );
+          }
+          if (changedDefinitions && applyDefinitions) {
+            await updateSource(
+              session,
+              client.safety,
+              classIncludeUrl(name, 'definitions'),
+              applyDefinitions.updatedSource,
+              lock.lockHandle,
+              effectiveTransport,
+            );
+          }
+          if (changedImplementations && applyImplementations) {
+            await updateSource(
+              session,
+              client.safety,
+              classIncludeUrl(name, 'implementations'),
+              applyImplementations.updatedSource,
+              lock.lockHandle,
+              effectiveTransport,
+            );
+          }
+        } finally {
+          // Best-effort unlock — if the object was already removed or the session
+          // expired, we still want to surface the original error instead of masking
+          // it with an unlock failure.
+          try {
+            await unlockObject(session, objectUrl, lock.lockHandle);
+          } catch {
+            // Swallowed intentionally; see comment above.
+          }
+        }
+      });
       cachingLayer?.invalidate(type, name);
 
       const insertedCount =

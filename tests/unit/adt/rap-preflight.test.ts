@@ -70,6 +70,34 @@ define behavior for ZC_Travel alias Travel
     expect(result.errors.some((f) => f.ruleId === 'BDEF_PROJECTION_USE_ETAG_UNSUPPORTED')).toBe(true);
   });
 
+  it('does NOT flag per-entity "use etag" in projection BDEF (SAP /DMO/ pattern)', () => {
+    // This is the exact pattern used by SAP's shipped /DMO/C_TRAVEL_PROCESSOR_M
+    // — `use etag` attached to a `define behavior for X alias Y` block is the
+    // supported modern form and MUST NOT be flagged. Earlier versions of the
+    // rule matched `use etag` anywhere in the source, producing a false
+    // positive on working SAP-delivered code.
+    const source = `projection;
+strict(2);
+
+define behavior for /DMO/C_Travel_Processor_M alias TravelProcessor
+use etag
+
+{
+  field ( readonly ) TotalPrice;
+  use create;
+  use update;
+  use delete;
+}
+
+define behavior for /DMO/C_Booking_Processor_M alias BookingProcessor
+use etag
+{
+  use update;
+}`;
+    const result = validateRapSource('BDEF', source, { systemType: 'onprem', abapRelease: '758' });
+    expect(result.errors.some((f) => f.ruleId === 'BDEF_PROJECTION_USE_ETAG_UNSUPPORTED')).toBe(false);
+  });
+
   it('adds warning for duplicate etag master names in BDEF', () => {
     const source = `define behavior for ZI_Travel alias Travel
 {

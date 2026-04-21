@@ -1,3 +1,30 @@
+/**
+ * RAP behavior-pool handler scaffolding.
+ *
+ * Context — this module exists because on-prem RAP development has a tight
+ * contract between a BDEF (behavior definition source) and its behavior pool
+ * (the ABAP global class named in `managed implementation in class ZBP_...`).
+ * Every `action` / `determination` / `validation` / `authorization master`
+ * declared in the BDEF requires a matching METHOD signature inside a local
+ * handler class (`lhc_<alias>`). If any signature is missing, the class will
+ * not activate and the error reported by ADT doesn't tell the developer
+ * which signatures are missing — they see a generic "behavior pool does not
+ * implement the required method for ..." message.
+ *
+ * The three exported helpers cooperate:
+ *   1. extractRapHandlerRequirements     — parse BDEF → list of required methods
+ *   2. findMissingRapHandlerRequirements — diff required vs. present in class
+ *   3. applyRapHandlerSignatures         — insert the missing METHODS lines
+ *
+ * The scaffolder never writes implementations — it only declares signatures.
+ * That keeps the scaffold deterministic and safe to run on existing pools.
+ *
+ * Naming convention: handler classes use the prefix `lhc_` (local handler
+ * class) followed by the lowercased alias from the BDEF. This is the RAP
+ * convention SAP's own templates use (see cl_abap_behavior_handler examples
+ * in /DMO/* and the "Create Behavior Implementation Class" wizard in ADT).
+ */
+
 export type RapHandlerKind =
   | 'action'
   | 'determination'
@@ -45,6 +72,20 @@ function countChar(value: string, char: string): number {
   return value.split(char).length - 1;
 }
 
+/**
+ * Collect a BDEF statement that may span multiple lines.
+ *
+ * RAP behavior definitions are terminated by `;`, but developers routinely
+ * split long declarations across lines for readability, e.g.:
+ *     action acceptTravel
+ *       result [1] $self;
+ * We must join the continuation lines before deciding whether a `result`
+ * clause is present — otherwise we'd emit `FOR ACTION ... RESULT result` for
+ * actions that don't return anything, producing an invalid handler signature.
+ *
+ * The 20-line safety cutoff guards against runaway scans when the BDEF is
+ * malformed or truncated; real declarations rarely exceed 5-6 lines.
+ */
 function collectStatement(lines: string[], startIdx: number): string {
   let statement = lines[startIdx] ?? '';
   if (statement.includes(';')) return statement;
@@ -52,16 +93,34 @@ function collectStatement(lines: string[], startIdx: number): string {
     const next = lines[j] ?? '';
     statement += ` ${next}`;
     if (next.includes(';')) break;
-    // Safety cutoff: behavior blocks shouldn't have single statements > 20 lines.
     if (j - startIdx > 20) break;
   }
   return statement;
 }
 
+/**
+ * Lowercase a BDEF identifier for use as an ABAP METHOD name.
+ *
+ * BDEF is case-insensitive for identifier matching but ABAP source code is
+ * rendered in lowercase by SAP's pretty printer. We emit lowercase here so
+ * the scaffolded METHODS lines match both the `lhc_<alias>` class name and
+ * SAP's default code-style. The trailing period (from a terminating `.` or
+ * `;` accidentally included by the regex match) is stripped defensively.
+ */
 function normalizeMethodName(name: string): string {
   return name.replace(/\.$/, '').trim().toLowerCase();
 }
 
+/**
+ * Derive an alias from an entity name when the BDEF author omits `alias X`.
+ *
+ * RAP aliases are optional; if absent, SAP falls back to the entity name
+ * itself for handler-class derivation. We emulate that by stripping namespace
+ * prefixes (`/DMO/ZI_TRAVEL` → `ZI_TRAVEL`) and a short leading prefix like
+ * `ZI_` or `I_` (→ `TRAVEL`), then sanitizing any leftover non-identifier
+ * characters. Final fallback is `Entity` so the generated `lhc_entity`
+ * remains a valid ABAP identifier.
+ */
 function deriveAlias(entityName: string): string {
   const noNamespace = entityName.split('/').at(-1) ?? entityName;
   const noPrefix = noNamespace.replace(/^[A-Z]{1,4}_/, '');
@@ -69,6 +128,21 @@ function deriveAlias(entityName: string): string {
   return normalized || 'Entity';
 }
 
+/**
+ * Split a BDEF into per-entity blocks bounded by `define behavior for ... { ... }`.
+ *
+ * A single interface BDEF can declare behavior for multiple entities
+ * (root + compositions), and each block has its own alias, its own actions,
+ * and produces its own `lhc_<alias>` handler class. We need the block
+ * boundaries so that an action declared under entity A isn't attributed to
+ * entity B's handler class.
+ *
+ * We track brace depth rather than simply splitting on `define behavior` so
+ * nested `{ ... }` inside features/draft/etag clauses doesn't close the block
+ * prematurely. `seenOpening` avoids closing a block before the first `{` is
+ * consumed — `define behavior for X` and the opening brace may be on
+ * separate lines.
+ */
 function parseBehaviorBlocks(source: string): RapBehaviorBlock[] {
   const blocks: RapBehaviorBlock[] = [];
   const lines = source.split('\n');
@@ -135,6 +209,17 @@ function pushRequirement(out: RapHandlerRequirement[], requirement: RapHandlerRe
 
 /**
  * Extract RAP behavior-pool handler method requirements from interface BDEF source.
+ *
+ * For every behavior block (one per entity in the BDEF), this produces the
+ * exact METHOD signatures that the behavior pool's `lhc_<alias>` class must
+ * declare for the class to activate. The output is used by:
+ *   - findMissingRapHandlerRequirements: to diff against an existing class
+ *   - applyRapHandlerSignatures: to synthesize the missing METHODS lines
+ *
+ * The emitted signatures mirror what SAP's "Create Behavior Implementation"
+ * wizard would generate — same FOR MODIFY/FOR DETERMINE ON/FOR VALIDATE ON
+ * syntax, same `alias~method` entity reference, same RESULT clause only when
+ * the BDEF declares a `result` cardinality.
  */
 export function extractRapHandlerRequirements(bdefSource: string): RapHandlerRequirement[] {
   const requirements: RapHandlerRequirement[] = [];
@@ -143,6 +228,9 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
 
   for (const block of blocks) {
     const alias = block.alias;
+    // RAP convention: one handler class per entity, named lhc_<alias>.
+    // This matches SAP's own templates and the ADT "Create Behavior
+    // Implementation Class" wizard — see /DMO/BP_TRAVEL_M and similar.
     const targetHandlerClass = `lhc_${alias.toLowerCase()}`;
     const body = block.lines.join('\n');
 
@@ -150,16 +238,29 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
       const line = block.lines[idx] ?? '';
       const declarationLine = block.startLine + idx;
 
-      // Match: [static] [factory|internal] action [(features...)] <name>
-      // Examples: "action Foo", "internal action Foo", "factory action Foo",
-      //           "static factory action Foo", "action ( features: instance ) Foo".
+      // Match all BDEF action variants. Order of the optional prefixes matters:
+      //   - `static` can appear alone or before `factory`: `static action`,
+      //     `static factory action`
+      //   - `internal` and `factory` are mutually exclusive but each may
+      //     appear after `static`: `internal action`, `factory action`
+      //   - the optional `( features: ... )` clause sits between the keyword
+      //     `action` and the action name — `action ( features: instance ) Foo`
+      // Missing any of these prefixes used to silently drop the requirement,
+      // which was the original bug on live /DMO/BP_TRAVEL_M samples.
       const actionMatch = line.match(
         /^\s*(?:static\s+)?(?:(?:internal|factory)\s+)*action(?:\s*\([^)]*\))?\s+([A-Za-z_]\w*)\b/i,
       );
       if (actionMatch?.[1]) {
         const actionName = actionMatch[1];
         const methodName = normalizeMethodName(actionName);
+        // Collapse continuation lines so the `result` clause is visible even
+        // when the author split the declaration across multiple lines.
         const actionDecl = collectStatement(block.lines, idx);
+        // Emit `RESULT result` only when the BDEF declares a result cardinality.
+        // Factory/internal/static actions without a result clause must NOT
+        // carry RESULT in the handler signature — the activation check is strict
+        // and rejects mismatched signatures with a cryptic "method signature
+        // does not match BDL declaration" error.
         const hasResult = /\bresult\b/i.test(actionDecl);
         const resultPart = hasResult ? ' RESULT result' : '';
         pushRequirement(
@@ -222,6 +323,9 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
       }
     }
 
+    // `authorization master ( instance )` → the pool must implement
+    // get_instance_authorizations (per-instance row-level checks, imports
+    // keys so the handler can evaluate each row individually).
     const instanceAuthMatch = body.match(/\bauthorization\s+master\s*\(\s*instance\s*\)/i);
     if (instanceAuthMatch) {
       pushRequirement(
@@ -241,6 +345,9 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
       );
     }
 
+    // `authorization master ( global )` → the pool must implement
+    // get_global_authorizations (a single, stateless check for the whole
+    // entity; no keys parameter because the decision is not per-row).
     const globalAuthMatch = body.match(/\bauthorization\s+master\s*\(\s*global\s*\)/i);
     if (globalAuthMatch) {
       pushRequirement(
@@ -264,6 +371,21 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
   return requirements;
 }
 
+/**
+ * Find every `CLASS ... DEFINITION` block in an ABAP source, returning the
+ * line index range and — if present — the line index of PRIVATE SECTION.
+ *
+ * Behavior pool sources frequently contain:
+ *   - multiple concrete handler classes (`lhc_travel`, `lhc_booking`, ...)
+ *   - deferred declarations (`CLASS lhc_travel DEFINITION DEFERRED.`) used
+ *     to satisfy forward references in the implementation section; these
+ *     have no matching ENDCLASS and must not be confused with the real
+ *     definition that follows later in the same file
+ *
+ * The `i = end` advance at the bottom skips past the ENDCLASS of the class
+ * we just processed, so the outer loop doesn't re-enter the same class and
+ * double-register ranges.
+ */
 function parseClassDefinitionRanges(source: string): ClassDefinitionRange[] {
   const lines = source.split('\n');
   const ranges: ClassDefinitionRange[] = [];
@@ -277,6 +399,8 @@ function parseClassDefinitionRanges(source: string): ClassDefinitionRange[] {
     const isDeferred = /\bDEFINITION\b.*\bDEFERRED\b/i.test(line);
     if (isDeferred) {
       // Deferred declarations are single-line declarations without ENDCLASS.
+      // Record the range at the same index so a later concrete definition of
+      // the same class gets its own entry and isn't shadowed here.
       ranges.push({ name, start: i, end: i });
       continue;
     }
@@ -303,6 +427,26 @@ function parseClassDefinitionRanges(source: string): ClassDefinitionRange[] {
 
 /**
  * Parse method declarations (`METHODS ...`) per class definition.
+ *
+ * The returned Set contains BOTH:
+ *   1. Every declared METHOD name in the class (e.g. `submitforapproval`,
+ *      `set_status_accepted`, `validate_customer`)
+ *   2. Every RAP binding-key those methods are bound to (the action /
+ *      determination / validation / authorization referenced in the
+ *      `FOR ACTION <alias>~<name>` / `FOR <alias>~<name>` /
+ *      `FOR INSTANCE AUTHORIZATION ... FOR <alias>` clauses)
+ *
+ * Why both? Hand-crafted behavior pools (like SAP's own /DMO/BP_TRAVEL_M)
+ * routinely use semantic method names that differ from the BDEF action
+ * names — e.g. BDEF `action acceptTravel` bound to METHOD
+ * `set_status_accepted` via `FOR ACTION travel~acceptTravel`. The
+ * scaffolder's missing-requirement check compares by BDEF identifier, so if
+ * we only indexed method names, it would incorrectly report
+ * `accepttravel` as missing and try to inject a duplicate METHOD line.
+ *
+ * METHOD declarations can span multiple lines (one line for the name +
+ * continuation lines for FOR / IMPORTING / RESULT), so we join the
+ * statement up to its terminating `.` before pattern-matching the binding.
  */
 export function parseClassDefinitionMethods(source: string): Map<string, Set<string>> {
   const lines = source.split('\n');
@@ -318,6 +462,31 @@ export function parseClassDefinitionMethods(source: string): Map<string, Set<str
       const match = line.match(/^\s*(?:CLASS-)?METHODS\s+([A-Za-z_~][\w~]*)/i);
       if (!match?.[1]) continue;
       methods.add(normalizeMethodName(match[1]));
+
+      // Collect the full multi-line METHODS statement so FOR-clause patterns
+      // (which usually sit on a continuation line) are visible to the regex.
+      let statement = line;
+      for (let j = i + 1; j <= range.end && j < i + 10; j += 1) {
+        const cont = lines[j] ?? '';
+        statement += ` ${cont}`;
+        if (/\.\s*$/.test(cont.trim())) break;
+      }
+
+      // `FOR ACTION alias~name` — action bindings.
+      const actionBinding = statement.match(/\bFOR\s+ACTION\s+[A-Za-z_]\w*\s*~\s*([A-Za-z_]\w*)/i);
+      if (actionBinding?.[1]) methods.add(normalizeMethodName(actionBinding[1]));
+
+      // `FOR alias~name` (no ACTION keyword) — determinations/validations.
+      // Exclude the ACTION case (handled above) and FOR MODIFY / FOR READ etc.
+      const entityBinding = statement.match(
+        /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)[A-Za-z_]\w*\s*~\s*([A-Za-z_]\w*)/i,
+      );
+      if (entityBinding?.[1]) methods.add(normalizeMethodName(entityBinding[1]));
+
+      // Authorization handlers have no alias~name binding — the BDEF side
+      // uses the fixed method names get_instance_authorizations /
+      // get_global_authorizations, so a literal method-name match already
+      // covers them (added at the top of this loop).
     }
 
     out.set(key, methods);
@@ -328,6 +497,15 @@ export function parseClassDefinitionMethods(source: string): Map<string, Set<str
 
 /**
  * Determine which RAP handler requirements are missing from class definitions.
+ *
+ * If the target handler class (`lhc_<alias>`) doesn't exist in the source at
+ * all, every requirement for that class is reported missing so the caller
+ * can decide whether to create the class or fall through to another include
+ * (the scaffold flow searches `main` → `definitions` → `implementations`).
+ *
+ * Method-name comparison is case-insensitive because ABAP identifiers
+ * are — we normalize on both sides so `METHODS SubmitForApproval ...`
+ * matches a BDEF `action SubmitForApproval`.
  */
 export function findMissingRapHandlerRequirements(
   requirements: RapHandlerRequirement[],
@@ -344,7 +522,21 @@ export function findMissingRapHandlerRequirements(
 
 /**
  * Insert missing RAP handler signatures into matching `lhc_*` class definitions.
- * This modifies declaration sections only; no method implementations are created.
+ *
+ * Scope and contract:
+ *  - Only DEFINITION sections are modified. METHOD implementations are the
+ *    developer's responsibility — scaffolding them with a RETURN placeholder
+ *    would mask activation errors and ship misleading handler logic.
+ *  - Requirements whose target class (`lhc_<alias>`) is not present in this
+ *    source are returned in `skipped`, not silently dropped. The caller can
+ *    then try another include (definitions/implementations) or surface a
+ *    clear error to the user.
+ *  - Edits are applied bottom-up (highest line index first) so that earlier
+ *    splice operations don't shift the indices of later ones.
+ *  - When a target class exists but has no PRIVATE SECTION at all, the
+ *    entire PRIVATE SECTION with the signatures is inserted just before
+ *    ENDCLASS — this covers freshly-generated behavior pools where ADT
+ *    produced a skeleton without method declarations.
  */
 export function applyRapHandlerSignatures(
   classSource: string,

@@ -536,17 +536,17 @@ export function getToolDefinitions(
           bdefName: {
             type: 'string',
             description:
-              'For scaffold_rap_handlers action: interface BDEF name used to derive required handler signatures (e.g., ZI_TRAVELREQ).',
+              'For scaffold_rap_handlers action: interface BDEF name used to derive required handler signatures (e.g., ZI_TRAVELREQ). The BDEF is parsed to find every action/determination/validation/authorization that must exist in the behavior pool.',
           },
           autoApply: {
             type: 'boolean',
             description:
-              'For scaffold_rap_handlers: if true, inject missing signatures into matching lhc_* class definitions and write the class source back.',
+              'For scaffold_rap_handlers: when true, missing METHODS signatures are inserted into matching lhc_* class definitions and the class source is written back under a single lock. When false (default), returns a JSON report of required vs. missing signatures without modifying the class — use this first to preview, then re-run with autoApply=true to commit.',
           },
           targetAlias: {
             type: 'string',
             description:
-              'For scaffold_rap_handlers: optional RAP entity alias filter (e.g., Travel, Segment) to scaffold only one handler class.',
+              'For scaffold_rap_handlers: optional RAP entity alias filter (e.g., Travel, Segment) to scaffold only one handler class. When omitted, all entities declared in the BDEF are scaffolded. Case-insensitive.',
           },
           description: {
             type: 'string',
