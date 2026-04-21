@@ -341,6 +341,21 @@ function hasSqlParserSignature(text: string): boolean {
 
 /** Format error messages with LLM-friendly remediation hints */
 function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
+  const base = buildBaseErrorMessage(err, message, tool, args);
+  // Handler-attached remediation hints (e.g., CDS delete blocker list) always
+  // appear last so the message reads "what happened → diagnostics → how to fix".
+  if (err instanceof AdtApiError && err.extraHint && !base.includes(err.extraHint)) {
+    return `${base}\n\n${err.extraHint}`;
+  }
+  return base;
+}
+
+function buildBaseErrorMessage(
+  err: unknown,
+  message: string,
+  tool: string,
+  args: Record<string, unknown>,
+): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
@@ -383,7 +398,16 @@ function formatErrorForLLM(err: unknown, message: string, tool: string, args: Re
     if (behaviorPoolHint) {
       return `${enriched}\n\nHint: ${behaviorPoolHint}`;
     }
-    if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType)) {
+    // Save hint — applies to create/update/batch_create/edit_method, not delete.
+    // Delete failures on DDIC types have different remediation (dependency resolution, not annotation fixes).
+    const action = String(args.action ?? '').toLowerCase();
+    const isSaveAction =
+      action === '' ||
+      action === 'create' ||
+      action === 'update' ||
+      action === 'batch_create' ||
+      action === 'edit_method';
+    if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType) && isSaveAction) {
       return (
         `${enriched}\n\nHint: DDIC save failed. Check the diagnostic details above for specific field or annotation errors. ` +
         'Common fixes: add missing @AbapCatalog annotations, fix field type names, check key field definitions.'
@@ -3045,7 +3069,11 @@ async function handleSAPWrite(
         if (err instanceof AdtApiError && CDS_DEPENDENCY_SENSITIVE_TYPES.has(type) && isDeleteDependencyError(err)) {
           const hint = await buildCdsDeleteDependencyHint(client, type, name, objectUrl);
           if (hint) {
-            err.message += `\n\n${hint}`;
+            // Attach via extraHint so the LLM-facing formatter renders it after
+            // DDIC diagnostics ("what happened → diagnostics → how to fix").
+            // Mutating err.message would surface the hint before diagnostics and
+            // leak into any other consumer of the same error instance.
+            err.extraHint = hint;
           }
         }
         throw err;

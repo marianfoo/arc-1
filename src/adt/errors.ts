@@ -59,6 +59,15 @@ export interface AbapGitErrorClassification {
 
 /** HTTP-level API error from SAP ADT */
 export class AdtApiError extends AdtError {
+  /**
+   * Optional remediation hint attached by a handler when it has context the
+   * generic error formatter lacks (e.g., the list of blocking dependents
+   * fetched via `/usageReferences` after a `[?/039]` delete failure).
+   * Appended at the very end of the LLM-facing error message so it reads as
+   * "what happened → diagnostics → how to fix".
+   */
+  extraHint?: string;
+
   constructor(
     message: string,
     public readonly statusCode: number,

@@ -7879,6 +7879,61 @@ ENDCLASS.`;
         'Suggested delete order: BDEF ZI_ROOT, DDLS ZI_CHILD_ONE, DDLS ZI_CHILD_TWO, then DDLS ZI_ROOT.',
       );
       expect(text).toContain('activate first');
+
+      // Remediation-first ordering: DDIC diagnostics come BEFORE the blocker hint
+      // so the LLM sees the raw SAP error → structured diagnostics → remediation.
+      const diagnosticsIdx = text.indexOf('DDIC diagnostics:');
+      const blockerIdx = text.indexOf('Blocking dependents');
+      expect(diagnosticsIdx).toBeGreaterThan(-1);
+      expect(blockerIdx).toBeGreaterThan(diagnosticsIdx);
+
+      // The [?/039] T100 key must appear in the diagnostics block (not replaced
+      // or shadowed by the blocker hint) — this is the SAP error code that
+      // links back to the actual message in SE91.
+      expect(text).toContain('[?/039]');
+
+      // The generic "DDIC save failed" hint must NOT fire on delete — it's a
+      // save-action remediation ("check annotations, fix field types") that
+      // would mislead an LLM into rewriting the DDLS source instead of
+      // resolving the dependency chain.
+      expect(text).not.toContain('DDIC save failed');
+      expect(text).not.toContain('@AbapCatalog annotations');
+    });
+
+    it('still shows the DDIC save hint for create failures (regression guard)', async () => {
+      // The delete fix narrowed the save hint to save actions; make sure we
+      // didn't accidentally suppress it for create/update/batch_create too.
+      const createErrorXml = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <exc:localizedMessage lang="EN">Can't save due to errors in source</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">DDL</entry>
+    <entry key="T100KEY-MSGNO">001</entry>
+    <entry key="LINE">3</entry>
+  </exc:properties>
+</exc:exception>`;
+
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = (opts?.method ?? 'GET').toUpperCase();
+        const urlStr = String(url);
+        if (method === 'POST' && urlStr.includes('/sap/bc/adt/ddic/ddl/sources')) {
+          return Promise.resolve(mockResponse(400, createErrorXml, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'ZI_BAD',
+        source: 'define view entity ZI_BAD as select from sflight {}',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]!.text;
+      expect(text).toContain('DDIC save failed');
+      expect(text).toContain('@AbapCatalog annotations');
     });
   });
 
