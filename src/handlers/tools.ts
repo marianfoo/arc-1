@@ -180,7 +180,7 @@ const SAPCONTEXT_DESC_ONPREM =
   '- "What breaks if I change <CDS view>?" / "Who consumes <I_*>?" / "Impact analysis on <DDLS>" / "Blast radius" → action="impact"\n' +
   '- "Understand dependencies before editing <object>" / "What does X depend on?" → action="deps" (default)\n' +
   '- "Find all callers of <object>" (cache-warmup required) → action="usages"\n\n' +
-  'action="impact" (CDS blast-radius, DDLS only): ALWAYS use this for CDS change-impact questions. Returns upstream AST dependencies plus downstream where-used results classified into RAP-aware buckets: projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls (DCLS), metadataExtensions (DDLX), abapConsumers, documentation (SKTD), tables, other. DO NOT replicate this with SAPQuery against DDDDLSRC/ACMDCLSRC/DDLXSRC_SRC/SRVDSRC_SRC — those text scans produce noise (non-dependency matches, package group nodes) that this classifier already filters out. Optional includeIndirect=true widens to transitive consumers.\n\n' +
+  'action="impact" (CDS blast-radius, DDLS only): ALWAYS use this for CDS change-impact questions. Returns upstream AST dependencies plus downstream where-used results classified into RAP-aware buckets: projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls (DCLS), metadataExtensions (DDLX), abapConsumers, documentation (SKTD), tables, other. Also emits additive sibling-consistency diagnostics (consistencyHints + siblingExtensionAnalysis) when sibling DDLS variants in the same package show asymmetric metadata-extension coverage. DO NOT replicate this with SAPQuery against DDDDLSRC/ACMDCLSRC/DDLXSRC_SRC/SRVDSRC_SRC — those text scans produce noise (non-dependency matches, package group nodes) that this classifier already filters out. Optional includeIndirect=true widens to transitive consumers. Optional siblingCheck=false disables sibling analysis; siblingMaxCandidates controls fan-out (default 4, hard cap 10).\n\n' +
   'action="deps" (default): Returns only the public API contracts (method signatures, interface definitions, type declarations) of all objects that the target depends on — NOT the full source code. The most token-efficient way to understand dependencies. Instead of N separate SAPRead calls returning full source (~200 lines each), returns ONE response with compressed contracts (~15-30 lines each). Typical compression: 7-30x fewer tokens.\n\n' +
   'What deps extracts per dependency:\n' +
   '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants). PROTECTED, PRIVATE and IMPLEMENTATION stripped.\n' +
@@ -199,7 +199,7 @@ const SAPCONTEXT_DESC_BTP =
   "Decision rule — pick the action based on the user's question:\n" +
   '- "What breaks if I change <CDS view>?" / "Who consumes <I_*>?" / "Impact analysis on <DDLS>" / "Blast radius" → action="impact"\n' +
   '- "Understand dependencies before editing <object>" / "What does X depend on?" → action="deps" (default)\n\n' +
-  'action="impact" (CDS blast-radius, DDLS only): ALWAYS use this for CDS change-impact questions. Returns upstream AST dependencies plus downstream where-used results classified into RAP-aware buckets: projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls (DCLS), metadataExtensions (DDLX), abapConsumers, documentation (SKTD), tables, other. DO NOT replicate this with SAPQuery — the classifier already filters noise. Optional includeIndirect=true widens to transitive consumers.\n\n' +
+  'action="impact" (CDS blast-radius, DDLS only): ALWAYS use this for CDS change-impact questions. Returns upstream AST dependencies plus downstream where-used results classified into RAP-aware buckets: projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls (DCLS), metadataExtensions (DDLX), abapConsumers, documentation (SKTD), tables, other. Also emits additive sibling-consistency diagnostics (consistencyHints + siblingExtensionAnalysis) when sibling DDLS variants in the same package show asymmetric metadata-extension coverage. DO NOT replicate this with SAPQuery — the classifier already filters noise. Optional includeIndirect=true widens to transitive consumers. Optional siblingCheck=false disables sibling analysis; siblingMaxCandidates controls fan-out (default 4, hard cap 10).\n\n' +
   'action="deps" (default): Returns only the public API contracts (method signatures, interface definitions, type declarations) of all objects that the target depends on — NOT the full source code.\n\n' +
   'What deps extracts per dependency:\n' +
   '- Classes: CLASS DEFINITION with PUBLIC SECTION only (methods, types, constants).\n' +
@@ -947,7 +947,7 @@ export function getToolDefinitions(
           enum: ['impact', 'deps', 'usages'],
           description:
             'Action:\n' +
-            '"impact" = CDS blast-radius analysis (DDLS only). USE THIS for any question like "what breaks if I change <view>", "who consumes <I_*>", "impact analysis on <CDS>", "downstream of <view>". Returns upstream AST dependencies + downstream where-used classified into RAP buckets (projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls, metadataExtensions, abapConsumers, documentation, tables, other). ALWAYS prefer over SAPQuery against DDDDLSRC/ACMDCLSRC/DDLXSRC_SRC/SRVDSRC_SRC (those text-scans produce noise this classifier filters out). Non-DDLS input returns a guardrail error.\n' +
+            '"impact" = CDS blast-radius analysis (DDLS only). USE THIS for any question like "what breaks if I change <view>", "who consumes <I_*>", "impact analysis on <CDS>", "downstream of <view>". Returns upstream AST dependencies + downstream where-used classified into RAP buckets (projectionViews, bdefs, serviceDefinitions, serviceBindings, accessControls, metadataExtensions, abapConsumers, documentation, tables, other), plus additive sibling-consistency diagnostics (consistencyHints + siblingExtensionAnalysis) when related DDLS siblings show asymmetric DDLX coverage. ALWAYS prefer over SAPQuery against DDDDLSRC/ACMDCLSRC/DDLXSRC_SRC/SRVDSRC_SRC (those text-scans produce noise this classifier filters out). Non-DDLS input returns a guardrail error.\n' +
             '"deps" (default, can be omitted) = forward dependency context — "what does <object> depend on?". Returns public API contracts of dependencies.\n' +
             '"usages" = reverse dependency lookup — "who calls <object>?". Requires cache warmup (--cache-warmup). Only "name" is needed. For CDS entities prefer action="impact" instead.',
         },
@@ -990,6 +990,15 @@ export function getToolDefinitions(
           type: 'boolean',
           description:
             'Only for action="impact". Include indirect (transitive) downstream where-used entries. Default false.',
+        },
+        siblingCheck: {
+          type: 'boolean',
+          description:
+            'Only for action="impact". Enable sibling metadata-extension consistency analysis. Default true.',
+        },
+        siblingMaxCandidates: {
+          type: 'number',
+          description: 'Only for action="impact". Maximum sibling DDLS candidates to compare. Default 4; hard cap 10.',
         },
       },
       required: ['name'],

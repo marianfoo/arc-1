@@ -261,6 +261,23 @@ describe('Tool Definitions', () => {
       expect(typeDesc).toMatch(/optional.*action="impact"|action="impact".*optional/i);
       expect(typeDesc).toMatch(/defaults to DDLS/i);
     });
+
+    it('SAPContext exposes sibling consistency controls for impact', () => {
+      const tools = getToolDefinitions(DEFAULT_CONFIG);
+      const sapContext = tools.find((t) => t.name === 'SAPContext')!;
+      const schema = sapContext.inputSchema as Record<string, any>;
+      const siblingCheck = schema.properties.siblingCheck;
+      const siblingMaxCandidates = schema.properties.siblingMaxCandidates;
+
+      expect(siblingCheck).toBeDefined();
+      expect(siblingCheck.type).toBe('boolean');
+      expect(siblingCheck.description).toMatch(/default true/i);
+
+      expect(siblingMaxCandidates).toBeDefined();
+      expect(siblingMaxCandidates.type).toBe('number');
+      expect(siblingMaxCandidates.description).toMatch(/default 4/i);
+      expect(siblingMaxCandidates.description).toMatch(/hard cap 10/i);
+    });
   });
 
   it('SAPDiagnose exposes runtime diagnostics + quickfix actions', () => {

@@ -174,6 +174,30 @@ Step 2: SAPRead(type="TABL", name="ZLLM_00_NODE")
         → Returns table structure
 ```
 
+### 2b. Diagnose Sibling DDLS Annotation Mismatch
+
+When one DDLS variant shows expected UI fields and another sibling variant does not, run impact on the failing view first:
+
+```
+Step 1: SAPContext(action="impact", type="DDLS", name="ZI_SALESDATA3")
+        → Review downstream.metadataExtensions and consistencyHints
+
+Step 2: If consistencyHints mention sibling mismatch,
+        inspect siblingExtensionAnalysis.checkedCandidates
+        → Identify sibling DDLS names with DDLX coverage
+
+Step 3: Read the missing extension target directly
+        SAPRead(type="DDLX", name="ZI_SALESDATA3")
+        → Confirm whether DDLX is missing vs. misconfigured
+```
+
+If the sibling check adds too much cost on large packages, cap or disable it:
+
+```
+SAPContext(action="impact", type="DDLS", name="ZI_SALESDATA3", siblingMaxCandidates=3)
+SAPContext(action="impact", type="DDLS", name="ZI_SALESDATA3", siblingCheck=false)
+```
+
 ### 3. Understand Error Messages
 
 ```

@@ -555,6 +555,15 @@ export const SAPGitSchema = z.object({
 
 const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC', 'DDLS'] as const;
 const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF', 'DDLS'] as const;
+const SAPCONTEXT_SIBLING_MAX_CANDIDATES_CAP = 10;
+const siblingMaxCandidatesSchema = z.coerce
+  .number()
+  .int()
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    return Math.min(Math.max(value, 1), SAPCONTEXT_SIBLING_MAX_CANDIDATES_CAP);
+  });
 
 export const SAPContextSchema = z.object({
   action: z.enum(['deps', 'usages', 'impact']).optional(),
@@ -565,6 +574,8 @@ export const SAPContextSchema = z.object({
   maxDeps: z.coerce.number().optional(),
   depth: z.coerce.number().min(1).max(3).optional(),
   includeIndirect: z.boolean().optional(),
+  siblingCheck: z.boolean().optional(),
+  siblingMaxCandidates: siblingMaxCandidatesSchema,
 });
 
 export const SAPContextSchemaBtp = z.object({
@@ -575,6 +586,8 @@ export const SAPContextSchemaBtp = z.object({
   maxDeps: z.coerce.number().optional(),
   depth: z.coerce.number().min(1).max(3).optional(),
   includeIndirect: z.boolean().optional(),
+  siblingCheck: z.boolean().optional(),
+  siblingMaxCandidates: siblingMaxCandidatesSchema,
 });
 
 // ─── SAPManage ──────────────────────────────────────────────────────

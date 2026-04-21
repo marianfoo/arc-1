@@ -19,6 +19,29 @@ export interface CdsImpactDownstream {
   };
 }
 
+export interface SiblingExtensionCandidate {
+  name: string;
+  packageName: string;
+  metadataExtensions: number;
+}
+
+export interface SiblingExtensionFindingInput {
+  targetName: string;
+  targetPackageName?: string;
+  stem: string;
+  targetMetadataExtensions: number;
+  siblings: SiblingExtensionCandidate[];
+}
+
+export interface SiblingExtensionFinding {
+  code: 'SIBLING_METADATA_EXTENSION_MISMATCH';
+  targetName: string;
+  targetPackageName?: string;
+  stem: string;
+  siblingsWithMetadataExtensions: SiblingExtensionCandidate[];
+  message: string;
+}
+
 interface ClassifyOptions {
   includeIndirect?: boolean;
 }
@@ -124,4 +147,83 @@ function bucketForType(type: string): BucketName {
     default:
       return 'other';
   }
+}
+
+/**
+ * Derive a conservative sibling stem from a DDLS object name.
+ * Example: ZI_SALESDATA3 -> ZI_SALESDATA
+ */
+export function deriveSiblingStem(name: string): string {
+  const normalized = normalizeName(name);
+  if (!normalized) return '';
+  const withoutNumericSuffix = normalized.replace(/\d+$/, '');
+  return withoutNumericSuffix || normalized;
+}
+
+/**
+ * Conservative sibling matcher: same stem, not the same object, and only
+ * empty-or-numeric suffixes after the stem.
+ */
+export function isSiblingNameMatch(targetName: string, candidateName: string, stem: string): boolean {
+  const target = normalizeName(targetName);
+  const candidate = normalizeName(candidateName);
+  const normalizedStem = deriveSiblingStem(stem);
+
+  if (!target || !candidate || !normalizedStem) return false;
+  if (target === candidate) return false;
+  if (!target.startsWith(normalizedStem) || !candidate.startsWith(normalizedStem)) return false;
+
+  const targetSuffix = target.slice(normalizedStem.length);
+  const candidateSuffix = candidate.slice(normalizedStem.length);
+
+  if (!isNumericVariantSuffix(targetSuffix) || !isNumericVariantSuffix(candidateSuffix)) {
+    return false;
+  }
+
+  return targetSuffix !== candidateSuffix;
+}
+
+/**
+ * Build a sibling-extension consistency finding when the target has no DDLX
+ * consumers but one or more siblings do.
+ */
+export function buildSiblingExtensionFinding(input: SiblingExtensionFindingInput): SiblingExtensionFinding | null {
+  if (input.targetMetadataExtensions > 0) return null;
+
+  const siblingsWithMetadataExtensions = input.siblings
+    .filter((sibling) => sibling.metadataExtensions > 0)
+    .sort((left, right) => {
+      if (right.metadataExtensions !== left.metadataExtensions) {
+        return right.metadataExtensions - left.metadataExtensions;
+      }
+      return left.name.localeCompare(right.name);
+    });
+
+  if (siblingsWithMetadataExtensions.length === 0) return null;
+
+  const siblingSummary = siblingsWithMetadataExtensions
+    .map((sibling) => `${sibling.name} (${sibling.metadataExtensions})`)
+    .join(', ');
+  const packageHint = input.targetPackageName ? ` in package ${input.targetPackageName}` : '';
+  const message =
+    `Possible sibling metadata-extension inconsistency${packageHint}: ` +
+    `${input.targetName} has 0 DDLX consumers while sibling DDLS for stem "${input.stem}" have DDLX consumers ` +
+    `(${siblingSummary}).`;
+
+  return {
+    code: 'SIBLING_METADATA_EXTENSION_MISMATCH',
+    targetName: input.targetName,
+    targetPackageName: input.targetPackageName,
+    stem: input.stem,
+    siblingsWithMetadataExtensions,
+    message,
+  };
+}
+
+function normalizeName(value: string): string {
+  return String(value).trim().toUpperCase();
+}
+
+function isNumericVariantSuffix(value: string): boolean {
+  return value.length === 0 || /^\d+$/.test(value);
 }

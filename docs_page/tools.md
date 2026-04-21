@@ -495,13 +495,15 @@ Returns only the public API contracts (method signatures, interface definitions,
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `action` | string | No | `"deps"` (default), `"usages"`, or `"impact"` |
-| `type` | string | Yes (for deps/impact) | Object type: `CLAS`, `INTF`, `PROG`, `FUNC`, `DDLS` |
+| `type` | string | Yes (for deps), optional for impact | Object type: `CLAS`, `INTF`, `PROG`, `FUNC`, `DDLS` |
 | `name` | string | Yes | Object name (e.g., `ZCL_ORDER`) |
 | `source` | string | No | Provide source directly instead of fetching from SAP |
 | `group` | string | No | Required for `FUNC` type. The function group name. |
 | `maxDeps` | number | No | Maximum dependencies to resolve (default 20) |
 | `depth` | number | No | Dependency depth: 1 = direct only (default), 2 = deps of deps, 3 = max |
 | `includeIndirect` | boolean | No | Only for `action="impact"` (DDLS): include indirect downstream where-used entries (default `false`) |
+| `siblingCheck` | boolean | No | Only for `action="impact"`: run sibling metadata-extension consistency analysis (default `true`) |
+| `siblingMaxCandidates` | number | No | Only for `action="impact"`: max sibling DDLS candidates to compare (default `4`, hard cap `10`) |
 
 **Examples:**
 ```
@@ -541,6 +543,8 @@ ENDCLASS.
 Returns a single JSON payload with:
 - **upstream** dependencies from CDS AST extraction (`tables`, `views`, `associations`, `compositions`)
 - **downstream** where-used consumers classified into RAP-relevant buckets (`projectionViews`, `bdefs`, `serviceDefinitions`, `serviceBindings`, `accessControls`, `metadataExtensions`, `abapConsumers`, `documentation`, etc.)
+- **consistencyHints** (additive): human-readable hints when sibling DDLS variants in the same package have asymmetric DDLX coverage
+- **siblingExtensionAnalysis** (additive): structured details about sibling candidate filtering and metadata-extension counts
 
 Use this to answer: "If I change this CDS view, what breaks?"
 
@@ -548,6 +552,8 @@ Use this to answer: "If I change this CDS view, what breaks?"
 ```
 SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT")
 SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT", includeIndirect=true)
+SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT", siblingCheck=false)
+SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT", siblingMaxCandidates=6)
 ```
 
 **Output (shape):**
@@ -574,9 +580,22 @@ SAPContext(action="impact", type="DDLS", name="ZI_ARC1_I33_ROOT", includeIndirec
     "other": [],
     "summary": { "total": 1, "direct": 1, "indirect": 0, "byBucket": { "projectionViews": 1 } }
   },
-  "summary": { "upstreamCount": 1, "downstreamTotal": 1, "downstreamDirect": 1 }
+  "summary": { "upstreamCount": 1, "downstreamTotal": 1, "downstreamDirect": 1 },
+  "consistencyHints": [
+    "Possible sibling metadata-extension inconsistency: ..."
+  ],
+  "siblingExtensionAnalysis": {
+    "stem": "ZI_ARC1_I33_ROOT",
+    "maxCandidates": 4,
+    "consideredCandidates": 2,
+    "checkedCandidates": [
+      { "name": "ZI_ARC1_I33_ROOT2", "packageName": "ZARC1", "metadataExtensions": 1, "downstreamTotal": 3 }
+    ]
+  }
 }
 ```
+
+Sibling analysis is best-effort and bounded. Any sibling-search or sibling where-used failures are returned as warnings while the primary impact result still succeeds.
 
 ### action="usages" — Reverse dependency lookup
 
