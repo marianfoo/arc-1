@@ -15,7 +15,7 @@ This matrix documents what ABAP SQL supports as a language versus what the ADT f
 | Single `SELECT ... WHERE ... ORDER BY ...` | Supported | Generally reliable | Keep as-is; cap rows with `maxRows` | ABAP keyword docs (Open SQL)
 | `ORDER BY ... ASC/DESC` (SQL standard keywords) | Not ABAP syntax | Rejected with parser errors | Use `ASCENDING` / `DESCENDING` | ABAP keyword docs (Open SQL)
 | `LIMIT n` | Not ABAP syntax | Rejected | Use `maxRows` parameter on `SAPQuery` | ARC-1 contract + ABAP SQL syntax
-| `GROUP BY`, `COUNT(*)` | Supported | Usually works | Keep; simplify if backend parser fails | ABAP keyword docs
+| `GROUP BY`, `COUNT(*)` | Supported | Usually works, but ABAP aggregate rules are strict | Include every non-aggregated selected field in `GROUP BY` | ABAP keyword docs
 | `JOIN` (`INNER/LEFT`) | Supported in language | Can fail on some systems in ADT SQL/freestyle parser despite valid SQL | Split into staged single-table selects when parser rejects | ABAP keyword docs + SAP Note 3605050 context
 | Subquery (`IN (SELECT ...)`) | Supported in language | May fail on parser/grammar edge cases by release | Rewrite as two-step lookup in ARC-1 | ABAP keyword docs + observed parser errors
 | ABAP target clauses (`INTO`, `APPENDING`, `PACKAGE SIZE`) inside freestyle SQL text | Valid in ABAP programs but not expected in ADT SQL console query text | Common parser errors such as `"INTO" is invalid ...` | Remove target clauses; return set is handled by endpoint and `maxRows` | SAP KBA 3690844 preview + ADT SQL console behavior

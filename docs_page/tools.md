@@ -331,6 +331,7 @@ Execute ABAP SQL queries against SAP tables.
 - Use `ASCENDING`/`DESCENDING` (not `ASC`/`DESC`)
 - Use `maxRows` parameter (not `LIMIT`)
 - `GROUP BY`, `COUNT(*)`, `WHERE` all work
+- ABAP SQL aggregate rule applies: non-aggregated selected fields must be listed in `GROUP BY`
 
 ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint parser can still reject valid-looking statements on some backend versions (for example grammar errors or single-SELECT enforcement). If parsing fails, simplify to one SELECT and split complex logic into staged queries.
 

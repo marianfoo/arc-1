@@ -66,6 +66,15 @@ describe('SAPReadSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts TABLE_CONTENTS sqlFilter when identifier contains SELECT as substring', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'ZTAB',
+      sqlFilter: "SELECTFLAG = 'X' AND MANDT = '100'",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('rejects TABLE_CONTENTS sqlFilter that starts with SELECT', () => {
     const result = SAPReadSchema.safeParse({
       type: 'TABLE_CONTENTS',

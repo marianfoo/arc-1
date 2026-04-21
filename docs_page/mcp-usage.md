@@ -25,6 +25,8 @@ ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint
 | `COUNT(*)` | **Works** | Aggregate functions work |
 | `WHERE` | **Works** | Standard conditions |
 
+**ABAP SQL rule:** if you use aggregates (`COUNT`, `SUM`, etc.), every non-aggregated selected field must also appear in `GROUP BY`.
+
 **Parser variability:** Errors like `Only one SELECT statement is allowed` or `"INTO" is invalid ...` come from endpoint parsing, not necessarily from ABAP SQL language limitations. Rewrite to one SELECT statement and remove ABAP target clauses (`INTO`, `APPENDING`, `PACKAGE SIZE`).
 
 Reference: [SAPQuery Freestyle Capability Matrix](../docs/research/sapquery-freestyle-capability-matrix.md)
