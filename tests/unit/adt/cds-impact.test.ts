@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { classifyCdsImpact } from '../../../src/adt/cds-impact.js';
+import {
+  buildSiblingExtensionFinding,
+  classifyCdsImpact,
+  deriveSiblingStem,
+  isSiblingNameMatch,
+} from '../../../src/adt/cds-impact.js';
 import type { WhereUsedResult } from '../../../src/adt/codeintel.js';
 import { findDeepNodes, parseXml } from '../../../src/adt/xml-parser.js';
 
@@ -178,5 +183,76 @@ describe('classifyCdsImpact', () => {
 
     expect(defaultResult.summary.total).toBe(1);
     expect(expandedResult.summary.total).toBe(2);
+  });
+});
+
+describe('sibling extension consistency helpers', () => {
+  it('derives a sibling stem by stripping trailing numeric suffixes', () => {
+    expect(deriveSiblingStem('ZI_SALESDATA3')).toBe('ZI_SALESDATA');
+    expect(deriveSiblingStem(' zi_salesdata12 ')).toBe('ZI_SALESDATA');
+  });
+
+  it('keeps names unchanged when they do not end in numeric variants', () => {
+    expect(deriveSiblingStem('ZI_SALESDATA_A')).toBe('ZI_SALESDATA_A');
+  });
+
+  it('matches numeric suffix DDLS variants as siblings', () => {
+    const stem = deriveSiblingStem('ZI_SALESDATA3');
+    expect(isSiblingNameMatch('ZI_SALESDATA3', 'ZI_SALESDATA4', stem)).toBe(true);
+  });
+
+  it('matches base name and numeric variant as siblings', () => {
+    const stem = deriveSiblingStem('ZI_SALESDATA3');
+    expect(isSiblingNameMatch('ZI_SALESDATA3', 'ZI_SALESDATA', stem)).toBe(true);
+  });
+
+  it('does not match exact same DDLS name', () => {
+    const stem = deriveSiblingStem('ZI_SALESDATA3');
+    expect(isSiblingNameMatch('ZI_SALESDATA3', 'ZI_SALESDATA3', stem)).toBe(false);
+  });
+
+  it('does not match unrelated names', () => {
+    const stem = deriveSiblingStem('ZI_SALESDATA3');
+    expect(isSiblingNameMatch('ZI_SALESDATA3', 'ZI_PURCHDATA3', stem)).toBe(false);
+    expect(isSiblingNameMatch('ZI_SALESDATA3', 'ZI_SALESDATA_A', stem)).toBe(false);
+  });
+
+  it('emits a finding when target has zero DDLX consumers but sibling has coverage', () => {
+    const finding = buildSiblingExtensionFinding({
+      targetName: 'ZI_SALESDATA3',
+      targetPackageName: 'ZPKG',
+      stem: 'ZI_SALESDATA',
+      targetMetadataExtensions: 0,
+      siblings: [
+        { name: 'ZI_SALESDATA4', packageName: 'ZPKG', metadataExtensions: 2 },
+        { name: 'ZI_SALESDATA5', packageName: 'ZPKG', metadataExtensions: 0 },
+      ],
+    });
+
+    expect(finding).not.toBeNull();
+    expect(finding?.code).toBe('SIBLING_METADATA_EXTENSION_MISMATCH');
+    expect(finding?.siblingsWithMetadataExtensions.map((item) => item.name)).toEqual(['ZI_SALESDATA4']);
+  });
+
+  it('does not emit a finding when target already has DDLX consumers', () => {
+    const finding = buildSiblingExtensionFinding({
+      targetName: 'ZI_SALESDATA3',
+      targetPackageName: 'ZPKG',
+      stem: 'ZI_SALESDATA',
+      targetMetadataExtensions: 1,
+      siblings: [{ name: 'ZI_SALESDATA4', packageName: 'ZPKG', metadataExtensions: 2 }],
+    });
+    expect(finding).toBeNull();
+  });
+
+  it('does not emit a finding when no sibling has DDLX consumers', () => {
+    const finding = buildSiblingExtensionFinding({
+      targetName: 'ZI_SALESDATA3',
+      targetPackageName: 'ZPKG',
+      stem: 'ZI_SALESDATA',
+      targetMetadataExtensions: 0,
+      siblings: [{ name: 'ZI_SALESDATA4', packageName: 'ZPKG', metadataExtensions: 0 }],
+    });
+    expect(finding).toBeNull();
   });
 });

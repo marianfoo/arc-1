@@ -2591,6 +2591,7 @@ ENDCLASS.`;
         action: 'impact',
         type: 'DDLS',
         name: 'Z_MY_VIEW',
+        siblingCheck: false,
       });
 
       expect(result.isError).toBeUndefined();
@@ -2640,6 +2641,7 @@ ENDCLASS.`;
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
         action: 'impact',
         name: 'I_COUNTRY',
+        siblingCheck: false,
       });
 
       expect(result.isError).toBeUndefined();
@@ -2683,12 +2685,287 @@ ENDCLASS.`;
         action: 'impact',
         type: 'DDLS',
         name: 'Z_MY_VIEW',
+        siblingCheck: false,
       });
 
       expect(result.isError).toBeUndefined();
       const parsed = JSON.parse(result.content[0]!.text);
       expect(parsed.warnings).toEqual(['Where-used endpoint not available on this system']);
       expect(parsed.downstream.summary.total).toBe(0);
+    });
+
+    it('emits sibling consistency hint when sibling DDLS has DDLX consumers but target does not', async () => {
+      mockFetch.mockReset();
+
+      const targetSearchXml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA3" adtcore:packageName="ZPKG" adtcore:description="Target"/>
+</adtcore:objectReferences>`;
+      const siblingSearchXml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA3" adtcore:packageName="ZPKG" adtcore:description="Target"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA4" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA4" adtcore:packageName="ZPKG" adtcore:description="Sibling"/>
+</adtcore:objectReferences>`;
+      const targetWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddl/sources/zi_projection" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="ZI_PROJECTION" adtcore:type="DDLS/DF" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+      const siblingWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddlx/sources/z_orderdata4" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="Z_ORDERDATA4" adtcore:type="DDLX/EX" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity Z_ORDERDATA3 as select from zmytab { key zmytab.id }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA3')) {
+          return Promise.resolve(mockResponse(200, targetWhereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA4')) {
+          return Promise.resolve(mockResponse(200, siblingWhereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/search?operation=quickSearch')) {
+          const parsed = new URL(urlStr);
+          const query = parsed.searchParams.get('query');
+          if (query === 'Z_ORDERDATA3') {
+            return Promise.resolve(mockResponse(200, targetSearchXml, { 'x-csrf-token': 'T' }));
+          }
+          if (query === 'Z_ORDERDATA*') {
+            return Promise.resolve(mockResponse(200, siblingSearchXml, { 'x-csrf-token': 'T' }));
+          }
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z_ORDERDATA3',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.consistencyHints?.[0]).toContain('Z_ORDERDATA3');
+      expect(parsed.consistencyHints?.[0]).toContain('Z_ORDERDATA4');
+      expect(parsed.siblingExtensionAnalysis.target.packageName).toBe('ZPKG');
+      expect(parsed.siblingExtensionAnalysis.checkedCandidates[0].name).toBe('Z_ORDERDATA4');
+      expect(parsed.siblingExtensionAnalysis.checkedCandidates[0].metadataExtensions).toBe(1);
+    });
+
+    it('does not emit sibling hint when target already has DDLX consumers', async () => {
+      mockFetch.mockReset();
+
+      const targetSearchXml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA3" adtcore:packageName="ZPKG" adtcore:description="Target"/>
+</adtcore:objectReferences>`;
+      const siblingSearchXml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA4" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA4" adtcore:packageName="ZPKG" adtcore:description="Sibling"/>
+</adtcore:objectReferences>`;
+      const whereUsedWithDdlx = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddlx/sources/z_orderdata3" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="Z_ORDERDATA3" adtcore:type="DDLX/EX" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity Z_ORDERDATA3 as select from zmytab { key zmytab.id }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA3')) {
+          return Promise.resolve(mockResponse(200, whereUsedWithDdlx, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA4')) {
+          return Promise.resolve(mockResponse(200, whereUsedWithDdlx, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/search?operation=quickSearch')) {
+          const parsed = new URL(urlStr);
+          const query = parsed.searchParams.get('query');
+          if (query === 'Z_ORDERDATA3') {
+            return Promise.resolve(mockResponse(200, targetSearchXml, { 'x-csrf-token': 'T' }));
+          }
+          if (query === 'Z_ORDERDATA*') {
+            return Promise.resolve(mockResponse(200, siblingSearchXml, { 'x-csrf-token': 'T' }));
+          }
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z_ORDERDATA3',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.consistencyHints).toBeUndefined();
+      expect(parsed.siblingExtensionAnalysis.target.metadataExtensions).toBe(1);
+    });
+
+    it('enforces sibling candidate cap', async () => {
+      mockFetch.mockReset();
+      let siblingWhereUsedCalls = 0;
+
+      const targetSearchXml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA3" adtcore:packageName="ZPKG" adtcore:description="Target"/>
+</adtcore:objectReferences>`;
+      const siblingSearchXml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA4" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA4" adtcore:packageName="ZPKG" adtcore:description="Sibling 4"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA5" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA5" adtcore:packageName="ZPKG" adtcore:description="Sibling 5"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA6" adtcore:type="DDLS/DF" adtcore:name="Z_ORDERDATA6" adtcore:packageName="ZPKG" adtcore:description="Sibling 6"/>
+</adtcore:objectReferences>`;
+      const emptyWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects />
+</usageReferences:usageReferenceResult>`;
+
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity Z_ORDERDATA3 as select from zmytab { key zmytab.id }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA3')) {
+          return Promise.resolve(mockResponse(200, emptyWhereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA')) {
+          siblingWhereUsedCalls += 1;
+          return Promise.resolve(mockResponse(200, emptyWhereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/search?operation=quickSearch')) {
+          const parsed = new URL(urlStr);
+          const query = parsed.searchParams.get('query');
+          if (query === 'Z_ORDERDATA3') {
+            return Promise.resolve(mockResponse(200, targetSearchXml, { 'x-csrf-token': 'T' }));
+          }
+          if (query === 'Z_ORDERDATA*') {
+            return Promise.resolve(mockResponse(200, siblingSearchXml, { 'x-csrf-token': 'T' }));
+          }
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z_ORDERDATA3',
+        siblingMaxCandidates: 1,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.siblingExtensionAnalysis.checkedCandidates).toHaveLength(1);
+      expect(parsed.siblingExtensionAnalysis.skipped.overLimit).toBe(2);
+      expect(siblingWhereUsedCalls).toBe(1);
+    });
+
+    it('keeps base impact response when sibling search fails', async () => {
+      mockFetch.mockReset();
+
+      const emptyWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects />
+</usageReferences:usageReferenceResult>`;
+
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z_ORDERDATA3/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity Z_ORDERDATA3 as select from zmytab { key zmytab.id }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ_ORDERDATA3')) {
+          return Promise.resolve(mockResponse(200, emptyWhereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/search?operation=quickSearch')) {
+          return Promise.resolve(mockResponse(500, 'Search failed', { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z_ORDERDATA3',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.summary.downstreamTotal).toBe(0);
+      expect(parsed.warnings).toContain(
+        'Sibling consistency check skipped due to search or where-used processing errors.',
+      );
+    });
+
+    it('skips sibling analysis and records a warning when the derived stem is too short', async () => {
+      mockFetch.mockReset();
+      let searchCalled = false;
+
+      const emptyWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects />
+</usageReferences:usageReferenceResult>`;
+
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/sap/bc/adt/ddic/ddl/sources/Z1/source/main')) {
+          return Promise.resolve(
+            mockResponse(200, 'define view entity Z1 as select from zmytab { key zmytab.id }', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        }
+        if (urlStr.includes('usageReferences?uri=%2Fsap%2Fbc%2Fadt%2Fddic%2Fddl%2Fsources%2FZ1')) {
+          return Promise.resolve(mockResponse(200, emptyWhereUsedXml, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/sap/bc/adt/repository/informationsystem/search?operation=quickSearch')) {
+          searchCalled = true;
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPContext', {
+        action: 'impact',
+        type: 'DDLS',
+        name: 'Z1',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.siblingExtensionAnalysis).toBeUndefined();
+      expect(parsed.warnings?.some((msg: string) => msg.includes('too short to identify siblings'))).toBe(true);
+      expect(searchCalled).toBe(false);
     });
   });
 

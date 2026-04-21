@@ -609,8 +609,45 @@ describe('SAPContextSchema', () => {
       maxDeps: 10,
       depth: 2,
       includeIndirect: true,
+      siblingCheck: false,
+      siblingMaxCandidates: 5,
     });
     expect(result.success).toBe(true);
+  });
+
+  it('accepts sibling controls for impact', () => {
+    const result = SAPContextSchema.safeParse({
+      action: 'impact',
+      type: 'DDLS',
+      name: 'ZI_SALES',
+      siblingCheck: true,
+      siblingMaxCandidates: 3,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('clamps siblingMaxCandidates to hard bounds', () => {
+    const low = SAPContextSchema.safeParse({
+      action: 'impact',
+      type: 'DDLS',
+      name: 'ZI_SALES',
+      siblingMaxCandidates: 0,
+    });
+    expect(low.success).toBe(true);
+    if (low.success) {
+      expect(low.data.siblingMaxCandidates).toBe(1);
+    }
+
+    const high = SAPContextSchema.safeParse({
+      action: 'impact',
+      type: 'DDLS',
+      name: 'ZI_SALES',
+      siblingMaxCandidates: 999,
+    });
+    expect(high.success).toBe(true);
+    if (high.success) {
+      expect(high.data.siblingMaxCandidates).toBe(10);
+    }
   });
 
   it('rejects missing name', () => {
@@ -639,6 +676,14 @@ describe('SAPContextSchemaBtp', () => {
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'CLAS' }).success).toBe(true);
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS' }).success).toBe(true);
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS', action: 'impact' }).success).toBe(true);
+    const siblingControls = SAPContextSchemaBtp.safeParse({
+      name: 'Z',
+      type: 'DDLS',
+      action: 'impact',
+      siblingCheck: false,
+      siblingMaxCandidates: 4,
+    });
+    expect(siblingControls.success).toBe(true);
   });
 
   it('does not have group field', () => {

@@ -24,7 +24,13 @@ import {
   switchBranch as abapGitSwitchBranch,
   unlinkRepo as abapGitUnlinkRepo,
 } from '../adt/abapgit.js';
-import { classifyCdsImpact } from '../adt/cds-impact.js';
+import {
+  buildSiblingExtensionFinding,
+  classifyCdsImpact,
+  deriveSiblingStem,
+  isSiblingNameMatch,
+  type SiblingExtensionCandidate,
+} from '../adt/cds-impact.js';
 import type { AdtClient } from '../adt/client.js';
 import {
   findDefinition,
@@ -3421,6 +3427,16 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
 
 // ─── SAPContext Handler ───────────────────────────────────────────────
 
+const DEFAULT_SIBLING_MAX_CANDIDATES = 4;
+const HARD_MAX_SIBLING_MAX_CANDIDATES = 10;
+
+function parseSiblingMaxCandidates(value: unknown): number {
+  const parsed = Number(value ?? DEFAULT_SIBLING_MAX_CANDIDATES);
+  if (!Number.isFinite(parsed)) return DEFAULT_SIBLING_MAX_CANDIDATES;
+  const rounded = Math.trunc(parsed);
+  return Math.min(Math.max(rounded, 1), HARD_MAX_SIBLING_MAX_CANDIDATES);
+}
+
 async function handleSAPContext(
   client: AdtClient,
   args: Record<string, unknown>,
@@ -3483,8 +3499,38 @@ async function handleSAPContext(
     const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
     const upstream = buildCdsUpstream(extractCdsDependencies(ddlSource));
     const includeIndirect = args.includeIndirect === true;
+    const siblingCheck = args.siblingCheck !== false;
+    const siblingMaxCandidates = parseSiblingMaxCandidates(args.siblingMaxCandidates);
     let downstream = classifyCdsImpact([], { includeIndirect });
     const warnings: string[] = [];
+    const consistencyHints: string[] = [];
+    let siblingExtensionAnalysis:
+      | {
+          enabled: boolean;
+          stem: string;
+          searchQuery: string;
+          includeIndirect: boolean;
+          maxCandidates: number;
+          filters: {
+            samePackage: boolean;
+            siblingStem: string;
+          };
+          target: {
+            name: string;
+            packageName?: string;
+            metadataExtensions: number;
+          };
+          consideredCandidates: number;
+          checkedCandidates: Array<SiblingExtensionCandidate & { downstreamTotal: number }>;
+          skipped: {
+            self: number;
+            nonDdls: number;
+            packageMismatch: number;
+            nameMismatch: number;
+            overLimit: number;
+          };
+        }
+      | undefined;
 
     try {
       const whereUsed = await findWhereUsed(client.http, client.safety, objectUrlForType('DDLS', name));
@@ -3494,6 +3540,142 @@ async function handleSAPContext(
         warnings.push('Where-used endpoint not available on this system');
       } else {
         throw err;
+      }
+    }
+
+    if (siblingCheck && warnings.length === 0) {
+      try {
+        const targetName = name.toUpperCase();
+        const stem = deriveSiblingStem(targetName);
+        // Guard against over-broad sibling searches for short/degenerate stems
+        // (e.g., target "Z1" -> stem "Z" -> searchQuery "Z*" would scan the full Z namespace).
+        if (stem.length < 3) {
+          warnings.push(
+            `Sibling consistency check skipped: derived stem "${stem}" is too short to identify siblings safely.`,
+          );
+        } else {
+          const targetMatches = await client.searchObject(targetName, 25);
+          const targetMatch = targetMatches.find(
+            (candidate) =>
+              normalizeObjectType(candidate.objectType) === 'DDLS' && candidate.objectName.toUpperCase() === targetName,
+          );
+          const targetPackageName = targetMatch?.packageName;
+
+          if (!targetPackageName) {
+            warnings.push(`Sibling consistency check skipped: could not resolve package for DDLS "${targetName}".`);
+          } else {
+            const searchQuery = `${stem}*`;
+            const searchMaxResults = Math.min(100, Math.max(siblingMaxCandidates * 4, siblingMaxCandidates + 4));
+            const siblingCandidates = await client.searchObject(searchQuery, searchMaxResults);
+            const skipped = {
+              self: 0,
+              nonDdls: 0,
+              packageMismatch: 0,
+              nameMismatch: 0,
+              overLimit: 0,
+            };
+            const filteredCandidates: Array<{ name: string; packageName: string }> = [];
+            const seenNames = new Set<string>();
+
+            for (const candidate of siblingCandidates) {
+              if (normalizeObjectType(candidate.objectType) !== 'DDLS') {
+                skipped.nonDdls += 1;
+                continue;
+              }
+
+              const candidateName = candidate.objectName.toUpperCase();
+              if (candidateName === targetName) {
+                skipped.self += 1;
+                continue;
+              }
+              if (candidate.packageName !== targetPackageName) {
+                skipped.packageMismatch += 1;
+                continue;
+              }
+              if (!isSiblingNameMatch(targetName, candidateName, stem)) {
+                skipped.nameMismatch += 1;
+                continue;
+              }
+              if (seenNames.has(candidateName)) {
+                continue;
+              }
+              seenNames.add(candidateName);
+              filteredCandidates.push({ name: candidateName, packageName: candidate.packageName });
+            }
+
+            const selectedCandidates = filteredCandidates.slice(0, siblingMaxCandidates);
+            skipped.overLimit = Math.max(filteredCandidates.length - selectedCandidates.length, 0);
+
+            const checkedCandidates: Array<SiblingExtensionCandidate & { downstreamTotal: number }> = [];
+            let skippedWhereUsedCandidates = 0;
+
+            for (const candidate of selectedCandidates) {
+              try {
+                const siblingWhereUsed = await findWhereUsed(
+                  client.http,
+                  client.safety,
+                  objectUrlForType('DDLS', candidate.name),
+                );
+                const siblingDownstream = classifyCdsImpact(siblingWhereUsed, { includeIndirect });
+                checkedCandidates.push({
+                  name: candidate.name,
+                  packageName: candidate.packageName,
+                  metadataExtensions: siblingDownstream.metadataExtensions.length,
+                  downstreamTotal: siblingDownstream.summary.total,
+                });
+              } catch (err) {
+                if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+                  skippedWhereUsedCandidates += 1;
+                  continue;
+                }
+                throw err;
+              }
+            }
+
+            if (skippedWhereUsedCandidates > 0) {
+              warnings.push(
+                `Sibling consistency check skipped ${skippedWhereUsedCandidates} candidate(s) due to where-used endpoint errors.`,
+              );
+            }
+
+            const siblingFinding = buildSiblingExtensionFinding({
+              targetName,
+              targetPackageName,
+              stem,
+              targetMetadataExtensions: downstream.metadataExtensions.length,
+              siblings: checkedCandidates,
+            });
+            if (siblingFinding) {
+              consistencyHints.push(siblingFinding.message);
+            }
+
+            siblingExtensionAnalysis = {
+              enabled: true,
+              stem,
+              searchQuery,
+              includeIndirect,
+              maxCandidates: siblingMaxCandidates,
+              filters: {
+                samePackage: true,
+                siblingStem: stem,
+              },
+              target: {
+                name: targetName,
+                packageName: targetPackageName,
+                metadataExtensions: downstream.metadataExtensions.length,
+              },
+              consideredCandidates: filteredCandidates.length,
+              checkedCandidates,
+              skipped,
+            };
+          }
+        }
+      } catch (err) {
+        logger.debug('Sibling consistency check aborted', {
+          name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        warnings.push('Sibling consistency check skipped due to search or where-used processing errors.');
       }
     }
 
@@ -3510,6 +3692,8 @@ async function handleSAPContext(
         downstreamTotal: downstream.summary.total,
         downstreamDirect: downstream.summary.direct,
       },
+      ...(consistencyHints.length > 0 ? { consistencyHints } : {}),
+      ...(siblingExtensionAnalysis ? { siblingExtensionAnalysis } : {}),
       ...(warnings.length > 0 ? { warnings } : {}),
     };
 
