@@ -652,7 +652,12 @@ export class AdtHttpClient {
   /** Handle response: throw on error status, return normalized response */
   private handleResponse(status: number, headers: Headers, body: string, path: string): AdtResponse {
     const contentType = headers.get('content-type')?.toLowerCase();
-    if (status === 200 && path.startsWith('/sap/bc/adt/') && contentType?.startsWith('text/html')) {
+    if (
+      status === 200 &&
+      path.startsWith('/sap/bc/adt/') &&
+      contentType?.startsWith('text/html') &&
+      looksLikeLoginPage(body)
+    ) {
       throw new AdtApiError(
         'ADT call returned HTML login page — authentication required. If using cookies, they may have expired. If using Basic auth, credentials may be invalid or not authorized for ADT (S_ADT_RES missing). If on an SSO-only system, try SAP_DISABLE_SAML=true or see docs/enterprise-auth.md. Re-run arc-1 after fixing.',
         401,
@@ -995,4 +1000,25 @@ function isModifyingMethod(method: string): boolean {
 function inferAcceptFromError(body: string): string | undefined {
   const match = body.match(/application\/[\w.+-]+(?:\/[\w.+-]+)?/);
   return match?.[0];
+}
+
+/**
+ * Distinguish a real SAP logon page from a legitimate HTML response payload.
+ *
+ * SAP logon pages are full HTML documents that begin with `<!DOCTYPE` / `<html>`
+ * or embed a recognizable logon form. Several ADT endpoints (e.g. gateway
+ * error log detail at `/sap/bc/adt/gw/errorlog/{type}/{tx}`, dump summaries,
+ * dump formatted output) legitimately return HTML *fragments* that start with
+ * `<h4>`, `<table>`, `<div>`, etc. — those must not be treated as login
+ * redirects.
+ */
+function looksLikeLoginPage(body: string): boolean {
+  if (!body) return false;
+  const trimmed = body.trimStart().slice(0, 2048);
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('<!doctype html') || lower.startsWith('<html')) return true;
+  // Classic SAP logon form markers (SICF logon / Fiori logon).
+  if (/sap-system-login|logonform|sap-ui-bootstrap|sapsystemlogin|sap-logon/i.test(trimmed)) return true;
+  return false;
 }

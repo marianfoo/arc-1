@@ -2,7 +2,7 @@
  * Intent-based tool handler for ARC-1.
  *
  * Routes MCP tool calls to the appropriate ADT client methods.
- * Each of the 11 tools (SAPRead, SAPSearch, etc.) dispatches
+ * Each of the 12 tools (SAPRead, SAPSearch, etc.) dispatches
  * based on its `type` or `action` parameter.
  *
  * Error handling: all errors are caught and returned as MCP error
@@ -81,10 +81,13 @@ import {
 } from '../adt/devtools.js';
 import {
   getDump,
+  getGatewayErrorDetail,
   getTraceDbAccesses,
   getTraceHitlist,
   getTraceStatements,
   listDumps,
+  listGatewayErrors,
+  listSystemMessages,
   listTraces,
 } from '../adt/diagnostics.js';
 import {
@@ -133,7 +136,7 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../adt/transport.js';
-import type { ClassHierarchy, ObjectTransportHistory, ResolvedFeatures } from '../adt/types.js';
+import type { ClassHierarchy, DumpDetail, ObjectTransportHistory, ResolvedFeatures } from '../adt/types.js';
 import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
@@ -182,8 +185,25 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPDiagnose: 'read',
   SAPWrite: 'write',
   SAPActivate: 'write',
-  SAPManage: 'write',
+  SAPManage: 'read',
   SAPTransport: 'write',
+};
+
+export const SAPMANAGE_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
+  features: 'read',
+  probe: 'read',
+  cache_stats: 'read',
+  create_package: 'write',
+  delete_package: 'write',
+  change_package: 'write',
+  flp_list_catalogs: 'write',
+  flp_list_groups: 'write',
+  flp_list_tiles: 'write',
+  flp_create_catalog: 'write',
+  flp_create_group: 'write',
+  flp_create_tile: 'write',
+  flp_add_tile_to_group: 'write',
+  flp_delete_catalog: 'write',
 };
 
 const SAPGIT_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
@@ -204,6 +224,10 @@ const SAPGIT_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
   create_branch: 'write',
   unlink: 'write',
 };
+
+function getSapManageActionScope(action: string): 'read' | 'write' {
+  return SAPMANAGE_ACTION_SCOPES[action] ?? 'write';
+}
 
 /**
  * Check if authInfo has the required scope, respecting implied scopes:
@@ -273,8 +297,20 @@ export function looksLikeFieldName(query: string): boolean {
   return true;
 }
 
+function hasSqlParserSignature(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes('only one select statement is allowed') ||
+    normalized.includes('only select statement is allowed') ||
+    normalized.includes('invalid query string') ||
+    normalized.includes('due to grammar') ||
+    normalized.includes('is invalid here') ||
+    normalized.includes('is invalid at this position')
+  );
+}
+
 /** Format error messages with LLM-friendly remediation hints */
-function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
+function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
@@ -287,6 +323,10 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     }
 
     if (err.isNotFound) {
+      const diagnosticsHint = buildDiagnosticsNotFoundHint(tool, args);
+      if (diagnosticsHint) {
+        return `${enriched}\n\nHint: ${diagnosticsHint}`;
+      }
       const name = String(args.name ?? '');
       const type = String(args.type ?? '');
       return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
@@ -298,6 +338,16 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     const transportHint = getTransportHint(err);
     if (transportHint) {
       return `${enriched}\n\nHint: ${transportHint}`;
+    }
+    if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS' && err.statusCode === 400) {
+      const combined = `${err.message}\n${err.responseBody ?? ''}`;
+      if (hasSqlParserSignature(combined)) {
+        return (
+          `${enriched}\n\nHint: TABLE_CONTENTS sqlFilter must be a condition expression only ` +
+          '(no WHERE, no SELECT, no semicolon). Examples: ' +
+          `sqlFilter="MANDT = '100'" or sqlFilter="MATNR LIKE 'Z%'".`
+        );
+      }
     }
     if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType)) {
       return (
@@ -318,11 +368,112 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     return enriched;
   }
 
+  if (err instanceof AdtSafetyError) {
+    const argType = String(args.type ?? '').toUpperCase();
+    if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS') {
+      return (
+        `${message}\n\nHint: TABLE_CONTENTS is blocked by safety configuration or missing data scope. ` +
+        'Enable table preview at the server level (SAP_BLOCK_DATA=false or a *-data/*-sql profile) ' +
+        'and, in authenticated HTTP mode, ensure the token includes data (or sql) scope.'
+      );
+    }
+    return message;
+  }
+
   if (err instanceof AdtNetworkError) {
-    return `${message}\n\nHint: Cannot reach the SAP system. This is a connectivity issue, not a usage error.`;
+    if (tool === 'SAPRead' && String(args.type ?? '').toUpperCase() === 'SYSTEM') {
+      return (
+        `${message}\n\nHint: Connectivity probe failed. Fix connectivity first, then retry ` +
+        'SAPRead(type="SYSTEM") before running any batch or parallel tool calls.'
+      );
+    }
+    return (
+      `${message}\n\nHint: Cannot reach the SAP system. Run SAPRead(type="SYSTEM") once as a connectivity ` +
+      'probe before retrying batch/parallel calls.'
+    );
   }
 
   return message;
+}
+
+function buildDiagnosticsNotFoundHint(tool: string, args: Record<string, unknown>): string | undefined {
+  if (tool !== 'SAPDiagnose') return undefined;
+
+  const action = String(args.action ?? '');
+  const id = String(args.id ?? '').trim();
+  const detailUrl = String(args.detailUrl ?? '').trim();
+
+  if (action === 'dumps' && id) {
+    return `Dump ID "${id}" was not found. Re-list dumps with SAPDiagnose(action="dumps", maxResults=50), then retry with a fresh ID from that list.`;
+  }
+
+  if (action === 'traces' && id) {
+    return `Trace ID "${id}" was not found. Re-list traces with SAPDiagnose(action="traces") and retry using an existing trace ID.`;
+  }
+
+  if (action === 'gateway_errors' && (detailUrl || id)) {
+    return 'Gateway error detail was not found. Re-list SAPDiagnose(action="gateway_errors") and reuse a current detailUrl from the list output.';
+  }
+
+  return undefined;
+}
+
+function buildAuditResultPreview(toolName: string, args: Record<string, unknown>, fullText: string): string {
+  const maxLen = 500;
+  const truncate = (value: string): string => (value.length > maxLen ? `${value.slice(0, maxLen)}...` : value);
+
+  if (toolName !== 'SAPDiagnose') return truncate(fullText);
+
+  const action = String(args.action ?? '');
+  const isDetailDump = action === 'dumps' && Boolean(args.id);
+  const isDetailGateway =
+    action === 'gateway_errors' && (Boolean(args.detailUrl) || (Boolean(args.id) && Boolean(args.errorType)));
+
+  if (!isDetailDump && !isDetailGateway) return truncate(fullText);
+
+  try {
+    const payload = JSON.parse(fullText) as Record<string, unknown>;
+    if (isDetailDump) {
+      const sections =
+        payload.sections && typeof payload.sections === 'object' ? (payload.sections as Record<string, unknown>) : {};
+      const compact = {
+        id: payload.id,
+        error: payload.error,
+        program: payload.program,
+        user: payload.user,
+        timestamp: payload.timestamp,
+        selectedSectionIds: payload.selectedSectionIds,
+        sections: Object.fromEntries(
+          Object.entries(sections).map(([key, value]) => {
+            if (typeof value === 'string') return [key, `[omitted ${value.length} chars]`];
+            return [key, '[omitted]'];
+          }),
+        ),
+        formattedText:
+          typeof payload.formattedText === 'string' ? `[omitted ${payload.formattedText.length} chars]` : undefined,
+      };
+      return truncate(JSON.stringify(compact));
+    }
+
+    if (isDetailGateway && payload.sourceCode && typeof payload.sourceCode === 'object') {
+      const sourceCode = payload.sourceCode as Record<string, unknown>;
+      const lines = Array.isArray(sourceCode.lines) ? sourceCode.lines.length : 0;
+      const compact = {
+        type: payload.type,
+        shortText: payload.shortText,
+        transactionId: payload.transactionId,
+        username: payload.username,
+        dateTime: payload.dateTime,
+        sourceCode: `[omitted ${lines} lines]`,
+        callStackCount: Array.isArray(payload.callStack) ? payload.callStack.length : 0,
+      };
+      return truncate(JSON.stringify(compact));
+    }
+
+    return truncate(JSON.stringify(payload));
+  } catch {
+    return truncate(fullText);
+  }
 }
 
 /** Enrich error message with additional SAP XML diagnostic detail (extra messages, properties) */
@@ -525,6 +676,30 @@ export async function handleToolCall(
     args = parsed.data as Record<string, unknown>;
   }
 
+  // Mixed-scope tool: SAPManage has read-only actions and write actions.
+  // Tool-level scope grants visibility; action-level scope enforces mutating actions.
+  if (authInfo && toolName === 'SAPManage') {
+    const action = String(args.action ?? '');
+    const requiredScope = getSapManageActionScope(action);
+    if (!hasRequiredScope(authInfo, requiredScope)) {
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        event: 'auth_scope_denied',
+        requestId: reqId,
+        user,
+        clientId,
+        tool: toolName,
+        requiredScope,
+        availableScopes: authInfo.scopes,
+      });
+      return errorResult(
+        `Insufficient scope: '${requiredScope}' required for SAPManage(action="${action}"). ` +
+          `Your scopes: [${authInfo.scopes.join(', ')}]`,
+      );
+    }
+  }
+
   // Run within request context so HTTP-level logs get the requestId
   return requestContext.run({ requestId: reqId, user, tool: toolName }, async () => {
     try {
@@ -604,7 +779,7 @@ export async function handleToolCall(
       const durationMs = Date.now() - start;
       const fullText = result.content.map((c) => c.text).join('');
       const resultSize = fullText.length;
-      const resultPreview = fullText.length > 500 ? `${fullText.slice(0, 500)}...` : fullText;
+      const resultPreview = buildAuditResultPreview(toolName, args, fullText);
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
@@ -1137,6 +1312,29 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   return textResult(transliterationNote + JSON.stringify(results, null, 2));
 }
 
+function classifySapQueryParserError(err: AdtApiError, sql: string): string | undefined {
+  if (err.statusCode !== 400) return undefined;
+
+  const combined = `${err.message}\n${err.responseBody ?? ''}`;
+  if (!hasSqlParserSignature(combined)) return undefined;
+
+  const hints = [
+    'ADT freestyle SQL parser rejected this query on this backend/version.',
+    'Submit exactly one SELECT statement (no semicolons, no multi-statement scripts).',
+    'Remove ABAP target clauses from SQL text (INTO, APPENDING, PACKAGE SIZE).',
+  ];
+
+  if (/\bJOIN\b/i.test(sql)) {
+    hints.push('JOIN parsing can fail on some systems (SAP Note 3605050); split into staged single-table queries.');
+  }
+
+  if (/\bINTO\b|\bAPPENDING\b|\bPACKAGE\s+SIZE\b/i.test(sql)) {
+    hints.push('Use the MCP maxRows parameter for row limits instead of ABAP target-table clauses.');
+  }
+
+  return `${err.message}\n\nHint: ${hints.join(' ')}`;
+}
+
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const sql = String(args.sql ?? '');
   const maxRows = Number(args.maxRows ?? 100);
@@ -1170,11 +1368,9 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
         }
       }
     }
-    // JOIN-aware error: ADT freestyle SQL parser has known edge cases with JOINs (SAP Note 3605050)
-    if (err instanceof AdtApiError && err.statusCode === 400 && /\bJOIN\b/i.test(sql)) {
-      return errorResult(
-        `${err.message}\n\nMulti-table JOIN query failed. The ADT freestyle SQL endpoint has known parser edge cases with JOINs (SAP Note 3605050). Try splitting into separate single-table queries.`,
-      );
+    if (err instanceof AdtApiError) {
+      const parserHint = classifySapQueryParserError(err, sql);
+      if (parserHint) return errorResult(parserHint);
     }
     throw err;
   }
@@ -3025,11 +3221,33 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
     case 'dumps': {
       const id = args.id as string | undefined;
       if (id) {
-        // Get single dump detail
         const detail = await getDump(client.http, client.safety, id);
-        return textResult(JSON.stringify(detail, null, 2));
+        const includeFullText = args.includeFullText === true || String(args.includeFullText ?? '') === 'true';
+        const selectedSections = selectDumpSections(detail, args.sections);
+
+        const payload: Record<string, unknown> = {
+          id: detail.id,
+          error: detail.error,
+          exception: detail.exception,
+          program: detail.program,
+          user: detail.user,
+          timestamp: detail.timestamp,
+          chapters: detail.chapters,
+          terminationUri: detail.terminationUri,
+          sections: selectedSections,
+          selectedSectionIds: Object.keys(selectedSections),
+          availableSections: detail.chapters.map((chapter) => ({
+            id: chapter.name,
+            title: chapter.title,
+            line: chapter.line,
+          })),
+        };
+        if (includeFullText) {
+          payload.formattedText = detail.formattedText;
+        }
+        return textResult(JSON.stringify(payload, null, 2));
       }
-      // List dumps
+
       const user = args.user as string | undefined;
       const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
       const dumps = await listDumps(client.http, client.safety, { user, maxResults });
@@ -3061,11 +3279,113 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
       const traces = await listTraces(client.http, client.safety);
       return textResult(JSON.stringify(traces, null, 2));
     }
+    case 'system_messages': {
+      const user = args.user as string | undefined;
+      const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
+      const from = args.from as string | undefined;
+      const to = args.to as string | undefined;
+      const messages = await listSystemMessages(client.http, client.safety, { user, maxResults, from, to });
+      return textResult(JSON.stringify(messages, null, 2));
+    }
+    case 'gateway_errors': {
+      if (isBtpSystem()) {
+        return errorResult(
+          'SAP Gateway error log is not available on BTP ABAP Environment. Use this action on on-prem systems.',
+        );
+      }
+
+      const user = args.user as string | undefined;
+      const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
+      const from = args.from as string | undefined;
+      const to = args.to as string | undefined;
+      const detailUrl = args.detailUrl as string | undefined;
+      const id = args.id as string | undefined;
+      const errorType = args.errorType as string | undefined;
+
+      if (detailUrl || id) {
+        const detail = await getGatewayErrorDetail(client.http, client.safety, { detailUrl, id, errorType });
+        return textResult(JSON.stringify(detail, null, 2));
+      }
+
+      const errors = await listGatewayErrors(client.http, client.safety, { user, maxResults, from, to });
+      return textResult(JSON.stringify(errors, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces`,
+        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces, system_messages, gateway_errors`,
       );
   }
+}
+
+function selectDumpSections(detail: DumpDetail, requestedSections: unknown): Record<string, string> {
+  const availableSections = detail.sections ?? {};
+  const availableIds = Object.keys(availableSections);
+  if (availableIds.length === 0) return {};
+
+  const requestedIds = resolveRequestedDumpSectionIds(detail, requestedSections);
+  const selectedIds = requestedIds.length > 0 ? requestedIds : pickDefaultDumpSectionIds(detail);
+  const finalIds = selectedIds.length > 0 ? selectedIds : availableIds.slice(0, 5);
+
+  return Object.fromEntries(finalIds.map((id) => [id, availableSections[id] ?? '']));
+}
+
+function resolveRequestedDumpSectionIds(detail: DumpDetail, requestedSections: unknown): string[] {
+  if (!Array.isArray(requestedSections)) return [];
+  const availableIds = new Set(Object.keys(detail.sections ?? {}));
+  const resolved = requestedSections
+    .map((entry) => resolveDumpSectionId(detail, String(entry ?? '')))
+    .filter((entry): entry is string => typeof entry === 'string' && availableIds.has(entry));
+  return Array.from(new Set(resolved));
+}
+
+function resolveDumpSectionId(detail: DumpDetail, candidate: string): string | undefined {
+  const normalizedCandidate = normalizeDumpSectionKey(candidate);
+  if (!normalizedCandidate) return undefined;
+
+  const direct = detail.chapters.find((chapter) => normalizeDumpSectionKey(chapter.name) === normalizedCandidate)?.name;
+  if (direct) return direct;
+
+  const exactTitle = detail.chapters.find(
+    (chapter) => normalizeDumpSectionKey(chapter.title) === normalizedCandidate,
+  )?.name;
+  if (exactTitle) return exactTitle;
+
+  const fuzzyTitle = detail.chapters.find((chapter) =>
+    normalizeDumpSectionKey(chapter.title).includes(normalizedCandidate),
+  )?.name;
+  return fuzzyTitle;
+}
+
+function pickDefaultDumpSectionIds(detail: DumpDetail): string[] {
+  const wanted = ['short text', 'what happened', 'error analysis', 'source code extract', 'active calls', 'call stack'];
+  const selected: string[] = [];
+
+  for (const pattern of wanted) {
+    const found = detail.chapters.find(
+      (chapter) => normalizeDumpSectionKey(chapter.title).includes(normalizeDumpSectionKey(pattern)) && chapter.name,
+    );
+    if (found?.name && !selected.includes(found.name) && detail.sections[found.name]) {
+      selected.push(found.name);
+    }
+  }
+
+  if (selected.length > 0) return selected;
+
+  const ordered = [...detail.chapters]
+    .sort((a, b) => {
+      if (a.line !== b.line) return a.line - b.line;
+      return a.chapterOrder - b.chapterOrder;
+    })
+    .map((chapter) => chapter.name)
+    .filter((name) => Boolean(name) && Boolean(detail.sections[name]));
+  return Array.from(new Set(ordered)).slice(0, 5);
+}
+
+function normalizeDumpSectionKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 // ─── SAPGit Handler ──────────────────────────────────────────────────
@@ -4203,7 +4523,7 @@ async function handleSAPManage(
 
     default:
       return errorResult(
-        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, change_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
       );
   }
 }

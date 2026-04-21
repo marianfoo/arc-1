@@ -1,5 +1,5 @@
 /**
- * Zod v4 input schemas for all 11 MCP tools.
+ * Zod v4 input schemas for all 12 MCP tools.
  *
  * These schemas provide runtime validation via safeParse() in handleToolCall().
  * JSON Schema generation via z.toJSONSchema() is planned for a future PR
@@ -84,7 +84,7 @@ const SAPREAD_CLAS_INCLUDES = ['main', 'testclasses', 'definitions', 'implementa
 const SAPREAD_DDLS_INCLUDES = ['elements'] as const;
 
 function validateSapReadInput(
-  input: { type: string; include?: string; versionUri?: string },
+  input: { type: string; include?: string; versionUri?: string; sqlFilter?: string },
   ctx: { addIssue: (issue: { code: 'custom'; path: string[]; message: string }) => void },
 ): void {
   if (input.include) {
@@ -124,6 +124,34 @@ function validateSapReadInput(
         code: 'custom',
         path: ['versionUri'],
         message: 'VERSION_SOURCE versionUri must start with /sap/bc/adt/.',
+      });
+    }
+  }
+
+  if (input.type === 'TABLE_CONTENTS' && input.sqlFilter) {
+    const sqlFilter = input.sqlFilter.trim();
+    if (/^select\b/i.test(sqlFilter)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must be a condition expression only (no SELECT statement). Example: "MANDT = \'100\'" or "MATNR LIKE \'Z%\'".',
+      });
+    }
+    if (/^where\b/i.test(sqlFilter)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must not start with WHERE. Pass only the condition expression, for example: "MANDT = \'100\'".',
+      });
+    }
+    if (sqlFilter.includes(';')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must contain exactly one condition expression (no semicolons or multiple statements).',
       });
     }
   }
@@ -429,7 +457,17 @@ export const SAPLintSchema = z.object({
 // ─── SAPDiagnose ────────────────────────────────────────────────────
 
 export const SAPDiagnoseSchema = z.object({
-  action: z.enum(['syntax', 'unittest', 'atc', 'dumps', 'traces', 'quickfix', 'apply_quickfix']),
+  action: z.enum([
+    'syntax',
+    'unittest',
+    'atc',
+    'dumps',
+    'traces',
+    'system_messages',
+    'gateway_errors',
+    'quickfix',
+    'apply_quickfix',
+  ]),
   name: z.string().optional(),
   type: z.string().optional(),
   source: z.string().optional(),
@@ -439,8 +477,14 @@ export const SAPDiagnoseSchema = z.object({
   proposalUserContent: z.string().optional(),
   variant: z.string().optional(),
   id: z.string().optional(),
+  detailUrl: z.string().optional(),
+  errorType: z.string().optional(),
   user: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
   maxResults: z.coerce.number().optional(),
+  sections: z.array(z.string()).optional(),
+  includeFullText: z.coerce.boolean().optional(),
   analysis: z.enum(['hitlist', 'statements', 'dbAccesses']).optional(),
 });
 

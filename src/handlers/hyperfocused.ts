@@ -27,8 +27,12 @@ const ACTION_TO_TOOL: Record<string, string> = {
   manage: 'SAPManage',
 };
 
-/** Actions that require write scope */
-const WRITE_ACTIONS = new Set(['write', 'activate', 'manage', 'transport']);
+/** Actions that require write scope at the top level.
+ *  `manage` is intentionally absent: SAPManage exposes both read actions
+ *  (features/probe/cache_stats) and write actions (package/FLP lifecycle).
+ *  Top-level scope only grants entry; action-level scope (SAPMANAGE_ACTION_SCOPES
+ *  in intent.ts) enforces write requirements on the mutating sub-actions. */
+const WRITE_ACTIONS = new Set(['write', 'activate', 'transport']);
 /** Actions that require sql scope */
 const SQL_ACTIONS = new Set(['query']);
 
@@ -88,8 +92,20 @@ export function expandHyperfocusedArgs(args: Record<string, unknown>):
  * Get the hyperfocused tool definition (~200 tokens).
  */
 export function getHyperfocusedToolDefinition(config: ServerConfig): ToolDefinition {
-  const readActions = ['read', 'search', 'query', 'navigate', 'context', 'lint', 'diagnose'];
-  const writeActions = config.readOnly ? [] : ['write', 'activate', 'manage'];
+  // `manage` is always exposed because SAPManage has read-only sub-actions
+  // (features/probe/cache_stats). Mutating sub-actions are enforced downstream
+  // via SAPMANAGE_ACTION_SCOPES and the safety config.
+  const readActions = [
+    'read',
+    'search',
+    ...(config.blockFreeSQL ? [] : ['query']),
+    'navigate',
+    'context',
+    'lint',
+    'diagnose',
+    'manage',
+  ];
+  const writeActions = config.readOnly ? [] : ['write', 'activate'];
   const adminActions = config.enableTransports ? ['transport'] : [];
   const allActions = [...readActions, ...writeActions, ...adminActions];
 

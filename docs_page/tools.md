@@ -25,7 +25,7 @@ Read any SAP ABAP object.
 | `group` | string | No | For FUNC: function group name |
 | `versionUri` | string | No | For VERSION_SOURCE: revision URI from a VERSIONS response (`revisions[].uri`), must start with `/sap/bc/adt/` |
 | `maxRows` | number | No | For TABLE_CONTENTS: max rows (default 100) |
-| `sqlFilter` | string | No | For TABLE_CONTENTS: SQL WHERE clause filter |
+| `sqlFilter` | string | No | For TABLE_CONTENTS: condition expression only (no `WHERE`, no `SELECT`), e.g. `MANDT = '100'` |
 | `objectType` | string | No | For API_STATE: SAP object type (CLAS, INTF, PROG, FUGR, etc.) — auto-detected from name if omitted |
 
 **Supported types:**
@@ -107,6 +107,10 @@ SAPRead(type="API_STATE", name="CL_SALV_TABLE")              — check if class 
 SAPRead(type="API_STATE", name="IF_HTTP_CLIENT")              — check interface release state
 SAPRead(type="API_STATE", name="MARA", objectType="TABL")     — check table with explicit type
 SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z%'")
+# TABLE_CONTENTS sqlFilter must be a condition expression only:
+#   ✅ "MANDT = '100'"
+#   ❌ "WHERE MANDT = '100'"
+#   ❌ "SELECT * FROM MARA WHERE MANDT = '100'"
 SAPRead(type="SYSTEM")
 SAPRead(type="INACTIVE_OBJECTS")                 — list objects pending activation
 ```
@@ -323,10 +327,15 @@ Execute ABAP SQL queries against SAP tables.
 | `sql` | string | Yes | ABAP SQL SELECT statement |
 | `maxRows` | number | No | Maximum rows (default 100) |
 
-**Important:** Uses ABAP SQL syntax, NOT standard SQL:
+**Important:** Uses the ADT freestyle SQL endpoint (`/sap/bc/adt/datapreview/freestyle`) with ABAP SQL syntax, NOT standard SQL:
 - Use `ASCENDING`/`DESCENDING` (not `ASC`/`DESC`)
 - Use `maxRows` parameter (not `LIMIT`)
 - `GROUP BY`, `COUNT(*)`, `WHERE` all work
+- ABAP SQL aggregate rule applies: non-aggregated selected fields must be listed in `GROUP BY`
+
+ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint parser can still reject valid-looking statements on some backend versions (for example grammar errors or single-SELECT enforcement). If parsing fails, simplify to one SELECT and split complex logic into staged queries.
+
+See: [SAPQuery Freestyle Capability Matrix](../docs/research/sapquery-freestyle-capability-matrix.md)
 
 **Examples:**
 ```
@@ -764,7 +773,7 @@ SAPDiagnose(action="traces", id="TRACE123", analysis="dbAccesses")
 Probe and report SAP system capabilities, inspect the object cache state, and manage package (DEVC) lifecycle operations.
 
 **Actions:**
-- `probe` — Re-probe the SAP system now (makes 8 parallel HEAD requests, ~1-2s). Detects optional features.
+- `probe` — Re-probe the SAP system now (feature probes + auth checks + ADT discovery refresh). Detects optional features.
 - `features` — Get cached feature status from last probe (fast, no SAP round-trip).
 - `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
 - `create_package` — Create a package (`DEVC`) via `/sap/bc/adt/packages`.
@@ -777,12 +786,13 @@ Probe and report SAP system capabilities, inspect the object cache state, and ma
 - `flp_create_group` — Create an FLP group.
 - `flp_create_tile` — Create a tile in an FLP catalog.
 - `flp_add_tile_to_group` — Assign a catalog tile instance into a group.
+- `flp_delete_catalog` — Delete an FLP business catalog.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `probe`, `features`, `cache_stats`, `create_package`, `delete_package`, `change_package`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group` |
+| `action` | string | Yes | `probe`, `features`, `cache_stats`, `create_package`, `delete_package`, `change_package`, `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group`, `flp_delete_catalog` |
 | `name` | string | No | Required for `create_package` and `delete_package` (package name) |
 | `description` | string | No | Required for `create_package` (package description) |
 | `superPackage` | string | No | Optional parent package for `create_package` (use `$TMP` for local packages) |
@@ -844,4 +854,4 @@ SAPManage(action="flp_create_tile", catalogId="ZARC1_SALES", tile={"id":"tile_sa
 SAPManage(action="flp_add_tile_to_group", groupId="ZARC1_SALES_GRP", catalogId="ZARC1_SALES", tileInstanceId="00O2TO3741QLWH4GV74AHMWQE")
 ```
 
-**Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work regardless of `--read-only` mode. In HTTP auth mode, SAPManage requires `write` scope.
+**Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work in `--read-only` mode and require only `read` scope in HTTP auth mode. Mutating SAPManage actions require `write` scope and writable safety config.

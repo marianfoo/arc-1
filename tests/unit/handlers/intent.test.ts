@@ -1083,6 +1083,43 @@ describe('Intent Handler', () => {
       expect(parsed.metadata.package).toBe('ZDEV');
       expect(parsed.testclasses).toContain('ltcl_test');
     });
+
+    it('returns sqlFilter remediation hint for TABLE_CONTENTS parser errors', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Invalid query string. Only SELECT statement is allowed',
+          400,
+          '/sap/bc/adt/datapreview/ddic',
+          'Invalid query string. Only SELECT statement is allowed',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABLE_CONTENTS',
+        name: 'MARA',
+        sqlFilter: "MANDT = '100'",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('condition expression only');
+      expect(result.content[0]?.text).toContain('no WHERE, no SELECT');
+      expect(result.content[0]?.text).toContain(`MANDT = '100'`);
+    });
+
+    it('returns data-safety hint when TABLE_CONTENTS is blocked by safety config', async () => {
+      const blockedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), blockData: true },
+      });
+      const result = await handleToolCall(blockedClient, DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABLE_CONTENTS',
+        name: 'MARA',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('TABLE_CONTENTS is blocked by safety configuration or missing data');
+      expect(result.content[0]?.text).toContain('SAP_BLOCK_DATA=false');
+    });
   });
 
   // ─── SAPSearch ─────────────────────────────────────────────────────
@@ -1246,7 +1283,7 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.type).toBe('text');
     });
 
-    it('returns JOIN-specific hint when a JOIN query fails with 400', async () => {
+    it('returns parser hint with JOIN-specific addendum when a JOIN query fails with 400', async () => {
       mockFetch.mockReset();
       // First call: CSRF token fetch (200)
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
@@ -1256,21 +1293,26 @@ describe('Intent Handler', () => {
         sql: 'SELECT a~field1, b~field2 FROM ztable1 AS a INNER JOIN ztable2 AS b ON a~id = b~id INTO TABLE @DATA(lt_result)',
       });
       expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
+      expect(result.content[0]?.text).toContain('exactly one SELECT statement');
+      expect(result.content[0]?.text).toContain('Remove ABAP target clauses');
       expect(result.content[0]?.text).toContain('SAP Note 3605050');
-      expect(result.content[0]?.text).toContain('splitting into separate single-table queries');
+      expect(result.content[0]?.text).toContain('staged single-table queries');
     });
 
-    it('does NOT include JOIN hint when a non-JOIN query fails with 400', async () => {
+    it('returns parser hint for non-JOIN 400 parser signatures', async () => {
       mockFetch.mockReset();
       // First call: CSRF token fetch (200)
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
-      // Second call: POST returns 400 (some other error)
-      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Syntax error in SQL'));
+      // Second call: POST returns parser signature
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Invalid query string. Only one SELECT statement is allowed'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
-        sql: 'SELECT * FROM ztable1 WHERE invalid_syntax',
+        sql: 'SELECT * FROM ztable1; SELECT * FROM ztable2',
       });
-      // Should NOT have JOIN hint — error falls through to default handler
       expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
+      expect(result.content[0]?.text).toContain('exactly one SELECT statement');
+      expect(result.content[0]?.text).toContain('Remove ABAP target clauses');
       expect(result.content[0]?.text).not.toContain('SAP Note 3605050');
     });
 
@@ -1735,6 +1777,199 @@ ENDCLASS.`;
     });
   });
 
+  describe('SAPDiagnose runtime diagnostics', () => {
+    function mockDumpDetailResponses(formattedText?: string): void {
+      const xml = `<?xml version="1.0"?>
+<dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="STRING_OFFSET_TOO_LARGE" author="DEVELOPER" exception="CX_SY_RANGE_OUT_OF_BOUNDS" terminatedProgram="SAPLSUSR_CERTRULE" datetime="2026-03-28T20:19:14Z">
+  <dump:links>
+    <dump:link relation="http://www.sap.com/adt/relations/runtime/dump/termination" uri="adt://A4H/sap/bc/adt/functions/groups/susr_certrule/includes/lsusr_certrulef01/source/main#start=27"/>
+  </dump:links>
+  <dump:chapters>
+    <dump:chapter name="kap0" title="Short Text" category="ABAP Developer View" line="1" chapterOrder="1" categoryOrder="1"/>
+    <dump:chapter name="kap1" title="What happened?" category="User View" line="4" chapterOrder="2" categoryOrder="1"/>
+    <dump:chapter name="kap3" title="Error analysis" category="ABAP Developer View" line="7" chapterOrder="3" categoryOrder="1"/>
+    <dump:chapter name="kap8" title="Source Code Extract" category="ABAP Developer View" line="10" chapterOrder="4" categoryOrder="1"/>
+    <dump:chapter name="kap11" title="Active Calls/Events" category="ABAP Developer View" line="13" chapterOrder="5" categoryOrder="1"/>
+  </dump:chapters>
+</dump:dump>`;
+      const text =
+        formattedText ??
+        [
+          'Short Text',
+          'S1',
+          '',
+          'What happened?',
+          'W1',
+          '',
+          'Error analysis',
+          'E1',
+          '',
+          'Source Code Extract',
+          'C1',
+          '',
+          'Active Calls/Events',
+          'A1',
+        ].join('\n');
+
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/runtime/dump/DUMP_ID/formatted')) {
+          return Promise.resolve(mockResponse(200, text, { 'x-csrf-token': 'T' }));
+        }
+        if (urlStr.includes('/runtime/dump/DUMP_ID')) {
+          return Promise.resolve(mockResponse(200, xml, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+    }
+
+    it('returns focused dump sections by default (without formattedText blob)', async () => {
+      mockDumpDetailResponses();
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'DUMP_ID',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.sections.kap0).toContain('Short Text');
+      expect(parsed.sections.kap8).toContain('Source Code Extract');
+      expect(parsed).not.toHaveProperty('formattedText');
+    });
+
+    it('includes full formatted dump text only when includeFullText=true', async () => {
+      mockDumpDetailResponses('Short Text\nSECRET_DUMP_CONTENT');
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'DUMP_ID',
+        includeFullText: true,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.formattedText).toContain('SECRET_DUMP_CONTENT');
+    });
+
+    it('supports explicit dump section filtering by chapter id and title text', async () => {
+      mockDumpDetailResponses();
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'DUMP_ID',
+        sections: ['kap1', 'Source Code Extract'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(Object.keys(parsed.sections)).toEqual(['kap1', 'kap8']);
+      expect(parsed.sections.kap1).toContain('What happened?');
+      expect(parsed.sections.kap8).toContain('Source Code Extract');
+    });
+
+    it('dispatches system_messages action to runtime/systemmessages feed', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          '<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"><atom:entry><atom:id>MSG1</atom:id><atom:title>Maintenance</atom:title></atom:entry></atom:feed>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'system_messages',
+        user: 'ADMIN',
+        maxResults: 3,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/sap/bc/adt/runtime/systemmessages');
+      expect(calledUrl).toMatch(/%24top=3|\$top=3/);
+      expect(decodeURIComponent(calledUrl)).toContain('equals(user,ADMIN)');
+    });
+
+    it('dispatches gateway_errors list action to /sap/bc/adt/gw/errorlog', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          '<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"><atom:entry><atom:id>/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC</atom:id><atom:title>Gateway fail</atom:title><atom:link rel="self" href="/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC"/></atom:entry></atom:feed>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'gateway_errors',
+        maxResults: 2,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/sap/bc/adt/gw/errorlog');
+      expect(calledUrl).toMatch(/%24top=2|\$top=2/);
+    });
+
+    it('returns a BTP guardrail for gateway_errors action', async () => {
+      setCachedFeatures({ abapRelease: '757', systemType: 'btp' } as ResolvedFeatures);
+      try {
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+          action: 'gateway_errors',
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('not available on BTP ABAP Environment');
+      } finally {
+        resetCachedFeatures();
+      }
+    });
+
+    it('uses diagnostics-specific not-found hint for missing dump IDs', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValue(
+        new AdtApiError('Not Found', 404, '/sap/bc/adt/runtime/dump/MISSING', '<error>not found</error>'),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'dumps',
+        id: 'MISSING',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Dump ID "MISSING" was not found');
+      expect(result.content[0]?.text).toContain('Re-list dumps');
+    });
+
+    it('sanitizes audit preview for dump details', async () => {
+      const auditSpy = vi.spyOn(logger, 'emitAudit');
+      try {
+        mockDumpDetailResponses('Short Text\nSECRET_DUMP_CONTENT_SHOULD_NOT_BE_LOGGED');
+        await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+          action: 'dumps',
+          id: 'DUMP_ID',
+          includeFullText: true,
+        });
+
+        const endEvent = auditSpy.mock.calls
+          .map(([event]) => event)
+          .find(
+            (event) =>
+              typeof event === 'object' &&
+              event !== null &&
+              (event as { event?: string; status?: string }).event === 'tool_call_end' &&
+              (event as { event?: string; status?: string }).status === 'success',
+          ) as { resultPreview?: string } | undefined;
+
+        expect(endEvent?.resultPreview).toContain('[omitted');
+        expect(endEvent?.resultPreview).not.toContain('SECRET_DUMP_CONTENT_SHOULD_NOT_BE_LOGGED');
+      } finally {
+        auditSpy.mockRestore();
+      }
+    });
+  });
+
   // ─── SAPWrite Package Enforcement ──────────────────────────────
 
   describe('SAPWrite package enforcement', () => {
@@ -2167,6 +2402,56 @@ ENDCLASS.`,
       expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
     });
 
+    it('allows SAPManage probe/features actions with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPManage',
+        { action: 'features' },
+        readAuth,
+      );
+      expect(result.content[0]?.text).not.toContain('Insufficient scope');
+    });
+
+    it('blocks SAPManage write actions with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPManage',
+        { action: 'create_package' },
+        readAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain('SAPManage(action="create_package")');
+    });
+
+    it('blocks SAP(manage) write sub-action escalation with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAP',
+        { action: 'manage', params: { action: 'create_package' } },
+        readAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain('SAPManage(action="create_package")');
+    });
+
+    it('allows SAPManage write actions with write scope (scope check passes)', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPManage',
+        { action: 'create_package' },
+        writeAuth,
+      );
+      // Should proceed to handler-level validation, not action-scope rejection.
+      expect(result.content[0]?.text).not.toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain('"name" is required');
+    });
+
     it('blocks SAPQuery with read-only scope (requires sql)', async () => {
       const result = await handleToolCall(
         createClient(),
@@ -2422,13 +2707,22 @@ ENDCLASS.`,
 
   describe('TOOL_SCOPES', () => {
     it('maps read tools to read scope', () => {
-      for (const tool of ['SAPRead', 'SAPSearch', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose', 'SAPGit']) {
+      for (const tool of [
+        'SAPRead',
+        'SAPSearch',
+        'SAPNavigate',
+        'SAPContext',
+        'SAPLint',
+        'SAPDiagnose',
+        'SAPGit',
+        'SAPManage',
+      ]) {
         expect(TOOL_SCOPES[tool]).toBe('read');
       }
     });
 
     it('maps write tools to write scope', () => {
-      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage', 'SAPTransport']) {
+      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPTransport']) {
         expect(TOOL_SCOPES[tool]).toBe('write');
       }
     });
@@ -4227,13 +4521,23 @@ ENDCLASS.`;
       }
     });
 
-    it('network errors still return connectivity hint', async () => {
+    it('network errors include probe-first connectivity guidance', async () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:8000'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Cannot reach the SAP system');
-      expect(result.content[0]?.text).toContain('connectivity issue');
+      expect(result.content[0]?.text).toContain('SAPRead(type="SYSTEM")');
+      expect(result.content[0]?.text).toContain('batch/parallel');
+    });
+
+    it('network errors on SAPRead SYSTEM mention failed probe specifically', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:8000'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'SYSTEM' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Connectivity probe failed');
+      expect(result.content[0]?.text).toContain('before running any batch or parallel tool calls');
     });
   });
 

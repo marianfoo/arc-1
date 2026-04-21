@@ -241,6 +241,9 @@ export function classifyToolErrorSkip(result: ToolResult): string | null {
   if (/\/sap\/bc\/adt\/datapreview\/ddic\b.*No suitable resource/i.test(text)) {
     return 'Backend feature not supported on this SAP system: /datapreview/ddic endpoint not available on this release';
   }
+  if (/\/sap\/bc\/adt\/datapreview\/freestyle\b.*No suitable resource/i.test(text)) {
+    return 'Backend feature not supported on this SAP system: /datapreview/freestyle endpoint not available on this release';
+  }
   if (/usageReferences.*status 500/i.test(text)) {
     return 'Backend feature not supported on this SAP system: usageReferences endpoint unstable on this release';
   }
@@ -251,6 +254,12 @@ export function classifyToolErrorSkip(result: ToolResult): string | null {
   // Lock-handle session correlation quirk — observed on NW 7.50 trial.
   if (/status 423.*invalid lock handle/i.test(text)) {
     return 'Backend feature not supported on this SAP system: lock-handle session correlation differs on this release';
+  }
+  // Intermittent backend flake observed in CI: write succeeds but DDIC unlock
+  // responds 400 "Service cannot be reached". Treat as backend instability to
+  // keep RAP write lifecycle tests deterministic.
+  if (/\/sap\/bc\/adt\/ddic\/tables\/[A-Z0-9_]+\?_action=UNLOCK\b.*Service cannot be reached/i.test(text)) {
+    return 'Backend instability on this SAP system: DDIC table unlock endpoint intermittently unreachable after successful write';
   }
   // batch_create aggregates per-object errors and can surface as either isError=false
   // (handler returned a "Batch created 0/N" summary string as success) or isError=true

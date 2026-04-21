@@ -55,14 +55,6 @@ Rules:
 - If multiple ARC-1 clones/worktrees exist, explicitly choose the one containing the target branch/commit.
 - Never hardcode `/Users/.../DEV/arc-1` unless user explicitly requests that exact path.
 
-### 0.5) Confirm active Cursor project/workspace matches target root (mandatory for runtime runs)
-
-Before generating runtime prompts, ensure the Cursor chat session is attached to the same project/workspace that will host the MCP servers and tool cache for the resolved root.
-
-Rules:
-- If the active Cursor project path differs from the resolved ARC-1 root, classify as `Environment/session setup issue (not code regression)` and provide a fix: open the correct workspace and reconnect MCP.
-- Do not mix artifacts from different Cursor projects when evaluating server availability/schema (for example, reading MCP cache from one project but running tests in another).
-
 ### 1) Determine target scope
 
 Use one of:
@@ -242,26 +234,13 @@ When asked for runnable output, always return in this order:
 4. One all-in-one test prompt
 5. Expected outcomes checklist (PASS/FAIL criteria)
 
-For DDLS runtime checks in generated prompts:
-- Use fallback discovery sequence: `Z_*` -> `ZI_*` -> `I_*` with `maxResults=100`.
-- Stop at the first query that returns at least one `DDLS/*` candidate.
-- Prefer a candidate likely to have siblings (same stem and/or numeric variants) when validating sibling-comparison behavior.
-- If no sibling-rich candidate exists, still validate toggle/clamp behavior (`siblingCheck`, `siblingMaxCandidates`) and mark sibling-comparison population as not applicable.
-
 ## Runtime prompt guardrails (must include)
 
 - Precheck required MCP servers are connected.
-- Server ID resolution priority:
-  - If user provides exact server IDs, use those exact IDs first.
-  - Only use suffix match (`*-arc1-good`, `*-arc1-good-btp-sim`) as fallback when exact IDs are not provided.
-- Connectivity decision rule:
-  - Prefer live callability over filesystem descriptor presence.
-  - If a server is callable, treat it as connected even when descriptor cache appears stale/incomplete.
-  - If a server appears missing/disconnected, wait 5-10 seconds and retry once before final classification.
-- If any required server is still disconnected after retry: stop and report exact server name.
+- Resolve actual server IDs by suffix match (`*-arc1-good`, `*-arc1-good-btp-sim`) rather than assuming literal IDs.
+- If any required server disconnected/missing: stop and report exact server name.
 - Verify server/tool contract matches expected scope from selected modules.
   - If expected actions/params are absent in advertised tool schema, classify as `Environment/session setup issue (not code regression)` and suggest rebuild/reconnect on the correct root.
-  - If descriptor schema and runtime behavior disagree, classify as `Environment/session setup issue (descriptor/session staleness)` unless runtime behavior itself violates expected contracts.
 - Use schema-correct args:
   - `SAPQuery` uses `sql` + `maxRows`.
   - avoid `UP TO ... ROWS` in SQL text unless backend-specific test intentionally checks parser rejection.
@@ -290,7 +269,5 @@ Include these runtime checks when diagnostics files are touched:
 - Recommending `source` for runtime server scripts
 - Assuming server IDs without checking connected MCP descriptors
 - Treating stale tool schema as code regression without classifying env/setup first
-- Failing immediately on first missing/disconnected check without one retry window
-- Treating descriptor-cache absence as authoritative when live server calls are available
 - Falling back to custom HTTP client without user permission when prompt says native-only
 - Leaking secret values in logs/output

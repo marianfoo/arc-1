@@ -34,9 +34,9 @@ The included `xs-security.json` defines:
 
 | Scope | Description | Tools |
 |-------|-------------|-------|
-| `read` | Read SAP objects | SAPRead, SAPSearch, SAPNavigate, SAPContext, SAPLint, SAPDiagnose |
-| `write` | Write SAP objects | SAPWrite, SAPActivate, SAPManage, SAPTransport |
-| `data` | Preview named table contents | SAPQuery (table preview) |
+| `read` | Read SAP objects | SAPRead, SAPSearch, SAPNavigate, SAPContext, SAPLint, SAPDiagnose, SAPManage (`features`/`probe`/`cache_stats`) |
+| `write` | Write SAP objects | SAPWrite, SAPActivate, SAPTransport, SAPManage mutating actions |
+| `data` | Preview named table contents | SAPRead (`TABLE_CONTENTS`) |
 | `sql` | Execute freestyle SQL queries | SAPQuery (freestyle SQL) |
 | `admin` | Administrative access | System management |
 
@@ -92,7 +92,7 @@ Expected response:
   "issuer": "https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/",
   "authorization_endpoint": "https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/authorize",
   "token_endpoint": "https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/token",
-  "scopes_supported": ["read", "write", "admin"],
+  "scopes_supported": ["read", "write", "data", "sql", "admin"],
   "response_types_supported": ["code"],
   "code_challenge_methods_supported": ["S256"],
   "grant_types_supported": ["authorization_code", "refresh_token"]

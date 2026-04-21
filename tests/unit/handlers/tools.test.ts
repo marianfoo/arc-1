@@ -38,16 +38,25 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPManage');
   });
 
-  it('hides write tools in read-only mode', () => {
+  it('hides write tools in read-only mode but keeps SAPManage read actions', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPWrite');
     expect(names).not.toContain('SAPActivate');
-    expect(names).not.toContain('SAPManage');
+    expect(names).toContain('SAPManage');
     // Navigate, Diagnose, and SAPContext should still be available
     expect(names).toContain('SAPNavigate');
     expect(names).toContain('SAPDiagnose');
     expect(names).toContain('SAPContext');
+  });
+
+  it('SAPManage exposes only probe/features/cache_stats actions in read-only mode', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
+    const sapManage = tools.find((t) => t.name === 'SAPManage')!;
+    const schema = sapManage.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toEqual(['features', 'probe', 'cache_stats']);
   });
 
   it('hides SAPTransport in read-only mode without enableTransports', () => {
@@ -158,6 +167,16 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPQuery');
   });
 
+  it('describes SAPRead sqlFilter as condition-only expression', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG);
+    const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+    const schema = sapRead.inputSchema as Record<string, any>;
+    const sqlFilterDescription = schema.properties.sqlFilter.description as string;
+    expect(sqlFilterDescription).toContain('condition expression only');
+    expect(sqlFilterDescription).toContain('no WHERE');
+    expect(sqlFilterDescription).toContain('no SELECT');
+  });
+
   it('SAPLint exposes lint + formatter actions (atc/syntax moved to SAPDiagnose)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapLint = tools.find((t) => t.name === 'SAPLint')!;
@@ -261,7 +280,7 @@ describe('Tool Definitions', () => {
     });
   });
 
-  it('SAPDiagnose exposes syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces', () => {
+  it('SAPDiagnose exposes runtime diagnostics + quickfix actions', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapDiagnose = tools.find((t) => t.name === 'SAPDiagnose')!;
     const schema = sapDiagnose.inputSchema as Record<string, any>;
@@ -274,11 +293,17 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('apply_quickfix');
     expect(actionEnum).toContain('dumps');
     expect(actionEnum).toContain('traces');
+    expect(actionEnum).toContain('system_messages');
+    expect(actionEnum).toContain('gateway_errors');
     expect(schema.properties.source).toBeDefined();
     expect(schema.properties.line).toBeDefined();
     expect(schema.properties.column).toBeDefined();
     expect(schema.properties.proposalUri).toBeDefined();
     expect(schema.properties.proposalUserContent).toBeDefined();
+    expect(schema.properties.sections).toBeDefined();
+    expect(schema.properties.includeFullText).toBeDefined();
+    expect(schema.properties.detailUrl).toBeDefined();
+    expect(schema.properties.errorType).toBeDefined();
   });
 
   // ─── textSearch-based SAPSearch adaptation ───────────────────────

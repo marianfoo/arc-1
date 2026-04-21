@@ -94,6 +94,7 @@ ARC-1 probes the SAP system at startup and adapts its behavior:
 - Auto-detects BTP vs on-premise systems
 - Maps SAP_BASIS release to the correct ABAP language version
 - Each feature can be forced on/off or left on auto-detect
+- In shared-credential mode (technical user), runs a startup auth preflight once and blocks SAP tool calls with a clear error on 401/403 to avoid repeated failed logins and potential user lockout
 
 ## Quick Start
 

@@ -46,11 +46,13 @@ Scopes define what a user is allowed to do in ARC-1. They are carried in JWT tok
 
 | Scope | What it grants | MCP Tools |
 |-------|---------------|-----------|
-| **`read`** | Read source code, search objects, navigate references, run unit tests, check syntax, view diagnostics | SAPRead, SAPSearch, SAPNavigate, SAPContext, SAPLint, SAPDiagnose |
-| **`write`** | Create, modify, delete objects. Activate. Manage transports. | SAPWrite, SAPActivate, SAPManage, SAPTransport |
+| **`read`** | Read source code, search objects, navigate references, run unit tests, check syntax, view diagnostics | SAPRead, SAPSearch, SAPNavigate, SAPContext, SAPLint, SAPDiagnose, SAPManage (`features`/`probe`/`cache_stats`) |
+| **`write`** | Create, modify, delete objects. Activate. Manage transports. | SAPWrite, SAPActivate, SAPTransport, SAPManage mutating actions |
 | **`data`** | Preview table contents (named tables via SAPRead) | Unlocks TABLE_CONTENTS in SAPRead |
 | **`sql`** | Execute freestyle SQL queries | SAPQuery |
 | **`admin`** | Reserved for future administrative features | None currently |
+
+SAPManage uses action-level scope checks: read actions (`features`, `probe`, `cache_stats`) require `read`; mutating actions require `write`.
 
 ### Scope Implications
 
