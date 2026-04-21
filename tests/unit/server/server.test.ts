@@ -2,13 +2,17 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AdtApiError } from '../../../src/adt/errors.js';
+import { AdtHttpClient } from '../../../src/adt/http.js';
 import { getToolDefinitions } from '../../../src/handlers/tools.js';
 import { logger } from '../../../src/server/logger.js';
 import {
   buildAdtConfig,
   createServer,
   filterToolsByAuthScope,
+  formatStartupAuthPreflightToolError,
   logAuthSummary,
+  runStartupAuthPreflight,
   VERSION,
 } from '../../../src/server/server.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
@@ -253,5 +257,84 @@ describe('logAuthSummary', () => {
     });
 
     expect(infoSpy).toHaveBeenCalledWith('auth: MCP=[api-key,oidc] SAP=cookie+pp (per-user)');
+  });
+});
+
+describe('startup auth preflight', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('skips in principal propagation mode', async () => {
+    const result = await runStartupAuthPreflight({
+      ...DEFAULT_CONFIG,
+      ppEnabled: true,
+      url: 'http://sap.example.com:8000',
+    });
+
+    expect(result.status).toBe('skipped');
+    expect(result.blocking).toBe(false);
+    expect(result.reason.toLowerCase()).toContain('principal propagation');
+  });
+
+  it('skips when SAP URL is not configured', async () => {
+    const result = await runStartupAuthPreflight({
+      ...DEFAULT_CONFIG,
+      ppEnabled: false,
+      url: '',
+    });
+
+    expect(result.status).toBe('skipped');
+    expect(result.blocking).toBe(false);
+    expect(result.reason).toContain('SAP_URL');
+  });
+
+  it('formats a blocking preflight failure for tool calls', () => {
+    const text = formatStartupAuthPreflightToolError({
+      status: 'failed',
+      blocking: true,
+      endpoint: '/sap/bc/adt/core/discovery',
+      checkedAt: '2026-04-21T00:00:00.000Z',
+      statusCode: 401,
+      reason: 'Authentication failed (401) during startup auth preflight.',
+    });
+
+    expect(text).toContain('Startup authentication preflight failed');
+    expect(text).toContain('HTTP 401');
+    expect(text).toContain('blocking shared SAP tool calls');
+    expect(text).toContain('/sap/bc/adt/core/discovery');
+  });
+
+  it('returns blocking failure on 401/403 auth errors', async () => {
+    vi.spyOn(AdtHttpClient.prototype, 'get').mockRejectedValue(
+      new AdtApiError('Unauthorized', 401, '/sap/bc/adt/core/discovery', 'Unauthorized'),
+    );
+
+    const result = await runStartupAuthPreflight({
+      ...DEFAULT_CONFIG,
+      ppEnabled: false,
+      url: 'http://sap.example.com:8000',
+      username: 'TECH_USER',
+      password: 'wrong',
+    });
+
+    expect(result.status).toBe('failed');
+    expect(result.blocking).toBe(true);
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('returns inconclusive and non-blocking on non-auth failures', async () => {
+    vi.spyOn(AdtHttpClient.prototype, 'get').mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const result = await runStartupAuthPreflight({
+      ...DEFAULT_CONFIG,
+      ppEnabled: false,
+      url: 'http://sap.example.com:8000',
+      username: 'TECH_USER',
+      password: 'secret',
+    });
+
+    expect(result.status).toBe('inconclusive');
+    expect(result.blocking).toBe(false);
   });
 });

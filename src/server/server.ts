@@ -14,6 +14,7 @@ import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
 import { resolveCookies } from '../adt/cookies.js';
+import { AdtApiError } from '../adt/errors.js';
 import { deriveUserSafety } from '../adt/safety.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
@@ -343,6 +344,107 @@ export function runStartupProbe(
   })();
 }
 
+export interface StartupAuthPreflightResult {
+  status: 'ok' | 'failed' | 'inconclusive' | 'skipped';
+  /** When true, shared-client SAP tool calls must be blocked to prevent repeated auth failures. */
+  blocking: boolean;
+  endpoint: string;
+  checkedAt: string;
+  statusCode?: number;
+  reason: string;
+}
+
+const STARTUP_AUTH_ENDPOINT = '/sap/bc/adt/core/discovery';
+
+function buildStartupAuthFailureReason(statusCode: number): string {
+  if (statusCode === 401) {
+    return (
+      'Authentication failed (401) during startup auth preflight. ' +
+      'Check SAP_USER/SAP_PASSWORD/SAP_CLIENT (or destination/service-key credentials), then restart ARC-1.'
+    );
+  }
+  if (statusCode === 403) {
+    return (
+      'Access forbidden (403) during startup auth preflight. ' +
+      'The configured SAP user lacks ADT authorization (for example S_ADT_RES). ' +
+      'Fix authorizations, then restart ARC-1.'
+    );
+  }
+  return `Startup auth preflight failed with HTTP ${statusCode}.`;
+}
+
+/**
+ * Run a startup auth preflight for shared-credential mode.
+ *
+ * Goal: detect invalid technical/shared credentials once at startup and avoid
+ * repeated failed SAP requests from the first LLM tool call onward.
+ *
+ * Behavior:
+ * - Never throws (server must stay up)
+ * - PP mode and no-URL mode are skipped (non-blocking)
+ * - 401/403 are blocking failures
+ * - Network/other failures are inconclusive (non-blocking)
+ */
+export async function runStartupAuthPreflight(
+  config: ServerConfig,
+  btpProxy?: BTPProxyConfig,
+  bearerTokenProvider?: () => Promise<string>,
+): Promise<StartupAuthPreflightResult> {
+  const checkedAt = new Date().toISOString();
+  const endpoint = STARTUP_AUTH_ENDPOINT;
+
+  if (config.ppEnabled) {
+    const reason = 'Skipped startup auth preflight: principal propagation mode is enabled (per-user auth at runtime).';
+    logger.info(reason);
+    return { status: 'skipped', blocking: false, endpoint, checkedAt, reason };
+  }
+
+  if (!config.url) {
+    const reason = 'Skipped startup auth preflight: SAP_URL is not configured.';
+    logger.info(reason);
+    return { status: 'skipped', blocking: false, endpoint, checkedAt, reason };
+  }
+
+  try {
+    const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+    await client.http.get(endpoint);
+    const reason = 'Startup auth preflight succeeded for shared SAP credentials.';
+    logger.info(reason, { endpoint });
+    return { status: 'ok', blocking: false, endpoint, checkedAt, reason };
+  } catch (err) {
+    if (err instanceof AdtApiError && (err.statusCode === 401 || err.statusCode === 403)) {
+      const reason = buildStartupAuthFailureReason(err.statusCode);
+      logger.warn(reason, { endpoint, statusCode: err.statusCode });
+      return {
+        status: 'failed',
+        blocking: true,
+        endpoint,
+        checkedAt,
+        statusCode: err.statusCode,
+        reason,
+      };
+    }
+
+    const detail = err instanceof Error ? err.message : String(err);
+    const reason =
+      'Startup auth preflight was inconclusive (non-auth failure). ' +
+      'Continuing and letting runtime requests handle connectivity diagnostics.';
+    logger.warn(reason, { endpoint, error: detail });
+    return { status: 'inconclusive', blocking: false, endpoint, checkedAt, reason };
+  }
+}
+
+export function formatStartupAuthPreflightToolError(preflight: StartupAuthPreflightResult): string {
+  const code = preflight.statusCode ? ` (HTTP ${preflight.statusCode})` : '';
+  return (
+    `Startup authentication preflight failed${code}. ` +
+    'ARC-1 is blocking shared SAP tool calls to avoid repeated failed logins and possible user lockout.\n\n' +
+    `${preflight.reason}\n` +
+    `Preflight endpoint: ${preflight.endpoint}\n` +
+    `Checked at: ${preflight.checkedAt}`
+  );
+}
+
 /**
  * Create the MCP server with registered tool handlers.
  * @param config Server configuration
@@ -351,6 +453,7 @@ export function runStartupProbe(
  * @param bearerTokenProvider Optional OAuth bearer token provider (BTP ABAP Environment)
  * @param cachingLayer Optional object cache layer
  * @param startupProbePromise Promise from runStartupProbe() — ListTools waits on this
+ * @param startupAuthPreflightPromise Promise from runStartupAuthPreflight() — CallTool blocks on auth failure in shared mode
  */
 export function createServer(
   config: ServerConfig,
@@ -359,6 +462,7 @@ export function createServer(
   bearerTokenProvider?: () => Promise<string>,
   cachingLayer?: CachingLayer,
   startupProbePromise?: Promise<void>,
+  startupAuthPreflightPromise?: Promise<StartupAuthPreflightResult>,
 ): Server {
   const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
@@ -388,6 +492,21 @@ export function createServer(
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+
+    if (startupAuthPreflightPromise) {
+      const startupAuth = await startupAuthPreflightPromise;
+      if (startupAuth.blocking) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: formatStartupAuthPreflightToolError(startupAuth),
+            },
+          ],
+          isError: true,
+        } as Record<string, unknown>;
+      }
+    }
 
     // Principal propagation: create per-user ADT client if enabled and user JWT available.
     // Only attempt PP when the token is a JWT (3 dot-separated parts), not a plain API key.
@@ -668,10 +787,28 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
   }
 
   // Run feature probe once at startup — shared across all requests (stdio and HTTP).
-  // This must happen before createServer() so the HTTP factory can close over the same promise.
-  const startupProbePromise = runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig);
+  // First run startup auth preflight in shared mode. If it blocks (401/403), skip feature probe
+  // to avoid firing many failing requests with invalid technical credentials.
+  const startupAuthPreflightPromise = runStartupAuthPreflight(config, btpProxy, bearerTokenProvider);
+  const startupProbePromise = (async () => {
+    const authPreflight = await startupAuthPreflightPromise;
+    if (authPreflight.blocking) {
+      setCachedFeatures(undefined);
+      setCachedDiscovery(new Map());
+      return;
+    }
+    await runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig);
+  })();
 
-  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise);
+  const server = createServer(
+    config,
+    btpProxy,
+    btpConfig,
+    bearerTokenProvider,
+    cachingLayer,
+    startupProbePromise,
+    startupAuthPreflightPromise,
+  );
 
   // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals).
   // IMPORTANT: registering a SIGINT/SIGTERM listener suppresses Node's default exit behavior,
@@ -740,7 +877,16 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
     const { startHttpServer } = await import('./http.js');
     await startHttpServer(
-      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise),
+      () =>
+        createServer(
+          config,
+          btpProxy,
+          btpConfig,
+          bearerTokenProvider,
+          cachingLayer,
+          startupProbePromise,
+          startupAuthPreflightPromise,
+        ),
       config,
       xsuaaCredentials,
     );

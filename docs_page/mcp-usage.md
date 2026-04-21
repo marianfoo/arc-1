@@ -290,6 +290,7 @@ SAPWrite(action="batch_create", package="$TMP", objects=[
 | 404 Not Found | Object doesn't exist | Check name with SAPSearch first |
 | Missing `group` | FUNC without function group | Provide `group` parameter |
 | Empty DDLS source | DDLS exists but has no source | Write source via SAPWrite |
+| Startup auth preflight failed (401/403) | Shared technical credentials invalid or user lacks ADT authorization | Fix `SAP_USER`/`SAP_PASSWORD`/`SAP_CLIENT` (or destination/service-key auth), then restart ARC-1. Tool calls are intentionally blocked to prevent repeated failed logins |
 
 ### Server Errors (5xx)
 
