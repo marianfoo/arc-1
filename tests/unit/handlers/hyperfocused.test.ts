@@ -161,14 +161,15 @@ describe('hyperfocused mode', () => {
       expect(tools.find((t) => t.name === 'SAPRead')).toBeDefined();
     });
 
-    it('returns 6 tools in standard mode with safe defaults', () => {
+    it('returns 7 tools in standard mode with safe defaults', () => {
       const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const };
       const tools = getToolDefinitions(config);
-      // Safe defaults: no SAPWrite, SAPActivate, SAPManage, SAPQuery, SAPTransport
-      expect(tools.length).toBe(6);
+      // Safe defaults: no SAPWrite, SAPActivate, SAPQuery, SAPTransport
+      expect(tools.length).toBe(7);
       expect(tools.find((t) => t.name === 'SAPTransport')).toBeUndefined();
       expect(tools.find((t) => t.name === 'SAPWrite')).toBeUndefined();
       expect(tools.find((t) => t.name === 'SAPQuery')).toBeUndefined();
+      expect(tools.find((t) => t.name === 'SAPManage')).toBeDefined();
     });
   });
 });

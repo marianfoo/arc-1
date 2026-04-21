@@ -2,8 +2,15 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getToolDefinitions } from '../../../src/handlers/tools.js';
 import { logger } from '../../../src/server/logger.js';
-import { buildAdtConfig, createServer, logAuthSummary, VERSION } from '../../../src/server/server.js';
+import {
+  buildAdtConfig,
+  createServer,
+  filterToolsByAuthScope,
+  logAuthSummary,
+  VERSION,
+} from '../../../src/server/server.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('MCP Server', () => {
@@ -14,6 +21,39 @@ describe('MCP Server', () => {
 
   it('has a valid version string', () => {
     expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('filters SAPManage actions to read-only set for read-scoped users', () => {
+    const tools = getToolDefinitions({
+      ...DEFAULT_CONFIG,
+      readOnly: false,
+      blockFreeSQL: false,
+      enableTransports: true,
+    });
+    const filtered = filterToolsByAuthScope(tools, ['read']);
+    const sapManage = filtered.find((tool) => tool.name === 'SAPManage');
+    expect(sapManage).toBeDefined();
+    const schema = sapManage!.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+    expect(actionEnum).toEqual(['features', 'probe', 'cache_stats']);
+    expect(filtered.map((tool) => tool.name)).not.toContain('SAPWrite');
+  });
+
+  it('keeps SAPManage write actions for write-scoped users', () => {
+    const tools = getToolDefinitions({
+      ...DEFAULT_CONFIG,
+      readOnly: false,
+      blockFreeSQL: false,
+      enableTransports: true,
+    });
+    const filtered = filterToolsByAuthScope(tools, ['read', 'write']);
+    const sapManage = filtered.find((tool) => tool.name === 'SAPManage');
+    expect(sapManage).toBeDefined();
+    const schema = sapManage!.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+    expect(actionEnum).toContain('create_package');
+    expect(actionEnum).toContain('flp_delete_catalog');
+    expect(filtered.map((tool) => tool.name)).toContain('SAPWrite');
   });
 });
 

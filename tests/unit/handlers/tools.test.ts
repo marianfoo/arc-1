@@ -38,16 +38,25 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPManage');
   });
 
-  it('hides write tools in read-only mode', () => {
+  it('hides write tools in read-only mode but keeps SAPManage read actions', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPWrite');
     expect(names).not.toContain('SAPActivate');
-    expect(names).not.toContain('SAPManage');
+    expect(names).toContain('SAPManage');
     // Navigate, Diagnose, and SAPContext should still be available
     expect(names).toContain('SAPNavigate');
     expect(names).toContain('SAPDiagnose');
     expect(names).toContain('SAPContext');
+  });
+
+  it('SAPManage exposes only probe/features/cache_stats actions in read-only mode', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
+    const sapManage = tools.find((t) => t.name === 'SAPManage')!;
+    const schema = sapManage.inputSchema as Record<string, any>;
+    const actionEnum: string[] = schema.properties.action.enum;
+
+    expect(actionEnum).toEqual(['features', 'probe', 'cache_stats']);
   });
 
   it('hides SAPTransport in read-only mode without enableTransports', () => {
@@ -156,6 +165,16 @@ describe('Tool Definitions', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPQuery');
+  });
+
+  it('describes SAPRead sqlFilter as condition-only expression', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG);
+    const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+    const schema = sapRead.inputSchema as Record<string, any>;
+    const sqlFilterDescription = schema.properties.sqlFilter.description as string;
+    expect(sqlFilterDescription).toContain('condition expression only');
+    expect(sqlFilterDescription).toContain('no WHERE');
+    expect(sqlFilterDescription).toContain('no SELECT');
   });
 
   it('SAPLint exposes lint + formatter actions (atc/syntax moved to SAPDiagnose)', () => {

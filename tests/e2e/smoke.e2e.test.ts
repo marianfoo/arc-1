@@ -180,11 +180,11 @@ describe('E2E Smoke Tests', () => {
     const result = await callTool(client, 'SAPQuery', { sql: 'SELECT * FROM T000', maxRows: 5 });
     if (result.isError) {
       const text = result.content?.[0]?.text ?? '';
-      // SAPQuery depends on /datapreview/ddic, which is absent on NW 7.50.
+      // SAPQuery depends on /datapreview/freestyle, which is absent on some older releases.
       // The handler wraps the 404 into a "Table not found" message.
       if (/Table .* not found/i.test(text) || classifyToolErrorSkip(result) !== null) {
         ctx.skip(
-          'Backend feature not supported on this SAP system: SAPQuery relies on /datapreview/ddic, absent on this release',
+          'Backend feature not supported on this SAP system: SAPQuery relies on /datapreview/freestyle, absent on this release',
         );
         return;
       }

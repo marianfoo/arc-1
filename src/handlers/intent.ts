@@ -176,8 +176,25 @@ export const TOOL_SCOPES: Record<string, string> = {
   SAPDiagnose: 'read',
   SAPWrite: 'write',
   SAPActivate: 'write',
-  SAPManage: 'write',
+  SAPManage: 'read',
   SAPTransport: 'write',
+};
+
+export const SAPMANAGE_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
+  features: 'read',
+  probe: 'read',
+  cache_stats: 'read',
+  create_package: 'write',
+  delete_package: 'write',
+  change_package: 'write',
+  flp_list_catalogs: 'write',
+  flp_list_groups: 'write',
+  flp_list_tiles: 'write',
+  flp_create_catalog: 'write',
+  flp_create_group: 'write',
+  flp_create_tile: 'write',
+  flp_add_tile_to_group: 'write',
+  flp_delete_catalog: 'write',
 };
 
 const SAPGIT_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
@@ -198,6 +215,10 @@ const SAPGIT_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
   create_branch: 'write',
   unlink: 'write',
 };
+
+function getSapManageActionScope(action: string): 'read' | 'write' {
+  return SAPMANAGE_ACTION_SCOPES[action] ?? 'write';
+}
 
 /**
  * Check if authInfo has the required scope, respecting implied scopes:
@@ -267,8 +288,20 @@ export function looksLikeFieldName(query: string): boolean {
   return true;
 }
 
+function hasSqlParserSignature(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes('only one select statement is allowed') ||
+    normalized.includes('only select statement is allowed') ||
+    normalized.includes('invalid query string') ||
+    normalized.includes('due to grammar') ||
+    normalized.includes('is invalid here') ||
+    normalized.includes('is invalid at this position')
+  );
+}
+
 /** Format error messages with LLM-friendly remediation hints */
-function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
+function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
@@ -293,6 +326,16 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     if (transportHint) {
       return `${enriched}\n\nHint: ${transportHint}`;
     }
+    if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS' && err.statusCode === 400) {
+      const combined = `${err.message}\n${err.responseBody ?? ''}`;
+      if (hasSqlParserSignature(combined)) {
+        return (
+          `${enriched}\n\nHint: TABLE_CONTENTS sqlFilter must be a condition expression only ` +
+          '(no WHERE, no SELECT, no semicolon). Examples: ' +
+          `sqlFilter="MANDT = '100'" or sqlFilter="MATNR LIKE 'Z%'".`
+        );
+      }
+    }
     if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType)) {
       return (
         `${enriched}\n\nHint: DDIC save failed. Check the diagnostic details above for specific field or annotation errors. ` +
@@ -312,8 +355,29 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     return enriched;
   }
 
+  if (err instanceof AdtSafetyError) {
+    const argType = String(args.type ?? '').toUpperCase();
+    if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS') {
+      return (
+        `${message}\n\nHint: TABLE_CONTENTS is blocked by safety configuration or missing data scope. ` +
+        'Enable table preview at the server level (SAP_BLOCK_DATA=false or a *-data/*-sql profile) ' +
+        'and, in authenticated HTTP mode, ensure the token includes data (or sql) scope.'
+      );
+    }
+    return message;
+  }
+
   if (err instanceof AdtNetworkError) {
-    return `${message}\n\nHint: Cannot reach the SAP system. This is a connectivity issue, not a usage error.`;
+    if (tool === 'SAPRead' && String(args.type ?? '').toUpperCase() === 'SYSTEM') {
+      return (
+        `${message}\n\nHint: Connectivity probe failed. Fix connectivity first, then retry ` +
+        'SAPRead(type="SYSTEM") before running any batch or parallel tool calls.'
+      );
+    }
+    return (
+      `${message}\n\nHint: Cannot reach the SAP system. Run SAPRead(type="SYSTEM") once as a connectivity ` +
+      'probe before retrying batch/parallel calls.'
+    );
   }
 
   return message;
@@ -517,6 +581,30 @@ export async function handleToolCall(
       return errorResult(validationError);
     }
     args = parsed.data as Record<string, unknown>;
+  }
+
+  // Mixed-scope tool: SAPManage has read-only actions and write actions.
+  // Tool-level scope grants visibility; action-level scope enforces mutating actions.
+  if (authInfo && toolName === 'SAPManage') {
+    const action = String(args.action ?? '');
+    const requiredScope = getSapManageActionScope(action);
+    if (!hasRequiredScope(authInfo, requiredScope)) {
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        event: 'auth_scope_denied',
+        requestId: reqId,
+        user,
+        clientId,
+        tool: toolName,
+        requiredScope,
+        availableScopes: authInfo.scopes,
+      });
+      return errorResult(
+        `Insufficient scope: '${requiredScope}' required for SAPManage(action="${action}"). ` +
+          `Your scopes: [${authInfo.scopes.join(', ')}]`,
+      );
+    }
   }
 
   // Run within request context so HTTP-level logs get the requestId
@@ -1131,6 +1219,29 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   return textResult(transliterationNote + JSON.stringify(results, null, 2));
 }
 
+function classifySapQueryParserError(err: AdtApiError, sql: string): string | undefined {
+  if (err.statusCode !== 400) return undefined;
+
+  const combined = `${err.message}\n${err.responseBody ?? ''}`;
+  if (!hasSqlParserSignature(combined)) return undefined;
+
+  const hints = [
+    'ADT freestyle SQL parser rejected this query on this backend/version.',
+    'Submit exactly one SELECT statement (no semicolons, no multi-statement scripts).',
+    'Remove ABAP target clauses from SQL text (INTO, APPENDING, PACKAGE SIZE).',
+  ];
+
+  if (/\bJOIN\b/i.test(sql)) {
+    hints.push('JOIN parsing can fail on some systems (SAP Note 3605050); split into staged single-table queries.');
+  }
+
+  if (/\bINTO\b|\bAPPENDING\b|\bPACKAGE\s+SIZE\b/i.test(sql)) {
+    hints.push('Use the MCP maxRows parameter for row limits instead of ABAP target-table clauses.');
+  }
+
+  return `${err.message}\n\nHint: ${hints.join(' ')}`;
+}
+
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const sql = String(args.sql ?? '');
   const maxRows = Number(args.maxRows ?? 100);
@@ -1164,11 +1275,9 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
         }
       }
     }
-    // JOIN-aware error: ADT freestyle SQL parser has known edge cases with JOINs (SAP Note 3605050)
-    if (err instanceof AdtApiError && err.statusCode === 400 && /\bJOIN\b/i.test(sql)) {
-      return errorResult(
-        `${err.message}\n\nMulti-table JOIN query failed. The ADT freestyle SQL endpoint has known parser edge cases with JOINs (SAP Note 3605050). Try splitting into separate single-table queries.`,
-      );
+    if (err instanceof AdtApiError) {
+      const parserHint = classifySapQueryParserError(err, sql);
+      if (parserHint) return errorResult(parserHint);
     }
     throw err;
   }
@@ -4019,7 +4128,7 @@ async function handleSAPManage(
 
     default:
       return errorResult(
-        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, change_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
       );
   }
 }

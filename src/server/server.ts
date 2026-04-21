@@ -22,18 +22,64 @@ import {
   getCachedDiscovery,
   getCachedFeatures,
   handleToolCall,
-  hasRequiredScope,
+  SAPMANAGE_ACTION_SCOPES,
   setCachedDiscovery,
   setCachedFeatures,
   TOOL_SCOPES,
 } from '../handlers/intent.js';
-import { getToolDefinitions } from '../handlers/tools.js';
+import { getToolDefinitions, type ToolDefinition } from '../handlers/tools.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
 /** ARC-1 version */
 export const VERSION = '0.6.10'; // x-release-please-version
+
+function pruneSapManageActionsForScope(tool: ToolDefinition, scopes: string[]): ToolDefinition {
+  if (tool.name !== 'SAPManage') return tool;
+
+  const schema = tool.inputSchema as Record<string, unknown>;
+  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+  const actionDef = (properties.action as Record<string, unknown> | undefined) ?? {};
+  const actionEnum = Array.isArray(actionDef.enum) ? actionDef.enum.map(String) : [];
+
+  const filteredActionEnum = actionEnum.filter((action) => {
+    const requiredScope = SAPMANAGE_ACTION_SCOPES[action] ?? 'write';
+    if (scopes.includes(requiredScope)) return true;
+    if (requiredScope === 'read' && scopes.includes('write')) return true;
+    return false;
+  });
+
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...properties,
+        action: {
+          ...actionDef,
+          enum: filteredActionEnum,
+        },
+      },
+    },
+  };
+}
+
+export function filterToolsByAuthScope(tools: ToolDefinition[], scopes: string[]): ToolDefinition[] {
+  const hasScope = (requiredScope: string): boolean => {
+    if (scopes.includes(requiredScope)) return true;
+    if (requiredScope === 'read' && scopes.includes('write')) return true;
+    if (requiredScope === 'data' && scopes.includes('sql')) return true;
+    return false;
+  };
+
+  return tools
+    .filter((tool) => {
+      const requiredScope = TOOL_SCOPES[tool.name];
+      return !requiredScope || hasScope(requiredScope);
+    })
+    .map((tool) => pruneSapManageActionsForScope(tool, scopes));
+}
 
 export function logAuthSummary(config: ServerConfig): void {
   const mcpMethods: string[] = [];
@@ -294,10 +340,7 @@ export function createServer(
 
     // When authenticated, only show tools the user has scopes for
     if (extra.authInfo) {
-      tools = tools.filter((tool) => {
-        const requiredScope = TOOL_SCOPES[tool.name];
-        return !requiredScope || hasRequiredScope(extra.authInfo!, requiredScope);
-      });
+      tools = filterToolsByAuthScope(tools, extra.authInfo.scopes);
     }
 
     return { tools };

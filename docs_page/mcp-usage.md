@@ -10,7 +10,8 @@
 
 ### SQL Query Limitations (SAPQuery)
 
-The SAP ADT Data Preview API uses **ABAP SQL syntax**, NOT standard SQL:
+SAPQuery uses the ADT freestyle endpoint (`/sap/bc/adt/datapreview/freestyle`) with **ABAP SQL syntax**, not standard SQL.
+ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint parser can still reject valid-looking SQL on some backend versions.
 
 | Feature | Status | Syntax |
 |---------|--------|--------|
@@ -23,6 +24,10 @@ The SAP ADT Data Preview API uses **ABAP SQL syntax**, NOT standard SQL:
 | `GROUP BY` | **Works** | `GROUP BY field_name` |
 | `COUNT(*)` | **Works** | Aggregate functions work |
 | `WHERE` | **Works** | Standard conditions |
+
+**Parser variability:** Errors like `Only one SELECT statement is allowed` or `"INTO" is invalid ...` come from endpoint parsing, not necessarily from ABAP SQL language limitations. Rewrite to one SELECT statement and remove ABAP target clauses (`INTO`, `APPENDING`, `PACKAGE SIZE`).
+
+Reference: [SAPQuery Freestyle Capability Matrix](../docs/research/sapquery-freestyle-capability-matrix.md)
 
 **Correct Example:**
 ```sql
@@ -101,7 +106,7 @@ flowchart TD
 | Read CDS view | `SAPRead` | `type=DDLS, name=ZDDL_VIEW` |
 | Read message class | `SAPRead` | `type=MESSAGES, name=ZMSG` |
 | Read table structure | `SAPRead` | `type=TABL, name=MARA` |
-| Read table data | `SAPRead` | `type=TABLE_CONTENTS, name=MARA, maxRows=10` |
+| Read table data | `SAPRead` | `type=TABLE_CONTENTS, name=MARA, maxRows=10, sqlFilter="MANDT = '100'"` |
 | System info | `SAPRead` | `type=SYSTEM` |
 | Installed components | `SAPRead` | `type=COMPONENTS` |
 
@@ -134,6 +139,15 @@ flowchart TD
 ---
 
 ## Common Workflows
+
+### 0. Connectivity Preflight (before parallel batches)
+
+```
+Step 1: SAPRead(type="SYSTEM")
+        → If this fails, stop batching and fix connectivity first
+
+Step 2: Run parallel/large investigation batches only after SYSTEM succeeds
+```
 
 ### 1. Read and Understand a Class
 

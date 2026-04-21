@@ -1083,6 +1083,43 @@ describe('Intent Handler', () => {
       expect(parsed.metadata.package).toBe('ZDEV');
       expect(parsed.testclasses).toContain('ltcl_test');
     });
+
+    it('returns sqlFilter remediation hint for TABLE_CONTENTS parser errors', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(
+        new AdtApiError(
+          'Invalid query string. Only SELECT statement is allowed',
+          400,
+          '/sap/bc/adt/datapreview/ddic',
+          'Invalid query string. Only SELECT statement is allowed',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABLE_CONTENTS',
+        name: 'MARA',
+        sqlFilter: "MANDT = '100'",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('condition expression only');
+      expect(result.content[0]?.text).toContain('no WHERE, no SELECT');
+      expect(result.content[0]?.text).toContain(`MANDT = '100'`);
+    });
+
+    it('returns data-safety hint when TABLE_CONTENTS is blocked by safety config', async () => {
+      const blockedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), blockData: true },
+      });
+      const result = await handleToolCall(blockedClient, DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABLE_CONTENTS',
+        name: 'MARA',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('TABLE_CONTENTS is blocked by safety configuration or missing data');
+      expect(result.content[0]?.text).toContain('SAP_BLOCK_DATA=false');
+    });
   });
 
   // ─── SAPSearch ─────────────────────────────────────────────────────
@@ -1246,7 +1283,7 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.type).toBe('text');
     });
 
-    it('returns JOIN-specific hint when a JOIN query fails with 400', async () => {
+    it('returns parser hint with JOIN-specific addendum when a JOIN query fails with 400', async () => {
       mockFetch.mockReset();
       // First call: CSRF token fetch (200)
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
@@ -1256,21 +1293,26 @@ describe('Intent Handler', () => {
         sql: 'SELECT a~field1, b~field2 FROM ztable1 AS a INNER JOIN ztable2 AS b ON a~id = b~id INTO TABLE @DATA(lt_result)',
       });
       expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
+      expect(result.content[0]?.text).toContain('exactly one SELECT statement');
+      expect(result.content[0]?.text).toContain('Remove ABAP target clauses');
       expect(result.content[0]?.text).toContain('SAP Note 3605050');
-      expect(result.content[0]?.text).toContain('splitting into separate single-table queries');
+      expect(result.content[0]?.text).toContain('staged single-table queries');
     });
 
-    it('does NOT include JOIN hint when a non-JOIN query fails with 400', async () => {
+    it('returns parser hint for non-JOIN 400 parser signatures', async () => {
       mockFetch.mockReset();
       // First call: CSRF token fetch (200)
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
-      // Second call: POST returns 400 (some other error)
-      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Syntax error in SQL'));
+      // Second call: POST returns parser signature
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Invalid query string. Only one SELECT statement is allowed'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
-        sql: 'SELECT * FROM ztable1 WHERE invalid_syntax',
+        sql: 'SELECT * FROM ztable1; SELECT * FROM ztable2',
       });
-      // Should NOT have JOIN hint — error falls through to default handler
       expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
+      expect(result.content[0]?.text).toContain('exactly one SELECT statement');
+      expect(result.content[0]?.text).toContain('Remove ABAP target clauses');
       expect(result.content[0]?.text).not.toContain('SAP Note 3605050');
     });
 
@@ -2167,6 +2209,43 @@ ENDCLASS.`,
       expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
     });
 
+    it('allows SAPManage probe/features actions with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPManage',
+        { action: 'features' },
+        readAuth,
+      );
+      expect(result.content[0]?.text).not.toContain('Insufficient scope');
+    });
+
+    it('blocks SAPManage write actions with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPManage',
+        { action: 'create_package' },
+        readAuth,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain('SAPManage(action="create_package")');
+    });
+
+    it('allows SAPManage write actions with write scope (scope check passes)', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPManage',
+        { action: 'create_package' },
+        writeAuth,
+      );
+      // Should proceed to handler-level validation, not action-scope rejection.
+      expect(result.content[0]?.text).not.toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain('"name" is required');
+    });
+
     it('blocks SAPQuery with read-only scope (requires sql)', async () => {
       const result = await handleToolCall(
         createClient(),
@@ -2422,13 +2501,22 @@ ENDCLASS.`,
 
   describe('TOOL_SCOPES', () => {
     it('maps read tools to read scope', () => {
-      for (const tool of ['SAPRead', 'SAPSearch', 'SAPNavigate', 'SAPContext', 'SAPLint', 'SAPDiagnose', 'SAPGit']) {
+      for (const tool of [
+        'SAPRead',
+        'SAPSearch',
+        'SAPNavigate',
+        'SAPContext',
+        'SAPLint',
+        'SAPDiagnose',
+        'SAPGit',
+        'SAPManage',
+      ]) {
         expect(TOOL_SCOPES[tool]).toBe('read');
       }
     });
 
     it('maps write tools to write scope', () => {
-      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage', 'SAPTransport']) {
+      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPTransport']) {
         expect(TOOL_SCOPES[tool]).toBe('write');
       }
     });
@@ -3950,13 +4038,23 @@ ENDCLASS.`;
       }
     });
 
-    it('network errors still return connectivity hint', async () => {
+    it('network errors include probe-first connectivity guidance', async () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:8000'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZPROG' });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Cannot reach the SAP system');
-      expect(result.content[0]?.text).toContain('connectivity issue');
+      expect(result.content[0]?.text).toContain('SAPRead(type="SYSTEM")');
+      expect(result.content[0]?.text).toContain('batch/parallel');
+    });
+
+    it('network errors on SAPRead SYSTEM mention failed probe specifically', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:8000'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'SYSTEM' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Connectivity probe failed');
+      expect(result.content[0]?.text).toContain('before running any batch or parallel tool calls');
     });
   });
 

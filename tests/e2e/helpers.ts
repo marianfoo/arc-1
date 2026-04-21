@@ -241,6 +241,9 @@ export function classifyToolErrorSkip(result: ToolResult): string | null {
   if (/\/sap\/bc\/adt\/datapreview\/ddic\b.*No suitable resource/i.test(text)) {
     return 'Backend feature not supported on this SAP system: /datapreview/ddic endpoint not available on this release';
   }
+  if (/\/sap\/bc\/adt\/datapreview\/freestyle\b.*No suitable resource/i.test(text)) {
+    return 'Backend feature not supported on this SAP system: /datapreview/freestyle endpoint not available on this release';
+  }
   if (/usageReferences.*status 500/i.test(text)) {
     return 'Backend feature not supported on this SAP system: usageReferences endpoint unstable on this release';
   }

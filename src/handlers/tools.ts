@@ -217,7 +217,7 @@ const SAPQUERY_DESC_ONPREM =
   'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
   'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
   'If a table is not found, similar table names will be suggested automatically. ' +
-  'Note: Uses the ADT freestyle SQL endpoint (same as ADT SQL Console in Eclipse). Supports ABAP SQL syntax including JOINs, but the endpoint parser has known edge cases with complex queries on some system versions (SAP Note 3605050). If a complex query fails, try simplifying — split JOINs into separate single-table SELECTs.\n\n' +
+  'Note: Uses the ADT freestyle SQL endpoint (same family as ADT SQL Console in Eclipse). ABAP SQL language supports JOINs and subqueries, but this endpoint parser can reject valid-looking statements on some backend versions (for example grammar errors, single-SELECT enforcement). If parsing fails, simplify to one SELECT and split multi-table logic into staged single-table queries (SAP Note 3605050).\n\n' +
   'CDS impact analysis: DO NOT query DDDDLSRC, ACMDCLSRC, DDLXSRC_SRC, or SRVDSRC_SRC to find CDS consumers — those text scans produce noise (substring matches, package group nodes, generated patterns). Use SAPContext(action="impact", type="DDLS", name="...") instead — it uses SAP\'s where-used index and returns bucketed, filtered results (projection views, BDEFs, SRVDs, access controls, documentation, ABAP consumers).';
 
 const SAPQUERY_DESC_BTP =
@@ -270,7 +270,7 @@ const SAPMANAGE_DESC_ONPREM =
   'Actions:\n' +
   '- "features": Get cached feature status from last probe (fast, no SAP round-trip). ' +
   'Returns which features are available, their mode (auto/on/off), and when they were last probed.\n' +
-  '- "probe": Re-probe the SAP system now (makes 8 parallel requests, ~1-2s). ' +
+  '- "probe": Re-probe the SAP system now (runs feature probes, auth checks, and ADT discovery refresh). ' +
   'Use this on first use or if you suspect feature availability has changed.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
   '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
@@ -292,13 +292,28 @@ const SAPMANAGE_DESC_BTP =
   'Returns feature status and system type. Also handles package (DEVC) lifecycle operations.\n\n' +
   'Actions:\n' +
   '- "features": Get cached feature status from last probe.\n' +
-  '- "probe": Re-probe the SAP system now.\n' +
+  '- "probe": Re-probe the SAP system now (feature probes + discovery refresh).\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
   '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
   '- "delete_package": Delete an existing package.\n' +
   '- FLP actions: flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.\n\n' +
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
+
+const SAPMANAGE_ACTIONS_READ = ['features', 'probe', 'cache_stats'];
+const SAPMANAGE_ACTIONS_WRITE = [
+  'create_package',
+  'delete_package',
+  'change_package',
+  'flp_list_catalogs',
+  'flp_list_groups',
+  'flp_list_tiles',
+  'flp_create_catalog',
+  'flp_create_group',
+  'flp_create_tile',
+  'flp_add_tile_to_group',
+  'flp_delete_catalog',
+];
 
 // ─── SAPGit ─────────────────────────────────────────────────────────
 
@@ -442,7 +457,11 @@ export function getToolDefinitions(
               'Output format. "text" (default): raw source code. "structured" (CLAS only): JSON with metadata (description, language, category) + decomposed source (main, testclasses, definitions, implementations, macros). Useful when you need to understand class structure or separate test code from production code.',
           },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
-          sqlFilter: { type: 'string', description: 'For TABLE_CONTENTS: SQL WHERE clause filter' },
+          sqlFilter: {
+            type: 'string',
+            description:
+              'For TABLE_CONTENTS: condition expression only (no WHERE, no SELECT), e.g. "MANDT = \'100\'" or "MATNR LIKE \'Z%\'".',
+          },
           objectType: {
             type: 'string',
             description:
@@ -930,126 +949,113 @@ export function getToolDefinitions(
     },
   });
 
-  // SAPManage — registered when not in read-only mode
-  if (!config.readOnly) {
-    tools.push({
-      name: 'SAPManage',
-      description: btp ? SAPMANAGE_DESC_BTP : SAPMANAGE_DESC_ONPREM,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            enum: [
-              'features',
-              'probe',
-              'cache_stats',
-              'create_package',
-              'delete_package',
-              'change_package',
-              'flp_list_catalogs',
-              'flp_list_groups',
-              'flp_list_tiles',
-              'flp_create_catalog',
-              'flp_create_group',
-              'flp_create_tile',
-              'flp_add_tile_to_group',
-              'flp_delete_catalog',
-            ],
-            description:
-              'Action to execute. Includes package lifecycle (create/delete/move) and FLP actions for catalogs/groups/tiles via PAGE_BUILDER_CUST OData service.',
-          },
-          name: {
-            type: 'string',
-            description: 'Package name (required for create_package and delete_package).',
-          },
-          description: {
-            type: 'string',
-            description: 'Package description (required for create_package).',
-          },
-          superPackage: {
-            type: 'string',
-            description: 'Parent package for create_package (defaults to empty root package).',
-          },
-          softwareComponent: {
-            type: 'string',
-            description: 'Software component for create_package (default: LOCAL).',
-          },
-          transportLayer: {
-            type: 'string',
-            description: 'Transport layer for create_package (optional; required by some transportable landscapes).',
-          },
-          packageType: {
-            type: 'string',
-            enum: ['development', 'structure', 'main'],
-            description: 'Package type for create_package (default: development).',
-          },
-          transport: {
-            type: 'string',
-            description: 'Optional transport request (corrNr) for create_package, delete_package, or change_package.',
-          },
-          objectUri: {
-            type: 'string',
-            description:
-              'ADT URI of the object to move (e.g., /sap/bc/adt/oo/classes/zcl_my_class). If not provided, resolved automatically from objectName + objectType via search.',
-          },
-          objectType: {
-            type: 'string',
-            description: 'ADT object type (e.g., CLAS/OC, DDLS/DF, PROG/P). Required for change_package.',
-          },
-          objectName: {
-            type: 'string',
-            description: 'Object name to move (e.g., ZCL_MY_CLASS). Required for change_package.',
-          },
-          oldPackage: {
-            type: 'string',
-            description: 'Current package of the object. Required for change_package.',
-          },
-          newPackage: {
-            type: 'string',
-            description: 'Target package to move the object to. Required for change_package.',
-          },
-          catalogId: {
-            type: 'string',
-            description:
-              'FLP catalog identifier — accepts either full ID (X-SAP-UI2-CATALOGPAGE:MY_CAT) or domain ID (MY_CAT). Required for flp_list_tiles, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.',
-          },
-          groupId: {
-            type: 'string',
-            description: 'FLP group/page identifier (required for flp_create_group, flp_add_tile_to_group).',
-          },
-          title: {
-            type: 'string',
-            description: 'Title for FLP catalog/group creation.',
-          },
-          domainId: {
-            type: 'string',
-            description: 'Domain ID for FLP catalog creation (e.g., ZARC1_SALES).',
-          },
-          tileInstanceId: {
-            type: 'string',
-            description: 'Tile instance ID in the source catalog (required for flp_add_tile_to_group).',
-          },
-          tile: {
-            type: 'object',
-            description: 'Tile definition for flp_create_tile.',
-            properties: {
-              id: { type: 'string', description: 'Tile ID (client-side logical id).' },
-              title: { type: 'string', description: 'Display title.' },
-              icon: { type: 'string', description: 'Optional icon URI.' },
-              semanticObject: { type: 'string', description: 'Semantic object for intent navigation.' },
-              semanticAction: { type: 'string', description: 'Semantic action for intent navigation.' },
-              url: { type: 'string', description: 'Optional target URL.' },
-              subtitle: { type: 'string', description: 'Optional subtitle text.' },
-              info: { type: 'string', description: 'Optional info text.' },
-            },
-            required: ['id', 'title', 'semanticObject', 'semanticAction'],
-          },
+  // SAPManage — always registered; mutating actions remain safety/scope-protected.
+  const sapManageActions = config.readOnly
+    ? SAPMANAGE_ACTIONS_READ
+    : [...SAPMANAGE_ACTIONS_READ, ...SAPMANAGE_ACTIONS_WRITE];
+  tools.push({
+    name: 'SAPManage',
+    description: btp ? SAPMANAGE_DESC_BTP : SAPMANAGE_DESC_ONPREM,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: sapManageActions,
+          description:
+            'Action to execute. read-only actions: features, probe, cache_stats. ' +
+            'Mutating package/FLP actions require writable safety config and write scope in authenticated mode.',
         },
-        required: ['action'],
+        name: {
+          type: 'string',
+          description: 'Package name (required for create_package and delete_package).',
+        },
+        description: {
+          type: 'string',
+          description: 'Package description (required for create_package).',
+        },
+        superPackage: {
+          type: 'string',
+          description: 'Parent package for create_package (defaults to empty root package).',
+        },
+        softwareComponent: {
+          type: 'string',
+          description: 'Software component for create_package (default: LOCAL).',
+        },
+        transportLayer: {
+          type: 'string',
+          description: 'Transport layer for create_package (optional; required by some transportable landscapes).',
+        },
+        packageType: {
+          type: 'string',
+          enum: ['development', 'structure', 'main'],
+          description: 'Package type for create_package (default: development).',
+        },
+        transport: {
+          type: 'string',
+          description: 'Optional transport request (corrNr) for create_package, delete_package, or change_package.',
+        },
+        objectUri: {
+          type: 'string',
+          description:
+            'ADT URI of the object to move (e.g., /sap/bc/adt/oo/classes/zcl_my_class). If not provided, resolved automatically from objectName + objectType via search.',
+        },
+        objectType: {
+          type: 'string',
+          description: 'ADT object type (e.g., CLAS/OC, DDLS/DF, PROG/P). Required for change_package.',
+        },
+        objectName: {
+          type: 'string',
+          description: 'Object name to move (e.g., ZCL_MY_CLASS). Required for change_package.',
+        },
+        oldPackage: {
+          type: 'string',
+          description: 'Current package of the object. Required for change_package.',
+        },
+        newPackage: {
+          type: 'string',
+          description: 'Target package to move the object to. Required for change_package.',
+        },
+        catalogId: {
+          type: 'string',
+          description:
+            'FLP catalog identifier — accepts either full ID (X-SAP-UI2-CATALOGPAGE:MY_CAT) or domain ID (MY_CAT). Required for flp_list_tiles, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog.',
+        },
+        groupId: {
+          type: 'string',
+          description: 'FLP group/page identifier (required for flp_create_group, flp_add_tile_to_group).',
+        },
+        title: {
+          type: 'string',
+          description: 'Title for FLP catalog/group creation.',
+        },
+        domainId: {
+          type: 'string',
+          description: 'Domain ID for FLP catalog creation (e.g., ZARC1_SALES).',
+        },
+        tileInstanceId: {
+          type: 'string',
+          description: 'Tile instance ID in the source catalog (required for flp_add_tile_to_group).',
+        },
+        tile: {
+          type: 'object',
+          description: 'Tile definition for flp_create_tile.',
+          properties: {
+            id: { type: 'string', description: 'Tile ID (client-side logical id).' },
+            title: { type: 'string', description: 'Display title.' },
+            icon: { type: 'string', description: 'Optional icon URI.' },
+            semanticObject: { type: 'string', description: 'Semantic object for intent navigation.' },
+            semanticAction: { type: 'string', description: 'Semantic action for intent navigation.' },
+            url: { type: 'string', description: 'Optional target URL.' },
+            subtitle: { type: 'string', description: 'Optional subtitle text.' },
+            info: { type: 'string', description: 'Optional info text.' },
+          },
+          required: ['id', 'title', 'semanticObject', 'semanticAction'],
+        },
       },
-    });
-  }
+      required: ['action'],
+    },
+  });
 
   // Transport tools — registered when transports are explicitly enabled
   if (config.enableTransports) {
