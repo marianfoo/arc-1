@@ -865,9 +865,9 @@ async function buildCdsActivationDependencyHint(client: AdtClient, name: string,
   return lines.join('\n');
 }
 
-async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
-  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
-
+/** Run a syntax check on the inactive version and format the errors for appending to an
+ *  error message. Returns '' on any failure or when no errors are reported. */
+async function inactiveSyntaxDiagnostic(client: AdtClient, type: string, name: string): Promise<string> {
   try {
     const checkResult = await syntaxCheck(client.http, client.safety, objectUrlForType(type, name), {
       version: 'inactive',
@@ -886,6 +886,11 @@ async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: str
   } catch {
     return '';
   }
+}
+
+async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
+  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
+  return inactiveSyntaxDiagnostic(client, type, name);
 }
 
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
@@ -3663,7 +3668,8 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   const activateOpts = preaudit !== undefined ? { preaudit } : undefined;
 
   if (args.objects && Array.isArray(args.objects)) {
-    const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
+    const rawObjects = args.objects as Array<Record<string, unknown>>;
+    const objects = rawObjects.map((o) => {
       const objType = normalizeObjectType(String(o.type ?? type));
       const objName = String(o.name ?? '');
       return { type: objType, name: objName, url: objectUrlForType(objType, objName) };
@@ -3677,7 +3683,15 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     if (result.success) {
       return textResult(`Successfully activated ${objects.length} objects: ${names}.${statusDetails}`);
     }
-    return errorResult(`Batch activation failed for: ${names}.${statusDetails}`);
+    // On batch failure enrich with per-object inactive-version syntax errors.
+    const diagnostics = await Promise.all(objects.map((o) => inactiveSyntaxDiagnostic(client, o.type, o.name)));
+    const combinedDiag = diagnostics
+      .map((d, i) => (d ? `\n[${objects[i].name}]${d}` : ''))
+      .filter(Boolean)
+      .join('');
+    return errorResult(
+      `Batch activation failed for: ${names}.${statusDetails}\n${formatActivationMessages(result)}${combinedDiag}`,
+    );
   }
 
   // Single activation (existing behavior)
@@ -3688,7 +3702,10 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   if (result.success) {
     return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
-  let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`;
+  // On failure, try to enrich with the actual compiler errors from the inactive version —
+  // especially useful when SAP returned <ioc:inactiveObjects> with no <msg> detail.
+  const syntaxDetail = await inactiveSyntaxDiagnostic(client, type, name);
+  let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}${syntaxDetail}`;
   if (type === 'DDLS') {
     activationError += `\n\n${await buildCdsActivationDependencyHint(client, name, objectUrl)}`;
   }
@@ -3965,7 +3982,8 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
   switch (action) {
     case 'syntax': {
       const objectUrl = objectUrlForType(type, name);
-      const result = await syntaxCheck(client.http, client.safety, objectUrl);
+      const version = args.version === 'inactive' ? 'inactive' : args.version === 'active' ? 'active' : undefined;
+      const result = await syntaxCheck(client.http, client.safety, objectUrl, version ? { version } : undefined);
       return textResult(JSON.stringify(result, null, 2));
     }
     case 'unittest': {

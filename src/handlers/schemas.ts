@@ -481,6 +481,7 @@ export const SAPDiagnoseSchema = z.object({
   source: z.string().optional(),
   line: z.coerce.number().optional(),
   column: z.coerce.number().optional(),
+  version: z.enum(['active', 'inactive']).optional(),
   proposalUri: z.string().optional(),
   proposalUserContent: z.string().optional(),
   variant: z.string().optional(),

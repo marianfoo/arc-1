@@ -439,7 +439,55 @@ export function parseActivationResult(xml: string): ActivationResult {
     details.push(detail);
   }
 
+  // SAP also returns <ioc:inactiveObjects> on some activation calls — a preaudit/dry-run
+  // shape that lists what is still inactive (and which transport/user owns it). With no
+  // <msg> errors this would otherwise parse as success; treat any entry that carries an
+  // <object> child ref as a failure so phantom "Successfully activated" responses stop.
+  if (!hasErrors) {
+    const inactive = extractInactiveObjectEntries(parsed);
+    if (inactive.length > 0) {
+      hasErrors = true;
+      for (const ref of inactive) {
+        const ownerSuffix = ref.user ? ` (pending changes owned by ${ref.user})` : '';
+        const label = ref.name || 'object';
+        const text = `Activation did not complete — ${label} is still inactive${ownerSuffix}.`;
+        messages.push(text);
+        const detail: ActivationMessage = { severity: 'error', text };
+        if (ref.uri) detail.uri = ref.uri;
+        details.push(detail);
+      }
+    }
+  }
+
   return { success: !hasErrors, messages, details };
+}
+
+/** Extract still-inactive object refs from an <ioc:inactiveObjects> response.
+ *  Entries with no <object> child (transport-only rows) are ignored. */
+function extractInactiveObjectEntries(
+  parsed: Record<string, unknown>,
+): Array<{ name: string; uri: string; user: string }> {
+  const entries = findDeepNodes(parsed, 'entry');
+  const out: Array<{ name: string; uri: string; user: string }> = [];
+  for (const entry of entries) {
+    const objectNode = entry.object;
+    if (!objectNode || typeof objectNode !== 'object') continue;
+    const refs = findDeepNodes(objectNode as Record<string, unknown>, 'ref');
+    if (refs.length === 0) continue;
+    const transportNode = entry.transport;
+    const transportUser =
+      transportNode && typeof transportNode === 'object'
+        ? String((transportNode as Record<string, unknown>)['@_user'] ?? '')
+        : '';
+    for (const ref of refs) {
+      out.push({
+        name: String(ref['@_name'] ?? '').trim(),
+        uri: String(ref['@_uri'] ?? ''),
+        user: transportUser,
+      });
+    }
+  }
+  return out;
 }
 
 /** Extract shortText from an activation message node.
@@ -465,14 +513,26 @@ function extractShortText(m: Record<string, unknown>): string {
 
 function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {
   const parsed = parseXml(xml);
-  const msgs = findDeepNodes(parsed, 'msg');
+  // Two response shapes observed:
+  //   - <msg type="E" shortText="..." line="..." col="..."/> (older / some variants)
+  //   - <chkrun:checkMessage chkrun:type="E" chkrun:shortText="..." chkrun:uri="...#start=LINE,COL"/>
+  //     (NW 7.50 /checkruns response — uri carries the position via #start=line,col)
+  const msgs = [...findDeepNodes(parsed, 'msg'), ...findDeepNodes(parsed, 'checkMessage')];
   const messages: SyntaxMessage[] = msgs.map((m) => {
     const type = String(m['@_type'] ?? '');
+    let line = Number.parseInt(String(m['@_line'] ?? '0'), 10);
+    let column = Number.parseInt(String(m['@_col'] ?? '0'), 10);
+    const uri = String(m['@_uri'] ?? '');
+    const startMatch = uri.match(/#start=(\d+),(\d+)/);
+    if (startMatch) {
+      if (!line) line = Number.parseInt(startMatch[1], 10);
+      if (!column) column = Number.parseInt(startMatch[2], 10);
+    }
     return {
       severity: type === 'E' ? 'error' : type === 'W' ? 'warning' : 'info',
       text: String(m['@_shortText'] ?? ''),
-      line: Number.parseInt(String(m['@_line'] ?? '0'), 10),
-      column: Number.parseInt(String(m['@_col'] ?? '0'), 10),
+      line: Number.isFinite(line) ? line : 0,
+      column: Number.isFinite(column) ? column : 0,
     };
   });
 

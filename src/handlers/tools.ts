@@ -872,7 +872,7 @@ export function getToolDefinitions(
       description:
         'Run diagnostics on ABAP objects and analyze runtime errors.\n\n' +
         'Actions:\n' +
-        '- "syntax": Syntax check an ABAP object. Requires name + type.\n' +
+        '- "syntax": Syntax check an ABAP object. Requires name + type. Optional: version ("active" or "inactive", defaults to active). Use "inactive" to check pending changes that have not yet been activated.\n' +
         '- "unittest": Run ABAP unit tests. Requires name + type.\n' +
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
         '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
@@ -913,6 +913,12 @@ export function getToolDefinitions(
           column: {
             type: 'number',
             description: 'Source column number for quickfix evaluation (default 0 for quickfix actions).',
+          },
+          version: {
+            type: 'string',
+            enum: ['active', 'inactive'],
+            description:
+              'Source version for syntax check (default "active"). Use "inactive" to validate pending changes.',
           },
           proposalUri: {
             type: 'string',
