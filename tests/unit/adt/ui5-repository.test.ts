@@ -67,12 +67,6 @@ describe('UI5 Repository', () => {
       );
     });
 
-    it('throws on safety check when read is blocked', async () => {
-      const safety = { ...defaultSafetyConfig(), disallowedOps: 'R' };
-      const http = mockHttp();
-      await expect(getAppInfo(http, safety, 'ZAPP')).rejects.toThrow('blocked by safety');
-    });
-
     it('re-throws non-404 errors', async () => {
       const http = mockHttp();
       vi.mocked(http.get).mockRejectedValue(new AdtApiError('Internal Server Error', 500, '/test'));

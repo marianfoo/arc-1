@@ -103,9 +103,9 @@ arc1 --profile developer
 arc1 --profile developer-sql
 
 # Or enable individual capabilities
-arc1 --read-only=false           # Enable writes
-arc1 --block-free-sql=false      # Enable free SQL
-arc1 --block-data=false          # Enable table preview
+arc1 --allow-writes=false           # Enable writes
+arc1 --allow-free-sql=false      # Enable free SQL
+arc1 --allow-data-preview=false          # Enable table preview
 
 # Restrict write operations to specific packages (reads are not restricted by package)
 # Use single quotes — bash expands $TMP inside double quotes.

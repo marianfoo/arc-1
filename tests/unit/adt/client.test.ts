@@ -503,13 +503,6 @@ describe('AdtClient', () => {
       const calledHeaders = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
       expect(calledHeaders?.Accept).toBe('application/vnd.sap.adt.apirelease.v10+xml');
     });
-
-    it('is blocked when read operations are disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: new Set(['R']) },
-      });
-      await expect(client.getApiReleaseState('/sap/bc/adt/oo/classes/cl_test')).rejects.toThrow();
-    });
   });
 
   // ─── URL Encoding (Issues #18, #52) ─────────────────────────────
@@ -551,8 +544,8 @@ describe('AdtClient', () => {
       const client = createClient();
       const restrictedSafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       const derived = client.withSafety(restrictedSafety);
-      expect(derived.safety.readOnly).toBe(true);
-      expect(client.safety.readOnly).toBe(false);
+      expect(derived.safety.allowWrites).toBe(false);
+      expect(client.safety.allowWrites).toBe(true);
     });
 
     it('shares the same HTTP client instance', () => {
@@ -587,20 +580,6 @@ describe('AdtClient', () => {
   });
 
   describe('safety checks', () => {
-    it('blocks read operations when disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getProgram('ZHELLO')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('blocks search when not in allowedOps', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'R' },
-      });
-      await expect(client.searchObject('Z*')).rejects.toThrow(AdtSafetyError);
-    });
-
     it('blocks free SQL when blockFreeSQL is true', async () => {
       const client = createClient({
         safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
@@ -612,21 +591,6 @@ describe('AdtClient', () => {
       const client = createClient();
       const source = await client.getProgram('ZHELLO');
       expect(source).toBeDefined();
-    });
-
-    it('allows operations when matching allowedOps', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'RS' },
-      });
-      const source = await client.getProgram('ZHELLO');
-      expect(source).toBeDefined();
-    });
-
-    it('getDcl is blocked when read operations are disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getDcl('ZI_TRAVEL_DCL')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -729,13 +693,6 @@ describe('AdtClient', () => {
         .mockResolvedValueOnce(mockResponse(200, '')); // macros
       const client = createClient();
       await expect(client.getClassStructured('ZCL_EXAMPLE')).rejects.toThrow(AdtApiError);
-    });
-
-    it('getClassStructured blocked when operation filter blocks Read', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'S' }, // only Search allowed
-      });
-      await expect(client.getClassStructured('ZCL_EXAMPLE')).rejects.toThrow(AdtSafetyError);
     });
 
     it('getClassStructured makes parallel requests for includes', async () => {
@@ -856,27 +813,6 @@ describe('AdtClient', () => {
       await client.getBspFileContent('ZAPP_BOOKING', 'view/Main.view.xml');
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toContain(encodeURIComponent('ZAPP_BOOKING/view/Main.view.xml'));
-    });
-
-    it('listBspApps blocked when read operations disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.listBspApps()).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('getBspAppStructure blocked when read operations disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getBspAppStructure('ZAPP')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('getBspFileContent blocked when read operations disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getBspFileContent('ZAPP', 'file.js')).rejects.toThrow(AdtSafetyError);
     });
 
     it('getBspAppStructure normalizes subPath without leading slash', async () => {

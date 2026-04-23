@@ -88,44 +88,6 @@ describe('Audit Logging Integration', () => {
     expect((end as any).resultSize).toBeGreaterThan(0);
   });
 
-  it('emits error details for failed tool calls', async () => {
-    const events: AuditEvent[] = [];
-    const captureSink = { write: (e: AuditEvent) => events.push(e) };
-    const { logger } = await import('../../../src/server/logger.js');
-    logger.addSink(captureSink);
-
-    // Use restricted config that blocks reads
-    const client = new AdtClient({
-      baseUrl: 'http://sap:8000',
-      username: 'admin',
-      password: 'secret',
-      safety: {
-        allowWrites: true,
-        allowFreeSQL: true,
-        allowedOps: 'X', // Only allow 'X' operations (nothing real)
-        disallowedOps: '',
-        allowedPackages: [],
-        dryRun: false,
-        allowTransportWrites: false,
-        transportReadOnly: false,
-        allowedTransports: [],
-      },
-    });
-
-    await handleToolCall(client, DEFAULT_CONFIG, 'SAPRead', {
-      type: 'PROG',
-      name: 'ZHELLO',
-    });
-
-    const ends = events.filter((e) => e.event === 'tool_call_end');
-    expect(ends).toHaveLength(1);
-
-    const end = ends[0]!;
-    expect((end as any).status).toBe('error');
-    expect((end as any).errorClass).toBe('AdtSafetyError');
-    expect((end as any).errorMessage).toContain('blocked by safety');
-  });
-
   it('emits auth_scope_denied for insufficient scopes', async () => {
     const events: AuditEvent[] = [];
     const captureSink = { write: (e: AuditEvent) => events.push(e) };

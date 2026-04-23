@@ -72,12 +72,6 @@ describe('Code Intelligence', () => {
       expect(url).toContain('line=42');
       expect(url).toContain('column=15');
     });
-
-    it('is blocked when Intelligence ops are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(findDefinition(http, safety, '/source', 1, 1, 'x')).rejects.toThrow(AdtSafetyError);
-    });
   });
 
   // ─── findReferences ────────────────────────────────────────────────
@@ -153,12 +147,6 @@ describe('Code Intelligence', () => {
         'application/xml',
         expect.objectContaining({ Accept: 'application/xml' }),
       );
-    });
-
-    it('is blocked when Intelligence ops are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(getWhereUsedScope(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -278,12 +266,6 @@ describe('Code Intelligence', () => {
           Accept: 'application/vnd.sap.adt.repository.usagereferences.result.v1+xml',
         }),
       );
-    });
-
-    it('is blocked when Intelligence ops are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(findWhereUsed(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 

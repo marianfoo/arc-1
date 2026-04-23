@@ -98,13 +98,13 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 
 | Setting | Recommended Value | Why |
 |---------|------------------|-----|
-| `--read-only` | `true` for production systems | Prevents any write operations through ARC-1 |
-| `--block-free-sql` | `true` for sensitive systems | Blocks arbitrary SQL queries against the database |
-| `--block-data` | `true` unless table preview is required | Prevents named table content preview |
+| `--allow-writes` | `true` for production systems | Prevents any write operations through ARC-1 |
+| `--allow-free-sql` | `true` for sensitive systems | Blocks arbitrary SQL queries against the database |
+| `--allow-data-preview` | `true` unless table preview is required | Prevents named table content preview |
 | `--allowed-packages` | `Z*,Y*,$TMP` | Restricts write operations (create, update, delete) to custom code packages (defaults to `$TMP` if not set). Read operations are not restricted by package. |
 | `--pp-strict` | `true` when PP is enabled | Rejects requests without user identity (no fallback to shared account) |
-| `--enable-transports` | `false` unless needed | Transport management is opt-in |
-| `--enable-git` | `false` unless needed | `SAPGit` write actions (clone/pull/push/commit/stage/...) are opt-in. Reads are not gated |
+| `--allow-transport-writes` | `false` unless needed | Transport management is opt-in |
+| `--allow-git-writes` | `false` unless needed | `SAPGit` write actions (clone/pull/push/commit/stage/...) are opt-in. Reads are not gated |
 
 ### Profile Reference
 

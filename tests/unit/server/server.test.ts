@@ -39,7 +39,16 @@ describe('MCP Server', () => {
     expect(sapManage).toBeDefined();
     const schema = sapManage!.inputSchema as Record<string, any>;
     const actionEnum: string[] = schema.properties.action.enum;
-    expect(actionEnum).toEqual(['features', 'probe', 'cache_stats']);
+    // v0.7: flp_list_* are read-scoped (classification bug fix)
+    expect(actionEnum).toContain('features');
+    expect(actionEnum).toContain('probe');
+    expect(actionEnum).toContain('cache_stats');
+    expect(actionEnum).toContain('flp_list_catalogs');
+    expect(actionEnum).toContain('flp_list_groups');
+    expect(actionEnum).toContain('flp_list_tiles');
+    // Write actions pruned
+    expect(actionEnum).not.toContain('create_package');
+    expect(actionEnum).not.toContain('flp_create_catalog');
     expect(filtered.map((tool) => tool.name)).not.toContain('SAPWrite');
   });
 
@@ -75,11 +84,13 @@ describe('MCP Server', () => {
     const actionEnum: string[] = schema.properties.action.enum;
 
     expect(actionEnum).toContain('read');
-    expect(actionEnum).toContain('manage');
+    // Note: SAP.manage in ACTION_POLICY requires write (coarse delegator), so read scope can't see it
+    expect(actionEnum).not.toContain('manage');
     expect(actionEnum).not.toContain('query');
     expect(actionEnum).not.toContain('write');
     expect(actionEnum).not.toContain('activate');
     expect(actionEnum).not.toContain('transport');
+    expect(actionEnum).not.toContain('git');
   });
 
   it('keeps only query for sql-scoped users in hyperfocused mode', () => {
@@ -214,18 +225,18 @@ describe('logAuthSummary', () => {
     vi.restoreAllMocks();
   });
 
-  it('logs api-key MCP auth and basic shared SAP auth', () => {
+  it('logs api-keys MCP auth and basic shared SAP auth', () => {
     delete process.env.SAP_BTP_DESTINATION;
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
 
     logAuthSummary({
       ...DEFAULT_CONFIG,
-      apiKey: 'k',
+      apiKeys: [{ key: 'k', profile: 'viewer' }],
       username: 'DEVELOPER',
       password: 'secret',
     });
 
-    expect(infoSpy).toHaveBeenCalledWith('auth: MCP=[api-key] SAP=basic (shared)');
+    expect(infoSpy).toHaveBeenCalledWith('auth: MCP=[api-keys] SAP=basic (shared)');
   });
 
   it('logs oidc MCP auth and per-user PP SAP auth', () => {
@@ -242,13 +253,13 @@ describe('logAuthSummary', () => {
     expect(infoSpy).toHaveBeenCalledWith('auth: MCP=[oidc] SAP=pp (per-user)');
   });
 
-  it('logs combined api-key+oidc MCP auth and cookie+pp SAP auth', () => {
+  it('logs combined api-keys+oidc MCP auth and cookie+pp SAP auth', () => {
     delete process.env.SAP_BTP_DESTINATION;
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
 
     logAuthSummary({
       ...DEFAULT_CONFIG,
-      apiKey: 'k',
+      apiKeys: [{ key: 'k', profile: 'viewer' }],
       oidcIssuer: 'https://issuer.example.com',
       oidcAudience: 'arc-1',
       cookieFile: 'cookies.txt',
@@ -256,7 +267,7 @@ describe('logAuthSummary', () => {
       ppEnabled: true,
     });
 
-    expect(infoSpy).toHaveBeenCalledWith('auth: MCP=[api-key,oidc] SAP=cookie+pp (per-user)');
+    expect(infoSpy).toHaveBeenCalledWith('auth: MCP=[api-keys,oidc] SAP=cookie+pp (per-user)');
   });
 });
 

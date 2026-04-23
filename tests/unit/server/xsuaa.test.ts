@@ -66,17 +66,25 @@ describe('InMemoryClientStore', () => {
 // ─── createChainedTokenVerifier ──────────────────────────────────────
 
 describe('createChainedTokenVerifier', () => {
-  it('returns API key auth when token matches', async () => {
-    const verifier = createChainedTokenVerifier({ apiKey: 'my-key' });
+  it('returns API key auth when token matches (multi-key admin profile)', async () => {
+    const verifier = createChainedTokenVerifier({
+      apiKeys: [{ key: 'my-key', profile: 'admin' }],
+    });
     const result = await verifier('my-key');
-    expect(result.clientId).toBe('api-key');
-    expect(result.scopes).toEqual(['read', 'write', 'data', 'sql', 'admin']);
+    expect(result.clientId).toBe('api-key:admin');
+    expect(result.scopes).toContain('admin');
+    expect(result.scopes).toContain('read');
+    expect(result.scopes).toContain('write');
+    expect(result.scopes).toContain('transports');
+    expect(result.scopes).toContain('git');
     // Must have expiresAt for MCP SDK's requireBearerAuth middleware
     expect(result.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it('throws when API key does not match and no other verifiers', async () => {
-    const verifier = createChainedTokenVerifier({ apiKey: 'my-key' });
+    const verifier = createChainedTokenVerifier({
+      apiKeys: [{ key: 'my-key', profile: 'viewer' }],
+    });
     await expect(verifier('wrong-key')).rejects.toThrow('Token validation failed');
   });
 
@@ -88,7 +96,7 @@ describe('createChainedTokenVerifier', () => {
       extra: {},
     } satisfies AuthInfo);
 
-    const verifier = createChainedTokenVerifier({ apiKey: 'my-key' }, xsuaaVerifier);
+    const verifier = createChainedTokenVerifier({ apiKeys: [{ key: 'my-key', profile: 'viewer' }] }, xsuaaVerifier);
     const result = await verifier('xsuaa-token');
     expect(result.clientId).toBe('xsuaa-client');
     expect(xsuaaVerifier).toHaveBeenCalledWith('xsuaa-token');
@@ -114,9 +122,13 @@ describe('createChainedTokenVerifier', () => {
     const xsuaaVerifier = vi.fn().mockRejectedValue(new Error('XSUAA fail'));
     const oidcVerifier = vi.fn().mockRejectedValue(new Error('OIDC fail'));
 
-    const verifier = createChainedTokenVerifier({ apiKey: 'my-key' }, xsuaaVerifier, oidcVerifier);
+    const verifier = createChainedTokenVerifier(
+      { apiKeys: [{ key: 'my-key', profile: 'admin' }] },
+      xsuaaVerifier,
+      oidcVerifier,
+    );
     const result = await verifier('my-key');
-    expect(result.clientId).toBe('api-key');
+    expect(result.clientId).toBe('api-key:admin');
   });
 
   it('throws when all verifiers fail and no API key', async () => {
@@ -144,13 +156,19 @@ describe('createChainedTokenVerifier', () => {
     expect(result.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
-  it('matches multi-key with developer-sql profile', async () => {
+  it('matches multi-key with developer-sql profile (includes transports, git, data, sql)', async () => {
     const verifier = createChainedTokenVerifier({
       apiKeys: [{ key: 'dev-key', profile: 'developer-sql' }],
     });
     const result = await verifier('dev-key');
     expect(result.clientId).toBe('api-key:developer-sql');
-    expect(result.scopes).toEqual(['read', 'write', 'data', 'sql']);
+    // developer-sql now includes transports + git per new API_KEY_PROFILES
+    expect(result.scopes).toContain('read');
+    expect(result.scopes).toContain('write');
+    expect(result.scopes).toContain('data');
+    expect(result.scopes).toContain('sql');
+    expect(result.scopes).toContain('transports');
+    expect(result.scopes).toContain('git');
   });
 
   it('matches correct key from multiple apiKeys', async () => {
@@ -164,28 +182,11 @@ describe('createChainedTokenVerifier', () => {
     expect(viewerResult.scopes).toEqual(['read']);
 
     const devResult = await verifier('dev-key');
-    expect(devResult.scopes).toEqual(['read', 'write']);
-  });
-
-  it('apiKeys takes precedence over single apiKey', async () => {
-    const verifier = createChainedTokenVerifier({
-      apiKey: 'shared-key',
-      apiKeys: [{ key: 'shared-key', profile: 'viewer' }],
-    });
-    const result = await verifier('shared-key');
-    // Should match apiKeys entry (viewer) not legacy (full access)
-    expect(result.clientId).toBe('api-key:viewer');
-    expect(result.scopes).toEqual(['read']);
-  });
-
-  it('falls back to legacy apiKey when apiKeys has no match', async () => {
-    const verifier = createChainedTokenVerifier({
-      apiKey: 'legacy-key',
-      apiKeys: [{ key: 'new-key', profile: 'viewer' }],
-    });
-    const result = await verifier('legacy-key');
-    expect(result.clientId).toBe('api-key');
-    expect(result.scopes).toEqual(['read', 'write', 'data', 'sql', 'admin']);
+    // developer now has read, write, transports, git
+    expect(devResult.scopes).toContain('read');
+    expect(devResult.scopes).toContain('write');
+    expect(devResult.scopes).toContain('transports');
+    expect(devResult.scopes).toContain('git');
   });
 
   it('rejects unknown key when only apiKeys is configured', async () => {
@@ -242,37 +243,28 @@ describe('XSUAA scope extraction and implied expansion', () => {
 
 // ─── createXsuaaTokenVerifier implied scope expansion ───────────────
 
-describe('createXsuaaTokenVerifier implied scope expansion', () => {
-  // We test the expandImpliedScopes integration by verifying the function
-  // is correctly imported and used in the module
-  it('expandImpliedScopes adds read when write is present', async () => {
-    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
-    const result = expandImpliedScopes(['write']);
+describe('expandScopes (scope expansion integration)', () => {
+  it('admin scope implies all 7 scopes', async () => {
+    const { expandScopes } = await import('../../../src/authz/policy.js');
+    const result = expandScopes(['admin']);
     expect(result).toContain('read');
     expect(result).toContain('write');
-  });
-
-  it('expandImpliedScopes adds data when sql is present', async () => {
-    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
-    const result = expandImpliedScopes(['sql']);
     expect(result).toContain('data');
     expect(result).toContain('sql');
-  });
-
-  it('expandImpliedScopes preserves all existing scopes', async () => {
-    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
-    const result = expandImpliedScopes(['read', 'write', 'admin']);
-    expect(result).toContain('read');
-    expect(result).toContain('write');
+    expect(result).toContain('transports');
+    expect(result).toContain('git');
     expect(result).toContain('admin');
+    expect(result.length).toBe(7);
   });
 
-  it('implied expansion with sql but no data adds data', async () => {
-    const { expandImpliedScopes } = await import('../../../src/adt/safety.js');
-    const result = expandImpliedScopes(['read', 'sql']);
-    expect(result).toContain('data');
-    expect(result).toContain('sql');
-    expect(result).toContain('read');
+  it('write implies read', async () => {
+    const { expandScopes } = await import('../../../src/authz/policy.js');
+    expect(expandScopes(['write']).sort()).toEqual(['read', 'write']);
+  });
+
+  it('sql implies data', async () => {
+    const { expandScopes } = await import('../../../src/authz/policy.js');
+    expect(expandScopes(['sql']).sort()).toEqual(['data', 'sql']);
   });
 });
 

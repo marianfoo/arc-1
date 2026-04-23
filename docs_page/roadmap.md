@@ -88,7 +88,7 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
 | DOC-04 | RAP & Common ABAP Workflow Skill Pack Refresh | 2026-04-18 | Docs |
-| FEAT-22 | gCTS/abapGit Integration (`SAPGit` tool + `--enable-git` safety gate) | 2026-04-18 | Features |
+| FEAT-22 | gCTS/abapGit Integration (`SAPGit` tool + `--allow-git-writes` safety gate) | 2026-04-18 | Features |
 | SEC-09 | Auth Safety & Configurability (cookie→PP leak fix, applyAuthHeader guard, fail-fast validation, auth summary log, SAML disable opt-in, HTML login detection) | 2026-04-17 | Security |
 | FEAT-20 | Source Version / Revision History | 2026-04-17 | Features |
 | FEAT-49 | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
@@ -709,7 +709,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 **What was delivered:**
 - New `SAPGit` intent tool with backend auto-selection (prefers gCTS, falls back to abapGit).
 - New backend clients: `src/adt/gcts.ts` (JSON `/sap/bc/cts_abapvcs/*`) and `src/adt/abapgit.ts` (XML/HATEOAS `/sap/bc/adt/abapgit/*`).
-- New safety gate `--enable-git` / `SAP_ENABLE_GIT` (default `false`) for all git write operations.
+- New safety gate `--allow-git-writes` / `SAP_ALLOW_GIT_WRITES` (default `false`) for all git write operations.
 - Feature probing extended with gCTS detection; tool registration is feature-gated.
 - End-to-end coverage added (unit + integration + e2e for SAPGit read paths and safety behavior).
 

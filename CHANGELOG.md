@@ -1,5 +1,43 @@
 # Changelog
 
+## [Unreleased] — v0.7 — Authorization Refactor (**breaking change**)
+
+Complete rewrite of the authorization model. Introduces a single `ACTION_POLICY` matrix as the source of truth for `(tool, action) → (scope, opType)`; replaces negated safety flags with positive opt-ins; adds per-user `transports` and `git` scopes; makes `admin` imply all scopes; and makes `allowWrites=false` truly block every mutation.
+
+See [`docs_page/updating.md`](https://github.com/marianfoo/arc-1/blob/main/docs_page/updating.md#v07-authorization-refactor-breaking-change) for the full migration guide.
+
+### Breaking — removed
+
+- **Env vars**: `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, `SAP_BLOCK_FREE_SQL`, `SAP_ENABLE_TRANSPORTS`, `SAP_ENABLE_GIT`, `SAP_ALLOWED_OPS`, `SAP_DISALLOWED_OPS`, `ARC1_PROFILE`, `ARC1_API_KEY` (single-key mode).
+- **CLI flags**: `--read-only`, `--block-data`, `--block-free-sql`, `--enable-transports`, `--enable-git`, `--allowed-ops`, `--disallowed-ops`, `--profile`, `--api-key`.
+- **Server config fields**: `readOnly`, `blockData`, `blockFreeSQL`, `enableTransports`, `enableGit`, `allowedOps`, `disallowedOps`, `dryRun`, `transportReadOnly`.
+- Server-side profile system (`PROFILES`, `PROFILE_SCOPES` tables).
+
+Startup aborts with a specific migration error pointing to `docs_page/updating.md` if any of these are set.
+
+### Breaking — added
+
+- **New env vars**: `SAP_ALLOW_WRITES`, `SAP_ALLOW_DATA_PREVIEW`, `SAP_ALLOW_FREE_SQL`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOW_GIT_WRITES`, `SAP_DENY_ACTIONS`. All positive opt-ins; all defaults are restrictive.
+- **New scopes** (xs-security.json + `API_KEY_PROFILES`): `transports`, `git`. `admin` now implies all 7 scopes at extraction time.
+- **New role templates**: `MCPDeveloper` bundles `[read, write, transports, git]`; `MCPAdmin` lists all 7 scopes explicitly.
+- **New API-key profile `admin`** in addition to existing `viewer`/`viewer-data`/`viewer-sql`/`developer`/`developer-data`/`developer-sql`.
+
+### Fixed — six scope/safety classification bugs
+
+1. `SAPLint.set_formatter_settings` — was scope `read` at tool level, but the implementation called `OperationType.Update`. Now correctly classified as `write`.
+2. `SAPManage.flp_list_catalogs` / `flp_list_groups` / `flp_list_tiles` — were scope `write`, but the implementation called `OperationType.Read`. Now correctly classified as `read`.
+3. `SAPTransport.check` — was scope `write`, but is a read operation. Now correctly `read`.
+4. `SAPTransport.history` — was scope `write`, but is a read operation. Now correctly `read`.
+5. `checkTransport` did not consult `readOnly` (silent security gap). Transport mutations now require `allowWrites=true && allowTransportWrites=true`.
+6. `checkGit` did not consult `readOnly`. Git mutations now require `allowWrites=true && allowGitWrites=true`.
+
+### Added — observability
+
+- Startup `effective safety` log line with per-field source attribution (env / flag / file / default).
+- Contradiction warnings for useless combos (e.g., `allowTransportWrites=true` with `allowWrites=false`).
+- New `arc-1 config show` CLI subcommand (`--format=json|table`) that dumps the resolved effective policy without starting the server. Exits non-zero on config error.
+- CI validator (`npm run validate:policy`) asserts `ACTION_POLICY` matches `src/handlers/schemas.ts` action/type enums.
+
 ## [0.6.10](https://github.com/marianfoo/arc-1/compare/v0.6.9...v0.6.10) (2026-04-20)
 
 

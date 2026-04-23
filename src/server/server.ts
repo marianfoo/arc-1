@@ -15,21 +15,21 @@ import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
 import { resolveCookies } from '../adt/cookies.js';
 import { AdtApiError } from '../adt/errors.js';
-import { deriveUserSafety } from '../adt/safety.js';
+import { deriveUserSafety, deriveUserSafetyFromProfile } from '../adt/safety.js';
+import { getActionPolicy, hasRequiredScope } from '../authz/policy.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
-import { getHyperfocusedScope } from '../handlers/hyperfocused.js';
 import {
   getCachedDiscovery,
   getCachedFeatures,
   handleToolCall,
-  SAPMANAGE_ACTION_SCOPES,
   setCachedDiscovery,
   setCachedFeatures,
-  TOOL_SCOPES,
 } from '../handlers/intent.js';
 import { getToolDefinitions, type ToolDefinition } from '../handlers/tools.js';
+import { API_KEY_PROFILES } from './config.js';
+import { isActionDenied } from './deny-actions.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
@@ -37,19 +37,33 @@ import type { ServerConfig } from './types.js';
 /** ARC-1 version */
 export const VERSION = '0.6.10'; // x-release-please-version
 
-function pruneSapManageActionsForScope(tool: ToolDefinition, scopes: string[]): ToolDefinition {
-  if (tool.name !== 'SAPManage') return tool;
-
+/**
+ * Prune a tool's action OR type enum (or both) based on the user's scopes and
+ * the server's denyActions list. Uses ACTION_POLICY as the single source of truth.
+ *
+ * - For action-bearing tools (SAPWrite, SAPManage, SAPLint, SAPTransport, SAPGit, ...):
+ *   filter the `action` enum to entries the user can actually invoke.
+ * - For SAPRead (which uses `type` not `action`): filter the `type` enum. The key one is
+ *   TABLE_CONTENTS, which requires the `data` scope — a read-scoped user sees SAPRead
+ *   without TABLE_CONTENTS in the type enum.
+ */
+function pruneToolByPolicy(tool: ToolDefinition, scopes: string[], denyActions: string[]): ToolDefinition {
   const schema = tool.inputSchema as Record<string, unknown>;
   const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
-  const actionDef = (properties.action as Record<string, unknown> | undefined) ?? {};
-  const actionEnum = Array.isArray(actionDef.enum) ? actionDef.enum.map(String) : [];
 
-  const filteredActionEnum = actionEnum.filter((action) => {
-    const requiredScope = SAPMANAGE_ACTION_SCOPES[action] ?? 'write';
-    if (scopes.includes(requiredScope)) return true;
-    if (requiredScope === 'read' && scopes.includes('write')) return true;
-    return false;
+  // Determine which enum this tool uses: SAPRead uses `type`; others use `action`.
+  const enumField = tool.name === 'SAPRead' ? 'type' : 'action';
+  const enumDef = (properties[enumField] as Record<string, unknown> | undefined) ?? {};
+  const enumValues = Array.isArray(enumDef.enum) ? enumDef.enum.map(String) : null;
+
+  if (!enumValues) return tool; // no pruning needed
+
+  const filtered = enumValues.filter((value) => {
+    const policy = getActionPolicy(tool.name, value);
+    if (!policy) return true; // unknown action/type — let it through and fail at runtime
+    if (!hasRequiredScope(scopes, policy.scope)) return false;
+    if (isActionDenied(tool.name, value, denyActions)) return false;
+    return true;
   });
 
   return {
@@ -58,66 +72,62 @@ function pruneSapManageActionsForScope(tool: ToolDefinition, scopes: string[]): 
       ...schema,
       properties: {
         ...properties,
-        action: {
-          ...actionDef,
-          enum: filteredActionEnum,
+        [enumField]: {
+          ...enumDef,
+          enum: filtered,
         },
       },
     },
   };
 }
 
-function pruneHyperfocusedActionsForScope(
-  tool: ToolDefinition,
-  hasScope: (requiredScope: string) => boolean,
-): ToolDefinition {
-  if (tool.name !== 'SAP') return tool;
-
+function hasNonEmptyActionOrTypeEnum(tool: ToolDefinition): boolean {
   const schema = tool.inputSchema as Record<string, unknown>;
   const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
-  const actionDef = (properties.action as Record<string, unknown> | undefined) ?? {};
-  const actionEnum = Array.isArray(actionDef.enum) ? actionDef.enum.map(String) : [];
-
-  const filteredActionEnum = actionEnum.filter((action) => hasScope(getHyperfocusedScope(action)));
-
-  return {
-    ...tool,
-    inputSchema: {
-      ...schema,
-      properties: {
-        ...properties,
-        action: {
-          ...actionDef,
-          enum: filteredActionEnum,
-        },
-      },
-    },
-  };
+  const enumField = tool.name === 'SAPRead' ? 'type' : 'action';
+  const enumDef = (properties[enumField] as Record<string, unknown> | undefined) ?? {};
+  if (!Array.isArray(enumDef.enum)) return true;
+  return enumDef.enum.length > 0;
 }
 
-function hasNonEmptyActionEnum(tool: ToolDefinition): boolean {
-  const schema = tool.inputSchema as Record<string, unknown>;
-  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
-  const actionDef = (properties.action as Record<string, unknown> | undefined) ?? {};
-  if (!Array.isArray(actionDef.enum)) return true;
-  return actionDef.enum.length > 0;
-}
-
-export function filterToolsByAuthScope(tools: ToolDefinition[], scopes: string[]): ToolDefinition[] {
-  const hasScope = (requiredScope: string): boolean => {
-    if (scopes.includes(requiredScope)) return true;
-    if (requiredScope === 'read' && scopes.includes('write')) return true;
-    if (requiredScope === 'data' && scopes.includes('sql')) return true;
-    return false;
-  };
-
+/**
+ * Filter tools by user scope + server deny list.
+ *
+ * Tools are included when the user has the tool-level scope, OR when any action/type
+ * in the tool has a scope the user satisfies (in which case the enum is pruned to
+ * just those action/types). After pruning, tools with empty action/type enums are
+ * removed entirely.
+ */
+export function filterToolsByAuthScope(
+  tools: ToolDefinition[],
+  scopes: string[],
+  denyActions: string[] = [],
+): ToolDefinition[] {
   return tools
     .filter((tool) => {
-      const requiredScope = TOOL_SCOPES[tool.name];
-      return !requiredScope || hasScope(requiredScope);
+      // Tool-level visibility: if the whole tool is tool-level-denied, hide it.
+      if (isActionDenied(tool.name, undefined, denyActions)) return false;
+      // Must have scope for at least the tool-level default — otherwise no chance any action succeeds.
+      const toolPolicy = getActionPolicy(tool.name);
+      if (toolPolicy && !hasRequiredScope(scopes, toolPolicy.scope)) {
+        // Still allow if any specific action has a scope the user HAS (e.g., SAPManage default='write'
+        // but flp_list_* have scope='read' — a read user should see SAPManage with pruned actions).
+        const schema = tool.inputSchema as Record<string, unknown>;
+        const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+        const enumField = tool.name === 'SAPRead' ? 'type' : 'action';
+        const enumDef = (properties[enumField] as Record<string, unknown> | undefined) ?? {};
+        const enumValues = Array.isArray(enumDef.enum) ? enumDef.enum.map(String) : null;
+        if (!enumValues) return false;
+        const anyAllowed = enumValues.some((v) => {
+          const p = getActionPolicy(tool.name, v);
+          return p && hasRequiredScope(scopes, p.scope) && !isActionDenied(tool.name, v, denyActions);
+        });
+        if (!anyAllowed) return false;
+      }
+      return true;
     })
-    .map((tool) => pruneSapManageActionsForScope(pruneHyperfocusedActionsForScope(tool, hasScope), scopes))
-    .filter(hasNonEmptyActionEnum);
+    .map((tool) => pruneToolByPolicy(tool, scopes, denyActions))
+    .filter(hasNonEmptyActionOrTypeEnum);
 }
 
 export function logAuthSummary(config: ServerConfig): void {
@@ -566,10 +576,20 @@ export function createServer(
     // Inject startup discovery MIME map (shared for default and per-user clients).
     client.http.setDiscoveryMap(getCachedDiscovery());
 
-    // Per-request safety: merge server ceiling with JWT scopes.
-    // Scopes can only restrict further, never expand beyond server config.
+    // Per-request safety: merge server ceiling with per-user policy.
+    //   - API-key path: clientId starts with "api-key:<profile>" — intersect server with profile's partial SafetyConfig.
+    //   - XSUAA/OIDC path: derive from scopes only (server ceiling, scopes can only tighten).
+    // API-key intersection is stricter — profile can narrow allowedPackages / feature flags
+    // that scopes alone cannot (scopes don't encode allowedPackages, etc.).
     let effectiveClient = client;
-    if (extra.authInfo?.scopes) {
+    if (extra.authInfo?.clientId?.startsWith('api-key:')) {
+      const profileName = extra.authInfo.clientId.slice('api-key:'.length);
+      const profile = API_KEY_PROFILES[profileName];
+      if (profile) {
+        const effectiveSafety = deriveUserSafetyFromProfile(client.safety, profile.safety);
+        effectiveClient = client.withSafety(effectiveSafety);
+      }
+    } else if (extra.authInfo?.scopes) {
       const effectiveSafety = deriveUserSafety(client.safety, extra.authInfo.scopes);
       effectiveClient = client.withSafety(effectiveSafety);
     }
@@ -628,9 +648,19 @@ async function createCachingLayer(config: ServerConfig): Promise<CachingLayer | 
 /**
  * Create and start the MCP server.
  */
-export async function createAndStartServer(config: ServerConfig): Promise<Server> {
+export async function createAndStartServer(
+  config: ServerConfig,
+  sources?: Record<string, import('./types.js').ConfigSource>,
+): Promise<Server> {
   initLogger(config.logFormat, config.verbose);
   logAuthSummary(config);
+
+  // Effective-policy log + contradiction warnings (Task 8 observability).
+  // Sources is optional for test callers — defaults to 'default' for all fields.
+  const effectiveSources = sources ?? {};
+  const { logEffectivePolicy, detectContradictions, logContradictions } = await import('./effective-policy-log.js');
+  logEffectivePolicy(config, effectiveSources, logger);
+  logContradictions(detectContradictions(config), logger);
 
   // Add file sink if configured
   if (config.logFile) {

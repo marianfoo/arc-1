@@ -65,16 +65,14 @@ npm run dev
 | `SAP_TRANSPORT` / `--transport` | MCP transport: `stdio` (default) or `http-streamable` |
 | `ARC1_PORT` / `--port` | HTTP server port (default: `8080`). Simpler alternative to `ARC1_HTTP_ADDR` when only the port needs to change |
 | `ARC1_HTTP_ADDR` / `--http-addr` | HTTP server bind address (default: `0.0.0.0:8080`). Use when you need to change both host and port |
-| `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: true) |
-| `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: true) |
-| `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: true) |
-| `SAP_ALLOWED_OPS` / `--allowed-ops` | Allowlist operation type codes (e.g., "RSQ"). If set, only listed codes are permitted. Codes: R/S/Q/F/C/U/D/A/T/L/I/W/X — see [configuration-reference.md](docs_page/configuration-reference.md#operation-type-codes) |
-| `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blocklist operation type codes (e.g., "CDUA"). Listed codes are always blocked; takes precedence over `SAP_ALLOWED_OPS` |
-| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict to packages (default: `$TMP`; supports wildcards: "Z*") |
-| `SAP_ENABLE_TRANSPORTS` / `--enable-transports` | Enable CTS transport management (default: false) |
-| `SAP_ENABLE_GIT` / `--enable-git` | Enable gCTS/abapGit write operations in `SAPGit` (default: false; no profile sets this) |
-| `ARC1_API_KEY` / `--api-key` | API key for MCP endpoint auth (Bearer token) |
-| `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`) |
+| `SAP_ALLOW_WRITES` / `--allow-writes` | Enable object mutations (default: `false`). Required for transport/git writes too. |
+| `SAP_ALLOW_DATA_PREVIEW` / `--allow-data-preview` | Enable named table preview (default: `false`) |
+| `SAP_ALLOW_FREE_SQL` / `--allow-free-sql` | Enable freestyle SQL (default: `false`) |
+| `SAP_DENY_ACTIONS` / `--deny-actions` | Fine-grained per-action denial. Grammar: `Tool`, `Tool.action`, `Tool.glob*`. Inline CSV or file path. See [authorization.md](docs_page/authorization.md#deny-actions-advanced). |
+| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: "Z*"). Reads never package-gated. |
+| `SAP_ALLOW_TRANSPORT_WRITES` / `--allow-transport-writes` | Enable transport mutations (default: `false`). Requires `SAP_ALLOW_WRITES=true`. |
+| `SAP_ALLOW_GIT_WRITES` / `--allow-git-writes` | Enable git mutations (default: `false`). Requires `SAP_ALLOW_WRITES=true`. |
+| `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`). Valid profiles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`, `admin`. |
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
 | `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
 | `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | BTP ABAP service key JSON (direct connection) |
@@ -92,7 +90,6 @@ npm run dev
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
 | `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
-| `ARC1_PROFILE` / `--profile` | Safety profile shortcut: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql` |
 
 ## Codebase Structure
 

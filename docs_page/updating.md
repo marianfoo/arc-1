@@ -1,5 +1,80 @@
 # Updating ARC-1
 
+## v0.7 — Authorization Refactor (breaking change)
+
+ARC-1 v0.7 rewrites the authorization layer around a **single source of truth** (`ACTION_POLICY`) with **positive opt-in** safety flags and **per-user scopes** that work for BTP, OIDC, and API-key auth modes consistently. **This is breaking — old env vars will error at startup**, pointing you here.
+
+### Why the rewrite
+
+- The old model mixed negations (`readOnly`, `blockData`, `blockFreeSQL`) with opt-ins (`enableGit`, `enableTransports`). Admins repeatedly misconfigured one or the other.
+- Op-code env vars (`SAP_ALLOWED_OPS`, `SAP_DISALLOWED_OPS`) overlapped with boolean flags — admin could accidentally block reads by typo.
+- Six scope-vs-safety classification bugs caused `SAPLint.set_formatter_settings` to skip write authorization, `SAPTransport.check` to require write, and `SAPManage.flp_list_*` to require write despite being reads.
+- `readOnly=true` did NOT block transport or git mutations (silent security gap).
+- `admin` scope alone gave **most-restrictive** safety (counter-intuitive).
+
+### What changed
+
+#### Env vars — old → new mapping
+
+| Old (removed)             | New                                                            | Notes                                                    |
+| ------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| `SAP_READ_ONLY`           | `SAP_ALLOW_WRITES` (inverted)                                  | `SAP_READ_ONLY=true` → `SAP_ALLOW_WRITES=false`           |
+| `SAP_BLOCK_DATA`          | `SAP_ALLOW_DATA_PREVIEW` (inverted)                            | Same                                                     |
+| `SAP_BLOCK_FREE_SQL`      | `SAP_ALLOW_FREE_SQL` (inverted)                                | Same                                                     |
+| `SAP_ENABLE_TRANSPORTS`   | `SAP_ALLOW_TRANSPORT_WRITES`                                   | Transport **reads** now always available                  |
+| `SAP_ENABLE_GIT`          | `SAP_ALLOW_GIT_WRITES`                                         | Git **reads** now always available                        |
+| `SAP_ALLOWED_OPS`         | `SAP_DENY_ACTIONS` (tool-qualified; see [authz doc](authorization.md#deny-actions-advanced)) | Op-code model removed            |
+| `SAP_DISALLOWED_OPS`      | `SAP_DENY_ACTIONS`                                             | Same                                                     |
+| `ARC1_PROFILE`            | Individual `SAP_ALLOW_*` flags (see recipes in [authz doc](authorization.md#recipes-reaching-a-specific-state)) | Server-side profile concept removed |
+| `ARC1_API_KEY` (single)   | `ARC1_API_KEYS="key:profile"` (multi-key only)                 | Profile names: `viewer` / `developer` / `admin` / etc.    |
+
+#### CLI flag aliases — old → new
+
+Same mapping as env vars, hyphenated: `--read-only` → `--allow-writes` (inverted); `--block-data` → `--allow-data-preview` (inverted); `--profile` → removed (use explicit flags); `--api-key` → `--api-keys="key:profile"`; `--allowed-ops` / `--disallowed-ops` → `--deny-actions`.
+
+#### Scope model
+
+Added two new scopes: `transports`, `git`. `admin` now **implies all other scopes** at extraction time (was: most-restrictive).
+
+#### xs-security.json (BTP)
+
+`MCPDeveloper` role template now bundles `[read, write, transports, git]`. Re-deploy `xs-security.json` to your XSUAA service:
+
+```bash
+cf update-service arc1-xsuaa -c xs-security.json
+```
+
+Users assigned to `ARC-1 Developer` role collection automatically gain transport and git write capability. If you want "developer without CTS/Git", create your own role template referencing just `[read, write]`.
+
+### Migration steps
+
+#### Local / Docker
+
+1. Open your `.env`.
+2. For each old env var, replace per the table above. Remember: `SAP_READ_ONLY`/`SAP_BLOCK_*` flags flip polarity (`true` → `false` and vice versa).
+3. If you used `ARC1_PROFILE`, pick the matching recipe from the new [.env.example](https://github.com/marianfoo/arc-1/blob/main/.env.example).
+4. If you used single `ARC1_API_KEY`, switch to `ARC1_API_KEYS="your-key:admin"` (or choose a restricted profile).
+5. If you used `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS`, see the [deny actions doc](authorization.md#deny-actions-advanced) for the `SAP_DENY_ACTIONS` equivalent.
+6. Start the server. It will either start successfully (with a new `effective safety: ...` log line) or error with a migration hint for any legacy var you missed.
+
+#### BTP Cloud Foundry
+
+1. Update `xs-security.json` in your repo (already done in the ARC-1 v0.7 release).
+2. Redeploy the XSUAA service: `cf update-service arc1-xsuaa -c xs-security.json`.
+3. Users keep the same role-collection assignments — no BTP admin action needed unless you want to customize role templates.
+4. Redeploy the app: `mbt build && cf deploy mta_archives/arc1-mcp_*.mtar`.
+5. Test with a developer user: `SAPTransport(action=check)` should succeed with a read-scoped user now; `SAPTransport(action=create)` should succeed for users in `ARC-1 Developer`.
+
+### Debugging the new model
+
+- `arc-1 config show` prints the resolved effective safety with per-field source attribution. Run this if a flag isn't behaving as expected.
+- Startup logs include `effective safety: writes=YES data=NO ...` one-liner plus `WARN: config contradiction: ...` lines for useless combos (like `allowTransportWrites=true` with `allowWrites=false`).
+- Every denied action includes the specific layer in the error: "Insufficient scope" = Layer 2; "allowWrites=false" = Layer 1; "denied by server policy" = `SAP_DENY_ACTIONS`.
+
+See the full [Authorization & Roles](authorization.md) doc for the complete model.
+
+---
+
 ## Before you update
 
 1. **Check the changelog** — review [CHANGELOG.md](https://github.com/marianfoo/arc-1/blob/main/CHANGELOG.md) or the [Releases page](https://github.com/marianfoo/arc-1/releases) for breaking changes.

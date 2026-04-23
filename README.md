@@ -17,9 +17,9 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Safe by default** — read-only, no free SQL, no table preview, no transports out of the box. Use `--profile developer` or explicit flags to enable capabilities
 - **Operation allowlists/denylists** — control exactly which operation types (read, write, search, query, activate, transport) are permitted
 - **Package restrictions** — limit AI write operations (create, update, delete) to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`). Read operations are not restricted by package — use SAP's native authorization for read-level access control
-- **Data access control** — enable table data preview (`--block-data=false`) or free-form SQL (`--block-free-sql=false`)
+- **Data access control** — enable table data preview (`--allow-data-preview=false`) or free-form SQL (`--allow-free-sql=false`)
 - **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only. Update/delete operations auto-use the lock correction number when no explicit transport is provided
-- **Git workflow safety** — Git operations are disabled by default. Enable explicitly with `--enable-git` / `SAP_ENABLE_GIT=true`
+- **Git workflow safety** — Git operations are disabled by default. Enable explicitly with `--allow-git-writes` / `SAP_ALLOW_GIT_WRITES=true`
 - **Safety profiles** — preconfigured roles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
 - **Writes restricted to `$TMP` when enabled** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
@@ -78,7 +78,7 @@ The 12 tools are designed from real LLM interaction feedback:
 | **SAPNavigate** | Go-to-definition, find references, code completion |
 | **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
 | **SAPTransport** | CTS transport management (list/create/release/delete/reassign), transport requirement checks, and reverse lookup history (`action="history"`) |
-| **SAPGit** | Git-based ABAP workflows across gCTS and abapGit (list/clone/pull/push/commit/branch/unlink) with backend auto-selection and safety gating (`--enable-git`) |
+| **SAPGit** | Git-based ABAP workflows across gCTS and abapGit (list/clone/pull/push/commit/branch/unlink) with backend auto-selection and safety gating (`--allow-git-writes`) |
 | **SAPContext** | Compressed dependency context (`action="deps"`), reverse dependency lookup (`action="usages"`), and CDS upstream/downstream impact analysis (`action="impact"` for DDLS) |
 | **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) + ADT PrettyPrint (server-side formatting) |
 | **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps, profiler traces |

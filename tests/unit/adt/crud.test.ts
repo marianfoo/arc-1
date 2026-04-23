@@ -140,12 +140,6 @@ describe('CRUD Operations', () => {
       expect(url).toContain('accessMode=MODIFY');
     });
 
-    it('is blocked when safety disallows Lock', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'L' };
-      await expect(lockObject(http, safety, '/url')).rejects.toThrow(AdtSafetyError);
-    });
-
     it('Lock type L is not in WRITE_OPS — readOnly does not block lock', async () => {
       // Lock is gated by its own operation type 'L', not by readOnly flag.
       // readOnly blocks CDUAW (Create, Delete, Update, Activate, Workflow).
@@ -153,12 +147,6 @@ describe('CRUD Operations', () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(lockObject(http, safety, '/url')).resolves.toBeDefined();
-    });
-
-    it('is blocked when Lock ops are explicitly disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'L' };
-      await expect(lockObject(http, safety, '/url')).rejects.toThrow(AdtSafetyError);
     });
 
     it('handles namespaced objects (Issue #18)', async () => {
@@ -441,12 +429,6 @@ describe('CRUD Operations', () => {
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
-      await expect(deleteObject(http, safety, '/url', 'handle')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when Delete operations are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'D' };
       await expect(deleteObject(http, safety, '/url', 'handle')).rejects.toThrow(AdtSafetyError);
     });
   });

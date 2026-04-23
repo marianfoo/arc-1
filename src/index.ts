@@ -8,11 +8,11 @@
  */
 
 import { config } from 'dotenv';
-import { parseArgs } from './server/config.js';
+import { resolveConfig } from './server/config.js';
 import { createAndStartServer } from './server/server.js';
 
 // Load .env file (if present) before anything else
 config();
 
-const serverConfig = parseArgs(process.argv.slice(2));
-await createAndStartServer(serverConfig);
+const { config: serverConfig, sources } = resolveConfig(process.argv.slice(2));
+await createAndStartServer(serverConfig, sources);

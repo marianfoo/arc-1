@@ -254,7 +254,7 @@ SAPWrite(action="create", type="SRVB", name="ZSB_TRAVEL_O4", package="$TMP",
   - If a transport IS required but none was provided, ARC-1 returns an actionable error message listing existing transports and guiding the caller to use `SAPTransport(action="list")` or `SAPTransport(action="create")` first.
   - If the pre-flight check fails (older system, permissions), ARC-1 proceeds and lets SAP handle the error.
 
-**Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `'Z*,$TMP'` — use single quotes in shell so `$TMP` isn't expanded).
+**Note:** Not available by default (read-only mode). Enable with `--allow-writes=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `'Z*,$TMP'` — use single quotes in shell so `$TMP` isn't expanded).
 
 ---
 
@@ -279,7 +279,7 @@ SAPActivate(type="CLAS", name="ZCL_ORDER")
 SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}])
 ```
 
-**Note:** Not available by default (read-only mode). Enable with `--read-only=false` or `--profile developer`.
+**Note:** Not available by default (read-only mode). Enable with `--allow-writes=false` or `--profile developer`.
 
 ---
 
@@ -302,7 +302,7 @@ Navigate code: find definitions, references (where-used), code completion, and c
 
 **References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
 
-**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--block-free-sql=false` or `--profile viewer-sql`/`developer-sql`).
+**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--allow-free-sql=false` or `--profile viewer-sql`/`developer-sql`).
 
 **Examples:**
 ```
@@ -343,7 +343,7 @@ SAPQuery(sql="SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER 
 SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 ```
 
-**Note:** Not available by default (free SQL blocked). Enable with `--block-free-sql=false` or `--profile viewer-sql`/`developer-sql`.
+**Note:** Not available by default (free SQL blocked). Enable with `--allow-free-sql=false` or `--profile viewer-sql`/`developer-sql`.
 
 ---
 
@@ -375,8 +375,8 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 - **`delete`** — Delete a transport. Use `recursive=true` to delete tasks first.
 - **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.
 - **`release_recursive`** — Release all unreleased tasks first, then the transport itself.
-- **`check`** — Check if a transport number is required for creating an object in a specific package. Requires `type`, `name`, and `package`. Returns whether transport recording is required, whether the package is local, existing transports, and any locked transport. **Does NOT require `--enable-transports`** — this is a read-only pre-flight check.
-- **`history`** — Reverse lookup: given an object (`type` + `name`), list the transport requests that reference it. Returns the locked transport (if any), all related transports, and candidate transports for assignment. Read-only; does NOT require `--enable-transports`.
+- **`check`** — Check if a transport number is required for creating an object in a specific package. Requires `type`, `name`, and `package`. Returns whether transport recording is required, whether the package is local, existing transports, and any locked transport. **Does NOT require `--allow-transport-writes`** — this is a read-only pre-flight check.
+- **`history`** — Reverse lookup: given an object (`type` + `name`), list the transport requests that reference it. Returns the locked transport (if any), all related transports, and candidate transports for assignment. Read-only; does NOT require `--allow-transport-writes`.
 
 **Check action output:**
 ```json
@@ -411,7 +411,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 **Protocol compatibility:** ARC-1 uses startup ADT service discovery (`/sap/bc/adt/discovery`) to proactively select endpoint MIME types, with endpoint-specific CTS media types and a one-retry 406/415 fallback as defense-in-depth.
 
-**Note:** Most actions require `--enable-transports`. The `check` and `history` actions work without it (read-only).
+**Note:** Most actions require `--allow-transport-writes`. The `check` and `history` actions work without it (read-only).
 
 ---
 
@@ -448,7 +448,7 @@ Git-based ABAP repository workflows with backend auto-selection: **gCTS** is pre
 
 - Read actions require `read` scope (HTTP auth mode).
 - Write actions (`clone`, `pull`, `push`, `commit`, `stage`, `switch_branch`, `create_branch`, `unlink`) require `write` scope.
-- All write actions are blocked unless `--enable-git` / `SAP_ENABLE_GIT=true` is set.
+- All write actions are blocked unless `--allow-git-writes` / `SAP_ALLOW_GIT_WRITES=true` is set.
 - Package-bound create/clone operations must pass the configured package allowlist.
 
 **Examples:**
@@ -854,4 +854,4 @@ SAPManage(action="flp_create_tile", catalogId="ZARC1_SALES", tile={"id":"tile_sa
 SAPManage(action="flp_add_tile_to_group", groupId="ZARC1_SALES_GRP", catalogId="ZARC1_SALES", tileInstanceId="00O2TO3741QLWH4GV74AHMWQE")
 ```
 
-**Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work in `--read-only` mode and require only `read` scope in HTTP auth mode. Mutating SAPManage actions require `write` scope and writable safety config.
+**Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work in `--allow-writes` mode and require only `read` scope in HTTP auth mode. Mutating SAPManage actions require `write` scope and writable safety config.

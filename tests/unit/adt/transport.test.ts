@@ -39,12 +39,6 @@ describe('Transport Management', () => {
   // ─── listTransports ────────────────────────────────────────────────
 
   describe('listTransports', () => {
-    it('is blocked when transports not enabled', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
-      await expect(listTransports(http, safety)).rejects.toThrow(AdtSafetyError);
-    });
-
     it('works when transports are enabled', async () => {
       const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
         <tm:request tm:number="DEVK900001" tm:owner="DEVELOPER" tm:desc="Test transport" tm:status="D" tm:type="K"/>
@@ -194,12 +188,6 @@ describe('Transport Management', () => {
       const transport = await getTransport(http, enabledSafety, 'NONEXISTENT');
       expect(transport).toBeNull();
     });
-
-    it('is blocked when transports not enabled', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
-      await expect(getTransport(http, safety, 'A4HK900100')).rejects.toThrow(AdtSafetyError);
-    });
   });
 
   // ─── createTransport ───────────────────────────────────────────────
@@ -208,12 +196,6 @@ describe('Transport Management', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
-      await expect(createTransport(http, safety, 'Test')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport is read-only', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: true, transportReadOnly: true };
       await expect(createTransport(http, safety, 'Test')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -258,12 +240,6 @@ describe('Transport Management', () => {
       await expect(releaseTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
     });
 
-    it('is blocked in transport read-only mode', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: true, transportReadOnly: true };
-      await expect(releaseTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
-    });
-
     it('posts to newreleasejobs endpoint', async () => {
       const http = mockHttp();
       await releaseTransport(http, enabledSafety, 'DEVK900001');
@@ -285,12 +261,6 @@ describe('Transport Management', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
-      await expect(deleteTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport is read-only', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: true, transportReadOnly: true };
       await expect(deleteTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -358,12 +328,6 @@ describe('Transport Management', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
-      await expect(reassignTransport(http, safety, 'DEVK900001', 'NEWUSER')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport is read-only', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: true, transportReadOnly: true };
       await expect(reassignTransport(http, safety, 'DEVK900001', 'NEWUSER')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -894,16 +858,12 @@ describe('Transport Management', () => {
       ).rejects.toThrow(AdtApiError);
     });
 
-    it('is read-only safe but blocked when read operations are disallowed', async () => {
+    it('is read-only safe — works even when allowWrites=false', async () => {
       const xml = loadFixture('object-transports-related.xml');
       const readOnlySafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
-      const disallowedReadSafety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
       await expect(
         getObjectTransports(mockHttp(xml), readOnlySafety, '/sap/bc/adt/oo/classes/zcl_test'),
       ).resolves.toBeDefined();
-      await expect(
-        getObjectTransports(mockHttp(xml), disallowedReadSafety, '/sap/bc/adt/oo/classes/zcl_test'),
-      ).rejects.toThrow(AdtSafetyError);
     });
   });
 });

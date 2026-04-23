@@ -17,9 +17,10 @@ import { config } from 'dotenv';
 import { AdtClient } from './adt/client.js';
 import { resolveCookies } from './adt/cookies.js';
 import { detectFilename, lintAbapSource } from './lint/lint.js';
-import { parseArgs } from './server/config.js';
+import { parseArgs, resolveConfig } from './server/config.js';
 import { initLogger } from './server/logger.js';
 import { VERSION } from './server/server.js';
+import type { ConfigSource } from './server/types.js';
 
 // Load .env
 config();
@@ -96,6 +97,75 @@ program
   .action(() => {
     console.log(`ARC-1 v${VERSION}`);
   });
+
+// Config show command — dumps resolved effective policy + source attribution
+const configCmd = program.command('config').description('Configuration inspection');
+configCmd
+  .command('show')
+  .description('Show the resolved effective safety config with per-field source attribution')
+  .option('--format <fmt>', 'Output format: table or json', 'table')
+  .action((opts: { format: string }) => {
+    try {
+      const { config: serverConfig, sources } = resolveConfig(process.argv.slice(3));
+      const fmt = opts.format === 'json' ? 'json' : 'table';
+      if (fmt === 'json') {
+        const out = {
+          effectivePolicy: {
+            allowWrites: serverConfig.allowWrites,
+            allowDataPreview: serverConfig.allowDataPreview,
+            allowFreeSQL: serverConfig.allowFreeSQL,
+            allowTransportWrites: serverConfig.allowTransportWrites,
+            allowGitWrites: serverConfig.allowGitWrites,
+            allowedPackages: serverConfig.allowedPackages,
+            allowedTransports: serverConfig.allowedTransports,
+            denyActions: serverConfig.denyActions,
+          },
+          sources,
+        };
+        console.log(JSON.stringify(out, null, 2));
+      } else {
+        console.log('ARC-1 effective authorization policy');
+        console.log('────────────────────────────────────');
+        const fields = [
+          ['allowWrites', serverConfig.allowWrites],
+          ['allowDataPreview', serverConfig.allowDataPreview],
+          ['allowFreeSQL', serverConfig.allowFreeSQL],
+          ['allowTransportWrites', serverConfig.allowTransportWrites],
+          ['allowGitWrites', serverConfig.allowGitWrites],
+          ['allowedPackages', JSON.stringify(serverConfig.allowedPackages)],
+          ['allowedTransports', JSON.stringify(serverConfig.allowedTransports)],
+        ] as const;
+        for (const [name, value] of fields) {
+          const src = formatConfigSource(sources[name]);
+          console.log(`  ${name.padEnd(22)} = ${String(value).padEnd(30)} [${src}]`);
+        }
+        console.log('\nDeny actions:');
+        if (serverConfig.denyActions.length === 0) {
+          console.log(`  (none) [${formatConfigSource(sources.denyActions)}]`);
+        } else {
+          const src = formatConfigSource(sources.denyActions);
+          for (const pattern of serverConfig.denyActions) {
+            console.log(`  ${pattern} [${src}]`);
+          }
+        }
+      }
+      process.exit(0);
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+function formatConfigSource(s: ConfigSource | undefined): string {
+  if (s === undefined) return 'default';
+  if (s === 'default') return 'default';
+  if (typeof s === 'object') {
+    if ('env' in s) return `env ${s.env}`;
+    if ('flag' in s) return `flag ${s.flag}`;
+    if ('file' in s) return `file ${s.file}`;
+  }
+  return 'unknown';
+}
 
 function createClientFromEnv(): AdtClient {
   const serverConfig = parseArgs([]);

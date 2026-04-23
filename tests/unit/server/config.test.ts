@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROFILE_SCOPES, PROFILES, parseApiKeys, parseArgs, validateConfig } from '../../../src/server/config.js';
+import {
+  API_KEY_PROFILES,
+  parseApiKeys,
+  parseArgs,
+  resolveConfig,
+  validateConfig,
+} from '../../../src/server/config.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('parseArgs', () => {
@@ -25,9 +31,12 @@ describe('parseArgs', () => {
     expect(config.client).toBe('100');
     expect(config.language).toBe('EN');
     expect(config.transport).toBe('stdio');
-    expect(config.readOnly).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.blockData).toBe(true);
+    expect(config.allowWrites).toBe(false);
+    expect(config.allowFreeSQL).toBe(false);
+    expect(config.allowDataPreview).toBe(false);
+    expect(config.allowTransportWrites).toBe(false);
+    expect(config.allowGitWrites).toBe(false);
+    expect(config.denyActions).toEqual([]);
     expect(config.verbose).toBe(false);
   });
 
@@ -61,39 +70,39 @@ describe('parseArgs', () => {
   });
 
   it('parses boolean flags', () => {
-    const config = parseArgs(['--read-only', 'true', '--verbose', 'true']);
-    expect(config.readOnly).toBe(true);
+    const config = parseArgs(['--allow-writes', 'true', '--verbose', 'true']);
+    expect(config.allowWrites).toBe(true);
     expect(config.verbose).toBe(true);
   });
 
   it('parses boolean env vars', () => {
-    process.env.SAP_READ_ONLY = 'true';
-    process.env.SAP_BLOCK_FREE_SQL = '1';
+    process.env.SAP_ALLOW_WRITES = 'true';
+    process.env.SAP_ALLOW_FREE_SQL = '1';
     const config = parseArgs([]);
-    expect(config.readOnly).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
+    expect(config.allowWrites).toBe(true);
+    expect(config.allowFreeSQL).toBe(true);
   });
 
-  it('parses --enable-git flag', () => {
-    const config = parseArgs(['--enable-git', 'true']);
-    expect(config.enableGit).toBe(true);
+  it('parses --allow-git-writes flag', () => {
+    const config = parseArgs(['--allow-git-writes', 'true']);
+    expect(config.allowGitWrites).toBe(true);
   });
 
-  it('parses SAP_ENABLE_GIT env var', () => {
-    process.env.SAP_ENABLE_GIT = '1';
+  it('parses SAP_ALLOW_GIT_WRITES env var', () => {
+    process.env.SAP_ALLOW_GIT_WRITES = '1';
     const config = parseArgs([]);
-    expect(config.enableGit).toBe(true);
+    expect(config.allowGitWrites).toBe(true);
   });
 
-  it('defaults enableGit to false without explicit configuration', () => {
+  it('defaults allowGitWrites to false without explicit configuration', () => {
     const config = parseArgs([]);
-    expect(config.enableGit).toBe(false);
+    expect(config.allowGitWrites).toBe(false);
   });
 
-  it('--enable-git takes precedence over SAP_ENABLE_GIT env', () => {
-    process.env.SAP_ENABLE_GIT = 'false';
-    const config = parseArgs(['--enable-git', 'true']);
-    expect(config.enableGit).toBe(true);
+  it('--allow-git-writes takes precedence over SAP_ALLOW_GIT_WRITES env', () => {
+    process.env.SAP_ALLOW_GIT_WRITES = 'false';
+    const config = parseArgs(['--allow-git-writes', 'true']);
+    expect(config.allowGitWrites).toBe(true);
   });
 
   it('parses transport type', () => {
@@ -200,87 +209,63 @@ describe('parseArgs', () => {
     expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
   });
 
-  describe('op-code validation', () => {
-    // Extracts only the reported unknown-codes portion so assertions don't
-    // accidentally match the suffix "known codes: R/S/Q/F/C/U/D/A/T/L/I/W/X".
-    const extractUnknown = (warning: string): string | undefined =>
-      warning.match(/unknown operation codes: ([^ ]+)/)?.[1];
-
-    it('warns when SAP_ALLOWED_OPS contains unknown codes (and only unknown ones)', () => {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      try {
-        // R (Read) and X (Transport) are valid; only Y and Z are unknown.
-        process.env.SAP_ALLOWED_OPS = 'RXYZ';
-        parseArgs([]);
-        const warnings = stderrSpy.mock.calls
-          .map((c) => String(c[0]))
-          .filter((s) => s.includes('SAP_ALLOWED_OPS') && s.includes('unknown operation codes'));
-        expect(warnings).toHaveLength(1);
-        const unknown = extractUnknown(warnings[0])?.split(',').sort();
-        expect(unknown).toEqual(['Y', 'Z']);
-      } finally {
-        stderrSpy.mockRestore();
-      }
+  describe('legacy config migration errors', () => {
+    it('throws migration error for SAP_READ_ONLY', () => {
+      process.env.SAP_READ_ONLY = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_READ_ONLY.*Replaced by SAP_ALLOW_WRITES/);
     });
 
-    it('warns when SAP_DISALLOWED_OPS contains unknown codes (and only unknown ones)', () => {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      try {
-        // C (Create) is valid; only Y is unknown.
-        process.env.SAP_DISALLOWED_OPS = 'CY';
-        parseArgs([]);
-        const warnings = stderrSpy.mock.calls
-          .map((c) => String(c[0]))
-          .filter((s) => s.includes('SAP_DISALLOWED_OPS') && s.includes('unknown operation codes'));
-        expect(warnings).toHaveLength(1);
-        expect(extractUnknown(warnings[0])).toBe('Y');
-      } finally {
-        stderrSpy.mockRestore();
-      }
+    it('throws migration error for SAP_BLOCK_DATA', () => {
+      process.env.SAP_BLOCK_DATA = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_BLOCK_DATA.*Replaced by SAP_ALLOW_DATA_PREVIEW/);
     });
 
-    it('does not warn for valid op codes', () => {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      try {
-        process.env.SAP_ALLOWED_OPS = 'RSQCU';
-        process.env.SAP_DISALLOWED_OPS = 'D';
-        parseArgs([]);
-        const warnings = stderrSpy.mock.calls
-          .map((c) => String(c[0]))
-          .filter((s) => s.includes('unknown operation codes'));
-        expect(warnings).toEqual([]);
-      } finally {
-        stderrSpy.mockRestore();
-      }
+    it('throws migration error for SAP_BLOCK_FREE_SQL', () => {
+      process.env.SAP_BLOCK_FREE_SQL = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_BLOCK_FREE_SQL.*Replaced by SAP_ALLOW_FREE_SQL/);
     });
 
-    it('does not warn when allowedOps and disallowedOps are empty', () => {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      try {
-        parseArgs([]);
-        const warnings = stderrSpy.mock.calls
-          .map((c) => String(c[0]))
-          .filter((s) => s.includes('unknown operation codes'));
-        expect(warnings).toEqual([]);
-      } finally {
-        stderrSpy.mockRestore();
-      }
+    it('throws migration error for SAP_ENABLE_TRANSPORTS', () => {
+      process.env.SAP_ENABLE_TRANSPORTS = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_ENABLE_TRANSPORTS.*Replaced by SAP_ALLOW_TRANSPORT_WRITES/);
     });
 
-    it('deduplicates repeated unknown codes (does not spam for RYYY)', () => {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      try {
-        process.env.SAP_ALLOWED_OPS = 'RYYY';
-        parseArgs([]);
-        const warnings = stderrSpy.mock.calls
-          .map((c) => String(c[0]))
-          .filter((s) => s.includes('unknown operation codes'));
-        expect(warnings).toHaveLength(1);
-        // Should mention Y once in the unknown-codes list, not three times
-        expect(extractUnknown(warnings[0])).toBe('Y');
-      } finally {
-        stderrSpy.mockRestore();
-      }
+    it('throws migration error for SAP_ENABLE_GIT', () => {
+      process.env.SAP_ENABLE_GIT = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_ENABLE_GIT.*Replaced by SAP_ALLOW_GIT_WRITES/);
+    });
+
+    it('throws migration error for SAP_ALLOWED_OPS', () => {
+      process.env.SAP_ALLOWED_OPS = 'RSQ';
+      expect(() => parseArgs([])).toThrow(/SAP_ALLOWED_OPS.*Op-code allowlist was removed/);
+    });
+
+    it('throws migration error for SAP_DISALLOWED_OPS', () => {
+      process.env.SAP_DISALLOWED_OPS = 'D';
+      expect(() => parseArgs([])).toThrow(/SAP_DISALLOWED_OPS.*Op-code blocklist was removed/);
+    });
+
+    it('throws migration error for ARC1_PROFILE', () => {
+      process.env.ARC1_PROFILE = 'developer';
+      expect(() => parseArgs([])).toThrow(/ARC1_PROFILE.*Server-side profile presets were removed/);
+    });
+
+    it('throws migration error for ARC1_API_KEY', () => {
+      process.env.ARC1_API_KEY = 'abc';
+      expect(() => parseArgs([])).toThrow(/ARC1_API_KEY.*Single API-key mode was removed/);
+    });
+
+    it('throws migration error for --read-only flag', () => {
+      expect(() => parseArgs(['--read-only', 'true'])).toThrow(/--read-only.*SAP_ALLOW_WRITES/);
+    });
+
+    it('throws migration error for --profile flag', () => {
+      expect(() => parseArgs(['--profile', 'developer'])).toThrow(/--profile.*profile presets were removed/);
+    });
+
+    it('migration error message points to updating.md', () => {
+      process.env.SAP_READ_ONLY = 'true';
+      expect(() => parseArgs([])).toThrow(/docs_page\/updating\.md/);
     });
   });
 
@@ -396,22 +381,22 @@ describe('parseArgs', () => {
     expect(config.systemType).toBe('btp');
   });
 
-  // --- blockData ---
+  // --- allowDataPreview (replaces blockData) ---
 
-  it('parses --block-data flag', () => {
-    const config = parseArgs(['--block-data', 'true']);
-    expect(config.blockData).toBe(true);
+  it('parses --allow-data-preview flag', () => {
+    const config = parseArgs(['--allow-data-preview', 'true']);
+    expect(config.allowDataPreview).toBe(true);
   });
 
-  it('parses SAP_BLOCK_DATA env var', () => {
-    process.env.SAP_BLOCK_DATA = '1';
+  it('parses SAP_ALLOW_DATA_PREVIEW env var', () => {
+    process.env.SAP_ALLOW_DATA_PREVIEW = '1';
     const config = parseArgs([]);
-    expect(config.blockData).toBe(true);
+    expect(config.allowDataPreview).toBe(true);
   });
 
-  it('defaults blockData to true without profile', () => {
+  it('defaults allowDataPreview to false', () => {
     const config = parseArgs([]);
-    expect(config.blockData).toBe(true);
+    expect(config.allowDataPreview).toBe(false);
   });
 
   // --- maxConcurrent ---
@@ -448,71 +433,11 @@ describe('parseArgs', () => {
     expect(config.maxConcurrent).toBe(3);
   });
 
-  // --- Profile ---
+  // --- API_KEY_PROFILES ---
 
-  it('--profile viewer sets readOnly, blockData, blockFreeSQL', () => {
-    const config = parseArgs(['--profile', 'viewer']);
-    expect(config.readOnly).toBe(true);
-    expect(config.blockData).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.enableTransports).toBe(false);
-  });
-
-  it('--profile developer sets write-enabled defaults', () => {
-    const config = parseArgs(['--profile', 'developer']);
-    expect(config.readOnly).toBe(false);
-    expect(config.blockData).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.enableTransports).toBe(true);
-    expect(config.allowedPackages).toEqual(['$TMP']);
-  });
-
-  it('--profile developer-data allows data but blocks SQL', () => {
-    const config = parseArgs(['--profile', 'developer-data']);
-    expect(config.readOnly).toBe(false);
-    expect(config.blockData).toBe(false);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.enableTransports).toBe(true);
-  });
-
-  it('--profile viewer-sql allows both data and SQL but stays read-only', () => {
-    const config = parseArgs(['--profile', 'viewer-sql']);
-    expect(config.readOnly).toBe(true);
-    expect(config.blockData).toBe(false);
-    expect(config.blockFreeSQL).toBe(false);
-  });
-
-  it('--profile developer-sql allows everything', () => {
-    const config = parseArgs(['--profile', 'developer-sql']);
-    expect(config.readOnly).toBe(false);
-    expect(config.blockData).toBe(false);
-    expect(config.blockFreeSQL).toBe(false);
-    expect(config.enableTransports).toBe(true);
-    expect(config.allowedPackages).toEqual(['$TMP']);
-  });
-
-  it('explicit flag overrides profile default', () => {
-    const config = parseArgs(['--profile', 'viewer', '--read-only', 'false']);
-    expect(config.readOnly).toBe(false);
-    // Other profile defaults remain
-    expect(config.blockData).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-  });
-
-  it('ARC1_PROFILE env var selects profile', () => {
-    process.env.ARC1_PROFILE = 'developer';
-    const config = parseArgs([]);
-    expect(config.readOnly).toBe(false);
-    expect(config.enableTransports).toBe(true);
-    expect(config.allowedPackages).toEqual(['$TMP']);
-  });
-
-  it('unknown profile name throws error', () => {
-    expect(() => parseArgs(['--profile', 'nonexistent'])).toThrow(/Unknown profile 'nonexistent'/);
-  });
-
-  it('PROFILES constant contains all expected profiles', () => {
-    expect(Object.keys(PROFILES).sort()).toEqual([
+  it('API_KEY_PROFILES contains all 7 expected profiles', () => {
+    expect(Object.keys(API_KEY_PROFILES).sort()).toEqual([
+      'admin',
       'developer',
       'developer-data',
       'developer-sql',
@@ -522,11 +447,41 @@ describe('parseArgs', () => {
     ]);
   });
 
-  it('PROFILE_SCOPES has an entry for every profile', () => {
-    for (const name of Object.keys(PROFILES)) {
-      expect(PROFILE_SCOPES[name]).toBeDefined();
-      expect(PROFILE_SCOPES[name].length).toBeGreaterThan(0);
-    }
+  it('API_KEY_PROFILES.viewer has read-only scopes and restrictive safety', () => {
+    expect(API_KEY_PROFILES.viewer.scopes).toEqual(['read']);
+    expect(API_KEY_PROFILES.viewer.safety.allowWrites).toBe(false);
+    expect(API_KEY_PROFILES.viewer.safety.allowDataPreview).toBe(false);
+    expect(API_KEY_PROFILES.viewer.safety.allowFreeSQL).toBe(false);
+  });
+
+  it('API_KEY_PROFILES.developer includes transports and git scopes', () => {
+    expect(API_KEY_PROFILES.developer.scopes).toContain('read');
+    expect(API_KEY_PROFILES.developer.scopes).toContain('write');
+    expect(API_KEY_PROFILES.developer.scopes).toContain('transports');
+    expect(API_KEY_PROFILES.developer.scopes).toContain('git');
+    expect(API_KEY_PROFILES.developer.safety.allowWrites).toBe(true);
+    expect(API_KEY_PROFILES.developer.safety.allowTransportWrites).toBe(true);
+    expect(API_KEY_PROFILES.developer.safety.allowGitWrites).toBe(true);
+    expect(API_KEY_PROFILES.developer.safety.allowedPackages).toEqual(['$TMP']);
+  });
+
+  it('API_KEY_PROFILES.admin has all 7 scopes', () => {
+    expect(API_KEY_PROFILES.admin.scopes.sort()).toEqual([
+      'admin',
+      'data',
+      'git',
+      'read',
+      'sql',
+      'transports',
+      'write',
+    ]);
+  });
+
+  it('API_KEY_PROFILES.developer-sql allows SQL and data preview', () => {
+    expect(API_KEY_PROFILES['developer-sql'].scopes).toContain('sql');
+    expect(API_KEY_PROFILES['developer-sql'].scopes).toContain('data');
+    expect(API_KEY_PROFILES['developer-sql'].safety.allowFreeSQL).toBe(true);
+    expect(API_KEY_PROFILES['developer-sql'].safety.allowDataPreview).toBe(true);
   });
 
   // --- Multi-key API keys ---
@@ -559,12 +514,29 @@ describe('parseArgs', () => {
     expect(config.apiKeys).toBeUndefined();
   });
 
-  it('both apiKey and apiKeys can coexist', () => {
-    process.env.ARC1_API_KEY = 'legacy-key';
-    process.env.ARC1_API_KEYS = 'new-key:viewer';
-    const config = parseArgs([]);
-    expect(config.apiKey).toBe('legacy-key');
-    expect(config.apiKeys).toEqual([{ key: 'new-key', profile: 'viewer' }]);
+  // --- resolveConfig (per-field source attribution) ---
+
+  it('resolveConfig returns per-field sources (default when unset)', () => {
+    const { sources } = resolveConfig([]);
+    expect(sources.allowWrites).toBe('default');
+    expect(sources.allowedPackages).toBe('default');
+  });
+
+  it('resolveConfig reports env source for env-set fields', () => {
+    process.env.SAP_ALLOW_WRITES = 'true';
+    const { sources } = resolveConfig([]);
+    expect(sources.allowWrites).toEqual({ env: 'SAP_ALLOW_WRITES' });
+  });
+
+  it('resolveConfig reports flag source for CLI-set fields', () => {
+    const { sources } = resolveConfig(['--allow-writes', 'true']);
+    expect(sources.allowWrites).toEqual({ flag: '--allow-writes' });
+  });
+
+  it('resolveConfig returns both config and sources', () => {
+    const result = resolveConfig(['--allow-writes', 'true']);
+    expect(result.config.allowWrites).toBe(true);
+    expect(result.sources.allowWrites).toEqual({ flag: '--allow-writes' });
   });
 });
 

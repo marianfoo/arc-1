@@ -168,81 +168,46 @@ export interface ToolResult {
  * Scope required for each tool.
  *
  * Scope enforcement is ADDITIVE to the safety system:
- * - Safety system (readOnly, allowedOps, etc.) gates operations at the ADT client level
+ * - Safety system (allowWrites, allowedPackages, etc.) gates operations at the ADT client level
  * - Scopes gate operations at the MCP tool level (only enforced when authInfo is present)
  * - Both must pass for an operation to succeed
  *
- * A user with `write` scope but `readOnly=true` in config still can't write.
+ * A user with `write` scope but `allowWrites=false` in config still can't write.
+ *
+ * Scope lookup and implication rules are defined in `src/authz/policy.ts` (ACTION_POLICY,
+ * getActionPolicy, hasRequiredScope). This module routes through them.
  */
-export const TOOL_SCOPES: Record<string, string> = {
-  SAPRead: 'read',
-  SAPSearch: 'read',
-  SAPQuery: 'sql',
-  SAPGit: 'read',
-  SAPNavigate: 'read',
-  SAPContext: 'read',
-  SAPLint: 'read',
-  SAPDiagnose: 'read',
-  SAPWrite: 'write',
-  SAPActivate: 'write',
-  SAPManage: 'read',
-  SAPTransport: 'write',
-};
-
-export const SAPMANAGE_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
-  features: 'read',
-  probe: 'read',
-  cache_stats: 'read',
-  create_package: 'write',
-  delete_package: 'write',
-  change_package: 'write',
-  flp_list_catalogs: 'write',
-  flp_list_groups: 'write',
-  flp_list_tiles: 'write',
-  flp_create_catalog: 'write',
-  flp_create_group: 'write',
-  flp_create_tile: 'write',
-  flp_add_tile_to_group: 'write',
-  flp_delete_catalog: 'write',
-};
-
-const SAPGIT_ACTION_SCOPES: Record<string, 'read' | 'write'> = {
-  list_repos: 'read',
-  whoami: 'read',
-  config: 'read',
-  branches: 'read',
-  external_info: 'read',
-  history: 'read',
-  objects: 'read',
-  check: 'read',
-  clone: 'write',
-  pull: 'write',
-  push: 'write',
-  commit: 'write',
-  stage: 'write',
-  switch_branch: 'write',
-  create_branch: 'write',
-  unlink: 'write',
-};
-
-function getSapManageActionScope(action: string): 'read' | 'write' {
-  return SAPMANAGE_ACTION_SCOPES[action] ?? 'write';
-}
+import { getActionPolicy, hasRequiredScope as hasScopeHelper } from '../authz/policy.js';
 
 /**
- * Check if authInfo has the required scope, respecting implied scopes:
- * - `write` implies `read`
- * - `sql` implies `data`
+ * Back-compat re-export of a tool→scope map derived from ACTION_POLICY.
+ * New code should use `getActionPolicy(tool, action)` directly.
+ */
+export const TOOL_SCOPES: Record<string, string> = Object.fromEntries(
+  [
+    'SAPRead',
+    'SAPSearch',
+    'SAPQuery',
+    'SAPGit',
+    'SAPNavigate',
+    'SAPContext',
+    'SAPLint',
+    'SAPDiagnose',
+    'SAPWrite',
+    'SAPActivate',
+    'SAPManage',
+    'SAPTransport',
+  ].map((t) => [t, getActionPolicy(t)?.scope ?? 'read']),
+);
+
+/**
+ * Check if authInfo has the required scope, routing through policy.hasRequiredScope.
  */
 export function hasRequiredScope(authInfo: AuthInfo, requiredScope: string): boolean {
-  const scopes = authInfo.scopes;
-  if (scopes.includes(requiredScope)) return true;
-
-  // Implied scopes
-  if (requiredScope === 'read' && scopes.includes('write')) return true;
-  if (requiredScope === 'data' && scopes.includes('sql')) return true;
-
-  return false;
+  return hasScopeHelper(
+    authInfo.scopes,
+    requiredScope as 'read' | 'write' | 'data' | 'sql' | 'transports' | 'git' | 'admin',
+  );
 }
 
 function textResult(text: string): ToolResult {
@@ -630,10 +595,22 @@ export async function handleToolCall(
     args: sanitizeArgs(args),
   });
 
-  // Scope enforcement — only when authInfo is present (XSUAA/OIDC mode)
-  if (authInfo) {
-    const requiredScope = TOOL_SCOPES[toolName];
-    if (requiredScope && !hasRequiredScope(authInfo, requiredScope)) {
+  // Unified scope enforcement via ACTION_POLICY — routes through action/type-aware lookup.
+  // For SAPRead, the policy key is Tool.{type}; for other action-bearing tools, Tool.{action};
+  // for tools without an action/type enum (SAPSearch, SAPQuery), the tool-level default applies.
+  // Runs BEFORE Zod validation so scope errors don't leak schema details to unauthorized callers.
+  const actionOrType =
+    toolName === 'SAPRead'
+      ? typeof args.type === 'string'
+        ? args.type
+        : undefined
+      : typeof args.action === 'string'
+        ? args.action
+        : undefined;
+  const policy = getActionPolicy(toolName, actionOrType);
+
+  if (authInfo && policy) {
+    if (!hasRequiredScope(authInfo, policy.scope)) {
       logger.emitAudit({
         timestamp: new Date().toISOString(),
         level: 'warn',
@@ -642,19 +619,38 @@ export async function handleToolCall(
         user,
         clientId,
         tool: toolName,
-        requiredScope,
+        requiredScope: policy.scope,
         availableScopes: authInfo.scopes,
       });
+      const actionLabel = actionOrType
+        ? `${toolName}(${toolName === 'SAPRead' ? 'type' : 'action'}="${actionOrType}")`
+        : toolName;
       return errorResult(
-        `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
+        `Insufficient scope: '${policy.scope}' required for ${actionLabel}. Your scopes: [${authInfo.scopes.join(', ')}]`,
       );
     }
   }
 
-  // Validate tool arguments with Zod schema
+  // Server-level denyActions (SAP_DENY_ACTIONS) — blocks before any per-user scope allows it.
+  const { isActionDenied } = await import('../server/deny-actions.js');
+  if (isActionDenied(toolName, actionOrType, config.denyActions ?? [])) {
+    logger.emitAudit({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      event: 'safety_blocked',
+      requestId: reqId,
+      user,
+      clientId,
+      operation: `${toolName}${actionOrType ? `.${actionOrType}` : ''}`,
+      reason: 'Action denied by SAP_DENY_ACTIONS',
+    });
+    return errorResult(
+      `Action '${toolName}${actionOrType ? `.${actionOrType}` : ''}' is denied by server policy (SAP_DENY_ACTIONS).`,
+    );
+  }
+
+  // Validate tool arguments with Zod schema (runs AFTER scope + deny check).
   const isBtp = config.systemType === 'btp';
-  // Always use the full search schema for validation — the handler checks text search availability
-  // and returns a proper error message with the probe reason when source_code search is unavailable
   const schema = getToolSchema(toolName, isBtp);
   if (schema) {
     args = normalizeTypeArgsForValidation(toolName, args);
@@ -674,30 +670,6 @@ export async function handleToolCall(
       return errorResult(validationError);
     }
     args = parsed.data as Record<string, unknown>;
-  }
-
-  // Mixed-scope tool: SAPManage has read-only actions and write actions.
-  // Tool-level scope grants visibility; action-level scope enforces mutating actions.
-  if (authInfo && toolName === 'SAPManage') {
-    const action = String(args.action ?? '');
-    const requiredScope = getSapManageActionScope(action);
-    if (!hasRequiredScope(authInfo, requiredScope)) {
-      logger.emitAudit({
-        timestamp: new Date().toISOString(),
-        level: 'warn',
-        event: 'auth_scope_denied',
-        requestId: reqId,
-        user,
-        clientId,
-        tool: toolName,
-        requiredScope,
-        availableScopes: authInfo.scopes,
-      });
-      return errorResult(
-        `Insufficient scope: '${requiredScope}' required for SAPManage(action="${action}"). ` +
-          `Your scopes: [${authInfo.scopes.join(', ')}]`,
-      );
-    }
   }
 
   // Run within request context so HTTP-level logs get the requestId
@@ -3427,18 +3399,13 @@ async function loadAbapGitRepo(client: AdtClient, repoId: string) {
 async function handleSAPGit(
   client: AdtClient,
   args: Record<string, unknown>,
-  authInfo?: AuthInfo,
+  _authInfo?: AuthInfo,
 ): Promise<ToolResult> {
+  // Scope enforcement happens at handleToolCall level via ACTION_POLICY.
+  // This handler only dispatches action logic.
   const action = String(args.action ?? '');
-  const scope = SAPGIT_ACTION_SCOPES[action];
-  if (!scope) {
+  if (!getActionPolicy('SAPGit', action)) {
     return errorResult(`Unknown SAPGit action: ${action}`);
-  }
-
-  if (authInfo && !hasRequiredScope(authInfo, scope)) {
-    return errorResult(
-      `Insufficient scope: '${scope}' required for SAPGit(action="${action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
-    );
   }
 
   const resolved = resolveSapGitBackend(args);

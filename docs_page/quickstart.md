@@ -57,7 +57,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
         "SAP_CLIENT": "100",
-        "ARC1_PROFILE": "viewer"
+        // (safe defaults)
       }
     }
   }
@@ -74,7 +74,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 | Transports | Off |
 | Package scope | `$TMP` if you later enable writes |
 
-Want the same safe setup but with SQL + named table preview? Change only the profile line in that same `env` block to `"ARC1_PROFILE": "viewer-sql"`. That keeps writes off and enables both `SAPQuery` modes.
+Want the same safe setup but with SQL + named table preview? Change only the profile line in that same `env` block to `"SAP_ALLOW_DATA_PREVIEW": "true", "SAP_ALLOW_FREE_SQL": "true"`. That keeps writes off and enables both `SAPQuery` modes.
 
 ### Path B — full local development
 
@@ -91,7 +91,7 @@ Same structure as Path A — only the `env` block changes. Use this only on a de
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
         "SAP_CLIENT": "100",
-        "ARC1_PROFILE": "developer-sql",
+        "SAP_ALLOW_WRITES": "true", "SAP_ALLOW_DATA_PREVIEW": "true", "SAP_ALLOW_FREE_SQL": "true", "SAP_ALLOW_TRANSPORT_WRITES": "true",
         "SAP_ALLOWED_PACKAGES": "*"
       }
     }
@@ -109,7 +109,7 @@ Same structure as Path A — only the `env` block changes. Use this only on a de
 | Transports | On |
 | Package scope | `*` (all packages) |
 
-Need something in between? Start from `ARC1_PROFILE=viewer-sql` for read-only + SQL, `ARC1_PROFILE=developer` for writes in `$TMP`, or pick another recipe in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes).
+Need something in between? Start from `SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true` for read-only + SQL, `SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true` for writes in `$TMP`, or pick another recipe in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes).
 
 Restart Claude Desktop after updating the config. The SAP tools (`SAPRead`, `SAPSearch`, etc.) should appear in the tool picker.
 

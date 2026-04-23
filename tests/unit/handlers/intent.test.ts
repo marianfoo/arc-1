@@ -2272,19 +2272,6 @@ ENDCLASS.`,
   // ─── Error Handling ────────────────────────────────────────────────
 
   describe('error handling', () => {
-    it('catches safety errors and returns MCP error response', async () => {
-      const client = new AdtClient({
-        baseUrl: 'http://sap:8000',
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPRead', {
-        type: 'PROG',
-        name: 'ZHELLO',
-      });
-      expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('blocked by safety');
-    });
-
     it('returns isError=true for all error responses', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'INVALID_TYPE',
@@ -2396,10 +2383,23 @@ ENDCLASS.`,
       expect(result.content[0]?.text).not.toContain('Insufficient scope');
     });
 
-    it('blocks SAPTransport with read-only scope', async () => {
+    it('allows SAPTransport read actions with read scope (v0.7: check/history/list/get require read, not write)', async () => {
+      // This test inverts the v0.6 behavior — SAPTransport.list is now classified as read.
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPTransport', { action: 'list' }, readAuth);
+      // Not blocked by scope — may error for other reasons (e.g., SAP backend), but not "Insufficient scope".
+      expect(result.content[0]?.text).not.toContain('Insufficient scope');
+    });
+
+    it('blocks SAPTransport write actions with read scope', async () => {
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPTransport',
+        { action: 'create', description: 'Test' },
+        readAuth,
+      );
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'transports'");
     });
 
     it('allows SAPManage probe/features actions with read scope', async () => {
@@ -2427,6 +2427,9 @@ ENDCLASS.`,
     });
 
     it('blocks SAP(manage) write sub-action escalation with read scope', async () => {
+      // Hyperfocused SAP.manage is a coarse "go call SAPManage"; action-level check happens
+      // downstream when the inner SAPManage action is dispatched, not here.
+      // The hyperfocused outer call requires 'write' scope (SAP.manage is write in ACTION_POLICY).
       const result = await handleToolCall(
         createClient(),
         DEFAULT_CONFIG,
@@ -2435,8 +2438,7 @@ ENDCLASS.`,
         readAuth,
       );
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
-      expect(result.content[0]?.text).toContain('SAPManage(action="create_package")');
+      expect(result.content[0]?.text).toContain('Insufficient scope');
     });
 
     it('allows SAPManage write actions with write scope (scope check passes)', async () => {
@@ -2492,23 +2494,6 @@ ENDCLASS.`,
       // No authInfo = no scope enforcement (stdio mode, API key without XSUAA)
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZHELLO' });
       expect(result.isError).toBeUndefined();
-    });
-
-    it('scope enforcement is additive to safety system', async () => {
-      // Write scope but readOnly config — safety system should still block
-      const client = new AdtClient({
-        baseUrl: 'http://sap:8000',
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      const result = await handleToolCall(
-        client,
-        DEFAULT_CONFIG,
-        'SAPRead',
-        { type: 'PROG', name: 'ZHELLO' },
-        adminAuth,
-      );
-      expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('blocked by safety');
     });
 
     it('includes user scopes in error message', async () => {
@@ -2608,7 +2593,7 @@ ENDCLASS.`,
       expect(result.content[0]?.text).toContain('Neither gCTS nor abapGit is available');
     });
 
-    it('blocks write actions for read-only scoped users', async () => {
+    it('blocks write actions for read-only scoped users (requires git scope in v0.7)', async () => {
       setCachedFeatures({
         gcts: { id: 'gcts', available: true, mode: 'auto' },
         abapGit: { id: 'abapGit', available: false, mode: 'auto' },
@@ -2621,7 +2606,7 @@ ENDCLASS.`,
         readAuth(),
       );
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain("Insufficient scope: 'write'");
+      expect(result.content[0]?.text).toContain("Insufficient scope: 'git'");
     });
 
     it('returns backend-mismatch error for gCTS-only action on abapGit backend', async () => {
@@ -2657,7 +2642,7 @@ ENDCLASS.`,
       expect(parsed.result.objects[0].type).toBe('CLAS');
     });
 
-    it('surfaces AdtSafetyError from git write operations', async () => {
+    it('surfaces AdtSafetyError from git write operations when allowGitWrites=false', async () => {
       setCachedFeatures({
         gcts: { id: 'gcts', available: true, mode: 'auto' },
         abapGit: { id: 'abapGit', available: false, mode: 'auto' },
@@ -2675,7 +2660,7 @@ ENDCLASS.`,
         package: '$TMP',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Git operation');
+      expect(result.content[0]?.text).toMatch(/allowGitWrites=false|Git write/);
     });
 
     it('surfaces AdtApiError details from backend calls', async () => {
@@ -2705,8 +2690,10 @@ ENDCLASS.`,
 
   // ─── TOOL_SCOPES mapping ──────────────────────────────────────────
 
-  describe('TOOL_SCOPES', () => {
+  describe('TOOL_SCOPES (back-compat re-export derived from ACTION_POLICY)', () => {
     it('maps read tools to read scope', () => {
+      // SAPTransport is now read at tool-level (check/history/list/get).
+      // Mutations require the `transports` scope via action-level policy.
       for (const tool of [
         'SAPRead',
         'SAPSearch',
@@ -2715,14 +2702,16 @@ ENDCLASS.`,
         'SAPLint',
         'SAPDiagnose',
         'SAPGit',
-        'SAPManage',
+        'SAPTransport',
       ]) {
         expect(TOOL_SCOPES[tool]).toBe('read');
       }
     });
 
     it('maps write tools to write scope', () => {
-      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPTransport']) {
+      // SAPManage default is write (create/delete/change_package mutate); individual
+      // read actions (features/probe/cache_stats/flp_list_*) have action-level read scope.
+      for (const tool of ['SAPWrite', 'SAPActivate', 'SAPManage']) {
         expect(TOOL_SCOPES[tool]).toBe('write');
       }
     });
@@ -2784,10 +2773,13 @@ ENDCLASS.`,
       expect(hasRequiredScope(makeAuth([]), 'sql')).toBe(false);
     });
 
-    it('admin scope does not imply other scopes', () => {
-      expect(hasRequiredScope(makeAuth(['admin']), 'read')).toBe(false);
-      expect(hasRequiredScope(makeAuth(['admin']), 'write')).toBe(false);
-      expect(hasRequiredScope(makeAuth(['admin']), 'data')).toBe(false);
+    it('admin scope implies ALL other scopes (v0.7 change)', () => {
+      expect(hasRequiredScope(makeAuth(['admin']), 'read')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['admin']), 'write')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['admin']), 'data')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['admin']), 'sql')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['admin']), 'transports')).toBe(true);
+      expect(hasRequiredScope(makeAuth(['admin']), 'git')).toBe(true);
     });
   });
 

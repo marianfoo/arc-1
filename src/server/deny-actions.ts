@@ -73,8 +73,8 @@ export function parseDenyActions(raw: string): string[] {
     .filter((entry) => entry.length > 0);
 }
 
-/** Pattern grammar: Tool | Tool.action | Tool.glob* (glob allowed in action part only) */
-const PATTERN_RE = /^[A-Z][A-Za-z]+(?:\.[A-Za-z_][A-Za-z0-9_]*\*?)?$/;
+/** Pattern grammar: Tool | Tool.action | Tool.glob* (glob allowed in action part; leading `*` or `_` ok). */
+const PATTERN_RE = /^[A-Z][A-Za-z]+(?:\.(?:\*|[A-Za-z_][A-Za-z0-9_]*\*?))?$/;
 const CROSS_TOOL_WILDCARD_RE = /^\*/;
 
 /**

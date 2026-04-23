@@ -253,7 +253,7 @@ Use `-e` for short examples and `--env-file` when the list gets long:
 docker run -d --rm \
   -p 8080:8080 \
   --env-file .env \
-  -e ARC1_PROFILE=developer \
+  -e SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
@@ -263,14 +263,14 @@ For the "everything on" local-dev path:
 docker run -d --rm \
   -p 8080:8080 \
   --env-file .env \
-  -e ARC1_PROFILE=developer-sql \
+  -e SAP_ALLOW_WRITES=true SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true SAP_ALLOW_TRANSPORT_WRITES=true \
   -e SAP_ALLOWED_PACKAGES='*' \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
 Keep credentials and stable connection settings in `.env`; layer temporary overrides with `-e`.
 
-For what `ARC1_PROFILE`, `SAP_ENABLE_TRANSPORTS`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
+For what `ARC1_PROFILE`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
 
 If you pass package patterns like `*` or `$TMP` through `-e SAP_ALLOWED_PACKAGES=...`, use single quotes so the shell does not expand them: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
 
@@ -505,7 +505,7 @@ when a new `ghcr.io/marianfoo/arc-1` image tag is published.
    restricted permissions (`chmod 600`) and is in `.gitignore`.
 
 3. **Default is already read-only.** Only enable write access on
-   development systems via `ARC1_PROFILE=developer` or `SAP_READ_ONLY=false`.
+   development systems via `SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true` or `SAP_ALLOW_WRITES=false`.
 
 4. **The container runs as a non-root user** (`arc1:arc1`) inside Alpine. There
    are no open ports — the attack surface is minimal.

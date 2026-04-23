@@ -48,7 +48,7 @@ docker run -d --name arc1 -p 8080:8080 \
   -e SAP_USER=SVC_ARC1 -e SAP_PASSWORD=... \
   -e SAP_CLIENT=100 \
   -e ARC1_API_KEY=$(openssl rand -hex 32) \
-  -e ARC1_PROFILE=developer \
+  -e SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true \
   -e SAP_ALLOWED_PACKAGES='Z*,$TMP' \
   ghcr.io/marianfoo/arc-1:latest
 ```
@@ -73,11 +73,11 @@ This example only turns on OIDC validation for the MCP endpoint. It does **not**
 If this shared server should allow development work, add these flags to the same `docker run` command:
 
 ```bash
--e ARC1_PROFILE=developer \
+-e SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true \
 -e SAP_ALLOWED_PACKAGES='Z*,$TMP'
 ```
 
-JWT scopes and profiles sit **beneath** that server ceiling. A token with `write` or `sql` scopes still cannot bypass `SAP_READ_ONLY=true` or other stricter server flags. Full matrix: [configuration-reference.md](configuration-reference.md). Scope model and ceiling interaction: [authorization.md](authorization.md#how-safety-and-scopes-interact).
+JWT scopes and profiles sit **beneath** that server ceiling. A token with `write` or `sql` scopes still cannot bypass `SAP_ALLOW_WRITES=true` or other stricter server flags. Full matrix: [configuration-reference.md](configuration-reference.md). Scope model and ceiling interaction: [authorization.md](authorization.md#how-safety-and-scopes-interact).
 
 ARC-1 audit logs show the real MCP user; SAP audit logs show the shared service account. Trade-off — good compromise when you can't use PP.
 For this shared-user mode, ARC-1 runs a startup auth preflight (`/sap/bc/adt/core/discovery`) and blocks SAP tool calls on 401/403 with a clear remediation message. This avoids hammering SAP with repeated failed logins when the technical password/client is wrong.
@@ -124,7 +124,7 @@ cf set-env arc1 SAP_BTP_DESTINATION MY_SAP_DESTINATION
 cf set-env arc1 SAP_BTP_PP_DESTINATION MY_SAP_PP_DESTINATION
 cf set-env arc1 SAP_PP_ENABLED true
 cf set-env arc1 SAP_XSUAA_AUTH true
-cf set-env arc1 ARC1_PROFILE developer
+cf set-env arc1 SAP_ALLOW_WRITES true && cf set-env arc1 SAP_ALLOW_TRANSPORT_WRITES true
 cf set-env arc1 SAP_ALLOWED_PACKAGES 'Z*'
 ```
 
@@ -166,11 +166,11 @@ For any deployment visible to a network, before you open the gate:
 
 - [ ] TLS terminated by a reverse proxy or platform (never HTTP on a public port)
 - [ ] `ARC1_API_KEY` or OIDC / XSUAA configured — never run HTTP mode without Layer A auth
-- [ ] `SAP_READ_ONLY=true` unless you've deliberately enabled writes
+- [ ] `SAP_ALLOW_WRITES=true` unless you've deliberately enabled writes
 - [ ] `SAP_ALLOWED_PACKAGES` set to a specific allowlist, not `*`
-- [ ] `SAP_BLOCK_DATA=true` and `SAP_BLOCK_FREE_SQL=true` unless you need them
-- [ ] `SAP_ENABLE_TRANSPORTS=false` unless you need CTS management
-- [ ] `SAP_ENABLE_GIT=false` unless you need gCTS/abapGit writes (reads are always allowed when the backends are available)
+- [ ] `SAP_ALLOW_DATA_PREVIEW=true` and `SAP_ALLOW_FREE_SQL=true` unless you need them
+- [ ] `SAP_ALLOW_TRANSPORT_WRITES=false` unless you need CTS management
+- [ ] `SAP_ALLOW_GIT_WRITES=false` unless you need gCTS/abapGit writes (reads are always allowed when the backends are available)
 - [ ] If using cookies: `SAP_PP_ENABLED=true` and cookies both set? → refuses unless `SAP_PP_ALLOW_SHARED_COOKIES=true` escape hatch is explicit
 - [ ] Audit log sink configured (file or BTP Audit Log Service)
 - [ ] Image pinned to an exact version (`:0.7.0`), not `:latest`

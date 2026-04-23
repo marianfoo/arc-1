@@ -2,124 +2,85 @@
 
 Every flag, env var, and default in one place.
 
-Global precedence: **CLI flag > env var > `.env` file > built-in default**. Within the safety layer, **profiles apply first and explicit safety flags override the profile's values**.
+Global precedence: **CLI flag > env var > `.env` file > built-in default**.
 
 !!! tip "Looking for the big picture?"
-    This page is a flat reference. If you need the mental model (how scopes, safety, and SAP auth combine; what overrides what; and what to change for a given goal), start with the [Authorization & Roles overview](authorization.md), especially the [At a glance](authorization.md#at-a-glance) and [Recipes](authorization.md#recipes-reaching-a-specific-state) sections.
+    This page is a flat reference. For the mental model (three-layer authorization, two-gate rule, scope implications, recipes), start with the [Authorization & Roles](authorization.md) overview.
 
 For the grouped template with inline commentary, see [`.env.example`](https://github.com/marianfoo/arc-1/blob/main/.env.example).
 
 ---
 
-## Mental model
+## Mental model (short version)
 
-ARC-1 has three independent gates:
+ARC-1 has **three independent gates** that all must pass for a mutation:
 
-1. **Server safety config = ceiling.** `SAP_READ_ONLY`, `SAP_ALLOWED_PACKAGES`, `SAP_ENABLE_TRANSPORTS`, `SAP_ENABLE_GIT`, and related flags define the maximum power this process will expose.
-2. **Profiles and MCP auth scopes = gate beneath that ceiling.** Use `ARC1_PROFILE` first for local development. API-key profiles and JWT scopes can only restrict further; they never widen the server ceiling.
-3. **SAP authorization = final per-user check.** Even if ARC-1 allows an action, SAP can still reject it based on the SAP user's own permissions.
+1. **Server safety config** (Layer 1) — e.g. `SAP_ALLOW_WRITES`, `SAP_ALLOW_TRANSPORT_WRITES`. Positive opt-ins, defaults restrictive.
+2. **User scope** (Layer 2) — from JWT (XSUAA/OIDC) or API-key profile. Scopes: `read`, `write`, `data`, `sql`, `transports`, `git`, `admin`. `admin` implies all.
+3. **SAP authorization** (Layer 3) — the underlying SAP user's PFCG roles / S_DEVELOP checks. Per-user via principal propagation.
 
-These gates combine with **AND**, not OR.
+Reads of SAP object source/metadata only need Layer 2 (`read` scope) — no server opt-out. Data preview and freestyle SQL each need both layers.
 
-**Precedence example:** `ARC1_PROFILE=developer` + `SAP_READ_ONLY=true` stays read-only. The profile enables writes and transports first, then the explicit flag overrides that part of the profile again.
-
-**Transport note:** `SAP_ENABLE_TRANSPORTS` is still explicit. Today it turns on only via a developer profile or `SAP_ENABLE_TRANSPORTS=true`; it is not auto-derived from `SAP_ALLOWED_PACKAGES`.
-
-**Git note:** `SAP_ENABLE_GIT` is always explicit — **no profile turns it on**, not even `developer-sql`. Reads (`list_repos`, `whoami`, `config`, `branches`, `history`, `objects`, `external_info`, `check`) work without it; writes (`clone`, `pull`, `push`, `commit`, `stage`, `switch_branch`, `create_branch`, `unlink`) are blocked until you set `SAP_ENABLE_GIT=true` / `--enable-git`. `SAP_ALLOWED_PACKAGES` still applies to `clone` (the target package). `SAP_READ_ONLY` also blocks git writes independently.
+See [Authorization & Roles](authorization.md) for the full model.
 
 ---
 
-## Safety / scopes / profiles
+## Safety flags (Layer 1)
 
-**Every gate below defaults to the restrictive setting.** ARC-1 starts read-only: no writes, no free SQL, no named table preview, no transport actions, writes confined to `$TMP`.
+**Every flag below defaults to the restrictive setting.** ARC-1 starts read-only: no writes, no free SQL, no named table preview, no transport writes, no git writes, writes confined to `$TMP`.
 
-Profiles are the primary knob. Pick the closest preset first, then use individual flags only when you need a custom mix.
+| Flag                             | Env Var                       | Default | What it enables                                                                                                              |
+| -------------------------------- | ----------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `--allow-writes`                 | `SAP_ALLOW_WRITES`            | `false` | Object mutations (`SAPWrite`, `SAPActivate`, package CRUD, FLP mutations). Also required for transport/git writes.            |
+| `--allow-data-preview`           | `SAP_ALLOW_DATA_PREVIEW`      | `false` | Named table preview (`SAPRead(type=TABLE_CONTENTS)`).                                                                        |
+| `--allow-free-sql`               | `SAP_ALLOW_FREE_SQL`          | `false` | Freestyle SQL via `SAPQuery`.                                                                                                |
+| `--allow-transport-writes`       | `SAP_ALLOW_TRANSPORT_WRITES`  | `false` | Transport mutations (`SAPTransport.create`/`release`/`delete`/`reassign`). **Also requires** `allowWrites=true`.              |
+| `--allow-git-writes`             | `SAP_ALLOW_GIT_WRITES`        | `false` | Git mutations (`SAPGit.clone`/`pull`/`push`/`commit`). **Also requires** `allowWrites=true`.                                 |
+| `--allowed-packages`             | `SAP_ALLOWED_PACKAGES`        | `$TMP`  | Package allowlist for writes. Comma-separated. `Z*` prefix wildcard. `*` = unrestricted. **Reads are never package-gated.**   |
+| `--allowed-transports`           | `SAP_ALLOWED_TRANSPORTS`      | `[]`    | Advanced: specific CTS transport ID whitelist.                                                                               |
+| `--deny-actions`                 | `SAP_DENY_ACTIONS`            | `[]`    | Fine-grained per-action denial. Tool-qualified grammar. See [deny-actions](authorization.md#deny-actions-advanced).          |
+| `--tool-mode`                    | `ARC1_TOOL_MODE`              | `standard` | `standard` (12 tools) / `hyperfocused` (1 universal tool, ~200 tokens).                                                  |
+| `--abaplint-config`              | `SAP_ABAPLINT_CONFIG`         | —       | Path to custom `abaplint.jsonc`.                                                                                             |
+| `--lint-before-write`            | `SAP_LINT_BEFORE_WRITE`       | `true`  | Pre-write lint validation (block syntax errors before save).                                                                 |
 
-### Where you actually set a profile
+### Recipes
 
-A recipe like `ARC1_PROFILE=viewer-sql` only takes effect on the ARC-1 process that receives it. The tables below show the value you need, but you still have to put that value into the place that starts ARC-1:
+| Goal                                           | Set these flags                                                                          |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Read/search only                               | (nothing — defaults are restrictive)                                                     |
+| Read + table preview                           | `SAP_ALLOW_DATA_PREVIEW=true`                                                             |
+| Read + table preview + freestyle SQL           | `SAP_ALLOW_DATA_PREVIEW=true`, `SAP_ALLOW_FREE_SQL=true`                                  |
+| Writes to `$TMP`/`Z*`                          | `SAP_ALLOW_WRITES=true`, `SAP_ALLOWED_PACKAGES=$TMP,Z*`                                   |
+| Developer + CTS transports                     | + `SAP_ALLOW_TRANSPORT_WRITES=true`                                                      |
+| Developer + Git writes                         | + `SAP_ALLOW_GIT_WRITES=true`                                                             |
+| Full local dev (everything)                    | All `SAP_ALLOW_*=true`, `SAP_ALLOWED_PACKAGES=*`                                          |
+| Deny specific actions (fine-grained)           | e.g. `SAP_DENY_ACTIONS=SAPWrite.delete,SAPManage.flp_*`                                   |
 
-- **stdio MCP clients** (Claude Desktop, Claude Code, Cursor): add `ARC1_PROFILE` to the same `env` block that already contains `SAP_URL`, `SAP_USER`, and the other SAP settings.
-- **Direct shell / `npx`**: prefix the startup command or export it first.
-- **VS Code / Copilot HTTP mode**: set the profile on the command that starts ARC-1. The MCP JSON only points the client at `http://.../mcp`; it does not set server safety flags.
-- **Docker / Cloud Foundry**: pass `-e ARC1_PROFILE=viewer-sql` / `cf set-env arc1 ARC1_PROFILE viewer-sql` on the server or container.
+Shell-quote package patterns with `*` or `$TMP`: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`. In `.env` files, no extra quoting needed.
 
-`--profile viewer-sql` and `ARC1_PROFILE=viewer-sql` are the same setting.
+### Internal classification (for developers)
 
-### Profile expansions
+ARC-1 classifies each action internally using an `OperationType` enum (Read, Search, Query, FreeSQL, Create, Update, Delete, Activate, Workflow, Test, Lock, Intelligence, Transport). This classification drives the `isOperationAllowed` safety check. The enum is **internal** — admins configure via the `SAP_ALLOW_*` flags and `SAP_DENY_ACTIONS`, not directly.
 
-Profiles are shortcuts. Individual flags set alongside a profile **override** the profile's values.
+The single source of truth for `(tool, action) → (scope, opType)` lives at `src/authz/policy.ts`. The CI validator (`npm run validate:policy`) asserts every action declared in `src/handlers/schemas.ts` has a matching policy entry.
 
-| Profile | `readOnly` | `blockData` | `blockFreeSQL` | `enableTransports` | `allowedPackages` |
-|---|:---:|:---:|:---:|:---:|---|
-| *(none)* | `true` | `true` | `true` | `false` | `$TMP` |
-| `viewer` | `true` | `true` | `true` | `false` | (default) |
-| `viewer-data` | `true` | `false` | `true` | `false` | (default) |
-| `viewer-sql` | `true` | `false` | `false` | `false` | (default) |
-| `developer` | `false` | `true` | `true` | `true` | `$TMP` |
-| `developer-data` | `false` | `false` | `true` | `true` | `$TMP` |
-| `developer-sql` | `false` | `false` | `false` | `true` | `$TMP` |
+### Operation summary
 
-### Common recipes
-
-| Use case | Set | Result |
-|---|---|---|
-| Read/search only | nothing, or `ARC1_PROFILE=viewer` | Safe default: no writes, no SQL, no table preview, no transports |
-| Read + named table preview | `ARC1_PROFILE=viewer-data` | Enables `SAPQuery action=table_contents`, still no writes or free SQL |
-| Read + SQL + table preview | `ARC1_PROFILE=viewer-sql` | Enables both `SAPQuery` modes, still no writes or transports |
-| Writes + transports in `$TMP` | `ARC1_PROFILE=developer` | Local development preset without SQL or table preview |
-| Full local development | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES=*` | Writes + SQL + table preview + transports, unrestricted packages |
-| Power-user operation filter | Start from a profile or explicit safety flags, then add `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` | Fine-grained op gating layered on top of `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, and `SAP_BLOCK_FREE_SQL` |
-
-If you want read-only access plus both SQL and named table preview, set only `ARC1_PROFILE=viewer-sql`. That profile keeps writes and transports off; you do **not** need to turn off `SAP_READ_ONLY`.
-
-The recipes above show raw config values. When you pass them through a shell flag such as `-e`, quote shell-sensitive package patterns like `*` or `$TMP`: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`. In JSON, `.env`, and `--env-file`, use the raw value without extra shell quotes.
-
-### Safety flags
-
-| Flag | Env Var | Default | What it blocks when enabled |
-|---|---|---|---|
-| `--read-only` | `SAP_READ_ONLY` | `true` | `SAPWrite` (create/update/delete/edit_method), `SAPActivate`, FLP workflow actions — i.e. ops `C`, `U`, `D`, `A`, `W` |
-| `--block-data` | `SAP_BLOCK_DATA` | `true` | `SAPQuery action=table_contents` (op `Q`) |
-| `--block-free-sql` | `SAP_BLOCK_FREE_SQL` | `true` | `SAPQuery action=run_query` (op `F`) |
-| `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` | When `false`, **all** `SAPTransport` actions are blocked — list, get, create, release, delete, reassign. Current behavior: stays off unless a developer profile or this flag enables it |
-| `--enable-git` | `SAP_ENABLE_GIT` | `false` | When `false`, **all** `SAPGit` write actions are blocked — clone, pull, push, commit, stage, switch_branch, create_branch, unlink. Reads (list_repos, whoami, config, branches, history, objects, external_info, check) are unaffected. **Not set by any profile** — explicit opt-in only |
-| `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Writes targeting packages outside this list fail. Comma-separated, trailing `*` wildcard only (`Z*,Y*,$TMP`). `*` alone = unrestricted. **Reads are never package-filtered.** |
-| `--allowed-ops` | `SAP_ALLOWED_OPS` | — | Allowlist of operation codes (e.g. `RSQ`) — anything not listed is blocked. Power-user knob when profiles are too coarse |
-| `--disallowed-ops` | `SAP_DISALLOWED_OPS` | — | Blocklist of operation codes — listed codes are blocked, rest allowed. Takes precedence over `--allowed-ops` |
-| `--profile` | `ARC1_PROFILE` | — | Preset — expands to multiple flags, see [profile expansions](#profile-expansions) above |
-| `--tool-mode` | `ARC1_TOOL_MODE` | `standard` | `standard` (11 tools) / `hyperfocused` (1 tool, ~200 tokens) |
-| `--abaplint-config` | `SAP_ABAPLINT_CONFIG` | — | Path to custom abaplint.jsonc |
-| `--lint-before-write` | `SAP_LINT_BEFORE_WRITE` | `true` | Pre-write lint validation |
-
-### Operation-type codes
-
-Single-character codes used in `--allowed-ops` / `--disallowed-ops` (concatenate without separators, e.g. `RSQ`):
-
-```
-Reads:  R = Read       S = Search     I = Intelligence (findRef, whereUsed, completion)
-        Q = Query (table preview)     F = FreeSQL
-Writes: C = Create     U = Update     D = Delete     A = Activate     W = Workflow (FLP)
-Other:  T = Test (unit)   L = Lock   X = Transport
-```
-
-**Evaluation order (first match wins):**
-
-1. `dryRun=true` → always allow (no SAP call executed)
-2. `readOnly=true` + op in `CDUAW` → block
-3. `blockFreeSQL=true` + op = `F` → block
-4. `blockData=true` + op = `Q` → block
-5. op = `X` and `enableTransports=false` → block
-6. op ∈ `disallowedOps` blocklist → block
-7. `allowedOps` non-empty and op ∉ `allowedOps` → block
-8. otherwise → allow
-
-**Key interactions:**
-
-- `allowedOps` is an **allowlist**: empty string `""` means "no allowlist filter" (all ops pass this step). Setting `allowedOps="C"` while `readOnly=true` still blocks `C` — step 2 fires first.
-- `disallowedOps` is a **blocklist**: takes precedence over `allowedOps`. Setting `allowedOps="RSQC"` + `disallowedOps="C"` allows `RSQ` and blocks `C`.
-- Write operations `C`, `D`, `U`, `A`, `W` are always blocked when `readOnly=true`, regardless of the op filter. To enable writes with a narrow op filter, set `readOnly=false` AND list the codes in `allowedOps`.
-- Invalid codes in `allowedOps`/`disallowedOps` are ignored for enforcement, but ARC-1 logs a startup warning with the unknown characters (e.g. `allowedOps="Z"` still blocks every known op because no code matches `Z`). Use the codes from the table above.
+| Op type     | Admin-facing flag           | Example tool actions                                       |
+| ----------- | --------------------------- | ---------------------------------------------------------- |
+| Read        | (always allowed)             | `SAPRead` (except TABLE_CONTENTS), `SAPSearch`, many others |
+| Search      | (always allowed)             | `SAPSearch`                                                 |
+| Intelligence | (always allowed)             | `SAPNavigate`, `SAPLint`, `SAPContext`                     |
+| Test        | (always allowed)             | `SAPDiagnose(action=unittest)`                             |
+| Lock        | (always allowed)             | Internal CRUD lock step                                     |
+| Query       | `SAP_ALLOW_DATA_PREVIEW`     | `SAPRead(type=TABLE_CONTENTS)`                             |
+| FreeSQL     | `SAP_ALLOW_FREE_SQL`         | `SAPQuery`                                                  |
+| Create      | `SAP_ALLOW_WRITES`           | `SAPWrite(action=create)`, `SAPManage.create_package`      |
+| Update      | `SAP_ALLOW_WRITES`           | `SAPWrite(action=update)`, `SAPLint.set_formatter_settings` |
+| Delete      | `SAP_ALLOW_WRITES`           | `SAPWrite(action=delete)`, `SAPManage.delete_package`      |
+| Activate    | `SAP_ALLOW_WRITES`           | `SAPActivate`                                               |
+| Workflow    | `SAP_ALLOW_WRITES`           | FLP mutations in `SAPManage`                               |
+| Transport   | `SAP_ALLOW_WRITES` + `SAP_ALLOW_TRANSPORT_WRITES` | `SAPTransport.create`/`release`/`delete`                 |
 
 ---
 
@@ -202,10 +163,9 @@ Set nothing.
 
 | Flag | Env Var | Description |
 |---|---|---|
-| `--api-key` | `ARC1_API_KEY` | Single shared bearer token |
-| `--api-keys` | `ARC1_API_KEYS` | Multi-key with profiles: `key1:viewer,key2:developer` |
+| `--api-keys` | `ARC1_API_KEYS` | Multi-key with profiles: `key1:viewer,key2:developer`. Valid profiles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`, `admin`. Each profile maps to a scope set AND a partial SafetyConfig intersected with the server ceiling. |
 
-Full reference: [api-key-setup.md](api-key-setup.md).
+Full reference: [api-key-setup.md](api-key-setup.md). Single `--api-key` / `ARC1_API_KEY` was removed in v0.7 — see [updating.md](updating.md#v07-authorization-refactor-breaking-change).
 
 ### A3. OIDC / JWT
 

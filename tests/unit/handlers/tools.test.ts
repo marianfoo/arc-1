@@ -59,28 +59,23 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toEqual(['features', 'probe', 'cache_stats']);
   });
 
-  it('hides SAPTransport in read-only mode without enableTransports', () => {
+  it('SAPTransport is always registered when featureTransport is not off (read actions always available)', () => {
+    // Default: featureTransport='auto' — tool is registered
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false, allowTransportWrites: false });
     const names = tools.map((t) => t.name);
-    expect(names).not.toContain('SAPTransport');
-  });
-
-  it('shows SAPTransport in read-only mode with enableTransports', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false, allowTransportWrites: true });
-    const names = tools.map((t) => t.name);
     expect(names).toContain('SAPTransport');
   });
 
-  it('hides SAPTransport when readOnly=false but enableTransports=false', () => {
+  it('SAPTransport is registered even when allowTransportWrites is off (read actions still work)', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, allowTransportWrites: false });
     const names = tools.map((t) => t.name);
-    expect(names).not.toContain('SAPTransport');
+    expect(names).toContain('SAPTransport');
   });
 
-  it('shows SAPTransport when enableTransports=true', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowTransportWrites: true });
+  it('SAPTransport is hidden only when featureTransport=off', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, featureTransport: 'off' });
     const names = tools.map((t) => t.name);
-    expect(names).toContain('SAPTransport');
+    expect(names).not.toContain('SAPTransport');
   });
 
   it('hides SAPGit when neither gCTS nor abapGit is available', () => {

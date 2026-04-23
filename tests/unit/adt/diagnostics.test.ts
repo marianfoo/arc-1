@@ -124,12 +124,6 @@ describe('Runtime Diagnostics', () => {
       expect(result).toEqual([]);
     });
 
-    it('is blocked when Read is disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
-      await expect(listDumps(http, safety)).rejects.toThrow(AdtSafetyError);
-    });
-
     it('is blocked in read-only mode (dumps are read operations, should work)', async () => {
       const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
       const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
@@ -204,12 +198,6 @@ describe('Runtime Diagnostics', () => {
       ]);
       // Formatted text request
       expect(calls).toContainEqual(['/sap/bc/adt/runtime/dump/DUMP_123/formatted', { Accept: 'text/plain' }]);
-    });
-
-    it('is blocked when Read is disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
-      await expect(getDump(http, safety, 'DUMP_ID')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -663,12 +651,6 @@ describe('Runtime Diagnostics', () => {
       expect(result[0]!.title).toBe('Trace for ZTEST');
       expect(result[0]!.id).toBe('TRACE_001');
     });
-
-    it('is blocked when Read is disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
-      await expect(listTraces(http, safety)).rejects.toThrow(AdtSafetyError);
-    });
   });
 
   // ─── parseTraceList ─────────────────────────────────────────────────
@@ -799,12 +781,6 @@ describe('Runtime Diagnostics', () => {
       expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/runtime/traces/abaptraces/TRACE_001/hitlist', {
         Accept: 'application/xml',
       });
-    });
-
-    it('is blocked when Read is disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'R' };
-      await expect(getTraceHitlist(http, safety, 'TRACE_001')).rejects.toThrow(AdtSafetyError);
     });
   });
 

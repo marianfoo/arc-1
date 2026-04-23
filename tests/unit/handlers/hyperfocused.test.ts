@@ -177,15 +177,18 @@ describe('hyperfocused mode', () => {
       expect(tools.find((t) => t.name === 'SAPRead')).toBeDefined();
     });
 
-    it('returns 7 tools in standard mode with safe defaults', () => {
+    it('returns minimal tool set in standard mode with safe defaults', () => {
       const config = { ...DEFAULT_CONFIG, toolMode: 'standard' as const };
       const tools = getToolDefinitions(config);
-      // Safe defaults: no SAPWrite, SAPActivate, SAPQuery, SAPTransport
-      expect(tools.length).toBe(7);
-      expect(tools.find((t) => t.name === 'SAPTransport')).toBeUndefined();
+      // Safe defaults (allowWrites=false, allowFreeSQL=false): no SAPWrite, SAPActivate, SAPQuery.
+      // SAPTransport is always registered when featureTransport is not 'off' (reads only gated by scope).
       expect(tools.find((t) => t.name === 'SAPWrite')).toBeUndefined();
+      expect(tools.find((t) => t.name === 'SAPActivate')).toBeUndefined();
       expect(tools.find((t) => t.name === 'SAPQuery')).toBeUndefined();
+      expect(tools.find((t) => t.name === 'SAPRead')).toBeDefined();
+      expect(tools.find((t) => t.name === 'SAPSearch')).toBeDefined();
       expect(tools.find((t) => t.name === 'SAPManage')).toBeDefined();
+      expect(tools.find((t) => t.name === 'SAPTransport')).toBeDefined();
     });
   });
 });
