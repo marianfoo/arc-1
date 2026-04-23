@@ -66,7 +66,7 @@ describe('abapGit ADT bridge integration', () => {
         package: '$TMP',
         url: 'https://github.com/example/repo.git',
       }),
-    ).rejects.toThrow(/Git operation/);
+    ).rejects.toThrow(/Git write 'clone' is blocked: allowGitWrites=false/);
   });
 
   it('checkRepo succeeds or fails quickly without hanging', async (ctx) => {

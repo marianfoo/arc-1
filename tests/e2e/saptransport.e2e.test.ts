@@ -5,7 +5,7 @@
  * - SAPTransport create + get (Issues #9, #26, #70)
  * - SAPWrite update in a transportable package without explicit transport (Issue #56)
  *
- * Transport tests require the MCP server to be running with --enable-transports.
+ * Transport tests require the MCP server to be running with --allow-transport-writes.
  * Transportable-package write tests additionally require TEST_TRANSPORT_PACKAGE env var.
  *
  * Run: npm run test:e2e -- tests/e2e/saptransport.e2e.test.ts
@@ -51,10 +51,10 @@ describe('E2E SAPTransport Tests', () => {
         description: desc,
       });
 
-      // Skip gracefully when transports aren't enabled on the MCP server
-      if (result.isError && result.content?.[0]?.text?.includes('transports not enabled')) {
+      // Skip gracefully when transport writes aren't enabled on the MCP server
+      if (result.isError && result.content?.[0]?.text?.includes('allowTransportWrites=false')) {
         transportsEnabled = false;
-        return ctx.skip('Transports not enabled on MCP server (--enable-transports)');
+        return ctx.skip('Transport writes not enabled on MCP server (--allow-transport-writes)');
       }
       // Known NW 7.50 backend gap: transport create returns 400
       // "user action is not supported". All downstream tests depend on this.
@@ -74,7 +74,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('retrieves the created transport with correct details', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
       requireOrSkip(ctx, createdTransportId, 'No transport was created in previous test');
 
       const result = await callTool(client, 'SAPTransport', {
@@ -92,7 +92,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('returns not-found message for non-existent transport', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
       const result = await callTool(client, 'SAPTransport', {
         action: 'get',
         id: 'ZZZK999999',
@@ -105,7 +105,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('lists transports without errors', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
       const result = await callTool(client, 'SAPTransport', {
         action: 'list',
       });
@@ -154,9 +154,9 @@ describe('E2E SAPTransport Tests', () => {
         action: 'create',
         description: `ARC-1 E2E delete test ${Date.now()}`,
       });
-      if (createResult.isError && createResult.content?.[0]?.text?.includes('transports not enabled')) {
+      if (createResult.isError && createResult.content?.[0]?.text?.includes('allowTransportWrites=false')) {
         transportsEnabled = false;
-        return ctx.skip('Transports not enabled on MCP server');
+        return ctx.skip('Transport writes not enabled on MCP server');
       }
       const backendSkip = classifyToolErrorSkip(createResult);
       if (backendSkip !== null) {
@@ -177,7 +177,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('create with type W creates Customizing transport', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
 
       let id = '';
       try {
@@ -202,7 +202,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('reassign action changes transport owner', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
 
       let id = '';
       try {
@@ -240,7 +240,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('release_recursive releases transport', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
 
       const createResult = await callTool(client, 'SAPTransport', {
         action: 'create',
@@ -344,7 +344,7 @@ describe('E2E SAPTransport Tests', () => {
 
       if (result.isError) {
         const text = result.content?.[0]?.text ?? '';
-        if (text.includes('transports not enabled') || text.includes('Unknown tool')) {
+        if (text.includes('Unknown tool')) {
           return ctx.skip('SAPTransport tool not available on MCP server');
         }
         if (text.toLowerCase().includes('not found')) {

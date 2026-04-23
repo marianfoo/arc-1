@@ -94,7 +94,7 @@ describe.sequential('E2E SAPGit tests', () => {
     expect(payload.result.branches.length).toBeGreaterThan(0);
   }, 120_000);
 
-  it('SAPGit(action=clone) without --enable-git returns safety error', async (ctx) => {
+  it('SAPGit(action=clone) without --allow-git-writes returns safety error', async (ctx) => {
     requireOrSkip(ctx, sapGitAvailable ? true : undefined, SkipReason.BACKEND_UNSUPPORTED);
     const backend = gctsAvailable ? 'gcts' : 'abapgit';
     const args: Record<string, unknown> = {
@@ -107,11 +107,13 @@ describe.sequential('E2E SAPGit tests', () => {
     const result = await callTool(client, 'SAPGit', args);
     const text = (result.content?.[0]?.text ?? '') as string;
 
-    if (result.isError && text.includes('Git operation')) {
-      expectToolError(result, 'Git operation');
+    if (result.isError && text.includes('Git write')) {
+      expectToolError(result, 'allowGitWrites=false');
       return;
     }
-    ctx.skip('Server appears to run with --enable-git=true; write safety gate is not expected in this environment');
+    ctx.skip(
+      'Server appears to run with --allow-git-writes=true; write safety gate is not expected in this environment',
+    );
   }, 120_000);
 
   it('SAPGit(action=whoami, backend=abapgit) returns backend mismatch error', async (ctx) => {

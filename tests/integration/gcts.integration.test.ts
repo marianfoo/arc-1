@@ -63,7 +63,7 @@ describe('gCTS integration', () => {
         url: 'https://github.com/example/repo.git',
         package: '$TMP',
       }),
-    ).rejects.toThrow(/Git operation/);
+    ).rejects.toThrow(/Git write 'clone' is blocked: allowGitWrites=false/);
   });
 
   it('getTransportHistory for unknown repo returns expected backend error class', async (ctx) => {

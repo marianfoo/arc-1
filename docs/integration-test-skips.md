@@ -175,7 +175,7 @@ Several SAPRead types return a human-readable placeholder (not an MCP error) whe
 | System | Typical E2E skip count | Categories that dominate |
 |---|---|---|
 | **NW 7.50 trial** | ~50 / 122 tests | Cat 2 (release gap), Cat 3 (lock-handle 423), E2E-α (fixture sync partial), Cat 1 (/DMO missing) |
-| **S/4HANA 2023** | 3 / 122 tests | Cat 5 (no transport package / `--enable-git`) |
+| **S/4HANA 2023** | 3 / 122 tests | Cat 5 (no transport package / `--allow-git-writes`) |
 | **BTP ABAP** | ~30 / 122 tests | Cat 5 (policy), some of Cat 1 |
 
 Anything over ~5 skips on S/4HANA is a regression signal — most likely a broken fixture sync or an unintended breaking change to a SAPRead handler output.
