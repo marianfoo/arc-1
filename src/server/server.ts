@@ -122,7 +122,6 @@ export function filterToolsByAuthScope(tools: ToolDefinition[], scopes: string[]
 
 export function logAuthSummary(config: ServerConfig): void {
   const mcpMethods: string[] = [];
-  if (config.apiKey) mcpMethods.push('api-key');
   if (config.apiKeys?.length) mcpMethods.push('api-keys');
   if (config.oidcIssuer && config.oidcAudience) mcpMethods.push('oidc');
   if (config.xsuaaAuth) mcpMethods.push('xsuaa');
@@ -174,17 +173,14 @@ export function buildAdtConfig(
     bearerTokenProvider,
     maxConcurrent: config.maxConcurrent,
     safety: {
-      readOnly: config.readOnly,
-      blockFreeSQL: config.blockFreeSQL,
-      blockData: config.blockData,
-      allowedOps: config.allowedOps,
-      disallowedOps: config.disallowedOps,
+      allowWrites: config.allowWrites,
+      allowDataPreview: config.allowDataPreview,
+      allowFreeSQL: config.allowFreeSQL,
+      allowTransportWrites: config.allowTransportWrites,
+      allowGitWrites: config.allowGitWrites,
       allowedPackages: config.allowedPackages,
-      dryRun: false,
-      enableGit: config.enableGit,
-      enableTransports: config.enableTransports,
-      transportReadOnly: false,
-      allowedTransports: [],
+      allowedTransports: config.allowedTransports,
+      denyActions: config.denyActions,
     },
   };
 
@@ -663,7 +659,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     event: 'server_start',
     version: VERSION,
     transport: config.transport,
-    readOnly: config.readOnly,
+    allowWrites: config.allowWrites,
     url: config.url || '(not configured)',
     pid: process.pid,
   });
@@ -672,7 +668,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     version: VERSION,
     transport: config.transport,
     url: config.url || '(not configured)',
-    readOnly: config.readOnly,
+    allowWrites: config.allowWrites,
   });
 
   // Pre-flight: warn clearly when no SAP connection is configured so users know

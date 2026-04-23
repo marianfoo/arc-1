@@ -30,9 +30,9 @@ describe('MCP Server', () => {
   it('filters SAPManage actions to read-only set for read-scoped users', () => {
     const tools = getToolDefinitions({
       ...DEFAULT_CONFIG,
-      readOnly: false,
-      blockFreeSQL: false,
-      enableTransports: true,
+      allowWrites: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
     });
     const filtered = filterToolsByAuthScope(tools, ['read']);
     const sapManage = filtered.find((tool) => tool.name === 'SAPManage');
@@ -46,9 +46,9 @@ describe('MCP Server', () => {
   it('keeps SAPManage write actions for write-scoped users', () => {
     const tools = getToolDefinitions({
       ...DEFAULT_CONFIG,
-      readOnly: false,
-      blockFreeSQL: false,
-      enableTransports: true,
+      allowWrites: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
     });
     const filtered = filterToolsByAuthScope(tools, ['read', 'write']);
     const sapManage = filtered.find((tool) => tool.name === 'SAPManage');
@@ -64,9 +64,9 @@ describe('MCP Server', () => {
     const tools = getToolDefinitions({
       ...DEFAULT_CONFIG,
       toolMode: 'hyperfocused',
-      readOnly: false,
-      blockFreeSQL: false,
-      enableTransports: true,
+      allowWrites: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
     });
     const filtered = filterToolsByAuthScope(tools, ['read']);
     const sap = filtered.find((tool) => tool.name === 'SAP');
@@ -86,9 +86,9 @@ describe('MCP Server', () => {
     const tools = getToolDefinitions({
       ...DEFAULT_CONFIG,
       toolMode: 'hyperfocused',
-      readOnly: false,
-      blockFreeSQL: false,
-      enableTransports: true,
+      allowWrites: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
     });
     const filtered = filterToolsByAuthScope(tools, ['sql']);
     const sap = filtered.find((tool) => tool.name === 'SAP');

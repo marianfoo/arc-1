@@ -5,9 +5,7 @@
  * 1. CLI flags (--url, --user, etc.)
  * 2. Environment variables (SAP_URL, SAP_USER, etc.)
  * 3. .env file
- * 4. Defaults
- *
- * This matches the Go version's configuration precedence.
+ * 4. Defaults (all `allow*` flags false — restrictive by default)
  */
 
 /** MCP transport type */
@@ -15,6 +13,9 @@ export type TransportType = 'stdio' | 'http-streamable';
 
 /** Feature toggle: auto detects from SAP system, on/off forces */
 export type FeatureToggle = 'auto' | 'on' | 'off';
+
+/** Per-field config source (used by resolveConfig + startup log + `config show`). */
+export type ConfigSource = 'default' | { env: string } | { flag: string } | { file: string };
 
 /** Server configuration — all fields needed to start ARC-1 */
 export interface ServerConfig {
@@ -34,15 +35,16 @@ export interface ServerConfig {
   transport: TransportType;
   httpAddr: string;
 
-  // --- Safety (gates all write operations) ---
-  readOnly: boolean;
-  blockFreeSQL: boolean;
-  blockData: boolean;
-  allowedOps: string;
-  disallowedOps: string;
+  // --- Safety (positive opt-ins; defaults restrictive) ---
+  allowWrites: boolean;
+  allowDataPreview: boolean;
+  allowFreeSQL: boolean;
+  allowTransportWrites: boolean;
+  allowGitWrites: boolean;
   allowedPackages: string[];
-  enableGit: boolean;
-  enableTransports: boolean;
+  allowedTransports: string[];
+  /** Resolved deny-action patterns from SAP_DENY_ACTIONS (parsed + validated at startup). */
+  denyActions: string[];
 
   // --- Feature Detection ---
   featureAbapGit: FeatureToggle;
@@ -60,8 +62,7 @@ export interface ServerConfig {
   systemType: 'auto' | 'btp' | 'onprem';
 
   // --- Authentication (MCP client → ARC-1) ---
-  apiKey?: string;
-  /** Multiple API keys with per-key profile assignment (key:profile pairs) */
+  /** Multiple API keys with per-key profile assignment (key:profile pairs). Single ARC1_API_KEY was removed in v0.7. */
   apiKeys?: Array<{ key: string; profile: string }>;
   oidcIssuer?: string;
   oidcAudience?: string;
@@ -117,7 +118,7 @@ export interface ServerConfig {
   verbose: boolean;
 }
 
-/** Default configuration values */
+/** Default configuration values — restrictive by default. */
 export const DEFAULT_CONFIG: ServerConfig = {
   url: '',
   username: '',
@@ -127,14 +128,14 @@ export const DEFAULT_CONFIG: ServerConfig = {
   insecure: false,
   transport: 'stdio',
   httpAddr: '0.0.0.0:8080',
-  readOnly: true,
-  blockFreeSQL: true,
-  blockData: true,
-  allowedOps: '',
-  disallowedOps: '',
+  allowWrites: false,
+  allowDataPreview: false,
+  allowFreeSQL: false,
+  allowTransportWrites: false,
+  allowGitWrites: false,
   allowedPackages: ['$TMP'],
-  enableGit: false,
-  enableTransports: false,
+  allowedTransports: [],
+  denyActions: [],
   featureAbapGit: 'auto',
   featureGcts: 'auto',
   featureRap: 'auto',

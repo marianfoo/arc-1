@@ -122,7 +122,7 @@ describe('hyperfocused mode', () => {
     });
 
     it('includes all actions in non-readOnly mode', () => {
-      const config = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, enableTransports: true };
+      const config = { ...DEFAULT_CONFIG, allowWrites: true, allowFreeSQL: true, allowTransportWrites: true };
       const tool = getHyperfocusedToolDefinition(config);
       const schema = tool.inputSchema as Record<string, any>;
       const actions = schema.properties.action.enum as string[];
@@ -133,7 +133,7 @@ describe('hyperfocused mode', () => {
     });
 
     it('excludes write actions in readOnly mode but keeps manage for read sub-actions', () => {
-      const config = { ...DEFAULT_CONFIG, readOnly: true };
+      const config = { ...DEFAULT_CONFIG, allowWrites: false };
       const tool = getHyperfocusedToolDefinition(config);
       const schema = tool.inputSchema as Record<string, any>;
       const actions = schema.properties.action.enum as string[];
@@ -148,7 +148,7 @@ describe('hyperfocused mode', () => {
     });
 
     it('excludes query action when free SQL is blocked', () => {
-      const config = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: true };
+      const config = { ...DEFAULT_CONFIG, allowWrites: true, allowFreeSQL: false };
       const tool = getHyperfocusedToolDefinition(config);
       const schema = tool.inputSchema as Record<string, any>;
       const actions = schema.properties.action.enum as string[];
@@ -168,9 +168,9 @@ describe('hyperfocused mode', () => {
       const config = {
         ...DEFAULT_CONFIG,
         toolMode: 'standard' as const,
-        readOnly: false,
-        blockFreeSQL: false,
-        enableTransports: true,
+        allowWrites: true,
+        allowFreeSQL: true,
+        allowTransportWrites: true,
       };
       const tools = getToolDefinitions(config);
       expect(tools.length).toBeGreaterThanOrEqual(11);

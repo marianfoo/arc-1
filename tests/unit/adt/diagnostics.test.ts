@@ -132,7 +132,7 @@ describe('Runtime Diagnostics', () => {
 
     it('is blocked in read-only mode (dumps are read operations, should work)', async () => {
       const http = mockHttp('<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"></atom:feed>');
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       // Read operations should NOT be blocked in read-only mode
       await expect(listDumps(http, safety)).resolves.toBeDefined();
     });

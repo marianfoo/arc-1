@@ -98,15 +98,15 @@ export function getHyperfocusedToolDefinition(config: ServerConfig): ToolDefinit
   const readActions = [
     'read',
     'search',
-    ...(config.blockFreeSQL ? [] : ['query']),
+    ...(config.allowFreeSQL ? ['query'] : []),
     'navigate',
     'context',
     'lint',
     'diagnose',
     'manage',
   ];
-  const writeActions = config.readOnly ? [] : ['write', 'activate'];
-  const adminActions = config.enableTransports ? ['transport'] : [];
+  const writeActions = config.allowWrites ? ['write', 'activate'] : [];
+  const adminActions = config.allowTransportWrites ? ['transport'] : [];
   const allActions = [...readActions, ...writeActions, ...adminActions];
 
   return {

@@ -479,8 +479,8 @@ export function getToolDefinitions(
     buildSAPSearchTool(btp, textSearchAvailable),
   ];
 
-  // Write tools — only registered when not in read-only mode
-  if (!config.readOnly) {
+  // Write tools — only registered when writes are enabled
+  if (config.allowWrites) {
     let sapWriteDesc = btp ? SAPWRITE_DESC_BTP : SAPWRITE_DESC_ONPREM;
     // Append package restriction info so the LLM knows its boundaries
     if (config.allowedPackages.length > 0) {
@@ -766,7 +766,7 @@ export function getToolDefinitions(
   });
 
   // SAPQuery — only registered when free SQL is allowed
-  if (!config.blockFreeSQL) {
+  if (config.allowFreeSQL) {
     tools.push({
       name: 'SAPQuery',
       description: btp ? SAPQUERY_DESC_BTP : SAPQUERY_DESC_ONPREM,
@@ -1006,9 +1006,9 @@ export function getToolDefinitions(
   });
 
   // SAPManage — always registered; mutating actions remain safety/scope-protected.
-  const sapManageActions = config.readOnly
-    ? SAPMANAGE_ACTIONS_READ
-    : [...SAPMANAGE_ACTIONS_READ, ...SAPMANAGE_ACTIONS_WRITE];
+  const sapManageActions = config.allowWrites
+    ? [...SAPMANAGE_ACTIONS_READ, ...SAPMANAGE_ACTIONS_WRITE]
+    : SAPMANAGE_ACTIONS_READ;
   tools.push({
     name: 'SAPManage',
     description: btp ? SAPMANAGE_DESC_BTP : SAPMANAGE_DESC_ONPREM,
@@ -1113,8 +1113,10 @@ export function getToolDefinitions(
     },
   });
 
-  // Transport tools — registered when transports are explicitly enabled
-  if (config.enableTransports) {
+  // Transport tools — always registered when the feature is available.
+  // Read actions (list/get/check/history) work with read scope.
+  // Write actions (create/release/delete/...) require 'transports' scope + allowTransportWrites=true.
+  if (config.featureTransport !== 'off') {
     tools.push({
       name: 'SAPTransport',
       description: btp ? SAPTRANSPORT_DESC_BTP : SAPTRANSPORT_DESC_ONPREM,

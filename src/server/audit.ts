@@ -85,7 +85,7 @@ export interface ServerStartEvent extends AuditEventBase {
   event: 'server_start';
   version: string;
   transport: string;
-  readOnly: boolean;
+  allowWrites: boolean;
   url: string;
   pid?: number;
 }

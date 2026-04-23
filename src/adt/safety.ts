@@ -4,21 +4,27 @@
  * Gates all operations before they reach SAP. This is the first line of defense
  * against unintended modifications — it runs before any HTTP call.
  *
- * Key design principle: safety checks are declarative and composable.
- * Each check is independent: readOnly, blockFreeSQL, allowedOps, disallowedOps,
- * allowedPackages, enableTransports, etc. They combine additively — if ANY
- * check blocks the operation, it's blocked.
+ * Design (post-authz-refactor-v2):
+ *   - Safety flags are all POSITIVE opt-ins (`allow*=true` to enable a capability).
+ *     Defaults are restrictive. No mix of negations and opt-ins.
+ *   - Every mutation requires the matching server flag AND the user's scope
+ *     (two-gate rule; scope check happens in the handler layer).
+ *   - `allowWrites=false` is a TRUE no-mutation block — it stops object writes,
+ *     transport writes, git writes, and activation (no loopholes).
+ *   - Fine-grained per-action denials are expressed via `denyActions` (parsed
+ *     from `SAP_DENY_ACTIONS`), not via op-code allow/block lists.
  *
- * This matches the Go implementation exactly (pkg/adt/safety.go) to ensure
- * behavioral parity during migration.
+ * Internal only: `OperationType` is the classification used by the safety
+ * engine. It is NOT admin-facing — the env vars `SAP_ALLOWED_OPS` /
+ * `SAP_DISALLOWED_OPS` were removed in v0.7. Admins configure via the `allow*`
+ * flags and `SAP_DENY_ACTIONS`.
  */
 
 import { AdtSafetyError } from './errors.js';
 
 /**
- * Operation type codes.
- * Single-character codes used in allowedOps/disallowedOps strings.
- * Example: "RSQ" = allow Read, Search, Query only.
+ * Operation type codes (internal classification).
+ * NOT admin-facing — the code just uses these as a compact categorical label.
  */
 export const OperationType = {
   Read: 'R',
@@ -38,21 +44,19 @@ export const OperationType = {
 
 export type OperationTypeCode = (typeof OperationType)[keyof typeof OperationType];
 
-/** Write operations that are blocked in read-only mode */
-const WRITE_OPS = 'CDUAW';
+/** Mutating operation types — blocked when `allowWrites=false`. */
+const MUTATING_OPS = 'CDUAWX';
 
 export interface SafetyConfig {
-  readOnly: boolean;
-  blockFreeSQL: boolean;
-  blockData: boolean;
-  allowedOps: string;
-  disallowedOps: string;
+  allowWrites: boolean;
+  allowDataPreview: boolean;
+  allowFreeSQL: boolean;
+  allowTransportWrites: boolean;
+  allowGitWrites: boolean;
   allowedPackages: string[];
-  dryRun: boolean;
-  enableGit: boolean;
-  enableTransports: boolean;
-  transportReadOnly: boolean;
   allowedTransports: string[];
+  /** Resolved deny-action patterns from SAP_DENY_ACTIONS. Populated at config-parse time. */
+  denyActions: string[];
 }
 
 /**
@@ -62,64 +66,51 @@ export interface SafetyConfig {
  */
 export function defaultSafetyConfig(): SafetyConfig {
   return {
-    readOnly: true,
-    blockFreeSQL: true,
-    blockData: true,
-    allowedOps: '',
-    disallowedOps: '',
+    allowWrites: false,
+    allowDataPreview: false,
+    allowFreeSQL: false,
+    allowTransportWrites: false,
+    allowGitWrites: false,
     allowedPackages: ['$TMP'],
-    dryRun: false,
-    enableGit: false,
-    enableTransports: false,
-    transportReadOnly: false,
     allowedTransports: [],
+    denyActions: [],
   };
 }
 
-/** No restrictions — use with caution */
+/** No restrictions — use with caution. */
 export function unrestrictedSafetyConfig(): SafetyConfig {
   return {
-    readOnly: false,
-    blockFreeSQL: false,
-    blockData: false,
-    allowedOps: '',
-    disallowedOps: '',
+    allowWrites: true,
+    allowDataPreview: true,
+    allowFreeSQL: true,
+    allowTransportWrites: true,
+    allowGitWrites: true,
     allowedPackages: [],
-    dryRun: false,
-    enableGit: true,
-    enableTransports: false,
-    transportReadOnly: false,
     allowedTransports: [],
+    denyActions: [],
   };
 }
 
-/** Check if an operation type is allowed by the safety config */
+/** Check if an operation type is allowed by the safety config. */
 export function isOperationAllowed(config: SafetyConfig, op: OperationTypeCode): boolean {
-  // DryRun mode allows everything (but doesn't execute)
-  if (config.dryRun) return true;
+  // Mutating ops (Create/Update/Delete/Activate/Workflow/Transport) require allowWrites
+  if (MUTATING_OPS.includes(op) && !config.allowWrites) return false;
 
-  // ReadOnly blocks all write operations
-  if (config.readOnly && WRITE_OPS.includes(op)) return false;
+  // Transport mutation has an additional gate
+  if (op === OperationType.Transport && !config.allowTransportWrites) return false;
 
-  // BlockFreeSQL specifically blocks free SQL queries
-  if (config.blockFreeSQL && op === OperationType.FreeSQL) return false;
+  // Table preview
+  if (op === OperationType.Query && !config.allowDataPreview) return false;
 
-  // BlockData blocks named table preview queries
-  if (config.blockData && op === OperationType.Query) return false;
+  // Free SQL
+  if (op === OperationType.FreeSQL && !config.allowFreeSQL) return false;
 
-  // Transport operations require explicit opt-in
-  if (op === OperationType.Transport && !config.enableTransports) return false;
-
-  // Disallowed ops blocklist (takes precedence over allowed)
-  if (config.disallowedOps?.includes(op)) return false;
-
-  // Allowed ops allowlist (if set, only listed ops are allowed)
-  if (config.allowedOps && !config.allowedOps.includes(op)) return false;
-
+  // All other ops (Read/Search/Intelligence/Test/Lock) are always allowed at this layer.
+  // User-gating happens at the scope layer (ACTION_POLICY + hasRequiredScope).
   return true;
 }
 
-/** Check operation and throw AdtSafetyError if blocked */
+/** Check operation and throw AdtSafetyError if blocked. */
 export function checkOperation(config: SafetyConfig, op: OperationTypeCode, opName: string): void {
   if (!isOperationAllowed(config, op)) {
     throw new AdtSafetyError(
@@ -130,18 +121,15 @@ export function checkOperation(config: SafetyConfig, op: OperationTypeCode, opNa
 
 /** Returns a human-readable reason why an operation is blocked. Assumes the op IS blocked. */
 function explainOperationBlock(config: SafetyConfig, op: OperationTypeCode): string {
-  if (config.readOnly && WRITE_OPS.includes(op)) return 'reason: readOnly=true blocks write ops (CDUAW)';
-  if (config.blockFreeSQL && op === OperationType.FreeSQL) return 'reason: blockFreeSQL=true';
-  if (config.blockData && op === OperationType.Query) return 'reason: blockData=true';
-  if (op === OperationType.Transport && !config.enableTransports) return 'reason: enableTransports=false';
-  if (config.disallowedOps?.includes(op))
-    return `reason: '${op}' is in disallowedOps blocklist '${config.disallowedOps}'`;
-  if (config.allowedOps && !config.allowedOps.includes(op))
-    return `reason: '${op}' is not in allowedOps allowlist '${config.allowedOps}'`;
+  if (MUTATING_OPS.includes(op) && !config.allowWrites)
+    return 'reason: allowWrites=false blocks mutations (C/D/U/A/W/X)';
+  if (op === OperationType.Transport && !config.allowTransportWrites) return 'reason: allowTransportWrites=false';
+  if (op === OperationType.Query && !config.allowDataPreview) return 'reason: allowDataPreview=false';
+  if (op === OperationType.FreeSQL && !config.allowFreeSQL) return 'reason: allowFreeSQL=false';
   return 'reason: unknown';
 }
 
-/** Check if operations on a given package are allowed */
+/** Check if operations on a given package are allowed (write-only check). */
 export function isPackageAllowed(config: SafetyConfig, pkg: string): boolean {
   if (config.allowedPackages.length === 0) return true;
 
@@ -163,7 +151,7 @@ export function isPackageAllowed(config: SafetyConfig, pkg: string): boolean {
   return false;
 }
 
-/** Check package and throw AdtSafetyError if blocked */
+/** Check package and throw AdtSafetyError if blocked. */
 export function checkPackage(config: SafetyConfig, pkg: string): void {
   if (!isPackageAllowed(config, pkg)) {
     throw new AdtSafetyError(
@@ -172,7 +160,7 @@ export function checkPackage(config: SafetyConfig, pkg: string): void {
   }
 }
 
-/** Check if a transport is in the whitelist (helper, doesn't check enableTransports) */
+/** Check if a transport is in the whitelist. */
 function isTransportInWhitelist(config: SafetyConfig, transport: string): boolean {
   if (config.allowedTransports.length === 0) return true;
 
@@ -190,21 +178,25 @@ function isTransportInWhitelist(config: SafetyConfig, transport: string): boolea
   return false;
 }
 
-/** Check transport operation and throw AdtSafetyError if blocked */
+/**
+ * Check transport operation. Writes require `allowWrites && allowTransportWrites`.
+ * Reads are always allowed at this layer (scope check enforces user gating upstream).
+ */
 export function checkTransport(config: SafetyConfig, transport: string, opName: string, isWrite: boolean): void {
-  // Require enableTransports for all transport operations
-  if (!config.enableTransports) {
-    throw new AdtSafetyError(
-      `Transport operation '${opName}' is blocked: transports not enabled (use --enable-transports or SAP_ENABLE_TRANSPORTS=true)`,
-    );
+  if (isWrite) {
+    if (!config.allowWrites) {
+      throw new AdtSafetyError(
+        `Transport write '${opName}' is blocked: allowWrites=false. Set SAP_ALLOW_WRITES=true to enable writes.`,
+      );
+    }
+    if (!config.allowTransportWrites) {
+      throw new AdtSafetyError(
+        `Transport write '${opName}' is blocked: allowTransportWrites=false. Set SAP_ALLOW_TRANSPORT_WRITES=true to enable transport mutations.`,
+      );
+    }
   }
 
-  // Check write permissions
-  if (isWrite && config.transportReadOnly) {
-    throw new AdtSafetyError(`Transport write operation '${opName}' is blocked: transport read-only mode enabled`);
-  }
-
-  // Check transport whitelist (applies to both read and write)
+  // Transport whitelist applies to both read and write
   if (transport && transport !== '*' && config.allowedTransports.length > 0) {
     if (!isTransportInWhitelist(config, transport)) {
       throw new AdtSafetyError(
@@ -214,77 +206,131 @@ export function checkTransport(config: SafetyConfig, transport: string, opName: 
   }
 }
 
-/** Check git operation and throw AdtSafetyError if blocked */
-export function checkGit(config: SafetyConfig, operation: string): void {
-  if (!config.enableGit) {
+/**
+ * Check git operation. Writes require `allowWrites && allowGitWrites`.
+ * Reads are always allowed at this layer.
+ */
+export function checkGit(config: SafetyConfig, operation: string, isWrite = true): void {
+  if (!isWrite) return;
+  if (!config.allowWrites) {
     throw new AdtSafetyError(
-      `Git operation "${operation}" is disabled. Set SAP_ENABLE_GIT=true or pass --enable-git to enable.`,
+      `Git write '${operation}' is blocked: allowWrites=false. Set SAP_ALLOW_WRITES=true to enable writes.`,
+    );
+  }
+  if (!config.allowGitWrites) {
+    throw new AdtSafetyError(
+      `Git write '${operation}' is blocked: allowGitWrites=false. Set SAP_ALLOW_GIT_WRITES=true to enable git mutations.`,
     );
   }
 }
 
 /**
- * Expand implied scopes: `write` implies `read`, `sql` implies `data`.
- * Returns a new array with implied scopes added.
- */
-export function expandImpliedScopes(scopes: string[]): string[] {
-  const expanded = new Set(scopes);
-  if (expanded.has('write')) expanded.add('read');
-  if (expanded.has('sql')) expanded.add('data');
-  return [...expanded];
-}
-
-/**
- * Derive a per-user safety config by merging server-level config (ceiling)
- * with JWT scopes. Scopes can only RESTRICT further, never expand beyond
- * what the server config allows.
+ * Derive a per-user effective safety config by merging the server ceiling with
+ * the user's JWT scopes. Scopes can only RESTRICT further, never loosen.
  *
- * Key principle: start with server config, only tighten booleans (false→true).
- * Never loosen (true→false).
+ * Uses the scope expansion rules from src/authz/policy.ts (admin implies all,
+ * write implies read, sql implies data). Callers should pass the already-expanded
+ * scope list for speed; this function re-expands as a safety net.
  */
 export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): SafetyConfig {
-  const effective = {
+  // Inline the expansion to avoid the circular import with src/authz/policy.ts.
+  // Keep in sync with expandScopes() there.
+  const expanded = new Set(scopes);
+  if (expanded.has('admin')) {
+    expanded.add('read');
+    expanded.add('write');
+    expanded.add('data');
+    expanded.add('sql');
+    expanded.add('transports');
+    expanded.add('git');
+  }
+  if (expanded.has('write')) expanded.add('read');
+  if (expanded.has('sql')) expanded.add('data');
+
+  const effective: SafetyConfig = {
     ...serverConfig,
     allowedPackages: [...serverConfig.allowedPackages],
     allowedTransports: [...serverConfig.allowedTransports],
+    denyActions: [...serverConfig.denyActions],
   };
-  const expanded = expandImpliedScopes(scopes);
 
-  // No write scope → force read-only and disable transports
-  if (!expanded.includes('write')) {
-    effective.readOnly = true;
-    effective.enableGit = false;
-    effective.enableTransports = false;
-  }
-
-  // No data scope (and no sql, which implies data) → block table preview
-  if (!expanded.includes('data')) {
-    effective.blockData = true;
-  }
-
-  // No sql scope → block free SQL
-  if (!expanded.includes('sql')) {
-    effective.blockFreeSQL = true;
-  }
+  if (!expanded.has('write')) effective.allowWrites = false;
+  if (!expanded.has('data')) effective.allowDataPreview = false;
+  if (!expanded.has('sql')) effective.allowFreeSQL = false;
+  if (!expanded.has('transports')) effective.allowTransportWrites = false;
+  if (!expanded.has('git')) effective.allowGitWrites = false;
 
   return effective;
 }
 
-/** Human-readable description of the safety configuration */
+/**
+ * Derive a per-user effective safety by intersecting a partial SafetyConfig
+ * (from an API-key profile) with the server ceiling. Tight side wins field-by-field.
+ *
+ * Semantics:
+ *   - Boolean fields: result is `server && profile` (both must be true for capability on).
+ *   - `allowedPackages`:
+ *       * If either side is `[]` (no restriction), use the other.
+ *       * Else intersection by prefix semantics — profile narrows server. If the profile's
+ *         set is a subset of server's (by name or prefix match), use profile; otherwise
+ *         fall back to server (profile tried to expand).
+ *   - `allowedTransports`: same as allowedPackages.
+ *   - `denyActions`: union (both the server and profile denies apply).
+ */
+export function deriveUserSafetyFromProfile(
+  serverConfig: SafetyConfig,
+  profileSafety: Partial<SafetyConfig>,
+): SafetyConfig {
+  const and = (a: boolean, b: boolean | undefined): boolean => (b === undefined ? a : a && b);
+
+  const intersectList = (server: string[], profile: string[] | undefined): string[] => {
+    if (!profile) return [...server];
+    if (server.length === 0 && profile.length === 0) return [];
+    if (server.length === 0) return [...profile];
+    if (profile.length === 0) return [...server];
+    // Profile narrows server: keep profile entries that are covered by server.
+    // "Covered by" means: there exists a server entry equal to the profile entry, or a
+    // server wildcard that matches it.
+    const covers = (serverPat: string, profilePat: string): boolean => {
+      const s = serverPat.toUpperCase();
+      const p = profilePat.toUpperCase();
+      if (s === p) return true;
+      if (s.endsWith('*')) {
+        const prefix = s.slice(0, -1);
+        if (p.startsWith(prefix)) return true;
+      }
+      return false;
+    };
+    const narrowed = profile.filter((p) => server.some((s) => covers(s, p)));
+    // If profile tried to expand beyond server, keep server's restriction instead.
+    return narrowed.length > 0 ? narrowed : [...server];
+  };
+
+  const effective: SafetyConfig = {
+    allowWrites: and(serverConfig.allowWrites, profileSafety.allowWrites),
+    allowDataPreview: and(serverConfig.allowDataPreview, profileSafety.allowDataPreview),
+    allowFreeSQL: and(serverConfig.allowFreeSQL, profileSafety.allowFreeSQL),
+    allowTransportWrites: and(serverConfig.allowTransportWrites, profileSafety.allowTransportWrites),
+    allowGitWrites: and(serverConfig.allowGitWrites, profileSafety.allowGitWrites),
+    allowedPackages: intersectList(serverConfig.allowedPackages, profileSafety.allowedPackages),
+    allowedTransports: intersectList(serverConfig.allowedTransports, profileSafety.allowedTransports),
+    denyActions: [...new Set([...serverConfig.denyActions, ...(profileSafety.denyActions ?? [])])],
+  };
+
+  return effective;
+}
+
+/** Human-readable description of the safety configuration. */
 export function describeSafety(config: SafetyConfig): string {
   const parts: string[] = [];
 
-  if (config.readOnly) parts.push('READ-ONLY');
-  if (config.blockFreeSQL) parts.push('NO-FREE-SQL');
-  if (config.blockData) parts.push('NO-DATA');
-  if (config.dryRun) parts.push('DRY-RUN');
-  if (config.allowedOps) parts.push(`AllowedOps=${config.allowedOps}`);
-  if (config.disallowedOps) parts.push(`DisallowedOps=${config.disallowedOps}`);
-  if (config.allowedPackages.length > 0) parts.push(`AllowedPackages=[${config.allowedPackages.join(',')}]`);
-  if (config.enableTransports) {
-    parts.push('TRANSPORTS-ENABLED');
-    if (config.transportReadOnly) parts.push('TRANSPORT-READ-ONLY');
-    if (config.allowedTransports.length > 0) parts.push(`AllowedTransports=[${config.allowedTransports.join(',')}]`);
-  }
-  return parts.length === 0 ? 'UNRESTRICTED' : parts.join(', ');
+  if (config.allowWrites) parts.push('WRITES');
+  if (config.allowDataPreview) parts.push('DATA-PREVIEW');
+  if (config.allowFreeSQL) parts.push('FREE-SQL');
+  if (config.allowTransportWrites) parts.push('TRANSPORT-WRITES');
+  if (config.allowGitWrites) parts.push('GIT-WRITES');
+  if (config.allowedPackages.length > 0) parts.push(`Packages=[${config.allowedPackages.join(',')}]`);
+  if (config.allowedTransports.length > 0) parts.push(`Transports=[${config.allowedTransports.join(',')}]`);
+  if (config.denyActions.length > 0) parts.push(`DenyActions=${config.denyActions.length}`);
+  return parts.length === 0 ? 'READ-ONLY' : parts.join(', ');
 }

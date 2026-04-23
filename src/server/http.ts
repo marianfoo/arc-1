@@ -29,8 +29,8 @@ import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import express from 'express';
-import { expandImpliedScopes } from '../adt/safety.js';
-import { PROFILE_SCOPES } from './config.js';
+import { expandScopes } from '../authz/policy.js';
+import { API_KEY_PROFILES } from './config.js';
 import { logger } from './logger.js';
 import { VERSION } from './server.js';
 import type { ServerConfig } from './types.js';
@@ -46,18 +46,19 @@ function matchApiKey(
   token: string,
   config: ServerConfig,
 ): { profile: string; scopes: string[]; clientId: string } | undefined {
-  // Multi-key: check apiKeys array first
+  // Multi-key: each API key has a named profile that maps to a scope set + partial SafetyConfig
   if (config.apiKeys) {
     for (const entry of config.apiKeys) {
       if (token === entry.key) {
-        const scopes = PROFILE_SCOPES[entry.profile] ?? ['read'];
+        const profile = API_KEY_PROFILES[entry.profile];
+        if (!profile) {
+          // Should have been caught at config parse; defense in depth
+          return undefined;
+        }
+        const scopes = expandScopes(profile.scopes);
         return { profile: entry.profile, scopes, clientId: `api-key:${entry.profile}` };
       }
     }
-  }
-  // Single key: legacy behavior (full scopes)
-  if (config.apiKey && token === config.apiKey) {
-    return { profile: 'full', scopes: ['read', 'write', 'data', 'sql', 'admin'], clientId: 'api-key' };
   }
   return undefined;
 }
@@ -258,7 +259,7 @@ export async function startHttpServer(
       await initJwks(config.oidcIssuer);
     }
 
-    if (config.apiKey || config.apiKeys || config.oidcIssuer) {
+    if (config.apiKeys || config.oidcIssuer) {
       // Use requireBearerAuth so that authInfo is populated on the MCP request context.
       // This enables scope enforcement, per-request safety, and principal propagation.
       const { requireBearerAuth } = await import('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js');
@@ -281,9 +282,8 @@ export async function startHttpServer(
   const httpServer = app.listen(port, bindHost, () => {
     let authMode = 'NONE (open)';
     if (config.xsuaaAuth && xsuaaCredentials) authMode = 'XSUAA OAuth proxy';
-    else if ((config.apiKey || config.apiKeys) && config.oidcIssuer) authMode = 'API key + OIDC';
+    else if (config.apiKeys && config.oidcIssuer) authMode = 'API keys + OIDC';
     else if (config.apiKeys) authMode = `API keys (${config.apiKeys.length} keys)`;
-    else if (config.apiKey) authMode = 'API key';
     else if (config.oidcIssuer) authMode = 'OIDC';
 
     logger.info('ARC-1 HTTP server started', {
@@ -412,7 +412,7 @@ async function createOidcVerifier(
 
 // ─── OIDC Scope Extraction ──────────────────────────────────────────
 
-const KNOWN_SCOPES = ['read', 'write', 'data', 'sql', 'admin'];
+const KNOWN_SCOPES = ['read', 'write', 'data', 'sql', 'transports', 'git', 'admin'];
 
 /**
  * Extract scopes from an OIDC JWT payload.
@@ -453,7 +453,7 @@ export function extractOidcScopes(payload: Record<string, unknown>): string[] {
     return ['read'];
   }
 
-  return expandImpliedScopes(filtered);
+  return expandScopes(filtered);
 }
 
 /**

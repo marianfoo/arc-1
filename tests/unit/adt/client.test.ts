@@ -549,7 +549,7 @@ describe('AdtClient', () => {
   describe('withSafety', () => {
     it('returns a new client with the given safety config', () => {
       const client = createClient();
-      const restrictedSafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const restrictedSafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       const derived = client.withSafety(restrictedSafety);
       expect(derived.safety.readOnly).toBe(true);
       expect(client.safety.readOnly).toBe(false);
@@ -569,7 +569,7 @@ describe('AdtClient', () => {
 
     it('derived client blocks operations per its safety config', async () => {
       const client = createClient();
-      const restrictedSafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const restrictedSafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       const derived = client.withSafety(restrictedSafety);
       // Original client can still read (unrestricted)
       const source = await client.getProgram('ZHELLO');
@@ -603,7 +603,7 @@ describe('AdtClient', () => {
 
     it('blocks free SQL when blockFreeSQL is true', async () => {
       const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true },
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
       });
       await expect(client.runQuery('SELECT * FROM T000')).rejects.toThrow(AdtSafetyError);
     });

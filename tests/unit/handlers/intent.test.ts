@@ -1110,7 +1110,7 @@ describe('Intent Handler', () => {
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), blockData: true },
+        safety: { ...unrestrictedSafetyConfig(), allowDataPreview: false },
       });
       const result = await handleToolCall(blockedClient, DEFAULT_CONFIG, 'SAPRead', {
         type: 'TABLE_CONTENTS',
@@ -1319,7 +1319,7 @@ describe('Intent Handler', () => {
     it('is blocked when free SQL is disallowed', async () => {
       const client = new AdtClient({
         baseUrl: 'http://sap:8000',
-        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true },
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
       });
       const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPQuery', {
         sql: 'SELECT * FROM T000',
@@ -2299,7 +2299,7 @@ ENDCLASS.`,
       // This tests the catch(err) path with a non-Error value
       const client = new AdtClient({
         baseUrl: 'http://sap:8000',
-        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true },
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
       });
       const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPQuery', {
         sql: 'SELECT * FROM T000',
@@ -2666,7 +2666,7 @@ ENDCLASS.`,
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), enableGit: false },
+        safety: { ...unrestrictedSafetyConfig(), allowGitWrites: false },
       });
       const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPGit', {
         action: 'clone',
@@ -3814,7 +3814,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
 
       const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
@@ -3859,7 +3859,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
 
       const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
@@ -3963,7 +3963,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
 
       const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
@@ -4179,7 +4179,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
 
       const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPManage', {
@@ -5217,7 +5217,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true },
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
       });
 
       const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPNavigate', {
@@ -5238,7 +5238,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true, blockData: true },
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false, allowDataPreview: false },
       });
 
       const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPNavigate', {
@@ -6148,7 +6148,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
       const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPWrite', {
         action: 'create',
@@ -6168,7 +6168,7 @@ ENDCLASS.`;
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
       const result = await handleToolCall(readOnlyClient, DEFAULT_CONFIG, 'SAPWrite', {
         action: 'create',
@@ -6585,7 +6585,7 @@ define role ZTEST_DCL {
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), readOnly: true },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false },
       });
 
       const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
@@ -7306,7 +7306,7 @@ define role ZTEST_DCL {
         baseUrl: 'http://sap:8000',
         username: 'admin',
         password: 'secret',
-        safety: { ...unrestrictedSafetyConfig(), enableTransports: true },
+        safety: { ...unrestrictedSafetyConfig(), allowTransportWrites: true },
       });
     }
 

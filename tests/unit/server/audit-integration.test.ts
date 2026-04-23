@@ -100,13 +100,13 @@ describe('Audit Logging Integration', () => {
       username: 'admin',
       password: 'secret',
       safety: {
-        readOnly: false,
-        blockFreeSQL: false,
+        allowWrites: true,
+        allowFreeSQL: true,
         allowedOps: 'X', // Only allow 'X' operations (nothing real)
         disallowedOps: '',
         allowedPackages: [],
         dryRun: false,
-        enableTransports: false,
+        allowTransportWrites: false,
         transportReadOnly: false,
         allowedTransports: [],
       },

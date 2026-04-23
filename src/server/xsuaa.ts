@@ -30,8 +30,8 @@ import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { XsuaaService } from '@sap/xssec';
-import { expandImpliedScopes } from '../adt/safety.js';
-import { PROFILE_SCOPES } from './config.js';
+import { expandScopes } from '../authz/policy.js';
+import { API_KEY_PROFILES } from './config.js';
 import { logger } from './logger.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -263,13 +263,13 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
     const grantedScopes: string[] = [];
     // The token contains scopes like "arc1-mcp!b12345.read"
     // checkLocalScope strips the prefix for us
-    for (const scope of ['read', 'write', 'data', 'sql', 'admin']) {
+    for (const scope of ['read', 'write', 'data', 'sql', 'transports', 'git', 'admin']) {
       if (securityContext.checkLocalScope(scope)) {
         grantedScopes.push(scope);
       }
     }
-    // Apply implied scope expansion: write→read, sql→data
-    const expandedScopes = expandImpliedScopes(grantedScopes);
+    // Apply implied scope expansion: admin→all, write→read, sql→data
+    const expandedScopes = expandScopes(grantedScopes);
 
     const expiresAt = securityContext.token?.payload?.exp;
 
@@ -300,21 +300,18 @@ export function createXsuaaTokenVerifier(credentials: XsuaaCredentials): (token:
  * Used by both the chained verifier (XSUAA mode) and standard verifier.
  */
 function matchApiKeyFromConfig(
-  config: { apiKey?: string; apiKeys?: Array<{ key: string; profile: string }> },
+  config: { apiKeys?: Array<{ key: string; profile: string }> },
   token: string,
 ): { scopes: string[]; clientId: string } | undefined {
-  // Multi-key: check apiKeys array first
   if (config.apiKeys) {
     for (const entry of config.apiKeys) {
       if (token === entry.key) {
-        const scopes = PROFILE_SCOPES[entry.profile] ?? ['read'];
+        const profile = API_KEY_PROFILES[entry.profile];
+        if (!profile) return undefined;
+        const scopes = expandScopes(profile.scopes);
         return { scopes, clientId: `api-key:${entry.profile}` };
       }
     }
-  }
-  // Single key: legacy behavior (full scopes)
-  if (config.apiKey && token === config.apiKey) {
-    return { scopes: ['read', 'write', 'data', 'sql', 'admin'], clientId: 'api-key' };
   }
   return undefined;
 }

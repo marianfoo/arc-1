@@ -35,7 +35,7 @@ function mockHttp(body = '{}'): AdtHttpClient {
   } as unknown as AdtHttpClient;
 }
 
-const gitSafety = { ...unrestrictedSafetyConfig(), enableGit: true };
+const gitSafety = { ...unrestrictedSafetyConfig(), allowGitWrites: true };
 
 describe('gCTS client helpers', () => {
   it('parses /system payload', async () => {
@@ -96,7 +96,7 @@ describe('gCTS client helpers', () => {
 
   it('cloneRepo is blocked when enableGit=false', async () => {
     const http = mockHttp(loadFixture('gcts-repository.json'));
-    const safety = { ...unrestrictedSafetyConfig(), enableGit: false };
+    const safety = { ...unrestrictedSafetyConfig(), allowGitWrites: false };
     await expect(
       cloneRepo(http, safety, { url: 'https://github.com/example/arc1.git', package: '$TMP' }),
     ).rejects.toThrow(AdtSafetyError);

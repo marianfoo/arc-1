@@ -238,7 +238,7 @@ describe('DevTools', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(activate(http, safety, '/sap/bc/adt/programs/programs/ZTEST')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -505,7 +505,7 @@ describe('DevTools', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(
         activateBatch(http, safety, [{ url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' }]),
       ).rejects.toThrow(AdtSafetyError);
@@ -565,7 +565,7 @@ describe('DevTools', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(publishServiceBinding(http, safety, 'ZSB_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
@@ -602,7 +602,7 @@ describe('DevTools', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(unpublishServiceBinding(http, safety, 'ZSB_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });

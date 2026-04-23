@@ -151,7 +151,7 @@ describe('CRUD Operations', () => {
       // readOnly blocks CDUAW (Create, Delete, Update, Activate, Workflow).
       // This is intentional: lock is needed for read operations like syntax check.
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(lockObject(http, safety, '/url')).resolves.toBeDefined();
     });
 
@@ -278,7 +278,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(createObject(http, safety, '/url', '<xml/>')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -371,7 +371,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(updateSource(http, safety, '/url', 'source', 'handle')).rejects.toThrow(AdtSafetyError);
     });
   });
@@ -415,7 +415,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(updateObject(http, safety, '/url', '<xml/>', 'handle', 'application/xml')).rejects.toThrow(
         AdtSafetyError,
       );
@@ -440,7 +440,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(deleteObject(http, safety, '/url', 'handle')).rejects.toThrow(AdtSafetyError);
     });
 

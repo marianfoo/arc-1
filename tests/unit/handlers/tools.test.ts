@@ -18,9 +18,9 @@ describe('Tool Definitions', () => {
   it('registers all implemented tools', () => {
     const tools = getToolDefinitions({
       ...DEFAULT_CONFIG,
-      readOnly: false,
-      blockFreeSQL: false,
-      enableTransports: true,
+      allowWrites: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
     });
     const names = tools.map((t) => t.name);
     // All implemented tools should be registered
@@ -39,7 +39,7 @@ describe('Tool Definitions', () => {
   });
 
   it('hides write tools in read-only mode but keeps SAPManage read actions', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false });
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPWrite');
     expect(names).not.toContain('SAPActivate');
@@ -51,7 +51,7 @@ describe('Tool Definitions', () => {
   });
 
   it('SAPManage exposes only probe/features/cache_stats actions in read-only mode', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false });
     const sapManage = tools.find((t) => t.name === 'SAPManage')!;
     const schema = sapManage.inputSchema as Record<string, any>;
     const actionEnum: string[] = schema.properties.action.enum;
@@ -60,25 +60,25 @@ describe('Tool Definitions', () => {
   });
 
   it('hides SAPTransport in read-only mode without enableTransports', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true, enableTransports: false });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false, allowTransportWrites: false });
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPTransport');
   });
 
   it('shows SAPTransport in read-only mode with enableTransports', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: true, enableTransports: true });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false, allowTransportWrites: true });
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPTransport');
   });
 
   it('hides SAPTransport when readOnly=false but enableTransports=false', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, enableTransports: false });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, allowTransportWrites: false });
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('SAPTransport');
   });
 
   it('shows SAPTransport when enableTransports=true', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, enableTransports: true });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowTransportWrites: true });
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPTransport');
   });
@@ -137,7 +137,7 @@ describe('Tool Definitions', () => {
   });
 
   it('SAPManage exposes package and FLP actions', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true });
     const sapManage = tools.find((t) => t.name === 'SAPManage')!;
     const schema = sapManage.inputSchema as Record<string, any>;
     const actionEnum: string[] = schema.properties.action.enum;
@@ -162,7 +162,7 @@ describe('Tool Definitions', () => {
   });
 
   it('shows SAPQuery when blockFreeSQL=false', () => {
-    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowFreeSQL: true });
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPQuery');
   });
@@ -233,7 +233,7 @@ describe('Tool Definitions', () => {
 
     it('SAPQuery description redirects CDS impact questions to SAPContext(action="impact")', () => {
       // SAPQuery is only registered when free SQL is allowed.
-      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, blockFreeSQL: false });
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowFreeSQL: true });
       const sapQuery = tools.find((t) => t.name === 'SAPQuery')!;
       expect(sapQuery.description).toContain('DDDDLSRC');
       expect(sapQuery.description).toContain('SAPContext');
@@ -389,9 +389,9 @@ describe('Tool Definitions', () => {
   // ─── BTP System Type Adaptation ─────────────────────────────────
 
   describe('BTP system type adaptation', () => {
-    const btpConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'btp' as const };
-    const onpremConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'onprem' as const };
-    const autoConfig = { ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false, systemType: 'auto' as const };
+    const btpConfig = { ...DEFAULT_CONFIG, allowWrites: true, allowFreeSQL: true, systemType: 'btp' as const };
+    const onpremConfig = { ...DEFAULT_CONFIG, allowWrites: true, allowFreeSQL: true, systemType: 'onprem' as const };
+    const autoConfig = { ...DEFAULT_CONFIG, allowWrites: true, allowFreeSQL: true, systemType: 'auto' as const };
 
     it('removes PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS from SAPRead on BTP', () => {
       const tools = getToolDefinitions(btpConfig);
@@ -537,7 +537,7 @@ describe('Tool Definitions', () => {
     });
 
     it('BTP SAPTransport description mentions gCTS', () => {
-      const tools = getToolDefinitions({ ...btpConfig, enableTransports: true });
+      const tools = getToolDefinitions({ ...btpConfig, allowTransportWrites: true });
       const sapTransport = tools.find((t) => t.name === 'SAPTransport')!;
 
       expect(sapTransport.description).toContain('gCTS');
