@@ -77,8 +77,8 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `SAP_READ_ONLY` / `--read-only` | Block all write operations (default: **true**) |
 | `SAP_BLOCK_DATA` / `--block-data` | Block named table preview (default: **true**) |
 | `SAP_BLOCK_FREE_SQL` / `--block-free-sql` | Block RunQuery execution (default: **true**) |
-| `SAP_ALLOWED_OPS` / `--allowed-ops` | Whitelist operation types (e.g., "RSQ") |
-| `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blacklist operation types (e.g., "CDUA") |
+| `SAP_ALLOWED_OPS` / `--allowed-ops` | Allowlist operation type codes (e.g., "RSQ"). If set, only listed codes are permitted. Codes: R/S/Q/F/C/U/D/A/T/L/I/W/X — see [configuration-reference.md](docs_page/configuration-reference.md#operation-type-codes) |
+| `SAP_DISALLOWED_OPS` / `--disallowed-ops` | Blocklist operation type codes (e.g., "CDUA"). Listed codes are always blocked; takes precedence over `SAP_ALLOWED_OPS` |
 | `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: "Z*"). Reads are not restricted by package. |
 | `SAP_ENABLE_TRANSPORTS` / `--enable-transports` | Enable CTS transport management (default: false) |
 | `SAP_ENABLE_GIT` / `--enable-git` | Enable gCTS/abapGit write operations in `SAPGit` (default: false) |

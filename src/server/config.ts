@@ -8,9 +8,32 @@
  * for drop-in compatibility with existing deployments and documentation.
  */
 
+import { OperationType } from '../adt/safety.js';
 import { logger } from './logger.js';
 import type { FeatureToggle, ServerConfig, TransportType } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
+
+const KNOWN_OP_CODES = new Set(Object.values(OperationType));
+
+/**
+ * Warn (but don't fail) if an allowedOps/disallowedOps string contains characters
+ * that aren't known op codes. Unknown codes silently have no effect, which makes
+ * typos like `SAP_ALLOWED_OPS=RXZ` block every op with no hint why.
+ */
+function validateOpCodes(value: string, varName: string): void {
+  if (!value) return;
+  const unknown = new Set<string>();
+  for (const ch of value) {
+    if (!KNOWN_OP_CODES.has(ch as (typeof OperationType)[keyof typeof OperationType])) {
+      unknown.add(ch);
+    }
+  }
+  if (unknown.size === 0) return;
+  logger.warn(
+    `${varName} contains unknown operation codes: ${[...unknown].join(',')} — known codes: R/S/Q/F/C/U/D/A/T/L/I/W/X. These characters have no effect.`,
+    { value, unknown: [...unknown] },
+  );
+}
 
 /**
  * Parse API keys string into structured array.
@@ -204,6 +227,8 @@ export function parseArgs(args: string[]): ServerConfig {
   else if (!profileName) config.blockData = true;
   config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
   config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
+  validateOpCodes(config.allowedOps, 'SAP_ALLOWED_OPS');
+  validateOpCodes(config.disallowedOps, 'SAP_DISALLOWED_OPS');
   const pkgs = getFlag('allowed-packages') ?? process.env.SAP_ALLOWED_PACKAGES;
   if (pkgs) {
     const raw = pkgs.split(',').map((p) => p.trim());

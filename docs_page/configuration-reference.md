@@ -82,8 +82,8 @@ The recipes above show raw config values. When you pass them through a shell fla
 | `--enable-transports` | `SAP_ENABLE_TRANSPORTS` | `false` | When `false`, **all** `SAPTransport` actions are blocked — list, get, create, release, delete, reassign. Current behavior: stays off unless a developer profile or this flag enables it |
 | `--enable-git` | `SAP_ENABLE_GIT` | `false` | When `false`, **all** `SAPGit` write actions are blocked — clone, pull, push, commit, stage, switch_branch, create_branch, unlink. Reads (list_repos, whoami, config, branches, history, objects, external_info, check) are unaffected. **Not set by any profile** — explicit opt-in only |
 | `--allowed-packages` | `SAP_ALLOWED_PACKAGES` | `$TMP` | Writes targeting packages outside this list fail. Comma-separated, trailing `*` wildcard only (`Z*,Y*,$TMP`). `*` alone = unrestricted. **Reads are never package-filtered.** |
-| `--allowed-ops` | `SAP_ALLOWED_OPS` | — | Whitelist operation codes (e.g. `RSQ`) — anything not listed is blocked. Power-user knob when profiles are too coarse |
-| `--disallowed-ops` | `SAP_DISALLOWED_OPS` | — | Blacklist operation codes — listed codes are blocked, rest allowed |
+| `--allowed-ops` | `SAP_ALLOWED_OPS` | — | Allowlist of operation codes (e.g. `RSQ`) — anything not listed is blocked. Power-user knob when profiles are too coarse |
+| `--disallowed-ops` | `SAP_DISALLOWED_OPS` | — | Blocklist of operation codes — listed codes are blocked, rest allowed. Takes precedence over `--allowed-ops` |
 | `--profile` | `ARC1_PROFILE` | — | Preset — expands to multiple flags, see [profile expansions](#profile-expansions) above |
 | `--tool-mode` | `ARC1_TOOL_MODE` | `standard` | `standard` (11 tools) / `hyperfocused` (1 tool, ~200 tokens) |
 | `--abaplint-config` | `SAP_ABAPLINT_CONFIG` | — | Path to custom abaplint.jsonc |
@@ -91,7 +91,7 @@ The recipes above show raw config values. When you pass them through a shell fla
 
 ### Operation-type codes
 
-Used in `--allowed-ops` / `--disallowed-ops`:
+Single-character codes used in `--allowed-ops` / `--disallowed-ops` (concatenate without separators, e.g. `RSQ`):
 
 ```
 Reads:  R = Read       S = Search     I = Intelligence (findRef, whereUsed, completion)
@@ -100,7 +100,23 @@ Writes: C = Create     U = Update     D = Delete     A = Activate     W = Workfl
 Other:  T = Test (unit)   L = Lock   X = Transport
 ```
 
-Write operations `C`, `D`, `U`, `A`, `W` are all blocked when `readOnly=true`, regardless of the op filter.
+**Evaluation order (first match wins):**
+
+1. `dryRun=true` → always allow (no SAP call executed)
+2. `readOnly=true` + op in `CDUAW` → block
+3. `blockFreeSQL=true` + op = `F` → block
+4. `blockData=true` + op = `Q` → block
+5. op = `X` and `enableTransports=false` → block
+6. op ∈ `disallowedOps` blocklist → block
+7. `allowedOps` non-empty and op ∉ `allowedOps` → block
+8. otherwise → allow
+
+**Key interactions:**
+
+- `allowedOps` is an **allowlist**: empty string `""` means "no allowlist filter" (all ops pass this step). Setting `allowedOps="C"` while `readOnly=true` still blocks `C` — step 2 fires first.
+- `disallowedOps` is a **blocklist**: takes precedence over `allowedOps`. Setting `allowedOps="RSQC"` + `disallowedOps="C"` allows `RSQ` and blocks `C`.
+- Write operations `C`, `D`, `U`, `A`, `W` are always blocked when `readOnly=true`, regardless of the op filter. To enable writes with a narrow op filter, set `readOnly=false` AND list the codes in `allowedOps`.
+- Invalid codes in `allowedOps`/`disallowedOps` are silently ignored (e.g. `allowedOps="Z"` blocks every known op because no code matches `Z`). Use the codes from the table above.
 
 ---
 

@@ -55,15 +55,19 @@ export interface SafetyConfig {
   allowedTransports: string[];
 }
 
-/** Safe defaults: read-only, no free SQL, standard ops only */
+/**
+ * Safe defaults — mirrors DEFAULT_CONFIG in src/server/types.ts.
+ * Use this when a test needs the real ship default without re-deriving it.
+ * If you change DEFAULT_CONFIG's safety fields, update this to match.
+ */
 export function defaultSafetyConfig(): SafetyConfig {
   return {
     readOnly: true,
     blockFreeSQL: true,
     blockData: true,
-    allowedOps: 'RSQTI',
+    allowedOps: '',
     disallowedOps: '',
-    allowedPackages: [],
+    allowedPackages: ['$TMP'],
     dryRun: false,
     enableGit: false,
     enableTransports: false,
@@ -106,10 +110,10 @@ export function isOperationAllowed(config: SafetyConfig, op: OperationTypeCode):
   // Transport operations require explicit opt-in
   if (op === OperationType.Transport && !config.enableTransports) return false;
 
-  // Disallowed ops blacklist (takes precedence over allowed)
+  // Disallowed ops blocklist (takes precedence over allowed)
   if (config.disallowedOps?.includes(op)) return false;
 
-  // Allowed ops whitelist (if set, only listed ops are allowed)
+  // Allowed ops allowlist (if set, only listed ops are allowed)
   if (config.allowedOps && !config.allowedOps.includes(op)) return false;
 
   return true;
@@ -118,8 +122,23 @@ export function isOperationAllowed(config: SafetyConfig, op: OperationTypeCode):
 /** Check operation and throw AdtSafetyError if blocked */
 export function checkOperation(config: SafetyConfig, op: OperationTypeCode, opName: string): void {
   if (!isOperationAllowed(config, op)) {
-    throw new AdtSafetyError(`Operation '${opName}' (type ${op}) is blocked by safety configuration`);
+    throw new AdtSafetyError(
+      `Operation '${opName}' (type ${op}) is blocked by safety configuration (${explainOperationBlock(config, op)})`,
+    );
   }
+}
+
+/** Returns a human-readable reason why an operation is blocked. Assumes the op IS blocked. */
+function explainOperationBlock(config: SafetyConfig, op: OperationTypeCode): string {
+  if (config.readOnly && WRITE_OPS.includes(op)) return 'reason: readOnly=true blocks write ops (CDUAW)';
+  if (config.blockFreeSQL && op === OperationType.FreeSQL) return 'reason: blockFreeSQL=true';
+  if (config.blockData && op === OperationType.Query) return 'reason: blockData=true';
+  if (op === OperationType.Transport && !config.enableTransports) return 'reason: enableTransports=false';
+  if (config.disallowedOps?.includes(op))
+    return `reason: '${op}' is in disallowedOps blocklist '${config.disallowedOps}'`;
+  if (config.allowedOps && !config.allowedOps.includes(op))
+    return `reason: '${op}' is not in allowedOps allowlist '${config.allowedOps}'`;
+  return 'reason: unknown';
 }
 
 /** Check if operations on a given package are allowed */

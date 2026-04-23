@@ -111,7 +111,7 @@ arc1 --block-data=false          # Enable table preview
 # Use single quotes — bash expands $TMP inside double quotes.
 arc1 --allowed-packages 'ZPROD*,$TMP'
 
-# Whitelist operations
+# Allowlist operations (only Read/Search/Query permitted; everything else blocked)
 arc1 --allowed-ops "RSQ"
 
 # API key authentication

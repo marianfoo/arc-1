@@ -21,7 +21,7 @@ ARC-1 is a TypeScript MCP server (distributed as an npm package and Docker image
 
 As an **admin**, you control what the AI can and cannot do:
 
-- Restrict to read-only, specific packages, or whitelisted operations
+- Restrict to read-only, specific packages, or an operation allowlist
 - Require transport assignments before any write (update/delete auto-uses lock correction number when available)
 - Block free-form SQL execution
 - Allow or deny individual operation types per deployment

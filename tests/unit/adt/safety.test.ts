@@ -67,7 +67,7 @@ describe('Safety System', () => {
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
     });
 
-    it('enforces allowedOps whitelist', () => {
+    it('enforces allowedOps allowlist', () => {
       const cfg = config({ allowedOps: 'RSQ' });
       expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Search)).toBe(true);
@@ -76,7 +76,7 @@ describe('Safety System', () => {
       expect(isOperationAllowed(cfg, OperationType.Delete)).toBe(false);
     });
 
-    it('enforces disallowedOps blacklist', () => {
+    it('enforces disallowedOps blocklist', () => {
       const cfg = config({ disallowedOps: 'CD' });
       expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
@@ -114,6 +114,15 @@ describe('Safety System', () => {
       expect(cfg.enableGit).toBe(false);
     });
 
+    it('defaultSafetyConfig mirrors DEFAULT_CONFIG from src/server/types.ts', () => {
+      const cfg = defaultSafetyConfig();
+      expect(cfg.allowedOps).toBe('');
+      expect(cfg.allowedPackages).toEqual(['$TMP']);
+      expect(cfg.readOnly).toBe(true);
+      expect(cfg.blockFreeSQL).toBe(true);
+      expect(cfg.blockData).toBe(true);
+    });
+
     it('unrestricted config allows Query', () => {
       const cfg = unrestrictedSafetyConfig();
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
@@ -144,6 +153,35 @@ describe('Safety System', () => {
       } catch (e) {
         expect((e as Error).message).toContain('CreateObject');
         expect((e as Error).message).toContain('C');
+      }
+    });
+
+    it('error message explains readOnly blocks write ops', () => {
+      const cfg = config({ readOnly: true });
+      try {
+        checkOperation(cfg, OperationType.Create, 'CreateObject');
+      } catch (e) {
+        expect((e as Error).message).toContain('readOnly=true');
+      }
+    });
+
+    it('error message explains disallowedOps blocklist hit', () => {
+      const cfg = config({ disallowedOps: 'C' });
+      try {
+        checkOperation(cfg, OperationType.Create, 'CreateObject');
+      } catch (e) {
+        expect((e as Error).message).toContain('disallowedOps');
+        expect((e as Error).message).toContain('blocklist');
+      }
+    });
+
+    it('error message explains allowedOps allowlist miss', () => {
+      const cfg = config({ allowedOps: 'RS' });
+      try {
+        checkOperation(cfg, OperationType.Create, 'CreateObject');
+      } catch (e) {
+        expect((e as Error).message).toContain('allowedOps');
+        expect((e as Error).message).toContain('allowlist');
       }
     });
   });

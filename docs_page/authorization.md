@@ -155,8 +155,8 @@ Independent of scopes, the server administrator can set a global safety configur
 | Read-only mode | `--read-only` / `SAP_READ_ONLY` | **`true`** | Blocks all write operations |
 | Block data | `--block-data` / `SAP_BLOCK_DATA` | **`true`** | Blocks table content preview |
 | Block free SQL | `--block-free-sql` / `SAP_BLOCK_FREE_SQL` | **`true`** | Blocks freestyle SQL queries |
-| Allowed operations | `--allowed-ops` / `SAP_ALLOWED_OPS` | (all) | Whitelist of operation type codes |
-| Disallowed operations | `--disallowed-ops` / `SAP_DISALLOWED_OPS` | (none) | Blacklist of operation type codes |
+| Allowed operations | `--allowed-ops` / `SAP_ALLOWED_OPS` | (all) | Allowlist of operation type codes |
+| Disallowed operations | `--disallowed-ops` / `SAP_DISALLOWED_OPS` | (none) | Blocklist of operation type codes (takes precedence over allowlist) |
 | Allowed packages | `--allowed-packages` / `SAP_ALLOWED_PACKAGES` | `$TMP` | Restrict to specific ABAP packages (supports wildcards). Defaults to `$TMP` (local objects only). Set to `'*'` for unrestricted or `'Z*,$TMP'` for custom packages (single quotes in shell so `$TMP` isn't expanded). |
 | Enable transports | `--enable-transports` / `SAP_ENABLE_TRANSPORTS` | `false` | Allow transport management |
 | Enable git writes | `--enable-git` / `SAP_ENABLE_GIT` | `false` | Allow `SAPGit` write actions (clone/pull/push/commit/stage/switch_branch/create_branch/unlink). Reads unaffected. Not set by any profile |

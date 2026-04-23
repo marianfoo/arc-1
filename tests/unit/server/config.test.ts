@@ -200,6 +200,84 @@ describe('parseArgs', () => {
     expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
   });
 
+  describe('op-code validation', () => {
+    it('warns when SAP_ALLOWED_OPS contains unknown codes', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        process.env.SAP_ALLOWED_OPS = 'RXZ';
+        parseArgs([]);
+        const warnings = stderrSpy.mock.calls
+          .map((c) => String(c[0]))
+          .filter((s) => s.includes('SAP_ALLOWED_OPS') && s.includes('unknown operation codes'));
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toContain('X');
+        expect(warnings[0]).toContain('Z');
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+
+    it('warns when SAP_DISALLOWED_OPS contains unknown codes', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        process.env.SAP_DISALLOWED_OPS = 'CY';
+        parseArgs([]);
+        const warnings = stderrSpy.mock.calls
+          .map((c) => String(c[0]))
+          .filter((s) => s.includes('SAP_DISALLOWED_OPS') && s.includes('unknown operation codes'));
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toContain('Y');
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+
+    it('does not warn for valid op codes', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        process.env.SAP_ALLOWED_OPS = 'RSQCU';
+        process.env.SAP_DISALLOWED_OPS = 'D';
+        parseArgs([]);
+        const warnings = stderrSpy.mock.calls
+          .map((c) => String(c[0]))
+          .filter((s) => s.includes('unknown operation codes'));
+        expect(warnings).toEqual([]);
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+
+    it('does not warn when allowedOps and disallowedOps are empty', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        parseArgs([]);
+        const warnings = stderrSpy.mock.calls
+          .map((c) => String(c[0]))
+          .filter((s) => s.includes('unknown operation codes'));
+        expect(warnings).toEqual([]);
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+
+    it('deduplicates repeated unknown codes (does not spam for RYYY)', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        process.env.SAP_ALLOWED_OPS = 'RYYY';
+        parseArgs([]);
+        const warnings = stderrSpy.mock.calls
+          .map((c) => String(c[0]))
+          .filter((s) => s.includes('unknown operation codes'));
+        expect(warnings).toHaveLength(1);
+        // Should mention Y once in the unknown-codes list, not three times
+        const unknownMatch = warnings[0].match(/unknown operation codes: ([^ ]+)/);
+        expect(unknownMatch?.[1]).toBe('Y');
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+  });
+
   it('parses cookie auth options', () => {
     const config = parseArgs(['--cookie-file', '/path/cookies.txt', '--cookie-string', 'a=b; c=d']);
     expect(config.cookieFile).toBe('/path/cookies.txt');
