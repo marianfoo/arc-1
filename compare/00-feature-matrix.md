@@ -22,7 +22,7 @@ _Last updated: 2026-04-23. Since 2026-04-18: PR #174 (2026-04-21) landed `SAPDia
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) | N/A (Python, git install) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Stars | — | 295 | 125 | 103 | 35 | 43 | 120 | 37 | 79 |
-| Active development | ✅ | ⚠️ Stable (v2.38.1; quiet since 2026-04-15) | ❌ Dormant (Feb 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v6.4.1, 4 releases in 1 week) | ⚠️ Dormant (Jan 2026) | ⚠️ Stable (53 tools, no commits since Apr 14) | ✅ Very (since 2018) |
+| Active development | ✅ | ✅ Stable (v2.38.1; quiet since 2026-04-15) | ❌ Dormant (Feb 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v6.4.1, 4 releases in 1 week) | ⚠️ Dormant (Jan 2026) | ✅ Stable (53 tools, no commits since Apr 14) | ✅ Very (since 2018) |
 | Release count | — | 32+ | — | — | — | 95+ (5 months) | — | rolling | rolling "latest" |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A | N/A |
 
