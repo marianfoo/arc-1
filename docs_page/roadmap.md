@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-18
+**Last Updated:** 2026-04-23
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -80,6 +80,8 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | 30 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
 | 31 | OPS-03 | Multi-System Routing | P3 | L | Ops |
 | 32 | FEAT-50 | ADT Probe Fixture Coverage (contributed fixtures) | P3 | XS-each | Diagnostics |
+| ~~—~~ | ~~FEAT-51~~ | ~~System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-21~~ |
+| ~~—~~ | ~~FEAT-52~~ | ~~ADT Type-Availability Probe (diagnostic)~~ | ~~P3~~ | ~~S~~ | ~~Completed 2026-04-20~~ |
 
 ---
 
@@ -87,6 +89,12 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| FEAT-53 | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
+| FEAT-51 | System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose (PR #174) | 2026-04-21 | Features |
+| FEAT-52 | ADT Type-Availability Probe (diagnostic) (PR #163) | 2026-04-20 | Features |
+| FEAT-54 | DTEL v2→v1 Content-Type Fallback + SICF-aware Error Hints (PR #169) | 2026-04-20 | Features |
+| — | SAPManage Scope Split + Data Preview Diagnostics (PR #171) | 2026-04-19 | Security |
+| DOC-05 | First-Party Skill Pack Expansion (clean-core ATC, dead code, object documenter) (PR #164) | 2026-04-19 | Docs |
 | DOC-04 | RAP & Common ABAP Workflow Skill Pack Refresh | 2026-04-18 | Docs |
 | FEAT-22 | gCTS/abapGit Integration (`SAPGit` tool + `--enable-git` safety gate) | 2026-04-18 | Features |
 | SEC-09 | Auth Safety & Configurability (cookie→PP leak fix, applyAuthHeader guard, fail-fast validation, auth summary log, SAML disable opt-in, HTML login detection) | 2026-04-17 | Security |
@@ -158,6 +166,16 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 >
 > **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) identified COMPAT-01..03 plus verify item COMPAT-04. Follow-up confirmed COMPAT-03 had already been fixed in PR #130 (commit `9b0601c`, completed 2026-04-15). COMPAT-01 and COMPAT-02 were fixed in this follow-up (completed 2026-04-16). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of recurring 423 lock errors and surfaced S/4HANA Public Cloud CSRF HEAD incompatibility (#104). PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API. Added **FEAT-49** (Object Transport History) at P1 — reverse lookup ("which transports contain this object?") is the missing link for transport-scoped code review (fr0ster#30). Enriched **FEAT-20** (revisions) with concrete ADT endpoint details; upgraded **FEAT-24** (diff) rationale — the trio (FEAT-49→FEAT-20→FEAT-24) enables the full code review workflow no competitor has end-to-end. Overview table re-sorted by actual priority (P0→P1→P2→P3).
 >
+> **2026-04-23 additions:** Three completed items close the last fr0ster-v5-unique diagnostics gaps and ship FEAT-50's base capability:
+> - **FEAT-51** — SM02 system messages + /IWFND/ERROR_LOG gateway errors wired into `SAPDiagnose` (PR #174). Matrix section 10 updated — ARC-1 no longer has any diagnostic feed that only fr0ster exposes.
+> - **FEAT-52** — standalone ADT type-availability probe (`npm run probe`, multi-signal classifier, fixture-driven replay tests) merged (PR #163). FEAT-50 (fixture coverage contributions) remains open as the follow-up backlog item.
+> - **FEAT-53** — `SAPContext(action="impact")` now catches asymmetric DDLS/DDLX metadata-extension coverage across sibling variants (PR #177) — the common RAP bug where one routing path has missing UI fields.
+> - **FEAT-54** — DTEL v2→v1 Content-Type fallback + SICF-aware (`icf-handler-not-bound`) error classification (PR #169).
+> - **SAPManage scope split** — read vs write sub-actions enforced via `SAPMANAGE_ACTION_SCOPES` in both standard and hyperfocused mode (PR #171). Read-only clients keep diagnostic manage actions.
+> - **DOC-05** — three new skills merged (`sap-clean-core-atc`, `sap-unused-code`, `sap-object-documenter`) broadening the workflow layer beyond RAP (PR #164).
+>
+> Competitor scan (2026-04-23): only **fr0ster** has moved this week — v6.2.0 shipped per-object-type tool descriptions (13 types) and v6.4.0 added per-instance `systemType` on `EmbeddableMcpServer` (multi-tenant embedding capability ARC-1 lacks — worth tracking). VSP, dassian-adt, mario, AWS Accelerator all quiet since before 2026-04-17.
+>
 > **2026-04-18 additions:** First-party workflow skills became an explicit productization layer. Research across SAP Help / ABAP docs, the `mcp-sap-docs` server, `sap-abap-base` steering docs, and `sap-skills` showed that common success patterns are workflow-level: system bootstrap, provider-contract selection, draft/auth defaults, impact-driven change analysis, revision/history inspection, formatter alignment, documentation capture, and Git/delivery context. ARC-1 now has enough primitives (`impact`, `VERSIONS`, `SAPTransport(action="history")`, `SAPLint` formatting/settings, `SKTD`, `SAPGit`) to encode those workflows directly in first-party RAP/common-use-case skills instead of just adding more raw endpoints.
 
 ### Phase A: Production Blockers (P0)
@@ -213,7 +231,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
 23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FTG2`, `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
 24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
-25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
+25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story (SM02 and /IWFND/ERROR_LOG already completed 2026-04-21 via FEAT-51 — SQL trace is the only fr0ster-v5 diagnostic still missing)
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
 26. ~~**FEAT-20** Source Version / Revision History (S) — promoted to P1/Phase B and completed 2026-04-17~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
@@ -1508,6 +1526,96 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 **How to contribute:** See the "How to contribute a fixture set from your own system" section in [docs/probe-adt-types.md](../docs/probe-adt-types.md). Each contributed fixture needs a short replay-test block in [`tests/unit/probe/replay.test.ts`](../tests/unit/probe/replay.test.ts) asserting the verdicts the contributor observes on their system — that's what turns the fixture into a permanent regression guard.
 
 **Why P3:** The probe is diagnostic-only; it does not change product behavior. Missing fixtures reduce confidence in classifier stability across SAP landscapes but do not cause user-visible defects. Priority rises if a regression in `classifyVerdict` ships undetected, or if issue [#162](https://github.com/marianfoo/arc-1/issues/162)-style "what types does my system actually support?" questions become a recurring support channel.
+
+---
+
+### FEAT-51: System Messages (SM02) + Gateway Error Log (/IWFND/ERROR_LOG)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — situational awareness (SM02) and OData/Gateway debugging (IWFND) for AI agents |
+| **Status** | **Completed** (2026-04-21, PR #174) |
+| **Source** | fr0ster v5.0.0 ADT feed reader, issue-level guidance in VSP/dassian trackers |
+
+**What:** Extended `SAPDiagnose` with two new actions that surface standard SAP runtime feeds via ADT:
+- `action="system_messages"` — SM02 system messages (list mode; filters: user, from, to, maxResults)
+- `action="gateway_errors"` — /IWFND/ERROR_LOG entries (list mode + detail mode via `detailUrl` preferred or `id+errorType`). On-prem only.
+
+**Why:** Closes the last fr0ster-v5-unique diagnostics gap. Before PR #174 ARC-1 had dumps + profiler traces via `SAPDiagnose`; now it has the full set (dumps, traces, system_messages, gateway_errors, quickfix, apply_quickfix). Gateway errors are the primary debugging signal for OData service failures — making them reachable from the LLM closes the loop between "user reports Fiori app error" and "agent finds the call stack in /IWFND/ERROR_LOG".
+
+**Implementation:**
+- `src/adt/diagnostics.ts` extended with feed-reader helpers for SM02 and /IWFND/ERROR_LOG.
+- New `SAPDiagnose` schema fields: `detailUrl`, `errorType`, `from`, `to`, `sections`, `includeFullText`.
+- Dumps action rewritten to return focused chapter sections (`kap0`/`kap3`/…) by default; `includeFullText=true` opt-in returns the full formatted blob (token-saving default).
+- Structured JSON response shapes in `src/adt/types.ts`.
+- Unit + integration + E2E coverage (`tests/unit/adt/diagnostics.test.ts`, `tests/integration/adt.integration.test.ts`, `tests/e2e/diagnostics.e2e.test.ts`).
+
+---
+
+### FEAT-52: ADT Type-Availability Probe (Diagnostic)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | S (1-2 days) |
+| **Risk** | None (diagnostic-only, no runtime gating) |
+| **Usefulness** | High for support; fuels FEAT-50 contributed fixture coverage |
+| **Status** | **Completed** (2026-04-20, PR #163) |
+| **Source** | Issue #162, PR #93/#96 regression lessons |
+
+**What:** Standalone `npm run probe` CLI that reports per-type ADT availability on any connected SAP system, plus quality metrics showing how much the probe's answers can be trusted.
+
+**Multi-signal classifier:** discovery + collection GET + known-object GET + release floor. The PR #94/#95 regression lesson baked in: only HTTP 404 counts as a hard "not available"; 400/403/405/500 mean "endpoint is there". Fixtures captured via `--save-fixtures` drive replay-based unit tests so classifier decisions are regression-proof.
+
+**Shipped fixtures:** synthetic 7.52 corpus + real NW 7.58 capture. Users can contribute fixture sets from their own systems — see FEAT-50.
+
+**Why diagnostic-only:** Explicit design choice after the RAP probe #93 → #96 regression. The probe reports but never gates runtime behavior.
+
+**Implementation:** `scripts/probe-adt-types.ts`, `src/probe/catalog.ts`, `src/probe/runner.ts`, `src/probe/fixtures.ts`, `tests/unit/probe/replay.test.ts`. See [docs/probe-adt-types.md](../docs/probe-adt-types.md).
+
+---
+
+### FEAT-53: SAPContext Impact — Sibling DDLS/DDLX Consistency Check
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low (additive, bounded, best-effort) |
+| **Usefulness** | High — catches a specific high-damage RAP bug class |
+| **Status** | **Completed** (2026-04-22, PR #177) |
+
+**What:** Additive sibling-consistency pass in `SAPContext(action="impact")` that surfaces the common RAP bug where one DDLS variant has DDLX metadata extensions but a sibling variant in the same package does not — leaving one routing path with missing UI fields.
+
+**Implementation:**
+- New helpers in `src/adt/cds-impact.ts` (`deriveSiblingStem`, `isSiblingNameMatch`, `buildSiblingExtensionFinding`).
+- New `siblingCheck` (default true) and `siblingMaxCandidates` (default 4, hard cap 10) inputs on `SAPContext`.
+- Emits `consistencyHints` + `siblingExtensionAnalysis` when siblings show asymmetric DDLX coverage. Base response remains backward-compatible.
+- Guard: stems shorter than 3 chars skip the analysis with a warning so e.g. "Z1" does not trigger a Z* scan of the entire namespace.
+- Sibling failures degrade to warnings only; outer catch logs via `logger.debug` so best-effort failures stay diagnosable.
+
+**Why:** Raw "upstream+downstream" dependency dumps don't flag this bug — you only notice it when a user reports "the UI works for customer X but not Y" and tracing the routing path. Detecting it automatically is exactly the kind of workflow-level differentiation the 2026-04-18 research note called out.
+
+---
+
+### FEAT-54: DTEL v2→v1 Content-Type Fallback + SICF-aware Error Hints
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low (narrow static allowlist, 415-only retry) |
+| **Usefulness** | High — fixes DTEL create on older releases + actionable hint on SICF misconfig |
+| **Status** | **Completed** (2026-04-20, PR #169) |
+
+**What:** Two compatibility improvements for DTEL create on older SAP releases:
+1. **Content-Type fallback** — `src/adt/crud.ts` now has a narrow static `CONTENT_TYPE_FALLBACKS` map; on HTTP 415 the client retries once with the fallback Content-Type (specifically `vnd.sap.adt.dataelements.v2+xml` → `vnd.sap.adt.dataelements.v1+xml` for DTEL). Not a generic retry loop — each entry must be a specific, tested compatibility gap.
+2. **`icf-handler-not-bound` error classification** — new SAP-domain category for DTEL create failures caused by a missing SICF node. The hint points operators to SICF activation rather than to SAP authorization.
+
+**Implementation:** `src/adt/crud.ts` (fallback map + 415 retry in both `createObject` and `updateObject`), `src/adt/errors.ts` (new `icf-handler-not-bound` category in `classifySapDomainError`), `src/handlers/intent.ts` (`formatErrorForLLM` routing). Unit tests in `tests/unit/adt/crud.test.ts` and `tests/unit/adt/errors.test.ts`.
 
 ---
 
