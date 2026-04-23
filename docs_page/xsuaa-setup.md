@@ -30,24 +30,32 @@ The `xs-security.json` file defines scopes, roles, and OAuth configuration:
 cf create-service xsuaa application arc1-xsuaa -c xs-security.json
 ```
 
-The included `xs-security.json` defines:
+The included `xs-security.json` defines 7 scopes:
 
-| Scope | Description | Tools |
-|-------|-------------|-------|
-| `read` | Read SAP objects | SAPRead, SAPSearch, SAPNavigate, SAPContext, SAPLint, SAPDiagnose, SAPManage (`features`/`probe`/`cache_stats`) |
-| `write` | Write SAP objects | SAPWrite, SAPActivate, SAPTransport, SAPManage mutating actions |
-| `data` | Preview named table contents | SAPRead (`TABLE_CONTENTS`) |
-| `sql` | Execute freestyle SQL queries | SAPQuery (freestyle SQL) |
-| `admin` | Administrative access | System management |
+| Scope          | Description                                                    | Gates                                                                                        |
+|----------------|----------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| `read`         | Read SAP objects, search, navigate, lint, diagnose             | `SAPRead`, `SAPSearch`, `SAPNavigate`, `SAPContext`, `SAPLint`, `SAPDiagnose`, SAPManage/SAPTransport/SAPGit read actions |
+| `write`        | Create / update / delete / activate ABAP objects               | `SAPWrite`, `SAPActivate`, `SAPManage` package + FLP mutations                               |
+| `data`         | Preview named table contents                                   | `SAPRead(type=TABLE_CONTENTS)`                                                               |
+| `sql`          | Execute freestyle SQL queries                                  | `SAPQuery`                                                                                   |
+| `transports`   | Create / release / delete CTS transports                       | `SAPTransport.create`/`release`/`delete`                                                     |
+| `git`          | Push / pull / commit via abapGit / gCTS                        | `SAPGit.clone`/`pull`/`push`/`commit`                                                        |
+| `admin`        | Implies ALL other scopes at runtime                            | Everything                                                                                   |
 
-| Role Collection | Scopes | Use Case |
-|-----------------|--------|----------|
-| ARC-1 Viewer | read | Read-only SAP access |
-| ARC-1 Developer | read, write | Development access |
-| ARC-1 Data Viewer | read, data | Read-only with table preview |
-| ARC-1 Developer + Data | read, write, data | Development + table preview |
-| ARC-1 Developer + SQL | read, write, data, sql | Development + freestyle SQL |
-| ARC-1 Admin | read, write, data, sql, admin | Full administrative access |
+And 6 pre-defined role collections (assignable to users in BTP Cockpit):
+
+| Role Collection           | Scopes                                                   | Use Case                                  |
+|---------------------------|----------------------------------------------------------|-------------------------------------------|
+| ARC-1 Viewer              | `read`                                                   | Read-only SAP access                      |
+| ARC-1 Developer           | `read`, `write`, `transports`, `git`                     | Full developer (write + CTS + Git)        |
+| ARC-1 Data Viewer         | `read`, `data`                                           | Read-only + table preview                 |
+| ARC-1 Developer + Data    | `read`, `write`, `data`, `transports`, `git`             | Developer + data preview                  |
+| ARC-1 Developer + SQL     | `read`, `write`, `data`, `sql`, `transports`, `git`      | Developer + data + freestyle SQL          |
+| ARC-1 Admin               | all 7                                                    | Administrative access                     |
+
+**Want a restricted developer** (can write code but cannot transport or push to Git)? Define your own role template in `xs-security.json` with just `[read, write]` scopes, redeploy, and assign it — or use `SAP_DENY_ACTIONS` on the server.
+
+See [authorization.md](authorization.md) for the full three-layer authorization model.
 
 ## Step 2: Bind Service and Configure
 
@@ -75,7 +83,7 @@ cf logs arc1-mcp-server --recent | grep XSUAA
 ## Step 3: Assign Role Collections
 
 1. Open **BTP Cockpit** → **Security** → **Role Collections**
-2. Find "ARC-1 Viewer" / "ARC-1 Editor" / "ARC-1 Admin"
+2. Find one of the shipped collections: "ARC-1 Viewer", "ARC-1 Developer", "ARC-1 Developer + Data", "ARC-1 Developer + SQL", "ARC-1 Data Viewer", or "ARC-1 Admin"
 3. Click the role collection → **Edit** → **Users** tab
 4. Add your BTP user (email address)
 5. Save
@@ -92,7 +100,7 @@ Expected response:
   "issuer": "https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/",
   "authorization_endpoint": "https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/authorize",
   "token_endpoint": "https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/token",
-  "scopes_supported": ["read", "write", "data", "sql", "admin"],
+  "scopes_supported": ["read", "write", "data", "sql", "transports", "git", "admin"],
   "response_types_supported": ["code"],
   "code_challenge_methods_supported": ["S256"],
   "grant_types_supported": ["authorization_code", "refresh_token"]

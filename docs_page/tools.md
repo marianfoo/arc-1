@@ -254,7 +254,7 @@ SAPWrite(action="create", type="SRVB", name="ZSB_TRAVEL_O4", package="$TMP",
   - If a transport IS required but none was provided, ARC-1 returns an actionable error message listing existing transports and guiding the caller to use `SAPTransport(action="list")` or `SAPTransport(action="create")` first.
   - If the pre-flight check fails (older system, permissions), ARC-1 proceeds and lets SAP handle the error.
 
-**Note:** Not available by default (read-only mode). Enable with `--allow-writes=false` or `--profile developer`. When enabled, write access is restricted to package `$TMP` (local objects). To write to other packages, configure `--allowed-packages` (e.g., `'Z*,$TMP'` — use single quotes in shell so `$TMP` isn't expanded).
+**Note:** Not available by default (read-only mode). Enable with `SAP_ALLOW_WRITES=true` / `--allow-writes=true`. Write access is restricted to package `$TMP` by default; to write to other packages, set `SAP_ALLOWED_PACKAGES='$TMP,Z*'` (quote in shell so `$TMP` isn't expanded).
 
 ---
 
@@ -279,7 +279,7 @@ SAPActivate(type="CLAS", name="ZCL_ORDER")
 SAPActivate(objects=[{type:"DDLS",name:"ZI_TRAVEL"},{type:"BDEF",name:"ZI_TRAVEL"},{type:"SRVD",name:"ZSD_TRAVEL"}])
 ```
 
-**Note:** Not available by default (read-only mode). Enable with `--allow-writes=false` or `--profile developer`.
+**Note:** Not available by default (read-only mode). Enable with `SAP_ALLOW_WRITES=true` / `--allow-writes=true`.
 
 ---
 
@@ -302,7 +302,7 @@ Navigate code: find definitions, references (where-used), code completion, and c
 
 **References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
 
-**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled (`--allow-free-sql=false` or `--profile viewer-sql`/`developer-sql`).
+**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled on the server (`SAP_ALLOW_FREE_SQL=true`) and the user must have the `sql` scope.
 
 **Examples:**
 ```
@@ -343,7 +343,7 @@ SAPQuery(sql="SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER 
 SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 ```
 
-**Note:** Not available by default (free SQL blocked). Enable with `--allow-free-sql=false` or `--profile viewer-sql`/`developer-sql`.
+**Note:** Not available by default (free SQL blocked). Enable with `SAP_ALLOW_FREE_SQL=true` / `--allow-free-sql=true`. User also needs the `sql` scope (or API-key profile `viewer-sql`/`developer-sql`/`admin`).
 
 ---
 

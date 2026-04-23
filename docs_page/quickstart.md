@@ -42,9 +42,9 @@ Hit `Ctrl+C` to stop. If this failed, check TLS (`--insecure` for self-signed de
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) and pick one of the two paths below.
 
-### Path A — read and search only
+### Path A — read and search only (safe defaults)
 
-`viewer` is the same as the built-in default, but keeping it explicit makes the intent obvious in local configs.
+No extra config needed. The defaults give read-only access.
 
 ```json
 {
@@ -56,8 +56,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
         "SAP_URL": "https://your-sap-host:44300",
         "SAP_USER": "YOUR_USER",
         "SAP_PASSWORD": "YOUR_PASS",
-        "SAP_CLIENT": "100",
-        // (safe defaults)
+        "SAP_CLIENT": "100"
       }
     }
   }
@@ -69,12 +68,12 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 | Capability | Result |
 |---|---|
 | Writes | Off |
-| Free SQL | Off |
+| Freestyle SQL | Off |
 | Named table preview | Off |
-| Transports | Off |
+| Transports / Git writes | Off |
 | Package scope | `$TMP` if you later enable writes |
 
-Want the same safe setup but with SQL + named table preview? Change only the profile line in that same `env` block to `"SAP_ALLOW_DATA_PREVIEW": "true", "SAP_ALLOW_FREE_SQL": "true"`. That keeps writes off and enables both `SAPQuery` modes.
+Want table preview + SQL added to the read-only setup? Add `"SAP_ALLOW_DATA_PREVIEW": "true"` and `"SAP_ALLOW_FREE_SQL": "true"` to the `env` block above.
 
 ### Path B — full local development
 
@@ -109,7 +108,7 @@ Same structure as Path A — only the `env` block changes. Use this only on a de
 | Transports | On |
 | Package scope | `*` (all packages) |
 
-Need something in between? Start from `SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true` for read-only + SQL, `SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true` for writes in `$TMP`, or pick another recipe in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes).
+Need something in between? Enable only the flags you need — each capability is a separate positive opt-in. Full model in [authorization.md](authorization.md#the-capability-matrix).
 
 Restart Claude Desktop after updating the config. The SAP tools (`SAPRead`, `SAPSearch`, etc.) should appear in the tool picker.
 
@@ -131,4 +130,4 @@ Claude should call `SAPRead` and return the ABAP source.
 
 - **Your SAP uses SSO (SAML / SPNEGO / X.509)?** Basic Auth won't work. See [local-development.md → SSO-only on-prem](local-development.md#sso-only-on-prem-cookie-extractor).
 - **Running on BTP or deploying for a team?** → [deployment.md](deployment.md).
-- **Full flag and profile reference** → [configuration-reference.md](configuration-reference.md).
+- **Understand the authorization model** → [authorization.md](authorization.md). **Full flag reference** → [configuration-reference.md](configuration-reference.md).

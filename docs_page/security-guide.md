@@ -94,32 +94,38 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 
 ## 5. Safety Configuration Best Practices
 
-### Recommended Production Settings
+All safety flags are **positive opt-ins** (default: `false` / restrictive). Enable only what you need.
 
-| Setting | Recommended Value | Why |
-|---------|------------------|-----|
-| `--allow-writes` | `true` for production systems | Prevents any write operations through ARC-1 |
-| `--allow-free-sql` | `true` for sensitive systems | Blocks arbitrary SQL queries against the database |
-| `--allow-data-preview` | `true` unless table preview is required | Prevents named table content preview |
-| `--allowed-packages` | `Z*,Y*,$TMP` | Restricts write operations (create, update, delete) to custom code packages (defaults to `$TMP` if not set). Read operations are not restricted by package. |
-| `--pp-strict` | `true` when PP is enabled | Rejects requests without user identity (no fallback to shared account) |
-| `--allow-transport-writes` | `false` unless needed | Transport management is opt-in |
-| `--allow-git-writes` | `false` unless needed | `SAPGit` write actions (clone/pull/push/commit/stage/...) are opt-in. Reads are not gated |
+### Recommended production defaults
 
-### Profile Reference
+| Setting                            | Recommended | Rationale                                                                                      |
+|------------------------------------|-------------|------------------------------------------------------------------------------------------------|
+| `SAP_ALLOW_WRITES`                 | `false` unless writes are needed | Blocks every mutation — object writes, activation, transport writes, git writes. |
+| `SAP_ALLOW_FREE_SQL`               | `false` on sensitive systems | Blocks arbitrary SQL queries against the database via `SAPQuery`.                               |
+| `SAP_ALLOW_DATA_PREVIEW`           | `false` unless table preview is required | Blocks named table content preview.                                              |
+| `SAP_ALLOWED_PACKAGES`             | `$TMP` or `Z*,Y*,$TMP` | Restricts writes to custom-code packages. Reads are never package-gated.                           |
+| `SAP_ALLOW_TRANSPORT_WRITES`       | `false` unless CTS needed | Opt-in for transport mutations (`SAPTransport.create`/`release`/`delete`).                           |
+| `SAP_ALLOW_GIT_WRITES`             | `false` unless Git needed | Opt-in for abapGit/gCTS mutations (`clone`/`pull`/`push`/`commit`).                                 |
+| `SAP_DENY_ACTIONS`                 | Use for fine-grained blocks | E.g. `SAPWrite.delete,SAPManage.flp_*` — overrides scope + flag checks.                              |
+| `SAP_PP_STRICT`                    | `true` when PP is enabled | Rejects requests without user identity (no fallback to shared account).                              |
 
-Profiles are safety presets that combine multiple flags. Use `--profile` to apply one:
+### API-key profiles (non-BTP multi-user)
 
-| Profile | Read-only | Block Data | Block SQL | Transports | Packages | Scopes Granted |
-|---------|-----------|------------|-----------|------------|----------|----------------|
-| `viewer` | Yes | Yes | Yes | No | — | `read` |
-| `viewer-data` | Yes | No | Yes | No | — | `read`, `data` |
-| `viewer-sql` | Yes | No | No | No | — | `read`, `data`, `sql` |
-| `developer` | No | Yes | Yes | Yes | `$TMP` | `read`, `write` |
-| `developer-data` | No | No | Yes | Yes | `$TMP` | `read`, `write`, `data` |
-| `developer-sql` | No | No | No | Yes | `$TMP` | `read`, `write`, `data`, `sql` |
+For HTTP-streamable deployments without XSUAA/OIDC, use `ARC1_API_KEYS` with per-key profile names. Each profile maps to a scope set AND a partial SafetyConfig intersected with the server ceiling.
 
-Individual flags override profile defaults. The server safety config is always the ceiling -- per-user scopes from JWT tokens can only restrict further.
+| Profile           | Scopes                                                  | Default `allowedPackages` |
+|-------------------|---------------------------------------------------------|---------------------------|
+| `viewer`          | `[read]`                                                | —                         |
+| `viewer-data`     | `[read, data]`                                          | —                         |
+| `viewer-sql`      | `[read, data, sql]`                                     | —                         |
+| `developer`       | `[read, write, transports, git]`                        | `$TMP`                    |
+| `developer-data`  | `[read, write, data, transports, git]`                  | `$TMP`                    |
+| `developer-sql`   | `[read, write, data, sql, transports, git]`             | `$TMP`                    |
+| `admin`           | all 7 scopes (implies everything)                       | (unrestricted)            |
+
+A user's effective safety is always the intersection of (1) the server ceiling, (2) their profile's partial safety, and (3) their JWT scopes. Per-user config can only tighten, never widen.
+
+Full authorization model: [authorization.md](authorization.md).
 
 ---
 

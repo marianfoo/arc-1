@@ -1,234 +1,171 @@
 # Authorization & Roles
 
-ARC-1 uses a **three-layer authorization model**: every mutation must pass all three layers to succeed. Each layer has a specific role, and each is enforced independently.
+Who can do what, and where it's checked.
+
+## In 30 seconds
+
+ARC-1 has **three layers of authorization**. Every mutation (anything that writes, activates, transports, or pushes to Git) must clear all three:
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│ Layer 1 — Server flag (ARC-1 config)                              │
-│   "Does this instance allow this capability at all?"              │
-│   Set via SAP_ALLOW_WRITES, SAP_ALLOW_TRANSPORT_WRITES, etc.      │
-└───────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌───────────────────────────────────────────────────────────────────┐
-│ Layer 2 — User scope (JWT / API-key profile)                      │
-│   "Does this user have permission to do this?"                    │
-│   Set via XSUAA role collections, OIDC scopes, or API-key profile │
-└───────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌───────────────────────────────────────────────────────────────────┐
-│ Layer 3 — SAP authorization (S_DEVELOP, S_ADT_RES, ...)           │
-│   "Does the underlying SAP user have this authorization?"         │
-│   Enforced by SAP per-user; reaches ARC-1 via principal propagation │
-└───────────────────────────────────────────────────────────────────┘
+  ╭──── Layer 1 — Server flag ────╮    "Is this capability enabled on this instance?"
+  │      SAP_ALLOW_WRITES, etc.   │     Admin sets once at server startup
+  ╰───────────────────────────────╯
+  ╭──── Layer 2 — User scope ─────╮    "Does THIS user have permission?"
+  │      JWT / API-key profile    │     Per-user, via XSUAA / OIDC / API-key profile
+  ╰───────────────────────────────╯
+  ╭──── Layer 3 — SAP auth ───────╮    "Does the SAP user have the authorization?"
+  │      S_DEVELOP, S_ADT_RES     │     SAP's own PFCG roles per user
+  ╰───────────────────────────────╯
 ```
 
-**The two-gate rule**: every mutation (object write, transport write, git write, activation, FLP mutation) requires BOTH Layer 1 (server flag) AND Layer 2 (user scope). Layer 3 (SAP) is ARC-1-invariant and always applies. Reads of SAP object source/metadata require only Layer 2 (`read` scope); the server has no opt-out for plain reads. Table data preview and freestyle SQL have their own (flag, scope) pair.
+**Reads of ABAP object source/metadata only require Layer 2** — ARC-1 never gates plain reads at the server level. Everything else needs both Layer 1 AND Layer 2 to succeed. Layer 3 is SAP's own check and always applies.
+
+**Three tips**:
+- Defaults are restrictive: `SAP_ALLOW_WRITES=false`, no SQL, no data preview, `$TMP` only.
+- `admin` scope on a JWT expands to all 7 scopes automatically.
+- `SAP_ALLOW_WRITES=false` blocks **every** mutation — object writes, transport writes, git writes, activation. There is no loophole.
 
 ---
 
-## Server flags (Layer 1)
+## The capability matrix
 
-Seven positive opt-ins, all default `false` / restrictive:
+This single table is the source of truth for what you need to grant for each operation. If you understand this table, you understand ARC-1 authorization.
 
-| Flag / env var                       | Default    | Gates                                                        |
-| ------------------------------------ | ---------- | ------------------------------------------------------------ |
-| `SAP_ALLOW_WRITES` / `--allow-writes` | `false`    | Any object mutation (create, update, delete, activate, FLP)  |
-| `SAP_ALLOW_DATA_PREVIEW` / `--allow-data-preview` | `false` | Named table content preview (`SAPRead(type=TABLE_CONTENTS)`)  |
-| `SAP_ALLOW_FREE_SQL` / `--allow-free-sql` | `false` | Freestyle SQL via `SAPQuery`                                 |
-| `SAP_ALLOW_TRANSPORT_WRITES` / `--allow-transport-writes` | `false` | Transport mutations (create / release / delete / reassign)   |
-| `SAP_ALLOW_GIT_WRITES` / `--allow-git-writes` | `false`  | Git mutations (clone / pull / push / commit)                 |
-| `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | `$TMP` | Package allowlist for writes (`*` = any; reads unrestricted) |
-| `SAP_ALLOWED_TRANSPORTS` / `--allowed-transports` | `[]` | Advanced: specific CTS transport ID whitelist                |
-| `SAP_DENY_ACTIONS` / `--deny-actions` | `[]`     | Fine-grained per-action denial (see below)                   |
+| Capability                              | Scope (Layer 2) | Server flag (Layer 1)                              |
+| --------------------------------------- | --------------- | -------------------------------------------------- |
+| Read object source / metadata           | `read`          | — (always on)                                      |
+| Search objects                          | `read`          | — (always on)                                      |
+| Navigate (find def / references)        | `read`          | — (always on)                                      |
+| Lint                                    | `read`          | — (always on)                                      |
+| Diagnose (ATC, dumps, unit tests)       | `read`          | — (always on)                                      |
+| Read transport info / list / history    | `read`          | — (always on)                                      |
+| Read abapGit / gCTS info / list         | `read`          | — (always on)                                      |
+| Preview named table contents            | `data`          | `SAP_ALLOW_DATA_PREVIEW=true`                      |
+| Run freestyle SQL                       | `sql`           | `SAP_ALLOW_FREE_SQL=true`                          |
+| Create / update / delete object         | `write`         | `SAP_ALLOW_WRITES=true`                            |
+| Activate object                         | `write`         | `SAP_ALLOW_WRITES=true`                            |
+| Package / FLP management                 | `write`         | `SAP_ALLOW_WRITES=true`                            |
+| Create / release / delete transport     | `transports`    | `SAP_ALLOW_WRITES=true` + `SAP_ALLOW_TRANSPORT_WRITES=true` |
+| Clone / pull / push / commit (Git)      | `git`           | `SAP_ALLOW_WRITES=true` + `SAP_ALLOW_GIT_WRITES=true`       |
 
-**Important**: `SAP_ALLOW_WRITES=false` truly blocks ALL mutations — object writes, transport writes, git writes, and activation. Transport reads and git reads remain available (gated only by scope). `SAP_ALLOW_TRANSPORT_WRITES` and `SAP_ALLOW_GIT_WRITES` are sub-gates within writes: admin must enable `SAP_ALLOW_WRITES=true` AND the specific capability for mutations to work.
+For writes, `SAP_ALLOWED_PACKAGES` also applies — by default `$TMP` only. Set it to e.g. `$TMP,Z*` to allow writes to Z-packages.
 
----
-
-## Scopes (Layer 2)
-
-Seven scopes, JWT-bearing:
-
-| Scope         | Grants                                                      | Implies                      |
-| ------------- | ----------------------------------------------------------- | ---------------------------- |
-| `read`        | Read ABAP object source, search, navigate, diagnose, lint   | —                            |
-| `write`       | Create / update / delete objects; activate                  | `read` (implicit)            |
-| `data`        | Preview named table contents (`TABLE_CONTENTS`)             | —                            |
-| `sql`         | Execute freestyle SQL queries                               | `data` (implicit)            |
-| `transports`  | Create / release / delete CTS transport requests            | —                            |
-| `git`         | abapGit / gCTS mutations (clone / pull / push)              | —                            |
-| `admin`       | Full administrative access                                  | **all other scopes** (v0.7)  |
-
-**`admin` is special**: when extracted from a JWT (XSUAA or OIDC), it expands to include all seven scopes. An admin user never needs explicit `read`/`write`/etc. grants.
-
-`write` implies `read` — a developer who can write can also read. `sql` implies `data` — a user who can run SQL can also preview tables. These are the only non-admin implications. `write` does NOT imply `transports` or `git` — those are orthogonal and require explicit grants.
+`SAP_DENY_ACTIONS` provides an extra deny-list layer that overrides everything above (see [Advanced: deny actions](#advanced-deny-actions)).
 
 ---
 
-## The two-gate matrix
+## Scopes
 
-Every ARC-1 tool action routes through this matrix:
+Seven scopes, carried in the user's JWT or derived from an API-key profile:
 
-| Capability                          | Required scope (Layer 2) | Required server flag (Layer 1)                   |
-| ----------------------------------- | ------------------------ | ------------------------------------------------ |
-| Read object source / metadata       | `read`                   | (none)                                           |
-| Search objects                      | `read`                   | (none)                                           |
-| Navigate (find def / references)    | `read`                   | (none)                                           |
-| Lint                                | `read`                   | (none)                                           |
-| Diagnose (ATC, dumps, unit tests)   | `read`                   | (none)                                           |
-| Preview named table contents        | `data`                   | `allowDataPreview=true`                          |
-| Run freestyle SQL                   | `sql`                    | `allowFreeSQL=true`                              |
-| Create / update / delete object     | `write`                  | `allowWrites=true`                               |
-| Activate object                     | `write`                  | `allowWrites=true`                               |
-| Read transport info / list          | `read`                   | (none)                                           |
-| Create / release / delete transport | `transports`             | `allowWrites=true` + `allowTransportWrites=true` |
-| Read Git info / repos               | `read`                   | (none)                                           |
-| Push / pull / commit via Git        | `git`                    | `allowWrites=true` + `allowGitWrites=true`       |
+| Scope          | Grants                                                    | Implies                |
+| -------------- | --------------------------------------------------------- | ---------------------- |
+| `read`         | Read source, search, navigate, lint, diagnose             | —                      |
+| `write`        | Create / update / delete / activate ABAP objects          | `read`                 |
+| `data`         | Preview named table contents                               | —                      |
+| `sql`          | Execute freestyle SQL                                      | `data`                 |
+| `transports`   | Create / release / delete CTS transport requests           | —                      |
+| `git`          | abapGit / gCTS push / pull / commit                        | —                      |
+| `admin`        | Everything                                                 | all other scopes       |
 
-The internal `ACTION_POLICY` matrix (in `src/authz/policy.ts`) is the single source of truth for the per-action mappings. The CI validator (`npm run validate:policy`) asserts every action in `src/handlers/schemas.ts` has a matching policy entry.
+`write` does NOT imply `transports` or `git` — those are orthogonal. A plain developer can modify `$TMP` code; to move that code into a transport or push to Git, they need the additional scope.
 
 ---
 
-## API-key profiles (for non-BTP deployments)
+## How scopes get assigned
 
-When auth is via `ARC1_API_KEYS="key:profile,key:profile"`, the profile name determines both the scope set AND a partial `SafetyConfig` that is INTERSECTED with the server ceiling (tight side wins field-by-field):
+| Auth method                | How the user's scopes are determined                                  |
+| -------------------------- | --------------------------------------------------------------------- |
+| **No auth** (stdio / dev)  | Scope checks skipped entirely; Layer 1 flags are the only control     |
+| **API key** (ARC1_API_KEYS) | Profile name attached to the key → fixed scope set + partial safety  |
+| **OIDC / JWT**             | `scope` / `scp` claim in the JWT                                      |
+| **XSUAA** (BTP)            | `scope` claim in the XSUAA-issued JWT → determined by role collection |
 
-| Profile           | Scopes granted                                              | Safety (intersected with server)                        |
-| ----------------- | ----------------------------------------------------------- | ------------------------------------------------------- |
-| `viewer`          | `[read]`                                                    | Read-only; no data preview; no SQL                      |
-| `viewer-data`     | `[read, data]`                                              | Read + data preview                                     |
-| `viewer-sql`      | `[read, data, sql]`                                         | Read + data + SQL                                       |
-| `developer`       | `[read, write, transports, git]`                            | Write + transports + git, $TMP only                     |
-| `developer-data`  | `[read, write, data, transports, git]`                      | Developer + data preview                                |
-| `developer-sql`   | `[read, write, data, sql, transports, git]`                 | Developer + data + SQL                                  |
-| `admin`           | `[read, write, data, sql, transports, git, admin]`          | All `allow*` true, unrestricted packages                |
+### API-key profiles (non-BTP)
 
-Example: `ARC1_API_KEYS="abc123:viewer,def456:developer-sql"`.
+`ARC1_API_KEYS="key:profile,key:profile"`. Each profile maps to both a scope set AND a partial safety config intersected with the server ceiling:
 
-**Intersection semantics**: if the server has `allowWrites=false`, even a `developer`-profile key gets `allowWrites=false` (server ceiling wins). If the profile has `allowedPackages=['$TMP']` and server has `allowedPackages=['$TMP', 'Z*']`, the key sees `['$TMP']` (profile narrows). Profile cannot exceed server — if profile says `['Z*']` but server says `['$TMP']`, server wins.
+| Profile           | Scopes                                                  | Package default |
+| ----------------- | ------------------------------------------------------- | --------------- |
+| `viewer`          | `[read]`                                                | —               |
+| `viewer-data`     | `[read, data]`                                          | —               |
+| `viewer-sql`      | `[read, data, sql]`                                     | —               |
+| `developer`       | `[read, write, transports, git]`                        | `$TMP`          |
+| `developer-data`  | `[read, write, data, transports, git]`                  | `$TMP`          |
+| `developer-sql`   | `[read, write, data, sql, transports, git]`             | `$TMP`          |
+| `admin`           | all 7                                                   | (unrestricted)  |
 
----
+Example: `ARC1_API_KEYS="abc:viewer,def:developer-sql"`.
 
-## BTP XSUAA setup
+The profile **cannot exceed** the server ceiling — if the server has `SAP_ALLOW_WRITES=false`, even a `developer` key cannot write.
 
-On BTP, scopes come from the user's JWT issued by XSUAA. Roles are configured in `xs-security.json`:
+### BTP XSUAA (role templates)
 
-**Shipped role templates** (customize in your xs-security.json if needed):
+`xs-security.json` ships with 5 role templates and 6 role collections. BTP admins assign role collections to users via SAP BTP Cockpit → Security.
 
-| Role template    | Scopes                                                                        |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `MCPViewer`      | `read`                                                                        |
-| `MCPDataViewer`  | `data`                                                                        |
-| `MCPSqlUser`     | `data`, `sql`                                                                 |
-| `MCPDeveloper`   | `read`, `write`, `transports`, `git`                                          |
-| `MCPAdmin`       | `read`, `write`, `data`, `sql`, `transports`, `git`, `admin` (all)            |
+| Role template    | Scopes                                                              |
+| ---------------- | ------------------------------------------------------------------- |
+| `MCPViewer`      | `read`                                                              |
+| `MCPDataViewer`  | `data`                                                              |
+| `MCPSqlUser`     | `data`, `sql`                                                       |
+| `MCPDeveloper`   | `read`, `write`, `transports`, `git`                                |
+| `MCPAdmin`       | all 7                                                               |
 
-**Shipped role collections** (BTP admin assigns these to users):
+Role collections combine templates — e.g. `ARC-1 Developer + SQL` = `MCPDeveloper` + `MCPSqlUser`. See [XSUAA Setup](xsuaa-setup.md) for assignment details.
 
-- `ARC-1 Viewer` → `MCPViewer`
-- `ARC-1 Developer` → `MCPDeveloper`
-- `ARC-1 Data Viewer` → `MCPViewer` + `MCPDataViewer`
-- `ARC-1 Developer + Data` → `MCPDeveloper` + `MCPDataViewer`
-- `ARC-1 Developer + SQL` → `MCPDeveloper` + `MCPSqlUser`
-- `ARC-1 Admin` → `MCPAdmin`
-
-**Want a restricted developer?** (e.g., write access but no CTS and no Git.) Create your own role template in the xs-security.json with just `[read, write]`, redeploy, and assign it to the user. Or use `SAP_DENY_ACTIONS` to block specific actions globally. See the [XSUAA Setup Guide](xsuaa-setup.md).
+**Want a restricted developer** (e.g. can write but cannot transport or push to Git)? Define your own role template in `xs-security.json` with just `[read, write]` and redeploy. Or block specific actions via `SAP_DENY_ACTIONS`.
 
 ---
 
-## Deny actions (advanced)
+## Advanced: deny actions
 
-`SAP_DENY_ACTIONS` provides fine-grained per-action blocking that overrides scope + flag checks. Use cases:
-
-- "Developers can write but cannot delete" → `SAP_DENY_ACTIONS=SAPWrite.delete`
-- "Disable all FLP management" → `SAP_DENY_ACTIONS=SAPManage.flp_*`
-- "Block all Git operations on this instance" → `SAP_DENY_ACTIONS=SAPGit`
+`SAP_DENY_ACTIONS` is a fine-grained blocklist that applies AFTER scope + flag checks pass. Use it when you need to say "developers can write, but cannot delete" — scopes and flags are too coarse for that.
 
 **Grammar** (tool-qualified only):
 
-- `Tool` — deny all actions of a tool (e.g., `SAPTransport`)
-- `Tool.action` — exact action (e.g., `SAPWrite.delete`)
-- `Tool.glob*` — glob within a tool (e.g., `SAPManage.flp_*`)
-- Cross-tool wildcards like `*.delete` are **rejected** — forces admins to be explicit about which tool.
+| Form             | Meaning                                          | Example                        |
+| ---------------- | ------------------------------------------------ | ------------------------------ |
+| `Tool`           | Deny every action of this tool                   | `SAPGit`                       |
+| `Tool.action`    | Deny exactly this action                         | `SAPWrite.delete`              |
+| `Tool.glob*`    | Glob match within a tool (`*` matches anything) | `SAPManage.flp_*`              |
 
-**Storage**: `SAP_DENY_ACTIONS` accepts either an inline CSV OR a filesystem path to a JSON array:
+Cross-tool wildcards like `*.delete` are rejected at startup.
+
+**Storage**: inline CSV in the env var, OR a filesystem path to a JSON array. Auto-detected by `/`, `./`, `~/`, or `../` prefix.
 
 ```bash
-# Inline CSV
+# Inline
 SAP_DENY_ACTIONS="SAPWrite.delete,SAPManage.flp_*"
 
-# File path (auto-detected by `/`, `./`, `~/`, `../` prefix)
-SAP_DENY_ACTIONS="./deny-actions.json"
-# Contents of ./deny-actions.json:
-# ["SAPWrite.delete", "SAPManage.flp_*"]
+# File
+SAP_DENY_ACTIONS="./deny-actions.json"   # contains: ["SAPWrite.delete", "SAPManage.flp_*"]
 ```
 
-**Fail-fast**: server aborts at startup if `SAP_DENY_ACTIONS` references an unknown tool or action, has invalid grammar, or cannot be read/parsed. No silent fallback.
+ARC-1 **aborts at startup** if the value references an unknown tool / action, has invalid grammar, or cannot be read. No silent fallback.
 
 ---
 
-## Recipes — reaching a specific state
+## Recipes
 
-Common configurations, copy-paste ready. Set these in `.env` or pass as CLI flags.
+The three common starting points. For the full reference (every flag, every default), see [configuration-reference.md](configuration-reference.md). For the explanation of the migration from v0.6, see [updating.md](updating.md).
 
-### Local read-only exploration (default)
+### Just read and explore (default)
 
-No config needed. Defaults are restrictive. Reads of source/metadata work; everything else is blocked.
+No config needed. Defaults are restrictive — reads work, everything else is blocked.
 
-### Local developer (writes to $TMP and Z* packages)
-
-```bash
-SAP_ALLOW_WRITES=true
-SAP_ALLOWED_PACKAGES="$TMP,Z*"
-```
-
-### Local developer + CTS transports
+### Local developer
 
 ```bash
 SAP_ALLOW_WRITES=true
 SAP_ALLOWED_PACKAGES="$TMP,Z*"
-SAP_ALLOW_TRANSPORT_WRITES=true
+# Optional, opt-in as needed:
+# SAP_ALLOW_TRANSPORT_WRITES=true
+# SAP_ALLOW_GIT_WRITES=true
+# SAP_ALLOW_DATA_PREVIEW=true
+# SAP_ALLOW_FREE_SQL=true
 ```
 
-### Local developer + table data preview
-
-```bash
-SAP_ALLOW_WRITES=true
-SAP_ALLOWED_PACKAGES="$TMP,Z*"
-SAP_ALLOW_DATA_PREVIEW=true
-```
-
-### Local developer + freestyle SQL
-
-```bash
-SAP_ALLOW_WRITES=true
-SAP_ALLOWED_PACKAGES="$TMP,Z*"
-SAP_ALLOW_DATA_PREVIEW=true
-SAP_ALLOW_FREE_SQL=true
-```
-
-### Local developer + abapGit/gCTS writes
-
-```bash
-SAP_ALLOW_WRITES=true
-SAP_ALLOWED_PACKAGES="$TMP,Z*"
-SAP_ALLOW_GIT_WRITES=true
-```
-
-### Full unrestricted local dev (not for production)
-
-```bash
-SAP_ALLOW_WRITES=true
-SAP_ALLOW_DATA_PREVIEW=true
-SAP_ALLOW_FREE_SQL=true
-SAP_ALLOW_TRANSPORT_WRITES=true
-SAP_ALLOW_GIT_WRITES=true
-SAP_ALLOWED_PACKAGES="*"
-```
-
-### Multi-user production: writes allowed server-wide, users restricted by scope
+### Production multi-user (HTTP transport + API-key profiles)
 
 ```bash
 SAP_TRANSPORT=http-streamable
@@ -238,49 +175,43 @@ SAP_ALLOW_FREE_SQL=true
 SAP_ALLOW_TRANSPORT_WRITES=true
 SAP_ALLOW_GIT_WRITES=true
 SAP_ALLOWED_PACKAGES="$TMP,Z*,Y*"
-ARC1_API_KEYS="key-viewer-abc:viewer,key-dev-def:developer,key-admin-xyz:admin"
+ARC1_API_KEYS="viewer-key:viewer,dev-key:developer,admin-key:admin"
 ```
 
-Each API key now receives the intersection of its profile with the server ceiling.
-
-### Deny dangerous actions even for developers
-
-```bash
-SAP_ALLOW_WRITES=true
-SAP_ALLOWED_PACKAGES="$TMP,Z*"
-SAP_DENY_ACTIONS="SAPWrite.delete,SAPManage.flp_delete_catalog"
-```
+The server runs at maximum capability; individual users get whatever their API-key profile allows (intersected with the server ceiling).
 
 ---
 
 ## Troubleshooting — "Which layer blocked me?"
 
-When you get a scope or safety error, identify which layer by the error text:
+| Error fragment                                      | Layer     | Fix                                                                 |
+| --------------------------------------------------- | --------- | ------------------------------------------------------------------- |
+| `Insufficient scope: 'write' required for ...`      | Layer 2   | User's JWT / API-key profile lacks `write`                          |
+| `Insufficient scope: 'transports' required ...`     | Layer 2   | User lacks `transports` — grant `MCPDeveloper` or `developer` profile |
+| `Insufficient scope: 'git' required ...`            | Layer 2   | User lacks `git` — grant `MCPDeveloper` or `developer` profile      |
+| `allowWrites=false blocks mutations`                | Layer 1   | Set `SAP_ALLOW_WRITES=true` on the server                           |
+| `allowTransportWrites=false`                        | Layer 1   | Set `SAP_ALLOW_TRANSPORT_WRITES=true` (plus `SAP_ALLOW_WRITES=true`) |
+| `allowGitWrites=false`                              | Layer 1   | Set `SAP_ALLOW_GIT_WRITES=true` (plus `SAP_ALLOW_WRITES=true`)      |
+| `allowDataPreview=false`                            | Layer 1   | Set `SAP_ALLOW_DATA_PREVIEW=true`                                   |
+| `allowFreeSQL=false`                                | Layer 1   | Set `SAP_ALLOW_FREE_SQL=true`                                       |
+| `Operations on package '...' are blocked`           | Layer 1   | Add the package to `SAP_ALLOWED_PACKAGES`                           |
+| `denied by server policy (SAP_DENY_ACTIONS)`        | Deny-list | Remove or narrow the pattern in `SAP_DENY_ACTIONS`                  |
+| `No authorization for object ...`                   | Layer 3   | Grant SAP authorization (S_DEVELOP, S_ADT_RES) via SU01 / PFCG      |
+| `Legacy authorization config detected`              | Migration | Old env var like `SAP_READ_ONLY`. See [updating.md](updating.md#v07-authorization-refactor-breaking-change) |
 
-| Error fragment                                    | Layer       | Typical cause                                      | Fix                                                                       |
-| ------------------------------------------------- | ----------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
-| `Insufficient scope: 'write' required for ...`    | Layer 2     | Your JWT / API-key profile lacks `write`           | Assign the correct role collection (BTP) or API-key profile               |
-| `Insufficient scope: 'transports' required ...`   | Layer 2     | Missing `transports` scope                         | Grant `MCPDeveloper` role template or use `developer` API-key profile     |
-| `Insufficient scope: 'git' required ...`          | Layer 2     | Missing `git` scope                                | Same (all developer-\* profiles include `git`)                            |
-| `allowWrites=false blocks mutations`              | Layer 1     | Server's `allowWrites` is false                    | Set `SAP_ALLOW_WRITES=true` on the server                                  |
-| `allowTransportWrites=false`                      | Layer 1     | Transport-write flag is off                        | Set `SAP_ALLOW_TRANSPORT_WRITES=true` + ensure `allowWrites=true`         |
-| `allowGitWrites=false`                            | Layer 1     | Git-write flag is off                              | Set `SAP_ALLOW_GIT_WRITES=true` + ensure `allowWrites=true`               |
-| `allowDataPreview=false`                          | Layer 1     | Table preview flag is off                          | Set `SAP_ALLOW_DATA_PREVIEW=true`                                         |
-| `allowFreeSQL=false`                              | Layer 1     | Freestyle SQL flag is off                          | Set `SAP_ALLOW_FREE_SQL=true`                                             |
-| `Operations on package '...' are blocked`         | Layer 1     | Package not in `allowedPackages`                   | Add to `SAP_ALLOWED_PACKAGES` or use `*`                                   |
-| `denied by server policy (SAP_DENY_ACTIONS)`      | Layer 1 +   | Matching deny pattern                              | Remove / adjust the pattern in `SAP_DENY_ACTIONS`                         |
-| `No authorization for object ...` (SAP-side)      | Layer 3     | SAP user lacks S_DEVELOP / S_ADT_RES authorization | Grant SAP authorization via SU01 / PFCG                                   |
-| `Legacy authorization config detected`            | Migration   | You have a removed env var like `SAP_READ_ONLY`    | See [Upgrading](updating.md) for the old→new mapping                       |
+**Debugging tools**:
 
-**Quick debugging tip**: run `arc-1 config show` on the server to see the resolved effective policy with per-field source attribution. For contradictions (like `allowTransportWrites=true` while `allowWrites=false`), look for `WARN: config contradiction: ...` in startup logs.
+- `arc-1 config show` — dumps the resolved effective policy with per-field source attribution
+- Startup log line: `effective safety: writes=YES data=NO ...` — shows the final values
+- Startup `WARN: config contradiction: ...` — flags useless combos (like `allowTransportWrites=true` with `allowWrites=false`)
 
 ---
 
 ## References
 
-- [Configuration Reference](configuration-reference.md) — flat list of every env var / flag
-- [XSUAA Setup](xsuaa-setup.md) — BTP role templates, assignment, SSO
-- [OAuth / JWT Setup](oauth-jwt-setup.md) — self-hosted OIDC IdPs (Entra ID, Okta, ...)
+- [Configuration Reference](configuration-reference.md) — every flag and env var
+- [XSUAA Setup](xsuaa-setup.md) — BTP role templates, SSO
+- [OAuth / JWT Setup](oauth-jwt-setup.md) — Entra ID, Okta, self-hosted OIDC
 - [Principal Propagation Setup](principal-propagation-setup.md) — per-user SAP auth
 - [Security Guide](security-guide.md) — hardening recommendations
-- [Upgrading](updating.md) — migration guide from v0.6.x
+- [Upgrading](updating.md) — migration guide from v0.6

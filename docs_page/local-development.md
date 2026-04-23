@@ -152,34 +152,33 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 
 ---
 
-## Safety profiles
+## Safety flags
 
-> **ARC-1 ships read-only.** For local development, start with a profile first and reach for individual flags only when you need a custom mix.
+ARC-1 ships read-only. For local development, enable only what you need via positive-opt-in flags.
 
 ### What's blocked by default
 
-| Capability | Default | Flag that blocks it | Tools/actions disabled when blocked |
-|---|---|---|---|
-| Writes | **off** | `SAP_ALLOW_WRITES=true` | `SAPWrite` (create/update/delete/edit_method), `SAPActivate`, FLP workflow actions in `SAPManage` |
-| Free SQL | **off** | `SAP_ALLOW_FREE_SQL=true` | `SAPQuery action=run_query` |
-| Named table preview | **off** | `SAP_ALLOW_DATA_PREVIEW=true` | `SAPQuery action=table_contents` |
-| Transports | **off** | `SAP_ALLOW_TRANSPORT_WRITES=false` | **all** `SAPTransport` actions — including list/get |
-| Git writes | **off** | `SAP_ALLOW_GIT_WRITES=false` | `SAPGit` writes (clone/pull/push/commit/stage/switch_branch/create_branch/unlink). Reads (list_repos/whoami/branches/history/external_info/check) still work. **Not enabled by any profile** — explicit opt-in only |
-| Package scope for writes | `$TMP` only | `SAP_ALLOWED_PACKAGES` | Writes to packages outside the allowlist fail. **Reads are never restricted by package.** |
+| Capability                 | Default | Opt-in flag                           |
+|----------------------------|---------|---------------------------------------|
+| Object writes              | off     | `SAP_ALLOW_WRITES=true`               |
+| Named table preview        | off     | `SAP_ALLOW_DATA_PREVIEW=true`         |
+| Freestyle SQL              | off     | `SAP_ALLOW_FREE_SQL=true`             |
+| Transport mutations        | off     | `SAP_ALLOW_TRANSPORT_WRITES=true` (also needs `SAP_ALLOW_WRITES=true`) |
+| Git mutations              | off     | `SAP_ALLOW_GIT_WRITES=true` (also needs `SAP_ALLOW_WRITES=true`)       |
+| Writes to any package       | `$TMP` only | `SAP_ALLOWED_PACKAGES="$TMP,Z*"` (or `*` for any) |
+
+Transport reads (list / get / check / history) and Git reads (list_repos / whoami / branches / ...) work without any opt-in flag — only mutations are gated.
 
 ### Common local starting points
 
-- (safe defaults — no config needed) or nothing: read/search only, same safe default.
-- `SAP_ALLOW_DATA_PREVIEW=true`: still read-only, but enables named table preview.
-- `SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true`: still read-only, but enables both named table preview and free SQL.
-- `SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true`: writes + transports in `$TMP`, still no SQL or named table preview.
-- `SAP_ALLOW_WRITES=true SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true SAP_ALLOW_TRANSPORT_WRITES=true` + `SAP_ALLOWED_PACKAGES='*'`: full local development access. (In shell, quote the `*` — otherwise the shell expands it to filenames before ARC-1 sees it.)
+- **Just explore** (default): no config needed.
+- **Table preview + SQL**: `SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true`.
+- **Developer**: `SAP_ALLOW_WRITES=true SAP_ALLOWED_PACKAGES="$TMP,Z*"` — optionally add `SAP_ALLOW_TRANSPORT_WRITES=true` or `SAP_ALLOW_GIT_WRITES=true`.
+- **Full local dev**: all 5 `SAP_ALLOW_*=true` + `SAP_ALLOWED_PACKAGES='*'` (quote the `*` in shell so it isn't expanded to filenames).
 
-Need something in between? The full recipe list lives in [configuration-reference.md](configuration-reference.md#common-recipes).
+For fine-grained blocking even after the above flags are set, use `SAP_DENY_ACTIONS` — e.g. `SAP_DENY_ACTIONS="SAPWrite.delete,SAPManage.flp_*"`. See [authorization.md](authorization.md#advanced-deny-actions).
 
-For surgical policies, use `SAP_DENY_ACTIONS` with tool-qualified entries such as
-`SAPWrite.delete` or `SAPManage.flp_*`. Full flag table: [configuration-reference.md](configuration-reference.md).
-Production hardening recommendations: [security-guide.md](security-guide.md).
+Full model and per-user scope handling: [authorization.md](authorization.md). Production hardening: [security-guide.md](security-guide.md).
 
 ---
 

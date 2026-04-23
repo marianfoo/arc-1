@@ -98,9 +98,9 @@ Each key gets both scopes (tool visibility) and safety restrictions from its pro
 
 | Key | Profile | Can Do | Cannot Do |
 |-----|---------|--------|-----------|
-| `$VIEWER_KEY` | `viewer` | Read source, search, navigate | Write, data, SQL |
-| `$DEV_KEY` | `developer` | Read + write source, transports | Data preview, SQL |
-| `$SQL_KEY` | `developer-sql` | Everything | Nothing restricted |
+| `$VIEWER_KEY` | `viewer` | Read source, search, navigate, lint, diagnose | Write, data preview, SQL, transports, git |
+| `$DEV_KEY` | `developer` | All of viewer + write source + transport mutations + git mutations | Data preview, freestyle SQL |
+| `$SQL_KEY` | `developer-sql` | All of developer + data preview + freestyle SQL | Nothing (server ceiling still applies) |
 
 ### 3. Test Per-Key Access
 
@@ -120,16 +120,17 @@ curl -X POST -H "Authorization: Bearer $DEV_KEY" \
 
 ### Available Profiles
 
-| Profile | Scopes | Description |
-|---------|--------|-------------|
-| `viewer` | `read` | Read-only source code access |
-| `viewer-data` | `read`, `data` | Source + table preview |
-| `viewer-sql` | `read`, `data`, `sql` | Source + table preview + SQL |
-| `developer` | `read`, `write` | Full development, no data |
-| `developer-data` | `read`, `write`, `data` | Development + table preview |
-| `developer-sql` | `read`, `write`, `data`, `sql` | Full access |
+| Profile           | Scopes                                                  | Description                              |
+|-------------------|---------------------------------------------------------|------------------------------------------|
+| `viewer`          | `read`                                                  | Read-only source + search + navigate     |
+| `viewer-data`     | `read`, `data`                                          | + named table preview                    |
+| `viewer-sql`      | `read`, `data`, `sql`                                   | + freestyle SQL                          |
+| `developer`       | `read`, `write`, `transports`, `git`                    | Full developer (write + CTS + Git)       |
+| `developer-data`  | `read`, `write`, `data`, `transports`, `git`            | Developer + data preview                 |
+| `developer-sql`   | `read`, `write`, `data`, `sql`, `transports`, `git`     | Developer + data + SQL                   |
+| `admin`           | all 7 scopes                                            | Admin — implies everything at runtime    |
 
-See [Authorization & Roles](authorization.md) for detailed scope descriptions.
+Each profile also carries a partial SafetyConfig that intersects with the server ceiling (never widens). Full authorization model: [authorization.md](authorization.md).
 
 ## Client Configuration
 

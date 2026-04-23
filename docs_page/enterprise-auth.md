@@ -181,7 +181,7 @@ For BTP deployments connecting to on-premise SAP systems via Cloud Connector. Th
 stdio (no MCP auth) → Basic Auth to SAP
 ```
 
-Simplest setup. Single user. Use `--profile developer` for write access or `--profile viewer` for read-only.
+Simplest setup. Single user. Leave defaults for read-only access, or set `SAP_ALLOW_WRITES=true` (plus `SAP_ALLOWED_PACKAGES="$TMP,Z*"`) to enable developer writes.
 
 ### Team Server with Role-Based Access
 

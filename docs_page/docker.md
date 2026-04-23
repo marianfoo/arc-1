@@ -242,18 +242,18 @@ MCP Client
 
 ## Passing Configuration into Docker
 
-All ARC-1 env vars, CLI flags, profiles, and safety recipes live in [configuration-reference.md](configuration-reference.md). This page only covers the Docker-specific part: how to pass that config into a container.
+All ARC-1 env vars, CLI flags, and safety recipes live in [configuration-reference.md](configuration-reference.md). This page only covers the Docker-specific part: how to pass that config into a container.
 
 ### Env vars and env files
 
 Use `-e` for short examples and `--env-file` when the list gets long:
 
 ```bash
-# Keep connection/auth settings in .env, add a profile at runtime
+# Keep connection/auth settings in .env, add extra safety opt-ins at runtime
 docker run -d --rm \
   -p 8080:8080 \
   --env-file .env \
-  -e SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true \
+  -e SAP_ALLOW_WRITES=true -e SAP_ALLOW_TRANSPORT_WRITES=true \
   ghcr.io/marianfoo/arc-1:latest
 ```
 

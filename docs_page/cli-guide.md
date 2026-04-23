@@ -90,22 +90,24 @@ arc1 version
 
 ## MCP Server Configuration
 
-All connection and safety flags are available:
+All connection and safety flags are available. Each capability is a separate positive opt-in:
 
 ```bash
 # Default: safe mode (read-only, no SQL, no data preview)
 arc1
 
-# Developer profile: enables writes + transports
-arc1 --profile developer
+# Developer: enable writes + transports (writes restricted to $TMP by default)
+arc1 --allow-writes=true --allow-transport-writes=true
 
-# Full access: writes + SQL + data + transports
-arc1 --profile developer-sql
+# Full access: writes + SQL + data preview + transports + git
+arc1 --allow-writes=true --allow-data-preview=true --allow-free-sql=true \
+     --allow-transport-writes=true --allow-git-writes=true \
+     --allowed-packages='*'
 
-# Or enable individual capabilities
-arc1 --allow-writes=false           # Enable writes
-arc1 --allow-free-sql=false      # Enable free SQL
-arc1 --allow-data-preview=false          # Enable table preview
+# Enable individual capabilities
+arc1 --allow-writes=true            # Enable object mutations
+arc1 --allow-free-sql=true          # Enable freestyle SQL
+arc1 --allow-data-preview=true      # Enable named table preview
 
 # Restrict write operations to specific packages (reads are not restricted by package)
 # Use single quotes — bash expands $TMP inside double quotes.

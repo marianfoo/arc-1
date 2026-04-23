@@ -158,7 +158,7 @@ case 'SAPManage':
 Add SAPManage to `getToolDefinitions()`. It should be registered conditionally — only when NOT in read-only mode (consistent with its `write` scope in `TOOL_SCOPES`):
 
 ```typescript
-if (!config.readOnly) {
+if (config.allowWrites) {
   tools.push({
     name: 'SAPManage',
     description: '...', // from 1.4
@@ -191,8 +191,8 @@ Remove `expect(names).not.toContain('SAPManage')` and add a positive test.
 
 | Test Case | What it Validates |
 |-----------|-------------------|
-| `SAPManage registered when readOnly=false` | Tool appears in definitions |
-| `SAPManage NOT registered when readOnly=true` | Tool excluded in read-only mode |
+| `SAPManage registered when allowWrites=true` | Tool appears in definitions |
+| `SAPManage NOT registered when allowWrites=false` | Tool excluded in read-only mode |
 
 **File: `tests/unit/handlers/intent.test.ts`** (update)
 
@@ -922,7 +922,7 @@ expect(names).not.toContain('SAPManage');
 
 // ADD:
 expect(names).toContain('SAPContext');
-// SAPManage: only when !readOnly
+// SAPManage: only when allowWrites
 ```
 
 ### 3.3 CLAUDE.md Updates
