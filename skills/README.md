@@ -100,7 +100,7 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | Skill | What it does | When to use |
 |---|---|---|
 | [sap-clean-core-atc](sap-clean-core-atc.md) | Audits a package of custom code and buckets every Z/Y object into Clean Core Levels A–D using mcp-sap-docs + ATC | Planning an ECC→S/4HANA Cloud or BTP move; quarterly custom-code health check |
-| [sap-unused-code](sap-unused-code.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_BLOCK_FREE_SQL=false` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
+| [sap-unused-code](sap-unused-code.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_ALLOW_FREE_SQL=true` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
 
 ### System Context & Local Workflow
 

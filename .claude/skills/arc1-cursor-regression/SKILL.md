@@ -189,7 +189,11 @@ export SAP_USER="${SAP_USER:-$(getv SAP_USER)}"
 export SAP_PASSWORD="${SAP_PASSWORD:-$(getv SAP_PASSWORD)}"
 export SAP_CLIENT="${SAP_CLIENT:-$(getv SAP_CLIENT)}"
 export SAP_LANGUAGE="${SAP_LANGUAGE:-EN}"
-export ARC1_PROFILE="${ARC1_PROFILE:-viewer}"
+# Safe defaults — no writes, no data preview, no SQL. Uncomment the SAP_ALLOW_* lines
+# below for developer-level access. See docs_page/authorization.md#recipes.
+# export SAP_ALLOW_WRITES=true
+# export SAP_ALLOW_DATA_PREVIEW=true
+# export SAP_ALLOW_FREE_SQL=true
 export SAP_TRANSPORT=stdio
 
 [[ -n "${SAP_URL}" ]] || { echo "Missing SAP_URL in $ENV_FILE"; exit 1; }
