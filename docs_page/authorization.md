@@ -54,9 +54,11 @@ Important details:
 
 ---
 
-## Capability matrix
+<a id="capability-matrix"></a>
 
-Use this table to configure a target state. For HTTP auth, the user needs the listed scope or `admin`.
+## Capability requirements
+
+Use this table to answer: "what must be true before this action can run?" For HTTP auth, the user needs the listed scope or `admin`.
 
 | Capability | User needs | Server needs | Notes |
 | ---------- | ---------- | ------------ | ----- |
@@ -84,9 +86,9 @@ Why transport and Git rows list `write` plus the specialized scope: ARC-1's safe
 
 | You want to change... | Change this | Do not change this |
 | --------------------- | ----------- | ------------------ |
-| What this ARC-1 instance can ever do | Server env / CLI flags (`SAP_ALLOW_*`, `SAP_ALLOWED_PACKAGES`, `SAP_DENY_ACTIONS`) | User JWT scopes |
+| What this ARC-1 instance can ever do | Server env / CLI flags (`SAP_ALLOW_*`, `SAP_ALLOWED_PACKAGES`, `SAP_DENY_ACTIONS`). On BTP, set these with `cf set-env`, `manifest.yml`, or MTA properties. | User JWT scopes |
+| What one BTP user can do | XSUAA role collection assignment | Server env vars; they change the whole ARC-1 instance, not one user |
 | What a specific API key can do | `ARC1_API_KEYS="key:profile"` | Server flags only |
-| What a BTP user can do | XSUAA role collections / role templates | `.env` on the ARC-1 server |
 | What an OIDC user can do | `scope` / `scp` claim in the JWT | MCP client JSON |
 | What SAP ultimately allows | SAP roles / authorization objects | ARC-1 scopes |
 
@@ -95,6 +97,8 @@ Precedence for server config is:
 ```text
 CLI flag > environment variable > .env file > built-in default
 ```
+
+Why not `.env` for BTP? `.env` is mainly the local/dev way to set the same server config. On BTP, use `cf set-env`, `manifest.yml`, or MTA properties instead. Those values are still the **server ceiling** and affect every user of that ARC-1 instance. To change one BTP user's access, change their XSUAA role collection assignment.
 
 Use `arc1 config show` to see the final resolved server policy and where each field came from.
 
@@ -115,6 +119,37 @@ Seven scopes exist:
 | `admin` | All ARC-1 scopes | all other scopes |
 
 Assigning only `transports` or only `git` is not useful for mutations because transport/Git writes also need `write`. The shipped `developer` profiles and BTP `MCPDeveloper` role include `write`, `transports`, and `git` together.
+
+---
+
+## BTP XSUAA role templates
+
+Start here for BTP deployments. API-key profiles are only for HTTP deployments without XSUAA/OIDC.
+
+BTP users receive scopes through role collections. The shipped `xs-security.json` contains these role templates:
+
+| Role template | Scopes |
+| ------------- | ------ |
+| `MCPViewer` | `read` |
+| `MCPDataViewer` | `data` |
+| `MCPSqlUser` | `data`, `sql` |
+| `MCPDeveloper` | `read`, `write`, `transports`, `git` |
+| `MCPAdmin` | all 7 |
+
+Common role collections:
+
+| Role collection | Effective scopes |
+| --------------- | ---------------- |
+| `ARC-1 Viewer` | `read` |
+| `ARC-1 Data Viewer` | `read`, `data` |
+| `ARC-1 Developer` | `read`, `write`, `transports`, `git` |
+| `ARC-1 Developer + Data` | `read`, `write`, `data`, `transports`, `git` |
+| `ARC-1 Developer + SQL` | `read`, `write`, `data`, `sql`, `transports`, `git` |
+| `ARC-1 Admin` | all 7 |
+
+Want a developer who can write code but cannot transport or use Git? Create a custom role template with just `read` + `write`, then update the XSUAA service. Or leave the shipped role as-is and turn off `SAP_ALLOW_TRANSPORT_WRITES` / `SAP_ALLOW_GIT_WRITES` server-wide.
+
+See [XSUAA Setup](xsuaa-setup.md) for BTP Cockpit assignment steps.
 
 ---
 
@@ -156,35 +191,6 @@ ARC1_API_KEYS='viewer-key:viewer,dev-key:developer'
 ```
 
 In that example, `dev-key:developer` can write `$TMP` only. The server also allows `Z*`, but the profile narrows the key to `$TMP`.
-
----
-
-## BTP XSUAA role templates
-
-BTP users receive scopes through role collections. The shipped `xs-security.json` contains these role templates:
-
-| Role template | Scopes |
-| ------------- | ------ |
-| `MCPViewer` | `read` |
-| `MCPDataViewer` | `data` |
-| `MCPSqlUser` | `data`, `sql` |
-| `MCPDeveloper` | `read`, `write`, `transports`, `git` |
-| `MCPAdmin` | all 7 |
-
-Common role collections:
-
-| Role collection | Effective scopes |
-| --------------- | ---------------- |
-| `ARC-1 Viewer` | `read` |
-| `ARC-1 Data Viewer` | `read`, `data` |
-| `ARC-1 Developer` | `read`, `write`, `transports`, `git` |
-| `ARC-1 Developer + Data` | `read`, `write`, `data`, `transports`, `git` |
-| `ARC-1 Developer + SQL` | `read`, `write`, `data`, `sql`, `transports`, `git` |
-| `ARC-1 Admin` | all 7 |
-
-Want a developer who can write code but cannot transport or use Git? Create a custom role template with just `read` + `write`, then update the XSUAA service. Or leave the shipped role as-is and turn off `SAP_ALLOW_TRANSPORT_WRITES` / `SAP_ALLOW_GIT_WRITES` server-wide.
-
-See [XSUAA Setup](xsuaa-setup.md) for BTP Cockpit assignment steps.
 
 ---
 

@@ -77,7 +77,7 @@ If this shared server should allow development work, add these flags to the same
 -e SAP_ALLOWED_PACKAGES='Z*,$TMP'
 ```
 
-Per-user JWT scopes and API-key profiles sit **beneath** that server ceiling — they can only tighten, never widen. A user with the `write` scope still cannot mutate objects when `SAP_ALLOW_WRITES=false`. Full model: [authorization.md](authorization.md#capability-matrix). Every flag: [configuration-reference.md](configuration-reference.md).
+Per-user JWT scopes and API-key profiles sit **beneath** that server ceiling — they can only tighten, never widen. A user with the `write` scope still cannot mutate objects when `SAP_ALLOW_WRITES=false`. Full model: [authorization.md](authorization.md#capability-requirements). Every flag: [configuration-reference.md](configuration-reference.md).
 
 ARC-1 audit logs show the real MCP user; SAP audit logs show the shared service account. Trade-off — good compromise when you can't use PP.
 For this shared-user mode, ARC-1 runs a startup auth preflight (`/sap/bc/adt/core/discovery`) and blocks SAP tool calls on 401/403 with a clear remediation message. This avoids hammering SAP with repeated failed logins when the technical password/client is wrong.

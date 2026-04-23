@@ -101,7 +101,7 @@ Pick the lightest combination that gets your work done. Common starting points:
 - **Read + data preview + SQL**: `SAP_ALLOW_DATA_PREVIEW=true`, `SAP_ALLOW_FREE_SQL=true`.
 - **Developer (writes to $TMP/Z*)**: `SAP_ALLOW_WRITES=true`, `SAP_ALLOWED_PACKAGES='$TMP,Z*'`, optionally `SAP_ALLOW_TRANSPORT_WRITES=true` for CTS.
 
-See [authorization.md](authorization.md) for the three-layer model and the full [capability matrix](authorization.md#capability-matrix).
+See [authorization.md](authorization.md) for the three-layer model and the full [capability requirements](authorization.md#capability-requirements).
 
 ### Claude Code
 
