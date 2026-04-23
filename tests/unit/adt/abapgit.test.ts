@@ -89,7 +89,7 @@ describe('abapGit client helpers', () => {
     expect(body).toContain('http://www.sap.com/adt/abapgit/externalRepo');
   });
 
-  it('createRepo is blocked when enableGit=false', async () => {
+  it('createRepo is blocked when allowGitWrites=false', async () => {
     const http = mockHttp(loadFixture('abapgit-repos-v2.xml'));
     const safety = { ...unrestrictedSafetyConfig(), allowGitWrites: false };
     await expect(

@@ -324,11 +324,10 @@ function matchApiKeyFromConfig(
  * Tries in order:
  * 1. XSUAA (@sap/xssec) — if XSUAA credentials are available
  * 2. Entra ID OIDC (jose) — if SAP_OIDC_ISSUER is configured
- * 3. API Key — if ARC1_API_KEY / ARC1_API_KEYS is configured
+ * 3. API Key — if ARC1_API_KEYS is configured
  */
 export function createChainedTokenVerifier(
   config: {
-    apiKey?: string;
     apiKeys?: Array<{ key: string; profile: string }>;
     oidcIssuer?: string;
     oidcAudience?: string;
@@ -373,7 +372,7 @@ export function createChainedTokenVerifier(
       }
     }
 
-    // 3. Try API key (multi-key with profiles, then single legacy key)
+    // 3. Try API key (multi-key with profiles)
     const apiKeyMatch = matchApiKeyFromConfig(config, token);
     if (apiKeyMatch) {
       logger.debug('Chained token verifier: API key matched', { clientId: apiKeyMatch.clientId });

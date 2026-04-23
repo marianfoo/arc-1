@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdtApiError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient, AdtResponse } from '../../../src/adt/http.js';
-import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 import { getAppInfo, SERVICE_PATH } from '../../../src/adt/ui5-repository.js';
 
 function mockHttp(responseBody = '', statusCode = 200): AdtHttpClient {

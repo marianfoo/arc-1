@@ -9,4 +9,4 @@
 // that could interfere with the JSON-RPC stream.
 // (Learned from fr0ster/mcp-abap-adt bin/mcp-abap-adt.js)
 
-import('../dist/index.js');
+import('../dist/cli.js');

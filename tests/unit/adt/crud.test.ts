@@ -140,9 +140,9 @@ describe('CRUD Operations', () => {
       expect(url).toContain('accessMode=MODIFY');
     });
 
-    it('Lock type L is not in WRITE_OPS — readOnly does not block lock', async () => {
-      // Lock is gated by its own operation type 'L', not by readOnly flag.
-      // readOnly blocks CDUAW (Create, Delete, Update, Activate, Workflow).
+    it('Lock type L is not a mutating operation — allowWrites=false does not block lock', async () => {
+      // Lock is gated by its own operation type 'L', not by the write gate.
+      // allowWrites=false blocks CDUAWX (Create, Delete, Update, Activate, Workflow, Transport).
       // This is intentional: lock is needed for read operations like syntax check.
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };

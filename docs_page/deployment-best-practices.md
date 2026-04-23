@@ -10,7 +10,7 @@ ARC-1 follows the **one instance per SAP backend** pattern. Each ARC-1 deploymen
 |---------|---------------|----------------------|
 | **Security** | Blast radius = one system | One breach = all systems |
 | **Auth** | Clean: one auth flow per instance | N destinations + N auth flows |
-| **Safety gates** | Per-system: `readOnly`, `allowedOps`, `allowedPackages` | Can't vary per backend |
+| **Safety gates** | Per-system: `allowWrites`, `allowedPackages`, `denyActions` | Can't vary per backend |
 | **Tool descriptions** | Tailored to system type (BTP vs on-premise) | Must be generic for all |
 | **Audit trail** | Clear per-system logs | Mixed across systems |
 | **Scaling** | Scale independently | Heavy-use system affects all |
@@ -29,7 +29,7 @@ Each ARC-1 instance serves **multiple users** via principal propagation (on-prem
 ┌─────────────────────┐ ┌──────────────────────┐
 │ arc1-ecc-dev        │ │ arc1-btp-dev         │
 │ on-premise, PP      │ │ BTP ABAP, JWT Bearer │
-│ readOnly=false      │ │ readOnly=false       │
+│ allowWrites=true    │ │ allowWrites=true     │
 │ 50 developers       │ │ 50 developers        │
 └──────┬──────────────┘ └──────┬───────────────┘
        ▼                       ▼
@@ -44,17 +44,17 @@ Each ARC-1 instance serves **multiple users** via principal propagation (on-prem
 CF Apps:
 ┌──────────────────────────────────┐
 │ arc1-ecc-dev                     │  ECC Dev, read+write, PP
-│ readOnly=false                   │
+│ allowWrites=true                 │
 ├──────────────────────────────────┤
 │ arc1-ecc-prod                    │  ECC Prod, read-only, PP
-│ readOnly=true, blockFreeSQL=true │
+│ allowWrites=false, allowFreeSQL=false │
 ├──────────────────────────────────┤
 │ arc1-s4-dev                      │  S/4 Dev, read+write, PP
-│ readOnly=false                   │
+│ allowWrites=true                 │
 ├──────────────────────────────────┤
 │ arc1-btp-dev                     │  BTP ABAP, read+write, JWT Bearer
 │ SAP_SYSTEM_TYPE=btp              │
-│ readOnly=false                   │
+│ allowWrites=true                 │
 └──────────────────────────────────┘
 ```
 
@@ -194,12 +194,12 @@ applications:
 
 ## Security Recommendations
 
-1. **Use `readOnly=true` for production systems** — prevents any write operations
-2. **Use `blockFreeSQL=true` for sensitive systems** — blocks arbitrary SQL queries
-3. **Use `allowedPackages=Z*,Y*,$TMP`** — restricts operations to custom code packages (default is `$TMP` only — local objects)
+1. **Use `SAP_ALLOW_WRITES=false` for production systems** — prevents object, transport, and Git mutations
+2. **Use `SAP_ALLOW_FREE_SQL=false` for sensitive systems** — blocks arbitrary SQL queries
+3. **Use `SAP_ALLOWED_PACKAGES=Z*,Y*,$TMP`** — restricts write operations to custom code packages (default is `$TMP` only — local objects)
 4. **Use `ppStrict=true`** — ensures every request has a user identity (no fallback to service account)
 5. **Deploy separate instances per system** — limits blast radius
-6. **Use XSUAA auth for deployed instances** — proper OAuth 2.0 with scopes (read/write/admin)
+6. **Use XSUAA auth for deployed instances** — proper OAuth 2.0 with scopes (read/write/data/sql/transports/git/admin)
 7. **Set `SAP_SYSTEM_TYPE`** explicitly in production — ensures correct tool definitions from startup
 
 ---

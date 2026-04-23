@@ -55,9 +55,9 @@ describe('gCTS integration', () => {
     expect(Array.isArray(repos)).toBe(true);
   });
 
-  it('clone operations are blocked when enableGit is disabled', async (ctx) => {
+  it('clone operations are blocked when allowGitWrites is disabled', async (ctx) => {
     requireOrSkip(ctx, gctsAvailable ? true : undefined, SkipReason.BACKEND_UNSUPPORTED);
-    const noGitSafety = { ...unrestrictedSafetyConfig(), enableGit: false };
+    const noGitSafety = { ...unrestrictedSafetyConfig(), allowGitWrites: false };
     await expect(
       cloneRepo(client.http, noGitSafety, {
         url: 'https://github.com/example/repo.git',

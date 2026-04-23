@@ -130,29 +130,33 @@ OIDC answers **who the MCP caller is**. It does not, by itself, grant write acce
 
 ARC-1 combines three things on each request:
 
-1. The user's JWT scopes from the `scope` or `scp` claim. For ARC-1 these should be `read`, `write`, `data`, and `sql`.
-2. The server's safety/profile configuration such as `ARC1_PROFILE`, `SAP_ALLOW_WRITES`, `SAP_ALLOW_DATA_PREVIEW`, `SAP_ALLOW_FREE_SQL`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOW_GIT_WRITES`, and `SAP_ALLOWED_PACKAGES`.
+1. The user's JWT scopes from the `scope` or `scp` claim. For ARC-1 these are `read`, `write`, `data`, `sql`, `transports`, `git`, and `admin`.
+2. The server's safety configuration such as `SAP_ALLOW_WRITES`, `SAP_ALLOW_DATA_PREVIEW`, `SAP_ALLOW_FREE_SQL`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOW_GIT_WRITES`, `SAP_ALLOWED_PACKAGES`, and `SAP_DENY_ACTIONS`.
 3. The SAP user's own authorization, which still runs after ARC-1 allows the request.
 
 These gates combine with **AND**, not OR:
 
-- If the token has `write` but the server runs with `SAP_ALLOW_WRITES=true`, writes are still blocked.
-- If the token has `sql` but the server keeps `SAP_ALLOW_FREE_SQL=true`, free SQL is still blocked.
+- If the token has `write` but the server runs with `SAP_ALLOW_WRITES=false`, writes are still blocked.
+- If the token has `sql` but the server keeps `SAP_ALLOW_FREE_SQL=false`, free SQL is still blocked.
 - If the token has no `scope` or `scp` claim at all, ARC-1 falls back to read-only access and logs a warning.
 
 For a shared development server, a common setup is:
 
 ```bash
-export ARC1_PROFILE=developer
+export SAP_ALLOW_WRITES=true
+export SAP_ALLOW_TRANSPORT_WRITES=true
+export SAP_ALLOW_GIT_WRITES=true
 export SAP_ALLOWED_PACKAGES='Z*,$TMP'
 ```
 
-Those are server-side variables on the ARC-1 process. If you want a read-only shared server with SQL + named table preview, use `export ARC1_PROFILE=viewer-sql` instead. Do **not** put `viewer-sql` in `.vscode/mcp.json`; that file only tells the client which MCP URL to call.
+Those are server-side variables on the ARC-1 process. If you want a read-only shared server with SQL + named table preview, set only `SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true` and leave `SAP_ALLOW_WRITES=false`. Do **not** put these server-side policy decisions in `.vscode/mcp.json`; that file only tells the client which MCP URL to call.
 
 Then let your IdP assign JWT scopes per user:
 
 - `read` for reviewers
 - `read write` for developers
+- `transports` for users allowed to create/release CTS requests
+- `git` for users allowed to run gCTS/abapGit mutations
 - `read write data sql` only for users who should access SAP data through ARC-1
 
 Full flag/profile reference: [configuration-reference.md](configuration-reference.md). Full scope and role model: [authorization.md](authorization.md).

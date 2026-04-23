@@ -270,7 +270,7 @@ docker run -d --rm \
 
 Keep credentials and stable connection settings in `.env`; layer temporary overrides with `-e`.
 
-For what `ARC1_PROFILE`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOWED_OPS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
+For what `SAP_ALLOW_WRITES`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_DENY_ACTIONS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
 
 If you pass package patterns like `*` or `$TMP` through `-e SAP_ALLOWED_PACKAGES=...`, use single quotes so the shell does not expand them: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
 
@@ -571,5 +571,5 @@ docker run -i --rm \
 1. Check feature flags — features in `auto` mode may have been turned off because
    the SAP component was not detected. Force them on with e.g.
    `SAP_FEATURE_RAP=on`.
-2. Check `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` — operation filters can block
-   tools at the handler level even if they are registered.
+2. Check `SAP_DENY_ACTIONS` — deny rules hide matching actions from tool listings
+   and block them again at call time.

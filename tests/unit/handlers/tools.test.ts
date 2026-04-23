@@ -50,13 +50,20 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPContext');
   });
 
-  it('SAPManage exposes only probe/features/cache_stats actions in read-only mode', () => {
+  it('SAPManage exposes only read actions when writes are disabled', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: false });
     const sapManage = tools.find((t) => t.name === 'SAPManage')!;
     const schema = sapManage.inputSchema as Record<string, any>;
     const actionEnum: string[] = schema.properties.action.enum;
 
-    expect(actionEnum).toEqual(['features', 'probe', 'cache_stats']);
+    expect(actionEnum).toEqual([
+      'features',
+      'probe',
+      'cache_stats',
+      'flp_list_catalogs',
+      'flp_list_groups',
+      'flp_list_tiles',
+    ]);
   });
 
   it('SAPTransport is always registered when featureTransport is not off (read actions always available)', () => {
@@ -68,8 +75,17 @@ describe('Tool Definitions', () => {
 
   it('SAPTransport is registered even when allowTransportWrites is off (read actions still work)', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, allowTransportWrites: false });
-    const names = tools.map((t) => t.name);
-    expect(names).toContain('SAPTransport');
+    const sapTransport = tools.find((t) => t.name === 'SAPTransport')!;
+    const actionEnum = (sapTransport.inputSchema as Record<string, any>).properties.action.enum as string[];
+    expect(actionEnum).toEqual(['list', 'get', 'check', 'history']);
+  });
+
+  it('SAPTransport includes write actions only when both write gates are enabled', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, allowTransportWrites: true });
+    const sapTransport = tools.find((t) => t.name === 'SAPTransport')!;
+    const actionEnum = (sapTransport.inputSchema as Record<string, any>).properties.action.enum as string[];
+    expect(actionEnum).toContain('create');
+    expect(actionEnum).toContain('release_recursive');
   });
 
   it('SAPTransport is hidden only when featureTransport=off', () => {
@@ -105,7 +121,7 @@ describe('Tool Definitions', () => {
     expect(names).toContain('SAPGit');
   });
 
-  it('SAPGit schema includes backend override and action matrix', () => {
+  it('SAPGit schema includes only read actions when git writes are disabled', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG, undefined, {
       gcts: { id: 'gcts', available: true, mode: 'auto' },
       abapGit: { id: 'abapGit', available: true, mode: 'auto' },
@@ -116,6 +132,21 @@ describe('Tool Definitions', () => {
     const actions: string[] = schema.properties.action.enum;
     expect(actions).toContain('list_repos');
     expect(actions).toContain('external_info');
+    expect(actions).not.toContain('commit');
+    expect(actions).not.toContain('unlink');
+    expect(schema.properties.backend.enum).toEqual(['gcts', 'abapgit']);
+  });
+
+  it('SAPGit schema includes write actions only when both write gates are enabled', () => {
+    const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, allowGitWrites: true }, undefined, {
+      gcts: { id: 'gcts', available: true, mode: 'auto' },
+      abapGit: { id: 'abapGit', available: true, mode: 'auto' },
+    } as any);
+    const sapGit = tools.find((t) => t.name === 'SAPGit');
+    expect(sapGit).toBeDefined();
+    const schema = sapGit!.inputSchema as Record<string, any>;
+    const actions: string[] = schema.properties.action.enum;
+    expect(actions).toContain('list_repos');
     expect(actions).toContain('commit');
     expect(actions).toContain('unlink');
     expect(schema.properties.backend.enum).toEqual(['gcts', 'abapgit']);
@@ -149,14 +180,14 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('flp_delete_catalog');
   });
 
-  it('includes SAPLint but hides SAPQuery by default (blockFreeSQL=true)', () => {
+  it('includes SAPLint but hides SAPQuery by default (allowFreeSQL=false)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPLint');
     expect(names).not.toContain('SAPQuery');
   });
 
-  it('shows SAPQuery when blockFreeSQL=false', () => {
+  it('shows SAPQuery when allowFreeSQL=true', () => {
     const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowFreeSQL: true });
     const names = tools.map((t) => t.name);
     expect(names).toContain('SAPQuery');

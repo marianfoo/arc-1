@@ -155,9 +155,12 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAP.diagnose': { scope: 'read', opType: OperationType.Read },
   'SAP.write': { scope: 'write', opType: OperationType.Update },
   'SAP.activate': { scope: 'write', opType: OperationType.Activate },
-  'SAP.transport': { scope: 'transports', opType: OperationType.Transport, featureGate: 'transport' },
-  'SAP.git': { scope: 'git', opType: OperationType.Update, featureGate: 'git' },
-  'SAP.manage': { scope: 'write', opType: OperationType.Update },
+  // Hyperfocused delegators are intentionally read-scoped at the top level.
+  // The recursive real-tool call enforces the concrete sub-action policy
+  // (for example SAPTransport.create => transports, SAPManage.create_package => write).
+  'SAP.transport': { scope: 'read', opType: OperationType.Read, featureGate: 'transport' },
+  'SAP.git': { scope: 'read', opType: OperationType.Read, featureGate: 'git' },
+  'SAP.manage': { scope: 'read', opType: OperationType.Read },
 };
 
 /**

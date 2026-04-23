@@ -580,7 +580,7 @@ describe('AdtClient', () => {
   });
 
   describe('safety checks', () => {
-    it('blocks free SQL when blockFreeSQL is true', async () => {
+    it('blocks free SQL when allowFreeSQL is false', async () => {
       const client = createClient({
         safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
       });

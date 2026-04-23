@@ -6,7 +6,7 @@
  *
  * Transport tests require:
  *   - SAP credentials (TEST_SAP_URL / SAP_URL, etc.)
- *   - enableTransports safety config
+ *   - allowTransportWrites safety config
  *
  * Transportable-package tests additionally require:
  *   - TEST_TRANSPORT_PACKAGE env var (e.g., Z_LLM_TEST_PACKAGE)
@@ -35,7 +35,7 @@ import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { buildCreateXml, CrudRegistry, cleanupAll, generateUniqueName } from './crud-harness.js';
 import { requireSapCredentials } from './helpers.js';
 
-/** Create an ADT client with transports enabled */
+/** Create an ADT client with transport writes enabled */
 function getTransportEnabledClient(): AdtClient {
   requireSapCredentials();
 
@@ -47,7 +47,7 @@ function getTransportEnabledClient(): AdtClient {
   const insecure = (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true';
 
   const safety = unrestrictedSafetyConfig();
-  safety.enableTransports = true;
+  safety.allowTransportWrites = true;
 
   return new AdtClient({
     baseUrl: url,

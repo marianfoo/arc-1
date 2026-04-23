@@ -19,7 +19,7 @@ flowchart TB
         end
 
         subgraph Auth["Authentication Layer"]
-            APIKEY[API Key<br/>ARC1_API_KEY]
+            APIKEY[API Keys<br/>ARC1_API_KEYS]
             OIDC[OIDC/JWT Validator<br/>EntraID · Cognito · Keycloak]
             PRM[RFC 9728 Metadata<br/>/.well-known/oauth-protected-resource]
         end
@@ -212,7 +212,7 @@ ARC-1 supports two independent authentication layers:
 flowchart TD
     Request[Incoming Request] --> MCPAuth{MCP Client Auth?}
 
-    MCPAuth -->|API Key| APIKey[ARC1_API_KEY header check]
+    MCPAuth -->|API Key| APIKey[ARC1_API_KEYS profile check]
     MCPAuth -->|OAuth/OIDC| OIDC[JWT Validation<br/>via IdP JWKS]
     MCPAuth -->|None| NoAuth[No client auth<br/>local/trusted network]
 

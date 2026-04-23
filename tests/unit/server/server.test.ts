@@ -84,13 +84,14 @@ describe('MCP Server', () => {
     const actionEnum: string[] = schema.properties.action.enum;
 
     expect(actionEnum).toContain('read');
-    // Note: SAP.manage in ACTION_POLICY requires write (coarse delegator), so read scope can't see it
-    expect(actionEnum).not.toContain('manage');
+    // Mixed delegators stay visible because their read sub-actions are usable.
+    // Concrete mutating sub-actions are scope-checked after delegation.
+    expect(actionEnum).toContain('manage');
+    expect(actionEnum).toContain('transport');
+    expect(actionEnum).toContain('git');
     expect(actionEnum).not.toContain('query');
     expect(actionEnum).not.toContain('write');
     expect(actionEnum).not.toContain('activate');
-    expect(actionEnum).not.toContain('transport');
-    expect(actionEnum).not.toContain('git');
   });
 
   it('keeps only query for sql-scoped users in hyperfocused mode', () => {

@@ -22,17 +22,24 @@ import { initLogger } from './server/logger.js';
 import { VERSION } from './server/server.js';
 import type { ConfigSource } from './server/types.js';
 
-// Load .env
-config();
+// Load .env without printing dotenv tips to stdout.
+config({ quiet: true });
 
 const program = new Command();
 
-program.name('arc1').description('ARC-1 — MCP Server for SAP ABAP Systems').version(VERSION);
+program
+  .name('arc1')
+  .description('ARC-1 — MCP Server for SAP ABAP Systems')
+  .version(VERSION)
+  .allowUnknownOption(true)
+  .allowExcessArguments(true);
 
 // Server mode (default)
 program
   .command('serve', { isDefault: true })
   .description('Start MCP server (default)')
+  .allowUnknownOption(true)
+  .allowExcessArguments(true)
   .action(async () => {
     // Dynamic import to avoid loading MCP SDK for CLI-only usage
     const { createAndStartServer } = await import('./server/server.js');
@@ -104,6 +111,8 @@ configCmd
   .command('show')
   .description('Show the resolved effective safety config with per-field source attribution')
   .option('--format <fmt>', 'Output format: table or json', 'table')
+  .allowUnknownOption(true)
+  .allowExcessArguments(true)
   .action((opts: { format: string }) => {
     try {
       const { config: serverConfig, sources } = resolveConfig(process.argv.slice(3));

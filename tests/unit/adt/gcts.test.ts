@@ -94,7 +94,7 @@ describe('gCTS client helpers', () => {
     expect(result[0]?.type).toBe('CLAS');
   });
 
-  it('cloneRepo is blocked when enableGit=false', async () => {
+  it('cloneRepo is blocked when allowGitWrites=false', async () => {
     const http = mockHttp(loadFixture('gcts-repository.json'));
     const safety = { ...unrestrictedSafetyConfig(), allowGitWrites: false };
     await expect(

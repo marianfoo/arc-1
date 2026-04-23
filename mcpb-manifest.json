@@ -32,7 +32,7 @@
         "SAP_CLIENT": "${user_config.sap_client}",
         "SAP_LANGUAGE": "${user_config.sap_language}",
         "SAP_INSECURE": "${user_config.sap_insecure}",
-        "SAP_READ_ONLY": "${user_config.sap_read_only}"
+        "SAP_ALLOW_WRITES": "${user_config.sap_allow_writes}"
       }
     }
   },
@@ -143,11 +143,11 @@
       "default": false,
       "required": false
     },
-    "sap_read_only": {
+    "sap_allow_writes": {
       "type": "boolean",
-      "title": "Read-Only Mode",
-      "description": "Block all write operations (recommended for safety)",
-      "default": true,
+      "title": "Allow Writes",
+      "description": "Allow ABAP object mutations. Keep false for read/search-only usage.",
+      "default": false,
       "required": false
     }
   }

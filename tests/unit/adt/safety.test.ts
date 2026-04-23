@@ -357,11 +357,13 @@ describe('Safety System', () => {
       expect(result.allowedPackages).toEqual(['$TMP']);
     });
 
-    it('allowedPackages: profile outside server ceiling → server wins', () => {
+    it('allowedPackages: disjoint profile/server restrictions deny all packages', () => {
       const server = config({ allowedPackages: ['$TMP'] });
       const profile = { allowedPackages: ['Z*'] }; // profile wanted Z*, server only allows $TMP
       const result = deriveUserSafetyFromProfile(server, profile);
-      expect(result.allowedPackages).toEqual(['$TMP']); // server ceiling wins
+      expect(isPackageAllowed(result, '$TMP')).toBe(false);
+      expect(isPackageAllowed(result, 'ZTEST')).toBe(false);
+      expect(() => checkPackage(result, '$TMP')).toThrow(/allowed: \[\]/);
     });
 
     it('allowedPackages: profile subset of server wildcards → profile wins', () => {

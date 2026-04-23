@@ -309,6 +309,42 @@ describe('ACTION_POLICY runtime integration — SAP_DENY_ACTIONS enforcement', (
   });
 });
 
+describe('ACTION_POLICY runtime integration — hyperfocused delegates enforce concrete actions', () => {
+  it('read user can call SAP(action=transport) for a read transport sub-action', async () => {
+    const result = await handleToolCall(
+      createClient(),
+      DEFAULT_CONFIG,
+      'SAP',
+      { action: 'transport', params: { action: 'check', name: 'ZTEST', type: 'PROG', package: '$TMP' } },
+      readAuth(),
+    );
+    expect(result.content[0]?.text).not.toMatch(/Insufficient scope/);
+  });
+
+  it('read user is blocked by the concrete SAPTransport.create policy after delegation', async () => {
+    const result = await handleToolCall(
+      createClient(),
+      DEFAULT_CONFIG,
+      'SAP',
+      { action: 'transport', params: { action: 'create', description: 'Test' } },
+      readAuth(),
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/Insufficient scope: 'transports'/);
+  });
+
+  it('read user can call SAP(action=manage) for a read FLP list sub-action', async () => {
+    const result = await handleToolCall(
+      createClient(),
+      DEFAULT_CONFIG,
+      'SAP',
+      { action: 'manage', params: { action: 'flp_list_catalogs' } },
+      readAuth(),
+    );
+    expect(result.content[0]?.text).not.toMatch(/Insufficient scope/);
+  });
+});
+
 describe('ACTION_POLICY runtime integration — type-level pruning in tool listing', () => {
   it('SAPRead TABLE_CONTENTS type is pruned when user lacks data scope', () => {
     const tools = getToolDefinitions({

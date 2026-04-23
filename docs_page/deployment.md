@@ -47,7 +47,7 @@ docker run -d --name arc1 -p 8080:8080 \
   -e SAP_URL=https://your-sap-host:44300 \
   -e SAP_USER=SVC_ARC1 -e SAP_PASSWORD=... \
   -e SAP_CLIENT=100 \
-  -e ARC1_API_KEY=$(openssl rand -hex 32) \
+  -e ARC1_API_KEYS="$(openssl rand -hex 32):admin" \
   -e SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true \
   -e SAP_ALLOWED_PACKAGES='Z*,$TMP' \
   ghcr.io/marianfoo/arc-1:latest
@@ -165,10 +165,10 @@ cf set-env arc1 SAP_XSUAA_AUTH true
 For any deployment visible to a network, before you open the gate:
 
 - [ ] TLS terminated by a reverse proxy or platform (never HTTP on a public port)
-- [ ] `ARC1_API_KEY` or OIDC / XSUAA configured — never run HTTP mode without Layer A auth
-- [ ] `SAP_ALLOW_WRITES=true` unless you've deliberately enabled writes
+- [ ] `ARC1_API_KEYS` or OIDC / XSUAA configured — never run HTTP mode without Layer A auth
+- [ ] `SAP_ALLOW_WRITES=false` unless you've deliberately enabled writes
 - [ ] `SAP_ALLOWED_PACKAGES` set to a specific allowlist, not `*`
-- [ ] `SAP_ALLOW_DATA_PREVIEW=true` and `SAP_ALLOW_FREE_SQL=true` unless you need them
+- [ ] `SAP_ALLOW_DATA_PREVIEW=false` and `SAP_ALLOW_FREE_SQL=false` unless you need them
 - [ ] `SAP_ALLOW_TRANSPORT_WRITES=false` unless you need CTS management
 - [ ] `SAP_ALLOW_GIT_WRITES=false` unless you need gCTS/abapGit writes (reads are always allowed when the backends are available)
 - [ ] If using cookies: `SAP_PP_ENABLED=true` and cookies both set? → refuses unless `SAP_PP_ALLOW_SHARED_COOKIES=true` escape hatch is explicit

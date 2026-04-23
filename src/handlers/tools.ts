@@ -249,7 +249,7 @@ const SAPTRANSPORT_DESC_ONPREM =
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
   'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
   'check (check if a package requires a transport — provide type, name, package), ' +
-  'history (find transports referencing an object — provide type, name; read-only, works without --enable-transports). ' +
+  'history (find transports referencing an object — provide type, name; read-only, works without SAP_ALLOW_TRANSPORT_WRITES). ' +
   'Transport IDs look like A4HK900123. Status: D=modifiable, R=released.';
 
 const SAPTRANSPORT_DESC_BTP =
@@ -258,7 +258,7 @@ const SAPTRANSPORT_DESC_BTP =
   'get (details with tasks and objects), create (K=Workbench, W=Customizing, T=Transport of Copies), ' +
   'release, delete, reassign (change owner), release_recursive (release tasks first, then parent), ' +
   'check (check if a package requires a transport — provide type, name, package), ' +
-  'history (find transports referencing an object — provide type, name; read-only, works without --enable-transports). ' +
+  'history (find transports referencing an object — provide type, name; read-only, works without SAP_ALLOW_TRANSPORT_WRITES). ' +
   'On BTP, transport release triggers a gCTS push to the software component Git repository. ' +
   'Import into target systems is done via the Manage Software Components app or Cloud Transport Management Service (cTMS), not via this tool.';
 
@@ -273,11 +273,11 @@ const SAPMANAGE_DESC_ONPREM =
   '- "probe": Re-probe the SAP system now (runs feature probes, auth checks, and ADT discovery refresh). ' +
   'Use this on first use or if you suspect feature availability has changed.\n' +
   '- "cache_stats": Show object cache health and warmup state.\n' +
-  '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
-  '- "delete_package": Delete an existing package.\n' +
   '- "flp_list_catalogs": List FLP business catalogs.\n' +
   '- "flp_list_groups": List FLP groups.\n' +
   '- "flp_list_tiles": List tiles in a catalog (requires "catalogId").\n' +
+  '- "create_package": Create a package (DEVC) via ADT packages API.\n' +
+  '- "delete_package": Delete an existing package.\n' +
   '- "flp_create_catalog": Create a business catalog (requires "domainId", "title").\n' +
   '- "flp_create_group": Create a group (requires "groupId", "title").\n' +
   '- "flp_create_tile": Create a tile in a catalog (requires "catalogId", "tile").\n' +
@@ -300,14 +300,18 @@ const SAPMANAGE_DESC_BTP =
   'Returns JSON with features and systemType="btp". On BTP, RAP/CDS and transports are always available. ' +
   'abapGit, AMDP, UI5/BSP, and FLP customization may not be available depending on the BTP ABAP configuration.';
 
-const SAPMANAGE_ACTIONS_READ = ['features', 'probe', 'cache_stats'];
+const SAPMANAGE_ACTIONS_READ = [
+  'features',
+  'probe',
+  'cache_stats',
+  'flp_list_catalogs',
+  'flp_list_groups',
+  'flp_list_tiles',
+];
 const SAPMANAGE_ACTIONS_WRITE = [
   'create_package',
   'delete_package',
   'change_package',
-  'flp_list_catalogs',
-  'flp_list_groups',
-  'flp_list_tiles',
   'flp_create_catalog',
   'flp_create_group',
   'flp_create_tile',
@@ -315,17 +319,32 @@ const SAPMANAGE_ACTIONS_WRITE = [
   'flp_delete_catalog',
 ];
 
+const SAPTRANSPORT_ACTIONS_READ = ['list', 'get', 'check', 'history'];
+const SAPTRANSPORT_ACTIONS_WRITE = ['create', 'release', 'delete', 'reassign', 'release_recursive'];
+
+const SAPGIT_ACTIONS_READ = [
+  'list_repos',
+  'whoami',
+  'config',
+  'branches',
+  'external_info',
+  'history',
+  'objects',
+  'check',
+];
+const SAPGIT_ACTIONS_WRITE = ['stage', 'clone', 'pull', 'push', 'commit', 'switch_branch', 'create_branch', 'unlink'];
+
 // ─── SAPGit ─────────────────────────────────────────────────────────
 
 const SAPGIT_DESC_ONPREM =
   'Git-based ABAP repository workflows with backend auto-selection: gCTS is preferred when available, otherwise abapGit bridge is used. ' +
   'Actions: list_repos (both), whoami/config/branches/history/objects (gCTS only), external_info/check/stage/push (abapGit only), clone/pull/commit/switch_branch/create_branch/unlink (backend-specific implementation). ' +
-  'Use backend="gcts" or backend="abapgit" to force a backend. Write actions require --enable-git and package allowlist compliance.';
+  'Use backend="gcts" or backend="abapgit" to force a backend. Write actions require SAP_ALLOW_WRITES=true, SAP_ALLOW_GIT_WRITES=true, git scope, and package allowlist compliance.';
 
 const SAPGIT_DESC_BTP =
   'Git-based ABAP repository workflows for BTP ABAP and S/4 systems. Backend auto-selection prefers gCTS and falls back to abapGit bridge when gCTS is unavailable. ' +
   'Actions: list_repos (both), whoami/config/branches/history/objects (gCTS only), external_info/check/stage/push (abapGit only), clone/pull/commit/switch_branch/create_branch/unlink (backend-specific implementation). ' +
-  'Use backend="gcts" or backend="abapgit" to force a backend. Write actions require --enable-git and package allowlist compliance.';
+  'Use backend="gcts" or backend="abapgit" to force a backend. Write actions require SAP_ALLOW_WRITES=true, SAP_ALLOW_GIT_WRITES=true, git scope, and package allowlist compliance.';
 
 // ─── SAPSearch Builder ─────────────────────────────────────────────
 
@@ -402,7 +421,7 @@ export function getToolDefinitions(
 ): ToolDefinition[] {
   // Hyperfocused mode: single universal SAP tool (~200 tokens)
   if (config.toolMode === 'hyperfocused') {
-    return [getHyperfocusedToolDefinition(config)];
+    return [getHyperfocusedToolDefinition(config, resolvedFeatures)];
   }
 
   const btp = isBtpMode(config);
@@ -1019,7 +1038,7 @@ export function getToolDefinitions(
           type: 'string',
           enum: sapManageActions,
           description:
-            'Action to execute. read-only actions: features, probe, cache_stats. ' +
+            'Action to execute. Read actions: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles. ' +
             'Mutating package/FLP actions require writable safety config and write scope in authenticated mode.',
         },
         name: {
@@ -1117,6 +1136,10 @@ export function getToolDefinitions(
   // Read actions (list/get/check/history) work with read scope.
   // Write actions (create/release/delete/...) require 'transports' scope + allowTransportWrites=true.
   if (config.featureTransport !== 'off') {
+    const sapTransportActions =
+      config.allowWrites && config.allowTransportWrites
+        ? [...SAPTRANSPORT_ACTIONS_READ, ...SAPTRANSPORT_ACTIONS_WRITE]
+        : SAPTRANSPORT_ACTIONS_READ;
     tools.push({
       name: 'SAPTransport',
       description: btp ? SAPTRANSPORT_DESC_BTP : SAPTRANSPORT_DESC_ONPREM,
@@ -1125,7 +1148,7 @@ export function getToolDefinitions(
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check', 'history'],
+            enum: sapTransportActions,
             description:
               'list: show transports (defaults to current user, modifiable only). ' +
               'get: fetch transport details including tasks and objects. ' +
@@ -1135,7 +1158,7 @@ export function getToolDefinitions(
               'reassign: change transport owner (use recursive=true for tasks too). ' +
               'release_recursive: release all unreleased tasks first, then the transport itself. ' +
               'check: check if a transport is needed for a package/object (requires type, name, package). ' +
-              'history: list transports referencing an object (reverse lookup; requires type, name; works without --enable-transports).',
+              'history: list transports referencing an object (reverse lookup; requires type, name; works without SAP_ALLOW_TRANSPORT_WRITES).',
           },
           id: {
             type: 'string',
@@ -1172,6 +1195,10 @@ export function getToolDefinitions(
 
   // SAPGit — registered only when gCTS or abapGit backend is available
   if (resolvedFeatures?.gcts?.available || resolvedFeatures?.abapGit?.available) {
+    const sapGitActions =
+      config.allowWrites && config.allowGitWrites
+        ? [...SAPGIT_ACTIONS_READ, ...SAPGIT_ACTIONS_WRITE]
+        : SAPGIT_ACTIONS_READ;
     tools.push({
       name: 'SAPGit',
       description: btp ? SAPGIT_DESC_BTP : SAPGIT_DESC_ONPREM,
@@ -1180,27 +1207,10 @@ export function getToolDefinitions(
         properties: {
           action: {
             type: 'string',
-            enum: [
-              'list_repos',
-              'whoami',
-              'config',
-              'branches',
-              'external_info',
-              'history',
-              'objects',
-              'check',
-              'stage',
-              'clone',
-              'pull',
-              'push',
-              'commit',
-              'switch_branch',
-              'create_branch',
-              'unlink',
-            ],
+            enum: sapGitActions,
             description:
               'Git action. Read: list_repos, whoami, config, branches, external_info, history, objects, check. ' +
-              'Write (requires --enable-git): clone, pull, push, commit, stage, switch_branch, create_branch, unlink.',
+              'Write (requires SAP_ALLOW_WRITES=true and SAP_ALLOW_GIT_WRITES=true): clone, pull, push, commit, stage, switch_branch, create_branch, unlink.',
           },
           backend: {
             type: 'string',

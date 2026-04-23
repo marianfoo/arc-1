@@ -52,9 +52,9 @@
           "default": "false"
         },
         {
-          "name": "SAP_READ_ONLY",
-          "description": "Block all write operations (safe default)",
-          "default": "true"
+          "name": "SAP_ALLOW_WRITES",
+          "description": "Allow ABAP object mutations (safe default: false)",
+          "default": "false"
         }
       ]
     },
@@ -98,9 +98,9 @@
           "default": "false"
         },
         {
-          "name": "SAP_READ_ONLY",
-          "description": "Block all write operations (safe default)",
-          "default": "true"
+          "name": "SAP_ALLOW_WRITES",
+          "description": "Allow ABAP object mutations (safe default: false)",
+          "default": "false"
         },
         {
           "name": "SAP_TRANSPORT",

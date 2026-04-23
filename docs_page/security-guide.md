@@ -227,7 +227,7 @@ The following files and values must never be committed to version control:
 |--------|----------------------|
 | `.env` files | Listed in `.gitignore`. Use environment variables or mounted files in production. |
 | SAP passwords (`SAP_PASSWORD`) | Inject via environment variable, secrets manager, or `cf set-env`. |
-| API keys (`ARC1_API_KEY`, `ARC1_API_KEYS`) | Store in a secrets manager (Vault, AWS Secrets Manager, Azure Key Vault). |
+| API keys (`ARC1_API_KEYS`) | Store in a secrets manager (Vault, AWS Secrets Manager, Azure Key Vault). |
 | BTP service keys (`SAP_BTP_SERVICE_KEY`) | Use `SAP_BTP_SERVICE_KEY_FILE` pointing to a mounted secret, not inline JSON. |
 | Cookie files (`cookies.txt`) | Listed in `.gitignore`. Ephemeral by nature. |
 | PP CA private key (`SAP_PP_CA_KEY`) | Store in HSM or secrets manager. This is the root of trust for principal propagation. |

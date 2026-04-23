@@ -1,7 +1,7 @@
 /**
  * CTS Transport management for SAP ADT.
  *
- * Transport operations require explicit opt-in via enableTransports flag.
+ * Transport mutations require explicit opt-in via allowWrites + allowTransportWrites.
  * Safety checks are applied at every entry point.
  */
 
@@ -245,7 +245,7 @@ export async function getTransportInfo(
   devclass: string,
   operation = 'I',
 ): Promise<TransportInfo> {
-  // Transport info is a read operation — doesn't require enableTransports
+  // Transport info is a read operation — doesn't require allowTransportWrites.
   checkOperation(safety, OperationType.Read, 'TransportInfo');
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>

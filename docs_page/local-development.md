@@ -82,7 +82,7 @@ Full grouped template with every option: see [`.env.example`](https://github.com
 
 ## MCP client configuration
 
-All MCP clients that speak stdio work the same way — they spawn `npx arc-1` as a subprocess and talk JSON-RPC over stdin/stdout. The `env` block is where credentials and safety flags go, so this is also where you put `ARC1_PROFILE` for `viewer`, `viewer-sql`, `developer`, and the other presets.
+All MCP clients that speak stdio work the same way — they spawn `npx arc-1` as a subprocess and talk JSON-RPC over stdin/stdout. The `env` block is where credentials and safety flags go, for example `SAP_ALLOW_WRITES`, `SAP_ALLOW_FREE_SQL`, and `SAP_ALLOWED_PACKAGES`.
 
 ### Claude Desktop
 
@@ -175,9 +175,11 @@ Same pattern: spawn `npx -y arc-1@latest` with the same `env` block. All stdio c
 - `SAP_ALLOW_WRITES=true SAP_ALLOW_TRANSPORT_WRITES=true`: writes + transports in `$TMP`, still no SQL or named table preview.
 - `SAP_ALLOW_WRITES=true SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true SAP_ALLOW_TRANSPORT_WRITES=true` + `SAP_ALLOWED_PACKAGES='*'`: full local development access. (In shell, quote the `*` — otherwise the shell expands it to filenames before ARC-1 sees it.)
 
-Need something in between? The full profile matrix and recipes live in [configuration-reference.md](configuration-reference.md#common-recipes).
+Need something in between? The full recipe list lives in [configuration-reference.md](configuration-reference.md#common-recipes).
 
-For surgical policies, `SAP_ALLOWED_OPS` and `SAP_DISALLOWED_OPS` are real power-user knobs. Use one or the other when profiles are too broad. Full flag table: [configuration-reference.md](configuration-reference.md). Production hardening recommendations: [security-guide.md](security-guide.md).
+For surgical policies, use `SAP_DENY_ACTIONS` with tool-qualified entries such as
+`SAPWrite.delete` or `SAPManage.flp_*`. Full flag table: [configuration-reference.md](configuration-reference.md).
+Production hardening recommendations: [security-guide.md](security-guide.md).
 
 ---
 

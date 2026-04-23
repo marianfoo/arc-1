@@ -400,12 +400,10 @@ S_ADT_RES authorization, SSO-only system needing `SAP_DISABLE_SAML=true`).
 | Flag | Env Var | Description |
 |------|---------|-------------|
 | **MCP Client Auth** | | |
-| `--api-key` | `ARC1_API_KEY` | Single API key (full scopes) |
 | `--api-keys` | `ARC1_API_KEYS` | Multiple API keys with profiles (`key:profile,...`) |
 | `--oidc-issuer` | `SAP_OIDC_ISSUER` | OIDC issuer URL |
 | `--oidc-audience` | `SAP_OIDC_AUDIENCE` | Expected token audience (**required** when `--oidc-issuer` is set) |
 | `--xsuaa-auth` | `SAP_XSUAA_AUTH` | Enable XSUAA OAuth proxy (`true`/`false`) |
-| `--profile` | `ARC1_PROFILE` | Safety profile shortcut (`viewer`, `developer`, etc.) |
 | **SAP Auth** | | |
 | `--user` | `SAP_USER` | SAP username (basic auth) |
 | `--password` | `SAP_PASSWORD` | SAP password (basic auth) |

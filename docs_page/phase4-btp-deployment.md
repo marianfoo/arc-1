@@ -230,8 +230,8 @@ cf push
 **Never put secrets in manifest.yml.** Set them via `cf set-env`:
 
 ```bash
-# API Key for simple auth (Phase 1)
-cf set-env arc1-mcp-server ARC1_API_KEY "your-secure-api-key"
+# API key for simple auth
+cf set-env arc1-mcp-server ARC1_API_KEYS "your-secure-api-key:admin"
 
 # OR OAuth/OIDC validation (Phase 2) — recommended
 cf set-env arc1-mcp-server SAP_OIDC_ISSUER "https://login.microsoftonline.com/{tenant-id}/v2.0"

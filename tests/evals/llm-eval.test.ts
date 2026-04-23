@@ -196,7 +196,7 @@ describe(`LLM Eval — ${PROVIDER_NAME}/${MODEL} [${BACKEND}]`, () => {
     }
 
     // Tool definitions (same as production MCP server surface)
-    const arcTools = getToolDefinitions({ ...DEFAULT_CONFIG, readOnly: false, blockFreeSQL: false });
+    const arcTools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, allowFreeSQL: true });
     tools = toOpenAITools(arcTools);
 
     console.log(`\n  Provider: ${PROVIDER_NAME}/${MODEL}`);

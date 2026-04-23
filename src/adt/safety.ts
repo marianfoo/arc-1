@@ -46,6 +46,15 @@ export type OperationTypeCode = (typeof OperationType)[keyof typeof OperationTyp
 
 /** Mutating operation types — blocked when `allowWrites=false`. */
 const MUTATING_OPS = 'CDUAWX';
+const DENY_ALL_LIST_ENTRY = '__ARC1_DENY_ALL__';
+
+function listDeniesAll(list: string[]): boolean {
+  return list.includes(DENY_ALL_LIST_ENTRY);
+}
+
+function displayAllowList(list: string[]): string {
+  return listDeniesAll(list) ? '[]' : `[${list.join(',')}]`;
+}
 
 export interface SafetyConfig {
   allowWrites: boolean;
@@ -131,6 +140,7 @@ function explainOperationBlock(config: SafetyConfig, op: OperationTypeCode): str
 
 /** Check if operations on a given package are allowed (write-only check). */
 export function isPackageAllowed(config: SafetyConfig, pkg: string): boolean {
+  if (listDeniesAll(config.allowedPackages)) return false;
   if (config.allowedPackages.length === 0) return true;
 
   const upperPkg = pkg.toUpperCase();
@@ -155,13 +165,14 @@ export function isPackageAllowed(config: SafetyConfig, pkg: string): boolean {
 export function checkPackage(config: SafetyConfig, pkg: string): void {
   if (!isPackageAllowed(config, pkg)) {
     throw new AdtSafetyError(
-      `Operations on package '${pkg}' are blocked by safety configuration (allowed: ${JSON.stringify(config.allowedPackages)})`,
+      `Operations on package '${pkg}' are blocked by safety configuration (allowed: ${displayAllowList(config.allowedPackages)})`,
     );
   }
 }
 
 /** Check if a transport is in the whitelist. */
 function isTransportInWhitelist(config: SafetyConfig, transport: string): boolean {
+  if (listDeniesAll(config.allowedTransports)) return false;
   if (config.allowedTransports.length === 0) return true;
 
   const upperTransport = transport.toUpperCase();
@@ -200,7 +211,7 @@ export function checkTransport(config: SafetyConfig, transport: string, opName: 
   if (transport && transport !== '*' && config.allowedTransports.length > 0) {
     if (!isTransportInWhitelist(config, transport)) {
       throw new AdtSafetyError(
-        `Operation '${opName}' on transport '${transport}' is blocked by safety configuration (allowed: ${JSON.stringify(config.allowedTransports)})`,
+        `Operation '${opName}' on transport '${transport}' is blocked by safety configuration (allowed: ${displayAllowList(config.allowedTransports)})`,
       );
     }
   }
@@ -271,9 +282,9 @@ export function deriveUserSafety(serverConfig: SafetyConfig, scopes: string[]): 
  *   - Boolean fields: result is `server && profile` (both must be true for capability on).
  *   - `allowedPackages`:
  *       * If either side is `[]` (no restriction), use the other.
- *       * Else intersection by prefix semantics — profile narrows server. If the profile's
- *         set is a subset of server's (by name or prefix match), use profile; otherwise
- *         fall back to server (profile tried to expand).
+ *       * Else intersection by prefix semantics — profile entries covered by the
+ *         server ceiling survive. If none survive, the effective list denies all
+ *         packages/transports (true intersection).
  *   - `allowedTransports`: same as allowedPackages.
  *   - `denyActions`: union (both the server and profile denies apply).
  */
@@ -302,8 +313,9 @@ export function deriveUserSafetyFromProfile(
       return false;
     };
     const narrowed = profile.filter((p) => server.some((s) => covers(s, p)));
-    // If profile tried to expand beyond server, keep server's restriction instead.
-    return narrowed.length > 0 ? narrowed : [...server];
+    // True intersection: disjoint constraints mean no package/transport is allowed.
+    // We cannot return [] here because [] means "unrestricted" in SafetyConfig.
+    return narrowed.length > 0 ? narrowed : [DENY_ALL_LIST_ENTRY];
   };
 
   const effective: SafetyConfig = {
@@ -329,8 +341,8 @@ export function describeSafety(config: SafetyConfig): string {
   if (config.allowFreeSQL) parts.push('FREE-SQL');
   if (config.allowTransportWrites) parts.push('TRANSPORT-WRITES');
   if (config.allowGitWrites) parts.push('GIT-WRITES');
-  if (config.allowedPackages.length > 0) parts.push(`Packages=[${config.allowedPackages.join(',')}]`);
-  if (config.allowedTransports.length > 0) parts.push(`Transports=[${config.allowedTransports.join(',')}]`);
+  if (config.allowedPackages.length > 0) parts.push(`Packages=${displayAllowList(config.allowedPackages)}`);
+  if (config.allowedTransports.length > 0) parts.push(`Transports=${displayAllowList(config.allowedTransports)}`);
   if (config.denyActions.length > 0) parts.push(`DenyActions=${config.denyActions.length}`);
   return parts.length === 0 ? 'READ-ONLY' : parts.join(', ');
 }

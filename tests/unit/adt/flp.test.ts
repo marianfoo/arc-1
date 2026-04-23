@@ -13,7 +13,7 @@ import {
   normalizeCatalogId,
 } from '../../../src/adt/flp.js';
 import type { AdtHttpClient, AdtResponse } from '../../../src/adt/http.js';
-import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 function mockHttp(responseBody = '', statusCode = 200): AdtHttpClient {
   return {

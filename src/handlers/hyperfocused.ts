@@ -9,6 +9,8 @@
  * Activate with: --tool-mode hyperfocused or ARC1_TOOL_MODE=hyperfocused
  */
 
+import type { ResolvedFeatures } from '../adt/types.js';
+import { getActionPolicy } from '../authz/policy.js';
 import type { ServerConfig } from '../server/types.js';
 import type { ToolDefinition } from './tools.js';
 
@@ -23,27 +25,17 @@ const ACTION_TO_TOOL: Record<string, string> = {
   lint: 'SAPLint',
   diagnose: 'SAPDiagnose',
   transport: 'SAPTransport',
+  git: 'SAPGit',
   context: 'SAPContext',
   manage: 'SAPManage',
 };
 
-/** Actions that require write scope at the top level.
- *  `manage` is intentionally absent: SAPManage exposes both read actions
- *  (features/probe/cache_stats) and write actions (package/FLP lifecycle).
- *  Top-level scope only grants entry; action-level scope (SAPMANAGE_ACTION_SCOPES
- *  in intent.ts) enforces write requirements on the mutating sub-actions. */
-const WRITE_ACTIONS = new Set(['write', 'activate', 'transport']);
-/** Actions that require sql scope */
-const SQL_ACTIONS = new Set(['query']);
-
 /**
  * Get the required scope for a hyperfocused action.
- * Must stay consistent with TOOL_SCOPES in intent.ts.
+ * Must stay consistent with ACTION_POLICY.
  */
 export function getHyperfocusedScope(action: string): string {
-  if (SQL_ACTIONS.has(action)) return 'sql';
-  if (WRITE_ACTIONS.has(action)) return 'write';
-  return 'read';
+  return getActionPolicy('SAP', action)?.scope ?? 'read';
 }
 
 /**
@@ -91,10 +83,16 @@ export function expandHyperfocusedArgs(args: Record<string, unknown>):
 /**
  * Get the hyperfocused tool definition (~200 tokens).
  */
-export function getHyperfocusedToolDefinition(config: ServerConfig): ToolDefinition {
-  // `manage` is always exposed because SAPManage has read-only sub-actions
-  // (features/probe/cache_stats). Mutating sub-actions are enforced downstream
-  // via SAPMANAGE_ACTION_SCOPES and the safety config.
+export function getHyperfocusedToolDefinition(
+  config: ServerConfig,
+  resolvedFeatures?: ResolvedFeatures,
+): ToolDefinition {
+  const gitAvailable =
+    resolvedFeatures !== undefined
+      ? !!(resolvedFeatures.gcts?.available || resolvedFeatures.abapGit?.available)
+      : config.featureAbapGit !== 'off' || config.featureGcts !== 'off';
+  // Mixed delegators stay visible when their read sub-actions are usable.
+  // Mutating sub-actions are enforced downstream by the concrete tool policy.
   const readActions = [
     'read',
     'search',
@@ -103,11 +101,12 @@ export function getHyperfocusedToolDefinition(config: ServerConfig): ToolDefinit
     'context',
     'lint',
     'diagnose',
+    ...(config.featureTransport === 'off' ? [] : ['transport']),
+    ...(gitAvailable ? ['git'] : []),
     'manage',
   ];
   const writeActions = config.allowWrites ? ['write', 'activate'] : [];
-  const adminActions = config.allowTransportWrites ? ['transport'] : [];
-  const allActions = [...readActions, ...writeActions, ...adminActions];
+  const allActions = [...readActions, ...writeActions];
 
   return {
     name: 'SAP',

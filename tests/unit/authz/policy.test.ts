@@ -101,6 +101,12 @@ describe('ACTION_POLICY matrix', () => {
     expect(getActionPolicy('SAPQuery')?.scope).toBe('sql');
   });
 
+  it('hyperfocused mixed delegators are read-scoped; concrete sub-actions enforce mutations', () => {
+    expect(getActionPolicy('SAP', 'transport')?.scope).toBe('read');
+    expect(getActionPolicy('SAP', 'git')?.scope).toBe('read');
+    expect(getActionPolicy('SAP', 'manage')?.scope).toBe('read');
+  });
+
   it('SAPManage read actions require read scope', () => {
     for (const action of ['features', 'probe', 'cache_stats']) {
       expect(getActionPolicy('SAPManage', action)?.scope, `SAPManage.${action}`).toBe('read');

@@ -108,7 +108,7 @@ describe('Audit Events', () => {
           event: 'server_start',
           version: '3.0.0',
           transport: 'stdio',
-          readOnly: false,
+          allowWrites: true,
           url: 'http://sap:8000',
         },
       ];

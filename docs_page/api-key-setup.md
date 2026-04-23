@@ -38,7 +38,7 @@ arc1 --url https://sap.example.com:44300 \
     --password 'ServicePassword123' \
     --transport http-streamable \
     --http-addr 0.0.0.0:8080 \
-    --api-key 'K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA='
+    --api-keys 'K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA=:admin'
 
 # Using environment variables
 export SAP_URL=https://sap.example.com:44300
@@ -46,7 +46,7 @@ export SAP_USER=SAP_SERVICE_USER
 export SAP_PASSWORD=ServicePassword123
 export SAP_TRANSPORT=http-streamable
 export SAP_HTTP_ADDR=0.0.0.0:8080
-export ARC1_API_KEY='K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA='
+export ARC1_API_KEYS='K7mQ3xR9vL2pN8wY5tJ6hB4cF1gD0eA=:admin'
 arc1
 ```
 
@@ -208,7 +208,7 @@ docker run -d \
   -e SAP_PASSWORD=secret \
   -e SAP_TRANSPORT=http-streamable \
   -e SAP_HTTP_ADDR=0.0.0.0:8080 \
-  -e ARC1_API_KEY='your-api-key-here' \
+  -e ARC1_API_KEYS='your-api-key-here:admin' \
   -p 8080:8080 \
   arc1
 ```

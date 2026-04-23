@@ -21,7 +21,6 @@ import {
   parseTraceList,
   parseTraceStatements,
 } from '../../../src/adt/diagnostics.js';
-import { AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 

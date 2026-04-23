@@ -241,7 +241,7 @@ export async function startHttpServer(
         issuerUrl: new URL(appUrl),
         baseUrl: new URL(appUrl),
         resourceServerUrl: new URL(`${appUrl}/mcp`),
-        scopesSupported: ['read', 'write', 'data', 'sql', 'admin'],
+        scopesSupported: ['read', 'write', 'data', 'sql', 'transports', 'git', 'admin'],
         resourceName: 'ARC-1 SAP MCP Server',
       }),
     );

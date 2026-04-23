@@ -1118,7 +1118,7 @@ describe('Intent Handler', () => {
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('TABLE_CONTENTS is blocked by safety configuration or missing data');
-      expect(result.content[0]?.text).toContain('SAP_BLOCK_DATA=false');
+      expect(result.content[0]?.text).toContain('SAP_ALLOW_DATA_PREVIEW=true');
     });
   });
 
@@ -2326,7 +2326,7 @@ ENDCLASS.`,
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
     };
 
-    const adminAuth: AuthInfo = {
+    const _adminAuth: AuthInfo = {
       token: 'test-token',
       clientId: 'test-client',
       scopes: ['read', 'write', 'data', 'sql', 'admin'],

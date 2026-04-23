@@ -735,7 +735,7 @@ describe('ADT Integration Tests', () => {
   // ─── Safety Checks ──────────────────────────────────────────────
 
   describe('safety', () => {
-    it('read-only client can still read', async () => {
+    it('safe-default client can still read', async () => {
       const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
@@ -743,17 +743,7 @@ describe('ADT Integration Tests', () => {
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
         client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
-        safety: {
-          readOnly: true,
-          blockFreeSQL: true,
-          allowedOps: 'RS',
-          disallowedOps: '',
-          allowedPackages: [],
-          dryRun: false,
-          enableTransports: false,
-          transportReadOnly: false,
-          allowedTransports: [],
-        },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false, allowFreeSQL: false },
       });
 
       // Read should work
@@ -761,7 +751,7 @@ describe('ADT Integration Tests', () => {
       expect(source).toBeTruthy();
     });
 
-    it('read-only client can search', async () => {
+    it('safe-default client can search', async () => {
       const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
@@ -769,24 +759,14 @@ describe('ADT Integration Tests', () => {
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
         client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
-        safety: {
-          readOnly: true,
-          blockFreeSQL: true,
-          allowedOps: 'RS',
-          disallowedOps: '',
-          allowedPackages: [],
-          dryRun: false,
-          enableTransports: false,
-          transportReadOnly: false,
-          allowedTransports: [],
-        },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false, allowFreeSQL: false },
       });
 
       const results = await roClient.searchObject('CL_ABAP_*', 3);
       expect(results.length).toBeGreaterThan(0);
     });
 
-    it('read-only client blocks free SQL', async () => {
+    it('safe-default client blocks free SQL', async () => {
       const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
@@ -794,17 +774,7 @@ describe('ADT Integration Tests', () => {
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
         client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
-        safety: {
-          readOnly: true,
-          blockFreeSQL: true,
-          allowedOps: 'RSQ',
-          disallowedOps: '',
-          allowedPackages: [],
-          dryRun: false,
-          enableTransports: false,
-          transportReadOnly: false,
-          allowedTransports: [],
-        },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false, allowFreeSQL: false },
       });
 
       await expect(roClient.runQuery('SELECT * FROM T000')).rejects.toThrow();

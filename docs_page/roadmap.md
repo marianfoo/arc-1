@@ -1183,7 +1183,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 - `src/adt/flp.ts` — OData client for PAGE_BUILDER_CUST with double-JSON tile config handling
 - SAPManage actions: `flp_list_catalogs`, `flp_list_groups`, `flp_list_tiles`, `flp_create_catalog`, `flp_create_group`, `flp_create_tile`, `flp_add_tile_to_group`, `flp_delete_catalog`
 - Feature-gated via `featureFlp` config (auto-probed at startup)
-- Write ops use `OperationType.Workflow` — blocked by `readOnly: true`
+- Write ops use `OperationType.Workflow` — blocked unless `SAP_ALLOW_WRITES=true`
 - Graceful ASSERTION_FAILED handling for problematic catalogs
 
 ---
@@ -1454,7 +1454,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
    - Then resolve task→request hierarchy via E070, optionally map to CR via E070A
    - Source: VSP `handleCRHistory` in `handlers_transport_analysis.go`
    - **Only way to get full transport history** — ADT REST endpoints only return current assignments
-   - Requires `blockFreeSQL=false` or data preview access to E071/E070
+   - Requires `SAP_ALLOW_FREE_SQL=true` or data preview access to E071/E070
 
 **Implementation summary (completed):**
 - Added `SAPTransport(action="history", type, name)` in `handleSAPTransport`.
@@ -1660,7 +1660,7 @@ The following features are tracked but not planned for near-term implementation.
 | **Status** | Complete via scope enforcement (2026-03-27) |
 
 **Implemented (2026-03-27):**
-- `TOOL_SCOPES` map in `src/handlers/intent.ts` — each tool requires a scope (read/write/admin)
+- `ACTION_POLICY` map in `src/authz/policy.ts` — each tool/action requires a scope
 - Scope enforcement in `handleToolCall()` — checks `authInfo.scopes` before executing any tool
 - `ListTools` filtering in `src/server/server.ts` — users only see tools they have scopes for
 - XSUAA role collections (ARC-1 Viewer/Editor/Admin) map to scopes via `xs-security.json`
@@ -1832,9 +1832,9 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 |------|--------|
 | TypeScript Migration | Complete — Go code removed, pure TypeScript |
 | Core MCP Server | 12 intent-based tools + hyperfocused mode (1 tool), HTTP Streamable + stdio |
-| Safety System | Read-only, package filter (default: `$TMP`), operation filter, transport guard, dry-run |
+| Safety System | Positive opt-in gates (`allowWrites`, SQL/data/transport/Git), package filter (default: `$TMP`), deny-actions |
 | Input Validation | Zod v4 runtime validation for all MCP tool inputs (v0.5.0) |
-| Phase 1: API Key Auth | `ARC1_API_KEY` Bearer token + multi-key profiles |
+| Phase 1: API Key Auth | `ARC1_API_KEYS` Bearer tokens with profiles |
 | Phase 2: OAuth/OIDC (Entra ID) | JWT validation via `jose` library, tested with Copilot Studio |
 | Phase 4: BTP CF Deployment | Docker on CF with Destination Service + Cloud Connector |
 | BTP Destination Service | Auto-resolves SAP credentials from BTP Destination at startup |
@@ -1872,7 +1872,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 |-------|-------------|--------|
 | Go v1.x-v2.32 | ADT client, 40+ tools, CRUD, debugging, WebSocket, Lua scripting | Complete (Go) |
 | Enterprise Rename | vsp -> ARC-1, intent-based tool architecture (now 12 tools) | Complete |
-| Auth Phase 1: API Key | `ARC1_API_KEY` Bearer token | Complete |
+| Auth Phase 1: API Key | `ARC1_API_KEYS` Bearer tokens with profiles | Complete |
 | Auth Phase 2: OAuth/OIDC | Entra ID JWT validation via `jose` library | Complete |
 | Auth Phase 4: BTP CF | Docker on CF with Destination Service + Cloud Connector | Complete |
 | TypeScript Migration | Full Go -> TypeScript port, Go code removed | Complete (2026-03-26) |

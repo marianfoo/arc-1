@@ -177,7 +177,7 @@ tests/
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
-| Modify scope enforcement | `src/handlers/intent.ts` (TOOL_SCOPES), `src/server/server.ts` (tool listing filter) |
+| Modify scope enforcement | `src/authz/policy.ts` (`ACTION_POLICY`), `src/handlers/intent.ts` (runtime check), `src/server/server.ts` (tool listing filter) |
 | Modify OIDC token handling | `src/server/http.ts` (validateOidcToken, ~line 274) |
 | Add/modify auth scopes | `xs-security.json`, `src/server/xsuaa.ts`, `src/server/http.ts`, `src/handlers/intent.ts` |
 | Add safety config option | `src/adt/safety.ts`, `src/server/config.ts`, `src/server/types.ts` |
@@ -214,7 +214,7 @@ MCP Transport (stdio or HTTP Streamable)
   ├─ HTTP: auth layer (server/http.ts)
   │   ├─ XSUAA OAuth (xsuaa.ts) → checkLocalScope() → AuthInfo { scopes, clientId, userName }
   │   ├─ OIDC JWT (http.ts) → jwtVerify() → AuthInfo { scopes }
-  │   └─ API key (http.ts) → exact match → AuthInfo { scopes: all }
+  │   └─ API key (http.ts) → exact match in ARC1_API_KEYS → AuthInfo { scopes from profile }
   │
   ▼
 Tool Call Handler (server/server.ts)
@@ -224,7 +224,7 @@ Tool Call Handler (server/server.ts)
   ▼
 handleToolCall (handlers/intent.ts)
   │
-  ├─ 1. Scope check: TOOL_SCOPES[toolName] vs authInfo.scopes (only when authInfo present)
+  ├─ 1. Scope check: ACTION_POLICY[tool/action-or-type] vs authInfo.scopes (only when authInfo present)
   ├─ 2. Zod validation: getToolSchema(toolName) → safeParse(args) (rejects invalid input with LLM-friendly errors)
   ├─ 3. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
   ├─ 4. Package check: checkPackage(safety, packageName) (for all SAPWrite actions: create, update, delete, edit_method)
@@ -252,32 +252,27 @@ SAP ABAP System (ADT REST API)
 
 ### Safety System (`src/adt/safety.ts`)
 
-Server-level config, set at startup via env vars / CLI flags. Applies to ALL users.
+Server-level config, set at startup via env vars / CLI flags, applies to all users as the ceiling:
+`allowWrites`, `allowDataPreview`, `allowFreeSQL`, `allowTransportWrites`, `allowGitWrites`,
+`allowedPackages`, `allowedTransports`, and `denyActions`.
 
-**Operation Types** (single-character codes, used in `allowedOps`/`disallowedOps`):
-```
-R = Read       S = Search     Q = Query (table preview)   F = FreeSQL
-C = Create     U = Update     D = Delete                  A = Activate
-T = Test       L = Lock       I = Intelligence             W = Workflow
-X = Transport
-```
+The internal `OperationType` enum is still used by code (`Read`, `Search`, `Query`, `FreeSQL`,
+`Create`, `Update`, `Delete`, `Activate`, `Test`, `Lock`, `Intelligence`, `Workflow`,
+`Transport`), but op-code env vars were removed. Admins use the high-level `allow*` flags plus
+`SAP_DENY_ACTIONS`.
 
-Write ops blocked by `readOnly`: `CDUAW`. All 36+ ADT endpoints have `checkOperation()` guards.
+Mutating operations require `allowWrites=true`. Transport writes additionally require
+`allowTransportWrites=true`; Git writes additionally require `allowGitWrites=true`.
+All ADT endpoints must have `checkOperation()` guards.
 
-### Scope Enforcement (`src/handlers/intent.ts`)
+### Scope Enforcement (`src/authz/policy.ts`, `src/handlers/intent.ts`)
 
-`TOOL_SCOPES` maps each MCP tool to a required scope. Only enforced when `authInfo` is present (HTTP transport with auth). Stdio has no auth → all tools allowed.
+`ACTION_POLICY` maps each `(tool, action/type)` to a required scope and operation type. It is the
+single source of truth for runtime scope checks and tool-list pruning. Stdio has no user auth, so
+only the server safety ceiling and SAP authorization apply.
 
-```typescript
-const TOOL_SCOPES: Record<string, string> = {
-  SAPRead: 'read',      SAPWrite: 'write',
-  SAPSearch: 'read',    SAPActivate: 'write',
-  SAPQuery: 'sql',      SAPManage: 'write',
-  SAPNavigate: 'read',  SAPTransport: 'write',
-  SAPContext: 'read',   SAPLint: 'read',
-  SAPDiagnose: 'read',
-};
-```
+Supported user scopes: `read`, `write`, `data`, `sql`, `transports`, `git`, `admin`.
+`admin` implies all scopes; `write` implies `read`; `sql` implies `data`.
 
 ### Auth Providers (Chained)
 
@@ -323,7 +318,7 @@ case 'DOMA': {
 
 ```typescript
 checkOperation(this.safety, OperationType.Create, 'CreateObject');
-// Throws AdtSafetyError if blocked by readOnly, allowedOps, etc.
+// Throws AdtSafetyError if blocked by allowWrites, allowFreeSQL, package gates, etc.
 ```
 
 ### CRUD Pattern (lock → modify → unlock)

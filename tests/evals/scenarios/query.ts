@@ -1,5 +1,5 @@
 /**
- * SAPQuery — SQL-against-SAP scenarios. Only registered when blockFreeSQL=false.
+ * SAPQuery — SQL-against-SAP scenarios. Only registered when allowFreeSQL=true.
  */
 
 import type { EvalScenario } from '../types.js';

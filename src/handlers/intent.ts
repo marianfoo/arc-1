@@ -154,7 +154,7 @@ import { sanitizeArgs } from '../server/audit.js';
 import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
-import { expandHyperfocusedArgs, getHyperfocusedScope } from './hyperfocused.js';
+import { expandHyperfocusedArgs } from './hyperfocused.js';
 import { getToolSchema } from './schemas.js';
 import { formatZodError } from './zod-errors.js';
 
@@ -338,8 +338,8 @@ function formatErrorForLLM(err: unknown, message: string, tool: string, args: Re
     if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS') {
       return (
         `${message}\n\nHint: TABLE_CONTENTS is blocked by safety configuration or missing data scope. ` +
-        'Enable table preview at the server level (SAP_BLOCK_DATA=false or a *-data/*-sql profile) ' +
-        'and, in authenticated HTTP mode, ensure the token includes data (or sql) scope.'
+        'Set SAP_ALLOW_DATA_PREVIEW=true at the server level and, in authenticated HTTP mode, ' +
+        'ensure the token includes data (or sql) scope.'
       );
     }
     return message;
@@ -721,17 +721,8 @@ export async function handleToolCall(
             result = errorResult(expanded.error);
             break;
           }
-          // Check scope for the delegated action
-          if (authInfo) {
-            const requiredScope = getHyperfocusedScope(String(args.action ?? ''));
-            if (!hasRequiredScope(authInfo, requiredScope)) {
-              result = errorResult(
-                `Insufficient scope: '${requiredScope}' required for SAP(action="${args.action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
-              );
-              break;
-            }
-          }
           // Delegate to the real handler (recursive call, but with the mapped tool name)
+          // The concrete tool/action policy is enforced by the recursive call.
           result = await handleToolCall(
             client,
             config,
@@ -3631,7 +3622,7 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
     }
     case 'check': {
       // Check transport requirements for an object/package combination.
-      // Does NOT require enableTransports — this is a read-only check.
+      // Does NOT require allowTransportWrites — this is a read-only check.
       const objectType = String(args.type ?? '');
       const objectName = String(args.name ?? '');
       const pkg = String(args.package ?? '');

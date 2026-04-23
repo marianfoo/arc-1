@@ -11,8 +11,9 @@ import { config } from 'dotenv';
 import { resolveConfig } from './server/config.js';
 import { createAndStartServer } from './server/server.js';
 
-// Load .env file (if present) before anything else
-config();
+// Load .env file (if present) before anything else.
+// Keep stdout clean for stdio MCP JSON-RPC.
+config({ quiet: true });
 
 const { config: serverConfig, sources } = resolveConfig(process.argv.slice(2));
 await createAndStartServer(serverConfig, sources);

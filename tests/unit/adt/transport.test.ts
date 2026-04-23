@@ -740,7 +740,7 @@ describe('Transport Management', () => {
       expect(info.lockedTransport).toBe('A4HK900999');
     });
 
-    it('does not require enableTransports flag (read-only check)', async () => {
+    it('does not require allowTransportWrites for read-only transport info', async () => {
       const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
         <RECORDING/>
         <DLVUNIT>LOCAL</DLVUNIT>
