@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-18
+**Last Updated:** 2026-04-23
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -39,92 +39,124 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 
 ## Overview: Not Yet Implemented (sorted by priority)
 
-| # | ID | Feature | Priority | Effort | Category |
-|---|-----|---------|----------|--------|----------|
-| ~~—~~ | ~~COMPAT-01~~ | ~~modificationSupport guard in lockObject()~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
-| ~~—~~ | ~~COMPAT-02~~ | ~~CSRF HEAD→GET fallback (S/4HANA Public Cloud)~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
-| ~~—~~ | ~~COMPAT-03~~ | ~~V4 SRVB publish endpoint bug~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-15~~ |
-| 1 | FEAT-18 | Function Group Bulk Fetch | P1 | S | Features |
-| ~~—~~ | ~~FEAT-10~~ | ~~PrettyPrint (Code Formatting)~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-17~~ |
-| ~~—~~ | ~~FEAT-20~~ | ~~Source Version / Revision History~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
-| ~~—~~ | ~~FEAT-49~~ | ~~Object Transport History (Reverse Lookup)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
-| 3 | DOC-01 | Copilot Studio Setup Guide | P1 | S | Docs |
-| 4 | DOC-02 | Basis Admin Security Guide | P1 | S | Docs |
-| ~~—~~ | ~~DOC-04~~ | ~~RAP & Common ABAP Workflow Skill Pack Refresh~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-18~~ |
-| 5 | FEAT-24 | CompareSource (Diff) | P2 ↑ | S | Features |
-| 6 | FEAT-32 | Table Pagination / Offset | P2 | XS | Features |
-| 7 | FEAT-21 | ABAP Documentation (F1 Help) | P2 | XS | Features |
-| 8 | FEAT-28 | SAP Compatibility Hardening | P2 | S | Features |
-| 9 | OPS-02 | Health Check Enhancements | P2 | XS | Ops |
-| 10 | FEAT-41 | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
-| 11 | FEAT-42 | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
-| ~~—~~ | ~~FEAT-43~~ | ~~DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations)~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
-| 12 | FEAT-09 | SQL Trace Monitoring | P2 | S | Features |
-| 13 | SEC-05 | Rate Limiting | P2 | S | Security |
-| 14 | FEAT-31 | Code Coverage from Unit Tests | P2 | S | Features |
-| ~~—~~ | ~~FEAT-33~~ | ~~CDS Impact Analysis~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
-| 15 | FEAT-26 | MCP Client Config Snippets | P2 | S | Features |
-| 16 | FEAT-25 | CDS Unit Tests | P2 | S | Features |
-| 17 | FEAT-23 | GetProgFullCode (Include Traversal) | P2 | S | Features |
-| 18 | FEAT-36 | Type Information (SAPNavigate) | P2 | S | Features |
-| 19 | FEAT-27 | Migration Analysis (ECC->S/4) | P2 | S | Features |
-| 20 | FEAT-06 | Cloud Readiness Assessment | P2 | M | Features |
-| 21 | FEAT-03 | Enhancement Framework (BAdI) | P2 | M | Features |
-| ~~—~~ | ~~FEAT-22~~ | ~~gCTS/abapGit Integration~~ | ~~P2~~ | ~~M~~ | ~~Completed 2026-04-18~~ |
-| 23 | FEAT-34 | i18n Translation Management | P2 | M | Features |
-| 24 | FEAT-30 | ABAP Cleaner Integration | P2 | M | Features |
-| 25 | DOC-03 | SAP Community Blog Post | P2 | S | Docs |
-| — | COMPAT-04 | BTP transport omission in safeUpdateSource() — verify only | P2 | XS | Compatibility |
-| 28 | FEAT-07 | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
-| 29 | FEAT-05 | Code Refactoring (Rename, Extract) | P3 | L | Features |
-| 30 | FEAT-29 | P3 Backlog (14 items) | P3 | various | Features |
-| 31 | OPS-03 | Multi-System Routing | P3 | L | Ops |
-| 32 | FEAT-50 | ADT Probe Fixture Coverage (contributed fixtures) | P3 | XS-each | Diagnostics |
+<!--
+SORT RULES for this table — DO NOT BREAK when adding rows:
+1. Open items first, strictly sorted by priority (P0 → P1 → P2 → P3).
+2. Completed (strikethrough) rows go at the BOTTOM, also sorted by priority (P0 → P3).
+3. Each ID cell links to its detail anchor below, e.g. `[FEAT-18](#feat-18)`.
+4. When you complete an item: strike it, move to the completed block at the bottom of
+   this table, AND add a dated row to the "Overview: Completed" table further down.
+-->
+
+| ID | Feature | Priority | Effort | Category |
+|-----|---------|----------|--------|----------|
+| [BUG-01](#bug-01) | SAPActivate phantom success + CLI/server alignment (NW 7.50) — PR [#179](https://github.com/marianfoo/arc-1/pull/179) open | P0 | S | Bugs |
+| [FEAT-18](#feat-18) | Function Group Bulk Fetch | P1 | S | Features |
+| [FEAT-24](#feat-24) | CompareSource (Diff) | P1 ↑ (from P2, 2026-04-23 — last piece of code-review workflow trio with FEAT-20 + FEAT-49) | S | Features |
+| [DOC-01](#doc-01) | Copilot Studio Setup Guide | P1 | S | Docs |
+| [DOC-02](#doc-02) | Basis Admin Security Guide | P1 | S | Docs |
+| [FEAT-09](#feat-09) | SQL Trace Monitoring | P2 | S | Features |
+| [FEAT-21](#feat-21) | ABAP Documentation (F1 Help) | P2 | XS | Features |
+| [FEAT-23](#feat-23) | GetProgFullCode (Include Traversal) | P2 | S | Features |
+| [FEAT-25](#feat-25) | CDS Unit Tests | P2 | S | Features |
+| [FEAT-26](#feat-26) | MCP Client Config Snippets | P2 | S | Features |
+| [FEAT-27](#feat-27) | Migration Analysis (ECC->S/4) | P2 | S | Features |
+| [FEAT-28](#feat-28) | SAP Compatibility Hardening | P2 | S | Features |
+| [FEAT-31](#feat-31) | Code Coverage from Unit Tests | P2 | S | Features |
+| [FEAT-32](#feat-32) | Table Pagination / Offset | P2 | XS | Features |
+| [FEAT-36](#feat-36) | Type Information (SAPNavigate) | P2 | S | Features |
+| [FEAT-41](#feat-41) | ABAP Unit Test Coverage (statement-level) | P2 | S | Features |
+| [FEAT-42](#feat-42) | ATC Output Formats (JUnit4, checkstyle, codeclimate) | P2 | XS | Features |
+| [FEAT-06](#feat-06) | Cloud Readiness Assessment | P2 | M | Features |
+| [FEAT-03](#feat-03) | Enhancement Framework (BAdI) | P2 | M | Features |
+| [FEAT-30](#feat-30) | ABAP Cleaner Integration | P2 | M | Features |
+| [FEAT-34](#feat-34) | i18n Translation Management | P2 | M | Features |
+| [FEAT-60](#feat-60) | CLI/server alignment (shortcut parity with MCP tool schemas) | P2 | S | Features |
+| [SEC-05](#sec-05) | Rate Limiting | P2 | S | Security |
+| [OPS-02](#ops-02) | Health Check Enhancements | P2 | XS | Ops |
+| [DOC-03](#doc-03) | SAP Community Blog Post | P2 | S | Docs |
+| [COMPAT-04](#compat-04) | BTP transport omission in safeUpdateSource() — verify only | P2 | XS | Compatibility |
+| [FEAT-05](#feat-05) | Code Refactoring (Rename, Extract) | P3 | L | Features |
+| [FEAT-07](#feat-07) | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
+| [FEAT-29](#feat-29) | P3 Backlog (14 items) | P3 | various | Features |
+| [FEAT-50](#feat-50) | ADT Probe Fixture Coverage (contributed fixtures) | P3 | XS-each | Diagnostics |
+| [FEAT-59](#feat-59) | Embeddable multi-tenant server (per-instance `systemType`) | P3 | M | Features |
+| [OPS-03](#ops-03) | Multi-System Routing | P3 | L | Ops |
+| ~~[COMPAT-01](#compat-01)~~ | ~~modificationSupport guard in lockObject()~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
+| ~~[COMPAT-02](#compat-02)~~ | ~~CSRF HEAD→GET fallback (S/4HANA Public Cloud)~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
+| ~~[COMPAT-03](#compat-03)~~ | ~~V4 SRVB publish endpoint bug~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-15~~ |
+| ~~[FEAT-10](#feat-10)~~ | ~~PrettyPrint (Code Formatting)~~ | ~~P1~~ | ~~XS~~ | ~~Completed 2026-04-17~~ |
+| ~~[FEAT-20](#feat-20)~~ | ~~Source Version / Revision History~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
+| ~~[FEAT-49](#feat-49)~~ | ~~Object Transport History (Reverse Lookup)~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
+| ~~[DOC-04](#doc-04)~~ | ~~RAP & Common ABAP Workflow Skill Pack Refresh~~ | ~~P1~~ | ~~S~~ | ~~Completed 2026-04-18~~ |
+| ~~[FEAT-22](#feat-22)~~ | ~~gCTS/abapGit Integration~~ | ~~P2~~ | ~~M~~ | ~~Completed 2026-04-18~~ |
+| ~~[FEAT-33](#feat-33)~~ | ~~CDS Impact Analysis~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-16~~ |
+| ~~[FEAT-43](#feat-43)~~ | ~~DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations)~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-17~~ |
+| ~~[FEAT-55](#feat-55)~~ | ~~System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose~~ | ~~P2~~ | ~~S~~ | ~~Completed 2026-04-21~~ |
+| ~~[FEAT-56](#feat-56)~~ | ~~ADT Type-Availability Probe (diagnostic)~~ | ~~P3~~ | ~~S~~ | ~~Completed 2026-04-20~~ |
 
 ---
 
 ## Overview: Completed (sorted by date, newest first)
 
+<!--
+SORT RULES for this table — DO NOT BREAK when adding rows:
+1. This is the full historical log, sorted by completion date (newest first).
+   Do NOT re-sort by priority here — that is what the completed block at the
+   bottom of the "Not Yet Implemented" table is for.
+2. Each ID with a detail section links to its anchor, e.g. `[FEAT-18](#feat-18)`.
+   Rows with "—" as ID are historical items that never had a FEAT-/SEC-/etc. number.
+3. When adding a completed item, also:
+   - Move its strikethrough row to the completed block of the "Not Yet Implemented" table.
+   - Mark the detail section's status as complete (and keep the `<a id="...">` anchor).
+-->
+
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
-| DOC-04 | RAP & Common ABAP Workflow Skill Pack Refresh | 2026-04-18 | Docs |
-| FEAT-22 | gCTS/abapGit Integration (`SAPGit` tool + `--allow-git-writes` safety gate) | 2026-04-18 | Features |
+| [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
+| [FEAT-55](#feat-55) | System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose (PR #174) | 2026-04-21 | Features |
+| [FEAT-56](#feat-56) | ADT Type-Availability Probe (diagnostic) (PR #163) | 2026-04-20 | Features |
+| [FEAT-58](#feat-58) | DTEL v2→v1 Content-Type Fallback + SICF-aware Error Hints (PR #169) | 2026-04-20 | Features |
+| — | SAPManage Scope Split + Data Preview Diagnostics (PR #171) | 2026-04-19 | Security |
+| [DOC-05](#doc-05) | First-Party Skill Pack Expansion (clean-core ATC, dead code, object documenter) (PR #164) | 2026-04-19 | Docs |
+| [DOC-04](#doc-04) | RAP & Common ABAP Workflow Skill Pack Refresh | 2026-04-18 | Docs |
+| [FEAT-22](#feat-22) | gCTS/abapGit Integration (`SAPGit` tool + `--allow-git-writes` safety gate) | 2026-04-18 | Features |
 | SEC-09 | Auth Safety & Configurability (cookie→PP leak fix, applyAuthHeader guard, fail-fast validation, auth summary log, SAML disable opt-in, HTML login detection) | 2026-04-17 | Security |
-| FEAT-20 | Source Version / Revision History | 2026-04-17 | Features |
-| FEAT-49 | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
-| FEAT-10 | PrettyPrint (Code Formatting) | 2026-04-17 | Features |
-| FEAT-43 | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
-| FEAT-33 | CDS Impact Analysis | 2026-04-16 | Features |
-| FEAT-38 | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
-| FEAT-16 | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
-| FEAT-37 | DCL (Access Control) Read/Write | 2026-04-15 | Features |
-| FEAT-12 | Fix Proposals / Auto-Fix from ATC | 2026-04-14 | Features |
-| FEAT-47 | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
-| FEAT-45 | DEVC (Package) Create | 2026-04-14 | Features |
-| FEAT-44 | TABL (Database Table) Create | 2026-04-14 | Features |
+| [FEAT-20](#feat-20) | Source Version / Revision History | 2026-04-17 | Features |
+| [FEAT-49](#feat-49) | Object Transport History (Reverse Lookup) | 2026-04-17 | Features |
+| [FEAT-10](#feat-10) | PrettyPrint (Code Formatting) | 2026-04-17 | Features |
+| [FEAT-43](#feat-43) | DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations) | 2026-04-17 | Features |
+| [FEAT-33](#feat-33) | CDS Impact Analysis | 2026-04-16 | Features |
+| [FEAT-38](#feat-38) | ADT Service Discovery (MIME Negotiation) | 2026-04-15 | Features |
+| [FEAT-16](#feat-16) | Error Intelligence (Actionable Hints) | 2026-04-15 | Features |
+| [FEAT-37](#feat-37) | DCL (Access Control) Read/Write | 2026-04-15 | Features |
+| [FEAT-12](#feat-12) | Fix Proposals / Auto-Fix from ATC | 2026-04-14 | Features |
+| [FEAT-47](#feat-47) | MSAG (Message Class) Read/Write | 2026-04-14 | Features |
+| [FEAT-45](#feat-45) | DEVC (Package) Create | 2026-04-14 | Features |
+| [FEAT-44](#feat-44) | TABL (Database Table) Create | 2026-04-14 | Features |
 | — | RAP DDIC save diagnostics (structured errors + inactive syntax check) | 2026-04-14 | Features |
 | — | Abaplint type-gating + per-call lintBeforeWrite | 2026-04-14 | Features |
-| FEAT-46 | SRVB (Service Binding) Create | 2026-04-14 | Features |
-| FEAT-39 | Transport Enhancements (K/W/T types; S/R deferred) | 2026-04-13 | Features |
+| [FEAT-46](#feat-46) | SRVB (Service Binding) Create | 2026-04-14 | Features |
+| [FEAT-39](#feat-39) | Transport Enhancements (K/W/T types; S/R deferred) | 2026-04-13 | Features |
 | — | RAP Write Guard (feature-aware) | 2026-04-13 | Features |
-| FEAT-13 | DDIC Domain/Data Element Write | 2026-04-12 | Features |
-| FEAT-08 | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
-| FEAT-14 | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
-| FEAT-15 | Namespace URL Encoding Audit | 2026-04-12 | Features |
-| FEAT-11 | Inactive Objects List | 2026-04-12 | Features |
-| FEAT-40 | FLP Launchpad Management (OData) | 2026-04-12 | Features |
-| SEC-08 | OAuth Security Hardening (RFC 9700) | 2026-04-08 | Security |
+| [FEAT-13](#feat-13) | DDIC Domain/Data Element Write | 2026-04-12 | Features |
+| [FEAT-08](#feat-08) | Content-Type 415/406 Auto-Retry | 2026-04-12 | Features |
+| [FEAT-14](#feat-14) | 401 Session Timeout Auto-Retry | 2026-04-12 | Features |
+| [FEAT-15](#feat-15) | Namespace URL Encoding Audit | 2026-04-12 | Features |
+| [FEAT-11](#feat-11) | Inactive Objects List | 2026-04-12 | Features |
+| [FEAT-40](#feat-40) | FLP Launchpad Management (OData) | 2026-04-12 | Features |
+| [SEC-08](#sec-08) | OAuth Security Hardening (RFC 9700) | 2026-04-08 | Security |
 | — | AFF Structured Class Read | 2026-04-08 |  Features |
 | — | AFF Batch Object Creation | 2026-04-08 | Features |
 | — | AFF Schema Validation | 2026-04-08 | Features |
 | — | Zod v4 Input Validation | 2026-04-08 | Features |
 | — | Two-Dimensional Auth (scopes x roles x safety) | 2026-04-07 | Security |
-| FEAT-01 | Where-Used Analysis | 2026-04-04 | Features |
+| [FEAT-01](#feat-01) | Where-Used Analysis | 2026-04-04 | Features |
 | — | Enhanced Abaplint (cloud/on-prem presets) | 2026-04-04 | Features |
 | — | Object Caching (SQLite + memory) | 2026-04-04 | Features |
 | — | HTTP Client Migration (axios -> undici) | 2026-04-04 | Features |
-| SEC-04 | Audit Logging (multi-sink) | 2026-04-01 | Security |
-| FEAT-04 | DDIC Completeness | 2026-04-01 | Features |
+| [SEC-04](#sec-04) | Audit Logging (multi-sink) | 2026-04-01 | Security |
+| [FEAT-04](#feat-04) | DDIC Completeness | 2026-04-01 | Features |
 | — | Hyperfocused Mode (1 tool, ~200 tokens) | 2026-04-01 | Features |
 | — | Method-Level Surgery | 2026-04-01 | Features |
 | — | Runtime Diagnostics (SAPDiagnose) | 2026-04-01 | Features |
@@ -132,21 +164,21 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 | — | Context Compression (7-30x) | 2026-04-01 | Features |
 | — | MCP Elicitation | 2026-04-01 | Features |
 | — | BTP ABAP Environment (OAuth 2.0) | 2026-04-01 | Features |
-| SEC-01 | Principal Propagation (per-user SAP auth) | 2026-03-27 | Security |
-| SEC-02 | BTP Cloud Connector PP | 2026-03-27 | Security |
-| SEC-06 | Tool Restriction by User Role | 2026-03-27 | Security |
-| SEC-07 | XSUAA OAuth Proxy | 2026-03-27 | Security |
+| [SEC-01](#sec-01) | Principal Propagation (per-user SAP auth) | 2026-03-27 | Security |
+| [SEC-02](#sec-02) | BTP Cloud Connector PP | 2026-03-27 | Security |
+| [SEC-06](#sec-06) | Tool Restriction by User Role | 2026-03-27 | Security |
+| [SEC-07](#sec-07) | XSUAA OAuth Proxy | 2026-03-27 | Security |
 | — | Dynamic Client Registration (RFC 7591) | 2026-03-27 | Security |
-| STRAT-01 | TypeScript Migration (Go -> TS) | 2026-03-26 | Infrastructure |
-| FEAT-35 | Class Hierarchy (SAPNavigate) | 2026-04-09 | Features |
+| [STRAT-01](#strat-01) | TypeScript Migration (Go -> TS) | 2026-03-26 | Infrastructure |
+| [FEAT-35](#feat-35) | Class Hierarchy (SAPNavigate) | 2026-04-09 | Features |
 | — | API Key Auth | — | Security |
 | — | OAuth/OIDC (Entra ID) | — | Security |
 | — | BTP CF Deployment | — | Infrastructure |
-| OPS-01 | Structured JSON Logging | — | Ops |
-| OPS-04 | CI/CD Pipeline | — | Ops |
-| CLEAN-01 | Go Code Removal | — | Cleanup |
-| CLEAN-02 | CLI Surface | — | Cleanup |
-| SEC-03 | S_DEVELOP Awareness | — | Security |
+| [OPS-01](#ops-01) | Structured JSON Logging | — | Ops |
+| [OPS-04](#ops-04) | CI/CD Pipeline | — | Ops |
+| [CLEAN-01](#clean-01) | Go Code Removal | — | Cleanup |
+| [CLEAN-02](#clean-02) | CLI Surface | — | Cleanup |
+| [SEC-03](#sec-03) | S_DEVELOP Awareness | — | Security |
 
 ---
 
@@ -157,6 +189,41 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 > **2026-04-14 priority re-evaluation:** dassian-adt's explosive growth (0→32 stars, 25→53 tools, OAuth/XSUAA, multi-system in 2 weeks) and SAP's confirmed Q2 2026 GA for official ABAP MCP Server increase urgency on fix proposals (FEAT-12↑P1), error intelligence (FEAT-16↑P1), and pretty print (FEAT-10↑P1, completed 2026-04-17). SAP Joule entering the space makes ARC-1's enterprise-grade safety/auth differentiation even more important.
 >
 > **2026-04-16 additions:** Cross-project competitor analysis (VSP, fr0ster, dassian-adt deep dive) identified COMPAT-01..03 plus verify item COMPAT-04. Follow-up confirmed COMPAT-03 had already been fixed in PR #130 (commit `9b0601c`, completed 2026-04-15). COMPAT-01 and COMPAT-02 were fixed in this follow-up (completed 2026-04-16). FR0ster reached v6.1.0 (35 stars). VSP confirmed modificationSupport guard as root cause of recurring 423 lock errors and surfaced S/4HANA Public Cloud CSRF HEAD incompatibility (#104). PR #134 (SKTD) merged 2026-04-16 — ARC-1-unique Knowledge Transfer Document support now live. Enhancement (BAdI) ADT endpoints confirmed from fr0ster analysis. GetProgFullCode confirmed on-prem only via nodestructure API. Added **FEAT-49** (Object Transport History) at P1 — reverse lookup ("which transports contain this object?") is the missing link for transport-scoped code review (fr0ster#30). Enriched **FEAT-20** (revisions) with concrete ADT endpoint details; upgraded **FEAT-24** (diff) rationale — the trio (FEAT-49→FEAT-20→FEAT-24) enables the full code review workflow no competitor has end-to-end. Overview table re-sorted by actual priority (P0→P1→P2→P3).
+>
+> **2026-04-23 additions:** Four merged items plus re-evaluation driven by open PR review and competitor scan:
+> - **FEAT-55** — SM02 system messages + /IWFND/ERROR_LOG gateway errors wired into `SAPDiagnose` (PR #174). Matrix section 10 updated — ARC-1 no longer has any diagnostic feed that only fr0ster exposes.
+> - **FEAT-56** — standalone ADT type-availability probe (`npm run probe`, multi-signal classifier, fixture-driven replay tests) merged (PR #163). FEAT-50 (fixture coverage contributions) remains open as the follow-up backlog item.
+> - **FEAT-57** — `SAPContext(action="impact")` now catches asymmetric DDLS/DDLX metadata-extension coverage across sibling variants (PR #177) — the common RAP bug where one routing path has missing UI fields.
+> - **FEAT-58** — DTEL v2→v1 Content-Type fallback + SICF-aware (`icf-handler-not-bound`) error classification (PR #169).
+> - **SAPManage scope split** — read vs write sub-actions enforced via `SAPMANAGE_ACTION_SCOPES` in both standard and hyperfocused mode (PR #171). Read-only clients keep diagnostic manage actions.
+> - **DOC-05** — three new skills merged (`sap-clean-core-atc`, `sap-unused-code`, `sap-object-documenter`) broadening the workflow layer beyond RAP (PR #164).
+>
+> Open PRs in flight (not merged at 2026-04-23):
+> - **PR [#179](https://github.com/marianfoo/arc-1/pull/179)** (samibouge) — **BUG-01 / P0**: SAPActivate reported "Successfully activated" for an inactive class on NW 7.50. Five independent parser/handler bugs combined into a silent no-op. Fix adds `<ioc:inactiveObjects>` detection in `parseActivationResult`, `/activation/inactive` → `/activation/inactiveobjects` fallback for `getInactiveObjects`, flat-shape support in `parseInactiveObjects`, new `version: 'active' \| 'inactive'` parameter on `SAPDiagnose action=syntax`, and NW 7.50 `<chkrun:checkMessage>` shape in `parseSyntaxCheckResult`. Also surfaces a wider **FEAT-60** gap (see below): CLI shortcut coverage lags MCP tool schemas across at least 9 tools.
+> - **PR [#176](https://github.com/marianfoo/arc-1/pull/176)** — CDS CRUD dependency guidance for DDLS update/activate/delete (handler-level workflow hints, not a new ADT capability). Uses FEAT-51 number; the 2026-04-23 completions in this roadmap use FEAT-55..58 to avoid renumbering collision with the in-flight PR.
+> - **PR [#173](https://github.com/marianfoo/arc-1/pull/173)** — RAP on-prem authoring gap closure: deterministic RAP preflight for TABL/BDEF/DDLX/DDLS (`preflightBeforeWrite` toggle), new `SAPWrite action=scaffold_rap_handlers` with `dry-run`/`autoApply`, behavior-pool include scanning, per-object batch activation statuses. Will close the remaining RAP retry-failure class once merged.
+> - **PR [#161](https://github.com/marianfoo/arc-1/pull/161)** — BTP CF deployment diagram (`docs/btp-deployment.drawio`). Doc artifact only.
+> - **PR [#151](https://github.com/marianfoo/arc-1/pull/151)** — SAPLint PrettyPrint + revision eval scenarios (test-only).
+>
+> Newly added roadmap items:
+> - **BUG-01** (P0) — SAPActivate phantom success + CLI/server alignment (tracked by PR #179)
+> - **FEAT-59** (P3) — Embeddable multi-tenant server with per-instance `systemType`. Competitive-tracking item inspired by fr0ster v6.4.0. ARC-1 is "one gateway per SAP system" today; a multi-tenant embedding story would matter for customers running many SAP systems behind one MCP gateway.
+> - **FEAT-60** (P2) — CLI/server alignment. PR #179's matrix shows 9 of 12 MCP tools have no CLI shortcut, and the 3 that do expose fewer knobs than their Zod schemas accept. Auto-generating shortcuts from schemas would close the gap and prevent future drift.
+>
+> Priority re-eval (competitor-driven, 2026-04-23):
+> - **FEAT-18** (Function Group Bulk Fetch) — still P1. The `npm run probe` (FEAT-56) and SQLite cache mitigate the round-trip cost; revisit if evals show LLMs hit 20+ FM groups repeatedly. Not downgrading yet — dassian's confirmed parallel fetch pattern means the gap is visible to users comparing tools.
+> - **FEAT-24** (CompareSource/Diff) — **promote P2 → P1**. With FEAT-20 (VERSIONS) + FEAT-49 (object transport history) both shipped, diff is now the last missing piece of the code-review workflow no competitor has end-to-end. Target revision-to-revision client-side diff first; transport-scoped diff is the follow-up.
+> - **FEAT-34** (i18n Translation Management) — **hold at P2 but de-emphasize**. VSP added 7 translation tools in early April but has been quiet since 2026-04-15. Not blocking adoption signals for ARC-1; revisit if a specific customer ask lands.
+> - **FEAT-07** (TLS/HTTPS) — stays P3. BTP CF + reverse proxy patterns are still the answer.
+>
+> Already-implemented sanity check (2026-04-23):
+> - `SAPContext(action="impact")` already handles DDLS/DDLX upstream+downstream (FEAT-33, 2026-04-16) plus sibling DDLS/DDLX consistency (FEAT-57, 2026-04-22).
+> - `SAPRead(type="VERSIONS" | "VERSION_SOURCE")` (FEAT-20, 2026-04-17) is live on on-prem; BTP exposure intentionally deferred.
+> - `SAPTransport(action="history")` (FEAT-49, 2026-04-17) is live with `transportchecks` fallback.
+> - `SAPDiagnose` now covers dumps + traces + system_messages + gateway_errors + quickfix + apply_quickfix (FEAT-55, 2026-04-21). SQL trace (FEAT-09) is the only fr0ster-v5 diagnostic still missing.
+> - `SAPGit` (FEAT-22, 2026-04-18) auto-selects gCTS→abapGit with a `--allow-git-writes` safety gate; VSP's gCTS lead is closed for the prioritized workflow set.
+>
+> Competitor scan (2026-04-23): only **fr0ster** has moved this week — v6.2.0 shipped per-object-type tool descriptions (13 types) and v6.4.0 added per-instance `systemType` on `EmbeddableMcpServer` (multi-tenant embedding capability ARC-1 lacks — tracked as FEAT-59). VSP, dassian-adt, mario, AWS Accelerator all quiet since before 2026-04-17.
 >
 > **2026-04-18 additions:** First-party workflow skills became an explicit productization layer. Research across SAP Help / ABAP docs, the `mcp-sap-docs` server, `sap-abap-base` steering docs, and `sap-skills` showed that common success patterns are workflow-level: system bootstrap, provider-contract selection, draft/auth defaults, impact-driven change analysis, revision/history inspection, formatter alignment, documentation capture, and Git/delivery context. ARC-1 now has enough primitives (`impact`, `VERSIONS`, `SAPTransport(action="history")`, `SAPLint` formatting/settings, `SKTD`, `SAPGit`) to encode those workflows directly in first-party RAP/common-use-case skills instead of just adding more raw endpoints.
 
@@ -172,13 +239,15 @@ Every other SAP MCP server today runs on the developer's local machine — unman
 ### Phase A.6: Compatibility Bug Fixes (P0) — identified 2026-04-16
 These bugs affect real-world deployments and were confirmed by cross-project competitor analysis:
 
-- ~~**COMPAT-01: modificationSupport guard in lockObject()** (XS)~~ — **completed 2026-04-16.** `lockObject()` now checks both `MODIFICATION_SUPPORT` and namespaced `modificationSupport` for explicit `false` and returns a targeted `AdtApiError` (423) before write attempts. Source: VSP commit 22517d4. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+- <a id="compat-01"></a>~~**COMPAT-01: modificationSupport guard in lockObject()** (XS)~~ — **completed 2026-04-16.** `lockObject()` now checks both `MODIFICATION_SUPPORT` and namespaced `modificationSupport` for explicit `false` and returns a targeted `AdtApiError` (423) before write attempts. Source: VSP commit 22517d4. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
 
-- ~~**COMPAT-02: CSRF HEAD→GET fallback (S/4HANA Public Cloud)** (XS)~~ — **completed 2026-04-16.** `fetchCsrfToken()` now retries with GET when HEAD returns 403, preserving existing 401/403 auth error behavior for true authorization failures. Source: VSP issue #104. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
+- <a id="compat-02"></a>~~**COMPAT-02: CSRF HEAD→GET fallback (S/4HANA Public Cloud)** (XS)~~ — **completed 2026-04-16.** `fetchCsrfToken()` now retries with GET when HEAD returns 403, preserving existing 401/403 auth error behavior for true authorization failures. Source: VSP issue #104. [Eval](../compare/vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md)
 
-- ~~**COMPAT-03: V4 SRVB publish endpoint bug** (XS)~~ — **already completed 2026-04-15** in PR #130 (commit `9b0601c`) before this compatibility plan was executed. `publishServiceBinding()`/`unpublishServiceBinding()` now propagate the resolved binding type (`odatav2` or `odatav4`) correctly. [Eval](../compare/fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
+- <a id="compat-03"></a>~~**COMPAT-03: V4 SRVB publish endpoint bug** (XS)~~ — **already completed 2026-04-15** in PR #130 (commit `9b0601c`) before this compatibility plan was executed. `publishServiceBinding()`/`unpublishServiceBinding()` now propagate the resolved binding type (`odatav2` or `odatav4`) correctly. [Eval](../compare/fr0ster/evaluations/51781d3-srvd-srvb-activate-variant.md)
 
-- ~~**COMPAT-04: BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable to ARC-1.** fr0ster's bug was per-handler transport wiring (`UpdateInterface` missing what `UpdateClass` had). ARC-1's centralized `safeUpdateSource()` handles ALL types with `effectiveTransport = transport ?? (lock.corrNr || undefined)` — the pattern already correctly omits `corrNr` when undefined. **Verify** with BTP Cloud INTF update integration test. Source: fr0ster commit c2b8006 + issue #61. [Eval](../compare/fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
+- **BUG-01: SAPActivate phantom success + CLI/server alignment (NW 7.50)** (S) — **In flight via PR [#179](https://github.com/marianfoo/arc-1/pull/179)** (samibouge, 2026-04-22). Five independent bugs produced a silent no-op that reported success for an inactive class. See the [BUG-01 detail block](#bug-01).
+
+- <a id="compat-04"></a>~~**COMPAT-04: BTP transport omission in safeUpdateSource()**~~ — **Likely NOT applicable to ARC-1.** fr0ster's bug was per-handler transport wiring (`UpdateInterface` missing what `UpdateClass` had). ARC-1's centralized `safeUpdateSource()` handles ALL types with `effectiveTransport = transport ?? (lock.corrNr || undefined)` — the pattern already correctly omits `corrNr` when undefined. **Verify** with BTP Cloud INTF update integration test. Source: fr0ster commit c2b8006 + issue #61. [Eval](../compare/fr0ster/evaluations/c2b8006-dump-simplify-updateintf-fix.md)
 
 ### Phase B: Core Value Features (P1)
 7. ~~**FEAT-37** DCL (Access Control) Read/Write (S)~~ — **completed 2026-04-15**
@@ -213,7 +282,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
 23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FTG2`, `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
 24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
-25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story
+25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story (SM02 and /IWFND/ERROR_LOG already completed 2026-04-21 via FEAT-55 — SQL trace is the only fr0ster-v5 diagnostic still missing)
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
 26. ~~**FEAT-20** Source Version / Revision History (S) — promoted to P1/Phase B and completed 2026-04-17~~
 27. **FEAT-31** Code Coverage from Unit Tests (S) — VSP has this (Apr 4). See also FEAT-41 for sapcli's approach.
@@ -240,7 +309,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 ### Phase F: Future / Niche (P3)
 37. **FEAT-07** TLS/HTTPS for HTTP Streamable (S) — most deployments use reverse proxy (BTP gorouter, nginx, K8s Ingress) for TLS termination; in-app TLS is edge case
 38. **FEAT-05** Code Refactoring (L) — rename, extract method *(change package completed 2026-04-15)*
-39. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29-p3-backlog-future--niche) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
+39. **FEAT-29** P3 Backlog — see [FEAT-29 table](#feat-29) for SSE, debugger, execute ABAP, call graph, UI5/BSP, RFC, embeddable server, lock registry, language attributes
 40. **FEAT-50** ADT Probe Fixture Coverage — contributor-driven; widen fixture coverage for [`classifyVerdict`](../src/probe/runner.ts) across SAP product lines (BTP ABAP, S/4 Cloud, plain NW, ECC EhP7, …)
 
 ### Strategic Context: SAP Official ABAP MCP Server (Q2 2026)
@@ -260,6 +329,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ## Details: Not Yet Implemented
 
+<a id="feat-02"></a>
 ### FEAT-02: API Release Status Tool (Clean Core)
 | Field | Value |
 |-------|-------|
@@ -278,6 +348,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-07"></a>
 ### FEAT-07: TLS/HTTPS for HTTP Streamable Transport
 | Field | Value |
 |-------|-------|
@@ -301,6 +372,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-08"></a>
 ### FEAT-08: Content-Type 415/406 Auto-Retry
 | Field | Value |
 |-------|-------|
@@ -328,6 +400,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-14"></a>
 ### FEAT-14: 401 Session Timeout Auto-Retry
 | Field | Value |
 |-------|-------|
@@ -348,6 +421,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-15"></a>
 ### FEAT-15: Namespace URL Encoding Audit
 | Field | Value |
 |-------|-------|
@@ -368,6 +442,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-12"></a>
 ### FEAT-12: Fix Proposals / Auto-Fix from ATC
 | Field | Value |
 |-------|-------|
@@ -391,6 +466,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-13"></a>
 ### FEAT-13: DDIC Domain/Data Element Write
 | Field | Value |
 |-------|-------|
@@ -414,6 +490,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-16"></a>
 ### FEAT-16: Error Intelligence (Actionable Hints)
 | Field | Value |
 |-------|-------|
@@ -439,6 +516,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-17"></a>
 ### FEAT-17: Type Auto-Mappings for SAPWrite
 | Field | Value |
 |-------|-------|
@@ -457,6 +535,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="feat-18"></a>
 ### FEAT-18: Function Group Bulk Fetch
 | Field | Value |
 |-------|-------|
@@ -475,6 +554,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 ---
 
+<a id="sec-05"></a>
 ### SEC-05: Rate Limiting
 | Field | Value |
 |-------|-------|
@@ -503,6 +583,7 @@ SAP_RATE_LIMIT_BURST=10  # burst allowance
 
 ---
 
+<a id="feat-03"></a>
 ### FEAT-03: Enhancement Framework (BAdI/Enhancement Spot)
 | Field | Value |
 |-------|-------|
@@ -527,6 +608,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-06"></a>
 ### FEAT-06: Cloud Readiness Assessment
 | Field | Value |
 |-------|-------|
@@ -553,6 +635,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-09"></a>
 ### FEAT-09: SQL Trace Monitoring
 | Field | Value |
 |-------|-------|
@@ -571,6 +654,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-10"></a>
 ### FEAT-10: PrettyPrint (Code Formatting)
 | Field | Value |
 |-------|-------|
@@ -589,6 +673,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-11"></a>
 ### FEAT-11: Inactive Objects List
 | Field | Value |
 |-------|-------|
@@ -607,6 +692,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-19"></a>
 ### FEAT-19: Transport Contents (E071 List)
 | Field | Value |
 |-------|-------|
@@ -623,6 +709,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-20"></a>
 ### FEAT-20: Source Version / Revision History
 | Field | Value |
 |-------|-------|
@@ -678,6 +765,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-21"></a>
 ### FEAT-21: ABAP Documentation (F1 Help)
 | Field | Value |
 |-------|-------|
@@ -696,6 +784,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-22"></a>
 ### FEAT-22: gCTS/abapGit Integration
 | Field | Value |
 |-------|-------|
@@ -724,6 +813,7 @@ Note: The `/enhancements/elements` endpoint is **on-prem only** (SAP BTP ABAP Cl
 
 ---
 
+<a id="feat-23"></a>
 ### FEAT-23: GetProgFullCode (Include Traversal)
 | Field | Value |
 |-------|-------|
@@ -749,6 +839,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-24"></a>
 ### FEAT-24: CompareSource (Diff)
 | Field | Value |
 |-------|-------|
@@ -782,6 +873,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-25"></a>
 ### FEAT-25: CDS Unit Tests
 | Field | Value |
 |-------|-------|
@@ -800,6 +892,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-26"></a>
 ### FEAT-26: MCP Client Config Snippets
 | Field | Value |
 |-------|-------|
@@ -818,6 +911,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-27"></a>
 ### FEAT-27: Migration Analysis (ECC->S/4)
 | Field | Value |
 |-------|-------|
@@ -836,6 +930,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-28"></a>
 ### FEAT-28: SAP Compatibility Hardening
 | Field | Value |
 |-------|-------|
@@ -861,6 +956,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-30"></a>
 ### FEAT-30: ABAP Cleaner Integration (Future)
 
 | Field | Value |
@@ -895,6 +991,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-31"></a>
 ### FEAT-31: Code Coverage from Unit Tests
 | Field | Value |
 |-------|-------|
@@ -913,6 +1010,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-32"></a>
 ### FEAT-32: Table Pagination / Offset
 | Field | Value |
 |-------|-------|
@@ -931,6 +1029,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-33"></a>
 ### FEAT-33: CDS Impact Analysis
 | Field | Value |
 |-------|-------|
@@ -949,6 +1048,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-34"></a>
 ### FEAT-34: i18n Translation Management
 | Field | Value |
 |-------|-------|
@@ -967,6 +1067,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-36"></a>
 ### FEAT-36: Type Information (SAPNavigate)
 | Field | Value |
 |-------|-------|
@@ -985,6 +1086,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="ops-02"></a>
 ### OPS-02: Health Check Enhancements
 | Field | Value |
 |-------|-------|
@@ -1002,6 +1104,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="doc-01"></a>
 ### DOC-01: End-to-End Copilot Studio Setup Guide
 | Field | Value |
 |-------|-------|
@@ -1024,6 +1127,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="doc-02"></a>
 ### DOC-02: Basis Admin Security Guide
 | Field | Value |
 |-------|-------|
@@ -1048,6 +1152,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="doc-03"></a>
 ### DOC-03: SAP Community Blog Post
 | Field | Value |
 |-------|-------|
@@ -1065,6 +1170,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="doc-04"></a>
 ### DOC-04: RAP & Common ABAP Workflow Skill Pack Refresh
 | Field | Value |
 |-------|-------|
@@ -1089,6 +1195,23 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="doc-05"></a>
+### DOC-05: First-Party Skill Pack Expansion
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — turns ARC-1 primitives into repeatable clean-core and documentation workflows |
+| **Status** | Completed (2026-04-19, PR #164) |
+
+**What:** Added first-party skills for clean-core ATC review, unused-code detection, and object documentation capture.
+
+**Why:** These workflows use ARC-1's existing diagnostics, context, transport, linting, and documentation tools to solve repeatable ABAP maintenance tasks without adding more raw MCP endpoints.
+
+---
+
+<a id="feat-37"></a>
 ### FEAT-37: DCL (Access Control) Read/Write
 | Field | Value |
 |-------|-------|
@@ -1114,6 +1237,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-38"></a>
 ### FEAT-38: ADT Service Discovery (MIME Negotiation)
 | Field | Value |
 |-------|-------|
@@ -1140,6 +1264,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-39"></a>
 ### FEAT-39: Transport Enhancements
 | Field | Value |
 |-------|-------|
@@ -1165,6 +1290,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-40"></a>
 ### FEAT-40: FLP Launchpad Management (OData)
 | Field | Value |
 |-------|-------|
@@ -1188,6 +1314,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-41"></a>
 ### FEAT-41: ABAP Unit Test Coverage (Statement-Level)
 | Field | Value |
 |-------|-------|
@@ -1212,6 +1339,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-42"></a>
 ### FEAT-42: ATC Output Formats
 | Field | Value |
 |-------|-------|
@@ -1233,6 +1361,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-43"></a>
 ### FEAT-43: DDIC Auth & Misc Read (Authorization Fields, Feature Toggles, Enhancement Implementations)
 | Field | Value |
 |-------|-------|
@@ -1255,6 +1384,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-44"></a>
 ### FEAT-44: TABL (Database Table) Create
 | Field | Value |
 |-------|-------|
@@ -1287,6 +1417,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-45"></a>
 ### FEAT-45: DEVC (Package) Create
 | Field | Value |
 |-------|-------|
@@ -1317,6 +1448,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-46"></a>
 ### FEAT-46: SRVB (Service Binding) Create
 | Field | Value |
 |-------|-------|
@@ -1347,6 +1479,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-47"></a>
 ### FEAT-47: MSAG (Message Class) Read/Write
 | Field | Value |
 |-------|-------|
@@ -1377,6 +1510,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-48"></a>
 ### FEAT-48: SKTD (Knowledge Transfer Documents) Read/Write
 | Field | Value |
 |-------|-------|
@@ -1418,6 +1552,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-49"></a>
 ### FEAT-49: Object Transport History (Reverse Lookup)
 | Field | Value |
 |-------|-------|
@@ -1470,6 +1605,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-50"></a>
 ### FEAT-50: ADT Probe Fixture Coverage
 
 | Field | Value |
@@ -1511,6 +1647,175 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-55"></a>
+### FEAT-55: System Messages (SM02) + Gateway Error Log (/IWFND/ERROR_LOG)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low |
+| **Usefulness** | High — situational awareness (SM02) and OData/Gateway debugging (IWFND) for AI agents |
+| **Status** | **Completed** (2026-04-21, PR #174) |
+| **Source** | fr0ster v5.0.0 ADT feed reader, issue-level guidance in VSP/dassian trackers |
+
+**What:** Extended `SAPDiagnose` with two new actions that surface standard SAP runtime feeds via ADT:
+- `action="system_messages"` — SM02 system messages (list mode; filters: user, from, to, maxResults)
+- `action="gateway_errors"` — /IWFND/ERROR_LOG entries (list mode + detail mode via `detailUrl` preferred or `id+errorType`). On-prem only.
+
+**Why:** Closes the last fr0ster-v5-unique diagnostics gap. Before PR #174 ARC-1 had dumps + profiler traces via `SAPDiagnose`; now it has the full set (dumps, traces, system_messages, gateway_errors, quickfix, apply_quickfix). Gateway errors are the primary debugging signal for OData service failures — making them reachable from the LLM closes the loop between "user reports Fiori app error" and "agent finds the call stack in /IWFND/ERROR_LOG".
+
+**Implementation:**
+- `src/adt/diagnostics.ts` extended with feed-reader helpers for SM02 and /IWFND/ERROR_LOG.
+- New `SAPDiagnose` schema fields: `detailUrl`, `errorType`, `from`, `to`, `sections`, `includeFullText`.
+- Dumps action rewritten to return focused chapter sections (`kap0`/`kap3`/…) by default; `includeFullText=true` opt-in returns the full formatted blob (token-saving default).
+- Structured JSON response shapes in `src/adt/types.ts`.
+- Unit + integration + E2E coverage (`tests/unit/adt/diagnostics.test.ts`, `tests/integration/adt.integration.test.ts`, `tests/e2e/diagnostics.e2e.test.ts`).
+
+---
+
+<a id="feat-56"></a>
+### FEAT-56: ADT Type-Availability Probe (Diagnostic)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | S (1-2 days) |
+| **Risk** | None (diagnostic-only, no runtime gating) |
+| **Usefulness** | High for support; fuels FEAT-50 contributed fixture coverage |
+| **Status** | **Completed** (2026-04-20, PR #163) |
+| **Source** | Issue #162, PR #93/#96 regression lessons |
+
+**What:** Standalone `npm run probe` CLI that reports per-type ADT availability on any connected SAP system, plus quality metrics showing how much the probe's answers can be trusted.
+
+**Multi-signal classifier:** discovery + collection GET + known-object GET + release floor. The PR #94/#95 regression lesson baked in: only HTTP 404 counts as a hard "not available"; 400/403/405/500 mean "endpoint is there". Fixtures captured via `--save-fixtures` drive replay-based unit tests so classifier decisions are regression-proof.
+
+**Shipped fixtures:** synthetic 7.52 corpus + real NW 7.58 capture. Users can contribute fixture sets from their own systems — see FEAT-50.
+
+**Why diagnostic-only:** Explicit design choice after the RAP probe #93 → #96 regression. The probe reports but never gates runtime behavior.
+
+**Implementation:** `scripts/probe-adt-types.ts`, `src/probe/catalog.ts`, `src/probe/runner.ts`, `src/probe/fixtures.ts`, `tests/unit/probe/replay.test.ts`. See [docs/probe-adt-types.md](../docs/probe-adt-types.md).
+
+---
+
+<a id="feat-57"></a>
+### FEAT-57: SAPContext Impact — Sibling DDLS/DDLX Consistency Check
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low (additive, bounded, best-effort) |
+| **Usefulness** | High — catches a specific high-damage RAP bug class |
+| **Status** | **Completed** (2026-04-22, PR #177) |
+
+**What:** Additive sibling-consistency pass in `SAPContext(action="impact")` that surfaces the common RAP bug where one DDLS variant has DDLX metadata extensions but a sibling variant in the same package does not — leaving one routing path with missing UI fields.
+
+**Implementation:**
+- New helpers in `src/adt/cds-impact.ts` (`deriveSiblingStem`, `isSiblingNameMatch`, `buildSiblingExtensionFinding`).
+- New `siblingCheck` (default true) and `siblingMaxCandidates` (default 4, hard cap 10) inputs on `SAPContext`.
+- Emits `consistencyHints` + `siblingExtensionAnalysis` when siblings show asymmetric DDLX coverage. Base response remains backward-compatible.
+- Guard: stems shorter than 3 chars skip the analysis with a warning so e.g. "Z1" does not trigger a Z* scan of the entire namespace.
+- Sibling failures degrade to warnings only; outer catch logs via `logger.debug` so best-effort failures stay diagnosable.
+
+**Why:** Raw "upstream+downstream" dependency dumps don't flag this bug — you only notice it when a user reports "the UI works for customer X but not Y" and tracing the routing path. Detecting it automatically is exactly the kind of workflow-level differentiation the 2026-04-18 research note called out.
+
+---
+
+<a id="feat-58"></a>
+### FEAT-58: DTEL v2→v1 Content-Type Fallback + SICF-aware Error Hints
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low (narrow static allowlist, 415-only retry) |
+| **Usefulness** | High — fixes DTEL create on older releases + actionable hint on SICF misconfig |
+| **Status** | **Completed** (2026-04-20, PR #169) |
+
+**What:** Two compatibility improvements for DTEL create on older SAP releases:
+1. **Content-Type fallback** — `src/adt/crud.ts` now has a narrow static `CONTENT_TYPE_FALLBACKS` map; on HTTP 415 the client retries once with the fallback Content-Type (specifically `vnd.sap.adt.dataelements.v2+xml` → `vnd.sap.adt.dataelements.v1+xml` for DTEL). Not a generic retry loop — each entry must be a specific, tested compatibility gap.
+2. **`icf-handler-not-bound` error classification** — new SAP-domain category for DTEL create failures caused by a missing SICF node. The hint points operators to SICF activation rather than to SAP authorization.
+
+**Implementation:** `src/adt/crud.ts` (fallback map + 415 retry in both `createObject` and `updateObject`), `src/adt/errors.ts` (new `icf-handler-not-bound` category in `classifySapDomainError`), `src/handlers/intent.ts` (`formatErrorForLLM` routing). Unit tests in `tests/unit/adt/crud.test.ts` and `tests/unit/adt/errors.test.ts`.
+
+---
+
+<a id="bug-01"></a>
+### BUG-01: SAPActivate Phantom Success + CLI/Server Alignment (NW 7.50)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P0 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Medium — parser changes affect every activation path |
+| **Usefulness** | Critical — false "Successfully activated" is worse than a failure |
+| **Status** | **In flight** — PR [#179](https://github.com/marianfoo/arc-1/pull/179) (samibouge) open at 2026-04-23 |
+| **Source** | Reported on NW 7.50 reproducer against `ZCL_XXX` |
+
+**What:** `SAPActivate` reported "Successfully activated" for an ABAP class that was provably inactive (still failing to compile in Eclipse, visible as inactive in SAP GUI). Five independent parser/handler bugs combined into a silent no-op:
+
+1. **`parseActivationResult` misreads `<ioc:inactiveObjects>` as success** — the response shape with zero `<msg>` elements but several `<ioc:inactiveObjects>` entries was read as "no errors → success". VSP's Go client correctly treats this shape as failure.
+2. **`getInactiveObjects` hardcoded to the Cloud endpoint path** — Newer SAP uses `/sap/bc/adt/activation/inactive`; NW 7.50 uses `/sap/bc/adt/activation/inactiveobjects`. The client hardcoded the new path and returned 404 on older systems.
+3. **`parseInactiveObjects` only understood the feed-wrapped shape** — NW 7.50 returns a flat `<adtcore:objectReferences>` list; parser returned `[]` for this shape.
+4. **`SAPDiagnose syntax` had no `version` parameter** — The low-level `syntaxCheck()` already supported `{ version: 'active' | 'inactive' }` but the MCP tool schema never exposed it, so callers couldn't reach real compile errors on objects with pending changes.
+5. **`parseSyntaxCheckResult` missed NW 7.50's `<chkrun:checkMessage>` shape** — Wrong element name and line/column encoded inside `uri="…/source/main#start=LINE,COL"` fragment.
+
+**Why P0:** False-positive activation is the worst possible failure mode — it confidently misleads every downstream consumer (CI, eval suites, LLM agents chaining operations).
+
+**PR #179 fix summary:** inactive-objects detection in parse result (including owning user from `ioc:transport[@_user]`), endpoint fallback, flat-shape parser support, new `version` parameter plumbed through, `<chkrun:checkMessage>` position extraction, and a new `inactiveSyntaxDiagnostic()` primitive invoked on activation failure to append compiler errors from the inactive version.
+
+**Blast radius:** Every activation path (`SAPActivate`, RAP batch activation, E2E suites). Needs the missing E2E regression test the PR description calls out: create a class with a deliberate type error → attempt `SAPActivate` → assert failure → assert the returned message names the user and includes compiler text.
+
+---
+
+<a id="feat-59"></a>
+### FEAT-59: Embeddable Multi-Tenant Server (per-instance `systemType`)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | M (3-5 days) |
+| **Risk** | Medium — touches configuration and per-call routing |
+| **Usefulness** | Medium — enterprise customers running one MCP gateway for multiple SAP systems |
+| **Status** | Not started |
+| **Source** | fr0ster v6.4.0 (PR #69/#70, 2026-04-20) — per-instance `systemType` on `EmbeddableMcpServer` |
+
+**What:** Let a single ARC-1 instance serve multiple SAP backends with per-instance configuration, including per-instance `systemType` (`auto` / `btp` / `onprem`). Today ARC-1 is "one gateway per SAP system" — scaling to many systems means deploying many instances.
+
+**Why:** Customers with mixed landscapes (dev BTP + prod on-prem + sandbox ECC) want one MCP endpoint per environment, not one per SAP system. fr0ster's v6.4.0 EmbeddableMcpServer pattern is the reference implementation. Principal Propagation already handles per-user identity; per-instance would handle per-system routing.
+
+**Why not:** ARC-1's safety config is global (`allowWrites`, `allowedPackages`, etc.) — multi-tenant requires per-tenant safety gates or a consistent profile per SAP system. Also overlaps with the existing Destination Service pattern on BTP. Likely best implemented as a thin router in front of existing per-system instances rather than rebuilding the core. Reconsider when a customer explicitly asks.
+
+---
+
+<a id="feat-60"></a>
+### FEAT-60: CLI/Server Alignment (Shortcut Parity with MCP Tool Schemas)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low (CLI-only, behind existing `call` generic entry point) |
+| **Usefulness** | Medium — reduces "why can't the CLI do X?" support load |
+| **Status** | Not started |
+| **Source** | PR [#179](https://github.com/marianfoo/arc-1/pull/179) matrix |
+
+**What:** The CLI exposes generic `call` + `tools` entry points plus ergonomic shortcuts for some MCP tools, but the shortcuts have drifted from the Zod schemas. PR #179's matrix shows 9 of 12 MCP tools (SAPWrite, SAPNavigate, SAPTransport, SAPGit, SAPContext, SAPLint, SAPManage and the extended actions of SAPRead/SAPDiagnose/SAPActivate) have no shortcut or incomplete shortcut coverage.
+
+**Why:** CLI drift forces users into `call SAPX --arg key=value` syntax for any non-basic operation. This hides capabilities from ad-hoc users and makes the CLI hard to recommend alongside the MCP server.
+
+**Implementation options:**
+1. Hand-write the missing shortcuts — faster, but will drift again next time a schema changes.
+2. Auto-generate shortcut help (required/optional field hints) from the Zod schemas at build time — slower first cut, but prevents future drift.
+
+**Why not:** CLI usage is minor compared to MCP-first usage (Claude Desktop, Cursor, etc.). Option 2 adds build-time complexity. Defer if CLI shortcut requests stay sporadic.
+
+**Related follow-up from PR #179:** rename the local `lint` CLI command to `lint-local` or `offline-lint` to free `lint` for the `SAPLint` MCP tool; clean up XML entity residue (`&quot;`, `&gt;`) in `SyntaxMessage.text`.
+
+---
+
+<a id="feat-05"></a>
 ### FEAT-05: Code Refactoring (Rename, Extract Method)
 | Field | Value |
 |-------|-------|
@@ -1530,6 +1835,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="feat-29"></a>
 ### FEAT-29: P3 Backlog (Future / Niche)
 
 The following features are tracked but not planned for near-term implementation. They are niche, complex, or not aligned with core principles.
@@ -1553,6 +1859,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="ops-03"></a>
 ### OPS-03: Multi-System Routing
 | Field | Value |
 |-------|-------|
@@ -1572,6 +1879,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ## Details: Completed
 
+<a id="sec-01"></a>
 ### SEC-01: Principal Propagation — Per-User SAP Authentication
 | Field | Value |
 |-------|-------|
@@ -1612,6 +1920,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="sec-02"></a>
 ### SEC-02: BTP Cloud Connector Principal Propagation
 | Field | Value |
 |-------|-------|
@@ -1622,6 +1931,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="sec-03"></a>
 ### SEC-03: SAP Authorization Object Awareness (S_DEVELOP)
 | Field | Value |
 |-------|-------|
@@ -1631,6 +1941,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="sec-04"></a>
 ### SEC-04: Audit Logging
 | Field | Value |
 |-------|-------|
@@ -1653,6 +1964,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="sec-06"></a>
 ### SEC-06: MCP Client Tool Restriction by User Role
 | Field | Value |
 |-------|-------|
@@ -1681,6 +1993,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="sec-07"></a>
 ### SEC-07: XSUAA OAuth Proxy for MCP-Native Clients (Claude, Cursor, MCP Inspector)
 | Field | Value |
 |-------|-------|
@@ -1708,6 +2021,7 @@ The following features are tracked but not planned for near-term implementation.
 
 ---
 
+<a id="sec-08"></a>
 ### SEC-08: OAuth Security Hardening (RFC 9700 Compliance)
 | Field | Value |
 |-------|-------|
@@ -1737,6 +2051,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="feat-01"></a>
 ### FEAT-01: Where-Used Analysis (Usage References)
 | Field | Value |
 |-------|-------|
@@ -1749,6 +2064,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="feat-04"></a>
 ### FEAT-04: DDIC Object Support (Domains, Data Elements, DDLX)
 | Field | Value |
 |-------|-------|
@@ -1758,6 +2074,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="feat-35"></a>
 ### FEAT-35: Class Hierarchy (SAPNavigate)
 | Field | Value |
 |-------|-------|
@@ -1768,6 +2085,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="ops-01"></a>
 ### OPS-01: Structured JSON Logging
 | Field | Value |
 |-------|-------|
@@ -1777,6 +2095,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="ops-04"></a>
 ### OPS-04: GitHub Actions CI/CD Pipeline
 | Field | Value |
 |-------|-------|
@@ -1789,6 +2108,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="clean-01"></a>
 ### CLEAN-01: Go Code Removal
 | Field | Value |
 |-------|-------|
@@ -1796,6 +2116,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="clean-02"></a>
 ### CLEAN-02: CLI Surface
 | Field | Value |
 |-------|-------|
@@ -1803,6 +2124,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 ---
 
+<a id="strat-01"></a>
 ### STRAT-01: TypeScript Migration
 | Field | Value |
 |-------|-------|

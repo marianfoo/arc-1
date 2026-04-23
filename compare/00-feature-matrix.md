@@ -2,7 +2,7 @@
 
 A comprehensive comparison of all SAP ADT/MCP projects against ARC-1.
 
-_Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit backend integration and `--enable-git` safety gate; DOC-04 completed: RAP/common-use-case skill pack refresh now exploits provider-contract guidance plus impact/history/formatter/SKTD/git primitives; SEC-09 Auth Safety landed 2026-04-17: fixed cookie→PP leak, added `X-SAP-SAML2` opt-in handling, added HTML-login-page detection; FEAT-20 implemented: VERSIONS/VERSION_SOURCE SAPRead support; FEAT-10 implemented: ADT PrettyPrint + formatter settings via SAPLint; FEAT-49 implemented: object → transport reverse lookup via `SAPTransport(action="history")`; FEAT-33 implemented: CDS impact analysis via `SAPContext(action="impact")`; FEAT-43 implemented: AUTH/FTG2/ENHO SAPRead support; PR #134 merged 2026-04-16: SKTD read/write (Knowledge Transfer Documents); COMPAT-01 fixed 2026-04-16: `lockObject()` now guards on `MODIFICATION_SUPPORT=false`; COMPAT-02 fixed 2026-04-16: CSRF HEAD 403 fallback to GET in `http.ts`; COMPAT-03 already fixed 2026-04-15 in PR #130 (`9b0601c`) via V4 SRVB publish endpoint support; fr0ster v6.1.0 and dassian-adt deep analysis updates retained)_
+_Last updated: 2026-04-23. Since 2026-04-18: PR #174 (2026-04-21) landed `SAPDiagnose` hardening — added **`system_messages` (SM02)** and **`gateway_errors` (/IWFND/ERROR_LOG)** actions, closed ARC-1's two remaining fr0ster-v5-unique diagnostics gaps; PR #163 (2026-04-20) added diagnostic **ADT type-availability probe** (FEAT-50 base feature) with multi-signal classifier + fixture-driven replay tests; PR #169 (2026-04-20) added **DTEL v2→v1 Content-Type fallback** and SICF-aware (icf-handler-not-bound) error classification; PR #177 (2026-04-22) extended `SAPContext(action="impact")` with **sibling DDLS/DDLX consistency check** surfacing asymmetric metadata-extension coverage; PR #171 hardened data preview diagnostics and split SAPManage sub-actions into read vs write scopes; three new first-party workflow skills merged (`sap-clean-core-atc`, `sap-unused-code`, `sap-object-documenter`). Competitor scan (2026-04-23): **fr0ster shipped v6.2.0 → v6.4.1** in 4 days — enriched per-object-type tool descriptions (13 types), per-instance `systemType` on `EmbeddableMcpServer`, Dockerfile HTTP/header fix; dassian-adt quiet since 2026-04-14; VSP quiet since 2026-04-15 (v2.38.1 latest); mario abap-adt-api repo dormant since Feb 2025 (125 stars). Open PR review (2026-04-23): PR [#179](https://github.com/marianfoo/arc-1/pull/179) (samibouge) fixes SAPActivate phantom success on NW 7.50 — five independent parser/handler bugs combined into a silent no-op; tracked as **BUG-01** (P0) in the roadmap. PRs [#176](https://github.com/marianfoo/arc-1/pull/176) (DDLS CRUD dependency guidance) and [#173](https://github.com/marianfoo/arc-1/pull/173) (RAP on-prem preflight + `scaffold_rap_handlers` action) in flight but not merged. Retains: FEAT-22 SAPGit; DOC-04 RAP/common-use-case skill refresh; SEC-09 Auth Safety; FEAT-20 VERSIONS/VERSION_SOURCE; FEAT-10 PrettyPrint; FEAT-49 object→transport reverse lookup; FEAT-33 CDS impact; FEAT-43 AUTH/FTG2/ENHO; PR #134 SKTD; COMPAT-01/02/03 all fixed._
 
 ## Legend
 - ✅ = Supported
@@ -21,8 +21,8 @@ _Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit bac
 | ADT client | Custom (undici/fetch) | Custom (Go) | abap-adt-api | Custom (axios) | Custom (aiohttp) | Custom (axios) | SAP Cloud SDK | abap-adt-api | Custom (requests) |
 | npm package | ✅ `arc-1` | ❌ (binary) | ❌ | ❌ | ❌ | ✅ `@mcp-abap-adt/core` | ❌ | ❌ (MCPB) | N/A (Python, git install) |
 | Docker image | ✅ ghcr.io | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Stars | — | 279 | 109 | 103 | 33 | 35 | 120 | 33 | 79 |
-| Active development | ✅ | ✅ Very (v2.39+) | ❌ Dormant (Jan 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v6.1.0) | ⚠️ Dormant (Jan 2026) | ⚠️ Stable (53 tools, no commits since Apr 14) | ✅ Very (since 2018) |
+| Stars | — | 295 | 125 | 103 | 35 | 43 | 120 | 37 | 79 |
+| Active development | ✅ | ✅ Stable (v2.38.1; quiet since 2026-04-15) | ❌ Dormant (Feb 2025) | ❌ Dormant | ⚠️ Stale (Mar 2026) | ✅ Very (v6.4.1, 4 releases in 1 week) | ⚠️ Dormant (Jan 2026) | ✅ Stable (53 tools, no commits since Apr 14) | ✅ Very (since 2018) |
 | Release count | — | 32+ | — | — | — | 95+ (5 months) | — | rolling | rolling "latest" |
 | NPM monthly downloads | — | N/A | — | — | — | 3,625 | — | N/A | N/A |
 
@@ -122,6 +122,9 @@ _Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit bac
 | Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ (PR #149 merged) |
 | Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| Deterministic RAP preflight (TABL/BDEF/DDLX/DDLS static checks) | ⚠️ (in-flight PR [#173](https://github.com/marianfoo/arc-1/pull/173) — `preflightBeforeWrite` toggle) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| RAP behavior-pool handler scaffolding | ⚠️ (in-flight PR [#173](https://github.com/marianfoo/arc-1/pull/173) — `SAPWrite action=scaffold_rap_handlers` with dry-run and autoApply) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| CDS CRUD dependency guidance (DDLS update/activate/delete impact hints) | ⚠️ (in-flight PR [#176](https://github.com/marianfoo/arc-1/pull/176) — handler-level, not a new ADT capability) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type auto-mappings (CLAS→CLAS/OC) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (ADTObjectType) |
 | Create test class | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | N/A | ✅ (abap_create_test_include) | ✅ (class write test_classes) |
@@ -146,6 +149,8 @@ _Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit bac
 | Call graph analysis | ❌ | ✅ (5 tools) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Type hierarchy | ✅ (via SQL) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | CDS dependencies | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| CDS impact analysis (upstream+downstream) | ✅ (`SAPContext action=impact`, RAP-aware buckets) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| CDS sibling DDLS/DDLX consistency | ✅ (PR #177 2026-04-22 — detects asymmetric metadata-extension coverage across sibling variants in same package) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 
 ## 8. Code Quality
 
@@ -180,11 +185,11 @@ _Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit bac
 
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
-| Short dumps (ST22) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ❌ |
+| Short dumps (ST22) | ✅ (focused sections by default + `includeFullText` opt-in, PR #174) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ❌ |
 | ABAP profiler traces | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ (8 tools: list/params/config/hit-list/statements/db-access/delete×2) | ❌ |
-| System messages (SM02) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0) | N/A | ❌ | ❌ |
-| Gateway error log (IWFND) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, on-prem) | N/A | ❌ | ❌ |
-| ADT feed reader (unified) | ⚠️ (dumps+traces) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, 5 types) | N/A | ❌ | ❌ |
+| System messages (SM02) | ✅ (`SAPDiagnose action=system_messages`, ADT feed, PR #174 2026-04-21) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0) | N/A | ❌ | ❌ |
+| Gateway error log (IWFND) | ✅ (`SAPDiagnose action=gateway_errors`, on-prem, list + detailUrl/id detail modes, PR #174 2026-04-21) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, on-prem) | N/A | ❌ | ❌ |
+| ADT feed reader (unified) | ✅ (dumps + traces + system_messages + gateway_errors; all under `SAPDiagnose`) | ❌ | ❌ | ❌ | ❌ | ✅ (v5.0.0, 5 types) | N/A | ❌ | ❌ |
 | SQL traces | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | ABAP debugger | ❌ | ✅ (8 tools) | ✅ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AMDP/HANA debugger | ❌ | ✅ (7 tools) | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
@@ -194,7 +199,7 @@ _Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit bac
 
 | Feature | ARC-1 | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
-| Feature auto-detection | ✅ (8 probes + ADT discovery/MIME) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (ADT discovery/MIME) |
+| Feature auto-detection | ✅ (8 probes + ADT discovery/MIME + standalone type-availability probe with multi-signal classifier, PR #163) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (ADT discovery/MIME) |
 | Caching (SQLite) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | UI5/Fiori BSP | ❌ | ⚠️ (3 read-only; 4 write tools disabled — ADT filestore returns 405) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (OData upload/download) |
 | abapGit/gCTS | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (full gCTS + checkout/checkin) |
@@ -205,15 +210,15 @@ _Last updated: 2026-04-18 (FEAT-22 implemented: `SAPGit` with gCTS + abapGit bac
 | Lua scripting engine | ❌ | ✅ (50+ bindings) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | WASM-to-ABAP compiler | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | MCP client configurator | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (11 clients) | ❌ | ❌ | ❌ |
-| CLI mode (non-MCP) | ❌ | ✅ (28 commands) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (28+ commands, primary mode) |
+| CLI mode (non-MCP) | ⚠️ (generic `call`/`tools` entry points + 6 ergonomic shortcuts; 9 of 12 MCP tools lack shortcuts or expose fewer knobs than the Zod schema — tracked as [FEAT-60](../docs_page/roadmap.md#feat-60-cliserver-alignment-shortcut-parity-with-mcp-tool-schemas) + PR [#179](https://github.com/marianfoo/arc-1/pull/179)) | ✅ (28 commands) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (28+ commands, primary mode) |
 | Health endpoint | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ (v4.3.0) | ❌ | ✅ | ❌ |
 | RFC connectivity | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (sap-rfc-lite) | ❌ | ❌ | ✅ (PyRFC, optional) |
 | MCPB one-click install | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Lock registry / recovery | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Batch HTTP operations | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (multipart/mixed) | ❌ | ❌ | ❌ |
-| RAG-optimized tool descriptions | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v4.4.0) | ❌ | ❌ | ❌ |
-| Embeddable server (library mode) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Error intelligence (hints) | ✅ (SAP-domain classification) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (extensive) | ✅ (typed error hierarchy) |
+| RAG-optimized tool descriptions | ⚠️ (intent-based tool blurbs; compact 12-tool surface) | ❌ | ❌ | ❌ | ❌ | ✅ (v4.4.0; v6.2.0 extended to per-object-type context for 13 types — PR #66) | ❌ | ❌ | ❌ |
+| Embeddable server (library mode) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (v6.4.0 adds per-instance `systemType` for multi-tenant) | ❌ | ❌ | ❌ |
+| Error intelligence (hints) | ✅ (SAP-domain classification: lock-conflict/enqueue/auth/activation/object-exists/transport/method-not-supported/icf-handler-not-bound — last category added 2026-04-20 for SICF misconfiguration on DTEL create) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (extensive) | ✅ (typed error hierarchy) |
 
 ## 12. Token Efficiency
 
@@ -268,6 +273,18 @@ The following items were incorrectly marked in the previous version and have sin
 | fr0ster version | v4.8.7 | v5.0.8 (303 tools) | v5.0.7: 14 activation tools (+14), post-merge naming fix in v5.0.8 |
 | fr0ster version | v5.0.8 (303 tools) | v5.1.1 (316 tools) | v5.1.0: 13 Check handlers, Node 22 minimum, stdio log fix, CSRF fix |
 | fr0ster version | v5.1.1 (316 tools) | v6.1.0 (~320 tools) | v5.2.0: SRVD/SRVB activate + ServiceBindingVariant. v6.0.0 BREAKING: RuntimeListDumps removed, dump reads via RuntimeListFeeds; UpdateInterface BTP corrNr fix. v6.1.0: RFC decoupled from legacy. |
+| fr0ster version | v6.1.0 | v6.4.1 (2026-04-21) | 4 releases in one week. v6.2.0: per-object-type tool descriptions across 13 types (PR #66). v6.4.0: per-instance `systemType` option for EmbeddableMcpServer (PR #69/#70, multi-tenant use case). v6.4.1: Dockerfile HTTP/header fix. Stars 35→43. |
+| ARC-1 System messages (SM02) | ❌ | ✅ (PR #174 2026-04-21) | `SAPDiagnose action=system_messages` via ADT feed with user/from/to/maxResults filters. Closes the last fr0ster-v5-unique diagnostics gap. |
+| ARC-1 Gateway error log (IWFND) | ❌ | ✅ (PR #174 2026-04-21) | `SAPDiagnose action=gateway_errors` (on-prem /IWFND/ERROR_LOG). Supports list mode and detail mode via `detailUrl` (preferred) or `id+errorType`. |
+| ARC-1 ADT type-availability probe | not tracked | ✅ (PR #163 2026-04-20) | FEAT-50 base feature shipped as standalone diagnostic (`npm run probe`). Multi-signal classifier (discovery + collection GET + known-object GET + release floor). Fixture-driven replay tests. Synthetic 7.52 corpus + real NW 7.58 capture. No runtime gating — explicit design choice after PR #93/#96 regression. |
+| ARC-1 DTEL v2→v1 content-type fallback | not tracked | ✅ (PR #169 2026-04-20) | Narrow static allowlist in `CONTENT_TYPE_FALLBACKS`; 415-only retry for DTEL create on older releases where `vnd.sap.adt.dataelements.v2+xml` is unsupported. |
+| ARC-1 SICF-aware error hints | not tracked | ✅ (PR #169 2026-04-20) | New `icf-handler-not-bound` classification for DTEL create failures caused by missing SICF node (actionable hint points to SICF activation). |
+| ARC-1 CDS sibling DDLS/DDLX consistency | not tracked | ✅ (PR #177 2026-04-22) | `SAPContext action=impact` additive sibling-consistency pass detecting asymmetric metadata-extension coverage across variants (common RAP bug: one DDLS has DDLX, sibling doesn't → missing UI fields on one routing path). Bounded (`siblingCheck`, `siblingMaxCandidates`), degrades to warnings on failure. |
+| ARC-1 SAPManage scope split | not tracked | ✅ (PR #171) | Read sub-actions (features/probe/cache_stats) vs write sub-actions (package/FLP lifecycle) enforced via `SAPMANAGE_ACTION_SCOPES` in both standard and hyperfocused mode. Read-only clients keep diagnostic manage actions. |
+| ARC-1 first-party skills | 4 (RAP + workflow) | 7 (added `sap-clean-core-atc`, `sap-unused-code`, `sap-object-documenter`) | Productization layer expanded beyond RAP into clean-core ATC review, dead-code detection, and object-level documentation capture. |
+| dassian-adt | 33 stars | 37 stars | Still quiet — no commits since Apr 14. |
+| abap-adt-api (mario) | 109 stars | 125 stars | Repo remains dormant (last commit Feb 2025). Star growth is retrospective, not activity-driven. |
+| VSP stars | 279 | 295 | Quiet since 2026-04-15. Latest release v2.38.1 (2026-04-07). |
 | dassian-adt | 0 stars, 25 tools, no OAuth | 33 stars, 53 tools, OAuth/XSUAA, multi-system | Explosive growth: 28 new tools, OAuth, multi-system in 2 weeks. No new commits since Apr 14. |
 | dassian-adt transport tool count | 6 | 9 | Deep analysis: +transport_set_owner, +transport_add_user, +transport_delete in TransportHandlers.ts |
 | dassian-adt trace tools | (unlisted) | 8 (TraceHandlers.ts) | Full profiler workflow: list/params/config/hit-list/statements/db-access/delete/delete-config |
@@ -301,22 +318,29 @@ The following items were incorrectly marked in the previous version and have sin
 10. **npm + Docker + release-please** — Most professional distribution pipeline.
 
 ### Biggest Competitive Threats
-1. **vibing-steampunk** (279 stars) — Community favorite. Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening, RecoverFailedCreate primitive. Defaults to hyperfocused mode (1 tool). Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (fix in 22517d4), CSRF HEAD 403 on S/4HANA public cloud (#104), SAProuter support (#103).
-2. **fr0ster** (v6.1.0, 100+ releases, 35 stars) — Closest enterprise competitor. ~320 tools, 9 auth providers, TLS, RFC, embeddable. v6.0.0 BREAKING: simplified dump API + fixed UpdateInterface on BTP (corrNr bug — not applicable to ARC-1 due to centralized safeUpdateSource). v6.1.0: RFC decoupled from legacy system type. ARC-1 has already aligned on V4 SRVB publish endpoint support (PR #130, 2026-04-15).
-3. **dassian-adt** (33 stars, 53 tools) — Stabilized after explosive April sprint (0 → 33 stars, 25 → 53 tools in 2 weeks). OAuth/XSUAA/multi-system/per-user auth all added. Deep analysis (2026-04-16): 9 transport tools, 8 trace tools, abap_create_test_include confirmed. Still no new commits since Apr 14. Lacks: safety system, BTP Destination/PP, caching, linting.
+1. **vibing-steampunk** (295 stars) — Community favorite but quiet since 2026-04-15 (latest release v2.38.1, 2026-04-07). Has Streamable HTTP (v2.38.0), SAML SSO (PR #97). Massive early-Apr sprint: i18n, gCTS, API release state, version history, code coverage, health analysis, rename preview, dead code analysis, package safety hardening, RecoverFailedCreate primitive. Defaults to hyperfocused mode (1 tool). Open issues: OAuth2 BTP request (#99), recurring lock handle bugs (fix in 22517d4), CSRF HEAD 403 on S/4HANA public cloud (#104), SAProuter support (#103).
+2. **fr0ster** (v6.4.1, 100+ releases, 43 stars) — Closest enterprise competitor and the only active one this week (4 releases in 4 days, Apr 17-21). ~320 tools, 9 auth providers, TLS, RFC, embeddable. v6.2.0 shipped per-object-type tool descriptions (13 types) — same direction ARC-1 took with intent-based tools, but via per-type enrichment instead of collapsing to 12 intents. v6.4.0 added per-instance `systemType` to `EmbeddableMcpServer` (multi-tenant capability ARC-1 lacks — worth tracking for enterprise customers running one gateway per portfolio of SAP systems). v6.0.0 BREAKING: simplified dump API + fixed UpdateInterface on BTP (corrNr bug — not applicable to ARC-1 due to centralized safeUpdateSource). ARC-1 has already aligned on V4 SRVB publish endpoint support (PR #130, 2026-04-15) and closed the last unique diagnostics gap by adding SM02 + IWFND to `SAPDiagnose` (PR #174, 2026-04-21).
+3. **dassian-adt** (37 stars, 53 tools) — Stabilized after explosive April sprint (0 → 37 stars, 25 → 53 tools in 2 weeks). OAuth/XSUAA/multi-system/per-user auth all added. Deep analysis (2026-04-16): 9 transport tools, 8 trace tools, abap_create_test_include confirmed. No new commits since Apr 14 — stable but stalled. Lacks: safety system, BTP Destination/PP, caching, linting.
 4. **SAP Joule / Official ABAP MCP Server** — SAP announced Q2 2026 GA for ABAP Cloud Extension for VS Code with built-in agentic AI. Initial scope: RAP UI service development. Will reshape landscape — community servers become complementary.
 5. **btp-odata-mcp** (120 stars) — Different category (OData not ADT). Dormant since Jan 2026. High stars but no recent development.
 
 ### Key Gaps to Close
 
 **Closed gaps:**
-- ~~Diagnostics~~ → ST22 + profiler traces (SAPDiagnose)
+- ~~Diagnostics~~ → ST22 + profiler traces + **SM02 system messages** + **/IWFND/ERROR_LOG gateway errors** all under `SAPDiagnose` (PR #174, 2026-04-21)
 - ~~RAP completeness~~ → DDLX/SRVB read, DDLS/DDLX/BDEF/SRVD write, batch activation
 - ~~DDIC completeness~~ → STRU, DOMA, DTEL, TRAN read
 - ~~Token efficiency~~ → method-level surgery, hyperfocused mode, context compression
-- ~~Workflow/productization gap~~ → first-party RAP/common-use-case skills now codify provider contracts, draft/auth defaults, impact analysis, revision history, formatter settings, SKTD docs, and SAPGit delivery context.
+- ~~Workflow/productization gap~~ → first-party skills now cover RAP workflows, clean-core ATC review, dead-code detection, object-level documentation capture, plus provider contracts / draft-auth defaults / impact analysis / revision history / formatter settings / SKTD docs / SAPGit delivery context.
+- ~~Diagnostic compatibility visibility~~ → standalone ADT type-availability probe (`npm run probe`) with multi-signal classifier, fixture-driven replay tests (PR #163, 2026-04-20).
 
 **Recently merged / productized:**
+- ~~**SM02 + IWFND in `SAPDiagnose`**~~ — **✅ Merged PR #174 (2026-04-21)**. Added `system_messages` and `gateway_errors` actions, closing the last fr0ster-v5-unique diagnostics gap. Dumps action rewritten for focused sections (`kap0`/`kap3`/…) with `includeFullText` opt-in to reduce token usage.
+- ~~**ADT type-availability probe (FEAT-50 base)**~~ — **✅ Merged PR #163 (2026-04-20)**. Standalone `npm run probe` command, multi-signal classifier, fixture-driven replay tests (synthetic 7.52 + real NW 7.58). Diagnostic-only, no runtime gating.
+- ~~**DTEL v2→v1 fallback + SICF-aware error hints**~~ — **✅ Merged PR #169 (2026-04-20)**. Narrow static Content-Type fallback + new `icf-handler-not-bound` error category for SICF misconfig.
+- ~~**SAPContext impact sibling DDLS/DDLX consistency**~~ — **✅ Merged PR #177 (2026-04-22)**. Catches the "one sibling has DDLX, the other doesn't" RAP bug that missing UI fields trace back to.
+- ~~**SAPManage scope split + data preview hardening**~~ — **✅ Merged PR #171**. Read sub-actions (features/probe/cache_stats) vs write sub-actions (package/FLP), enforced in both standard and hyperfocused mode.
+- ~~**Three new first-party skills**~~ — **✅ Merged PR #164 (2026-04-19)**. `sap-clean-core-atc`, `sap-unused-code`, `sap-object-documenter` — broadens the workflow layer from RAP into clean-core review, dead-code detection, and object-level documentation capture.
 - ~~**SKTD (Knowledge Transfer Documents)**~~ — **✅ Merged PR #134 (2026-04-16)** by lemaiwo. Full read/write for Markdown docs attached to ABAP objects. Unique to ARC-1 among all competitors.
 - **RAP/common-use-case skill refresh (2026-04-18)** — `generate-rap-service-researched`, `generate-rap-service`, and `generate-rap-logic` now explicitly use `SAPContext(action="impact")`, `SAPRead(type="VERSIONS")`, `SAPTransport(action="history")`, `SAPLint(action="format"/"get_formatter_settings")`, `SAPRead/SAPWrite(type="SKTD")`, and `SAPGit`.
 - **Workflow research conclusion** — external steering/skill repos (`sap-abap-base`, `sap-skills`) reinforce that the next differentiation layer is codified workflows, not raw tool-count inflation. ARC-1 is now positioned to ship tighter first-party playbooks on top of its intent-tool model.
@@ -337,13 +361,14 @@ The following items were incorrectly marked in the previous version and have sin
 - Expand first-party workflow skills beyond RAP into transport review, diagnostics, clean-core checks, and Git-backed change review
 
 **P2+ — future gaps:**
-- System messages (SM02) — AI agent situational awareness. fr0ster v5.0.0 added this.
-- Gateway error log (IWFND) — OData/Gateway debugging with source code + call stack. fr0ster v5.0.0, on-prem only.
+- ~~System messages (SM02)~~ — **✅ shipped in PR #174 (2026-04-21)** as `SAPDiagnose action=system_messages`.
+- ~~Gateway error log (IWFND)~~ — **✅ shipped in PR #174 (2026-04-21)** as `SAPDiagnose action=gateway_errors` (on-prem only).
 - Compare/diff on top of FEAT-20 + FEAT-49
 - ABAP documentation / F1 help, table pagination / offset
 - SQL traces, coverage/reporting enhancements
 - Cloud readiness assessment, enhancement framework
 - Multi-system routing, rate limiting
+- Per-instance `systemType` / embeddable multi-tenant (fr0ster v6.4.0 pattern) — track if enterprise customers need one gateway for multiple SAP systems
 - Dynpro (screen) metadata — ADT endpoint `/sap/bc/adt/programs/programs/<PROG>/dynpros` (abap-adt-api #44)
 - RecoverFailedCreate — partial-create recovery on 5xx (VSP f00356a)
 
