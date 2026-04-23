@@ -126,6 +126,12 @@ export async function probeFeatures(
     resultMap.set(result.id, result.available);
   }
 
+  // Component-based HANA detection overrides the endpoint probe when the hanainfo
+  // endpoint is absent (e.g. some S/4HANA releases). Only applies in auto mode.
+  if (!resultMap.get('hana') && systemDetection.hasHana && modeMap.hana === 'auto') {
+    resultMap.set('hana', true);
+  }
+
   // Resolve all features
   const result: Record<string, FeatureStatus> = {};
   for (const probe of PROBES) {
@@ -187,6 +193,8 @@ export function mapSapReleaseToAbaplintVersion(release: string): Version {
 interface SystemDetection {
   abapRelease?: string;
   systemType?: SystemType;
+  hasHana?: boolean;
+  hanaRelease?: string;
 }
 
 /**
@@ -200,15 +208,18 @@ interface SystemDetection {
  */
 async function detectSystemFromComponents(client: AdtHttpClient): Promise<SystemDetection> {
   try {
-    const resp = await client.get('/sap/bc/adt/system/components');
+    const resp = await client.get('/sap/bc/adt/system/components', { Accept: 'application/atom+xml;type=feed' });
     if (resp.statusCode >= 400) return {};
     const components = parseInstalledComponents(resp.body);
     const basis = components.find((c) => c.name.toUpperCase() === 'SAP_BASIS');
     const hasSapCloud = components.some((c) => c.name.toUpperCase() === 'SAP_CLOUD');
     const systemType: SystemType | undefined = hasSapCloud ? 'btp' : 'onprem';
+    const { hasHana, hanaRelease } = detectHanaFromComponents(components);
     return {
       abapRelease: basis?.release || undefined,
       systemType,
+      hasHana,
+      hanaRelease,
     };
   } catch {
     return {};
@@ -219,6 +230,20 @@ async function detectSystemFromComponents(client: AdtHttpClient): Promise<System
  * Detect system type from installed components (exported for testing).
  * Returns 'btp' if SAP_CLOUD component is present, 'onprem' otherwise.
  */
+export function detectHanaFromComponents(components: Array<{ name: string; release: string }>): {
+  hasHana: boolean;
+  hanaRelease?: string;
+} {
+  // Step 1: component whose name contains HDB or HANA — direct DB indicator, release available
+  const hanaComponent = components.find((c) => /HDB|HANA/i.test(c.name));
+  if (hanaComponent) {
+    return { hasHana: true, hanaRelease: hanaComponent.release };
+  }
+  // Step 2: S4CORE implies S/4HANA → always runs on HANA; DB release cannot be inferred
+  const hasS4Core = components.some((c) => c.name.toUpperCase() === 'S4CORE');
+  return { hasHana: hasS4Core };
+}
+
 export function detectSystemType(
   components: Array<{ name: string; release: string; description: string }>,
 ): SystemType {

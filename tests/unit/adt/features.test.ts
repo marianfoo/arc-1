@@ -1,8 +1,10 @@
 import { Version } from '@abaplint/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureConfig } from '../../../src/adt/config.js';
+import { AdtApiError } from '../../../src/adt/errors.js';
 import {
   classifyAuthProbeError,
+  detectHanaFromComponents,
   detectSystemType,
   mapSapReleaseToAbaplintVersion,
   probeAuthorization,
@@ -265,6 +267,59 @@ describe('Feature Detection', () => {
     });
   });
 
+  // ─── detectHanaFromComponents ──────────────────────────────────────
+
+  describe('detectHanaFromComponents', () => {
+    it('detects HANA when HDB component is present', () => {
+      const result = detectHanaFromComponents([{ name: 'HDB', release: '2.0' }]);
+      expect(result.hasHana).toBe(true);
+      expect(result.hanaRelease).toBe('2.0');
+    });
+
+    it('detects HANA when component name contains HANA', () => {
+      const result = detectHanaFromComponents([{ name: 'HANA_XS', release: '1.0' }]);
+      expect(result.hasHana).toBe(true);
+      expect(result.hanaRelease).toBe('1.0');
+    });
+
+    it('detects HANA via S4CORE with no hanaRelease', () => {
+      const result = detectHanaFromComponents([{ name: 'S4CORE', release: '108' }]);
+      expect(result.hasHana).toBe(true);
+      expect(result.hanaRelease).toBeUndefined();
+    });
+
+    it('returns false when no HANA indicators are present', () => {
+      const result = detectHanaFromComponents([
+        { name: 'SAP_BASIS', release: '758' },
+        { name: 'SAP_ABA', release: '758' },
+      ]);
+      expect(result.hasHana).toBe(false);
+      expect(result.hanaRelease).toBeUndefined();
+    });
+
+    it('returns false for empty component list', () => {
+      const result = detectHanaFromComponents([]);
+      expect(result.hasHana).toBe(false);
+    });
+
+    it('is case-insensitive for HDB/HANA component names', () => {
+      expect(detectHanaFromComponents([{ name: 'hdb', release: '2.0' }]).hasHana).toBe(true);
+      expect(detectHanaFromComponents([{ name: 'Hana_XS', release: '1.0' }]).hasHana).toBe(true);
+    });
+
+    // Note: not sure if this combination (HDB + S4CORE) is actually present in any real system.
+    // On native S/4HANA there is likely no HDB-named ABAP component in CVERS; HDB may only appear
+    // on ERP on HANA (Suite on HANA) systems, which would not have S4CORE.
+    it('HDB component takes priority over S4CORE for hanaRelease', () => {
+      const result = detectHanaFromComponents([
+        { name: 'HDB', release: '2.0' },
+        { name: 'S4CORE', release: '108' },
+      ]);
+      expect(result.hasHana).toBe(true);
+      expect(result.hanaRelease).toBe('2.0');
+    });
+  });
+
   // ─── probeFeatures (with discovery) ───────────────────────────────
 
   describe('probeFeatures', () => {
@@ -350,6 +405,56 @@ describe('Feature Detection', () => {
 
       expect(result.discoveryMap).toBeDefined();
       expect(result.discoveryMap?.size).toBe(0);
+    });
+
+    function makeComponentsXml(entries: Array<{ id: string; title: string }>): string {
+      const items = entries
+        .map(
+          (e) =>
+            `  <atom:entry>\n    <atom:id>${e.id}</atom:id>\n    <atom:title>${e.title}</atom:title>\n  </atom:entry>`,
+        )
+        .join('\n');
+      return `<?xml version="1.0" encoding="utf-8"?>\n<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">\n${items}\n</atom:feed>`;
+    }
+
+    function mockProbeClientHanaScenario(options: { componentsXml: string; hanaEndpoint404: boolean }): AdtHttpClient {
+      return {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') {
+            return Promise.resolve({ statusCode: 200, body: discoveryXml });
+          }
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({ statusCode: 200, body: options.componentsXml });
+          }
+          if (url === '/sap/bc/adt/ddic/sysinfo/hanainfo') {
+            if (options.hanaEndpoint404) {
+              return Promise.reject(new AdtApiError('Not Found', 404, url));
+            }
+            return Promise.resolve({ statusCode: 200, body: '' });
+          }
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+    }
+
+    it('detects HANA via S4CORE component when hanainfo endpoint returns 404', async () => {
+      const s4Components = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'S4CORE', title: '108;S4CORE108;0001;S/4HANA Core' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: s4Components, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+    });
+
+    it('reports HANA unavailable when hanainfo 404 and no HANA components', async () => {
+      const nonHanaComponents = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'SAP_ABA', title: '758;SAPK-75801INSAPABA;0001;SAP Application Basis' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: nonHanaComponents, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
     });
   });
 
