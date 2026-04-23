@@ -38,6 +38,87 @@ MCP Client Request
 
 ---
 
+## At a glance
+
+If you only read one section, read this one.
+
+### The three levers (in evaluation order)
+
+Every tool call is gated by **three independent checks, AND'd together** — all must pass:
+
+| # | Check | Controlled by | Where set |
+|---|-------|---------------|-----------|
+| 1 | **Scope check** — does this user have the right MCP scope? | JWT scopes / API-key profile | Per-user (OIDC, XSUAA, `ARC1_API_KEYS`) — **stdio has no scope check** |
+| 2 | **Safety check** — is this operation allowed by the ceiling? | `SafetyConfig` | Server-wide (`SAP_*` env vars, CLI flags, `ARC1_PROFILE`) |
+| 3 | **SAP authorization** — does the SAP user have the right role? | S_DEVELOP, S_ADT_RES, S_TRANSPRT, etc. | SAP side (per user with PP, shared with Basic Auth) |
+
+**Server safety is a ceiling.** Per-user scopes can only *tighten* it, never widen it. If the server blocks writes, no scope combination re-enables them.
+
+### Defaults out of the box
+
+Nothing is allowed to write or read data until you change something. ARC-1 ships with the most restrictive defaults:
+
+| Knob | Default | Meaning |
+|------|---------|---------|
+| `SAP_READ_ONLY` | `true` | No creates, updates, deletes, activates, or FLP workflow |
+| `SAP_BLOCK_DATA` | `true` | No named table content preview |
+| `SAP_BLOCK_FREE_SQL` | `true` | No freestyle SQL |
+| `SAP_ALLOWED_PACKAGES` | `$TMP` | Writes restricted to `$TMP`; reads never restricted by package |
+| `SAP_ENABLE_TRANSPORTS` | `false` | No CTS transport operations |
+| `SAP_ENABLE_GIT` | `false` | No abapGit / gCTS write operations (reads still work) |
+| `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS` | `""` / `""` | No op-code filter |
+
+Source of truth: `DEFAULT_CONFIG` in `src/server/types.ts`.
+
+### Precedence chain — who wins
+
+Each config value is resolved in this order. Later steps override earlier ones:
+
+```
+1. DEFAULT_CONFIG  (the restrictive defaults above)
+       ↓  if a profile is active, its fields overwrite matching defaults
+          (readOnly, blockFreeSQL, blockData, enableTransports, allowedPackages;
+           enableGit is NEVER set by a profile)
+2. ARC1_PROFILE / --profile
+       ↓  per-setting override; each env var / flag is evaluated independently
+3. Individual settings (.env → shell env var → CLI flag — CLI wins per setting)
+       ↓  per-request tightening when a JWT/API-key profile is present
+4. deriveUserSafety(serverConfig, jwtScopes)   (can ONLY tighten, never widen)
+       ↓  final per-object check
+5. SAP-side authorization  (can still reject even if ARC-1 allows)
+```
+
+Sources: `src/server/config.ts:parseArgs` (steps 1–3), `src/adt/safety.ts:deriveUserSafety` (step 4).
+
+**Three critical rules:**
+
+- **The profile is just a preset.** It seeds up to five safety fields — all six profiles set `readOnly`, `blockData`, `blockFreeSQL`, and `enableTransports`; the three `developer*` profiles also set `allowedPackages=['$TMP']`. Explicit env vars / CLI flags override those fields per-setting. `enableGit` is *never* set by a profile.
+- **`ARC1_PROFILE=developer` + `SAP_READ_ONLY=true` → read-only.** The flag is processed after the profile. This is the knob to use when you want "mostly developer, but locked down right now".
+- **Server wins over scopes.** The server config is the ceiling. Scopes can subtract (`no write → readOnly=true`) but never add (`no server write → no write, regardless of token`).
+
+### `.env` file, shell env, CLI flags — which wins?
+
+Within step 3 above:
+
+- `.env` is loaded via `dotenv` at process start. It **only fills in values not already in `process.env`** (shell env wins over `.env`).
+- `process.env` is read by each setting's resolver.
+- CLI flags are read with `getFlag(flag) ?? process.env[envVar]` — **CLI wins over env**.
+
+So the full precedence for one setting like `SAP_READ_ONLY` is: `DEFAULT_CONFIG < profile < .env file < shell env var < --read-only CLI flag`.
+
+### Where to change what
+
+| Goal | Change on |
+|------|-----------|
+| Raise or lower the server-wide ceiling | Server startup env / CLI — admin-only |
+| Restrict one user below the ceiling | That user's IdP scopes (XSUAA role collection, OIDC token, or API-key profile) |
+| Add per-user SAP-level restrictions | That user's SAP role/profile, via Principal Propagation |
+| Open the ceiling from defaults | `ARC1_PROFILE=developer` (or individual `SAP_READ_ONLY=false`, etc.) |
+
+See the [Configuration Reference](configuration-reference.md) for the flat list of every flag.
+
+---
+
 ## Scopes
 
 Scopes define what a user is allowed to do in ARC-1. They are carried in JWT tokens (from XSUAA or OIDC providers) and checked on every tool call.
@@ -163,6 +244,8 @@ Independent of scopes, the server administrator can set a global safety configur
 
 ### How Safety and Scopes Interact
 
+Per-request, ARC-1 computes an **effective** safety config by combining the server ceiling with the user's JWT scopes. `deriveUserSafety()` only *tightens* — it never loosens.
+
 ```
 Server Safety Config (ceiling)
   readOnly=false, blockData=true, blockFreeSQL=true
@@ -170,14 +253,26 @@ Server Safety Config (ceiling)
           ▼
 User JWT Scopes: [read, write, sql]
           │
-          ▼  deriveUserSafety() merges both
+          ▼  deriveUserSafety() applies the tightening rules below
 Effective Config for this request:
   readOnly=false  ← server allows writes, user has write scope
   blockData=true  ← server blocks data, even though sql implies data
   blockFreeSQL=true ← server blocks SQL, overrides user's sql scope
 ```
 
-The server always wins. If `blockFreeSQL=true` is set, no user can run freestyle SQL regardless of their `sql` scope.
+**Scope → tightening rules** (applied against the server config; these flags can only flip `false` → `true`, never the reverse):
+
+| User's scopes lack... | Effect on effective config |
+|------------------------|-------|
+| `write` (after expansion) | `readOnly = true`, `enableGit = false`, `enableTransports = false` |
+| `data` (after expansion; note `sql` implies `data`) | `blockData = true` |
+| `sql` | `blockFreeSQL = true` |
+
+Implications: `write` implies `read` and `sql` implies `data` — you never need to grant both.
+
+**The server always wins the tight side.** If the server has `blockFreeSQL=true`, no scope combination can re-enable SQL. If the server has `readOnly=false` but the token lacks `write`, that one request is still read-only. The `allowedPackages`, `allowedOps`, and `disallowedOps` settings are *not* affected by scopes — they are pure server config.
+
+Source: `src/adt/safety.ts:deriveUserSafety` and `src/adt/safety.ts:expandImpliedScopes`.
 
 ### Profiles: Safety Presets
 
@@ -193,6 +288,58 @@ Instead of setting individual flags, you can use `--profile` (or `ARC1_PROFILE`)
 | `developer-sql` | No | No | No | Yes | `$TMP` | Full development + SQL |
 
 Individual flags override profile defaults: `--profile viewer --read-only=false` disables read-only even though the viewer profile normally enables it.
+
+---
+
+## Recipes — reaching a specific state
+
+Each row is self-contained. All env vars belong on the **server process** (where ARC-1 starts), not the MCP client. See [Configuration Reference → Where you actually set a profile](configuration-reference.md#where-you-actually-set-a-profile) for how to inject env vars in Docker / CF / Claude Desktop / etc.
+
+### Start here: "what do I want to do?"
+
+| Goal | Minimum change from defaults |
+|------|-----|
+| Read and search source code only | Nothing — defaults already do this |
+| Also preview named tables | `ARC1_PROFILE=viewer-data` |
+| Also run freestyle SQL | `ARC1_PROFILE=viewer-sql` |
+| Write to `$TMP` only | `ARC1_PROFILE=developer` |
+| Write to customer Z-packages | `ARC1_PROFILE=developer` + `SAP_ALLOWED_PACKAGES='Z*,$TMP'` |
+| Full local development, unrestricted | `ARC1_PROFILE=developer-sql` + `SAP_ALLOWED_PACKAGES='*'` + `SAP_ENABLE_GIT=true` |
+| Enable CTS transports | `SAP_ENABLE_TRANSPORTS=true` (or any `developer*` profile) |
+| Enable abapGit / gCTS writes | `SAP_ENABLE_GIT=true` — **no profile sets this**, always explicit |
+
+### "I have a writer, but want to restrict further"
+
+This is the most common source of confusion. Scopes can only *tighten* the server config; they never widen it. So to restrict a writer further, you change the **server ceiling**, not the user's role.
+
+| I have... | I want... | Set on server |
+|-----------|-----------|-------------|
+| `ARC1_PROFILE=developer` (writes enabled) | No deletes | `SAP_DISALLOWED_OPS=D` |
+| `ARC1_PROFILE=developer` | Writes only to `$TMP` — no transports | `SAP_ENABLE_TRANSPORTS=false` (profile sets it on; explicit flag overrides) |
+| `ARC1_PROFILE=developer` | No activation (only create/update/delete) | `SAP_DISALLOWED_OPS=A` |
+| `ARC1_PROFILE=developer` | Writes only to `Z_FEATURE_*` packages | `SAP_ALLOWED_PACKAGES='Z_FEATURE_*'` |
+| `ARC1_PROFILE=developer-sql` | Temporarily disable all writes (incident mode) | `SAP_READ_ONLY=true` — flag beats the profile |
+| `ARC1_PROFILE=developer` | No Git writes | Nothing — git is already off unless `SAP_ENABLE_GIT=true` |
+| `ARC1_PROFILE=developer-sql` | Keep writes but ban SQL | `SAP_BLOCK_FREE_SQL=true` |
+| Server allows writes, but one specific user should be read-only | Give that user's JWT `['read']` only (no `write`). `deriveUserSafety` forces their `readOnly=true` for that request |
+
+**Key insight:** the explicit env var / CLI flag **always overrides** the profile value, even if the profile set it first. The evaluation order is: `DEFAULT → profile → env var → CLI flag`.
+
+### "What if my user has write scope but the server is read-only?"
+
+The server wins. `readOnly=true` on the server means no writes, ever, regardless of scopes. This is by design — the ceiling is always the tighter of (server, user).
+
+### "I set `SAP_ENABLE_GIT=true` but Git still errors"
+
+Verify that:
+1. You set it on the **server process**, not the MCP client (env vars in Claude Desktop config go to the server).
+2. The failing operation is a Git **write** (clone, pull, push, commit, stage, switch_branch, create_branch, unlink). Reads (list_repos, whoami, config, branches, history, objects, external_info, check) don't need `SAP_ENABLE_GIT`.
+3. `SAP_READ_ONLY` is `false` — read-only still blocks Git writes independently.
+4. `SAP_ALLOWED_PACKAGES` allows the target package for `clone`.
+
+### "I set `SAP_ALLOWED_OPS=RSQ` but still get 'allowlist' errors on writes"
+
+Correct behavior. `allowedOps` is an allowlist of op-type codes. `R` (Read), `S` (Search), `Q` (Query) does not include `C` (Create), `U` (Update), etc. To allow writes through the op filter, include `CDUA` (or whichever subset) and also set `SAP_READ_ONLY=false` — both gates fire.
 
 ---
 
@@ -423,6 +570,25 @@ PP is enabled alongside XSUAA — they are part of the same BTP deployment. See 
 
 ## Troubleshooting
 
+### Which layer blocked me?
+
+Error messages are written so you can read them top-down. Match the message to the layer:
+
+| Message fragment | Layer | What to change |
+|------------------|-------|---------------|
+| `Insufficient scope: 'write' required...` | Scope (Layer 1) | Grant the scope on the user's token / profile, or call a tool that matches their scopes |
+| `blocked by safety configuration (reason: readOnly=true...)` | Safety (Layer 2) | Server-side: set `SAP_READ_ONLY=false`, or pick a `developer*` profile |
+| `blocked by safety configuration (reason: ...blockFreeSQL=true)` | Safety (Layer 2) | Server-side: set `SAP_BLOCK_FREE_SQL=false` |
+| `blocked by safety configuration (reason: ...blockData=true)` | Safety (Layer 2) | Server-side: set `SAP_BLOCK_DATA=false` |
+| `blocked by safety configuration (reason: 'X' is in disallowedOps blocklist ...)` | Safety (Layer 2) | Server-side: remove code from `SAP_DISALLOWED_OPS` |
+| `blocked by safety configuration (reason: 'X' is not in allowedOps allowlist ...)` | Safety (Layer 2) | Server-side: add code to `SAP_ALLOWED_OPS` (or clear it) |
+| `Operations on package 'X' are blocked...` | Safety (Layer 2) | Server-side: add to `SAP_ALLOWED_PACKAGES` |
+| `Transport operation '...' is blocked: transports not enabled` | Safety (Layer 2) | Server-side: `SAP_ENABLE_TRANSPORTS=true` |
+| `Git operation "..." is disabled` | Safety (Layer 2) | Server-side: `SAP_ENABLE_GIT=true` |
+| SAP returns `403`, `no authorization for...`, `S_DEVELOP`, `S_ADT_RES` | SAP (Layer 3) | SAP admin: grant the missing SAP role to the SAP user |
+
+The error class also tells you the layer: `Insufficient scope` → Layer 1, `AdtSafetyError` → Layer 2, `AdtApiError` with HTTP status → Layer 3.
+
 ### "Insufficient scope" errors
 
 The user's JWT is missing the required scope for the tool they're calling. Check:
@@ -446,6 +612,14 @@ Table content preview requires the `data` scope. The `read` scope only covers so
 ### SAPQuery returns "insufficient scope"
 
 SAPQuery (freestyle SQL) requires the `sql` scope, not just `data`. Assign MCPSqlUser role template.
+
+### "I changed `SAP_READ_ONLY` but nothing changed"
+
+Two common causes:
+1. **You set it on the MCP client, not the ARC-1 server.** Safety flags only affect the ARC-1 process. In Claude Desktop / Cursor / Copilot config, env vars in the `env` block are passed to the server — that's correct. But if you set it in your shell and ARC-1 runs in a separate terminal, it won't inherit.
+2. **Profile + flag interplay:** `ARC1_PROFILE=developer` sets `readOnly=false`, and you added `SAP_READ_ONLY=true` which overrides it. If the flag is absent, the profile wins. If the flag is present, the flag wins.
+
+Verify with the startup log line: `auth: MCP=[...] SAP=[...] (shared|per-user)` and the safety summary in `describeSafety()`.
 
 ---
 

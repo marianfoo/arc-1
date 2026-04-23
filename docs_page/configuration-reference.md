@@ -4,6 +4,9 @@ Every flag, env var, and default in one place.
 
 Global precedence: **CLI flag > env var > `.env` file > built-in default**. Within the safety layer, **profiles apply first and explicit safety flags override the profile's values**.
 
+!!! tip "Looking for the big picture?"
+    This page is a flat reference. If you need the mental model (how scopes, safety, and SAP auth combine; what overrides what; and what to change for a given goal), start with the [Authorization & Roles overview](authorization.md), especially the [At a glance](authorization.md#at-a-glance) and [Recipes](authorization.md#recipes-reaching-a-specific-state) sections.
+
 For the grouped template with inline commentary, see [`.env.example`](https://github.com/marianfoo/arc-1/blob/main/.env.example).
 
 ---
