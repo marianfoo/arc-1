@@ -158,31 +158,17 @@ describe('Safety System', () => {
 
     it('error message explains readOnly blocks write ops', () => {
       const cfg = config({ readOnly: true });
-      try {
-        checkOperation(cfg, OperationType.Create, 'CreateObject');
-      } catch (e) {
-        expect((e as Error).message).toContain('readOnly=true');
-      }
+      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).toThrow(/readOnly=true/);
     });
 
     it('error message explains disallowedOps blocklist hit', () => {
       const cfg = config({ disallowedOps: 'C' });
-      try {
-        checkOperation(cfg, OperationType.Create, 'CreateObject');
-      } catch (e) {
-        expect((e as Error).message).toContain('disallowedOps');
-        expect((e as Error).message).toContain('blocklist');
-      }
+      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).toThrow(/disallowedOps blocklist/);
     });
 
     it('error message explains allowedOps allowlist miss', () => {
       const cfg = config({ allowedOps: 'RS' });
-      try {
-        checkOperation(cfg, OperationType.Create, 'CreateObject');
-      } catch (e) {
-        expect((e as Error).message).toContain('allowedOps');
-        expect((e as Error).message).toContain('allowlist');
-      }
+      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).toThrow(/allowedOps allowlist/);
     });
   });
 

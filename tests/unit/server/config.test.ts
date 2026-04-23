@@ -201,32 +201,39 @@ describe('parseArgs', () => {
   });
 
   describe('op-code validation', () => {
-    it('warns when SAP_ALLOWED_OPS contains unknown codes', () => {
+    // Extracts only the reported unknown-codes portion so assertions don't
+    // accidentally match the suffix "known codes: R/S/Q/F/C/U/D/A/T/L/I/W/X".
+    const extractUnknown = (warning: string): string | undefined =>
+      warning.match(/unknown operation codes: ([^ ]+)/)?.[1];
+
+    it('warns when SAP_ALLOWED_OPS contains unknown codes (and only unknown ones)', () => {
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       try {
-        process.env.SAP_ALLOWED_OPS = 'RXZ';
+        // R (Read) and X (Transport) are valid; only Y and Z are unknown.
+        process.env.SAP_ALLOWED_OPS = 'RXYZ';
         parseArgs([]);
         const warnings = stderrSpy.mock.calls
           .map((c) => String(c[0]))
           .filter((s) => s.includes('SAP_ALLOWED_OPS') && s.includes('unknown operation codes'));
         expect(warnings).toHaveLength(1);
-        expect(warnings[0]).toContain('X');
-        expect(warnings[0]).toContain('Z');
+        const unknown = extractUnknown(warnings[0])?.split(',').sort();
+        expect(unknown).toEqual(['Y', 'Z']);
       } finally {
         stderrSpy.mockRestore();
       }
     });
 
-    it('warns when SAP_DISALLOWED_OPS contains unknown codes', () => {
+    it('warns when SAP_DISALLOWED_OPS contains unknown codes (and only unknown ones)', () => {
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       try {
+        // C (Create) is valid; only Y is unknown.
         process.env.SAP_DISALLOWED_OPS = 'CY';
         parseArgs([]);
         const warnings = stderrSpy.mock.calls
           .map((c) => String(c[0]))
           .filter((s) => s.includes('SAP_DISALLOWED_OPS') && s.includes('unknown operation codes'));
         expect(warnings).toHaveLength(1);
-        expect(warnings[0]).toContain('Y');
+        expect(extractUnknown(warnings[0])).toBe('Y');
       } finally {
         stderrSpy.mockRestore();
       }
@@ -270,8 +277,7 @@ describe('parseArgs', () => {
           .filter((s) => s.includes('unknown operation codes'));
         expect(warnings).toHaveLength(1);
         // Should mention Y once in the unknown-codes list, not three times
-        const unknownMatch = warnings[0].match(/unknown operation codes: ([^ ]+)/);
-        expect(unknownMatch?.[1]).toBe('Y');
+        expect(extractUnknown(warnings[0])).toBe('Y');
       } finally {
         stderrSpy.mockRestore();
       }

@@ -44,9 +44,8 @@ Server-level, configured via env vars / CLI flags. Applies globally to ALL users
 | `--block-free-sql` | Blocks freestyle SQL execution | `true` |
 | `--allowed-ops "RSQTI"` | Allowlist of operation type codes | `""` (no allowlist filter) |
 | `--disallowed-ops "F"` | Blocklist of operation type codes (takes precedence over allowlist) | `""` |
-| `--allowed-packages "Z*,Y*"` | Package restriction (wildcard support) | `[]` (all) |
+| `--allowed-packages "Z*,Y*"` | Package restriction (wildcard support) | `"$TMP"` |
 | `--enable-transports` | Allow CTS transport operations | `false` |
-| `--allow-transportable-edits` | Allow editing objects in transportable packages | `false` |
 
 **Operation Types:**
 ```

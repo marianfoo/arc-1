@@ -116,7 +116,7 @@ Other:  T = Test (unit)   L = Lock   X = Transport
 - `allowedOps` is an **allowlist**: empty string `""` means "no allowlist filter" (all ops pass this step). Setting `allowedOps="C"` while `readOnly=true` still blocks `C` — step 2 fires first.
 - `disallowedOps` is a **blocklist**: takes precedence over `allowedOps`. Setting `allowedOps="RSQC"` + `disallowedOps="C"` allows `RSQ` and blocks `C`.
 - Write operations `C`, `D`, `U`, `A`, `W` are always blocked when `readOnly=true`, regardless of the op filter. To enable writes with a narrow op filter, set `readOnly=false` AND list the codes in `allowedOps`.
-- Invalid codes in `allowedOps`/`disallowedOps` are silently ignored (e.g. `allowedOps="Z"` blocks every known op because no code matches `Z`). Use the codes from the table above.
+- Invalid codes in `allowedOps`/`disallowedOps` are ignored for enforcement, but ARC-1 logs a startup warning with the unknown characters (e.g. `allowedOps="Z"` still blocks every known op because no code matches `Z`). Use the codes from the table above.
 
 ---
 
