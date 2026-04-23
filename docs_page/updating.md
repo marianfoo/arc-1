@@ -23,9 +23,9 @@ ARC-1 v0.7 rewrites the authorization layer around a **single source of truth** 
 | `SAP_BLOCK_FREE_SQL`      | `SAP_ALLOW_FREE_SQL` (inverted)                                | Same                                                     |
 | `SAP_ENABLE_TRANSPORTS`   | `SAP_ALLOW_TRANSPORT_WRITES`                                   | Transport **reads** now always available                  |
 | `SAP_ENABLE_GIT`          | `SAP_ALLOW_GIT_WRITES`                                         | Git **reads** now always available                        |
-| `SAP_ALLOWED_OPS`         | `SAP_DENY_ACTIONS` (tool-qualified; see [authz doc](authorization.md#deny-actions-advanced)) | Op-code model removed            |
+| `SAP_ALLOWED_OPS`         | `SAP_DENY_ACTIONS` (tool-qualified; see [authz doc](authorization.md#advanced-deny-actions)) | Op-code model removed            |
 | `SAP_DISALLOWED_OPS`      | `SAP_DENY_ACTIONS`                                             | Same                                                     |
-| `ARC1_PROFILE`            | Individual `SAP_ALLOW_*` flags (see recipes in [authz doc](authorization.md#recipes-reaching-a-specific-state)) | Server-side profile concept removed |
+| `ARC1_PROFILE`            | Individual `SAP_ALLOW_*` flags (see recipes in [authz doc](authorization.md#recipes)) | Server-side profile concept removed |
 | `ARC1_API_KEY` (single)   | `ARC1_API_KEYS="key:profile"` (multi-key only)                 | Profile names: `viewer` / `developer` / `admin` / etc.    |
 
 #### CLI flag aliases — old → new
@@ -54,7 +54,7 @@ Users assigned to `ARC-1 Developer` role collection automatically gain transport
 2. For each old env var, replace per the table above. Remember: `SAP_READ_ONLY`/`SAP_BLOCK_*` flags flip polarity (`true` → `false` and vice versa).
 3. If you used `ARC1_PROFILE`, pick the matching recipe from the new [.env.example](https://github.com/marianfoo/arc-1/blob/main/.env.example).
 4. If you used single `ARC1_API_KEY`, switch to `ARC1_API_KEYS="your-key:admin"` (or choose a restricted profile).
-5. If you used `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS`, see the [deny actions doc](authorization.md#deny-actions-advanced) for the `SAP_DENY_ACTIONS` equivalent.
+5. If you used `SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS`, see the [deny actions doc](authorization.md#advanced-deny-actions) for the `SAP_DENY_ACTIONS` equivalent.
 6. Start the server. It will either start successfully (with a new `effective safety: ...` log line) or error with a migration hint for any legacy var you missed.
 
 #### BTP Cloud Foundry
@@ -67,7 +67,7 @@ Users assigned to `ARC-1 Developer` role collection automatically gain transport
 
 ### Debugging the new model
 
-- `arc-1 config show` prints the resolved effective safety with per-field source attribution. Run this if a flag isn't behaving as expected.
+- `arc1 config show` prints the resolved effective safety with per-field source attribution. Run this if a flag isn't behaving as expected.
 - Startup logs include `effective safety: writes=YES data=NO ...` one-liner plus `WARN: config contradiction: ...` lines for useless combos (like `allowTransportWrites=true` with `allowWrites=false`).
 - Every denied action includes the specific layer in the error: "Insufficient scope" = Layer 2; "allowWrites=false" = Layer 1; "denied by server policy" = `SAP_DENY_ACTIONS`.
 

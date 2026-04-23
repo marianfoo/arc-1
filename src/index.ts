@@ -2,7 +2,7 @@
  * ARC-1 — ABAP Relay Connector
  *
  * MCP (Model Context Protocol) server for SAP ABAP systems.
- * Provides 11 intent-based tools for AI agents to interact with SAP ADT.
+ * Provides 12 intent-based tools for AI agents to interact with SAP ADT.
  *
  * Entry point: starts the MCP server on stdio (default) or HTTP Streamable transport.
  */

@@ -32,7 +32,7 @@ For single-developer setups on your own laptop, use [local-development.md](local
 |---|---|
 | Docker on any VM / container host | [Docker deployment](#docker-on-any-vm) |
 | BTP Cloud Foundry, on-prem SAP via Cloud Connector | [BTP CF with PP](#btp-cloud-foundry-with-principal-propagation) |
-| BTP Cloud Foundry, BTP ABAP backend | [BTP CF + BTP ABAP](#btp-cloud-foundry--btp-abap-environment) |
+| BTP Cloud Foundry, BTP ABAP backend | [BTP CF + BTP ABAP](#btp-cloud-foundry-btp-abap-environment) |
 
 ---
 
@@ -68,7 +68,7 @@ docker run -d --name arc1 -p 8080:8080 \
   ghcr.io/marianfoo/arc-1:latest
 ```
 
-This example only turns on OIDC validation for the MCP endpoint. It does **not** widen the server's safety ceiling: ARC-1 still defaults to read-only, no SQL, no named table preview, no transports, and writes restricted to `$TMP` unless you set a profile or explicit safety flags.
+This example only turns on OIDC validation for the MCP endpoint. It does **not** widen the server's safety ceiling: ARC-1 still defaults to read-only, no SQL, no named table preview, no transport writes, and writes restricted to `$TMP` unless you set explicit `SAP_ALLOW_*` safety flags.
 
 If this shared server should allow development work, add these flags to the same `docker run` command:
 
@@ -77,14 +77,14 @@ If this shared server should allow development work, add these flags to the same
 -e SAP_ALLOWED_PACKAGES='Z*,$TMP'
 ```
 
-Per-user JWT scopes and API-key profiles sit **beneath** that server ceiling — they can only tighten, never widen. A user with the `write` scope still cannot mutate objects when `SAP_ALLOW_WRITES=false`. Full model: [authorization.md](authorization.md#the-capability-matrix). Every flag: [configuration-reference.md](configuration-reference.md).
+Per-user JWT scopes and API-key profiles sit **beneath** that server ceiling — they can only tighten, never widen. A user with the `write` scope still cannot mutate objects when `SAP_ALLOW_WRITES=false`. Full model: [authorization.md](authorization.md#capability-matrix). Every flag: [configuration-reference.md](configuration-reference.md).
 
 ARC-1 audit logs show the real MCP user; SAP audit logs show the shared service account. Trade-off — good compromise when you can't use PP.
 For this shared-user mode, ARC-1 runs a startup auth preflight (`/sap/bc/adt/core/discovery`) and blocks SAP tool calls on 401/403 with a clear remediation message. This avoids hammering SAP with repeated failed logins when the technical password/client is wrong.
 
 **Full references:**
 - [docker.md](docker.md) — image tags, build, ports, troubleshooting
-- [api-key-setup.md](api-key-setup.md) — single / multi-key, profiles
+- [api-key-setup.md](api-key-setup.md) — one or more API-key entries with profiles
 - [oauth-jwt-setup.md](oauth-jwt-setup.md) — OIDC with Entra ID / Okta / Keycloak
 - [security-guide.md](security-guide.md) — production hardening checklist
 

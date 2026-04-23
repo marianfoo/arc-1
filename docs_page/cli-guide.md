@@ -113,11 +113,11 @@ arc1 --allow-data-preview=true      # Enable named table preview
 # Use single quotes — bash expands $TMP inside double quotes.
 arc1 --allowed-packages 'ZPROD*,$TMP'
 
-# Allowlist operations (only Read/Search/Query permitted; everything else blocked)
-arc1 --allowed-ops "RSQ"
+# Fine-grained deny list (tool-qualified only)
+arc1 --allow-writes=true --deny-actions "SAPWrite.delete,SAPManage.flp_*"
 
 # API key authentication
-arc1 --transport http-streamable --api-key "my-secret-key"
+arc1 --transport http-streamable --api-keys "my-secret-key:viewer"
 
 # OIDC authentication
 arc1 --transport http-streamable \
@@ -128,4 +128,11 @@ arc1 --transport http-streamable \
 SAP_BTP_DESTINATION=SAP_TRIAL arc1
 ```
 
-Full configuration reference: **[CLAUDE.md](../CLAUDE.md#configuration)**
+To inspect the resolved policy and config sources:
+
+```bash
+arc1 config show
+arc1 config show --format=json
+```
+
+Full configuration reference: [configuration-reference.md](configuration-reference.md).

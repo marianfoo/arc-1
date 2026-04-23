@@ -6,7 +6,7 @@
  * Also scans for useless/dangerous flag combinations and warns about them.
  *
  * Called once from src/server/server.ts after resolveConfig() returns. The same
- * functions are reused by `arc-1 config show` (Task 9).
+ * functions are reused by `arc1 config show` (Task 9).
  */
 
 import type { Logger } from './logger.js';

@@ -99,9 +99,9 @@ Pick the lightest combination that gets your work done. Common starting points:
 
 - **Read/search only**: nothing — defaults are already read-only.
 - **Read + data preview + SQL**: `SAP_ALLOW_DATA_PREVIEW=true`, `SAP_ALLOW_FREE_SQL=true`.
-- **Developer (writes to $TMP/Z*)**: `SAP_ALLOW_WRITES=true`, `SAP_ALLOWED_PACKAGES="$TMP,Z*"`, optionally `SAP_ALLOW_TRANSPORT_WRITES=true` for CTS.
+- **Developer (writes to $TMP/Z*)**: `SAP_ALLOW_WRITES=true`, `SAP_ALLOWED_PACKAGES='$TMP,Z*'`, optionally `SAP_ALLOW_TRANSPORT_WRITES=true` for CTS.
 
-See [authorization.md](authorization.md) for the three-layer model and the full [capability matrix](authorization.md#the-capability-matrix).
+See [authorization.md](authorization.md) for the three-layer model and the full [capability matrix](authorization.md#capability-matrix).
 
 ### Claude Code
 
@@ -155,7 +155,7 @@ All MCP clients that support stdio work out of the box — just point them at `n
 
 ## Tools
 
-ARC-1 exposes 11 intent-based tools via MCP, designed for AI agents like Copilot Studio.
+ARC-1 exposes 12 intent-based tools via MCP, designed for AI agents like Copilot Studio.
 
 Full reference: **[tools.md](tools.md)**
 
@@ -168,13 +168,13 @@ Full reference: **[tools.md](tools.md)**
 
 ## Admin Controls (Safety)
 
-Safe by default — read-only, no SQL, no data preview, no transports. Writes are restricted to `$TMP`.
+Safe by default - read-only, no SQL, no data preview, no transport writes, no Git writes. Writes are restricted to `$TMP`.
 
 Every capability is a separate positive opt-in flag:
 
 - **Nothing**: read / search / navigate / lint / diagnose work out of the box.
 - `SAP_ALLOW_DATA_PREVIEW=true` + `SAP_ALLOW_FREE_SQL=true`: enable named table preview and freestyle SQL.
-- `SAP_ALLOW_WRITES=true` + `SAP_ALLOWED_PACKAGES="$TMP,Z*"`: enable object writes to `$TMP` and `Z*` packages.
+- `SAP_ALLOW_WRITES=true` + `SAP_ALLOWED_PACKAGES='$TMP,Z*'`: enable object writes to `$TMP` and `Z*` packages.
 - Add `SAP_ALLOW_TRANSPORT_WRITES=true` for CTS transport mutations, `SAP_ALLOW_GIT_WRITES=true` for abapGit / gCTS pushes.
 
 The three-layer model (server flag + user scope + SAP authorization) is described in [authorization.md](authorization.md). Full flag reference: [configuration-reference.md](configuration-reference.md).
@@ -190,7 +190,7 @@ The three-layer model (server flag + user scope + SAP authorization) is describe
 | [updating.md](updating.md) | Update procedures (npx / Docker / BTP / git) |
 | [enterprise-auth.md](enterprise-auth.md) | Auth internals — Layer A / Layer B, coexistence matrix |
 | [authorization.md](authorization.md) | Scopes, roles, safety profiles |
-| [tools.md](tools.md) | Complete tool reference (11 intent-based tools) |
+| [tools.md](tools.md) | Complete tool reference (12 intent-based tools) |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
 | [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
 | [caching.md](caching.md) | Object caching — memory, SQLite, pre-warmer, reverse dep lookup |

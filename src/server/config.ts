@@ -203,7 +203,7 @@ function detectLegacyConfig(args: string[]): void {
 /**
  * Parse CLI args + env into a `{ config, sources }` pair.
  * `sources` records where each field's value came from (default / env / flag / file).
- * Consumed by the startup effective-policy log and the `arc-1 config show` subcommand.
+ * Consumed by the startup effective-policy log and the `arc1 config show` subcommand.
  */
 export function resolveConfig(args: string[]): { config: ServerConfig; sources: Record<string, ConfigSource> } {
   detectLegacyConfig(args);

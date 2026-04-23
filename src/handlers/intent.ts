@@ -3047,7 +3047,8 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       if (!canFreeSQL && !canQuery) {
         return errorResult(
           'Class hierarchy requires data access permissions. ' +
-            'Enable free SQL (--block-free-sql=false) or table preview (--block-data=false).',
+            'Enable free SQL (SAP_ALLOW_FREE_SQL=true / --allow-free-sql=true) or table preview ' +
+            '(SAP_ALLOW_DATA_PREVIEW=true / --allow-data-preview=true), and grant the matching sql/data scope in HTTP auth mode.',
         );
       }
 

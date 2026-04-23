@@ -166,14 +166,14 @@ arc-1/
 │   │   ├── logger.ts               # Structured logger (stderr only)
 │   │   └── types.ts                # ServerConfig type, defaults
 │   ├── handlers/
-│   │   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
+│   │   ├── intent.ts               # 12 intent-based tool router (handleToolCall)
 │   │   └── tools.ts                # Tool definitions (names, descriptions, schemas)
 │   ├── adt/
 │   │   ├── client.ts               # ADT client facade (all read operations)
 │   │   ├── http.ts                 # HTTP transport (undici/fetch, discovery MIME, CSRF, cookies, sessions)
 │   │   ├── discovery.ts            # ADT service discovery parser/lookup for MIME negotiation
 │   │   ├── errors.ts               # Typed error classes (AdtApiError, AdtSafetyError)
-│   │   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
+│   │   ├── safety.ts               # Safety system (positive opt-ins, package gates, deny actions)
 │   │   ├── features.ts             # Feature detection (auto/on/off)
 │   │   ├── config.ts               # ADT client configuration types
 │   │   ├── types.ts                # ADT response types

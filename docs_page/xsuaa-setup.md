@@ -55,6 +55,8 @@ And 6 pre-defined role collections (assignable to users in BTP Cockpit):
 
 **Want a restricted developer** (can write code but cannot transport or push to Git)? Define your own role template in `xs-security.json` with just `[read, write]` scopes, redeploy, and assign it — or use `SAP_DENY_ACTIONS` on the server.
 
+Role collections are only the user-permission gate. Server flags still have to allow the capability: for example, a user in `ARC-1 Developer` still cannot create transports unless the ARC-1 instance also has `SAP_ALLOW_WRITES=true` and `SAP_ALLOW_TRANSPORT_WRITES=true`.
+
 See [authorization.md](authorization.md) for the full three-layer authorization model.
 
 ## Step 2: Bind Service and Configure

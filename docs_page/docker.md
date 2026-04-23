@@ -21,8 +21,8 @@ without spawning a new process per session.
    - [Cookie files inside the container](#cookie-files-inside-the-container)
    - [Proxy, TLS, and networking](#proxy-tls-and-networking)
 6. [MCP Client Integration](#mcp-client-integration)
-   - [Claude Desktop](#claude-desktop)
-   - [Gemini CLI / Other Agents](#gemini-cli--other-agents)
+   - [Claude Desktop](#claude-desktop-stdio-fallback)
+   - [Gemini CLI / Other Agents](#gemini-cli-other-agents)
 7. [Updating the Image](#updating-the-image)
 8. [Security Notes](#security-notes)
 9. [Troubleshooting](#troubleshooting)
@@ -270,7 +270,7 @@ docker run -d --rm \
 
 Keep credentials and stable connection settings in `.env`; layer temporary overrides with `-e`.
 
-For what `SAP_ALLOW_WRITES`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_DENY_ACTIONS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Common recipes](configuration-reference.md#common-recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
+For what `SAP_ALLOW_WRITES`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_DENY_ACTIONS`, `SAP_ALLOWED_PACKAGES`, and the rest actually do, use [configuration-reference.md](configuration-reference.md). Ready-made read-only, sandboxed, and developer recipes live in [configuration-reference.md → Recipes](configuration-reference.md#recipes). That page shows raw `ENV=value` values: use them as-is in `.env` and `--env-file`, but quote shell-sensitive package patterns when you pass them via `-e`.
 
 If you pass package patterns like `*` or `$TMP` through `-e SAP_ALLOWED_PACKAGES=...`, use single quotes so the shell does not expand them: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`.
 
@@ -544,7 +544,7 @@ docker run -i --rm -e SAP_URL=https://host:44300 ... arc1
 x509: certificate signed by unknown authority
 ```
 
-Either add your CA certificate (see [Network / TLS](#network--tls)) or use
+Either add your CA certificate (see [Network / TLS](#proxy-tls-and-networking)) or use
 `SAP_INSECURE=true` in non-production environments.
 
 ### `authentication required` error

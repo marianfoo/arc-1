@@ -19,7 +19,7 @@ ARC-1 has **three independent gates** that all must pass for a mutation:
 2. **User scope** (Layer 2) — from JWT (XSUAA/OIDC) or API-key profile. Scopes: `read`, `write`, `data`, `sql`, `transports`, `git`, `admin`. `admin` implies all.
 3. **SAP authorization** (Layer 3) — the underlying SAP user's PFCG roles / S_DEVELOP checks. Per-user via principal propagation.
 
-Reads of SAP object source/metadata only need Layer 2 (`read` scope) — no server opt-out. Data preview and freestyle SQL each need both layers.
+Reads of SAP object source/metadata only need Layer 2 (`read` scope) — no server opt-out. Data preview and freestyle SQL each need both layers. Transport/Git mutations need `write` plus their specialized `transports` / `git` scope because users without `write` are treated as no-mutation users.
 
 See [Authorization & Roles](authorization.md) for the full model.
 
@@ -38,7 +38,7 @@ See [Authorization & Roles](authorization.md) for the full model.
 | `--allow-git-writes`             | `SAP_ALLOW_GIT_WRITES`        | `false` | Git mutations (`SAPGit.clone`/`pull`/`push`/`commit`). **Also requires** `allowWrites=true`.                                 |
 | `--allowed-packages`             | `SAP_ALLOWED_PACKAGES`        | `$TMP`  | Package allowlist for writes. Comma-separated. `Z*` prefix wildcard. `*` = unrestricted. **Reads are never package-gated.**   |
 | `--allowed-transports`           | `SAP_ALLOWED_TRANSPORTS`      | `[]`    | Advanced: specific CTS transport ID whitelist.                                                                               |
-| `--deny-actions`                 | `SAP_DENY_ACTIONS`            | `[]`    | Fine-grained per-action denial. Tool-qualified grammar. See [deny-actions](authorization.md#deny-actions-advanced).          |
+| `--deny-actions`                 | `SAP_DENY_ACTIONS`            | `[]`    | Fine-grained per-action denial. Tool-qualified grammar. See [deny actions](authorization.md#advanced-deny-actions).          |
 | `--tool-mode`                    | `ARC1_TOOL_MODE`              | `standard` | `standard` (12 tools) / `hyperfocused` (1 universal tool, ~200 tokens).                                                  |
 | `--abaplint-config`              | `SAP_ABAPLINT_CONFIG`         | —       | Path to custom `abaplint.jsonc`.                                                                                             |
 | `--lint-before-write`            | `SAP_LINT_BEFORE_WRITE`       | `true`  | Pre-write lint validation (block syntax errors before save).                                                                 |
@@ -50,13 +50,15 @@ See [Authorization & Roles](authorization.md) for the full model.
 | Read/search only                               | (nothing — defaults are restrictive)                                                     |
 | Read + table preview                           | `SAP_ALLOW_DATA_PREVIEW=true`                                                             |
 | Read + table preview + freestyle SQL           | `SAP_ALLOW_DATA_PREVIEW=true`, `SAP_ALLOW_FREE_SQL=true`                                  |
-| Writes to `$TMP`/`Z*`                          | `SAP_ALLOW_WRITES=true`, `SAP_ALLOWED_PACKAGES=$TMP,Z*`                                   |
-| Developer + CTS transports                     | + `SAP_ALLOW_TRANSPORT_WRITES=true`                                                      |
-| Developer + Git writes                         | + `SAP_ALLOW_GIT_WRITES=true`                                                             |
-| Full local dev (everything)                    | All `SAP_ALLOW_*=true`, `SAP_ALLOWED_PACKAGES=*`                                          |
+| Writes to `$TMP`/`Z*`                          | `SAP_ALLOW_WRITES=true`, `SAP_ALLOWED_PACKAGES='$TMP,Z*'`                                 |
+| Writes + CTS transports                        | `SAP_ALLOW_WRITES=true`, `SAP_ALLOW_TRANSPORT_WRITES=true`                                |
+| Writes + Git mutations                         | `SAP_ALLOW_WRITES=true`, `SAP_ALLOW_GIT_WRITES=true`                                      |
+| Full local dev (everything)                    | All `SAP_ALLOW_*=true`, `SAP_ALLOWED_PACKAGES='*'`                                        |
 | Deny specific actions (fine-grained)           | e.g. `SAP_DENY_ACTIONS=SAPWrite.delete,SAPManage.flp_*`                                   |
 
 Shell-quote package patterns with `*` or `$TMP`: `-e SAP_ALLOWED_PACKAGES='*'` or `-e SAP_ALLOWED_PACKAGES='Z*,$TMP'`. In `.env` files, no extra quoting needed.
+
+API-key profile note: `developer`, `developer-data`, and `developer-sql` profiles are intentionally capped to `$TMP`. If you use API keys and need Z-package writes, use a tightly scoped `admin` key with a narrow server-side `SAP_ALLOWED_PACKAGES`, or use OIDC/XSUAA for per-user scopes.
 
 ### Internal classification (for developers)
 

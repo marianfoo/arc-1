@@ -4,17 +4,17 @@ This file provides context for AI assistants (Claude, etc.) working on this proj
 
 ## Project Overview
 
-**ARC-1** is a TypeScript MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides 11 intent-based tools (SAPRead, SAPSearch, SAPWrite, SAPActivate, SAPNavigate, SAPQuery, SAPTransport, SAPContext, SAPLint, SAPDiagnose, SAPManage) for use with Claude and other MCP-compatible LLMs.
+**ARC-1** is a TypeScript MCP (Model Context Protocol) server for SAP ABAP Development Tools (ADT). It provides 12 intent-based tools (SAPRead, SAPSearch, SAPWrite, SAPActivate, SAPNavigate, SAPQuery, SAPTransport, SAPGit, SAPContext, SAPLint, SAPDiagnose, SAPManage) for use with Claude and other MCP-compatible LLMs.
 
 Distributed as an npm package (`arc-1`) and Docker image (`ghcr.io/marianfoo/arc-1`).
 
 ## Design Principles
 
-1. **Centralized admin control** — Runs as a managed service, not on developer laptops. Admins configure safety gates (read-only, package allowlists, operation filters, SQL blocking, transport guards) per instance. Every tool call is audited with user identity. Per-user JWT scopes can restrict further but never expand beyond server config.
+1. **Centralized admin control** — Runs as a managed service, not on developer laptops. Admins configure positive opt-in safety gates (writes, data preview, SQL, package allowlists, transport/Git writes, deny actions) per instance. Every tool call is audited with user identity. Per-user JWT scopes can restrict further but never expand beyond server config.
 
 2. **Per-user SAP identity** — Principal propagation maps each MCP user to their own SAP user via BTP Destination Service + Cloud Connector. SAP's native authorization (S_DEVELOP, package checks) applies per user. No shared service accounts.
 
-3. **Token-efficient tool design** — 11 intent-based tools (~5K schema tokens) instead of 200+ endpoints. Hyperfocused mode: 1 tool (~200 tokens). Method-level surgery (95% reduction) and context compression (7-30x) keep responses within tight context windows. This is the difference between working and not working on mid-tier LLMs (GPT-4o-mini, Copilot Studio).
+3. **Token-efficient tool design** — 12 intent-based tools (~5K schema tokens) instead of 200+ endpoints. Hyperfocused mode: 1 tool (~200 tokens). Method-level surgery (95% reduction) and context compression (7-30x) keep responses within tight context windows. This is the difference between working and not working on mid-tier LLMs (GPT-4o-mini, Copilot Studio).
 
 4. **BTP-native deployment** — First-class BTP CF support: Destination Service, Cloud Connector, XSUAA OAuth, BTP Audit Log Service. Also deployable as Docker or npm. Local stdio mode for development.
 
@@ -68,7 +68,7 @@ npm run dev
 | `SAP_ALLOW_WRITES` / `--allow-writes` | Enable object mutations (default: `false`). Required for transport/git writes too. |
 | `SAP_ALLOW_DATA_PREVIEW` / `--allow-data-preview` | Enable named table preview (default: `false`) |
 | `SAP_ALLOW_FREE_SQL` / `--allow-free-sql` | Enable freestyle SQL (default: `false`) |
-| `SAP_DENY_ACTIONS` / `--deny-actions` | Fine-grained per-action denial. Grammar: `Tool`, `Tool.action`, `Tool.glob*`. Inline CSV or file path. See [authorization.md](docs_page/authorization.md#deny-actions-advanced). |
+| `SAP_DENY_ACTIONS` / `--deny-actions` | Fine-grained per-action denial. Grammar: `Tool`, `Tool.action`, `Tool.glob*`. Inline CSV or file path. See [authorization.md](docs_page/authorization.md#advanced-deny-actions). |
 | `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: "Z*"). Reads never package-gated. |
 | `SAP_ALLOW_TRANSPORT_WRITES` / `--allow-transport-writes` | Enable transport mutations (default: `false`). Requires `SAP_ALLOW_WRITES=true`. |
 | `SAP_ALLOW_GIT_WRITES` / `--allow-git-writes` | Enable git mutations (default: `false`). Requires `SAP_ALLOW_WRITES=true`. |
@@ -79,7 +79,7 @@ npm run dev
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
 | `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
-| `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (11 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
+| `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (12 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
 | `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
 | `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
 | `ARC1_CACHE` / `--cache` | Cache mode: `auto` (default), `memory`, `sqlite`, `none` |
@@ -107,7 +107,7 @@ src/
 │   ├── xsuaa.ts                # XSUAA JWT validation for BTP
 │   └── sinks/                  # Audit sinks: stderr, file, btp-auditlog
 ├── handlers/
-│   ├── intent.ts               # 11 intent-based tool router (handleToolCall)
+│   ├── intent.ts               # 12 intent-based tool router (handleToolCall)
 │   ├── tools.ts                # Tool definitions (names, descriptions, JSON schemas)
 │   ├── schemas.ts              # Zod v4 input schemas (runtime validation)
 │   ├── zod-errors.ts           # Zod error formatting for LLM clients
@@ -116,7 +116,7 @@ src/
 │   ├── client.ts               # ADT client facade (all read operations)
 │   ├── http.ts                 # HTTP transport (undici/fetch, CSRF, cookies, sessions)
 │   ├── errors.ts               # Typed errors (AdtApiError, AdtSafetyError, AdtNetworkError)
-│   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
+│   ├── safety.ts               # Safety system (positive opt-ins, package gates, deny actions)
 │   ├── features.ts             # Feature detection (auto/on/off)
 │   ├── config.ts, types.ts     # ADT client config + response types
 │   ├── xml-parser.ts           # XML parser (fast-xml-parser v5)

@@ -745,7 +745,7 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 **Why:** Simplifies reading programs with many includes — reduces N+1 round trips. fr0ster has `GetProgFullCode`. Useful for LLMs working with large legacy programs that heavily use includes (a very common pattern in ECC/on-prem codebases).
 
-**Why not:** `SAPContext` with dependency extraction already resolves includes and returns combined context with AST-based compression (7-30x reduction). A dedicated "full code" tool just renames existing functionality without adding behavior — it violates the 11-tool design principle. The LLM can already request `SAPRead PROG` followed by individual includes if needed. **On-prem only** (SAP BTP doesn't expose nodestructure for includes), so BTP users get no benefit. The recursive traversal is fragile — malformed INCLUDE statements or circular dependencies cause infinite loops.
+**Why not:** `SAPContext` with dependency extraction already resolves includes and returns combined context with AST-based compression (7-30x reduction). A dedicated "full code" tool just renames existing functionality without adding behavior — it violates the 12-tool design principle. The LLM can already request `SAPRead PROG` followed by individual includes if needed. **On-prem only** (SAP BTP doesn't expose nodestructure for includes), so BTP users get no benefit. The recursive traversal is fragile — malformed INCLUDE statements or circular dependencies cause infinite loops.
 
 ---
 
@@ -1911,7 +1911,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 
 | Competitor | Language | Tools | Auth | Safety | Deployment | Key Advantage |
 |-----------|---------|-------|------|--------|------------|---------------|
-| **ARC-1** | TypeScript | 12 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, op filter, 2D auth (scopes+roles+safety) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,500+ tests across unit/integration/E2E |
+| **ARC-1** | TypeScript | 12 intent-based + hyperfocused | API Key, OIDC, XSUAA, PP | Read-only, pkg filter, deny actions, 3-layer auth (server ceiling + user scopes + SAP auth) | Docker, BTP CF, npm | Per-user PP, scope-based tools, 3 auth modes, safety, 1,500+ tests across unit/integration/E2E |
 | **vibing-steampunk** | Go 1.24 | 1-99+ (3 modes) | Basic, Cookie | Op filter, pkg filter, transport guard | Go binary (9 platforms) | 279 stars, **Streamable HTTP (v2.38.0)**, native parser, massive feature sprint (i18n, gCTS, API release state, version history, code coverage) |
 | **fr0ster/mcp-abap-adt** | TypeScript | ~320 (4 tiers) | 9 providers (incl. TLS, SAML, Device Flow) | Exposition tiers | npm `@mcp-abap-adt/core` | Most tools, most auth options, embeddable, RFC, multi-system |
 | SAP ABAP Add-on MCP | ABAP | ~10 | SAP native | SAP authorization | Runs inside SAP | No proxy needed, SAP-native auth |

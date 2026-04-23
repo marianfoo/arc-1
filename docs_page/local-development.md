@@ -165,7 +165,7 @@ ARC-1 ships read-only. For local development, enable only what you need via posi
 | Freestyle SQL              | off     | `SAP_ALLOW_FREE_SQL=true`             |
 | Transport mutations        | off     | `SAP_ALLOW_TRANSPORT_WRITES=true` (also needs `SAP_ALLOW_WRITES=true`) |
 | Git mutations              | off     | `SAP_ALLOW_GIT_WRITES=true` (also needs `SAP_ALLOW_WRITES=true`)       |
-| Writes to any package       | `$TMP` only | `SAP_ALLOWED_PACKAGES="$TMP,Z*"` (or `*` for any) |
+| Writes to any package       | `$TMP` only | `SAP_ALLOWED_PACKAGES='$TMP,Z*'` (or `*` for any) |
 
 Transport reads (list / get / check / history) and Git reads (list_repos / whoami / branches / ...) work without any opt-in flag — only mutations are gated.
 
@@ -173,7 +173,7 @@ Transport reads (list / get / check / history) and Git reads (list_repos / whoam
 
 - **Just explore** (default): no config needed.
 - **Table preview + SQL**: `SAP_ALLOW_DATA_PREVIEW=true SAP_ALLOW_FREE_SQL=true`.
-- **Developer**: `SAP_ALLOW_WRITES=true SAP_ALLOWED_PACKAGES="$TMP,Z*"` — optionally add `SAP_ALLOW_TRANSPORT_WRITES=true` or `SAP_ALLOW_GIT_WRITES=true`.
+- **Developer**: `SAP_ALLOW_WRITES=true SAP_ALLOWED_PACKAGES='$TMP,Z*'` — optionally add `SAP_ALLOW_TRANSPORT_WRITES=true` or `SAP_ALLOW_GIT_WRITES=true`.
 - **Full local dev**: all 5 `SAP_ALLOW_*=true` + `SAP_ALLOWED_PACKAGES='*'` (quote the `*` in shell so it isn't expanded to filenames).
 
 For fine-grained blocking even after the above flags are set, use `SAP_DENY_ACTIONS` — e.g. `SAP_DENY_ACTIONS="SAPWrite.delete,SAPManage.flp_*"`. See [authorization.md](authorization.md#advanced-deny-actions).

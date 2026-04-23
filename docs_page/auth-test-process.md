@@ -31,7 +31,7 @@ npm test
 npx arc-1 --url http://your-sap:8000 \
   --user DEVELOPER --password secret --client 001 \
   --transport http-streamable --http-addr 0.0.0.0:8080 \
-  --api-key 'test-key-12345'
+  --api-keys 'test-key-12345:admin'
 ```
 
 **2. Verify health endpoint (no auth required):**

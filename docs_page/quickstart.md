@@ -108,7 +108,7 @@ Same structure as Path A — only the `env` block changes. Use this only on a de
 | Transports | On |
 | Package scope | `*` (all packages) |
 
-Need something in between? Enable only the flags you need — each capability is a separate positive opt-in. Full model in [authorization.md](authorization.md#the-capability-matrix).
+Need something in between? Enable only the flags you need — each capability is a separate positive opt-in. Full model in [authorization.md](authorization.md#capability-matrix).
 
 Restart Claude Desktop after updating the config. The SAP tools (`SAPRead`, `SAPSearch`, etc.) should appear in the tool picker.
 

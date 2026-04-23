@@ -1,7 +1,7 @@
 /**
  * Hyperfocused mode — a single universal `SAP` tool (~200 tokens of schema).
  *
- * Instead of 11 intent-based tools (~14K tokens), hyperfocused mode exposes
+ * Instead of 12 intent-based tools (~14K tokens), hyperfocused mode exposes
  * a single `SAP` tool that routes to all operations via an `action` parameter.
  * This is useful for token-constrained scenarios (small context windows,
  * cost optimization, or when the LLM already knows the ARC-1 API).

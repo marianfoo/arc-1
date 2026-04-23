@@ -80,7 +80,7 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `SAP_ALLOW_TRANSPORT_WRITES` / `--allow-transport-writes` | Enable transport mutations (`SAPTransport.create`/`release`/`delete`). Default: `false`. **Also requires** `SAP_ALLOW_WRITES=true`. |
 | `SAP_ALLOW_GIT_WRITES` / `--allow-git-writes` | Enable git mutations (`SAPGit.clone`/`pull`/`push`). Default: `false`. **Also requires** `SAP_ALLOW_WRITES=true`. |
 | `SAP_ALLOWED_PACKAGES` / `--allowed-packages` | Restrict write operations to packages (default: `$TMP`; supports wildcards: `Z*`). `*` = any. Reads are never package-gated. |
-| `SAP_DENY_ACTIONS` / `--deny-actions` | Fine-grained per-action denial. Grammar: `Tool`, `Tool.action`, `Tool.glob*` (tool-qualified only). Inline CSV or file path. Fails fast on invalid input. See [authorization.md](docs_page/authorization.md#deny-actions-advanced). |
+| `SAP_DENY_ACTIONS` / `--deny-actions` | Fine-grained per-action denial. Grammar: `Tool`, `Tool.action`, `Tool.glob*` (tool-qualified only). Inline CSV or file path. Fails fast on invalid input. See [authorization.md](docs_page/authorization.md#advanced-deny-actions). |
 | `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`). Valid profiles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`, `admin`. Each profile maps to a scope set AND a partial SafetyConfig intersected with the server ceiling. Single `ARC1_API_KEY` was removed in v0.7. |
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
 | `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
@@ -129,7 +129,7 @@ src/
 │   ├── http.ts                 # HTTP transport (undici/fetch, CSRF, cookies, sessions)
 │   ├── discovery.ts            # ADT discovery (endpoint MIME map fetch + resolve)
 │   ├── errors.ts               # Typed errors (AdtApiError, AdtSafetyError, AdtNetworkError)
-│   ├── safety.ts               # Safety system (read-only, op filter, pkg filter)
+│   ├── safety.ts               # Safety system (positive opt-ins, package gates, deny actions)
 │   ├── features.ts             # Feature detection (auto/on/off)
 │   ├── config.ts, types.ts     # ADT client config + response types
 │   ├── xml-parser.ts           # XML parser (fast-xml-parser v5)

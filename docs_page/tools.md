@@ -302,7 +302,7 @@ Navigate code: find definitions, references (where-used), code completion, and c
 
 **References action (Where-Used):** Uses the full scope-based Where-Used API, returning detailed results with line numbers, code snippets, and package info. Falls back to the simpler reference lookup on older SAP systems that don't support the scope endpoint.
 
-**Hierarchy action:** Returns the class inheritance chain via SEOMETAREL: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). Uses SQL queries, so free SQL must be enabled on the server (`SAP_ALLOW_FREE_SQL=true`) and the user must have the `sql` scope.
+**Hierarchy action:** Returns the class inheritance chain via `SEOMETAREL`: superclass (or null), implemented interfaces, and direct subclasses. Requires `name` parameter (class name). It needs either table preview (`SAP_ALLOW_DATA_PREVIEW=true` + `data` scope) or freestyle SQL (`SAP_ALLOW_FREE_SQL=true` + `sql` scope). ARC-1 uses SQL when available and falls back to named table preview.
 
 **Examples:**
 ```
@@ -335,7 +335,7 @@ Execute ABAP SQL queries against SAP tables.
 
 ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint parser can still reject valid-looking statements on some backend versions (for example grammar errors or single-SELECT enforcement). If parsing fails, simplify to one SELECT and split complex logic into staged queries.
 
-See: [SAPQuery Freestyle Capability Matrix](../docs/research/sapquery-freestyle-capability-matrix.md)
+See: [SAPQuery Freestyle Capability Matrix](https://github.com/marianfoo/arc-1/blob/main/docs/research/sapquery-freestyle-capability-matrix.md)
 
 **Examples:**
 ```
@@ -411,7 +411,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 **Protocol compatibility:** ARC-1 uses startup ADT service discovery (`/sap/bc/adt/discovery`) to proactively select endpoint MIME types, with endpoint-specific CTS media types and a one-retry 406/415 fallback as defense-in-depth.
 
-**Note:** Most actions require `--allow-transport-writes`. The `check` and `history` actions work without it (read-only).
+**Note:** Transport mutations (`create`, `release`, `release_recursive`, `reassign`, `delete`) require `write` + `transports` scopes and both `SAP_ALLOW_WRITES=true` and `SAP_ALLOW_TRANSPORT_WRITES=true`. `list`, `get`, `check`, and `history` are read actions and work without `--allow-transport-writes`.
 
 ---
 
@@ -654,7 +654,7 @@ Run local abaplint rules on ABAP source code. System-aware: auto-selects cloud o
 - **`list_rules`** — List all available rules with current config (preset, enabled/disabled status, severity). No source needed.
 - **`format`** — Pretty-print ABAP source via SAP ADT PrettyPrinter using the SAP system's global formatter settings. Returns formatted source text.
 - **`get_formatter_settings`** — Read SAP global PrettyPrinter settings (indentation + keyword style).
-- **`set_formatter_settings`** — Update SAP global PrettyPrinter settings. Provide at least one of `indentation` or `style`. Blocked in read-only mode.
+- **`set_formatter_settings`** — Update SAP global PrettyPrinter settings. Provide at least one of `indentation` or `style`. Requires `write` scope and `SAP_ALLOW_WRITES=true`.
 
 **System-Aware Presets:**
 
@@ -854,4 +854,4 @@ SAPManage(action="flp_create_tile", catalogId="ZARC1_SALES", tile={"id":"tile_sa
 SAPManage(action="flp_add_tile_to_group", groupId="ZARC1_SALES_GRP", catalogId="ZARC1_SALES", tileInstanceId="00O2TO3741QLWH4GV74AHMWQE")
 ```
 
-**Note:** The `probe`, `features`, and `cache_stats` actions are read-only operations that work in `--allow-writes` mode and require only `read` scope in HTTP auth mode. Mutating SAPManage actions require `write` scope and writable safety config.
+**Note:** The `probe`, `features`, and `cache_stats` actions are read operations that work without `--allow-writes` and require only `read` scope in HTTP auth mode. Mutating SAPManage actions require `write` scope and writable safety config.

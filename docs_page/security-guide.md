@@ -6,17 +6,17 @@ A consolidated security reference for ARC-1 operators. This guide covers hardeni
 
 ## 1. Security Architecture Overview
 
-ARC-1 enforces authorization at three stacked layers. All must allow an operation for it to succeed.
+ARC-1 enforces authorization at three stacked gates. All relevant gates must allow an operation for it to succeed.
 
 | Layer | What it checks | Controlled by |
 |-------|---------------|---------------|
-| **ARC-1 (Layer 1)** | Scopes from JWT + server safety config | ARC-1 administrator |
-| **BTP / IAS (Layer 2)** | XSUAA scopes and role collections (or IAS groups) assigned to users | BTP administrator via BTP Cockpit |
-| **SAP (Layer 3)** | SAP authorization objects (S_DEVELOP, S_ADT_RES, etc.) | SAP Basis / role admin |
+| **Server ceiling** | Positive opt-in flags such as `SAP_ALLOW_WRITES`, `SAP_ALLOW_FREE_SQL`, `SAP_DENY_ACTIONS` | ARC-1 administrator |
+| **User permission** | Scopes from XSUAA/OIDC JWTs or API-key profiles | BTP/IdP/ARC-1 administrator |
+| **SAP authorization** | SAP authorization objects (`S_DEVELOP`, `S_ADT_RES`, package auth, etc.) | SAP Basis / role admin |
 
-Checks are additive: scope check AND safety check AND SAP authorization must all pass. If any layer blocks, the operation fails. The server safety config acts as a hard ceiling — BTP role collections (XSUAA) or IAS group mappings determine which scopes a user receives, and per-user scopes can only restrict further, never expand beyond the server config. Layer 2 only applies when running on BTP with XSUAA or IAS authentication; for self-hosted OIDC deployments, scopes come directly from the JWT claims.
+Checks are additive: server ceiling AND user scope/profile AND SAP authorization must all pass. If any layer blocks, the operation fails. The server safety config acts as a hard ceiling - user scopes can only restrict further, never expand beyond server config.
 
-For the full two-layer model, scope definitions, and role assignment details, see [Authorization & Roles](authorization.md).
+For the full model, scope definitions, API-key profiles, and BTP role mapping, see [Authorization & Roles](authorization.md).
 
 ---
 
@@ -25,7 +25,7 @@ For the full two-layer model, scope definitions, and role assignment details, se
 | Scenario | Transport | MCP Client Auth | Recommended Guide |
 |----------|-----------|----------------|-------------------|
 | Local development (single user) | stdio | None | [Local Development](local-development.md) |
-| Shared server (single access level) | HTTP | Single API key | [API Key Setup](api-key-setup.md) |
+| Shared server (single access level) | HTTP | One `ARC1_API_KEYS` entry | [API Key Setup](api-key-setup.md) |
 | Team server (role-based access) | HTTP | Multiple API keys with profiles | [API Key Setup](api-key-setup.md) |
 | Enterprise (per-user identity) | HTTP | OIDC / JWT | [OAuth / JWT Setup](oauth-jwt-setup.md) |
 | Enterprise + SAP audit trail | HTTP | OIDC / JWT + Principal Propagation | [OAuth / JWT](oauth-jwt-setup.md) + [PP Setup](principal-propagation-setup.md) |
@@ -51,7 +51,7 @@ Verification checklist:
 
 - [ ] `SAP_OIDC_ISSUER` matches the `iss` claim in your tokens exactly (trailing slashes matter).
 - [ ] `SAP_OIDC_AUDIENCE` matches the `aud` claim in your tokens (decode a token at jwt.ms to verify).
-- [ ] The OIDC provider includes ARC-1 scopes (`read`, `write`, `data`, `sql`) in the `scope` or `scp` claim. Tokens without scope claims default to read-only access.
+- [ ] The OIDC provider includes ARC-1 scopes (`read`, `write`, `data`, `sql`, `transports`, `git`, `admin`) in the `scope` or `scp` claim. Tokens without scope claims default to read-only access.
 - [ ] The JWKS endpoint at `{issuer}/.well-known/openid-configuration` is reachable from the ARC-1 server.
 - [ ] TLS certificates on the issuer URL are valid (no self-signed certs without `--insecure`).
 
@@ -71,7 +71,7 @@ openssl rand -base64 32
 
 ### Per-Key Profiles
 
-Use `--api-keys` (not `--api-key`) to assign each key a profile with specific scopes and safety restrictions. This avoids giving all key holders the same access level.
+Use `--api-keys` to assign each key a profile with specific scopes and safety restrictions. The old single `--api-key` mode was removed because it made the access level ambiguous.
 
 ```bash
 arc1 --api-keys "$VIEWER_KEY:viewer,$DEV_KEY:developer,$SQL_KEY:developer-sql"
@@ -125,6 +125,8 @@ For HTTP-streamable deployments without XSUAA/OIDC, use `ARC1_API_KEYS` with per
 
 A user's effective safety is always the intersection of (1) the server ceiling, (2) their profile's partial safety, and (3) their JWT scopes. Per-user config can only tighten, never widen.
 
+Important: API-key `developer*` profiles are sandboxed to `$TMP` by design. If a key must write to transportable packages, use a tightly scoped `admin` key with a narrow server-side `SAP_ALLOWED_PACKAGES`, or use OIDC/XSUAA for per-user authorization.
+
 Full authorization model: [authorization.md](authorization.md).
 
 ---
@@ -137,16 +139,20 @@ ARC-1 scopes have transitive grants that operators should understand:
 |---------------|---------------------------|--------|
 | `write` | `write` + `read` | A developer who can write can also read |
 | `sql` | `sql` + `data` | A user who can run freestyle SQL can also preview tables |
+| `admin` | all 7 scopes | Emergency/operator profile, still limited by server flags |
 | `read` | `read` only | No transitive grants |
 | `data` | `data` only | No transitive grants |
+| `transports` | `transports` only | Specialized CTS scope; mutations also need `write` |
+| `git` | `git` only | Specialized Git scope; mutations also need `write` |
 
 This means:
 
 - Assigning `write` without `read` is unnecessary -- `write` already includes `read`.
 - Assigning `sql` without `data` is unnecessary -- `sql` already includes `data`.
 - Assigning `data` does NOT grant `read` (source code access) -- these are independent dimensions.
+- Assigning only `transports` or only `git` is not enough for mutations -- grant `write` as well.
 
-The scope model separates two dimensions: **objects** (source code: `read`/`write`) and **data** (table contents: `data`/`sql`). A developer may need full source code access without being able to query production data, and vice versa.
+The scope model separates several dimensions: **objects** (source code: `read`/`write`), **data** (table contents: `data`/`sql`), and **shared infrastructure** (CTS and Git: `transports`/`git`). A developer may need full source code access without being able to query production data, and vice versa.
 
 ---
 
@@ -171,7 +177,7 @@ Example nginx configuration is provided in the [API Key Setup](api-key-setup.md#
 
 ### XSUAA Role Collections
 
-Scopes are assigned to BTP users via role templates and role collections in the BTP Cockpit. The five scopes (`read`, `write`, `data`, `sql`, `admin`) map to role templates (MCPViewer, MCPDeveloper, MCPDataViewer, MCPSqlUser, MCPAdmin) that are combined into role collections for assignment.
+Scopes are assigned to BTP users via role templates and role collections in the BTP Cockpit. The seven scopes (`read`, `write`, `data`, `sql`, `transports`, `git`, `admin`) map to role templates (`MCPViewer`, `MCPDeveloper`, `MCPDataViewer`, `MCPSqlUser`, `MCPAdmin`) that are combined into role collections for assignment.
 
 ### Principal Propagation
 
@@ -190,7 +196,7 @@ For detailed setup instructions:
 - [XSUAA Setup](xsuaa-setup.md) -- role templates, role collections, xs-security.json
 - [Principal Propagation Setup](principal-propagation-setup.md) -- Cloud Connector, CERTRULE, mTLS
 - [BTP Destination Setup](btp-destination-setup.md) -- Destination Service configuration
-- [Authorization & Roles: XSUAA Roles](authorization.md#xsuaa-roles-btp-deployments) -- role-to-scope mapping
+- [Authorization & Roles: BTP XSUAA role templates](authorization.md#btp-xsuaa-role-templates) -- role-to-scope mapping
 
 ---
 
@@ -255,7 +261,7 @@ When ARC-1 runs with `--transport http-streamable`, the default bind address is 
 
 - Always place ARC-1 behind a TLS-terminating reverse proxy or load balancer.
 - Restrict network access using firewall rules, security groups, or VPN.
-- Without `--api-key`, `--api-keys`, or `--oidc-issuer`, the HTTP endpoint is open to anyone who can reach the port.
+- Without `--api-keys`, `--oidc-issuer`, or `--xsuaa-auth`, the HTTP endpoint is open to anyone who can reach the port.
 
 ### SAP Connection
 

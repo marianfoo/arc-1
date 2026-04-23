@@ -5239,6 +5239,8 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('data access permissions');
+      expect(result.content[0]?.text).toContain('SAP_ALLOW_FREE_SQL=true');
+      expect(result.content[0]?.text).toContain('SAP_ALLOW_DATA_PREVIEW=true');
     });
   });
 
