@@ -96,7 +96,8 @@ SAPManage(action="create_package", name="<package>", description="<description>"
 - Use `abap.char(1)` for boolean-like flags in TABL (not `abap.boolean`).
 - Every `abap.curr(...)` field needs `@Semantics.amount.currencyCode` above it.
 - Keep projection BDEF header as `projection;` (do not add `use etag` header lines).
-- If behavior-pool full-class writes fail with generic save errors, use quickfix-generated signatures + `SAPWrite(action="edit_method")` for method bodies.
+- Keep RAP preflight checks enabled (default) so deterministic TABL/BDEF/DDLX issues are blocked before activation churn. Only use `preflightBeforeWrite=false` as a local escape hatch.
+- If behavior-pool full-class writes fail with generic save errors, use `SAPWrite(action="scaffold_rap_handlers", ...)` first to derive/apply signatures, then use quickfix fallback + `SAPWrite(action="edit_method")` for method bodies.
 
 ## Step 2: Design the Data Model
 
@@ -699,7 +700,9 @@ If batch activation fails, activate sequentially in dependency order:
 9. Service definition
 
 If behavior pool activation fails because `METHODS ... FOR ...` signatures are missing:
-- Use `SAPDiagnose(action="quickfix", ...)` and `SAPDiagnose(action="apply_quickfix", ...)` when proposals are available.
+- Use `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="ZI_<entity>")` to list missing signatures.
+- If needed, rerun with `autoApply=true` to inject signatures into class declarations plus empty method stubs.
+- If signatures are still unresolved, use `SAPDiagnose(action="quickfix", ...)` and `SAPDiagnose(action="apply_quickfix", ...)` when proposals are available.
 - Fallback to ADT editor quick-fix generation, then patch method bodies with `SAPWrite(action="edit_method", ...)`.
 
 For any failing object, run syntax check to identify the issue:

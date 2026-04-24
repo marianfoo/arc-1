@@ -154,7 +154,8 @@ const SAPWRITE_DESC_ONPREM =
   'SKTD (Knowledge Transfer Documents, Markdown docs attached to an ABAP object): create requires refObjectType (parent ADT type+subtype, e.g., "DDLS/DF"). A KTD inherits the name of the object it documents — so "name" MUST equal the parent object name (one KTD per object; refObjectName defaults to name and cannot differ). Update takes Markdown in "source"; delete uses the ADT deletion framework (two-step check/delete). Follow creates/updates with SAPActivate(type="SKTD", name="..."). ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
-  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). Pass "objects" array with dependency order.';
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). Pass "objects" array with dependency order. ' +
+  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
 
 const SAPWRITE_DESC_BTP =
   'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
@@ -167,7 +168,8 @@ const SAPWRITE_DESC_BTP =
   'SKTD (Knowledge Transfer Documents, Markdown docs attached to an ABAP object): create requires refObjectType (parent ADT type+subtype, e.g., "DDLS/DF"). A KTD inherits the name of the object it documents — so "name" MUST equal the parent object name (one KTD per object; refObjectName defaults to name and cannot differ). Update takes Markdown in "source"; delete uses the ADT deletion framework (two-step check/delete). Follow creates/updates with SAPActivate(type="SKTD", name="..."). ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
-  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD).';
+  'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). ' +
+  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -514,9 +516,9 @@ export function getToolDefinitions(
         properties: {
           action: {
             type: 'string',
-            enum: ['create', 'update', 'delete', 'edit_method', 'batch_create'],
+            enum: ['create', 'update', 'delete', 'edit_method', 'batch_create', 'scaffold_rap_handlers'],
             description:
-              'Write action. edit_method: surgically replace a single method body (requires type=CLAS, method, and source params). batch_create: create and activate multiple objects in sequence (requires objects array)',
+              'Write action. edit_method: surgically replace a single method body (requires type=CLAS, method, and source params). batch_create: create and activate multiple objects in sequence (requires objects array). scaffold_rap_handlers: derive missing behavior-pool handler signatures from interface BDEF declarations and optionally inject declarations plus empty implementation stubs.',
           },
           type: {
             type: 'string',
@@ -530,6 +532,21 @@ export function getToolDefinitions(
           method: {
             type: 'string',
             description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',
+          },
+          bdefName: {
+            type: 'string',
+            description:
+              'For scaffold_rap_handlers action: interface BDEF name used to derive required handler signatures (e.g., ZI_TRAVELREQ). The BDEF is parsed to find every action/determination/validation/authorization that must exist in the behavior pool.',
+          },
+          autoApply: {
+            type: 'boolean',
+            description:
+              'For scaffold_rap_handlers: when true, missing METHODS signatures are inserted into matching lhc_* class definitions, empty METHOD stubs are inserted into matching implementation blocks where possible, and the class source is written back under a single lock. When false (default), returns a JSON report of required vs. missing signatures without modifying the class — use this first to preview, then re-run with autoApply=true to commit.',
+          },
+          targetAlias: {
+            type: 'string',
+            description:
+              'For scaffold_rap_handlers: optional RAP entity alias filter (e.g., Travel, Segment) to scaffold only one handler class. When omitted, all entities declared in the BDEF are scaffolded. Case-insensitive.',
           },
           description: {
             type: 'string',
@@ -603,7 +620,12 @@ export function getToolDefinitions(
           lintBeforeWrite: {
             type: 'boolean',
             description:
-              'Override server lint-before-write setting for this call. Set false to skip pre-write lint validation. Lint applies to ABAP types (PROG, CLAS, INTF, FUNC) and CDS views (DDLS). BDEF/SRVD/SRVB/DDLX/TABL are skipped (not supported by offline linter).',
+              'Override server lint-before-write setting for this call. Set false to skip pre-write lint validation. Lint applies to ABAP types (PROG, CLAS, INTF, FUNC) and CDS views (DDLS). BDEF/SRVD/SRVB/DDLX/TABL are skipped by offline linter; RAP preflight may still catch deterministic issues for those types.',
+          },
+          preflightBeforeWrite: {
+            type: 'boolean',
+            description:
+              'Enable/disable deterministic RAP preflight checks for this call (default: true). Useful for TABL/BDEF/DDLX static rules (e.g., curr/quan semantics, invalid BDEF enums, unsupported DDLX annotation scope on on-prem 7.5x).',
           },
           refObjectType: {
             type: 'string',

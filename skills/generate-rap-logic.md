@@ -116,11 +116,13 @@ If the user provided a natural language description, map it to the appropriate m
 
 If the BDEF declares action/determination/validation handlers that do not exist in the class definition:
 
-1. Try MCP quick-fix flow first:
+1. Run `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="<bdef_name>")` to list missing signatures.
+2. If signatures are missing, rerun with `autoApply=true` to inject declarations plus empty method stubs into class sections when possible.
+3. If unresolved, try MCP quick-fix flow:
    - `SAPDiagnose(action="quickfix", ...)`
    - `SAPDiagnose(action="apply_quickfix", ...)`
-2. If no suitable proposal is available, use ADT quick-fix to generate the missing `METHODS ... FOR ...` signature.
-3. Re-read method list with `SAPRead(type="CLAS", name="<bp_class>", method="*")` before writing bodies.
+4. If still unresolved, use ADT quick-fix to generate the missing `METHODS ... FOR ...` signature.
+5. Re-read method list with `SAPRead(type="CLAS", name="<bp_class>", method="*")` before writing bodies.
 
 ## Step 3: Research RAP Patterns
 
@@ -268,7 +270,7 @@ If you want the generated method body to follow SAP's formatter settings before 
 SAPLint(action="format", source="<generated_method_code>", name="<bp_class>")
 ```
 
-Before calling `edit_method`, confirm the target method exists in `SAPRead(..., method="*")`. If it does not exist yet, generate the signature first via quick-fix flow (`quickfix` + `apply_quickfix`) or ADT quick-fix fallback.
+Before calling `edit_method`, confirm the target method exists in `SAPRead(..., method="*")`. If it does not exist yet, run `scaffold_rap_handlers` first, then quick-fix flow (`quickfix` + `apply_quickfix`) or ADT quick-fix fallback.
 
 Write each method implementation using method-level surgery:
 
@@ -523,7 +525,7 @@ ENDMETHOD.
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Method not found in behavior pool | Class name in BDEF doesn't match actual class | Check `implementation in class` in BDEF source, verify class exists |
-| Missing `METHODS ... FOR ...` handler signature | BDEF declaration exists but class signature not generated yet | Run `SAPDiagnose(action="quickfix")` + `apply_quickfix` when available, or use ADT quick-fix, then retry `edit_method` |
+| Missing `METHODS ... FOR ...` handler signature | BDEF declaration exists but class signature not generated yet | Run `SAPWrite(action="scaffold_rap_handlers", ...)` first (optionally `autoApply=true`), then `SAPDiagnose(action="quickfix")` + `apply_quickfix` or ADT quick-fix, then retry `edit_method` |
 | Syntax error: `<entity>` unknown in `READ ENTITIES` | Wrong entity name or alias | Use the exact alias from the BDEF `define behavior for ... alias <Alias>` |
 | Syntax error: field `<Field>` unknown | Field alias doesn't match CDS view | Check CDS view field aliases — BDEF uses CDS aliases, not table field names |
 | Activation fails | BDEF and class are incompatible | Activate BDEF and class together: `SAPActivate(objects=[...])` |
@@ -531,7 +533,7 @@ ENDMETHOD.
 | `IN LOCAL MODE` missing | Missing clause causes authorization check | Always use `IN LOCAL MODE` for internal reads/writes within the behavior pool |
 | `%tky` not available | Method signature doesn't provide transactional key | Check method signature — determinations use `keys`, validations use `keys` |
 | Runtime error on `MODIFY ENTITIES` | Trying to modify read-only fields | Don't modify fields marked `field ( readonly )` in BDEF |
-| Generic save error `[?/011]` on full class write | Behavior-pool full-class update path is unstable on some systems | Keep class signature generated via quickfix, then patch method bodies via `edit_method` only |
+| Generic save error `[?/011]` on full class write | Behavior-pool full-class update path is unstable on some systems | Use `scaffold_rap_handlers` + quickfix path for signatures, then patch method bodies via `edit_method` only |
 
 ## Notes
 

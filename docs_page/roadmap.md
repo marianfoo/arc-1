@@ -115,6 +115,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 |----|---------|-----------|----------|
 | [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
 | [FEAT-55](#feat-55) | System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose (PR #174) | 2026-04-21 | Features |
+| — | RAP authoring hardening (`SAPWrite` deterministic RAP preflight, `scaffold_rap_handlers`, per-object batch activation statuses) | 2026-04-21 | Features |
 | [FEAT-56](#feat-56) | ADT Type-Availability Probe (diagnostic) (PR #163) | 2026-04-20 | Features |
 | [FEAT-58](#feat-58) | DTEL v2→v1 Content-Type Fallback + SICF-aware Error Hints (PR #169) | 2026-04-20 | Features |
 | — | SAPManage Scope Split + Data Preview Diagnostics (PR #171) | 2026-04-19 | Security |

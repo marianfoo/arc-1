@@ -724,7 +724,9 @@ At this point the service is previewable and stable.
 
 9. Add actions/determinations/validations to interface BDEF and activate.
 10. Generate missing behavior handler signatures:
-   - First preference: `SAPDiagnose(action="quickfix", ...)` + `SAPDiagnose(action="apply_quickfix", ...)` if proposals are available.
+   - First preference: `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="ZBP_I_<entity>", bdefName="ZI_<entity>")` to list missing signatures.
+   - Then rerun with `autoApply=true` to inject declarations plus empty implementation stubs into class sections (`main`, `definitions`, `implementations`) when possible.
+   - Next fallback: `SAPDiagnose(action="quickfix", ...)` + `SAPDiagnose(action="apply_quickfix", ...)` if proposals are available.
    - Fallback: ADT quick-fix in editor if no MCP quick-fix proposal is exposed.
 11. Implement method bodies with `SAPWrite(action="edit_method", ...)` (avoid full-class rewrites when behavior pools are unstable).
 12. Add `strict ( 2 )` and authorization handlers only after signatures and method bodies are active.
@@ -950,7 +952,7 @@ Activate the **child view entity first**, then the root. The root's `composition
 
 ### Lint and non-ABAP types
 
-Pre-write lint runs by default for ABAP sources and DDLS. BDEF/SRVD/SRVB/DDLX/TABL/DOMA/DTEL still need activation or preflight validation for most semantic checks. If lint blocks a known-valid case, use `lintBeforeWrite: false` for that specific write and keep the override local.
+Pre-write lint runs by default for ABAP sources and DDLS. BDEF/SRVD/SRVB/DDLX/TABL/DOMA/DTEL still need activation or RAP preflight validation for most semantic checks. Keep RAP preflight enabled by default; only use `preflightBeforeWrite: false` for narrowly-scoped recovery when you understand the specific rule being bypassed. If lint blocks a known-valid case, use `lintBeforeWrite: false` for that specific write and keep the override local.
 
 ---
 
@@ -993,7 +995,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 | `not a suitable draft persistency ... there is no "X" field` | Hand-written draft table column naming mismatch | Generate draft table via quick-fix (preferred), or follow CDS-name derivation exactly. |
 | `Annotation 'UI.headerInfo.X' used at wrong position` in DDLX | Unsupported annotation scope in DDLX on 7.5x | Move `@UI.headerInfo`, `@Search.searchable`, `@ObjectModel.*` to projection DDLS source. |
 | `Multiple entries with same name 'X' not allowed` in DDLX | Duplicate annotation blocks on same field | Consolidate field annotations into one block. |
-| `[?/011]` while updating behavior pool class | Full-class behavior-pool write path unstable for `METHODS ... FOR ...` | Keep class minimal, generate signatures via quick-fix, then patch bodies with `SAPWrite(action="edit_method", ...)`. |
+| `[?/011]` while updating behavior pool class | Full-class behavior-pool write path unstable for `METHODS ... FOR ...` | Use `SAPWrite(action="scaffold_rap_handlers", ...)` first (optionally `autoApply=true`), then quick-fix fallback, then patch bodies with `SAPWrite(action="edit_method", ...)`. |
 
 ---
 

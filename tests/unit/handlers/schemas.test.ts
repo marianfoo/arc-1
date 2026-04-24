@@ -359,6 +359,20 @@ describe('SAPWriteSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts preflightBeforeWrite override', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'update',
+      type: 'TABL',
+      name: 'ZTABL_TEST',
+      source: 'define table ztabl_test { key client : abap.clnt not null; }',
+      preflightBeforeWrite: false,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.preflightBeforeWrite).toBe(false);
+    }
+  });
+
   it('accepts TABL for source-based writes', () => {
     const result = SAPWriteSchema.safeParse({
       action: 'create',
@@ -388,6 +402,21 @@ describe('SAPWriteSchema', () => {
       ],
     });
     expect(result.success).toBe(true);
+  });
+
+  it('accepts scaffold_rap_handlers action fields', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'scaffold_rap_handlers',
+      type: 'CLAS',
+      name: 'ZBP_I_TRAVELREQ',
+      bdefName: 'ZI_TRAVELREQ',
+      autoApply: 'true',
+      targetAlias: 'Travel',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.autoApply).toBe(true);
+    }
   });
 
   it('validates objects array structure', () => {

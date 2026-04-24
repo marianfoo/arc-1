@@ -394,7 +394,7 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   if ((typeId === 'ExceptionResourceCreationFailure' || resourceExistsPattern) && objectExistsPattern) {
     return {
       category: 'object-exists',
-      hint: 'An object with this name already exists. Use SAPRead to inspect the existing object, or choose a different name.',
+      hint: 'An object with this name already exists. Recovery path: rerun the same payload with SAPWrite(action="update") to overwrite source/content, instead of retrying create.',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }

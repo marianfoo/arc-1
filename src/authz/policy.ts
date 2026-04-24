@@ -50,6 +50,13 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAPWrite.delete': { scope: 'write', opType: OperationType.Delete },
   'SAPWrite.edit_method': { scope: 'write', opType: OperationType.Update },
   'SAPWrite.batch_create': { scope: 'write', opType: OperationType.Create },
+  // scaffold_rap_handlers updates an existing behavior-pool CLAS (writes method
+  // declarations into one or more includes). It is a RAP-feature-specific
+  // action — explicit entry lets admins target it with SAP_DENY_ACTIONS
+  // (e.g. "SAPWrite.scaffold_rap_handlers") to block it while still allowing
+  // plain create/update. The featureGate tag also keeps this action aligned
+  // with the SAPTransport/SAPGit/FLP pattern for future enforcement.
+  'SAPWrite.scaffold_rap_handlers': { scope: 'write', opType: OperationType.Update, featureGate: 'rap' },
 
   // ── SAPActivate ──────────────────────────────────────────────────
   SAPActivate: { scope: 'write', opType: OperationType.Activate },
