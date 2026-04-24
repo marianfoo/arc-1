@@ -125,8 +125,7 @@ import {
   switchBranch as gctsSwitchBranch,
 } from '../adt/gcts.js';
 import {
-  applyRapHandlerImplementationStubs,
-  applyRapHandlerSignatures,
+  applyRapHandlerScaffold,
   extractRapHandlerRequirements,
   findMissingRapHandlerImplementationStubs,
   findMissingRapHandlerRequirements,
@@ -2564,8 +2563,8 @@ async function handleSAPWrite(
       //   the class for every `lhc_<alias>` local handler class and make
       //   sure it declares a METHOD for every action / determination /
       //   validation / authorization master the BDEF requires. When autoApply
-      //   is true, the missing METHODS signatures are inserted directly and
-      //   the class is saved.
+      //   is true, missing METHODS signatures plus empty METHOD stubs are
+      //   inserted directly and the class is saved.
       //
       // Why this exists:
       //   Without it, the LLM agent trying to author a RAP behavior pool has
@@ -2650,105 +2649,30 @@ async function handleSAPWrite(
         return textResult(JSON.stringify({ ...summary, applied: false }, null, 2));
       }
 
-      // Apply fall-through: try main first, then feed anything `applyRap...`
-      // couldn't place (handler class not present in that include) into the
-      // next include. The `pending` list carries the un-placed requirements
-      // forward; anything still pending after implementations genuinely has
-      // no matching `lhc_<alias>` class anywhere in the pool and will be
-      // reported as `unresolved` in the response for the user to fix.
-      const applyMain = applyRapHandlerSignatures(classMainSource, missing);
-      let pending = applyMain.skipped.map((entry) => entry.requirement);
-
-      let applyDefinitions:
-        | ReturnType<typeof applyRapHandlerSignatures>
-        | {
-            updatedSource: string;
-            inserted: [];
-            skipped: typeof applyMain.skipped;
-            changed: false;
-          }
-        | undefined;
-      if (pending.length > 0 && classDefinitionsSource) {
-        applyDefinitions = applyRapHandlerSignatures(classDefinitionsSource, pending);
-        pending = applyDefinitions.skipped.map((entry) => entry.requirement);
-      }
-
-      let applyImplementations:
-        | ReturnType<typeof applyRapHandlerSignatures>
-        | {
-            updatedSource: string;
-            inserted: [];
-            skipped: typeof applyMain.skipped;
-            changed: false;
-          }
-        | undefined;
-      if (pending.length > 0 && classImplementationsSource) {
-        applyImplementations = applyRapHandlerSignatures(classImplementationsSource, pending);
-        pending = applyImplementations.skipped.map((entry) => entry.requirement);
-      }
-
-      const unresolvedDeclarationKeys = new Set(
-        pending.map(
-          (req) =>
-            `${req.targetHandlerClass.toLowerCase()}|${req.kind}|${req.methodName.toLowerCase()}|${req.entityAlias.toLowerCase()}`,
-        ),
+      // Pure RAP transformation planning lives in rap-handlers.ts. Keep this
+      // handler focused on MCP/ADT concerns: safety, linting, locking, writes.
+      const scaffoldPlan = applyRapHandlerScaffold(
+        {
+          main: classMainSource,
+          definitions: classDefinitionsSource || undefined,
+          implementations: classImplementationsSource || undefined,
+        },
+        missing,
+        missingImplementationStubs,
       );
-      const stubRequirements = missingImplementationStubs.filter(
-        (req) =>
-          !unresolvedDeclarationKeys.has(
-            `${req.targetHandlerClass.toLowerCase()}|${req.kind}|${req.methodName.toLowerCase()}|${req.entityAlias.toLowerCase()}`,
-          ),
-      );
-      const definitionLookupSource = [
-        applyMain.updatedSource,
-        applyDefinitions?.updatedSource ?? classDefinitionsSource,
-        applyImplementations?.updatedSource ?? classImplementationsSource,
-      ]
-        .filter(Boolean)
-        .join('\n\n');
 
-      const stubMain = applyRapHandlerImplementationStubs(applyMain.updatedSource, stubRequirements, {
-        createImplementationBlocks: true,
-        definitionSource: definitionLookupSource,
-      });
-      const stubDefinitions = classDefinitionsSource
-        ? applyRapHandlerImplementationStubs(
-            applyDefinitions?.updatedSource ?? classDefinitionsSource,
-            stubRequirements,
-            { definitionSource: definitionLookupSource },
-          )
-        : undefined;
-      const stubImplementations = classImplementationsSource
-        ? applyRapHandlerImplementationStubs(
-            applyImplementations?.updatedSource ?? classImplementationsSource,
-            stubRequirements,
-            { createImplementationBlocks: true, definitionSource: definitionLookupSource },
-          )
-        : undefined;
-
-      const finalMainSource = stubMain.updatedSource;
-      const finalDefinitionsSource = stubDefinitions?.updatedSource ?? applyDefinitions?.updatedSource;
-      const finalImplementationsSource = stubImplementations?.updatedSource ?? applyImplementations?.updatedSource;
-      const changedMain = applyMain.changed || stubMain.changed;
-      const changedDefinitions = (applyDefinitions?.changed ?? false) || (stubDefinitions?.changed ?? false);
-      const changedImplementations =
-        (applyImplementations?.changed ?? false) || (stubImplementations?.changed ?? false);
-      if (!changedMain && !changedDefinitions && !changedImplementations) {
+      if (scaffoldPlan.changedSections.length === 0) {
         return textResult(
           JSON.stringify(
             {
               ...summary,
               applied: false,
               applyResult: {
-                main: applyMain,
-                definitions: applyDefinitions,
-                implementations: applyImplementations,
-                implementationStubs: {
-                  main: stubMain,
-                  definitions: stubDefinitions,
-                  implementations: stubImplementations,
-                },
-                unresolved: pending,
+                main: scaffoldPlan.signatures.main,
+                definitions: scaffoldPlan.signatures.definitions,
+                implementations: scaffoldPlan.signatures.implementations,
+                implementationStubs: scaffoldPlan.implementationStubs,
+                unresolved: scaffoldPlan.unresolved,
               },
             },
             null,
@@ -2757,23 +2681,27 @@ async function handleSAPWrite(
         );
       }
 
+      const finalMainSource = scaffoldPlan.sections.main;
+      const finalDefinitionsSource = scaffoldPlan.sections.definitions;
+      const finalImplementationsSource = scaffoldPlan.sections.implementations;
+      const { changed } = scaffoldPlan;
+
       // Run lint for every section we are about to update; block before any write to avoid partial state.
       let lintWarningsMain: PreWriteLintResult | undefined;
-      if (changedMain) {
+      if (changed.main) {
         lintWarningsMain = runPreWriteLint(finalMainSource, type, name, config, lintOverride);
         if (lintWarningsMain.blocked) return lintWarningsMain.result!;
       }
       let lintWarningsDefinitions: PreWriteLintResult | undefined;
-      if (changedDefinitions && finalDefinitionsSource) {
+      if (changed.definitions && finalDefinitionsSource) {
         lintWarningsDefinitions = runPreWriteLint(finalDefinitionsSource, type, name, config, lintOverride);
         if (lintWarningsDefinitions.blocked) return lintWarningsDefinitions.result!;
       }
       let lintWarningsImplementations: PreWriteLintResult | undefined;
-      if (changedImplementations && finalImplementationsSource) {
+      if (changed.implementations && finalImplementationsSource) {
         lintWarningsImplementations = runPreWriteLint(finalImplementationsSource, type, name, config, lintOverride);
         if (lintWarningsImplementations.blocked) return lintWarningsImplementations.result!;
       }
-
       // All modified includes share one lock so we never end up in a partial-state
       // (e.g. main written, implementations errored → handler class declares but
       // doesn't implement methods → class cannot activate). The lock is taken once
@@ -2783,10 +2711,10 @@ async function handleSAPWrite(
         const lock = await lockObject(session, client.safety, objectUrl);
         const effectiveTransport = transport ?? (lock.corrNr || undefined);
         try {
-          if (changedMain) {
+          if (changed.main) {
             await updateSource(session, client.safety, srcUrl, finalMainSource, lock.lockHandle, effectiveTransport);
           }
-          if (changedDefinitions && finalDefinitionsSource) {
+          if (changed.definitions && finalDefinitionsSource) {
             await updateSource(
               session,
               client.safety,
@@ -2796,7 +2724,7 @@ async function handleSAPWrite(
               effectiveTransport,
             );
           }
-          if (changedImplementations && finalImplementationsSource) {
+          if (changed.implementations && finalImplementationsSource) {
             await updateSource(
               session,
               client.safety,
@@ -2819,22 +2747,9 @@ async function handleSAPWrite(
       });
       cachingLayer?.invalidate(type, name);
 
-      const insertedCount =
-        applyMain.inserted.length +
-        (applyDefinitions?.inserted.length ?? 0) +
-        (applyImplementations?.inserted.length ?? 0);
-      const implementationStubCount =
-        stubMain.inserted.length +
-        (stubDefinitions?.inserted.length ?? 0) +
-        (stubImplementations?.inserted.length ?? 0);
-      const updatedSections = [
-        changedMain ? 'main' : undefined,
-        changedDefinitions ? 'definitions' : undefined,
-        changedImplementations ? 'implementations' : undefined,
-      ].filter(Boolean);
       const msg =
-        `Scaffolded ${insertedCount} RAP handler signature(s) and ${implementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
-        `Updated section(s): ${updatedSections.join(', ')}.`;
+        `Scaffolded ${scaffoldPlan.insertedSignatureCount} RAP handler signature(s) and ${scaffoldPlan.insertedImplementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
+        `Updated section(s): ${scaffoldPlan.changedSections.join(', ')}.`;
       const warnings = mergePreWriteWarnings(
         lintWarningsMain?.warnings,
         lintWarningsDefinitions?.warnings,
@@ -2845,15 +2760,11 @@ async function handleSAPWrite(
           ...summary,
           applied: true,
           applyResult: {
-            main: applyMain,
-            definitions: applyDefinitions,
-            implementations: applyImplementations,
-            implementationStubs: {
-              main: stubMain,
-              definitions: stubDefinitions,
-              implementations: stubImplementations,
-            },
-            unresolved: pending,
+            main: scaffoldPlan.signatures.main,
+            definitions: scaffoldPlan.signatures.definitions,
+            implementations: scaffoldPlan.signatures.implementations,
+            implementationStubs: scaffoldPlan.implementationStubs,
+            unresolved: scaffoldPlan.unresolved,
           },
         },
         null,

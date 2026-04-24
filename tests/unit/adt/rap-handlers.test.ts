@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyRapHandlerImplementationStubs,
+  applyRapHandlerScaffold,
   applyRapHandlerSignatures,
   extractRapHandlerRequirements,
   findMissingRapHandlerImplementationStubs,
@@ -412,5 +413,38 @@ ENDCLASS.`;
 
     expect(result.changed).toBe(false);
     expect(result.updatedSource.match(/METHOD submitforapproval/g)).toHaveLength(1);
+  });
+});
+
+describe('applyRapHandlerScaffold', () => {
+  it('plans signatures and stubs across behavior-pool includes without ADT I/O', () => {
+    const bdef = `define behavior for zi_travel alias travel
+{
+  action acceptTravel result [1] $self;
+  action RecalculateTotalCost result [1] $self;
+}`;
+    const definitions = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS set_status_accepted FOR MODIFY
+      IMPORTING keys FOR ACTION travel~acceptTravel RESULT result.
+ENDCLASS.`;
+    const implementations = `CLASS lhc_travel IMPLEMENTATION.
+  METHOD set_status_accepted.
+  ENDMETHOD.
+ENDCLASS.`;
+    const requirements = extractRapHandlerRequirements(bdef);
+    const missing = findMissingRapHandlerRequirements(requirements, `${definitions}\n${implementations}`);
+    const missingStubs = findMissingRapHandlerImplementationStubs(requirements, `${definitions}\n${implementations}`);
+
+    const plan = applyRapHandlerScaffold({ main: '', definitions, implementations }, missing, missingStubs);
+
+    expect(plan.changed.definitions).toBe(true);
+    expect(plan.changed.implementations).toBe(true);
+    expect(plan.insertedSignatureCount).toBe(1);
+    expect(plan.insertedImplementationStubCount).toBe(1);
+    expect(plan.sections.definitions).toContain('METHODS recalculatetotalcost FOR MODIFY');
+    expect(plan.sections.implementations).toContain('METHOD recalculatetotalcost.');
+    expect(plan.sections.implementations).not.toContain('METHOD accepttravel.');
+    expect(plan.unresolved).toEqual([]);
   });
 });

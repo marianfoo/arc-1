@@ -16,6 +16,7 @@
  *   2. findMissingRapHandlerRequirements — diff required vs. present in class
  *   3. applyRapHandlerSignatures         — insert the missing METHODS lines
  *   4. applyRapHandlerImplementationStubs — insert empty METHOD stubs
+ *   5. applyRapHandlerScaffold           — plan multi-include auto-apply
  *
  * The scaffolder writes declarations plus empty implementations only.
  * Business logic remains the developer's responsibility and can be filled
@@ -56,6 +57,31 @@ export interface RapHandlerApplyResult {
   changed: boolean;
 }
 
+export type RapHandlerSectionName = 'main' | 'definitions' | 'implementations';
+
+export interface RapHandlerSourceSections {
+  main: string;
+  definitions?: string;
+  implementations?: string;
+}
+
+export interface RapHandlerSectionApplyResults {
+  main: RapHandlerApplyResult;
+  definitions?: RapHandlerApplyResult;
+  implementations?: RapHandlerApplyResult;
+}
+
+export interface RapHandlerScaffoldPlan {
+  sections: RapHandlerSourceSections;
+  signatures: RapHandlerSectionApplyResults;
+  implementationStubs: RapHandlerSectionApplyResults;
+  unresolved: RapHandlerRequirement[];
+  changed: Record<RapHandlerSectionName, boolean>;
+  changedSections: RapHandlerSectionName[];
+  insertedSignatureCount: number;
+  insertedImplementationStubCount: number;
+}
+
 interface RapBehaviorBlock {
   entityName: string;
   alias: string;
@@ -76,22 +102,12 @@ interface ClassImplementationRange {
   end: number;
 }
 
-function requirementKey(
-  targetHandlerClass: string,
-  kind: RapHandlerKind,
-  methodName: string,
-  entityAlias: string,
-): string {
+function bindingKey(targetHandlerClass: string, kind: RapHandlerKind, methodName: string, entityAlias: string): string {
   return [targetHandlerClass.toLowerCase(), kind, normalizeMethodName(methodName), entityAlias.toLowerCase()].join('|');
 }
 
-function keyForRequirement(requirement: RapHandlerRequirement): string {
-  return requirementKey(
-    requirement.targetHandlerClass,
-    requirement.kind,
-    requirement.methodName,
-    requirement.entityAlias,
-  );
+export function rapHandlerRequirementKey(requirement: RapHandlerRequirement): string {
+  return bindingKey(requirement.targetHandlerClass, requirement.kind, requirement.methodName, requirement.entityAlias);
 }
 
 function countChar(value: string, char: string): number {
@@ -120,6 +136,25 @@ function collectStatement(lines: string[], startIdx: number): string {
     statement += ` ${next}`;
     if (next.includes(';')) break;
     if (j - startIdx > 20) break;
+  }
+  return statement;
+}
+
+/**
+ * Collect a multi-line ABAP statement terminated by `.`.
+ *
+ * Behavior handler declarations are often split across lines:
+ *   METHODS set_status_accepted FOR MODIFY
+ *     IMPORTING keys FOR ACTION travel~acceptTravel RESULT result.
+ * Binding parsing needs the continuation lines; otherwise semantic method
+ * names cannot be mapped back to the BDEF action/determination/validation.
+ */
+function collectAbapStatement(lines: string[], startIdx: number, endIdx: number, maxContinuation = 10): string {
+  let statement = lines[startIdx] ?? '';
+  for (let j = startIdx + 1; j <= endIdx && j < startIdx + maxContinuation; j += 1) {
+    const cont = lines[j] ?? '';
+    statement += ` ${cont}`;
+    if (/\.\s*$/.test(cont.trim())) break;
   }
   return statement;
 }
@@ -222,7 +257,7 @@ function parseBehaviorBlocks(source: string): RapBehaviorBlock[] {
 }
 
 function pushRequirement(out: RapHandlerRequirement[], requirement: RapHandlerRequirement, seen: Set<string>): void {
-  const key = keyForRequirement(requirement);
+  const key = rapHandlerRequirementKey(requirement);
   if (seen.has(key)) return;
   seen.add(key);
   out.push(requirement);
@@ -487,6 +522,47 @@ function parseClassImplementationMethods(source: string): Map<string, Set<string
   return out;
 }
 
+function parseHandlerDeclarationBinding(
+  statement: string,
+): { kind: RapHandlerKind; methodName: string; entityAlias: string } | undefined {
+  const actionBinding = statement.match(/\bFOR\s+ACTION\s+([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i);
+  if (actionBinding?.[1] && actionBinding[2]) {
+    return { kind: 'action', entityAlias: actionBinding[1], methodName: actionBinding[2] };
+  }
+
+  const entityBinding = statement.match(
+    /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i,
+  );
+  if (entityBinding?.[1] && entityBinding[2]) {
+    if (/\bFOR\s+DETERMINE\s+ON\b/i.test(statement)) {
+      return { kind: 'determination', entityAlias: entityBinding[1], methodName: entityBinding[2] };
+    }
+    if (/\bFOR\s+VALIDATE\s+ON\b/i.test(statement)) {
+      return { kind: 'validation', entityAlias: entityBinding[1], methodName: entityBinding[2] };
+    }
+  }
+
+  const authBinding = statement.match(/\bAUTHORIZATION\b.*\bFOR\s+([A-Za-z_]\w*)\s+RESULT\b/i);
+  if (authBinding?.[1]) {
+    if (/\bFOR\s+INSTANCE\s+AUTHORIZATION\b/i.test(statement)) {
+      return {
+        kind: 'instance_authorization',
+        entityAlias: authBinding[1],
+        methodName: 'get_instance_authorizations',
+      };
+    }
+    if (/\bFOR\s+GLOBAL\s+AUTHORIZATION\b/i.test(statement)) {
+      return {
+        kind: 'global_authorization',
+        entityAlias: authBinding[1],
+        methodName: 'get_global_authorizations',
+      };
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Map BDEF requirement keys to the concrete ABAP method name used in the
  * handler declaration.
@@ -510,52 +586,14 @@ function parseClassDefinitionHandlerBindings(source: string): Map<string, string
       const match = line.match(/^\s*(?:CLASS-)?METHODS\s+([A-Za-z_~][\w~]*)/i);
       if (!match?.[1]) continue;
       const declaredMethodName = normalizeMethodName(match[1]);
+      const statement = collectAbapStatement(lines, i, range.end);
 
-      let statement = line;
-      for (let j = i + 1; j <= range.end && j < i + 10; j += 1) {
-        const cont = lines[j] ?? '';
-        statement += ` ${cont}`;
-        if (/\.\s*$/.test(cont.trim())) break;
-      }
-
-      const actionBinding = statement.match(/\bFOR\s+ACTION\s+([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i);
-      if (actionBinding?.[1] && actionBinding[2]) {
-        out.set(requirementKey(targetHandlerClass, 'action', actionBinding[2], actionBinding[1]), declaredMethodName);
-        continue;
-      }
-
-      const entityBinding = statement.match(
-        /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i,
-      );
-      if (entityBinding?.[1] && entityBinding[2]) {
-        if (/\bFOR\s+DETERMINE\s+ON\b/i.test(statement)) {
-          out.set(
-            requirementKey(targetHandlerClass, 'determination', entityBinding[2], entityBinding[1]),
-            declaredMethodName,
-          );
-        } else if (/\bFOR\s+VALIDATE\s+ON\b/i.test(statement)) {
-          out.set(
-            requirementKey(targetHandlerClass, 'validation', entityBinding[2], entityBinding[1]),
-            declaredMethodName,
-          );
-        }
-        continue;
-      }
-
-      const authBinding = statement.match(/\bAUTHORIZATION\b.*\bFOR\s+([A-Za-z_]\w*)\s+RESULT\b/i);
-      if (authBinding?.[1]) {
-        if (/\bFOR\s+INSTANCE\s+AUTHORIZATION\b/i.test(statement)) {
-          out.set(
-            requirementKey(targetHandlerClass, 'instance_authorization', 'get_instance_authorizations', authBinding[1]),
-            declaredMethodName,
-          );
-        } else if (/\bFOR\s+GLOBAL\s+AUTHORIZATION\b/i.test(statement)) {
-          out.set(
-            requirementKey(targetHandlerClass, 'global_authorization', 'get_global_authorizations', authBinding[1]),
-            declaredMethodName,
-          );
-        }
-      }
+      const binding = parseHandlerDeclarationBinding(statement);
+      if (binding)
+        out.set(
+          bindingKey(targetHandlerClass, binding.kind, binding.methodName, binding.entityAlias),
+          declaredMethodName,
+        );
     }
   }
 
@@ -602,28 +640,13 @@ export function parseClassDefinitionMethods(source: string): Map<string, Set<str
 
       // Collect the full multi-line METHODS statement so FOR-clause patterns
       // (which usually sit on a continuation line) are visible to the regex.
-      let statement = line;
-      for (let j = i + 1; j <= range.end && j < i + 10; j += 1) {
-        const cont = lines[j] ?? '';
-        statement += ` ${cont}`;
-        if (/\.\s*$/.test(cont.trim())) break;
-      }
+      const statement = collectAbapStatement(lines, i, range.end);
 
-      // `FOR ACTION alias~name` — action bindings.
-      const actionBinding = statement.match(/\bFOR\s+ACTION\s+[A-Za-z_]\w*\s*~\s*([A-Za-z_]\w*)/i);
-      if (actionBinding?.[1]) methods.add(normalizeMethodName(actionBinding[1]));
-
-      // `FOR alias~name` (no ACTION keyword) — determinations/validations.
-      // Exclude the ACTION case (handled above) and FOR MODIFY / FOR READ etc.
-      const entityBinding = statement.match(
-        /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)[A-Za-z_]\w*\s*~\s*([A-Za-z_]\w*)/i,
-      );
-      if (entityBinding?.[1]) methods.add(normalizeMethodName(entityBinding[1]));
-
-      // Authorization handlers have no alias~name binding — the BDEF side
-      // uses the fixed method names get_instance_authorizations /
-      // get_global_authorizations, so a literal method-name match already
-      // covers them (added at the top of this loop).
+      // Also index the BDEF-side binding key. This is different from the
+      // ABAP method name when developers use semantic names such as
+      // `set_status_accepted FOR ACTION travel~acceptTravel`.
+      const binding = parseHandlerDeclarationBinding(statement);
+      if (binding) methods.add(normalizeMethodName(binding.methodName));
     }
 
     out.set(key, methods);
@@ -668,7 +691,7 @@ export function findMissingRapHandlerImplementationStubs(
     const methods = classMethods.get(req.targetHandlerClass.toLowerCase());
     if (!methods) return true;
     const implementationMethodName =
-      declaredMethodByRequirement.get(keyForRequirement(req)) ?? normalizeMethodName(req.methodName);
+      declaredMethodByRequirement.get(rapHandlerRequirementKey(req)) ?? normalizeMethodName(req.methodName);
     return !methods.has(implementationMethodName);
   });
 }
@@ -804,7 +827,7 @@ export function applyRapHandlerImplementationStubs(
     const toInsert: Array<{ requirement: RapHandlerRequirement; implementationMethodName: string }> = [];
     for (const req of classRequirements) {
       const implementationMethodName =
-        declaredMethodByRequirement.get(keyForRequirement(req)) ?? normalizeMethodName(req.methodName);
+        declaredMethodByRequirement.get(rapHandlerRequirementKey(req)) ?? normalizeMethodName(req.methodName);
       if (seenMethods.has(implementationMethodName)) continue;
       seenMethods.add(implementationMethodName);
       toInsert.push({ requirement: req, implementationMethodName });
@@ -857,5 +880,122 @@ export function applyRapHandlerImplementationStubs(
     inserted,
     skipped,
     changed: inserted.length > 0,
+  };
+}
+
+function countInserted(results: RapHandlerSectionApplyResults): number {
+  return (
+    results.main.inserted.length +
+    (results.definitions?.inserted.length ?? 0) +
+    (results.implementations?.inserted.length ?? 0)
+  );
+}
+
+/**
+ * Build the complete auto-apply plan for a behavior pool without doing I/O.
+ *
+ * This is intentionally pure: the MCP handler owns safety checks, locks,
+ * linting, and ADT writes; this helper owns the RAP-specific sequencing:
+ *   1. insert missing METHODS declarations into whichever include contains
+ *      the matching `lhc_<alias> DEFINITION`
+ *   2. skip stubs whose declarations still could not be placed
+ *   3. insert empty METHOD stubs using the concrete ABAP method name from
+ *      existing/new declarations, including semantic names bound via
+ *      `FOR ACTION alias~ActionName`
+ *
+ * Keeping this plan here prevents `intent.ts` from duplicating RAP parser
+ * invariants such as "deferred classes are not editable" and "stub method
+ * names come from declarations, not necessarily from BDEF action names".
+ */
+export function applyRapHandlerScaffold(
+  sections: RapHandlerSourceSections,
+  missingSignatures: RapHandlerRequirement[],
+  missingImplementationStubs: RapHandlerRequirement[],
+): RapHandlerScaffoldPlan {
+  const applyMain = applyRapHandlerSignatures(sections.main, missingSignatures);
+  let pending = applyMain.skipped.map((entry) => entry.requirement);
+
+  let applyDefinitions: RapHandlerApplyResult | undefined;
+  if (pending.length > 0 && sections.definitions) {
+    applyDefinitions = applyRapHandlerSignatures(sections.definitions, pending);
+    pending = applyDefinitions.skipped.map((entry) => entry.requirement);
+  }
+
+  let applyImplementations: RapHandlerApplyResult | undefined;
+  if (pending.length > 0 && sections.implementations) {
+    applyImplementations = applyRapHandlerSignatures(sections.implementations, pending);
+    pending = applyImplementations.skipped.map((entry) => entry.requirement);
+  }
+
+  // A METHOD stub is only useful after its declaration exists. If the target
+  // `lhc_*` class was not found anywhere, suppress the stub for that unresolved
+  // declaration rather than creating an implementation block with no matching
+  // RAP handler signature.
+  const unresolvedDeclarationKeys = new Set(pending.map(rapHandlerRequirementKey));
+  const stubRequirements = missingImplementationStubs.filter(
+    (req) => !unresolvedDeclarationKeys.has(rapHandlerRequirementKey(req)),
+  );
+  const definitionLookupSource = [
+    applyMain.updatedSource,
+    applyDefinitions?.updatedSource ?? sections.definitions,
+    applyImplementations?.updatedSource ?? sections.implementations,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const stubMain = applyRapHandlerImplementationStubs(applyMain.updatedSource, stubRequirements, {
+    createImplementationBlocks: true,
+    definitionSource: definitionLookupSource,
+  });
+  const stubDefinitions = sections.definitions
+    ? applyRapHandlerImplementationStubs(applyDefinitions?.updatedSource ?? sections.definitions, stubRequirements, {
+        definitionSource: definitionLookupSource,
+      })
+    : undefined;
+  const stubImplementations = sections.implementations
+    ? applyRapHandlerImplementationStubs(
+        applyImplementations?.updatedSource ?? sections.implementations,
+        stubRequirements,
+        { createImplementationBlocks: true, definitionSource: definitionLookupSource },
+      )
+    : undefined;
+
+  const changed = {
+    main: applyMain.changed || stubMain.changed,
+    definitions: (applyDefinitions?.changed ?? false) || (stubDefinitions?.changed ?? false),
+    implementations: (applyImplementations?.changed ?? false) || (stubImplementations?.changed ?? false),
+  };
+  const changedSections = (Object.keys(changed) as RapHandlerSectionName[]).filter((section) => changed[section]);
+
+  return {
+    sections: {
+      main: stubMain.updatedSource,
+      definitions: stubDefinitions?.updatedSource ?? applyDefinitions?.updatedSource ?? sections.definitions,
+      implementations:
+        stubImplementations?.updatedSource ?? applyImplementations?.updatedSource ?? sections.implementations,
+    },
+    signatures: {
+      main: applyMain,
+      definitions: applyDefinitions,
+      implementations: applyImplementations,
+    },
+    implementationStubs: {
+      main: stubMain,
+      definitions: stubDefinitions,
+      implementations: stubImplementations,
+    },
+    unresolved: pending,
+    changed,
+    changedSections,
+    insertedSignatureCount: countInserted({
+      main: applyMain,
+      definitions: applyDefinitions,
+      implementations: applyImplementations,
+    }),
+    insertedImplementationStubCount: countInserted({
+      main: stubMain,
+      definitions: stubDefinitions,
+      implementations: stubImplementations,
+    }),
   };
 }
