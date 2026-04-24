@@ -120,6 +120,38 @@ describe('parseArgs', () => {
     expect(config.httpAddr).toBe('0.0.0.0:9090');
   });
 
+  it('parses ARC1_HTTP_ADDR env var', () => {
+    process.env.ARC1_HTTP_ADDR = '127.0.0.1:19081';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('127.0.0.1:19081');
+    } finally {
+      delete process.env.ARC1_HTTP_ADDR;
+    }
+  });
+
+  it('parses SAP_HTTP_ADDR env var as legacy-compatible alias', () => {
+    process.env.SAP_HTTP_ADDR = '127.0.0.1:19082';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('127.0.0.1:19082');
+    } finally {
+      delete process.env.SAP_HTTP_ADDR;
+    }
+  });
+
+  it('prefers ARC1_HTTP_ADDR over SAP_HTTP_ADDR when both are set', () => {
+    process.env.ARC1_HTTP_ADDR = '127.0.0.1:19081';
+    process.env.SAP_HTTP_ADDR = '127.0.0.1:19082';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('127.0.0.1:19081');
+    } finally {
+      delete process.env.ARC1_HTTP_ADDR;
+      delete process.env.SAP_HTTP_ADDR;
+    }
+  });
+
   it('ARC1_PORT env var overrides httpAddr port', () => {
     process.env.ARC1_PORT = '7070';
     try {

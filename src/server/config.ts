@@ -295,7 +295,18 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   // ── Transport ──────────────────────────────────────────────────────
   const transport = resolveStr('transport', 'SAP_TRANSPORT', 'stdio', 'transport');
   config.transport = (transport === 'http-streamable' ? 'http-streamable' : 'stdio') as TransportType;
-  config.httpAddr = resolveStr('http-addr', 'SAP_HTTP_ADDR', '0.0.0.0:8080', 'httpAddr');
+  const httpAddrFlag = getFlag('http-addr');
+  const httpAddrEnv = process.env.ARC1_HTTP_ADDR ?? process.env.SAP_HTTP_ADDR;
+  if (httpAddrFlag !== undefined) {
+    config.httpAddr = httpAddrFlag;
+    sources.httpAddr = { flag: '--http-addr' };
+  } else if (httpAddrEnv !== undefined) {
+    config.httpAddr = httpAddrEnv;
+    sources.httpAddr = process.env.ARC1_HTTP_ADDR !== undefined ? { env: 'ARC1_HTTP_ADDR' } : { env: 'SAP_HTTP_ADDR' };
+  } else {
+    config.httpAddr = '0.0.0.0:8080';
+    sources.httpAddr = 'default';
+  }
   const portOverride = getFlag('port') ?? process.env.ARC1_PORT;
   if (portOverride) {
     const parsedPort = Number.parseInt(portOverride, 10);
