@@ -194,7 +194,6 @@ interface SystemDetection {
   abapRelease?: string;
   systemType?: SystemType;
   hasHana?: boolean;
-  hanaRelease?: string;
 }
 
 /**
@@ -214,12 +213,10 @@ async function detectSystemFromComponents(client: AdtHttpClient): Promise<System
     const basis = components.find((c) => c.name.toUpperCase() === 'SAP_BASIS');
     const hasSapCloud = components.some((c) => c.name.toUpperCase() === 'SAP_CLOUD');
     const systemType: SystemType | undefined = hasSapCloud ? 'btp' : 'onprem';
-    const { hasHana, hanaRelease } = detectHanaFromComponents(components);
     return {
       abapRelease: basis?.release || undefined,
       systemType,
-      hasHana,
-      hanaRelease,
+      hasHana: detectHanaFromComponents(components),
     };
   } catch {
     return {};
@@ -227,23 +224,33 @@ async function detectSystemFromComponents(client: AdtHttpClient): Promise<System
 }
 
 /**
+ * Detect HANA DB presence from installed software components (exported for testing).
+ *
+ * Rules (any match → HANA):
+ * 1. Component name contains `HDB` or `HANA` (e.g. `HDB`, `HANA_XS`) — direct DB indicator,
+ *    typically present on Suite-on-HANA systems.
+ * 2. Component name starts with `S4` (e.g. `S4CORE`, `S4FND`, `S4CEXT`) — S/4HANA is
+ *    HANA-only, and `S4` is SAP's reserved prefix for S/4HANA software components.
+ *    On S/4HANA 2021+ the core component is `S4FND`, not `S4CORE`.
+ * 3. Component name `BW4CORE` — BW/4HANA is also HANA-only.
+ *
+ * DB release info is intentionally not surfaced: only HDB-named components carry a
+ * meaningful release; S4/BW4CORE releases describe the ABAP stack, not the DB.
+ */
+export function detectHanaFromComponents(components: Array<{ name: string }>): boolean {
+  for (const c of components) {
+    const name = c.name.toUpperCase();
+    if (/HDB|HANA/.test(name)) return true;
+    if (/^S4[A-Z]/.test(name)) return true;
+    if (name === 'BW4CORE') return true;
+  }
+  return false;
+}
+
+/**
  * Detect system type from installed components (exported for testing).
  * Returns 'btp' if SAP_CLOUD component is present, 'onprem' otherwise.
  */
-export function detectHanaFromComponents(components: Array<{ name: string; release: string }>): {
-  hasHana: boolean;
-  hanaRelease?: string;
-} {
-  // Step 1: component whose name contains HDB or HANA — direct DB indicator, release available
-  const hanaComponent = components.find((c) => /HDB|HANA/i.test(c.name));
-  if (hanaComponent) {
-    return { hasHana: true, hanaRelease: hanaComponent.release };
-  }
-  // Step 2: S4CORE implies S/4HANA → always runs on HANA; DB release cannot be inferred
-  const hasS4Core = components.some((c) => c.name.toUpperCase() === 'S4CORE');
-  return { hasHana: hasS4Core };
-}
-
 export function detectSystemType(
   components: Array<{ name: string; release: string; description: string }>,
 ): SystemType {

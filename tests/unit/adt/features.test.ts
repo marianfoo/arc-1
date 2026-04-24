@@ -271,52 +271,73 @@ describe('Feature Detection', () => {
 
   describe('detectHanaFromComponents', () => {
     it('detects HANA when HDB component is present', () => {
-      const result = detectHanaFromComponents([{ name: 'HDB', release: '2.0' }]);
-      expect(result.hasHana).toBe(true);
-      expect(result.hanaRelease).toBe('2.0');
+      expect(detectHanaFromComponents([{ name: 'HDB' }])).toBe(true);
     });
 
     it('detects HANA when component name contains HANA', () => {
-      const result = detectHanaFromComponents([{ name: 'HANA_XS', release: '1.0' }]);
-      expect(result.hasHana).toBe(true);
-      expect(result.hanaRelease).toBe('1.0');
+      expect(detectHanaFromComponents([{ name: 'HANA_XS' }])).toBe(true);
     });
 
-    it('detects HANA via S4CORE with no hanaRelease', () => {
-      const result = detectHanaFromComponents([{ name: 'S4CORE', release: '108' }]);
-      expect(result.hasHana).toBe(true);
-      expect(result.hanaRelease).toBeUndefined();
+    it('detects HANA via S4CORE (S/4HANA ≤ 2020)', () => {
+      expect(detectHanaFromComponents([{ name: 'S4CORE' }])).toBe(true);
+    });
+
+    it('detects HANA via S4FND (S/4HANA 2021+)', () => {
+      expect(detectHanaFromComponents([{ name: 'S4FND' }])).toBe(true);
+    });
+
+    it('detects HANA via S4CEXT', () => {
+      expect(detectHanaFromComponents([{ name: 'S4CEXT' }])).toBe(true);
+    });
+
+    it('detects HANA via BW4CORE (BW/4HANA)', () => {
+      expect(detectHanaFromComponents([{ name: 'BW4CORE' }])).toBe(true);
     });
 
     it('returns false when no HANA indicators are present', () => {
-      const result = detectHanaFromComponents([
-        { name: 'SAP_BASIS', release: '758' },
-        { name: 'SAP_ABA', release: '758' },
-      ]);
-      expect(result.hasHana).toBe(false);
-      expect(result.hanaRelease).toBeUndefined();
+      expect(detectHanaFromComponents([{ name: 'SAP_BASIS' }, { name: 'SAP_ABA' }, { name: 'SAP_APPL' }])).toBe(false);
     });
 
     it('returns false for empty component list', () => {
-      const result = detectHanaFromComponents([]);
-      expect(result.hasHana).toBe(false);
+      expect(detectHanaFromComponents([])).toBe(false);
     });
 
-    it('is case-insensitive for HDB/HANA component names', () => {
-      expect(detectHanaFromComponents([{ name: 'hdb', release: '2.0' }]).hasHana).toBe(true);
-      expect(detectHanaFromComponents([{ name: 'Hana_XS', release: '1.0' }]).hasHana).toBe(true);
+    it('is case-insensitive for component names', () => {
+      expect(detectHanaFromComponents([{ name: 'hdb' }])).toBe(true);
+      expect(detectHanaFromComponents([{ name: 'Hana_XS' }])).toBe(true);
+      expect(detectHanaFromComponents([{ name: 's4fnd' }])).toBe(true);
+      expect(detectHanaFromComponents([{ name: 'bw4core' }])).toBe(true);
     });
 
-    // Note: not sure if this combination (HDB + S4CORE) is actually present in any real system.
-    // On native S/4HANA there is likely no HDB-named ABAP component in CVERS; HDB may only appear
-    // on ERP on HANA (Suite on HANA) systems, which would not have S4CORE.
-    it('HDB component takes priority over S4CORE for hanaRelease', () => {
-      const result = detectHanaFromComponents([
-        { name: 'HDB', release: '2.0' },
-        { name: 'S4CORE', release: '108' },
-      ]);
-      expect(result.hasHana).toBe(true);
-      expect(result.hanaRelease).toBe('2.0');
+    it('does not false-positive on non-S/4 components starting with "S4"-adjacent text', () => {
+      // S4 must be followed by an uppercase letter (checked after uppercasing input), so "S4" alone,
+      // "S4" followed by a digit, or "SAP_S4" would not match. Only S/4HANA component naming fits.
+      expect(detectHanaFromComponents([{ name: 'S4' }])).toBe(false);
+      expect(detectHanaFromComponents([{ name: 'S40' }])).toBe(false);
+      expect(detectHanaFromComponents([{ name: 'SAP_S4' }])).toBe(false);
+    });
+
+    it('detects HANA on a real-world S/4HANA 2023 on-prem component list (S4FND + MDG_FND)', () => {
+      // Captured from /sap/bc/adt/system/components on an S/4HANA 2023 on-prem trial.
+      // Notably absent: S4CORE, HDB, anything named HANA — the original heuristic missed this.
+      expect(
+        detectHanaFromComponents([
+          { name: 'DMIS' },
+          { name: 'HOME' },
+          { name: 'LOCAL' },
+          { name: 'MDG_FND' },
+          { name: 'S4FND' },
+          { name: 'SAP_ABA' },
+          { name: 'SAP_BASIS' },
+          { name: 'SAP_BW' },
+          { name: 'SAP_GWFND' },
+          { name: 'SAP_UI' },
+          { name: 'ST-PI' },
+          { name: 'UIBAS001' },
+          { name: 'ZCUSTOM_DEVELOPMENT' },
+          { name: 'ZLOCAL' },
+        ]),
+      ).toBe(true);
     });
   });
 
@@ -441,6 +462,19 @@ describe('Feature Detection', () => {
       const s4Components = makeComponentsXml([
         { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
         { id: 'S4CORE', title: '108;S4CORE108;0001;S/4HANA Core' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: s4Components, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+    });
+
+    it('detects HANA via S4FND on S/4HANA 2021+ when hanainfo endpoint returns 404', async () => {
+      // S/4HANA 2021+ ships S4FND instead of S4CORE — this was the scenario that originally
+      // produced a false negative on the reporter's test system.
+      const s4Components = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'S4FND', title: '108;S4FND108;0001;S/4HANA Foundation' },
+        { id: 'MDG_FND', title: '808;MDGFND808;0001;S/4HANA MDG Foundation' },
       ]);
       const client = mockProbeClientHanaScenario({ componentsXml: s4Components, hanaEndpoint404: true });
       const result = await probeFeatures(client, defaultConfig);
