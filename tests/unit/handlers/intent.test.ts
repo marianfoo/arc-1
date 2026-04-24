@@ -6642,6 +6642,64 @@ ENDCLASS.
       expect(resolvePackageSpy).not.toHaveBeenCalled();
     });
 
+    it('dry-run does not report semantic FOR ACTION implementations as missing stubs', async () => {
+      const semanticBdefSource = `managed implementation in class ZBP_I_TRAVELREQ unique;
+define behavior for ZI_TRAVELREQ alias Travel
+{
+  action acceptTravel result [1] $self;
+}`;
+      const semanticDefinitionsSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS set_status_accepted FOR MODIFY
+      IMPORTING keys FOR ACTION Travel~acceptTravel RESULT result.
+ENDCLASS.`;
+      const semanticImplementationsSource = `CLASS lhc_travel IMPLEMENTATION.
+  METHOD set_status_accepted.
+  ENDMETHOD.
+ENDCLASS.`;
+
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        if (method === 'GET' && urlStr.endsWith('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ')) {
+          return Promise.resolve(mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' }));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/source/main')) {
+          return Promise.resolve(mockResponse(200, classMainSource, { 'x-csrf-token': 'T' }));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions')) {
+          return Promise.resolve(mockResponse(200, semanticDefinitionsSource, { 'x-csrf-token': 'T' }));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations')) {
+          return Promise.resolve(mockResponse(200, semanticImplementationsSource, { 'x-csrf-token': 'T' }));
+        }
+        if (
+          method === 'GET' &&
+          (urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/testclasses') ||
+            urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/macros'))
+        ) {
+          return Promise.reject(new AdtApiError('Not found', 404, urlStr));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVELREQ/source/main')) {
+          return Promise.resolve(mockResponse(200, semanticBdefSource, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'scaffold_rap_handlers',
+        type: 'CLAS',
+        name: 'ZBP_I_TRAVELREQ',
+        bdefName: 'ZI_TRAVELREQ',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.missingCount).toBe(0);
+      expect(parsed.missingImplementationStubCount).toBe(0);
+    });
+
     it('autoApply still enforces write package allowlist for existing behavior pools', async () => {
       mockFetch.mockReset();
       const restrictedClient = new AdtClient({

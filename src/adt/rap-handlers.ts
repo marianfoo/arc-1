@@ -76,6 +76,24 @@ interface ClassImplementationRange {
   end: number;
 }
 
+function requirementKey(
+  targetHandlerClass: string,
+  kind: RapHandlerKind,
+  methodName: string,
+  entityAlias: string,
+): string {
+  return [targetHandlerClass.toLowerCase(), kind, normalizeMethodName(methodName), entityAlias.toLowerCase()].join('|');
+}
+
+function keyForRequirement(requirement: RapHandlerRequirement): string {
+  return requirementKey(
+    requirement.targetHandlerClass,
+    requirement.kind,
+    requirement.methodName,
+    requirement.entityAlias,
+  );
+}
+
 function countChar(value: string, char: string): number {
   return value.split(char).length - 1;
 }
@@ -204,12 +222,7 @@ function parseBehaviorBlocks(source: string): RapBehaviorBlock[] {
 }
 
 function pushRequirement(out: RapHandlerRequirement[], requirement: RapHandlerRequirement, seen: Set<string>): void {
-  const key = [
-    requirement.targetHandlerClass.toLowerCase(),
-    requirement.kind,
-    normalizeMethodName(requirement.methodName),
-    requirement.entityAlias.toLowerCase(),
-  ].join('|');
+  const key = keyForRequirement(requirement);
   if (seen.has(key)) return;
   seen.add(key);
   out.push(requirement);
@@ -475,6 +488,81 @@ function parseClassImplementationMethods(source: string): Map<string, Set<string
 }
 
 /**
+ * Map BDEF requirement keys to the concrete ABAP method name used in the
+ * handler declaration.
+ *
+ * The generated method name for a BDEF action `acceptTravel` is `accepttravel`,
+ * but real behavior pools often declare semantic method names such as
+ * `set_status_accepted FOR ACTION travel~acceptTravel`. Stub detection and
+ * stub generation must use the declared ABAP method name, otherwise a pool
+ * that is already implemented under semantic names is reported as missing.
+ */
+function parseClassDefinitionHandlerBindings(source: string): Map<string, string> {
+  const lines = source.split('\n');
+  const ranges = parseClassDefinitionRanges(source);
+  const out = new Map<string, string>();
+
+  for (const range of ranges) {
+    const targetHandlerClass = range.name;
+
+    for (let i = range.start; i <= range.end; i += 1) {
+      const line = lines[i] ?? '';
+      const match = line.match(/^\s*(?:CLASS-)?METHODS\s+([A-Za-z_~][\w~]*)/i);
+      if (!match?.[1]) continue;
+      const declaredMethodName = normalizeMethodName(match[1]);
+
+      let statement = line;
+      for (let j = i + 1; j <= range.end && j < i + 10; j += 1) {
+        const cont = lines[j] ?? '';
+        statement += ` ${cont}`;
+        if (/\.\s*$/.test(cont.trim())) break;
+      }
+
+      const actionBinding = statement.match(/\bFOR\s+ACTION\s+([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i);
+      if (actionBinding?.[1] && actionBinding[2]) {
+        out.set(requirementKey(targetHandlerClass, 'action', actionBinding[2], actionBinding[1]), declaredMethodName);
+        continue;
+      }
+
+      const entityBinding = statement.match(
+        /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i,
+      );
+      if (entityBinding?.[1] && entityBinding[2]) {
+        if (/\bFOR\s+DETERMINE\s+ON\b/i.test(statement)) {
+          out.set(
+            requirementKey(targetHandlerClass, 'determination', entityBinding[2], entityBinding[1]),
+            declaredMethodName,
+          );
+        } else if (/\bFOR\s+VALIDATE\s+ON\b/i.test(statement)) {
+          out.set(
+            requirementKey(targetHandlerClass, 'validation', entityBinding[2], entityBinding[1]),
+            declaredMethodName,
+          );
+        }
+        continue;
+      }
+
+      const authBinding = statement.match(/\bAUTHORIZATION\b.*\bFOR\s+([A-Za-z_]\w*)\s+RESULT\b/i);
+      if (authBinding?.[1]) {
+        if (/\bFOR\s+INSTANCE\s+AUTHORIZATION\b/i.test(statement)) {
+          out.set(
+            requirementKey(targetHandlerClass, 'instance_authorization', 'get_instance_authorizations', authBinding[1]),
+            declaredMethodName,
+          );
+        } else if (/\bFOR\s+GLOBAL\s+AUTHORIZATION\b/i.test(statement)) {
+          out.set(
+            requirementKey(targetHandlerClass, 'global_authorization', 'get_global_authorizations', authBinding[1]),
+            declaredMethodName,
+          );
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
  * Parse method declarations (`METHODS ...`) per class definition.
  *
  * The returned Set contains BOTH:
@@ -574,11 +662,14 @@ export function findMissingRapHandlerImplementationStubs(
   classSource: string,
 ): RapHandlerRequirement[] {
   const classMethods = parseClassImplementationMethods(classSource);
+  const declaredMethodByRequirement = parseClassDefinitionHandlerBindings(classSource);
 
   return requirements.filter((req) => {
     const methods = classMethods.get(req.targetHandlerClass.toLowerCase());
     if (!methods) return true;
-    return !methods.has(normalizeMethodName(req.methodName));
+    const implementationMethodName =
+      declaredMethodByRequirement.get(keyForRequirement(req)) ?? normalizeMethodName(req.methodName);
+    return !methods.has(implementationMethodName);
   });
 }
 
@@ -681,7 +772,7 @@ export function applyRapHandlerSignatures(
 export function applyRapHandlerImplementationStubs(
   classSource: string,
   requirements: RapHandlerRequirement[],
-  options: { createImplementationBlocks?: boolean } = {},
+  options: { createImplementationBlocks?: boolean; definitionSource?: string } = {},
 ): RapHandlerApplyResult {
   if (requirements.length === 0) {
     return { updatedSource: classSource, inserted: [], skipped: [], changed: false };
@@ -691,6 +782,8 @@ export function applyRapHandlerImplementationStubs(
   const definitionRanges = parseClassDefinitionRanges(classSource);
   const implementationRanges = parseClassImplementationRanges(classSource);
   const methodsByClass = parseClassImplementationMethods(classSource);
+  const definitionLookupSource = options.definitionSource ? `${options.definitionSource}\n${classSource}` : classSource;
+  const declaredMethodByRequirement = parseClassDefinitionHandlerBindings(definitionLookupSource);
   const grouped = new Map<string, RapHandlerRequirement[]>();
 
   for (const req of requirements) {
@@ -707,15 +800,23 @@ export function applyRapHandlerImplementationStubs(
 
   for (const [targetClassName, classRequirements] of grouped.entries()) {
     const existingMethods = methodsByClass.get(targetClassName) ?? new Set<string>();
-    const toInsert = classRequirements.filter((req) => !existingMethods.has(normalizeMethodName(req.methodName)));
+    const seenMethods = new Set(existingMethods);
+    const toInsert: Array<{ requirement: RapHandlerRequirement; implementationMethodName: string }> = [];
+    for (const req of classRequirements) {
+      const implementationMethodName =
+        declaredMethodByRequirement.get(keyForRequirement(req)) ?? normalizeMethodName(req.methodName);
+      if (seenMethods.has(implementationMethodName)) continue;
+      seenMethods.add(implementationMethodName);
+      toInsert.push({ requirement: req, implementationMethodName });
+    }
     if (toInsert.length === 0) continue;
 
     const stubLines: string[] = [];
     for (let i = 0; i < toInsert.length; i += 1) {
-      const req = toInsert[i]!;
-      stubLines.push(`  METHOD ${normalizeMethodName(req.methodName)}.`, '  ENDMETHOD.');
+      const { requirement, implementationMethodName } = toInsert[i]!;
+      stubLines.push(`  METHOD ${implementationMethodName}.`, '  ENDMETHOD.');
       if (i < toInsert.length - 1) stubLines.push('');
-      inserted.push(req);
+      inserted.push(requirement);
     }
 
     const implementationRange = implementationRanges.find((r) => r.name.toLowerCase() === targetClassName);
@@ -733,10 +834,10 @@ export function applyRapHandlerImplementationStubs(
       continue;
     }
 
-    for (const req of toInsert) {
+    for (const { requirement } of toInsert) {
       skipped.push({
-        requirement: req,
-        reason: `Implementation class ${req.targetHandlerClass} not found in behavior pool.`,
+        requirement,
+        reason: `Implementation class ${requirement.targetHandlerClass} not found in behavior pool.`,
       });
     }
     inserted.splice(inserted.length - toInsert.length, toInsert.length);

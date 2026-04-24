@@ -2699,21 +2699,30 @@ async function handleSAPWrite(
             `${req.targetHandlerClass.toLowerCase()}|${req.kind}|${req.methodName.toLowerCase()}|${req.entityAlias.toLowerCase()}`,
           ),
       );
+      const definitionLookupSource = [
+        applyMain.updatedSource,
+        applyDefinitions?.updatedSource ?? classDefinitionsSource,
+        applyImplementations?.updatedSource ?? classImplementationsSource,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
 
       const stubMain = applyRapHandlerImplementationStubs(applyMain.updatedSource, stubRequirements, {
         createImplementationBlocks: true,
+        definitionSource: definitionLookupSource,
       });
       const stubDefinitions = classDefinitionsSource
         ? applyRapHandlerImplementationStubs(
             applyDefinitions?.updatedSource ?? classDefinitionsSource,
             stubRequirements,
+            { definitionSource: definitionLookupSource },
           )
         : undefined;
       const stubImplementations = classImplementationsSource
         ? applyRapHandlerImplementationStubs(
             applyImplementations?.updatedSource ?? classImplementationsSource,
             stubRequirements,
-            { createImplementationBlocks: true },
+            { createImplementationBlocks: true, definitionSource: definitionLookupSource },
           )
         : undefined;
 

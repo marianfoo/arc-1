@@ -222,6 +222,28 @@ ENDCLASS.`;
 
     expect(missing.map((req) => req.methodName)).toEqual(['submitforapproval']);
   });
+
+  it('treats semantic method implementations as satisfying their BDEF action binding', () => {
+    const bdef = `define behavior for zi_travel alias travel
+{
+  action acceptTravel result [1] $self;
+}`;
+    const classSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS set_status_accepted FOR MODIFY
+      IMPORTING keys FOR ACTION travel~acceptTravel RESULT result.
+ENDCLASS.
+
+CLASS lhc_travel IMPLEMENTATION.
+  METHOD set_status_accepted.
+  ENDMETHOD.
+ENDCLASS.`;
+
+    const requirements = extractRapHandlerRequirements(bdef);
+    const missing = findMissingRapHandlerImplementationStubs(requirements, classSource);
+
+    expect(missing).toEqual([]);
+  });
 });
 
 describe('applyRapHandlerSignatures', () => {
@@ -353,6 +375,27 @@ ENDCLASS.`;
   METHOD submitforapproval.
   ENDMETHOD.
 ENDCLASS.`);
+  });
+
+  it('uses the declared semantic method name when creating stubs for bound BDEF actions', () => {
+    const bdef = `define behavior for zi_travel alias travel
+{
+  action acceptTravel result [1] $self;
+}`;
+    const definitionSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS set_status_accepted FOR MODIFY
+      IMPORTING keys FOR ACTION travel~acceptTravel RESULT result.
+ENDCLASS.`;
+    const implementationSource = `CLASS lhc_travel IMPLEMENTATION.
+ENDCLASS.`;
+    const requirements = extractRapHandlerRequirements(bdef);
+
+    const result = applyRapHandlerImplementationStubs(implementationSource, requirements, { definitionSource });
+
+    expect(result.changed).toBe(true);
+    expect(result.updatedSource).toContain('METHOD set_status_accepted.');
+    expect(result.updatedSource).not.toContain('METHOD accepttravel.');
   });
 
   it('does not duplicate existing implementation stubs', () => {
