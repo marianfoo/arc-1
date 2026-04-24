@@ -6516,6 +6516,17 @@ authorization master ( instance )
   adtcore:description="Behavior pool"
   class:abapLanguageVersion="standard"/>`;
 
+    const classMetadataForbiddenPackageXml = `<?xml version="1.0" encoding="UTF-8"?>
+<class:abapClass
+  xmlns:class="http://www.sap.com/adt/classlib"
+  xmlns:adtcore="http://www.sap.com/adt/core"
+  adtcore:name="/DMO/BP_TRAVEL_M"
+  adtcore:type="CLAS/OC"
+  adtcore:description="Behavior pool"
+  class:abapLanguageVersion="standard">
+  <adtcore:packageRef adtcore:name="/DMO/FLIGHT_MANAGED"/>
+</class:abapClass>`;
+
     const classMainSource = `CLASS zbp_i_travelreq DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zi_travelreq.
 ENDCLASS.
 
@@ -6574,6 +6585,87 @@ ENDCLASS.
             req.methodName === 'recalculatetotalcost' || req.methodName === 'get_instance_authorizations',
         ),
       ).toBe(true);
+    });
+
+    it('dry-run does not enforce write package allowlist for existing behavior pools', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr });
+
+        if (method === 'GET' && urlStr.endsWith('/sap/bc/adt/oo/classes/%2FDMO%2FBP_TRAVEL_M')) {
+          return Promise.resolve(mockResponse(200, classMetadataForbiddenPackageXml, { 'x-csrf-token': 'T' }));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/%2FDMO%2FBP_TRAVEL_M/source/main')) {
+          return Promise.resolve(mockResponse(200, classMainSource, { 'x-csrf-token': 'T' }));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/%2FDMO%2FBP_TRAVEL_M/includes/definitions')) {
+          return Promise.resolve(mockResponse(200, classDefinitionsSource, { 'x-csrf-token': 'T' }));
+        }
+        if (
+          method === 'GET' &&
+          (urlStr.includes('/sap/bc/adt/oo/classes/%2FDMO%2FBP_TRAVEL_M/includes/testclasses') ||
+            urlStr.includes('/sap/bc/adt/oo/classes/%2FDMO%2FBP_TRAVEL_M/includes/implementations') ||
+            urlStr.includes('/sap/bc/adt/oo/classes/%2FDMO%2FBP_TRAVEL_M/includes/macros'))
+        ) {
+          return Promise.reject(new AdtApiError('Not found', 404, urlStr));
+        }
+        if (method === 'GET' && urlStr.includes('/sap/bc/adt/bo/behaviordefinitions/%2FDMO%2FI_TRAVEL_M/source/main')) {
+          return Promise.resolve(mockResponse(200, bdefSource, { 'x-csrf-token': 'T' }));
+        }
+        return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const resolvePackageSpy = vi.spyOn(restrictedClient, 'resolveObjectPackage');
+
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'scaffold_rap_handlers',
+        type: 'CLAS',
+        name: '/DMO/BP_TRAVEL_M',
+        bdefName: '/DMO/I_TRAVEL_M',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.applied).toBe(false);
+      expect(parsed.requiredCount).toBeGreaterThan(0);
+      expect(result.content[0]?.text).not.toContain('blocked by safety');
+      expect(calls.some((call) => call.method === 'PUT' || call.url.includes('_action=LOCK'))).toBe(false);
+      expect(resolvePackageSpy).not.toHaveBeenCalled();
+    });
+
+    it('autoApply still enforces write package allowlist for existing behavior pools', async () => {
+      mockFetch.mockReset();
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+      const resolvePackageSpy = vi
+        .spyOn(restrictedClient, 'resolveObjectPackage')
+        .mockResolvedValue('/DMO/FLIGHT_MANAGED');
+
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'scaffold_rap_handlers',
+        type: 'CLAS',
+        name: '/DMO/BP_TRAVEL_M',
+        bdefName: '/DMO/I_TRAVEL_M',
+        autoApply: true,
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('/DMO/FLIGHT_MANAGED');
+      expect(result.content[0]?.text).toContain('blocked');
+      expect(resolvePackageSpy).toHaveBeenCalledOnce();
     });
 
     it('autoApply injects signatures and writes class source', async () => {

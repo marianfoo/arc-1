@@ -2585,7 +2585,9 @@ async function handleSAPWrite(
         .trim()
         .toLowerCase();
 
-      await enforcePackageForExistingObject();
+      if (autoApply) {
+        await enforcePackageForExistingObject();
+      }
 
       // Why scan all three CLAS includes (main, definitions, implementations):
       //   Behavior-pool handler classes CAN live in any of the three, and
