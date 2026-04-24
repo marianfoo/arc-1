@@ -68,6 +68,7 @@ define behavior for ZC_Travel alias Travel
 }`;
     const result = validateRapSource('BDEF', source, { systemType: 'onprem', abapRelease: '758' });
     expect(result.errors.some((f) => f.ruleId === 'BDEF_PROJECTION_USE_ETAG_UNSUPPORTED')).toBe(true);
+    expect(result.errors.find((f) => f.ruleId === 'BDEF_PROJECTION_USE_ETAG_UNSUPPORTED')?.line).toBe(2);
   });
 
   it('does NOT flag per-entity "use etag" in projection BDEF (SAP /DMO/ pattern)', () => {

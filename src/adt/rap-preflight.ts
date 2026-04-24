@@ -226,11 +226,13 @@ function validateBdef(source: string, context: RapPreflightContext, findings: Ra
       const preamble = firstBehaviorIdx >= 0 ? source.slice(0, firstBehaviorIdx) : source;
       // Header-level form is terminated by a semicolon (or end-of-preamble);
       // the per-entity form never has a terminating `;` directly after etag.
-      if (/\buse\s+etag\s*;/i.test(preamble)) {
+      const headerUseEtagMatch = /\buse\s+etag\s*;/i.exec(preamble);
+      if (headerUseEtagMatch) {
         findings.push({
           severity: 'error',
           ruleId: 'BDEF_PROJECTION_USE_ETAG_UNSUPPORTED',
           message: 'Projection BDEF contains "use etag" as a header statement, which is not supported on on-prem 7.5x.',
+          line: source.slice(0, headerUseEtagMatch.index).split(/\r?\n/).length,
           suggestion:
             'Move "use etag" into each "define behavior for X alias Y use etag { ... }" block instead of declaring it at the projection header level.',
         });
