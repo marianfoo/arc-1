@@ -5,6 +5,7 @@
  * and provider factory without requiring a live XSUAA instance.
  */
 
+import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createChainedTokenVerifier, InMemoryClientStore } from '../../../src/server/xsuaa.js';
@@ -137,11 +138,13 @@ describe('createChainedTokenVerifier', () => {
 
     const verifier = createChainedTokenVerifier({}, xsuaaVerifier, oidcVerifier);
     await expect(verifier('invalid-token')).rejects.toThrow('Token validation failed');
+    await expect(verifier('invalid-token')).rejects.toBeInstanceOf(InvalidTokenError);
   });
 
   it('works with no verifiers configured', async () => {
     const verifier = createChainedTokenVerifier({});
     await expect(verifier('any-token')).rejects.toThrow('Token validation failed');
+    await expect(verifier('any-token')).rejects.toBeInstanceOf(InvalidTokenError);
   });
 
   // --- Multi-key API key support ---

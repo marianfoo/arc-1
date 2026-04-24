@@ -26,6 +26,7 @@
  */
 
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
+import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/providers/proxyProvider.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
@@ -387,7 +388,7 @@ export function createChainedTokenVerifier(
     }
 
     logger.debug('Chained token verifier: all methods failed', { tokenPreview });
-    throw new Error('Token validation failed: not a valid XSUAA, OIDC, or API key token');
+    throw new InvalidTokenError('Token validation failed: not a valid XSUAA, OIDC, or API key token');
   };
 }
 
