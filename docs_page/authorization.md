@@ -340,6 +340,27 @@ Also read startup logs for:
 - `config contradiction: ...` - flags that cannot take effect, such as transport writes without writes
 - `auth: MCP=[...] SAP=[...]` - active auth methods
 
+### "I changed the user's role but the new scopes don't appear"
+
+XSUAA caches the user's authorities in their browser session. When you change role-collection assignments in BTP Cockpit, **existing JWTs keep the old scopes until they expire** (typically 1 hour) AND the user's SSO session at XSUAA / IAS still references the old authorities.
+
+To force fresh scopes immediately:
+
+1. **Log out of XSUAA** in the same browser the MCP client uses:
+   `https://<your-xsuaa-tenant>.authentication.<region>.hana.ondemand.com/logout.do`
+2. **Log out of the IAS / business-users IdP** if you use one:
+   `https://<your-ias-tenant>.accounts.ondemand.com/logout`
+3. In your MCP client (Claude.ai, Cursor, MCP Inspector): **disconnect** the connector and **re-add** it - this triggers a fresh DCR + OAuth flow.
+4. Optional: complete the OAuth login in a fresh browser / private window to guarantee no SSO session is reused.
+
+After that, the new JWT will be issued from a fresh session and carry only the user's currently assigned scopes. You can verify by reading the JWT at [jwt.ms](https://jwt.ms) - the `scope` claim should match the role collection's scopes.
+
+### "I have two `marian@example.com` users in BTP and only one shows the role I changed"
+
+BTP can hold multiple identities for the same email - one per IdP origin (`sap.default`, the IAS tenant, custom IdPs). Role assignments are per-identity. The MCP client logs in via one specific IdP, so check that you're updating the role for the **same identity** that the OAuth flow uses.
+
+In BTP Cockpit → Users you can see all identities for a given email and their `Identity-Provider` column. Update the role on the identity whose IdP matches the OAuth login.
+
 ---
 
 ## References
