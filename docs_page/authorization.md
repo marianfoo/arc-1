@@ -80,6 +80,17 @@ Use this table to answer: "what must be true before this action can run?" For HT
 
 Why transport and Git rows list `write` plus the specialized scope: ARC-1's safety layer turns off all mutations for users without `write`. The specialized `transports` / `git` scopes decide who may use those write families after general write permission exists.
 
+Transport mutation checklist:
+
+1. User has `write` scope.
+2. User has `transports` scope.
+3. Server has `SAP_ALLOW_WRITES=true`.
+4. Server has `SAP_ALLOW_TRANSPORT_WRITES=true`.
+5. `SAP_DENY_ACTIONS` does not deny the concrete action.
+6. SAP backend authorization allows the SAP user to create, release, delete, or reassign CTS requests.
+
+Tool schemas are pruned to hide actions that cannot pass ARC-1 gates. Treat schema visibility as a helpful signal, not a separate authorization layer.
+
 ---
 
 ## Where to set things
@@ -149,6 +160,8 @@ Common role collections:
 
 Want a developer who can write code but cannot transport or use Git? Create a custom role template with just `read` + `write`, then update the XSUAA service. Or leave the shipped role as-is and turn off `SAP_ALLOW_TRANSPORT_WRITES` / `SAP_ALLOW_GIT_WRITES` server-wide.
 
+To grant SQL to one BTP user, assign a role collection that includes `MCPSqlUser` (for example `ARC-1 Developer + SQL`) to that user. Do **not** change server env vars for one user. The ARC-1 instance must already have `SAP_ALLOW_FREE_SQL=true`; there is no `SAP_ALLOW_SQL` flag.
+
 See [XSUAA Setup](xsuaa-setup.md) for BTP Cockpit assignment steps.
 
 ---
@@ -163,6 +176,8 @@ ARC1_API_KEYS="viewer-key:viewer,dev-key:developer,admin-key:admin"
 
 Each profile grants scopes and, for developer profiles, an additional safety cap. The final result is still intersected with the server ceiling.
 
+Profiles are fixed names built into ARC-1. `ARC1_API_KEYS` only selects one of the profiles below; it does **not** let you attach custom scopes or custom package allowlists to one key.
+
 | Profile | Scopes | Extra profile safety |
 | ------- | ------ | -------------------- |
 | `viewer` | `read` | No writes, no data preview, no SQL, no transports, no Git |
@@ -176,6 +191,7 @@ Each profile grants scopes and, for developer profiles, an additional safety cap
 Key implications:
 
 - A `developer` key can write only to `$TMP`, even if the server allows `Z*`.
+- Because API-key profiles are fixed, there is no `developer-z` profile and no `key:developer:Z*` syntax.
 - To give an API key transportable-package write access, use a tightly scoped `admin` key on a server whose `SAP_ALLOWED_PACKAGES` is restricted, or use OIDC/XSUAA for real per-user roles.
 - A profile cannot override the server. If `SAP_ALLOW_WRITES=false`, every API key is effectively read-only.
 
@@ -284,6 +300,7 @@ Then assign role collections in BTP Cockpit. The server says what the instance c
 | User has `transports`, but transport create fails | Mutations also need `write`, and server needs both write flags | Grant `write` + `transports`; set `SAP_ALLOW_WRITES=true` and `SAP_ALLOW_TRANSPORT_WRITES=true` |
 | `SAP_ALLOW_TRANSPORT_WRITES=true`, but transport create fails | `SAP_ALLOW_WRITES=false` still blocks all mutations | Set both flags |
 | `developer` API key cannot write to `Z*` | Developer API-key profiles are capped to `$TMP` | Use `$TMP`, use a restricted `admin` key, or use XSUAA/OIDC |
+| You want one API key to write `Z*`, but not be full admin | API-key profiles are fixed; per-key custom package caps are not supported | Use an `admin` key on a narrowly configured server, or use XSUAA/OIDC |
 | SQL still blocked after `SAP_ALLOW_FREE_SQL=true` | User lacks `sql` scope | Grant `sql` or use `viewer-sql` / `developer-sql` |
 | Table preview blocked after `SAP_ALLOW_DATA_PREVIEW=true` | User lacks `data` scope | Grant `data`; `sql` also implies `data` |
 | Package allowlist seems ignored for reads | ARC-1 package allowlist is write-only | Enforce read restrictions in SAP roles |

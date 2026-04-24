@@ -106,13 +106,15 @@ The profile mapping lives on the ARC-1 server, not in the client config. If you 
 
 Each key gets both scopes (tool visibility) and safety restrictions from its profile. The server ceiling still wins.
 
+Profiles are fixed names built into ARC-1. `ARC1_API_KEYS` selects one profile per key; it does not support custom per-key scopes or custom per-key package allowlists.
+
 | Key | Profile | Can Do | Cannot Do |
 |-----|---------|--------|-----------|
 | `$VIEWER_KEY` | `viewer` | Read source, search, navigate, lint, diagnose | Write, data preview, SQL, transports, git |
 | `$DEV_KEY` | `developer` | All of viewer + write source in `$TMP` + transport mutations + git mutations if server flags allow them | Data preview, freestyle SQL, writes outside `$TMP` |
 | `$SQL_KEY` | `developer-sql` | All of developer + data preview + freestyle SQL | Writes outside `$TMP` (server ceiling still applies) |
 
-Important: `developer`, `developer-data`, and `developer-sql` API-key profiles are intentionally capped to `$TMP`. If a key must write to `Z*` packages, use a tightly scoped `admin` key with `SAP_ALLOWED_PACKAGES='Z*,$TMP'`, or use OIDC/XSUAA for per-user authorization.
+Important: `developer`, `developer-data`, and `developer-sql` API-key profiles are intentionally capped to `$TMP`. There is no `developer-z` profile and no `key:developer:Z*` syntax. If a key must write to `Z*` packages, use a tightly scoped `admin` key with `SAP_ALLOWED_PACKAGES='Z*,$TMP'`, or use OIDC/XSUAA for per-user authorization.
 
 ### 3. Test Per-Key Access
 

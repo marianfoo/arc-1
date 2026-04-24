@@ -23,6 +23,27 @@ npm test
 npm test
 ```
 
+### HTTP Profile Manifest Smoke Test
+
+When a local HTTP authz test server is already running with four API-key profiles, run:
+
+```bash
+npm run test:authz:http
+```
+
+Default assumptions:
+
+- URL: `http://127.0.0.1:19081/mcp` (override with `ARC1_AUTHZ_MCP_URL`)
+- Keys: `viewer-key-local`, `sql-key-local`, `dev-key-local`, `admin-key-local`
+- Server ceiling: writes, data preview, SQL, and transport writes enabled; Git writes disabled
+
+The script checks the live MCP `tools/list` manifest for each key. It verifies that unauthorized tools/actions are hidden before any SAP mutation can be attempted:
+
+- `viewer`: no `SAPWrite`, no `SAPQuery`, no `TABLE_CONTENTS`, transport read actions only
+- `viewer-sql`: `SAPQuery` and `TABLE_CONTENTS` visible, no writes
+- `developer`: writes and transport mutations visible, SQL hidden, Git write actions hidden
+- `admin`: writes, SQL, and transport mutations visible; Git write actions still hidden when `SAP_ALLOW_GIT_WRITES=false`
+
 ### Manual Integration Test
 
 **1. Start arc1 with API key:**
