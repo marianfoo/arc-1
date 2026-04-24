@@ -2662,11 +2662,19 @@ async function handleSAPWrite(
       );
 
       if (scaffoldPlan.changedSections.length === 0) {
+        const unresolvedHandlerClasses = Array.from(
+          new Set(scaffoldPlan.unresolved.map((req) => req.targetHandlerClass)),
+        );
+        const unresolvedHint =
+          unresolvedHandlerClasses.length > 0
+            ? `No source changes were applied because handler class skeleton(s) ${unresolvedHandlerClasses.join(', ')} were not found in main, definitions, or implementations. Create the local handler class skeleton(s) first (for example with the ADT quick fix "Create local handler class"), then rerun with autoApply=true.`
+            : undefined;
         return textResult(
           JSON.stringify(
             {
               ...summary,
               applied: false,
+              hint: unresolvedHint,
               applyResult: {
                 main: scaffoldPlan.signatures.main,
                 definitions: scaffoldPlan.signatures.definitions,
