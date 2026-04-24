@@ -117,7 +117,7 @@ If the user provided a natural language description, map it to the appropriate m
 If the BDEF declares action/determination/validation handlers that do not exist in the class definition:
 
 1. Run `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="<bdef_name>")` to list missing signatures.
-2. If signatures are missing, rerun with `autoApply=true` to inject declarations into class sections when possible.
+2. If signatures are missing, rerun with `autoApply=true` to inject declarations plus empty method stubs into class sections when possible.
 3. If unresolved, try MCP quick-fix flow:
    - `SAPDiagnose(action="quickfix", ...)`
    - `SAPDiagnose(action="apply_quickfix", ...)`

@@ -725,7 +725,7 @@ At this point the service is previewable and stable.
 9. Add actions/determinations/validations to interface BDEF and activate.
 10. Generate missing behavior handler signatures:
    - First preference: `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="ZBP_I_<entity>", bdefName="ZI_<entity>")` to list missing signatures.
-   - Then rerun with `autoApply=true` to inject declarations into class sections (`main`, `definitions`, `implementations`) when possible.
+   - Then rerun with `autoApply=true` to inject declarations plus empty implementation stubs into class sections (`main`, `definitions`, `implementations`) when possible.
    - Next fallback: `SAPDiagnose(action="quickfix", ...)` + `SAPDiagnose(action="apply_quickfix", ...)` if proposals are available.
    - Fallback: ADT quick-fix in editor if no MCP quick-fix proposal is exposed.
 11. Implement method bodies with `SAPWrite(action="edit_method", ...)` (avoid full-class rewrites when behavior pools are unstable).

@@ -144,7 +144,7 @@ src/
 │   ├── abapgit.ts              # abapGit ADT bridge client (/sap/bc/adt/abapgit/*, XML/HATEOAS)
 │   ├── cds-impact.ts           # CDS downstream impact classifier (RAP-oriented buckets)
 │   ├── rap-preflight.ts        # Deterministic RAP static-rule validator (TABL/BDEF/DDLX/DDLS)
-│   ├── rap-handlers.ts         # RAP handler signature extraction/matching/injection helpers
+│   ├── rap-handlers.ts         # RAP handler signature/stub extraction, matching, and injection helpers
 │   ├── ui5-repository.ts       # UI5 ABAP Repository OData client
 │   ├── flp.ts                  # FLP PAGE_BUILDER_CUST OData client
 │   └── transport.ts            # CTS transport management

@@ -701,7 +701,7 @@ If batch activation fails, activate sequentially in dependency order:
 
 If behavior pool activation fails because `METHODS ... FOR ...` signatures are missing:
 - Use `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="ZI_<entity>")` to list missing signatures.
-- If needed, rerun with `autoApply=true` to inject signatures into class declarations.
+- If needed, rerun with `autoApply=true` to inject signatures into class declarations plus empty method stubs.
 - If signatures are still unresolved, use `SAPDiagnose(action="quickfix", ...)` and `SAPDiagnose(action="apply_quickfix", ...)` when proposals are available.
 - Fallback to ADT editor quick-fix generation, then patch method bodies with `SAPWrite(action="edit_method", ...)`.
 

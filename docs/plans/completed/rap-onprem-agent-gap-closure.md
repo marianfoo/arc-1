@@ -104,6 +104,7 @@ Create a deterministic preflight validator for high-frequency RAP static-rule fa
 Provide an MCP-native path to generate/apply RAP handler signatures and reduce dependency on manual ADT editor quick-fixes.
 
 - [x] Add a RAP-oriented helper action (under existing tool families) that maps BDEF declarations to required behavior-pool method signatures and returns missing signatures with exact insertion targets.
+- [x] Auto-apply also creates empty implementation stubs when matching local handler implementation blocks are available, so `SAPWrite(action="edit_method")` can patch method bodies immediately after scaffolding.
 - [x] Implement optional auto-apply mode that uses existing quickfix/apply_quickfix ADT plumbing where possible, and falls back to safe method-level patching when full-class update is unstable.
 - [x] Ensure create/update flows detect behavior-pool signature mismatch failures and return explicit guidance referencing the new helper action.
 - [x] Add unit tests (~15) for signature extraction/matching, helper responses, and fallback logic.

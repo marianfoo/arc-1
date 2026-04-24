@@ -163,7 +163,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
 | `bdefName` | string | No | For `scaffold_rap_handlers`: interface BDEF name used to derive required handler signatures |
-| `autoApply` | boolean | No | For `scaffold_rap_handlers`: when `true`, inject missing signatures into behavior pool class declarations and write back |
+| `autoApply` | boolean | No | For `scaffold_rap_handlers`: when `true`, inject missing signatures plus empty method stubs into the behavior pool and write back |
 | `targetAlias` | string | No | For `scaffold_rap_handlers`: optional RAP entity alias filter (scaffold only one alias/handler class) |
 | `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
@@ -233,7 +233,7 @@ If any object fails, processing stops and the response reports which objects suc
 
 **RAP handler scaffolding:**
 
-`scaffold_rap_handlers` derives required behavior-pool `METHODS ... FOR ...` signatures from an interface BDEF, computes missing signatures, and can optionally inject declarations into the behavior pool class:
+`scaffold_rap_handlers` derives required behavior-pool `METHODS ... FOR ...` signatures from an interface BDEF, computes missing signatures, and can optionally inject declarations plus empty `METHOD ... ENDMETHOD` stubs into the behavior pool class:
 
 - Scans class sections from `source/main`, `includes/definitions`, and `includes/implementations`
 - Supports dry-run listing (`autoApply=false`, default) and write-back mode (`autoApply=true`)

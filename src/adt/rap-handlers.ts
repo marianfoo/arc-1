@@ -11,13 +11,15 @@
  * which signatures are missing — they see a generic "behavior pool does not
  * implement the required method for ..." message.
  *
- * The three exported helpers cooperate:
+ * The exported helpers cooperate:
  *   1. extractRapHandlerRequirements     — parse BDEF → list of required methods
  *   2. findMissingRapHandlerRequirements — diff required vs. present in class
  *   3. applyRapHandlerSignatures         — insert the missing METHODS lines
+ *   4. applyRapHandlerImplementationStubs — insert empty METHOD stubs
  *
- * The scaffolder never writes implementations — it only declares signatures.
- * That keeps the scaffold deterministic and safe to run on existing pools.
+ * The scaffolder writes declarations plus empty implementations only.
+ * Business logic remains the developer's responsibility and can be filled
+ * with edit_method.
  *
  * Naming convention: handler classes use the prefix `lhc_` (local handler
  * class) followed by the lowercased alias from the BDEF. This is the RAP
@@ -66,6 +68,12 @@ interface ClassDefinitionRange {
   start: number;
   end: number;
   privateSection?: number;
+}
+
+interface ClassImplementationRange {
+  name: string;
+  start: number;
+  end: number;
 }
 
 function countChar(value: string, char: string): number {
@@ -397,13 +405,7 @@ function parseClassDefinitionRanges(source: string): ClassDefinitionRange[] {
 
     const name = startMatch[1];
     const isDeferred = /\bDEFINITION\b.*\bDEFERRED\b/i.test(line);
-    if (isDeferred) {
-      // Deferred declarations are single-line declarations without ENDCLASS.
-      // Record the range at the same index so a later concrete definition of
-      // the same class gets its own entry and isn't shadowed here.
-      ranges.push({ name, start: i, end: i });
-      continue;
-    }
+    if (isDeferred) continue;
 
     let end = i;
     let privateSection: number | undefined;
@@ -423,6 +425,53 @@ function parseClassDefinitionRanges(source: string): ClassDefinitionRange[] {
   }
 
   return ranges;
+}
+
+function parseClassImplementationRanges(source: string): ClassImplementationRange[] {
+  const lines = source.split('\n');
+  const ranges: ClassImplementationRange[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    const startMatch = line.match(/^\s*CLASS\s+([A-Za-z_][\w$]*)\s+IMPLEMENTATION\s*\./i);
+    if (!startMatch?.[1]) continue;
+
+    const name = startMatch[1];
+    let end = i;
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const inner = lines[j] ?? '';
+      if (/^\s*ENDCLASS\./i.test(inner)) {
+        end = j;
+        break;
+      }
+    }
+
+    ranges.push({ name, start: i, end });
+    i = end;
+  }
+
+  return ranges;
+}
+
+function parseClassImplementationMethods(source: string): Map<string, Set<string>> {
+  const lines = source.split('\n');
+  const ranges = parseClassImplementationRanges(source);
+  const out = new Map<string, Set<string>>();
+
+  for (const range of ranges) {
+    const key = range.name.toLowerCase();
+    const methods = out.get(key) ?? new Set<string>();
+
+    for (let i = range.start; i <= range.end; i += 1) {
+      const line = lines[i] ?? '';
+      const match = line.match(/^\s*METHOD\s+([A-Za-z_~][\w~]*)\s*\./i);
+      if (match?.[1]) methods.add(normalizeMethodName(match[1]));
+    }
+
+    out.set(key, methods);
+  }
+
+  return out;
 }
 
 /**
@@ -520,13 +569,26 @@ export function findMissingRapHandlerRequirements(
   });
 }
 
+export function findMissingRapHandlerImplementationStubs(
+  requirements: RapHandlerRequirement[],
+  classSource: string,
+): RapHandlerRequirement[] {
+  const classMethods = parseClassImplementationMethods(classSource);
+
+  return requirements.filter((req) => {
+    const methods = classMethods.get(req.targetHandlerClass.toLowerCase());
+    if (!methods) return true;
+    return !methods.has(normalizeMethodName(req.methodName));
+  });
+}
+
 /**
  * Insert missing RAP handler signatures into matching `lhc_*` class definitions.
  *
  * Scope and contract:
- *  - Only DEFINITION sections are modified. METHOD implementations are the
- *    developer's responsibility — scaffolding them with a RETURN placeholder
- *    would mask activation errors and ship misleading handler logic.
+ *  - Only DEFINITION sections are modified. Use
+ *    applyRapHandlerImplementationStubs after this step when the scaffold
+ *    should be immediately patchable with edit_method.
  *  - Requirements whose target class (`lhc_<alias>`) is not present in this
  *    source are returned in `skipped`, not silently dropped. The caller can
  *    then try another include (definitions/implementations) or surface a
@@ -597,6 +659,87 @@ export function applyRapHandlerSignatures(
       index: range.privateSection + 1,
       lines: [...signatureLines, ''],
     });
+  }
+
+  if (edits.length === 0) {
+    return { updatedSource: classSource, inserted, skipped, changed: false };
+  }
+
+  const sorted = edits.sort((a, b) => b.index - a.index);
+  for (const edit of sorted) {
+    lines.splice(edit.index, 0, ...edit.lines);
+  }
+
+  return {
+    updatedSource: lines.join('\n'),
+    inserted,
+    skipped,
+    changed: inserted.length > 0,
+  };
+}
+
+export function applyRapHandlerImplementationStubs(
+  classSource: string,
+  requirements: RapHandlerRequirement[],
+  options: { createImplementationBlocks?: boolean } = {},
+): RapHandlerApplyResult {
+  if (requirements.length === 0) {
+    return { updatedSource: classSource, inserted: [], skipped: [], changed: false };
+  }
+
+  const lines = classSource.split('\n');
+  const definitionRanges = parseClassDefinitionRanges(classSource);
+  const implementationRanges = parseClassImplementationRanges(classSource);
+  const methodsByClass = parseClassImplementationMethods(classSource);
+  const grouped = new Map<string, RapHandlerRequirement[]>();
+
+  for (const req of requirements) {
+    const key = req.targetHandlerClass.toLowerCase();
+    const list = grouped.get(key) ?? [];
+    list.push(req);
+    grouped.set(key, list);
+  }
+
+  type Edit = { index: number; lines: string[] };
+  const edits: Edit[] = [];
+  const inserted: RapHandlerRequirement[] = [];
+  const skipped: RapHandlerApplySkipped[] = [];
+
+  for (const [targetClassName, classRequirements] of grouped.entries()) {
+    const existingMethods = methodsByClass.get(targetClassName) ?? new Set<string>();
+    const toInsert = classRequirements.filter((req) => !existingMethods.has(normalizeMethodName(req.methodName)));
+    if (toInsert.length === 0) continue;
+
+    const stubLines: string[] = [];
+    for (let i = 0; i < toInsert.length; i += 1) {
+      const req = toInsert[i]!;
+      stubLines.push(`  METHOD ${normalizeMethodName(req.methodName)}.`, '  ENDMETHOD.');
+      if (i < toInsert.length - 1) stubLines.push('');
+      inserted.push(req);
+    }
+
+    const implementationRange = implementationRanges.find((r) => r.name.toLowerCase() === targetClassName);
+    if (implementationRange) {
+      edits.push({ index: implementationRange.end, lines: [...stubLines, ''] });
+      continue;
+    }
+
+    const hasDefinition = definitionRanges.some((r) => r.name.toLowerCase() === targetClassName);
+    if (options.createImplementationBlocks && hasDefinition) {
+      edits.push({
+        index: lines.length,
+        lines: ['', `CLASS ${classRequirements[0]!.targetHandlerClass} IMPLEMENTATION.`, ...stubLines, 'ENDCLASS.'],
+      });
+      continue;
+    }
+
+    for (const req of toInsert) {
+      skipped.push({
+        requirement: req,
+        reason: `Implementation class ${req.targetHandlerClass} not found in behavior pool.`,
+      });
+    }
+    inserted.splice(inserted.length - toInsert.length, toInsert.length);
   }
 
   if (edits.length === 0) {

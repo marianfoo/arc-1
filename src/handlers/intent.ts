@@ -125,8 +125,10 @@ import {
   switchBranch as gctsSwitchBranch,
 } from '../adt/gcts.js';
 import {
+  applyRapHandlerImplementationStubs,
   applyRapHandlerSignatures,
   extractRapHandlerRequirements,
+  findMissingRapHandlerImplementationStubs,
   findMissingRapHandlerRequirements,
 } from '../adt/rap-handlers.js';
 import { formatRapPreflightFindings, validateRapSource } from '../adt/rap-preflight.js';
@@ -2627,6 +2629,7 @@ async function handleSAPWrite(
       }
 
       const missing = findMissingRapHandlerRequirements(requirements, classCombinedSource);
+      const missingImplementationStubs = findMissingRapHandlerImplementationStubs(requirements, classCombinedSource);
       const summary = {
         className: name,
         bdefName,
@@ -2639,9 +2642,11 @@ async function handleSAPWrite(
         requiredCount: requirements.length,
         missingCount: missing.length,
         missing,
+        missingImplementationStubCount: missingImplementationStubs.length,
+        missingImplementationStubs,
       };
 
-      if (!autoApply || missing.length === 0) {
+      if (!autoApply || (missing.length === 0 && missingImplementationStubs.length === 0)) {
         return textResult(JSON.stringify({ ...summary, applied: false }, null, 2));
       }
 
@@ -2682,9 +2687,43 @@ async function handleSAPWrite(
         pending = applyImplementations.skipped.map((entry) => entry.requirement);
       }
 
-      const changedMain = applyMain.changed;
-      const changedDefinitions = applyDefinitions?.changed ?? false;
-      const changedImplementations = applyImplementations?.changed ?? false;
+      const unresolvedDeclarationKeys = new Set(
+        pending.map(
+          (req) =>
+            `${req.targetHandlerClass.toLowerCase()}|${req.kind}|${req.methodName.toLowerCase()}|${req.entityAlias.toLowerCase()}`,
+        ),
+      );
+      const stubRequirements = missingImplementationStubs.filter(
+        (req) =>
+          !unresolvedDeclarationKeys.has(
+            `${req.targetHandlerClass.toLowerCase()}|${req.kind}|${req.methodName.toLowerCase()}|${req.entityAlias.toLowerCase()}`,
+          ),
+      );
+
+      const stubMain = applyRapHandlerImplementationStubs(applyMain.updatedSource, stubRequirements, {
+        createImplementationBlocks: true,
+      });
+      const stubDefinitions = classDefinitionsSource
+        ? applyRapHandlerImplementationStubs(
+            applyDefinitions?.updatedSource ?? classDefinitionsSource,
+            stubRequirements,
+          )
+        : undefined;
+      const stubImplementations = classImplementationsSource
+        ? applyRapHandlerImplementationStubs(
+            applyImplementations?.updatedSource ?? classImplementationsSource,
+            stubRequirements,
+            { createImplementationBlocks: true },
+          )
+        : undefined;
+
+      const finalMainSource = stubMain.updatedSource;
+      const finalDefinitionsSource = stubDefinitions?.updatedSource ?? applyDefinitions?.updatedSource;
+      const finalImplementationsSource = stubImplementations?.updatedSource ?? applyImplementations?.updatedSource;
+      const changedMain = applyMain.changed || stubMain.changed;
+      const changedDefinitions = (applyDefinitions?.changed ?? false) || (stubDefinitions?.changed ?? false);
+      const changedImplementations =
+        (applyImplementations?.changed ?? false) || (stubImplementations?.changed ?? false);
       if (!changedMain && !changedDefinitions && !changedImplementations) {
         return textResult(
           JSON.stringify(
@@ -2695,6 +2734,11 @@ async function handleSAPWrite(
                 main: applyMain,
                 definitions: applyDefinitions,
                 implementations: applyImplementations,
+                implementationStubs: {
+                  main: stubMain,
+                  definitions: stubDefinitions,
+                  implementations: stubImplementations,
+                },
                 unresolved: pending,
               },
             },
@@ -2707,23 +2751,17 @@ async function handleSAPWrite(
       // Run lint for every section we are about to update; block before any write to avoid partial state.
       let lintWarningsMain: PreWriteLintResult | undefined;
       if (changedMain) {
-        lintWarningsMain = runPreWriteLint(applyMain.updatedSource, type, name, config, lintOverride);
+        lintWarningsMain = runPreWriteLint(finalMainSource, type, name, config, lintOverride);
         if (lintWarningsMain.blocked) return lintWarningsMain.result!;
       }
       let lintWarningsDefinitions: PreWriteLintResult | undefined;
-      if (changedDefinitions && applyDefinitions) {
-        lintWarningsDefinitions = runPreWriteLint(applyDefinitions.updatedSource, type, name, config, lintOverride);
+      if (changedDefinitions && finalDefinitionsSource) {
+        lintWarningsDefinitions = runPreWriteLint(finalDefinitionsSource, type, name, config, lintOverride);
         if (lintWarningsDefinitions.blocked) return lintWarningsDefinitions.result!;
       }
       let lintWarningsImplementations: PreWriteLintResult | undefined;
-      if (changedImplementations && applyImplementations) {
-        lintWarningsImplementations = runPreWriteLint(
-          applyImplementations.updatedSource,
-          type,
-          name,
-          config,
-          lintOverride,
-        );
+      if (changedImplementations && finalImplementationsSource) {
+        lintWarningsImplementations = runPreWriteLint(finalImplementationsSource, type, name, config, lintOverride);
         if (lintWarningsImplementations.blocked) return lintWarningsImplementations.result!;
       }
 
@@ -2737,31 +2775,24 @@ async function handleSAPWrite(
         const effectiveTransport = transport ?? (lock.corrNr || undefined);
         try {
           if (changedMain) {
-            await updateSource(
-              session,
-              client.safety,
-              srcUrl,
-              applyMain.updatedSource,
-              lock.lockHandle,
-              effectiveTransport,
-            );
+            await updateSource(session, client.safety, srcUrl, finalMainSource, lock.lockHandle, effectiveTransport);
           }
-          if (changedDefinitions && applyDefinitions) {
+          if (changedDefinitions && finalDefinitionsSource) {
             await updateSource(
               session,
               client.safety,
               classIncludeUrl(name, 'definitions'),
-              applyDefinitions.updatedSource,
+              finalDefinitionsSource,
               lock.lockHandle,
               effectiveTransport,
             );
           }
-          if (changedImplementations && applyImplementations) {
+          if (changedImplementations && finalImplementationsSource) {
             await updateSource(
               session,
               client.safety,
               classIncludeUrl(name, 'implementations'),
-              applyImplementations.updatedSource,
+              finalImplementationsSource,
               lock.lockHandle,
               effectiveTransport,
             );
@@ -2783,13 +2814,17 @@ async function handleSAPWrite(
         applyMain.inserted.length +
         (applyDefinitions?.inserted.length ?? 0) +
         (applyImplementations?.inserted.length ?? 0);
+      const implementationStubCount =
+        stubMain.inserted.length +
+        (stubDefinitions?.inserted.length ?? 0) +
+        (stubImplementations?.inserted.length ?? 0);
       const updatedSections = [
         changedMain ? 'main' : undefined,
         changedDefinitions ? 'definitions' : undefined,
         changedImplementations ? 'implementations' : undefined,
       ].filter(Boolean);
       const msg =
-        `Scaffolded ${insertedCount} RAP handler signature(s) in ${type} ${name} from BDEF ${bdefName}. ` +
+        `Scaffolded ${insertedCount} RAP handler signature(s) and ${implementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
         `Updated section(s): ${updatedSections.join(', ')}.`;
       const warnings = mergePreWriteWarnings(
         lintWarningsMain?.warnings,
@@ -2804,6 +2839,11 @@ async function handleSAPWrite(
             main: applyMain,
             definitions: applyDefinitions,
             implementations: applyImplementations,
+            implementationStubs: {
+              main: stubMain,
+              definitions: stubDefinitions,
+              implementations: stubImplementations,
+            },
             unresolved: pending,
           },
         },

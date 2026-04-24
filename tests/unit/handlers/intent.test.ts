@@ -6669,6 +6669,9 @@ ENDCLASS.
     });
 
     it('autoApply injects signatures and writes class source', async () => {
+      const classImplementationsSource = `CLASS lhc_travel IMPLEMENTATION.
+ENDCLASS.`;
+
       mockFetch.mockReset();
       const calls: Array<{ method: string; url: string; body?: string }> = [];
       mockFetch.mockImplementation(
@@ -6692,10 +6695,12 @@ ENDCLASS.
           if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions')) {
             return Promise.resolve(mockResponse(200, classDefinitionsSource, { 'x-csrf-token': 'T' }));
           }
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations')) {
+            return Promise.resolve(mockResponse(200, classImplementationsSource, { 'x-csrf-token': 'T' }));
+          }
           if (
             method === 'GET' &&
             (urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/testclasses') ||
-              urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations') ||
               urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/macros'))
           ) {
             return Promise.reject(new AdtApiError('Not found', 404, urlStr));
@@ -6734,6 +6739,13 @@ ENDCLASS.
       expect(putCall).toBeDefined();
       expect(putCall?.body).toContain('METHODS recalculatetotalcost FOR MODIFY');
       expect(putCall?.body).toContain('METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION');
+      const implPutCall = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations'),
+      );
+      expect(implPutCall).toBeDefined();
+      expect(implPutCall?.body).toContain('METHOD recalculatetotalcost.');
+      expect(implPutCall?.body).toContain('METHOD get_instance_authorizations.');
     });
 
     it('autoApply falls back to implementations include when handler class is declared there', async () => {
@@ -6814,6 +6826,93 @@ ENDCLASS.`;
       expect(putCall).toBeDefined();
       expect(putCall?.body).toContain('METHODS recalculatetotalcost FOR MODIFY');
       expect(putCall?.body).toContain('METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION');
+      expect(putCall?.body).toContain('METHOD recalculatetotalcost.');
+      expect(putCall?.body).toContain('METHOD get_instance_authorizations.');
+    });
+
+    it('autoApply adds implementation stubs even when declarations already exist', async () => {
+      const classDefinitionsAllHandlers = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS submitforapproval FOR MODIFY
+      IMPORTING keys FOR ACTION Travel~SubmitForApproval RESULT result.
+    METHODS recalculatetotalcost FOR MODIFY
+      IMPORTING keys FOR ACTION Travel~RecalculateTotalCost RESULT result.
+    METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION
+      IMPORTING keys REQUEST requested_authorizations FOR Travel RESULT result.
+ENDCLASS.`;
+      const classImplementationsEmpty = `CLASS lhc_travel IMPLEMENTATION.
+ENDCLASS.`;
+
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; body?: string | Buffer | null; headers?: Record<string, string> },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          const urlStr = String(url);
+          calls.push({ method, url: urlStr, body: typeof opts?.body === 'string' ? opts.body : undefined });
+
+          if (method === 'GET' && urlStr.endsWith('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ')) {
+            return Promise.resolve(mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/source/main')) {
+            return Promise.resolve(mockResponse(200, classMainSource, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions')) {
+            return Promise.resolve(mockResponse(200, classDefinitionsAllHandlers, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations')) {
+            return Promise.resolve(mockResponse(200, classImplementationsEmpty, { 'x-csrf-token': 'T' }));
+          }
+          if (
+            method === 'GET' &&
+            (urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/testclasses') ||
+              urlStr.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/macros'))
+          ) {
+            return Promise.reject(new AdtApiError('Not found', 404, urlStr));
+          }
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVELREQ/source/main')) {
+            return Promise.resolve(mockResponse(200, bdefSource, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+            return Promise.resolve(
+              mockResponse(
+                200,
+                '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+                { 'x-csrf-token': 'T' },
+              ),
+            );
+          }
+          return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'scaffold_rap_handlers',
+        type: 'CLAS',
+        name: 'ZBP_I_TRAVELREQ',
+        bdefName: 'ZI_TRAVELREQ',
+        autoApply: true,
+        lintBeforeWrite: false,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('0 RAP handler signature(s) and 3 implementation stub(s)');
+      const definitionPutCall = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions'),
+      );
+      expect(definitionPutCall).toBeUndefined();
+      const implPutCall = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations'),
+      );
+      expect(implPutCall).toBeDefined();
+      expect(implPutCall?.body).toContain('METHOD submitforapproval.');
+      expect(implPutCall?.body).toContain('METHOD recalculatetotalcost.');
+      expect(implPutCall?.body).toContain('METHOD get_instance_authorizations.');
     });
 
     it('returns validation error when bdefName is missing', async () => {

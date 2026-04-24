@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyRapHandlerImplementationStubs,
   applyRapHandlerSignatures,
   extractRapHandlerRequirements,
+  findMissingRapHandlerImplementationStubs,
   findMissingRapHandlerRequirements,
   parseClassDefinitionMethods,
 } from '../../../src/adt/rap-handlers.js';
+import { spliceMethod } from '../../../src/context/method-surgery.js';
 
 const BDEF_SOURCE = `managed implementation in class ZBP_I_TRAVELREQ unique;
 define behavior for ZI_TRAVELREQ alias Travel
@@ -199,6 +202,28 @@ ENDCLASS.`;
   });
 });
 
+describe('findMissingRapHandlerImplementationStubs', () => {
+  it('reports declarations that still lack implementation blocks', () => {
+    const bdef = `define behavior for zi_travel alias travel
+{
+  action SubmitForApproval result [1] $self;
+}`;
+    const classSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS submitforapproval FOR MODIFY
+      IMPORTING keys FOR ACTION travel~SubmitForApproval RESULT result.
+ENDCLASS.
+
+CLASS lhc_travel IMPLEMENTATION.
+ENDCLASS.`;
+
+    const requirements = extractRapHandlerRequirements(bdef);
+    const missing = findMissingRapHandlerImplementationStubs(requirements, classSource);
+
+    expect(missing.map((req) => req.methodName)).toEqual(['submitforapproval']);
+  });
+});
+
 describe('applyRapHandlerSignatures', () => {
   it('injects missing signatures into existing handler class private sections', () => {
     const classSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
@@ -217,6 +242,30 @@ ENDCLASS.`;
     expect(result.updatedSource).toContain('METHODS submitforapproval FOR MODIFY');
     expect(result.updatedSource).toContain('METHODS recalculatetotalcost FOR MODIFY');
     expect(result.updatedSource).toContain('METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION');
+  });
+
+  it('ignores deferred handler declarations when choosing insertion target', () => {
+    const classSource = `CLASS lhc_travel DEFINITION DEFERRED.
+
+CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+ENDCLASS.
+
+CLASS lhc_travel IMPLEMENTATION.
+ENDCLASS.`;
+    const requirement = extractRapHandlerRequirements(BDEF_SOURCE).find(
+      (req) => req.methodName === 'submitforapproval',
+    );
+    expect(requirement).toBeDefined();
+
+    const result = applyRapHandlerSignatures(classSource, requirement ? [requirement] : []);
+
+    expect(result.changed).toBe(true);
+    expect(result.updatedSource).toMatch(/^CLASS lhc_travel DEFINITION DEFERRED\./);
+    expect(result.updatedSource).toContain(`CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS submitforapproval FOR MODIFY`);
+    expect(result.updatedSource).not.toMatch(/^ {2}PRIVATE SECTION\./);
   });
 
   it('adds PRIVATE SECTION when missing in a handler class definition', () => {
@@ -248,5 +297,77 @@ ENDCLASS.`;
     expect(result.inserted).toHaveLength(0);
     expect(result.skipped).toHaveLength(requirements.length);
     expect(result.skipped[0]?.reason).toContain('not found');
+  });
+});
+
+describe('applyRapHandlerImplementationStubs', () => {
+  it('inserts empty method stubs into matching implementation classes', () => {
+    const classSource = `CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS submitforapproval FOR MODIFY
+      IMPORTING keys FOR ACTION Travel~SubmitForApproval RESULT result.
+ENDCLASS.
+
+CLASS lhc_travel IMPLEMENTATION.
+ENDCLASS.`;
+    const requirement = extractRapHandlerRequirements(BDEF_SOURCE).find(
+      (req) => req.methodName === 'submitforapproval',
+    );
+    expect(requirement).toBeDefined();
+
+    const result = applyRapHandlerImplementationStubs(classSource, requirement ? [requirement] : []);
+
+    expect(result.changed).toBe(true);
+    expect(result.updatedSource).toContain('CLASS lhc_travel IMPLEMENTATION.');
+    expect(result.updatedSource).toContain('  METHOD submitforapproval.');
+    expect(result.updatedSource).toContain('  ENDMETHOD.');
+
+    const spliced = spliceMethod(
+      result.updatedSource,
+      'zbp_i_travelreq',
+      'submitforapproval',
+      '    reported = reported.',
+    );
+    expect(spliced.success).toBe(true);
+    expect(spliced.newSource).toContain('reported = reported.');
+  });
+
+  it('creates implementation blocks in implementation includes when requested', () => {
+    const classSource = `*"* implementations placeholder
+CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS submitforapproval FOR MODIFY
+      IMPORTING keys FOR ACTION Travel~SubmitForApproval RESULT result.
+ENDCLASS.`;
+    const requirement = extractRapHandlerRequirements(BDEF_SOURCE).find(
+      (req) => req.methodName === 'submitforapproval',
+    );
+    expect(requirement).toBeDefined();
+
+    const result = applyRapHandlerImplementationStubs(classSource, requirement ? [requirement] : [], {
+      createImplementationBlocks: true,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.updatedSource).toContain(`CLASS lhc_travel IMPLEMENTATION.
+  METHOD submitforapproval.
+  ENDMETHOD.
+ENDCLASS.`);
+  });
+
+  it('does not duplicate existing implementation stubs', () => {
+    const classSource = `CLASS lhc_travel IMPLEMENTATION.
+  METHOD submitforapproval.
+  ENDMETHOD.
+ENDCLASS.`;
+    const requirement = extractRapHandlerRequirements(BDEF_SOURCE).find(
+      (req) => req.methodName === 'submitforapproval',
+    );
+    expect(requirement).toBeDefined();
+
+    const result = applyRapHandlerImplementationStubs(classSource, requirement ? [requirement] : []);
+
+    expect(result.changed).toBe(false);
+    expect(result.updatedSource.match(/METHOD submitforapproval/g)).toHaveLength(1);
   });
 });
