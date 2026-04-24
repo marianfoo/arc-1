@@ -82,6 +82,18 @@ export interface RapHandlerScaffoldPlan {
   insertedImplementationStubCount: number;
 }
 
+interface RapHandlerDeclarationBinding {
+  kind: RapHandlerKind;
+  methodName: string;
+  entityAlias: string;
+}
+
+interface SignatureFallthroughPlan {
+  signatures: RapHandlerSectionApplyResults;
+  updatedSections: RapHandlerSourceSections;
+  unresolved: RapHandlerRequirement[];
+}
+
 interface RapBehaviorBlock {
   entityName: string;
   alias: string;
@@ -101,6 +113,36 @@ interface ClassImplementationRange {
   start: number;
   end: number;
 }
+
+// AI-maintenance guide:
+// If SAP adds or changes RAP handler syntax, update these parser patterns first,
+// then add one fixture-style test in tests/unit/adt/rap-handlers.test.ts. Keeping
+// the grammar fragments here avoids subtly divergent regexes in detection,
+// missing-checks, and auto-apply.
+const BDEF_DEFINE_BEHAVIOR_RE = /^\s*define\s+behavior\s+for\s+([^\s{]+)(?:\s+alias\s+([A-Za-z_]\w*))?/i;
+const BDEF_ACTION_DECLARATION_RE =
+  /^\s*(?:static\s+)?(?:(?:internal|factory)\s+)*action(?:\s*\([^)]*\))?\s+([A-Za-z_]\w*)\b/i;
+const BDEF_DETERMINATION_DECLARATION_RE = /^\s*determination\s+([A-Za-z_]\w*)\s+on\s+(modify|save)\b/i;
+const BDEF_VALIDATION_DECLARATION_RE = /^\s*validation\s+([A-Za-z_]\w*)\s+on\s+(modify|save)\b/i;
+const BDEF_INSTANCE_AUTH_RE = /\bauthorization\s+master\s*\(\s*instance\s*\)/i;
+const BDEF_GLOBAL_AUTH_RE = /\bauthorization\s+master\s*\(\s*global\s*\)/i;
+
+const CLASS_DEFINITION_START_RE = /^\s*CLASS\s+([A-Za-z_][\w$]*)\s+DEFINITION\b/i;
+const CLASS_DEFINITION_DEFERRED_RE = /\bDEFINITION\b.*\bDEFERRED\b/i;
+const CLASS_IMPLEMENTATION_START_RE = /^\s*CLASS\s+([A-Za-z_][\w$]*)\s+IMPLEMENTATION\s*\./i;
+const PRIVATE_SECTION_RE = /^\s*PRIVATE\s+SECTION\./i;
+const ENDCLASS_RE = /^\s*ENDCLASS\./i;
+const METHOD_DECLARATION_RE = /^\s*(?:CLASS-)?METHODS\s+([A-Za-z_~][\w~]*)/i;
+const METHOD_IMPLEMENTATION_RE = /^\s*METHOD\s+([A-Za-z_~][\w~]*)\s*\./i;
+
+const HANDLER_ACTION_BINDING_RE = /\bFOR\s+ACTION\s+([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i;
+const HANDLER_ENTITY_BINDING_RE =
+  /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i;
+const HANDLER_AUTH_BINDING_RE = /\bAUTHORIZATION\b.*\bFOR\s+([A-Za-z_]\w*)\s+RESULT\b/i;
+const HANDLER_DETERMINE_STATEMENT_RE = /\bFOR\s+DETERMINE\s+ON\b/i;
+const HANDLER_VALIDATE_STATEMENT_RE = /\bFOR\s+VALIDATE\s+ON\b/i;
+const HANDLER_INSTANCE_AUTH_STATEMENT_RE = /\bFOR\s+INSTANCE\s+AUTHORIZATION\b/i;
+const HANDLER_GLOBAL_AUTH_STATEMENT_RE = /\bFOR\s+GLOBAL\s+AUTHORIZATION\b/i;
 
 function bindingKey(targetHandlerClass: string, kind: RapHandlerKind, methodName: string, entityAlias: string): string {
   return [targetHandlerClass.toLowerCase(), kind, normalizeMethodName(methodName), entityAlias.toLowerCase()].join('|');
@@ -223,7 +265,7 @@ function parseBehaviorBlocks(source: string): RapBehaviorBlock[] {
     const line = lines[i] ?? '';
 
     if (!current) {
-      const defineMatch = line.match(/^\s*define\s+behavior\s+for\s+([^\s{]+)(?:\s+alias\s+([A-Za-z_]\w*))?/i);
+      const defineMatch = line.match(BDEF_DEFINE_BEHAVIOR_RE);
       if (!defineMatch) continue;
 
       const entityName = defineMatch[1] ?? '';
@@ -261,6 +303,21 @@ function pushRequirement(out: RapHandlerRequirement[], requirement: RapHandlerRe
   if (seen.has(key)) return;
   seen.add(key);
   out.push(requirement);
+}
+
+function groupRequirementsByTargetClass(requirements: RapHandlerRequirement[]): Map<string, RapHandlerRequirement[]> {
+  const grouped = new Map<string, RapHandlerRequirement[]>();
+  for (const req of requirements) {
+    const key = req.targetHandlerClass.toLowerCase();
+    const list = grouped.get(key) ?? [];
+    list.push(req);
+    grouped.set(key, list);
+  }
+  return grouped;
+}
+
+function hasActionResultClause(actionDeclaration: string): boolean {
+  return /\bresult\b/i.test(actionDeclaration);
 }
 
 /**
@@ -303,9 +360,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
       //     `action` and the action name — `action ( features: instance ) Foo`
       // Missing any of these prefixes used to silently drop the requirement,
       // which was the original bug on live /DMO/BP_TRAVEL_M samples.
-      const actionMatch = line.match(
-        /^\s*(?:static\s+)?(?:(?:internal|factory)\s+)*action(?:\s*\([^)]*\))?\s+([A-Za-z_]\w*)\b/i,
-      );
+      const actionMatch = line.match(BDEF_ACTION_DECLARATION_RE);
       if (actionMatch?.[1]) {
         const actionName = actionMatch[1];
         const methodName = normalizeMethodName(actionName);
@@ -317,7 +372,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
         // carry RESULT in the handler signature — the activation check is strict
         // and rejects mismatched signatures with a cryptic "method signature
         // does not match BDL declaration" error.
-        const hasResult = /\bresult\b/i.test(actionDecl);
+        const hasResult = hasActionResultClause(actionDecl);
         const resultPart = hasResult ? ' RESULT result' : '';
         pushRequirement(
           requirements,
@@ -335,7 +390,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
         );
       }
 
-      const determinationMatch = line.match(/^\s*determination\s+([A-Za-z_]\w*)\s+on\s+(modify|save)\b/i);
+      const determinationMatch = line.match(BDEF_DETERMINATION_DECLARATION_RE);
       if (determinationMatch?.[1] && determinationMatch[2]) {
         const determinationName = determinationMatch[1];
         const event = determinationMatch[2].toUpperCase();
@@ -357,7 +412,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
         );
       }
 
-      const validationMatch = line.match(/^\s*validation\s+([A-Za-z_]\w*)\s+on\s+(modify|save)\b/i);
+      const validationMatch = line.match(BDEF_VALIDATION_DECLARATION_RE);
       if (validationMatch?.[1] && validationMatch[2]) {
         const validationName = validationMatch[1];
         const event = validationMatch[2].toUpperCase();
@@ -382,7 +437,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
     // `authorization master ( instance )` → the pool must implement
     // get_instance_authorizations (per-instance row-level checks, imports
     // keys so the handler can evaluate each row individually).
-    const instanceAuthMatch = body.match(/\bauthorization\s+master\s*\(\s*instance\s*\)/i);
+    const instanceAuthMatch = body.match(BDEF_INSTANCE_AUTH_RE);
     if (instanceAuthMatch) {
       pushRequirement(
         requirements,
@@ -404,7 +459,7 @@ export function extractRapHandlerRequirements(bdefSource: string): RapHandlerReq
     // `authorization master ( global )` → the pool must implement
     // get_global_authorizations (a single, stateless check for the whole
     // entity; no keys parameter because the decision is not per-row).
-    const globalAuthMatch = body.match(/\bauthorization\s+master\s*\(\s*global\s*\)/i);
+    const globalAuthMatch = body.match(BDEF_GLOBAL_AUTH_RE);
     if (globalAuthMatch) {
       pushRequirement(
         requirements,
@@ -448,21 +503,21 @@ function parseClassDefinitionRanges(source: string): ClassDefinitionRange[] {
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
-    const startMatch = line.match(/^\s*CLASS\s+([A-Za-z_][\w$]*)\s+DEFINITION\b/i);
+    const startMatch = line.match(CLASS_DEFINITION_START_RE);
     if (!startMatch?.[1]) continue;
 
     const name = startMatch[1];
-    const isDeferred = /\bDEFINITION\b.*\bDEFERRED\b/i.test(line);
+    const isDeferred = CLASS_DEFINITION_DEFERRED_RE.test(line);
     if (isDeferred) continue;
 
     let end = i;
     let privateSection: number | undefined;
     for (let j = i + 1; j < lines.length; j += 1) {
       const inner = lines[j] ?? '';
-      if (privateSection === undefined && /^\s*PRIVATE\s+SECTION\./i.test(inner)) {
+      if (privateSection === undefined && PRIVATE_SECTION_RE.test(inner)) {
         privateSection = j;
       }
-      if (/^\s*ENDCLASS\./i.test(inner)) {
+      if (ENDCLASS_RE.test(inner)) {
         end = j;
         break;
       }
@@ -481,14 +536,14 @@ function parseClassImplementationRanges(source: string): ClassImplementationRang
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
-    const startMatch = line.match(/^\s*CLASS\s+([A-Za-z_][\w$]*)\s+IMPLEMENTATION\s*\./i);
+    const startMatch = line.match(CLASS_IMPLEMENTATION_START_RE);
     if (!startMatch?.[1]) continue;
 
     const name = startMatch[1];
     let end = i;
     for (let j = i + 1; j < lines.length; j += 1) {
       const inner = lines[j] ?? '';
-      if (/^\s*ENDCLASS\./i.test(inner)) {
+      if (ENDCLASS_RE.test(inner)) {
         end = j;
         break;
       }
@@ -512,7 +567,7 @@ function parseClassImplementationMethods(source: string): Map<string, Set<string
 
     for (let i = range.start; i <= range.end; i += 1) {
       const line = lines[i] ?? '';
-      const match = line.match(/^\s*METHOD\s+([A-Za-z_~][\w~]*)\s*\./i);
+      const match = line.match(METHOD_IMPLEMENTATION_RE);
       if (match?.[1]) methods.add(normalizeMethodName(match[1]));
     }
 
@@ -522,36 +577,32 @@ function parseClassImplementationMethods(source: string): Map<string, Set<string
   return out;
 }
 
-function parseHandlerDeclarationBinding(
-  statement: string,
-): { kind: RapHandlerKind; methodName: string; entityAlias: string } | undefined {
-  const actionBinding = statement.match(/\bFOR\s+ACTION\s+([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i);
+function parseHandlerDeclarationBinding(statement: string): RapHandlerDeclarationBinding | undefined {
+  const actionBinding = statement.match(HANDLER_ACTION_BINDING_RE);
   if (actionBinding?.[1] && actionBinding[2]) {
     return { kind: 'action', entityAlias: actionBinding[1], methodName: actionBinding[2] };
   }
 
-  const entityBinding = statement.match(
-    /\bFOR\s+(?!ACTION\b|MODIFY\b|READ\b|VALIDATE\b|DETERMINE\b|INSTANCE\b|GLOBAL\b)([A-Za-z_]\w*)\s*~\s*([A-Za-z_]\w*)/i,
-  );
+  const entityBinding = statement.match(HANDLER_ENTITY_BINDING_RE);
   if (entityBinding?.[1] && entityBinding[2]) {
-    if (/\bFOR\s+DETERMINE\s+ON\b/i.test(statement)) {
+    if (HANDLER_DETERMINE_STATEMENT_RE.test(statement)) {
       return { kind: 'determination', entityAlias: entityBinding[1], methodName: entityBinding[2] };
     }
-    if (/\bFOR\s+VALIDATE\s+ON\b/i.test(statement)) {
+    if (HANDLER_VALIDATE_STATEMENT_RE.test(statement)) {
       return { kind: 'validation', entityAlias: entityBinding[1], methodName: entityBinding[2] };
     }
   }
 
-  const authBinding = statement.match(/\bAUTHORIZATION\b.*\bFOR\s+([A-Za-z_]\w*)\s+RESULT\b/i);
+  const authBinding = statement.match(HANDLER_AUTH_BINDING_RE);
   if (authBinding?.[1]) {
-    if (/\bFOR\s+INSTANCE\s+AUTHORIZATION\b/i.test(statement)) {
+    if (HANDLER_INSTANCE_AUTH_STATEMENT_RE.test(statement)) {
       return {
         kind: 'instance_authorization',
         entityAlias: authBinding[1],
         methodName: 'get_instance_authorizations',
       };
     }
-    if (/\bFOR\s+GLOBAL\s+AUTHORIZATION\b/i.test(statement)) {
+    if (HANDLER_GLOBAL_AUTH_STATEMENT_RE.test(statement)) {
       return {
         kind: 'global_authorization',
         entityAlias: authBinding[1],
@@ -583,7 +634,7 @@ function parseClassDefinitionHandlerBindings(source: string): Map<string, string
 
     for (let i = range.start; i <= range.end; i += 1) {
       const line = lines[i] ?? '';
-      const match = line.match(/^\s*(?:CLASS-)?METHODS\s+([A-Za-z_~][\w~]*)/i);
+      const match = line.match(METHOD_DECLARATION_RE);
       if (!match?.[1]) continue;
       const declaredMethodName = normalizeMethodName(match[1]);
       const statement = collectAbapStatement(lines, i, range.end);
@@ -634,7 +685,7 @@ export function parseClassDefinitionMethods(source: string): Map<string, Set<str
 
     for (let i = range.start; i <= range.end; i += 1) {
       const line = lines[i] ?? '';
-      const match = line.match(/^\s*(?:CLASS-)?METHODS\s+([A-Za-z_~][\w~]*)/i);
+      const match = line.match(METHOD_DECLARATION_RE);
       if (!match?.[1]) continue;
       methods.add(normalizeMethodName(match[1]));
 
@@ -725,14 +776,7 @@ export function applyRapHandlerSignatures(
   const lines = classSource.split('\n');
   const ranges = parseClassDefinitionRanges(classSource);
   const methodsByClass = parseClassDefinitionMethods(classSource);
-  const grouped = new Map<string, RapHandlerRequirement[]>();
-
-  for (const req of requirements) {
-    const key = req.targetHandlerClass.toLowerCase();
-    const list = grouped.get(key) ?? [];
-    list.push(req);
-    grouped.set(key, list);
-  }
+  const grouped = groupRequirementsByTargetClass(requirements);
 
   type Edit = { index: number; lines: string[] };
   const edits: Edit[] = [];
@@ -807,14 +851,7 @@ export function applyRapHandlerImplementationStubs(
   const methodsByClass = parseClassImplementationMethods(classSource);
   const definitionLookupSource = options.definitionSource ? `${options.definitionSource}\n${classSource}` : classSource;
   const declaredMethodByRequirement = parseClassDefinitionHandlerBindings(definitionLookupSource);
-  const grouped = new Map<string, RapHandlerRequirement[]>();
-
-  for (const req of requirements) {
-    const key = req.targetHandlerClass.toLowerCase();
-    const list = grouped.get(key) ?? [];
-    list.push(req);
-    grouped.set(key, list);
-  }
+  const grouped = groupRequirementsByTargetClass(requirements);
 
   type Edit = { index: number; lines: string[] };
   const edits: Edit[] = [];
@@ -891,6 +928,69 @@ function countInserted(results: RapHandlerSectionApplyResults): number {
   );
 }
 
+function changedSectionsFrom(changed: Record<RapHandlerSectionName, boolean>): RapHandlerSectionName[] {
+  return (Object.keys(changed) as RapHandlerSectionName[]).filter((section) => changed[section]);
+}
+
+/**
+ * Build the source used to resolve semantic method names while creating stubs.
+ *
+ * The declaration (`METHODS set_status_accepted FOR ACTION travel~acceptTravel`)
+ * and implementation (`METHOD set_status_accepted.`) can live in different ADT
+ * includes. Stub generation therefore needs the post-signature sources for all
+ * sections, not only the include currently being edited.
+ */
+function buildDefinitionLookupSource(
+  originalSections: RapHandlerSourceSections,
+  signaturePlan: SignatureFallthroughPlan,
+): string {
+  return [
+    signaturePlan.updatedSections.main,
+    signaturePlan.updatedSections.definitions ?? originalSections.definitions,
+    signaturePlan.updatedSections.implementations ?? originalSections.implementations,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * Try signature insertion in ADT include order: main → definitions → implementations.
+ *
+ * A handler class can legally exist in any of these includes depending on how
+ * ADT generated the behavior pool. The unresolved list is deliberately carried
+ * forward between sections so a requirement is inserted exactly once, in the
+ * first include that contains its concrete `lhc_<alias> DEFINITION`.
+ */
+function applySignaturesAcrossSections(
+  sections: RapHandlerSourceSections,
+  missingSignatures: RapHandlerRequirement[],
+): SignatureFallthroughPlan {
+  const main = applyRapHandlerSignatures(sections.main, missingSignatures);
+  let unresolved = main.skipped.map((entry) => entry.requirement);
+
+  let definitions: RapHandlerApplyResult | undefined;
+  if (unresolved.length > 0 && sections.definitions) {
+    definitions = applyRapHandlerSignatures(sections.definitions, unresolved);
+    unresolved = definitions.skipped.map((entry) => entry.requirement);
+  }
+
+  let implementations: RapHandlerApplyResult | undefined;
+  if (unresolved.length > 0 && sections.implementations) {
+    implementations = applyRapHandlerSignatures(sections.implementations, unresolved);
+    unresolved = implementations.skipped.map((entry) => entry.requirement);
+  }
+
+  return {
+    signatures: { main, definitions, implementations },
+    updatedSections: {
+      main: main.updatedSource,
+      definitions: definitions?.updatedSource ?? sections.definitions,
+      implementations: implementations?.updatedSource ?? sections.implementations,
+    },
+    unresolved,
+  };
+}
+
 /**
  * Build the complete auto-apply plan for a behavior pool without doing I/O.
  *
@@ -912,86 +1012,63 @@ export function applyRapHandlerScaffold(
   missingSignatures: RapHandlerRequirement[],
   missingImplementationStubs: RapHandlerRequirement[],
 ): RapHandlerScaffoldPlan {
-  const applyMain = applyRapHandlerSignatures(sections.main, missingSignatures);
-  let pending = applyMain.skipped.map((entry) => entry.requirement);
-
-  let applyDefinitions: RapHandlerApplyResult | undefined;
-  if (pending.length > 0 && sections.definitions) {
-    applyDefinitions = applyRapHandlerSignatures(sections.definitions, pending);
-    pending = applyDefinitions.skipped.map((entry) => entry.requirement);
-  }
-
-  let applyImplementations: RapHandlerApplyResult | undefined;
-  if (pending.length > 0 && sections.implementations) {
-    applyImplementations = applyRapHandlerSignatures(sections.implementations, pending);
-    pending = applyImplementations.skipped.map((entry) => entry.requirement);
-  }
+  const signaturePlan = applySignaturesAcrossSections(sections, missingSignatures);
 
   // A METHOD stub is only useful after its declaration exists. If the target
   // `lhc_*` class was not found anywhere, suppress the stub for that unresolved
   // declaration rather than creating an implementation block with no matching
   // RAP handler signature.
-  const unresolvedDeclarationKeys = new Set(pending.map(rapHandlerRequirementKey));
+  const unresolvedDeclarationKeys = new Set(signaturePlan.unresolved.map(rapHandlerRequirementKey));
   const stubRequirements = missingImplementationStubs.filter(
     (req) => !unresolvedDeclarationKeys.has(rapHandlerRequirementKey(req)),
   );
-  const definitionLookupSource = [
-    applyMain.updatedSource,
-    applyDefinitions?.updatedSource ?? sections.definitions,
-    applyImplementations?.updatedSource ?? sections.implementations,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  const definitionLookupSource = buildDefinitionLookupSource(sections, signaturePlan);
 
-  const stubMain = applyRapHandlerImplementationStubs(applyMain.updatedSource, stubRequirements, {
+  const stubMain = applyRapHandlerImplementationStubs(signaturePlan.updatedSections.main, stubRequirements, {
     createImplementationBlocks: true,
     definitionSource: definitionLookupSource,
   });
   const stubDefinitions = sections.definitions
-    ? applyRapHandlerImplementationStubs(applyDefinitions?.updatedSource ?? sections.definitions, stubRequirements, {
-        definitionSource: definitionLookupSource,
-      })
+    ? applyRapHandlerImplementationStubs(
+        signaturePlan.updatedSections.definitions ?? sections.definitions,
+        stubRequirements,
+        {
+          definitionSource: definitionLookupSource,
+        },
+      )
     : undefined;
   const stubImplementations = sections.implementations
     ? applyRapHandlerImplementationStubs(
-        applyImplementations?.updatedSource ?? sections.implementations,
+        signaturePlan.updatedSections.implementations ?? sections.implementations,
         stubRequirements,
         { createImplementationBlocks: true, definitionSource: definitionLookupSource },
       )
     : undefined;
 
   const changed = {
-    main: applyMain.changed || stubMain.changed,
-    definitions: (applyDefinitions?.changed ?? false) || (stubDefinitions?.changed ?? false),
-    implementations: (applyImplementations?.changed ?? false) || (stubImplementations?.changed ?? false),
+    main: signaturePlan.signatures.main.changed || stubMain.changed,
+    definitions: (signaturePlan.signatures.definitions?.changed ?? false) || (stubDefinitions?.changed ?? false),
+    implementations:
+      (signaturePlan.signatures.implementations?.changed ?? false) || (stubImplementations?.changed ?? false),
   };
-  const changedSections = (Object.keys(changed) as RapHandlerSectionName[]).filter((section) => changed[section]);
+  const changedSections = changedSectionsFrom(changed);
 
   return {
     sections: {
       main: stubMain.updatedSource,
-      definitions: stubDefinitions?.updatedSource ?? applyDefinitions?.updatedSource ?? sections.definitions,
-      implementations:
-        stubImplementations?.updatedSource ?? applyImplementations?.updatedSource ?? sections.implementations,
+      definitions: stubDefinitions?.updatedSource ?? signaturePlan.updatedSections.definitions,
+      implementations: stubImplementations?.updatedSource ?? signaturePlan.updatedSections.implementations,
     },
-    signatures: {
-      main: applyMain,
-      definitions: applyDefinitions,
-      implementations: applyImplementations,
-    },
+    signatures: signaturePlan.signatures,
     implementationStubs: {
       main: stubMain,
       definitions: stubDefinitions,
       implementations: stubImplementations,
     },
-    unresolved: pending,
+    unresolved: signaturePlan.unresolved,
     changed,
     changedSections,
-    insertedSignatureCount: countInserted({
-      main: applyMain,
-      definitions: applyDefinitions,
-      implementations: applyImplementations,
-    }),
+    insertedSignatureCount: countInserted(signaturePlan.signatures),
     insertedImplementationStubCount: countInserted({
       main: stubMain,
       definitions: stubDefinitions,
