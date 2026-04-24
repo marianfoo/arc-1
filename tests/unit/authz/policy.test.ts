@@ -118,6 +118,17 @@ describe('ACTION_POLICY matrix', () => {
       expect(getActionPolicy('SAPManage', action)?.scope, `SAPManage.${action}`).toBe('write');
     }
   });
+
+  it('SAPWrite.scaffold_rap_handlers has explicit entry with rap feature gate', () => {
+    // Regression: after the authz refactor (commit 7be4ff0), every SAPWrite
+    // action has its own entry so admins can target them individually in
+    // SAP_DENY_ACTIONS. Without this entry, deny-actions startup validation
+    // rejects `SAPWrite.scaffold_rap_handlers` as "matches no actions".
+    const policy = getActionPolicy('SAPWrite', 'scaffold_rap_handlers');
+    expect(policy?.scope).toBe('write');
+    expect(policy?.opType).toBe(OperationType.Update);
+    expect(policy?.featureGate).toBe('rap');
+  });
 });
 
 describe('getActionPolicy', () => {

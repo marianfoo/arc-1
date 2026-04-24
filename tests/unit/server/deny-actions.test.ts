@@ -79,6 +79,13 @@ describe('validateDenyActions', () => {
     expect(() => validateDenyActions(['SAPWrite.delete', 'SAPManage.flp_list_catalogs'])).not.toThrow();
   });
 
+  it('accepts SAPWrite.scaffold_rap_handlers (RAP handler scaffolder)', () => {
+    // Regression: this action was added after the main SAPWrite enum and
+    // must be listed in ACTION_POLICY so admins can specifically deny it
+    // via SAP_DENY_ACTIONS without having to block the whole SAPWrite tool.
+    expect(() => validateDenyActions(['SAPWrite.scaffold_rap_handlers'])).not.toThrow();
+  });
+
   it('accepts valid Tool.glob* patterns', () => {
     expect(() => validateDenyActions(['SAPManage.flp_*', 'SAPTransport.*'])).not.toThrow();
   });
