@@ -38,6 +38,7 @@ import {
   findReferences,
   findWhereUsed,
   getCompletion,
+  getWhereUsedScope,
   type ReferenceResult,
   type WhereUsedResult,
 } from '../adt/codeintel.js';
@@ -285,6 +286,20 @@ interface CdsOrderedObject {
 }
 
 const CDS_ORDERABLE_TYPES = new Set(['DDLS', 'DCLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB']);
+const CDS_IMPACT_WHERE_USED_TYPES = new Set([
+  'DDLS',
+  'DCLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'CLAS',
+  'INTF',
+  'PROG',
+  'FUGR',
+  'TABL',
+  'SKTD',
+]);
 
 // ─── Search Helpers ─────────────────────────────────────────────────
 
@@ -339,6 +354,26 @@ function hasSqlParserSignature(text: string): boolean {
   );
 }
 
+function getWriteInfrastructureHint(err: AdtApiError, tool: string, args: Record<string, unknown>): string | undefined {
+  if (tool !== 'SAPWrite') return undefined;
+  const action = String(args.action ?? '').toLowerCase();
+  if (!['create', 'update', 'batch_create', 'edit_method', 'delete'].includes(action)) return undefined;
+
+  // These failures happen around ADT session management, often after SAP has
+  // already accepted a mutation. They need cleanup guidance, not DDIC syntax hints.
+  const combined = `${err.message}\n${err.responseBody ?? ''}\n${err.path}`.toLowerCase();
+  const failedDuringCsrfFetch = err.path.includes('/sap/bc/adt/core/discovery') || combined.includes('no csrf token');
+  const failedDuringUnlock = combined.includes('_action=unlock');
+  const serviceRoutingFailure = combined.includes('service cannot be reached');
+  if (!failedDuringCsrfFetch && !failedDuringUnlock && !serviceRoutingFailure) return undefined;
+
+  return (
+    'SAP ADT write/session infrastructure failed, not a DDIC source save failure. ' +
+    'The object may have been partially created or changed before the session failed; verify with SAPRead/SAPSearch, ' +
+    'wait briefly, then retry cleanup. If an edit lock remains, release it in ADT/SM12 or ask Basis to clear it.'
+  );
+}
+
 /** Format error messages with LLM-friendly remediation hints */
 function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
   const base = buildBaseErrorMessage(err, message, tool, args);
@@ -350,12 +385,7 @@ function formatErrorForLLM(err: unknown, message: string, tool: string, args: Re
   return base;
 }
 
-function buildBaseErrorMessage(
-  err: unknown,
-  message: string,
-  tool: string,
-  args: Record<string, unknown>,
-): string {
+function buildBaseErrorMessage(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
@@ -397,6 +427,10 @@ function buildBaseErrorMessage(
     const behaviorPoolHint = getBehaviorPoolSaveFailureHint(err, args);
     if (behaviorPoolHint) {
       return `${enriched}\n\nHint: ${behaviorPoolHint}`;
+    }
+    const writeInfrastructureHint = getWriteInfrastructureHint(err, tool, args);
+    if (writeInfrastructureHint) {
+      return `${enriched}\n\nHint: ${writeInfrastructureHint}`;
     }
     // Save hint — applies to create/update/batch_create/edit_method, not delete.
     // Delete failures on DDIC types have different remediation (dependency resolution, not annotation fixes).
@@ -658,10 +692,67 @@ function formatCdsActivationPayload(objects: readonly CdsOrderedObject[], max = 
   return objects.length > max ? `[${listed}, ...] (+${objects.length - max} more)` : `[${listed}]`;
 }
 
+function dedupeWhereUsedResults(results: readonly WhereUsedResult[]): WhereUsedResult[] {
+  const seen = new Set<string>();
+  const deduped: WhereUsedResult[] = [];
+
+  for (const result of results) {
+    const uriKey = result.uri.toLowerCase();
+    const fallbackKey = `${mainObjectType(result.type)}:${String(result.name ?? '').toUpperCase()}`;
+    const key = uriKey || fallbackKey;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(result);
+  }
+
+  return deduped;
+}
+
+function isCdsImpactWhereUsedType(objectType: string): boolean {
+  return CDS_IMPACT_WHERE_USED_TYPES.has(mainObjectType(objectType));
+}
+
+async function loadScopedCdsWhereUsedResults(client: AdtClient, objectUrl: string): Promise<WhereUsedResult[]> {
+  try {
+    const scope = await getWhereUsedScope(client.http, client.safety, objectUrl);
+    const scopedTypes = Array.from(
+      new Set(
+        scope.entries
+          .filter((entry) => entry.count > 0 && isCdsImpactWhereUsedType(entry.objectType))
+          .map((entry) => entry.objectType),
+      ),
+    );
+    const scopedResults: WhereUsedResult[] = [];
+
+    for (const objectType of scopedTypes) {
+      try {
+        scopedResults.push(...(await findWhereUsed(client.http, client.safety, objectUrl, objectType)));
+      } catch {
+        // Scoped results only enrich guidance; one unsupported filter must not
+        // make the write/delete/activate path fail.
+      }
+    }
+
+    return scopedResults;
+  } catch (err) {
+    if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+      return [];
+    }
+    // Where-used enrichment is advisory; the original write/delete/activate
+    // result should not fail just because a scoped lookup is unavailable.
+    return [];
+  }
+}
+
 async function loadCdsImpactDownstream(client: AdtClient, objectUrl: string): Promise<CdsImpactDownstream | undefined> {
   try {
     const whereUsed = await findWhereUsed(client.http, client.safety, objectUrl);
-    return classifyCdsImpact(whereUsed, { includeIndirect: true });
+    // Some SAP releases return a shallow/default result set for unfiltered
+    // usageReferences. Scope + object-type filters usually expose the full
+    // bucket fan-out, which is exactly what CRUD guidance needs.
+    const scopedWhereUsed = await loadScopedCdsWhereUsedResults(client, objectUrl);
+    const combinedWhereUsed = dedupeWhereUsedResults([...whereUsed, ...scopedWhereUsed]);
+    return classifyCdsImpact(combinedWhereUsed, { includeIndirect: true });
   } catch (err) {
     if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
       return undefined;
@@ -708,7 +799,25 @@ async function buildCdsDeleteDependencyHint(
 ): Promise<string | undefined> {
   const downstream = await loadCdsImpactDownstream(client, objectUrl);
   if (!downstream || downstream.summary.total === 0) {
-    return undefined;
+    const lines: string[] = [];
+    lines.push(`Delete dependency follow-up for ${type} ${name}:`);
+    if (!downstream) {
+      lines.push('- ADT where-used lookup is unavailable on this system or failed during error enrichment.');
+    } else {
+      lines.push(
+        '- No current ADT where-used dependents were returned, but SAP still rejected delete with a DDIC dependency error.',
+      );
+    }
+    lines.push(
+      '- If dependents were just deleted, wait briefly and retry; SAP active dependency/index state can lag in the same cleanup session.',
+    );
+    lines.push(
+      `- If source was stripped or restored, run SAPActivate(type="${type}", name="${name}") first; delete checks active DDIC dependencies.`,
+    );
+    lines.push(
+      `- If it keeps failing, run SAPNavigate(action="references", type="${type}", name="${name}") and check for edit locks/inactive objects before retrying.`,
+    );
+    return lines.join('\n');
   }
 
   const lines: string[] = [];
@@ -720,6 +829,9 @@ async function buildCdsDeleteDependencyHint(
   }
   lines.push(
     `Delete/refactor these dependents first, then retry SAPWrite(action="delete", type="${type}", name="${name}").`,
+  );
+  lines.push(
+    'If the listed dependents were just deleted, wait briefly and retry; SAP active dependency/index state can lag in the same cleanup session.',
   );
   lines.push(
     'For cyclic CDS projection graphs, temporarily strip redirected/composition associations, activate stripped DDLS, then delete.',

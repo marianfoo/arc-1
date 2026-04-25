@@ -90,11 +90,17 @@ define view entity ZI_ARC1_CHILD2_<suffix>
 
 Then update root alias `Price` -> `TicketPrice` via `SAPWrite(update)` and activate/delete as in the sequence above.
 
-### Live test-system probe status (2026-04-21)
+### Live test-system probe status (2026-04-25)
 
-- A4H direct basic-auth probe against known endpoints (`http://65.109.59.210:50000` and `http://a4h.marianzeis.de:50000`) returned `401 Anmeldung fehlgeschlagen` with `DEVELOPER/Appl1ance`.
-- BTP smoke run remains browser-interactive OAuth (`Authorization Code` callback), so unattended execution cannot complete without an interactive login.
-- Result: this PR validates behavior via deterministic unit tests and provides a ready-to-run manual SAP script for environments with working credentials.
+- A4H (`http://a4h.marianzeis.de:50000`) accepted the local test credentials and supported the root + 3 dependent DDLS scenario on SAP_BASIS 758 / S4FND 108. If `SAPRead(type="COMPONENTS")` also shows `MDG_FND 808`, treat that as a separate installed component, not the S4FND release.
+- The live Cursor regression confirmed DDLS update guidance, failed-activation CDS impact text, delete `[?/039]` blocker enrichment, and `SAP_DENY_ACTIONS=SAPWrite.delete` denial behavior.
+- The first create attempt hit an ADT/backend lock/unlock anomaly and left one empty DDLS shell locked by the same user. The clean rerun with a fresh suffix completed and cleaned up successfully; the lock is an environment/backend cleanup issue, not PR behavior.
+- A follow-up Cursor run from the readable snapshot confirmed static/docs/auth behavior but hit SAP write-session instability before the DDLS graph could be created: `SAPWrite(create, DDLS, ...)` failed during `UNLOCK`, and cleanup delete hit a CSRF/core-discovery 400. Reads/search/navigation still worked. Treat this as environment/session instability; rerun the live DDLS scenario only after a write-smoke create/delete succeeds.
+- A later write-smoke run succeeded, and the full root + 3 child DDLS graph validated end-to-end: update guidance listed all three children, failed root activation included CDS activation impact and a batch template, delete `[?/039]` showed DDIC diagnostics before blocking dependents, and cleanup removed all created DDLS objects. Child projections that keep `Price` also need `CurrencyCode` on SAP_BASIS 758; otherwise activation fails on amount/currency semantics before the dependency scenario starts.
+- Subsequent reruns confirmed the same behavior and exposed one post-cleanup backend edge case: after all children were deleted, the first root delete could still return `[?/039]` with no current blockers or with stale where-used rows for an already-deleted child, then an immediate retry succeeded. ARC-1 now emits stale active-dependency guidance for both variants instead of returning only a bare DDIC block.
+- A4H's unfiltered `usageReferences` response initially returned only one of three dependent DDLS views. ARC-1 now supplements the unfiltered call with scoped object-type-filter where-used calls, then deduplicates results before building the CRUD hint.
+- Error formatting now distinguishes write-session infrastructure failures (CSRF/core-discovery/unlock/service-routing) from DDIC source-save diagnostics, so the LLM is not told to fix annotations when SAP failed after or around the lock/write session.
+- BTP smoke runs remain browser-interactive OAuth (`Authorization Code` callback), so unattended BTP execution cannot complete without an interactive login.
 
 ## Expected system reaction
 

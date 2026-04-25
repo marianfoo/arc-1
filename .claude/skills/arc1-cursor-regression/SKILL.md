@@ -129,6 +129,25 @@ Path/worktree requirements for generated config:
 - If scripts are generated under `<root>/.cursor/scripts`, they must compute root relative to script location, with `ARC1_ROOT` override.
 - Mention the resolved root in output so user can quickly verify it before running tests.
 
+### Readable snapshot workflow for filtered worktrees
+
+Use this when Cursor cannot read the hidden PR worktree because the active workspace
+or `.cursorignore` filters paths such as `.claude/worktrees/...`.
+
+Rules:
+- Create a readable static snapshot under the active Cursor workspace, for example
+  `<cursor-workspace>/arc1-pr<nr>-visible`, while keeping the MCP runtime pointed
+  at the real PR worktree.
+- Do not copy secrets, `.env`, caches, cookies, `node_modules`, or runtime folders
+  into the static snapshot.
+- Write `.arc1-pr<nr>-snapshot.json` in the snapshot with `source`, `visibleRoot`,
+  `head`, and `createdAt` so Cursor can report exactly what it reviewed.
+- Generated prompts must distinguish `staticRoot` from `runtimeRoot`. Do not treat
+  a different active Cursor workspace as a regression when the prompt explicitly
+  uses a readable snapshot plus a separate runtime root.
+- If the MCP config lives inside the snapshot, say that directly; do not claim it
+  is at the active workspace root.
+
 ## Env prep rules
 
 - Build first (`npm run build`) unless user says skip.
@@ -139,6 +158,16 @@ Path/worktree requirements for generated config:
 - Default env file for generated scripts must be `${ARC1_ROOT}/.env` (or `${ROOT}/.env` after root resolution).
 - Allow user override via `ARC1_ENV_FILE`.
 - Generated scripts must fail fast if root/env/build artifacts are missing or required keys are empty.
+- Generated scripts may accept `ARC1_EXPECT_DIST_TEXT`; when set, fail startup if
+  the expected text is missing from `dist/handlers/intent.js`. This catches stale
+  MCP server builds before Cursor runs a long live regression.
+- Include an `ARC1_RUNTIME_FINGERPRINT` env value in generated MCP profiles for
+  branch-specific runs, and tell the tester to restart/toggle MCP servers after
+  changing config or rebuilding.
+- When the target branch uses positive safety flags (`SAP_ALLOW_*`) instead of
+  older block flags, generated profiles must set the positive flags explicitly
+  and unset legacy `SAP_READ_ONLY` / `SAP_BLOCK_*` / `ARC1_PROFILE` values so a
+  root `.env` cannot silently override the intended test profile.
 - Generated script examples must be executed as files (`bash /path/to/script.sh` or executable path), not sourced.
 - Parse only required keys (and strip surrounding quotes / CRLF):
 
@@ -173,6 +202,10 @@ fi
 [[ -n "$ROOT" ]] || { echo "Unable to resolve ARC-1 root. Set ARC1_ROOT=/absolute/path/to/arc-1"; exit 1; }
 [[ -f "$ROOT/package.json" ]] || { echo "Invalid ARC1_ROOT: $ROOT (package.json missing)"; exit 1; }
 [[ -f "$ROOT/dist/index.js" ]] || { echo "Missing build artifact: $ROOT/dist/index.js. Run: (cd \"$ROOT\" && npm run build)"; exit 1; }
+if [[ -n "${ARC1_EXPECT_DIST_TEXT:-}" ]] && ! grep -Fq "$ARC1_EXPECT_DIST_TEXT" "$ROOT/dist/handlers/intent.js"; then
+  echo "Built dist is stale: expected text not found in dist/handlers/intent.js. Run: (cd \"$ROOT\" && npm run build)" >&2
+  exit 1
+fi
 
 ENV_FILE="${ARC1_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || { echo "Missing env file: $ENV_FILE"; exit 1; }
@@ -200,6 +233,9 @@ export SAP_TRANSPORT=stdio
 [[ -n "${SAP_USER}" ]] || { echo "Missing SAP_USER in $ENV_FILE"; exit 1; }
 [[ -n "${SAP_PASSWORD}" ]] || { echo "Missing SAP_PASSWORD in $ENV_FILE"; exit 1; }
 node -e 'new URL(process.argv[1])' "$SAP_URL" >/dev/null || { echo "Invalid SAP_URL: [$SAP_URL]"; exit 1; }
+
+unset SAP_READ_ONLY SAP_BLOCK_DATA SAP_BLOCK_FREE_SQL SAP_ENABLE_TRANSPORTS SAP_ENABLE_GIT
+unset SAP_ALLOWED_OPS SAP_DISALLOWED_OPS ARC1_PROFILE ARC1_API_KEY
 
 exec node "$ROOT/dist/index.js"
 ```
@@ -264,6 +300,13 @@ For DDLS runtime checks in generated prompts:
   - If a server ID is callable, treat it as connected even when descriptor cache appears stale.
   - On missing/disconnected result, label it as "possibly stale session cache", wait 5-10 seconds, and retry once before final classification.
 - If any required server is still disconnected/missing after retry: stop and report exact server name.
+- If a live write test is required, run a small create/delete write-smoke before
+  creating multi-object DDLS graphs. On CSRF/core-discovery/unlock/service-routing
+  failure, stop the live mutation scenario and classify as environment/session,
+  not product regression.
+- If a write-smoke create fails during post-save unlock but search/read shows the
+  object exists, report `partial-created`, attempt at most one cleanup delete,
+  and list leftovers explicitly if cleanup also fails.
 - Verify server/tool contract matches expected scope from selected modules.
   - If expected actions/params are absent in advertised tool schema, classify as `Environment/session setup issue (not code regression)` and suggest rebuild/reconnect on the correct root.
   - If descriptor schema says fields are missing but live calls accept/behave correctly, classify as `Environment/session setup issue (descriptor staleness)` rather than code regression.
@@ -274,6 +317,15 @@ For DDLS runtime checks in generated prompts:
   - `Implemented fixes confirmed`
   - `Regression found`
   - `Environment/session setup issue (not code regression)`
+- For SAP component reporting, copy exact `SAPRead(type="COMPONENTS")` rows.
+  Do not conflate separate installed components, for example `S4FND 108` and
+  `MDG_FND 808`.
+- For where-used evidence, separate container/package rows such as `DEVC $TMP`
+  from real DDLS impact rows. Do not count containers as dependent CDS objects.
+- Keep evidence snippets tied to the exact tool call under test; do not paste
+  static source excerpts unless static behavior failed.
+- If live sections are skipped because write-smoke failed, keep skipped YAML
+  sections compact with empty arrays and one-line raw snippets.
 
 ## Diagnostics-specific module guidance (for PRs touching SAPDiagnose)
 
@@ -291,11 +343,16 @@ Include these runtime checks when diagnostics files are touched:
 - Hardcoding only auth/sqlFilter tests when PR scope is diagnostics
 - Hardcoding absolute repo paths in scripts/config (`/Users/.../DEV/arc-1`)
 - Mixing PR analysis root and runtime server root
+- Mixing static snapshot paths and runtime roots without naming both explicitly
 - Emitting script text in a way that encourages pasting raw script bodies into interactive shells
 - Recommending `source` for runtime server scripts
 - Assuming server IDs without checking connected MCP descriptors
+- Leaving Cursor MCP servers running after rebuilding `dist/` or changing MCP env
+- Reporting a stale MCP runtime as a product regression when source/dist already contain the expected behavior
 - Treating stale tool schema as code regression without classifying env/setup first
 - Failing immediately on first missing/disconnected check without one retry window
 - Treating descriptor-cache absence as authoritative when live calls are available
 - Falling back to custom HTTP client without user permission when prompt says native-only
+- Treating post-save `UNLOCK`/CSRF/core-discovery failures as DDIC source-save problems
+- Counting package/container where-used rows as CDS dependents
 - Leaking secret values in logs/output

@@ -1,0 +1,95 @@
+{
+  "mcpServers": {
+    "arc1-pr176-dev": {
+      "command": "bash",
+      "args": [
+        "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/scripts/arc1-good.sh"
+      ],
+      "env": {
+        "ARC1_ROOT": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4",
+        "ARC1_ENV_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.env",
+        "ARC1_RUNTIME_DIR": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/dev",
+        "ARC1_CACHE_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/dev/cache.db",
+        "SAP_ALLOW_WRITES": "true",
+        "SAP_ALLOW_DATA_PREVIEW": "false",
+        "SAP_ALLOW_FREE_SQL": "false",
+        "SAP_ALLOWED_PACKAGES": "$TMP",
+        "ARC1_RUNTIME_FINGERPRINT": "pr176-cds-crud-v11-20260425T2022",
+        "ARC1_EXPECT_DIST_TEXT": "If the listed dependents were just deleted, wait briefly and retry"
+      }
+    },
+    "arc1-pr176-no-update": {
+      "command": "bash",
+      "args": [
+        "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/scripts/arc1-good.sh"
+      ],
+      "env": {
+        "ARC1_ROOT": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4",
+        "ARC1_ENV_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.env",
+        "ARC1_RUNTIME_DIR": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/no-update",
+        "ARC1_CACHE_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/no-update/cache.db",
+        "SAP_ALLOW_WRITES": "true",
+        "SAP_ALLOW_DATA_PREVIEW": "false",
+        "SAP_ALLOW_FREE_SQL": "false",
+        "SAP_DENY_ACTIONS": "SAPWrite.update",
+        "SAP_ALLOWED_PACKAGES": "$TMP",
+        "ARC1_RUNTIME_FINGERPRINT": "pr176-cds-crud-v11-20260425T2022",
+        "ARC1_EXPECT_DIST_TEXT": "If the listed dependents were just deleted, wait briefly and retry"
+      }
+    },
+    "arc1-pr176-no-delete": {
+      "command": "bash",
+      "args": [
+        "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/scripts/arc1-good.sh"
+      ],
+      "env": {
+        "ARC1_ROOT": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4",
+        "ARC1_ENV_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.env",
+        "ARC1_RUNTIME_DIR": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/no-delete",
+        "ARC1_CACHE_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/no-delete/cache.db",
+        "SAP_ALLOW_WRITES": "true",
+        "SAP_ALLOW_DATA_PREVIEW": "false",
+        "SAP_ALLOW_FREE_SQL": "false",
+        "SAP_DENY_ACTIONS": "SAPWrite.delete",
+        "SAP_ALLOWED_PACKAGES": "$TMP",
+        "ARC1_RUNTIME_FINGERPRINT": "pr176-cds-crud-v11-20260425T2022",
+        "ARC1_EXPECT_DIST_TEXT": "If the listed dependents were just deleted, wait briefly and retry"
+      }
+    },
+    "arc1-pr176-readonly": {
+      "command": "bash",
+      "args": [
+        "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/scripts/arc1-good.sh"
+      ],
+      "env": {
+        "ARC1_ROOT": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4",
+        "ARC1_ENV_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.env",
+        "ARC1_RUNTIME_DIR": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/readonly",
+        "ARC1_CACHE_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/readonly/cache.db",
+        "SAP_ALLOW_WRITES": "false",
+        "SAP_ALLOW_DATA_PREVIEW": "false",
+        "SAP_ALLOW_FREE_SQL": "false",
+        "SAP_ALLOWED_PACKAGES": "$TMP",
+        "ARC1_RUNTIME_FINGERPRINT": "pr176-cds-crud-v11-20260425T2022",
+        "ARC1_EXPECT_DIST_TEXT": "If the listed dependents were just deleted, wait briefly and retry"
+      }
+    },
+    "arc1-pr176-btp-sim": {
+      "command": "bash",
+      "args": [
+        "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/scripts/arc1-good-btp-sim.sh"
+      ],
+      "env": {
+        "ARC1_ROOT": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4",
+        "ARC1_ENV_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.env",
+        "ARC1_RUNTIME_DIR": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/btp-sim",
+        "ARC1_CACHE_FILE": "/Users/marianzeis/DEV/arc-1/.claude/worktrees/suspicious-torvalds-f801a4/.cursor/runtime/btp-sim/cache.db",
+        "SAP_ALLOW_WRITES": "false",
+        "SAP_ALLOW_DATA_PREVIEW": "false",
+        "SAP_ALLOW_FREE_SQL": "false",
+        "ARC1_RUNTIME_FINGERPRINT": "pr176-cds-crud-v11-20260425T2022",
+        "ARC1_EXPECT_DIST_TEXT": "If the listed dependents were just deleted, wait briefly and retry"
+      }
+    }
+  }
+}
