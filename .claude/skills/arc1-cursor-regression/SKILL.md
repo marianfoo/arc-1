@@ -147,6 +147,9 @@ Rules:
   uses a readable snapshot plus a separate runtime root.
 - If the MCP config lives inside the snapshot, say that directly; do not claim it
   is at the active workspace root.
+- Treat generated `.cursor/` configs, prompts, scripts, and runtime files as local
+  operator artifacts. Do not commit them to ARC-1 unless the user explicitly asks
+  for a reusable repository template with scrubbed, portable paths.
 
 ## Env prep rules
 
@@ -288,6 +291,10 @@ For DDLS runtime checks in generated prompts:
 - Do not fail regression just because `Z_*` has no DDLS.
 - Prefer candidates with sibling signal (same stem / numeric variants) so `checkedCandidates` is more likely non-empty.
 - If no sibling-rich candidate exists, still validate clamp/toggle behavior and treat missing sibling comparisons as not applicable, not regression.
+- Include backend semantic caveats discovered during test design. Example: on
+  SAP_BASIS 758, CDS children projecting an amount field such as `sflight-price`
+  may also need the currency field, otherwise activation fails before the feature
+  under test is reached.
 
 ## Runtime prompt guardrails (must include)
 
@@ -310,6 +317,9 @@ For DDLS runtime checks in generated prompts:
 - Verify server/tool contract matches expected scope from selected modules.
   - If expected actions/params are absent in advertised tool schema, classify as `Environment/session setup issue (not code regression)` and suggest rebuild/reconnect on the correct root.
   - If descriptor schema says fields are missing but live calls accept/behave correctly, classify as `Environment/session setup issue (descriptor staleness)` rather than code regression.
+  - For authorization profiles, action/tool hiding can be the expected pass
+    condition. Example: a read-only server may hide `SAPWrite`; a deny-action
+    server may hide only the denied action instead of returning an in-band denial.
 - Use schema-correct args:
   - `SAPQuery` uses `sql` + `maxRows`.
   - avoid `UP TO ... ROWS` in SQL text unless backend-specific test intentionally checks parser rejection.
@@ -324,6 +334,9 @@ For DDLS runtime checks in generated prompts:
   from real DDLS impact rows. Do not count containers as dependent CDS objects.
 - Keep evidence snippets tied to the exact tool call under test; do not paste
   static source excerpts unless static behavior failed.
+- For multi-phase prompts, specify which tool response owns each evidence block
+  (for example update guidance from `SAPWrite(update)`, activation guidance from
+  `SAPActivate(ROOT)`, delete guidance from the first pre-cleanup root delete).
 - If live sections are skipped because write-smoke failed, keep skipped YAML
   sections compact with empty arrays and one-line raw snippets.
 
@@ -343,6 +356,7 @@ Include these runtime checks when diagnostics files are touched:
 - Hardcoding only auth/sqlFilter tests when PR scope is diagnostics
 - Hardcoding absolute repo paths in scripts/config (`/Users/.../DEV/arc-1`)
 - Mixing PR analysis root and runtime server root
+- Committing generated `.cursor/` MCP configs or prompts with absolute local paths
 - Mixing static snapshot paths and runtime roots without naming both explicitly
 - Emitting script text in a way that encourages pasting raw script bodies into interactive shells
 - Recommending `source` for runtime server scripts

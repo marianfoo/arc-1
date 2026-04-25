@@ -47,6 +47,7 @@ go.work.sum
 
 # IDE
 .idea/
+.cursor/
 .vscode/
 !.vscode/settings.json
 *.swp
