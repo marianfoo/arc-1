@@ -47,6 +47,11 @@ export async function lockObject(
     // header) ICM transforms it to 401 "no logon data". ARC-1's 401 retry handler then
     // clears the cookie jar and retries without cookies, which returns 400. So we see
     // 400, 401, or 403 depending on timing — all with the same HTML login page body.
+    //
+    // The "Logon Error Message" HTML body is the de-facto NW 7.50 gate — S/4 returns
+    // structured XML with <exc:exception> here (no "Logon Error Message" string), and
+    // S/4's auth-failure HTML is "Anmeldung fehlgeschlagen" (also no match). So this
+    // branch self-scopes without an explicit detectSystemCapabilities() check.
     if (
       err instanceof AdtApiError &&
       (err.statusCode === 400 || err.statusCode === 401 || err.statusCode === 403) &&

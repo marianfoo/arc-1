@@ -156,19 +156,21 @@ export async function activate(
   <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"${nameAttr}/>
 </adtcore:objectReferences>`;
 
+    const phase1Start = Date.now();
     const resp = await http.post(
       `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
       body,
       'application/*',
       { Accept: 'application/xml' },
     );
+    const phase1DurationMs = Date.now() - phase1Start;
 
     const outcome = parseActivationOutcome(resp.body);
     if (outcome.kind !== 'preaudit' || !preaudit) {
       return outcomeToResult(outcome);
     }
 
-    return confirmPreaudit(http, outcome.refs);
+    return confirmPreaudit(http, outcome.refs, options?.name ?? objectUrl, phase1DurationMs);
   } catch (err) {
     return rethrowOrLockHint(err, options?.name ?? objectUrl);
   }
@@ -203,28 +205,36 @@ ${refs}
 </adtcore:objectReferences>`;
 
   try {
+    const phase1Start = Date.now();
     const resp = await http.post(
       `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
       body,
       'application/*',
       { Accept: 'application/xml' },
     );
+    const phase1DurationMs = Date.now() - phase1Start;
 
     const outcome = parseActivationOutcome(resp.body);
     if (outcome.kind !== 'preaudit' || !preaudit) {
       return outcomeToResult(outcome);
     }
 
-    return confirmPreaudit(http, outcome.refs);
+    return confirmPreaudit(http, outcome.refs, objects.map((o) => o.name).join(', '), phase1DurationMs);
   } catch (err) {
     return rethrowOrLockHint(err, objects.map((o) => o.name).join(', '));
   }
 }
 
-/** Second POST of the preaudit handshake: send the full object list with preauditRequested=false. */
+/** Second POST of the preaudit handshake: send the full object list with preauditRequested=false.
+ *
+ *  Emits an `activation_preaudit_completed` audit event so SIEM/audit consumers can correlate
+ *  the two http_request events as one logical handshake instead of greppping for the
+ *  preauditRequested=true→false pattern. */
 async function confirmPreaudit(
   http: AdtHttpClient,
   refs: Array<{ uri: string; name: string }>,
+  objectLabel: string,
+  phase1DurationMs: number,
 ): Promise<ActivationResult> {
   logger.debug('Activation preaudit: SAP returned inactive objects, confirming with preauditRequested=false', {
     count: refs.length,
@@ -242,15 +252,29 @@ async function confirmPreaudit(
 ${refLines}
 </adtcore:objectReferences>`;
 
-  const resp = await http.post(
-    '/sap/bc/adt/activation?method=activate&preauditRequested=false',
-    body,
-    'application/*',
-    { Accept: 'application/xml' },
-  );
-
-  const outcome = parseActivationOutcome(resp.body);
-  return outcomeToResult(outcome);
+  const phase2Start = Date.now();
+  let result: ActivationResult | undefined;
+  try {
+    const resp = await http.post(
+      '/sap/bc/adt/activation?method=activate&preauditRequested=false',
+      body,
+      'application/*',
+      { Accept: 'application/xml' },
+    );
+    result = outcomeToResult(parseActivationOutcome(resp.body));
+    return result;
+  } finally {
+    logger.emitAudit({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      event: 'activation_preaudit_completed',
+      objectLabel,
+      refCount: refs.length,
+      phase1DurationMs,
+      phase2DurationMs: Date.now() - phase2Start,
+      outcome: result?.success ? 'success' : 'error',
+    });
+  }
 }
 
 // NW 7.50 lock-conflict-as-auth-error quirk:
@@ -260,6 +284,11 @@ ${refLines}
 // So we see 400, 401, or 403 depending on timing — all with the same HTML login page.
 // Other ADT endpoints work fine with the same session. Detected by matching
 // "Logon Error Message" in the HTML body on the activation path.
+//
+// The "Logon Error Message" HTML body is the de-facto NW 7.50 gate — S/4 returns
+// structured XML with <exc:exception> here (no "Logon Error Message" string), and
+// S/4's auth-failure HTML is "Anmeldung fehlgeschlagen" (also no match). So this
+// branch self-scopes without an explicit detectSystemCapabilities() check.
 function rethrowOrLockHint(err: unknown, objectLabel: string): never | ActivationResult {
   if (
     err instanceof AdtApiError &&

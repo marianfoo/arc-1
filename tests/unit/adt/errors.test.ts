@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   AdtApiError,
@@ -7,6 +10,10 @@ import {
   extractExceptionType,
   extractLockOwner,
 } from '../../../src/adt/errors.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FIXTURES_DIR = join(__dirname, '..', '..', 'fixtures', 'xml');
+const loadXmlFixture = (name: string): string => readFileSync(join(FIXTURES_DIR, name), 'utf-8');
 
 describe('AdtApiError', () => {
   describe('extractCleanMessage', () => {
@@ -329,6 +336,32 @@ describe('AdtApiError', () => {
 
     it('returns undefined when no lock owner details exist', () => {
       expect(extractLockOwner('Syntax error in line 5')).toBeUndefined();
+    });
+
+    it('extracts MARIAN from real S/4 lock-conflict body (T100KEY-V1 wins over LONGTEXT "another user")', () => {
+      // The captured S/4 body contains BOTH:
+      //   <message>User MARIAN is currently editing ZARC1_BAT1_MNW93T2K</message>
+      //   <entry key="LONGTEXT">…being edited by another user…</entry>
+      //   <entry key="T100KEY-V1">MARIAN</entry>
+      // Without the T100 path, the regex chain matched "by another" first → bug.
+      const owner = extractLockOwner(loadXmlFixture('lock-conflict-s4.xml'));
+      expect(owner?.user).toBe('MARIAN');
+    });
+
+    it('falls back to regex when T100KEY-V1 is absent', () => {
+      expect(extractLockOwner('User DEVELOPER is currently editing ZTEST')).toEqual({ user: 'DEVELOPER' });
+    });
+
+    it('rejects placeholder "another" capture and falls through to undefined', () => {
+      // Body has the LONGTEXT-style phrasing but no structured T100 and no specific message.
+      // Without the placeholder filter, the old chain captured "another" as a userid.
+      const owner = extractLockOwner('This object is currently being edited by another user.');
+      expect(owner).toBeUndefined();
+    });
+
+    it('rejects placeholder words (case-insensitive)', () => {
+      expect(extractLockOwner('locked by Another')).toBeUndefined();
+      expect(extractLockOwner('locked by THE backend')).toBeUndefined();
     });
   });
 

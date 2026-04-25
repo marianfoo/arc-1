@@ -2693,6 +2693,8 @@ async function handleSAPWrite(
       // Pre-write server-side syntax check (opt-in; never blocks — warnings only).
       const checkNotes = await runPreWriteSyntaxCheck(client, type, source, objectUrl, config, checkOverride);
 
+      // If safeUpdateSource throws (lock conflict, network error, etc.), checkNotes
+      // is intentionally discarded — pre-check warnings only matter when the write succeeded.
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
       cachingLayer?.invalidate(type, name);
       const msg = `Successfully updated ${type} ${name}.`;

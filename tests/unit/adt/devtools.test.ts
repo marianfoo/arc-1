@@ -131,6 +131,42 @@ describe('DevTools', () => {
       expect(result.messages).toHaveLength(1);
       expect(result.messages[0]).toEqual({ severity: 'error', text: 'Error found', line: 5, column: 1 });
     });
+
+    describe('NW 7.50 <chkrun:checkMessage> shape (line/col in uri#start fragment)', () => {
+      it('extracts line/column from uri="...#start=LINE,COL"', async () => {
+        const { readFileSync } = await import('node:fs');
+        const { join, dirname } = await import('node:path');
+        const { fileURLToPath } = await import('node:url');
+        const here = dirname(fileURLToPath(import.meta.url));
+        const xml = readFileSync(join(here, '..', '..', 'fixtures', 'xml', 'syntax-check-nw750.xml'), 'utf-8');
+        const http = mockHttp(xml);
+        const result = await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+        expect(result.hasErrors).toBe(true);
+        expect(result.messages).toHaveLength(3);
+        // First error: "Result type cannot be converted..." at line 42, col 5
+        const firstError = result.messages.find((m) => m.text.includes('Result type'));
+        expect(firstError).toBeDefined();
+        expect(firstError?.line).toBe(42);
+        expect(firstError?.column).toBe(5);
+        expect(firstError?.severity).toBe('error');
+        // Warning at line 10, col 12
+        const warning = result.messages.find((m) => m.severity === 'warning');
+        expect(warning?.line).toBe(10);
+        expect(warning?.column).toBe(12);
+      });
+
+      it('handles mixed <msg> and <chkrun:checkMessage> in same body', async () => {
+        const xml = `<checkRunReports>
+          <msg type="E" line="5" col="1" shortText="Old shape error"/>
+          <chkrun:checkMessage chkrun:type="E" chkrun:shortText="New shape error" chkrun:uri="/sap/bc/adt/programs/programs/ZTEST/source/main#start=22,7" xmlns:chkrun="http://www.sap.com/adt/checkrun"/>
+        </checkRunReports>`;
+        const http = mockHttp(xml);
+        const result = await syntaxCheck(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST');
+        expect(result.messages).toHaveLength(2);
+        expect(result.messages.find((m) => m.text === 'Old shape error')?.line).toBe(5);
+        expect(result.messages.find((m) => m.text === 'New shape error')?.line).toBe(22);
+      });
+    });
   });
 
   // ─── prettyPrint ──────────────────────────────────────────────────
@@ -710,6 +746,115 @@ describe('DevTools', () => {
 
         expect(result.success).toBe(false);
         expect(http.post).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('rethrowOrLockHint (NW 7.50 lock-conflict on activation)', () => {
+      function mockHttpThatRejects(status: number, body: string): AdtHttpClient {
+        const post = vi.fn().mockRejectedValue(new AdtApiError('reject', status, '/url', body));
+        return {
+          get: vi.fn(),
+          post,
+          put: vi.fn(),
+          delete: vi.fn(),
+          fetchCsrfToken: vi.fn(),
+          withStatefulSession: vi.fn(),
+        } as unknown as AdtHttpClient;
+      }
+
+      const html = '<html><body>Logon Error Message — please log on again.</body></html>';
+
+      it('returns lock-conflict ActivationResult on 403 + "Logon Error Message" body', async () => {
+        const http = mockHttpThatRejects(403, html);
+        const result = await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST', {
+          name: 'ZTEST',
+        });
+        expect(result.success).toBe(false);
+        expect(result.messages.join(' ')).toMatch(/locked by another session/i);
+      });
+
+      it('returns lock-conflict ActivationResult on 400 + "Logon Error Message" body', async () => {
+        const http = mockHttpThatRejects(400, html);
+        const result = await activate(http, unrestrictedSafetyConfig(), '/url');
+        expect(result.success).toBe(false);
+        expect(result.messages.join(' ')).toMatch(/locked by another session/i);
+      });
+
+      it('rethrows unchanged when 403 body has no "Logon Error Message" marker (S/4 structured XML)', async () => {
+        const xml =
+          '<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><type id="ExceptionResourceNoAccess"/><message lang="EN">User MARIAN is currently editing ZTEST</message></exc:exception>';
+        const http = mockHttpThatRejects(403, xml);
+        await expect(activate(http, unrestrictedSafetyConfig(), '/url')).rejects.toMatchObject({ statusCode: 403 });
+      });
+    });
+
+    describe('activation_preaudit_completed audit emission', () => {
+      it('emits audit event after successful handshake (success outcome)', async () => {
+        const { logger } = await import('../../../src/server/logger.js');
+        const emitSpy = vi.spyOn(logger, 'emitAudit').mockImplementation(() => {});
+        try {
+          const http = mockHttpSequence(preauditXml, '');
+          await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST', { name: 'ZCL_TEST' });
+
+          const auditCalls = emitSpy.mock.calls.filter((c) => c[0].event === 'activation_preaudit_completed');
+          expect(auditCalls).toHaveLength(1);
+          const event = auditCalls[0]![0] as Record<string, unknown>;
+          expect(event.objectLabel).toBe('ZCL_TEST');
+          expect(event.refCount).toBe(2);
+          expect(event.outcome).toBe('success');
+          expect(typeof event.phase1DurationMs).toBe('number');
+          expect(typeof event.phase2DurationMs).toBe('number');
+        } finally {
+          emitSpy.mockRestore();
+        }
+      });
+
+      it('emits audit event with outcome=error when phase 2 returns errors', async () => {
+        const { logger } = await import('../../../src/server/logger.js');
+        const emitSpy = vi.spyOn(logger, 'emitAudit').mockImplementation(() => {});
+        try {
+          const errorXml = '<messages><msg type="E" shortText="Activation dependency unresolved"/></messages>';
+          const http = mockHttpSequence(preauditXml, errorXml);
+          await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+
+          const auditCalls = emitSpy.mock.calls.filter((c) => c[0].event === 'activation_preaudit_completed');
+          expect(auditCalls).toHaveLength(1);
+          expect((auditCalls[0]![0] as Record<string, unknown>).outcome).toBe('error');
+        } finally {
+          emitSpy.mockRestore();
+        }
+      });
+
+      it('does NOT emit audit event when first POST succeeds without preaudit', async () => {
+        const { logger } = await import('../../../src/server/logger.js');
+        const emitSpy = vi.spyOn(logger, 'emitAudit').mockImplementation(() => {});
+        try {
+          const http = mockHttpSequence('');
+          await activate(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+
+          const auditCalls = emitSpy.mock.calls.filter((c) => c[0].event === 'activation_preaudit_completed');
+          expect(auditCalls).toHaveLength(0);
+        } finally {
+          emitSpy.mockRestore();
+        }
+      });
+
+      it('uses comma-joined object names as objectLabel for activateBatch', async () => {
+        const { logger } = await import('../../../src/server/logger.js');
+        const emitSpy = vi.spyOn(logger, 'emitAudit').mockImplementation(() => {});
+        try {
+          const http = mockHttpSequence(preauditXml, '');
+          await activateBatch(http, unrestrictedSafetyConfig(), [
+            { url: '/sap/bc/adt/oo/classes/ZA', name: 'ZA' },
+            { url: '/sap/bc/adt/oo/classes/ZB', name: 'ZB' },
+          ]);
+
+          const auditCalls = emitSpy.mock.calls.filter((c) => c[0].event === 'activation_preaudit_completed');
+          expect(auditCalls).toHaveLength(1);
+          expect((auditCalls[0]![0] as Record<string, unknown>).objectLabel).toBe('ZA, ZB');
+        } finally {
+          emitSpy.mockRestore();
+        }
       });
     });
   });

@@ -110,7 +110,9 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 
 ```
 src/
-├── index.ts, cli.ts            # Entry points (MCP server, CLI)
+├── index.ts                    # MCP server entry (bin: arc1)
+├── cli.ts, cli-args.ts         # CLI entry (bin: arc1-cli) — `call`, `tools`, `read`, `activate`, ...
+├── extract-sap-cookies.ts      # Cookie helper invoked via `arc1-cli extract-cookies`
 ├── server/
 │   ├── server.ts               # MCP server setup, tool registration
 │   ├── config.ts               # Config parser (CLI > env > .env > defaults)
@@ -218,6 +220,9 @@ tests/
 | Modify context output format | `src/context/compressor.ts` |
 | Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
+| Add audit event type | `src/server/audit.ts` (typed `*Event` interface + `AuditEvent` union); emit via `logger.emitAudit({...})` from the call site (e.g. `confirmPreaudit` in `src/adt/devtools.ts`) |
+| Add CLI sub-command (`call`, `tools`, shortcuts) | `src/cli.ts` (Commander wiring), `src/cli-args.ts` (pure arg parsing helpers + tests in `tests/unit/cli/cli-args.test.ts`) — never duplicate Zod validation; `handleToolCall` does it |
+| Add SAP version-quirk workaround (NW 7.50 / S/4 gating) | Prefer body-marker self-gating (e.g. `"Logon Error Message"` in `src/adt/crud.ts` `lockObject` and `src/adt/devtools.ts` `rethrowOrLockHint`) when the marker is unique to the affected release. Always inline-comment WHY the heuristic self-scopes so future readers don't hunt for a `detectSystemCapabilities()` call. |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
 | Modify scope enforcement | `src/authz/policy.ts` (`ACTION_POLICY`), `src/handlers/intent.ts` (runtime check), `src/server/server.ts` (tool listing filter) |
