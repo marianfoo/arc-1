@@ -91,6 +91,7 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (12 tools, `SAPGit` feature-gated) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
 | `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
 | `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
+| `SAP_CHECK_BEFORE_WRITE` / `--check-before-write` | Opt-in: pre-write SAP-side syntax check via ADT checkruns with inline content (default: **false**). When enabled, errors/warnings from the proposed source are **appended to the write response** (non-blocking). Off by default because it adds a round-trip per write and, during multi-file edits, surfaces dependency-related errors that self-resolve once later files land. Activation remains the definitive check. |
 | `ARC1_CACHE` / `--cache` | Cache mode: `auto` (default), `memory`, `sqlite`, `none` |
 | `ARC1_CACHE_FILE` / `--cache-file` | SQLite cache file path (default: `.arc1-cache.db`) |
 | `ARC1_CACHE_WARMUP` / `--cache-warmup` | Pre-warm cache on startup via TADIR scan (default: false) |
@@ -102,12 +103,16 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `SAP_PP_STRICT` / `--pp-strict` | PP failure = error, no fallback to shared client (default: false) |
 | `SAP_PP_ALLOW_SHARED_COOKIES` / `--pp-allow-shared-cookies` | Opt-in escape hatch allowing `SAP_COOKIE_FILE`/`SAP_COOKIE_STRING` to coexist with `SAP_PP_ENABLED`. Cookies stay on shared client only. (default: false) |
 | `SAP_DISABLE_SAML` / `--disable-saml` | Opt-in: disable SAML redirect via `X-SAP-SAML2: disabled` + `?saml2=disabled`. Do NOT use on BTP ABAP or S/4 Public Cloud. (default: false) |
+| `ARC1_PROFILE` / `--profile` | Safety profile shortcut: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql` |
+| `ARC1_LOG_HTTP_DEBUG` | Opt-in: attach full request/response bodies and headers to `http_request` audit events (default: false). Sensitive headers redacted, bodies truncated at 64KB. Not for production. |
 
 ## Codebase Structure
 
 ```
 src/
-├── index.ts, cli.ts            # Entry points (MCP server, CLI)
+├── index.ts                    # MCP server entry (bin: arc1)
+├── cli.ts, cli-args.ts         # CLI entry (bin: arc1-cli) — `call`, `tools`, `read`, `activate`, ...
+├── extract-sap-cookies.ts      # Cookie helper invoked via `arc1-cli extract-cookies`
 ├── server/
 │   ├── server.ts               # MCP server setup, tool registration
 │   ├── config.ts               # Config parser (CLI > env > .env > defaults)
@@ -215,6 +220,9 @@ tests/
 | Modify context output format | `src/context/compressor.ts` |
 | Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
+| Add audit event type | `src/server/audit.ts` (typed `*Event` interface + `AuditEvent` union); emit via `logger.emitAudit({...})` from the call site (e.g. `confirmPreaudit` in `src/adt/devtools.ts`) |
+| Add CLI sub-command (`call`, `tools`, shortcuts) | `src/cli.ts` (Commander wiring), `src/cli-args.ts` (pure arg parsing helpers + tests in `tests/unit/cli/cli-args.test.ts`) — never duplicate Zod validation; `handleToolCall` does it |
+| Add SAP version-quirk workaround (NW 7.50 / S/4 gating) | Prefer body-marker self-gating (e.g. `"Logon Error Message"` in `src/adt/crud.ts` `lockObject` and `src/adt/devtools.ts` `rethrowOrLockHint`) when the marker is unique to the affected release. Always inline-comment WHY the heuristic self-scopes so future readers don't hunt for a `detectSystemCapabilities()` call. |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
 | Modify scope enforcement | `src/authz/policy.ts` (`ACTION_POLICY`), `src/handlers/intent.ts` (runtime check), `src/server/server.ts` (tool listing filter) |

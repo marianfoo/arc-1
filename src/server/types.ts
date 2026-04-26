@@ -99,6 +99,16 @@ export interface ServerConfig {
   abaplintConfig?: string;
   /** Enable pre-write lint validation (default: true) */
   lintBeforeWrite: boolean;
+  /** Enable pre-write server-side syntax check via ADT checkruns with inline content
+   *  (default: false, opt-in). When true, SAPWrite sends the proposed source to SAP's
+   *  compiler BEFORE writing and appends any error/warning messages to the write's
+   *  success response. The write is NOT blocked — errors are informational, deferred to
+   *  the eventual activation for real resolution. This keeps multi-file edits with
+   *  cross-object dependencies from hitting false-positive blocks on intermediate
+   *  writes (a referenced type/class/include is not yet updated). Useful for
+   *  single-file edits where you want early visibility into compile errors without
+   *  having to call SAPDiagnose separately. */
+  checkBeforeWrite: boolean;
 
   // --- Cache ---
   /** Cache mode: 'auto' (memory for stdio, sqlite for http-streamable), 'memory', 'sqlite', 'none' */
@@ -154,6 +164,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   disableSaml2: false,
   toolMode: 'standard',
   lintBeforeWrite: true,
+  checkBeforeWrite: false,
   cacheMode: 'auto',
   cacheFile: '.arc1-cache.db',
   cacheWarmup: false,

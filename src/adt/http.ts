@@ -34,6 +34,68 @@ import { resolveAcceptType, resolveContentType } from './discovery.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
 import type { Semaphore } from './semaphore.js';
 
+/**
+ * Opt-in wire-level debug logging.
+ *
+ * When ARC1_LOG_HTTP_DEBUG=true, every completed HTTP call to SAP ADT attaches
+ * its request body, request headers, response body, and response headers to
+ * the audit event. Sensitive headers are redacted; bodies are truncated at
+ * 64KB. Intended for ad-hoc debugging of content negotiation, CSRF, and
+ * activation preaudit responses — not for production.
+ */
+const HTTP_DEBUG_BODY_LIMIT = 65536;
+const HTTP_DEBUG_REDACT_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-csrf-token',
+  'sap-connectivity-authentication',
+  'proxy-authorization',
+]);
+
+function redactDebugHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    out[k] = HTTP_DEBUG_REDACT_HEADERS.has(k.toLowerCase()) ? '[REDACTED]' : v;
+  }
+  return out;
+}
+
+function responseHeadersToObject(h: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  h.forEach((v, k) => {
+    out[k] = HTTP_DEBUG_REDACT_HEADERS.has(k.toLowerCase()) ? '[REDACTED]' : v;
+  });
+  return out;
+}
+
+function truncateBody(body: string | undefined): string | undefined {
+  if (body === undefined) return undefined;
+  if (body.length <= HTTP_DEBUG_BODY_LIMIT) return body;
+  return `${body.slice(0, HTTP_DEBUG_BODY_LIMIT)}\n…[truncated ${body.length - HTTP_DEBUG_BODY_LIMIT} chars]`;
+}
+
+/** Build the optional debug-only audit fields (empty object when not enabled). */
+function buildHttpDebugFields(
+  reqHeaders: Record<string, string>,
+  reqBody: string | undefined,
+  respHeaders: Headers,
+  respBody: string,
+): Partial<{
+  requestBody: string;
+  requestHeaders: Record<string, string>;
+  responseBody: string;
+  responseHeaders: Record<string, string>;
+}> {
+  if (process.env.ARC1_LOG_HTTP_DEBUG !== 'true') return {};
+  return {
+    requestHeaders: redactDebugHeaders(reqHeaders),
+    requestBody: truncateBody(reqBody),
+    responseHeaders: responseHeadersToObject(respHeaders),
+    responseBody: truncateBody(respBody),
+  };
+}
+
 /** Session type for ADT requests */
 export type SessionType = 'stateful' | 'stateless' | undefined;
 
@@ -600,6 +662,7 @@ export class AdtHttpClient {
         path,
         statusCode: response.status,
         durationMs: Date.now() - httpStart,
+        ...buildHttpDebugFields(headers, body, response.headers, responseBody),
       });
 
       return result;
@@ -616,6 +679,13 @@ export class AdtHttpClient {
           statusCode: err.statusCode,
           durationMs,
           errorBody: err.responseBody?.slice(0, 200),
+          ...(process.env.ARC1_LOG_HTTP_DEBUG === 'true'
+            ? {
+                requestHeaders: redactDebugHeaders(headers),
+                requestBody: truncateBody(body),
+                responseBody: truncateBody(err.responseBody),
+              }
+            : {}),
         });
         throw err;
       }

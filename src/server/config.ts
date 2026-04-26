@@ -444,6 +444,7 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   // ── Lint ───────────────────────────────────────────────────────────
   config.abaplintConfig = resolveOptionalStr('abaplint-config', 'SAP_ABAPLINT_CONFIG', 'abaplintConfig');
   config.lintBeforeWrite = resolveBool('lint-before-write', 'SAP_LINT_BEFORE_WRITE', true, 'lintBeforeWrite');
+  config.checkBeforeWrite = resolveBool('check-before-write', 'SAP_CHECK_BEFORE_WRITE', false, 'checkBeforeWrite');
 
   // ── Cache ──────────────────────────────────────────────────────────
   const cacheMode = resolveStr('cache', 'ARC1_CACHE', 'auto', 'cacheMode');

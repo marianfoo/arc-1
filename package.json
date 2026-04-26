@@ -14,7 +14,8 @@
     "node": ">=22.0.0"
   },
   "bin": {
-    "arc1": "./bin/arc1.js"
+    "arc1": "./bin/arc1.js",
+    "arc1-cli": "./bin/arc1-cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -49,7 +50,7 @@
     "typecheck": "tsc --noEmit",
     "validate:policy": "tsx scripts/validate-action-policy.ts",
     "cli": "tsx src/cli.ts",
-    "extract-sap-cookies": "tsx scripts/extract-sap-cookies.ts",
+    "extract-sap-cookies": "tsx src/extract-sap-cookies.ts",
     "probe": "tsx scripts/probe-adt-types.ts",
     "prepare": "husky || true",
     "prepublishOnly": "npm run build",

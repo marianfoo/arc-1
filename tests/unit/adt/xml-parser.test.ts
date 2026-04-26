@@ -1027,6 +1027,28 @@ describe('XML Parser', () => {
       const xml = '<?xml version="1.0"?><root><empty/></root>';
       expect(parseInactiveObjects(xml)).toEqual([]);
     });
+
+    it('parses real NW 7.50 flat <adtcore:objectReferences> shape (no <entry> wrapper)', () => {
+      // Captured live from npl.marianzeis.de — GET /activation/inactiveobjects on NW 7.50
+      // returns a flat list, NOT the feed-wrapped <ioc:entry><ioc:object> shape.
+      const objects = parseInactiveObjects(loadFixture('inactive-objects-nw750-flat.xml'));
+      expect(objects.length).toBeGreaterThanOrEqual(4);
+      expect(objects[0]).toEqual({
+        name: 'ZARC1_DTCV1_8BGO62',
+        type: 'DTEL/DE',
+        uri: '/sap/bc/adt/ddic/dataelements/zarc1_dtcv1_8bgo62',
+      });
+      // Verify a non-DTEL type to confirm the parser doesn't filter
+      const cls = objects.find((o) => o.type === 'CLAS/OC');
+      expect(cls?.name).toBe('ZCL_ARC1_TEST');
+    });
+
+    it('parses single flat objectReference (covers isArray=true)', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?><adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zonly" adtcore:type="PROG/P" adtcore:name="ZONLY"/></adtcore:objectReferences>`;
+      const objects = parseInactiveObjects(xml);
+      expect(objects).toHaveLength(1);
+      expect(objects[0]).toEqual({ name: 'ZONLY', type: 'PROG/P', uri: '/sap/bc/adt/programs/programs/zonly' });
+    });
   });
 
   describe('parseRevisionFeed', () => {

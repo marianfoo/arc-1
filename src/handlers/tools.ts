@@ -627,6 +627,11 @@ export function getToolDefinitions(
             description:
               'Enable/disable deterministic RAP preflight checks for this call (default: true). Useful for TABL/BDEF/DDLX static rules (e.g., curr/quan semantics, invalid BDEF enums, unsupported DDLX annotation scope on on-prem 7.5x).',
           },
+          checkBeforeWrite: {
+            type: 'boolean',
+            description:
+              'Override server check-before-write setting (default off). When true, SAPWrite sends the proposed source to /sap/bc/adt/checkruns with inline <chkrun:content> and appends any error/warning messages to the success response — the write is NOT blocked. Useful for single-file edits to see compile diagnostics without a separate SAPDiagnose call. Off by default because (a) it adds a round-trip per write and (b) intermediate writes during multi-file refactors will legitimately trip dependency errors that resolve once the whole sequence lands. Activation remains the definitive compile check.',
+          },
           refObjectType: {
             type: 'string',
             description:
@@ -872,7 +877,7 @@ export function getToolDefinitions(
       description:
         'Run diagnostics on ABAP objects and analyze runtime errors.\n\n' +
         'Actions:\n' +
-        '- "syntax": Syntax check an ABAP object. Requires name + type.\n' +
+        '- "syntax": Syntax check an ABAP object. Requires name + type. Optional: version ("active" or "inactive", defaults to active). Optional: source — when supplied, SAP compiles the given content as if it lived at the object\'s URI (pre-write dry-run, nothing is written). Omit source to check what is stored.\n' +
         '- "unittest": Run ABAP unit tests. Requires name + type.\n' +
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
         '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
@@ -913,6 +918,12 @@ export function getToolDefinitions(
           column: {
             type: 'number',
             description: 'Source column number for quickfix evaluation (default 0 for quickfix actions).',
+          },
+          version: {
+            type: 'string',
+            enum: ['active', 'inactive'],
+            description:
+              'Source version for syntax check (default "active"). Use "inactive" to validate pending changes.',
           },
           proposalUri: {
             type: 'string',

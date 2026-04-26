@@ -904,7 +904,7 @@ export function parseBspFolderListing(xml: string, appName: string): BspFileNode
  * fast-xml-parser with processEntities:false + parseAttributeValue:false
  * keeps raw encoded strings — we decode them for human-readable output.
  */
-function decodeXmlEntities(s: string): string {
+export function decodeXmlEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -1032,26 +1032,37 @@ function toStringArray(value: unknown): string[] {
   return [String(value)];
 }
 
-/** Parse inactive objects response from /sap/bc/adt/activation/inactive */
+/** Parse inactive objects response from /sap/bc/adt/activation/inactive(objects).
+ *  Supports two response shapes:
+ *   - Flat (NW 7.50 /inactiveobjects):
+ *       <adtcore:objectReferences><adtcore:objectReference .../>...</adtcore:objectReferences>
+ *   - Feed-wrapped (newer /inactive):
+ *       <feed><entry><objectReference .../></entry>...</feed>
+ */
 export function parseInactiveObjects(xml: string): InactiveObject[] {
   if (!xml.trim()) return [];
   const parsed = parseXml(xml);
-  // Each inactive object is in its own entry → objectReference is nested per-entry.
-  // findDeepNodes returns early on first match, so we iterate entries instead.
+  const toRef = (ref: Record<string, unknown>): InactiveObject => ({
+    name: String(ref['@_name'] ?? ''),
+    type: String(ref['@_type'] ?? ''),
+    uri: String(ref['@_uri'] ?? ''),
+    ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
+  });
+
+  // Feed shape: iterate entries explicitly (findDeepNodes returns early on first match).
   const entries = findDeepNodes(parsed, 'entry');
-  const results: InactiveObject[] = [];
-  for (const entry of entries) {
-    const refs = findDeepNodes(entry, 'objectReference');
-    for (const ref of refs) {
-      results.push({
-        name: String(ref['@_name'] ?? ''),
-        type: String(ref['@_type'] ?? ''),
-        uri: String(ref['@_uri'] ?? ''),
-        ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
-      });
+  if (entries.length > 0) {
+    const feedRefs: InactiveObject[] = [];
+    for (const entry of entries) {
+      const refs = findDeepNodes(entry, 'objectReference');
+      for (const ref of refs) feedRefs.push(toRef(ref));
     }
+    if (feedRefs.length > 0) return feedRefs;
   }
-  return results;
+
+  // Flat shape: objectReference elements sit directly under objectReferences.
+  const refs = findDeepNodes(parsed, 'objectReference');
+  return refs.map(toRef);
 }
 
 /** Parse source revision history feed from /source/main/versions */

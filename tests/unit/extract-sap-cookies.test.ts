@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planExtraction } from '../../../scripts/extract-sap-cookies.ts';
+import { planExtraction } from '../../src/extract-sap-cookies.ts';
 
 describe('extract-sap-cookies planExtraction', () => {
   it('refuses to run when SAP_PP_ENABLED=true', () => {

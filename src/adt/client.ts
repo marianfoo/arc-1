@@ -457,13 +457,24 @@ export class AdtClient {
     return parseApiReleaseState(resp.body);
   }
 
-  /** List objects pending activation (inactive objects) */
+  /** List objects pending activation (inactive objects).
+   *  Endpoint path differs across SAP versions — newer releases (Cloud, S/4) use
+   *  `/activation/inactive`, older on-prem (NW 7.50) uses `/activation/inactiveobjects`.
+   *  Tries the modern path first and falls back on 404. */
   async getInactiveObjects(): Promise<InactiveObject[]> {
     checkOperation(this.safety, OperationType.Read, 'GetInactiveObjects');
-    const resp = await this.http.get('/sap/bc/adt/activation/inactive', {
-      Accept: 'application/xml',
-    });
-    return parseInactiveObjects(resp.body);
+    try {
+      const resp = await this.http.get('/sap/bc/adt/activation/inactive', {
+        Accept: 'application/xml',
+      });
+      return parseInactiveObjects(resp.body);
+    } catch (err) {
+      if (!isNotFoundError(err)) throw err;
+      const resp = await this.http.get('/sap/bc/adt/activation/inactiveobjects', {
+        Accept: 'application/xml',
+      });
+      return parseInactiveObjects(resp.body);
+    }
   }
 
   // ─── Search Operations ─────────────────────────────────────────────
