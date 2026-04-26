@@ -81,6 +81,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 | [FEAT-29](#feat-29) | P3 Backlog (14 items) | P3 | various | Features |
 | [FEAT-50](#feat-50) | ADT Probe Fixture Coverage (contributed fixtures) | P3 | XS-each | Diagnostics |
 | [FEAT-59](#feat-59) | Embeddable multi-tenant server (per-instance `systemType`) | P3 | M | Features |
+| [FEAT-61](#feat-61) | Tool Extension Points (custom tools on top of ARC-1) | P3 | M-L (phased) | Features |
 | [OPS-03](#ops-03) | Multi-System Routing | P3 | L | Ops |
 | ~~[COMPAT-01](#compat-01)~~ | ~~modificationSupport guard in lockObject()~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
 | ~~[COMPAT-02](#compat-02)~~ | ~~CSRF HEAD→GET fallback (S/4HANA Public Cloud)~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
@@ -1814,6 +1815,39 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 **Why not:** CLI usage is minor compared to MCP-first usage (Claude Desktop, Cursor, etc.). Option 2 adds build-time complexity. Defer if CLI shortcut requests stay sporadic.
 
 **Related follow-up from PR #179:** rename the local `lint` CLI command to `lint-local` or `offline-lint` to free `lint` for the `SAPLint` MCP tool; clean up XML entity residue (`&quot;`, `&gt;`) in `SyntaxMessage.text`.
+
+---
+
+<a id="feat-61"></a>
+### FEAT-61: Tool Extension Points (Custom Tools on Top of ARC-1)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | M-L (phased: Phase 0+1 ≈ M, Phase 2 ≈ S, Phase 3 ≈ M, Phase 4 if ever ≈ M) |
+| **Risk** | Medium — touches the central tool registration / scope policy / audit path |
+| **Usefulness** | Medium-High — unblocks customer-specific tools without forking; the prerequisite for any later marketplace |
+| **Status** | Research only — see [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) |
+| **Source** | User-requested 2026-04-26 — reuse ARC-1 plumbing (ADT, HTTP, OData) for in-house tooling |
+
+**What:** A documented, opinionated way for downstream users to add their own MCP tools to an ARC-1 instance and reuse the same building blocks the built-in tools rely on (`AdtClient`, `AdtHttpClient`, `SafetyConfig`, `CachingLayer`, `logger`, typed errors), without forking the repository.
+
+**Why:** Today the only way to add a tool is to fork the repo and edit six files (`tools.ts`, `schemas.ts`, `intent.ts`, `policy.ts`, plus tests). Customers with private/internal tools cannot upstream them. A defined extension point keeps the in-tree tool surface focused on the universally useful tools while letting teams extend their own instance.
+
+**Phased plan (recommended):**
+
+1. **Phase 0** — define the public API boundary (`src/public/` or `package.json#exports`). No new feature; just declare what is stable. Prerequisite for everything else.
+2. **Phase 1** — internal `ToolRegistry` behind a feature flag. Built-ins register through it. No external behaviour change but the codebase becomes extension-shaped. One built-in (e.g. `SAPManage(action="cache_stats")`) converted end-to-end as a self-test.
+3. **Phase 2** — local trusted plugin loader: `ARC1_PLUGINS=/path/to/plugin.js`. Admin-explicit, file-permission-checked, fail-fast on registration errors. Same trust model as any binary the admin runs.
+4. **Phase 3 (optional)** — manifest-only plugins (declarative JSON, no JS) for thin endpoint wrappers — safest tier, fits the "I just want to wrap one OData endpoint" case.
+5. **Phase 4 (only if asked)** — npm peer-package plugins. Not recommended unless customers explicitly request it; an npm marketplace fights the centralized-gateway model.
+
+**Why not (yet):** ARC-1's value comes from the opinionated central safety/scope/audit pipeline. A poorly-designed plugin API could let a third-party tool bypass `allowWrites`, `allowedPackages`, scope policy, or PP. The research doc lists eight invariants that any plugin API must enforce; getting them right takes time. Deferred to P3 until either (a) a concrete customer asks for it, or (b) the in-tree tool count starts to feel like a marketplace candidate.
+
+**Out of scope:** Embedding ARC-1 *into* another app (already deferred as [FEAT-29g](#feat-29) — contradicts the centralized-gateway model). This item is the *opposite* — adding tools *to* an ARC-1 instance.
+
+**Related research:**
+- [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) — full design with public-surface map, seven extension-pattern survey, security model, anti-patterns, open questions, and a sketch of `defineTool()` + `ToolContext`.
 
 ---
 
