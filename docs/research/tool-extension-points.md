@@ -449,3 +449,214 @@ A subsequent PR adds Phase 2 (`ARC1_PLUGINS` loader). A possible third PR adds P
 * [ ] Does a plugin that throws an unexpected error keep the server up? (Should: yes — same try/catch in `handleToolCall` that already wraps every built-in.)
 * [ ] Does `ARC1_TOOL_MODE=hyperfocused` still work when plugins are loaded? (Open: depends on whether plugins opt into a hyperfocused action.)
 * [ ] Does the test harness work without a live SAP system? (Should: yes — mock `AdtClient` / `AdtHttpClient` provided in `arc-1/public/testing`.)
+
+---
+
+## 14. Worked example: samibouge NW 7.50 fork — what fits, what doesn't
+
+**Source:** [main...samibouge:arc-1:feat/nw750-version-fix](https://github.com/marianfoo/arc-1/compare/main...samibouge:arc-1:feat/nw750-version-fix) (18 commits, +2&nbsp;936 / −151 lines)
+
+This is a real third-party branch that hardens ARC-1 against SAP NetWeaver 7.50 backend quirks. It is the right shape of contribution to test the extension concept against a concrete case. The author bundled fixes, features, and **one site-local capability that requires installing custom ABAP code on the SAP system**. Maintaining customer-side ABAP is exactly what we don't want in upstream ARC-1 — but the underlying need is real, and this is precisely the situation FEAT-61 is designed to handle.
+
+### 14.1 Bucketing the 18 commits
+
+| # | Commit | Subject | Disposition | Why |
+|---|--------|---------|-------------|-----|
+| 1 | `8e9c12f` | SAPActivate phantom success + CLI/server alignment (NW 7.50) | **Already upstream** ([PR #179](https://github.com/marianfoo/arc-1/pull/179), merged 2026-04-26) | n/a — superseded |
+| 2 | `e3a8de6` | PR #179 follow-ups + auth-refactor rebase | **Already upstream** (folded into #179 / #181) | n/a — superseded |
+| 3 | `7fd90ce` | Two-phase activation handshake + NW 7.50 lock-conflict detection | **Upstream as bug fix** | Affects every system that hits preaudit; lock-as-auth-error reclassification is a universal correctness fix |
+| 4 | `dd8dd7e` | Activation error formatting (line numbers, decode entities, dedupe) | **Upstream as bug fix** | Universal output-formatting fix |
+| 5 | `5618345` | Update unit test assertions for new activation formatting | **Upstream** with #4 | Test-only |
+| 6 | `432ce3f` | Opt-in pre-write SAP syntax check + inactive-version diagnostics | **Upstream as opt-in feature** | No SAP-side install; `SAP_CHECK_BEFORE_WRITE` is a clean opt-in flag |
+| 7 | `f658687` | `extract-sap-cookies` CLI subcommand | **Upstream as CLI feature** | Just moves an existing script under the `arc1-cli` binary |
+| 8 | `b366dda` | Auto-reload cookie file on stale auth | **Upstream as infra** | Universal improvement to cookie auth mode |
+| 9 | `b2f024f` | Cookie hot-reload in CSRF token fetch path | **Upstream** with #8 | Bug fix in the same path |
+| 10 | `75ee47e` | Reject mixed-case object names on create | **Upstream as safety fix** | TADIR silent-corruption guard — universal |
+| 11 | `7fd9935` | Guard STRU writes against non-structures | **Upstream as safety fix** | SE11 silent-corruption guard — universal |
+| 12 | `6e7e660` | Guard MSAG create against task numbers on NW 7.50 | **Upstream as safety fix** | TADIR ghost-entry guard; no install needed |
+| 13 | `6d9a89d` | Expose MSAG `messages` property in SAPWrite tool schema | **Upstream as schema bug fix** | Pure schema completeness fix |
+| 14 | `bb93034` | Classify 404 deletion-blocked errors | **Upstream as error-class fix** | Hint-text correctness — universal |
+| 15 | `f2be2be` | Remove incorrect `minRelease 754` gate on `change_package` | **Upstream as gating fix** | Wrong gate; verified against real 7.50 discovery |
+| 16 | `635002e` | NW 7.50 TABL read routing, STRU write support, version param | **Upstream as routing fix** | Pure URL rewrite on the standard ADT API; no SAP install |
+| 17 | `2456aea` | Release-gated dispatch tables for unavailable types/actions | **Upstream as hint feature** | Just better 404 hints — internal mapping table only |
+| 18 | **`8dedcb0`** | **NW 7.50 dump detail via custom ICF endpoint** | **Plugin (FEAT-61)** | **Requires `ZCL_ARC1_DUMP_HANDLER` installed on SAP — the line we don't want to cross upstream** |
+
+**Net result:** out of 18 commits, **exactly one** belongs in the extension model. The rest are vanilla upstream contributions that should land as small, focused PRs (or be cherry-picked individually). Several already have.
+
+### 14.2 The one that needs the extension model: dump detail via custom ICF
+
+**The technical problem.** SAP NW 7.50 exposes the dump *listing* feed (`/sap/bc/adt/runtime/dumps`) but **does not expose a dump detail REST endpoint**. The standard ADT detail URL (`/sap/bc/adt/runtime/dump/{id}`) returns 404 on 7.50 because the underlying handler class was added in a later release. In Eclipse, "view dump" on 7.50 opens ST22 via SAP GUI integration — there's literally no REST surface. ARC-1 cannot fix this purely on the client; the data isn't exposed.
+
+**samibouge's approach.** Ship an ABAP class `ZCL_ARC1_DUMP_HANDLER` (`IF_HTTP_EXTENSION`) deployed at `/sap/rest/arc1/dumps`. The class:
+
+- lists `SNAP_ADT` for the feed shape;
+- parses the `RSDUMP_FT` structure with the same FT field-id codes as `CL_WD_TRACE_TOOL_ABAP_UTIL`;
+- calls `RS_ST22_READ_SNAPT` for short text / explanation / hints;
+- reads source ±10 lines around the abort via `READ REPORT`;
+- serialises with `/UI2/CL_JSON`.
+
+The TS side adds release-gated routing in `src/adt/diagnostics.ts`:
+
+```ts
+// commit 8dedcb0 in samibouge's fork
+function useCustomDumpEndpoint(abapRelease?: string): boolean {
+  if (!abapRelease) return false;
+  const r = abapRelease.replace(/\D/g, '');
+  const num = Number.parseInt(r, 10);
+  return Number.isFinite(num) && num >= 750 && num < 751;
+}
+
+export async function listDumps(http, safety, options, abapRelease) {
+  if (useCustomDumpEndpoint(abapRelease)) {
+    try { return await listDumpsViaCustomEndpoint(http); }
+    catch { /* fall through to ADT feed */ }
+  }
+  // ... standard ADT path
+}
+```
+
+**Why upstream merging this is wrong.** Five concrete costs:
+
+1. **Permanent ABAP-class maintenance.** Once the TS code references `/sap/rest/arc1/dumps`, the ABAP class is part of ARC-1's contract. Upgrading the class on customer systems becomes a coordinated release. Today ARC-1 ships zero ABAP — it lives on top of standard ADT.
+2. **Deployment story breaks.** "Install ARC-1 in BTP/Docker, point at SAP, done" becomes "install ARC-1 *and* transport `ZCL_ARC1_DUMP_HANDLER`." This is the deployment surface FEAT-29b explicitly rejected ("requires ABAP-side deployment, violates 'no ABAP installation required' principle").
+3. **Failure modes get worse, not better.** A customer without the class installed currently sees a clean "endpoint not available on this release" error. With this commit they'll see `useCustomDumpEndpoint(abapRelease)` route to a URL that returns 404, then fall through to the ADT path that *also* returns 404. Two failures, one user-visible message.
+4. **Slippery-slope precedent.** Once we accept one custom ICF, the next request is inevitable: custom RFC reader, custom ATC variant runner, custom user-info endpoint, custom STMS bridge. Each one a permanent maintenance burden. The line stays bright only if it's at zero.
+5. **Centralised-gateway pitch erodes.** ARC-1's differentiator (per the [Vision](../../docs_page/roadmap.md#vision)) is "one instance per SAP system, no SAP-side install, no shared service accounts." Adding even one custom ICF dilutes that pitch.
+
+But the underlying need — letting one customer fill an NW 7.50 hole with their own ABAP code — is real and reasonable. It just doesn't belong in upstream.
+
+### 14.3 What this looks like as a FEAT-61 plugin
+
+The same capability, owned by the customer, leveraging the extension model:
+
+**Customer repo `arc1-plugin-nw750-dumps`** (separate from ARC-1):
+
+```
+arc1-plugin-nw750-dumps/
+├── package.json           # peerDependencies: { "arc-1": "^0.7" }
+├── src/
+│   └── index.ts           # defineTool() + http calls
+├── abap/
+│   └── ZCL_ARC1_DUMP_HANDLER/   # the ABAP class, owned by customer
+│       └── README.md      # SICF setup steps
+└── README.md
+```
+
+**`src/index.ts` sketch (Phase 2, additive-only model):**
+
+```ts
+import { defineTool, OperationType, AdtApiError, z } from 'arc-1/public';
+
+export default {
+  apiVersion: 1 as const,
+  name: 'nw750-dumps',
+  version: '0.1.0',
+  tools: [
+    defineTool({
+      name: 'Custom_ListNw750Dumps',
+      description:
+        'List ABAP short dumps via custom NW 7.50 ICF endpoint /sap/rest/arc1/dumps. ' +
+        'Requires ZCL_ARC1_DUMP_HANDLER deployed and SICF-activated on the target system. ' +
+        'Use this on NW 7.50 systems where SAPDiagnose(action="dumps") returns 404 for detail.',
+      schema: z.object({ user: z.string().optional(), maxResults: z.coerce.number().optional() }),
+      policy: { scope: 'read', opType: OperationType.Read },
+      availableOn: 'all',
+      async handler(args, ctx) {
+        // Plugin only registers itself when admin opts in via ARC1_PLUGINS.
+        // Skipping the abapRelease check here is fine — the LLM sees this tool
+        // only on systems where the admin chose to load this plugin.
+        const resp = await ctx.client.http.get('/sap/rest/arc1/dumps', {
+          Accept: 'application/json',
+        });
+        return { content: [{ type: 'text', text: resp.body }] };
+      },
+    }),
+    defineTool({
+      name: 'Custom_GetNw750Dump',
+      description: 'Read ABAP dump detail via custom NW 7.50 ICF endpoint. ' +
+        'Dump ID format: datum;uzeit;ahost;uname;mandt;modno.',
+      schema: z.object({ id: z.string() }),
+      policy: { scope: 'read', opType: OperationType.Read },
+      availableOn: 'all',
+      async handler(args, ctx) {
+        try {
+          const resp = await ctx.client.http.get(
+            `/sap/rest/arc1/dumps/${encodeURIComponent(args.id)}`,
+            { Accept: 'application/json' },
+          );
+          return { content: [{ type: 'text', text: resp.body }] };
+        } catch (err) {
+          if (err instanceof AdtApiError && err.statusCode === 404) {
+            return {
+              content: [{
+                type: 'text',
+                text: 'NW 7.50 dump handler not deployed on this system. ' +
+                  'Install ZCL_ARC1_DUMP_HANDLER (see arc1-plugin-nw750-dumps/abap/README.md) ' +
+                  'and activate SICF node /sap/rest/arc1/dumps.',
+              }],
+              isError: true,
+            };
+          }
+          throw err;  // central formatter handles other typed errors
+        }
+      },
+    }),
+  ],
+};
+```
+
+**Operator workflow:**
+
+```bash
+# admin installs ABAP class once via abapGit / SE38 transport
+# admin installs plugin
+npm install arc1-plugin-nw750-dumps
+# admin opts in
+export ARC1_PLUGINS=$(node -p "require.resolve('arc1-plugin-nw750-dumps')")
+# restart ARC-1 — plugin tools appear in tools/list for users with read scope
+```
+
+**What ARC-1 core ships:** nothing changes. `src/adt/diagnostics.ts` stays as it is today. The `useCustomDumpEndpoint` branch and the `/sap/rest/arc1/dumps` URL never enter the upstream codebase.
+
+### 14.4 Honest tension: additive-only vs. route replacement
+
+The Phase 1+2 model in §6 lets plugins **add** `Custom_*` tools but **not replace** built-in ones. Under that constraint, samibouge's seamless model — where `SAPDiagnose(action="dumps")` *transparently* uses the custom endpoint on NW 7.50 — is not directly reproducible. The LLM has to learn "on NW 7.50, call `Custom_GetNw750Dump` instead of `SAPDiagnose(action="dumps")`."
+
+This is a real UX cost. There are three answers:
+
+**Answer 1 — Live with it.** Ship Phase 1+2 as designed; LLMs that talk to NW 7.50 systems pick up the alternate tool from the tool description. Pros: clean trust boundary, no new mechanism. Cons: more LLM steering required; per-release-conditional routing logic ends up in prompts/skills instead of code.
+
+**Answer 2 — Add a route-replacement hook in Phase 1.5.** Allow a plugin to register a replacement *handler* for a specific `(tool, action[, predicate])` tuple, where the predicate can read `cachedFeatures.abapRelease` and similar. Sketch:
+
+```ts
+registerRoute({
+  tool: 'SAPDiagnose',
+  action: 'dumps',
+  when: features => /^7\.50/.test(features.abapRelease ?? ''),
+  // when true, this handler replaces the built-in for matching requests
+  handler: async (args, ctx) => { /* call /sap/rest/arc1/dumps */ },
+});
+```
+
+Pros: matches samibouge's actual UX; one code path per release. Cons: bigger blast radius if a plugin gets the predicate wrong; requires fail-fast collision detection across plugins; complicates the audit trail (which plugin's route ran?).
+
+**Answer 3 — Manifest-only routes in Phase 3.** A JSON entry (no JS) declaring "for SAPDiagnose action=dumps when abapRelease starts with 7.50, GET this path with this header, return JSON shape X". The core has a generic interpreter. Safer than Answer 2 but limited to thin mappings; cannot do the FT structure parsing samibouge needs (so it would still need an additional response transformer — back to JS).
+
+**Provisional recommendation:** ship Phase 1+2 *additive-only* and treat the NW 7.50 dump UX gap as the canonical motivating example for whether to add Answer 2 in a Phase 1.5 follow-up. Don't speculate on Answer 2 until at least two real plugin authors hit the same UX wall — one example does not justify a route-replacement hook with all its blast radius.
+
+### 14.5 Implications for the recommended next step (§12)
+
+The case study tightens the §12 plan rather than changing it:
+
+1. **Bucket B + C + D from §14.1 are independent of FEAT-61.** They should land as ordinary upstream PRs whether FEAT-61 ever ships. They are 13 of 18 commits and most of the line count.
+2. **The dump-handler commit is the canonical "wait for FEAT-61" example.** Don't merge it. Don't reject it on technical grounds either — the work is correct for what it does. Reject on *scope* grounds and link the author to FEAT-61 when Phase 1+2 ship.
+3. **Phase 1+2 design holds.** The additive-only model is enough to unblock the dump-handler use case. Whether to add Phase 1.5 (route replacement) is a future call driven by real demand, not by this single example.
+4. **The `availableOn` field probably needs a per-feature predicate.** A plugin that targets only NW 7.50 should be able to say so declaratively, so the registry can hide the tool on other systems. This is a small Phase 1 design tweak: extend `availableOn: 'onprem' | 'btp' | 'all'` to optionally accept a `(features) => boolean` predicate. Cheap to add now, expensive later.
+
+### 14.6 What to communicate back to samibouge
+
+A focused reply along these lines (no commitment yet, since FEAT-61 is P3):
+
+> Thanks for the deep NW 7.50 work. About 13 of the 18 commits are clean upstream candidates and we'd be happy to take them as small focused PRs (some already merged via #179). The custom ICF endpoint commit (`8dedcb0`) we're not going to merge upstream — installing `ZCL_ARC1_DUMP_HANDLER` on every customer's SAP system is the line ARC-1 doesn't cross. We've sketched a plugin model in [docs/research/tool-extension-points.md](./tool-extension-points.md) (FEAT-61) that is purpose-built for exactly this: you keep the ABAP class in your own repo, ship a small TS plugin that wraps `client.http.get('/sap/rest/arc1/dumps')`, and admins opt in via `ARC1_PLUGINS=...`. Until FEAT-61 lands you can already run a private fork; once it lands you can publish the plugin separately without forking ARC-1.
+
+That answers the user-stated concern ("don't want custom code of mine") while also giving a concrete path that doesn't waste samibouge's work.
