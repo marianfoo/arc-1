@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/marianfoo/arc-1/compare/v0.7.0...v0.7.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* restore npx package execution ([#189](https://github.com/marianfoo/arc-1/issues/189)) ([da05e01](https://github.com/marianfoo/arc-1/commit/da05e01ea30b0702126a9d12000a2b187fca6c9b))
+
 ## [0.7.0](https://github.com/marianfoo/arc-1/compare/v0.6.10...v0.7.0) (2026-04-26)
 
 
