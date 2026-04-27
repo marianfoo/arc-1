@@ -88,6 +88,9 @@ markdown_extensions:
 plugins:
   - search
 
+extra_javascript:
+  - javascripts/posthog.js
+
 extra:
   social:
     - icon: fontawesome/brands/github
