@@ -195,6 +195,12 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 | Date | Upstream Change | Relevant? | Decision | Status |
 |------|----------------|-----------|----------|--------|
+| 2026-04-24 | **Issue #124: SAP API Policy v.4.2026 may classify ADT REST as off-limits for productive use** | **Strategic** | **No code action** — track for project narrative; affects every ADT-based MCP. Possible mitigations: developer-tool framing, BTP-only positioning, wait for SAP clarification. | [Eval](vibing-steampunk/evaluations/issue-124-sap-api-policy-v42026.md) |
+| 2026-04-23 | Issue #123: GetRevisions 404 for INTF/DDLS (vsp uses wrong URL `oo/interfaces/{name}/includes/main/versions`) | Medium | Verify — ARC-1's path is `/source/main/versions` for INTF (likely correct). Run integration test against a4h to confirm. | — |
+| 2026-04-21 | Issue #110: Lock-handle regression on S/4HANA 758 (vsp v2.32→v2.36) | Medium | Cross-check whenever ARC-1 touches crud.ts — withStatefulSession should already cover it. | — |
+| 2026-04-20 | Issue #116: vsp's WriteSource rejects INCL | No | ARC-1 already supports INCL in SAPWRITE_TYPES_ONPREM with full case 'INCL' wiring. Win for ARC-1. | — |
+| 2026-04-20 | Issue #114: HANA detection on S/4HANA 758 (COMPONENTS endpoint returns 406, vsp probe doesn't fall back to S4CORE) | Medium | Verify ARC-1 capability detection has a 406-fallback path on 758. | — |
+| 2026-04-18 | Issue #109: vsp lacks DOMA/DTEL create | No | ARC-1 already supports DOMA/DTEL create+update via metadata XML writes (ddic-xml.ts). Win for ARC-1. | — |
 | 2026-04-12 | **CRITICAL: Package safety bypass on mutations (#101)** — `SAP_ALLOWED_PACKAGES` not enforced on update/delete. **ARC-1 has same bug.** | **Critical** | **Fix immediately** — checkPackage() missing on update/delete/edit_method | [Eval](vibing-steampunk/evaluations/0713d75-package-safety-mutations.md) |
 | 2026-04-12 | SAML SSO auth for S/4HANA Public Cloud (#97) — programmatic + browser + credential-cmd | Low | Defer — ARC-1 uses BTP OAuth / Destination Service | [Eval](vibing-steampunk/evaluations/e62c7d5-saml-sso-auth.md) |
 | 2026-04-15 | **Fix lock-handle bug class — modificationSupport guard** (22517d4) | **High** | **Implement**: add modificationSupport parsing to lockObject() in crud.ts. If false, fail early with clear LLM-friendly error (object locked in released transport). Fixes root cause of all 423 errors. | [Eval](vibing-steampunk/evaluations/22517d4-lock-handle-bug-class.md) |
@@ -223,4 +229,4 @@ mcp-go v0.17.0, Cobra, Viper, go-sqlite3, godotenv, yaml.v3, Gopher-Lua, WebSock
 
 > **Detailed commit-level tracking**: See [`compare/vibing-steampunk/`](vibing-steampunk/) for per-commit and per-issue evaluations.
 
-_Last updated: 2026-04-16_
+_Last updated: 2026-04-27_

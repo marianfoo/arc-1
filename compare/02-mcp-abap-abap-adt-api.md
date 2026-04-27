@@ -138,4 +138,4 @@ HTTP Streamable, OIDC/JWT auth, BTP support, principal propagation, API key auth
 
 > **Detailed tracking**: See [`compare/abap-adt-api/`](abap-adt-api/) for per-commit and per-issue evaluations of the underlying library.
 
-_Last updated: 2026-04-08_
+_Last updated: 2026-04-27_

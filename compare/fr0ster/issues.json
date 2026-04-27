@@ -1,16 +1,70 @@
 {
   "$schema": "Issue tracker for fr0ster/mcp-abap-adt — relevance to ARC-1",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-16",
+  "lastUpdated": "2026-04-27",
   "stats": {
     "total": 63,
     "open": 1,
     "closed": 62,
-    "relevantToArc1": 16,
-    "evaluated": 16,
+    "relevantToArc1": 32,
+    "evaluated": 63,
     "pending": 0
   },
   "issues": [
+    {
+      "number": 77,
+      "state": "open",
+      "date": "2026-04-25",
+      "title": "The UpdateFunctionModule operation will lose FM parameters.",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "Updating FM source via /source/main strips parameter declarations on reactivation because parameters live in a separate metadata document. ARC-1 verify: SAPWrite(type='FUNC', action='update') would hit the same bug AND has a separate broken-URL bug (objectBasePath('FUNC') returns the group path, not the fmodules path). Either fix both or remove FUNC from SAPWRITE_TYPES_ONPREM.",
+      "evaluationFile": "evaluations/issue-77-fm-update-parameter-loss.md"
+    },
+    {
+      "number": 69,
+      "state": "closed",
+      "date": "2026-04-20",
+      "title": "Per-instance systemType option for EmbeddableMcpServer (avoid global SAP_SYSTEM_TYPE)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "Constructor option overrides process.env.SAP_SYSTEM_TYPE for a single embedded server instance. Resolution order: option → env → 'cloud'. Not applicable to ARC-1 (one process per system); track for any future Node SDK / embed mode.",
+      "evaluationFile": "evaluations/c726f70-per-instance-systemtype.md"
+    },
+    {
+      "number": 68,
+      "state": "closed",
+      "date": "2026-04-20",
+      "title": "Add CreateProgram / UpdateProgram / DeleteProgram (classic executable reports)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already supports PROG CRUD via SAPWrite (case 'PROG' in buildCreateXml + objectBasePath, 'PROG' in SAPWRITE_TYPES_ONPREM, ZARC1_TEST_REPORT covered in tests/e2e/fixtures.ts). Closed in favour of #69 upstream.",
+      "evaluationFile": "evaluations/issue-68-program-crud.md"
+    },
+    {
+      "number": 67,
+      "state": "closed",
+      "date": "2026-04-19",
+      "title": "Refresh dependencies and lockfile after adt-clients drops node-rfc",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Lockfile cleanup after their adt-clients drops node-rfc — ARC-1 doesn't use node-rfc."
+    },
+    {
+      "number": 66,
+      "state": "closed",
+      "date": "2026-04-17",
+      "title": "Enrich tool descriptions with related operation context",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "RAG-driven cross-references between Create/Update/Read tool descriptions to improve vector-search ranking. Not applicable to ARC-1 (12 intent-based tools, no RAG selection); workflow-ordering polish in SAPWrite/SAPActivate descriptions remains a small DX improvement.",
+      "evaluationFile": "evaluations/issue-66-tool-description-enrichment.md"
+    },
     {
       "number": 63,
       "state": "closed",
