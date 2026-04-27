@@ -124,9 +124,29 @@ Add `.mcp.json` to your project root:
 }
 ```
 
-### GitHub Copilot / VS Code (HTTP Streamable)
+### GitHub Copilot / VS Code
 
-Start arc1 as an HTTP server, then point your MCP client to it:
+For local stdio mode, use the same `npx` command shape shown above. VS Code's `servers` form looks like this:
+
+```json
+{
+  "servers": {
+    "sap": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "your-username",
+        "SAP_PASSWORD": "your-password",
+        "SAP_CLIENT": "100"
+      }
+    }
+  }
+}
+```
+
+For HTTP Streamable mode, start arc1 as an HTTP server, then point your MCP client to it:
 
 ```bash
 SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \

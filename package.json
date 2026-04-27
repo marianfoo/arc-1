@@ -14,6 +14,7 @@
     "node": ">=22.0.0"
   },
   "bin": {
+    "arc-1": "./bin/arc1.js",
     "arc1": "./bin/arc1.js",
     "arc1-cli": "./bin/arc1-cli.js"
   },
@@ -41,6 +42,7 @@
     "test:integration:btp:extended": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.integration.test.ts",
     "test:integration:crud": "vitest run --config vitest.integration.config.ts tests/integration/crud.lifecycle.integration.test.ts",
     "test:authz:http": "node scripts/check-authz-http-profiles.mjs",
+    "test:npx-smoke": "npm run build && node scripts/ci/assert-npx-bin-smoke.mjs",
     "test:integration:skip-summary": "vitest run --config vitest.integration.config.ts --reporter=verbose 2>&1 | node scripts/ci/summarize-skips.mjs",
     "test:coverage": "vitest run --coverage",
     "test:coverage-report": "node scripts/ci/coverage-summary.mjs",
