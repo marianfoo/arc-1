@@ -156,12 +156,18 @@ describe('ADT Discovery', () => {
   });
 
   describe('hasNhiWorkspace', () => {
-    it('returns true when NHI href is present', () => {
+    it('returns true when NHI href is present (relative)', () => {
       expect(hasNhiWorkspace('<app:collection href="/sap/bc/adt/nhi/repositories">')).toBe(true);
     });
 
-    it('returns true for any NHI sub-path', () => {
-      expect(hasNhiWorkspace('/sap/bc/adt/nhi/configurations')).toBe(true);
+    it('returns true for an NHI href with absolute URL prefix', () => {
+      // Some SAP servers emit absolute hrefs in the discovery document.
+      expect(hasNhiWorkspace('<app:collection href="https://server.example.com/sap/bc/adt/nhi/repos">')).toBe(true);
+    });
+
+    it('is namespace-prefix agnostic and tolerates whitespace around the equals sign', () => {
+      expect(hasNhiWorkspace('<collection href = "/sap/bc/adt/nhi/repos">')).toBe(true);
+      expect(hasNhiWorkspace("<atom:link href='/sap/bc/adt/nhi/repos'/>")).toBe(true);
     });
 
     it('returns false for standard ADT hrefs', () => {
@@ -170,6 +176,28 @@ describe('ADT Discovery', () => {
 
     it('returns false for empty string', () => {
       expect(hasNhiWorkspace('')).toBe(false);
+    });
+
+    // ─── False-positive guards (regex anchored to href= attribute context) ─
+
+    it('returns false when the path appears as bare text (not inside an href)', () => {
+      // The previous lax substring match would have returned true here.
+      expect(hasNhiWorkspace('/sap/bc/adt/nhi/configurations')).toBe(false);
+    });
+
+    it('returns false when the path appears in <atom:title> text', () => {
+      // Defensive: a workspace title that mentions the NHI path verbatim must not signal HANA.
+      expect(hasNhiWorkspace('<atom:title>NHI lives at /sap/bc/adt/nhi/configurations</atom:title>')).toBe(false);
+    });
+
+    it('returns false when the path appears in a non-href attribute', () => {
+      // `data-path`, `id`, etc. mentioning the path must not count.
+      expect(hasNhiWorkspace('<a data-path="/sap/bc/adt/nhi/foo">link</a>')).toBe(false);
+    });
+
+    it('returns false when the path is missing the leading slash inside href', () => {
+      // Defensive: `href="sap/bc/adt/nhi/..."` is invalid for an absolute server path.
+      expect(hasNhiWorkspace('<app:collection href="sap/bc/adt/nhi/repos">')).toBe(false);
     });
   });
 

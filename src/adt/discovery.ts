@@ -13,10 +13,16 @@ export interface DiscoveryFetchResult {
 /**
  * Return true when the raw ADT discovery XML contains at least one NHI collection href.
  * NHI (/sap/bc/adt/nhi/*) workspaces are only registered on HANA-based systems.
+ *
+ * The match is anchored to an `href="..."` attribute so that mentions of the path in
+ * `<atom:title>` text, descriptions, or non-href attributes do not false-positive.
+ * The optional `https://host` prefix lets us still match the rare absolute-URL form some
+ * SAP servers emit. Namespace prefix on the surrounding element is irrelevant.
+ *
  * Exported for unit testing.
  */
 export function hasNhiWorkspace(xml: string): boolean {
-  return /\/sap\/bc\/adt\/nhi\//.test(xml);
+  return /href\s*=\s*["'](?:https?:\/\/[^"'/]+)?\/sap\/bc\/adt\/nhi\//i.test(xml);
 }
 
 /**
