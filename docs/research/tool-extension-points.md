@@ -660,3 +660,259 @@ A focused reply along these lines (no commitment yet, since FEAT-61 is P3):
 > Thanks for the deep NW 7.50 work. About 13 of the 18 commits are clean upstream candidates and we'd be happy to take them as small focused PRs (some already merged via #179). The custom ICF endpoint commit (`8dedcb0`) we're not going to merge upstream — installing `ZCL_ARC1_DUMP_HANDLER` on every customer's SAP system is the line ARC-1 doesn't cross. We've sketched a plugin model in [docs/research/tool-extension-points.md](./tool-extension-points.md) (FEAT-61) that is purpose-built for exactly this: you keep the ABAP class in your own repo, ship a small TS plugin that wraps `client.http.get('/sap/rest/arc1/dumps')`, and admins opt in via `ARC1_PLUGINS=...`. Until FEAT-61 lands you can already run a private fork; once it lands you can publish the plugin separately without forking ARC-1.
 
 That answers the user-stated concern ("don't want custom code of mine") while also giving a concrete path that doesn't waste samibouge's work.
+---
+
+## 15. Case study: integrating dassian-adt v2.0 as an ARC-1 extension
+
+A concrete worked example of how each extension pattern from §5 would (or would not) accommodate a real third-party MCP server: [dassian-adt](https://github.com/messianic-swop450/dassian-adt) (the upstream repository `DassianInc/dassian-adt` no longer exists; this is the surviving fork from `messianic-swop450`, captured 2026-04-26).
+
+### 15.1 What dassian-adt is
+
+dassian-adt v2.0 is a competing TypeScript MCP server for SAP ABAP, MIT-licensed, ~270 KB of TypeScript. It is built on top of [`abap-adt-api`](https://github.com/marcellourbani/abap-adt-api) (Marcello Urbani's ADT HTTP client) and ships with ~39 tools across 12 domain handlers.
+
+| Property | Value |
+|----------|-------|
+| Stack | Node 18+, TypeScript 5.7, `@modelcontextprotocol/sdk` 1.28, `abap-adt-api` 7.1 |
+| License | MIT |
+| Tools | ~39 across 12 handler classes |
+| Architecture | One `BaseHandler` per domain; `index.ts` wires them; `validateAndHandle` dispatches |
+| Auth | Basic, OAuth (XSUAA, Entra ID), or built-in OAuth login HTML form |
+| Multi-system | Yes — `SAP_SYSTEMS` env var, `sap_system_id` auto-injected into every tool schema |
+| Transports | stdio + Streamable HTTP |
+| MCP capabilities | `tools`, `prompts`, `logging` (sampling and elicitation used internally) |
+
+### 15.2 Tool inventory (39 tools, 12 handlers)
+
+| Handler | Tools |
+|---------|-------|
+| `SourceHandlers` | `abap_get_source`, `abap_set_source`, `abap_edit_method`, `abap_set_class_include`, `abap_pretty_print`, `abap_revisions`, `abap_get_function_group` |
+| `ObjectHandlers` | `abap_create`, `abap_delete`, `abap_activate`, `abap_search`, `abap_activate_batch`, `abap_object_info` |
+| `DataHandlers` | `abap_query`, `abap_table` |
+| `DdicHandlers` | `ddic_element`, `ddic_references` |
+| `GitHandlers` | `git_repos`, `git_pull` |
+| `QualityHandlers` | `abap_syntax_check`, `abap_atc_run`, `abap_atc_variants`, `abap_where_used`, `abap_find_definition`, `abap_fix_proposals` |
+| `RapHandlers` | `rap_binding_details`, `rap_publish_binding` |
+| `RunHandlers` | `abap_unlock`, `abap_run` |
+| `SystemHandlers` | `login`, `healthcheck`, `abap_get_dump`, `abap_inactive_objects`, `abap_annotation_defs`, `raw_http` |
+| `TestHandlers` | `abap_create_test_include`, `abap_unit_test` |
+| `TraceHandlers` | `traces_list`, `traces_set_parameters`, `traces_create_config`, `traces_hit_list`, `traces_statements`, `traces_db_access`, `traces_delete`, `traces_delete_config` |
+| `TransportHandlers` | `transport_create`, `transport_assign`, `transport_release`, `transport_list`, `transport_info`, `transport_delete`, `transport_set_owner`, `transport_add_user`, `transport_contents` |
+
+### 15.3 Coverage vs ARC-1's 12 intent tools
+
+Most dassian-adt tools have a one-to-one ARC-1 equivalent — they just live as `action`/`type` parameters on a shared intent tool rather than as separate tools. The interesting subset is what is *not* yet in ARC-1:
+
+| dassian-adt feature | ARC-1 status | Notes |
+|---------------------|--------------|-------|
+| `raw_http` escape-hatch tool | None — by design | Conflicts with ARC-1's "every endpoint has a safety guard" invariant. dassian-adt's own description warns "NEVER use raw_http to POST to lock endpoints" — exactly the kind of foot-gun ARC-1 wants to make impossible. |
+| `abap_unlock` (manual unlock) | None | Useful for orphaned-lock recovery. Could be added as `SAPManage(action="unlock_object")`. |
+| `abap_create_test_include` | None | Convenience for testclass scaffolding. Sits naturally in `SAPWrite`. |
+| `traces_create_config` / `traces_set_parameters` / `traces_delete_config` | Partial — `SAPDiagnose(action="traces")` reads only | Trace lifecycle (create config → run → analyze → delete) is more granular in dassian-adt. |
+| `abap_atc_variants` (list available variants) | None | ARC-1 takes a single variant param. Listing available variants is a small read tool that fits `SAPDiagnose`. |
+| `transport_add_user` | None — `SAPTransport` has `reassign` | dassian-adt's transport tools cover a few actions ARC-1 marked as "deferred" in [FEAT-39](../../docs_page/roadmap.md#feat-39). |
+| `abap_get_function_group` (parallel-fetch) | Open in [FEAT-18](../../docs_page/roadmap.md#feat-18) | Same idea, not yet built. |
+| `abap_set_class_include` (per-include surgical write) | Partial — `SAPWrite type=CLAS include=...` exists for read but not write | Real gap — class includes can only be written via full source today. |
+| MCP **prompts** (slash-command templates served via MCP) | None — ARC-1 ships [skills/](../../skills/) as files | dassian-adt registers `fix-atc`, `transport-review`, `class-overview`, `release-transport` as MCP `prompts`. ARC-1 ships the same idea as documentation files copied into client config — different distribution model. |
+| Sampling integration (`askClaude(systemPrompt, userMessage)` inside handlers) | None | Lets a handler ask the LLM a sub-question without breaking out to the user. |
+| Elicitation as a first-class flow control | Used sparingly via [src/server/elicit.ts](../../src/server/elicit.ts) | dassian-adt prompts for missing transport/package interactively; ARC-1 returns structured errors with hints. |
+| OAuth-mediated HTTP login form (HTML + cookie + PKCE) | Not in core — XSUAA on BTP only | dassian-adt embeds its own OAuth provider so users can self-supply SAP credentials per session. Conflicts with ARC-1's "admin controls everything" model. |
+| Multi-system with `sap_system_id` auto-injection | Deferred in [FEAT-59](../../docs_page/roadmap.md#feat-59) | dassian-adt does this today by mutating every tool's input schema at startup. |
+
+Things ARC-1 has and dassian-adt does **not**:
+
+* Centralized safety system (`allowWrites`, `allowedPackages`, `allowFreeSQL`, `denyActions`).
+* Per-action scope policy with implication rules (`admin → all`, `write → read`, `sql → data`).
+* Principal Propagation (per-user SAP identity via BTP Destination Service).
+* Structured audit log with multiple sinks (stderr / file / BTP Audit Log Service).
+* CDS impact analysis, RAP preflight, `scaffold_rap_handlers`, ABAP-cloud / on-prem feature gating.
+* Hyperfocused mode (one-tool ~200-token schema).
+* Object cache (memory / SQLite) with warmup.
+* `abaplint` integration for local lint + formatter.
+
+In one sentence: **dassian-adt is a single-tenant developer-laptop SAP MCP server with very clever workflow features; ARC-1 is a multi-tenant centrally-administered gateway**. The two address overlapping but different problems.
+
+### 15.4 The hard architectural mismatch: HTTP client identity
+
+This is the single biggest obstacle to integration. **dassian-adt is built on `abap-adt-api`; ARC-1 is built on its own `AdtHttpClient`** ([src/adt/http.ts](../../src/adt/http.ts)). The two HTTP layers are not interchangeable:
+
+| Concern | `abap-adt-api` | ARC-1's `AdtHttpClient` |
+|---------|----------------|-------------------------|
+| Login flow | `client.login()` — owns cookies/CSRF inside the lib | Discovery probe + lazy CSRF, owned by ARC-1 |
+| Auth methods | Basic, OAuth token (string) | Basic, cookie, BTP service key (OAuth), Destination Service, PP via `SAP-Connectivity-Authentication` or `Proxy-Authorization` jwt-bearer |
+| Stateful sessions | `client.stateful = stateful` global flag | `withStatefulSession()` per call, isolated client clone |
+| Per-user identity | None — one client per credential set | Per-request client built by `createPerUserClient(jwt)` |
+| MIME negotiation | Hard-coded per endpoint | Discovery-driven, with proactive MIME map and 415/406 fallback |
+| Audit | None | `http_request` audit event per call, request-id correlation |
+| Concurrency control | None | Optional semaphore (`SAP_MAX_CONCURRENT`) |
+| Safety hooks | None | Every public method calls `checkOperation()` first |
+
+**Consequence:** any "wholesale port" of dassian-adt either (a) keeps `abap-adt-api` and runs *two* HTTP stacks side by side with two separate SAP sessions per user — which silently breaks PP, audit, and safety; or (b) rewrites every handler to call `client.http.get/post/put/delete` instead of `adtclient.lock/setObjectSource/atcCheckVariant/...`. Option (b) is real engineering work, not a copy-paste port.
+
+### 15.5 Feature-by-feature: can a plugin author build this under FEAT-61 today?
+
+The right framing for this case study is **not** "how do we wrap dassian-adt as a plugin" but "for each capability dassian-adt invented, can a plugin author reproduce it with the §7 `ToolContext` as proposed, and if not, what's the smallest API change that makes it possible?"
+
+Five verdict levels:
+
+* ✅ **Buildable today** with the §7 `ToolContext` as proposed — no API change needed.
+* 🟢 **Buildable with a small public-API addition** — friction is annoying, the fix is a one-liner.
+* 🟡 **Needs a `ToolContext` capability that is currently missing** — must be added in Phase 1 to make this kind of feature work at all.
+* 🔵 **Server-level capability, not a plugin concern** — belongs in core ARC-1 (or a different roadmap item), not in the plugin API.
+* ❌ **Intentional non-goal** per §10 — stays blocked by design.
+
+#### 14.5.1 Domain tools (all ✅)
+
+Every dassian-adt tool that is "call this ADT endpoint, parse the result, return it" is a one-line `defineTool()` whose handler calls `ctx.client.http.get/post/put/delete`. No new primitives needed.
+
+| dassian-adt tool | Plugin handler skeleton |
+|------------------|--------------------------|
+| `abap_unlock` | `ctx.client.http.post(unlockUrl, body)` |
+| `abap_set_class_include` | `ctx.client.http.withStatefulSession(s => lock → put include → unlock)` |
+| `abap_create_test_include` | `ctx.client.http.put(.../includes/testclasses, source)` |
+| `abap_atc_variants` | `ctx.client.http.get(.../atc/variants)` |
+| `traces_*` (8 tools) | various `ctx.client.http.*` calls |
+| `abap_get_function_group` | parallel `Promise.all` of `ctx.client.http.get` calls (FEAT-18 territory) |
+| `abap_annotation_defs` | `ctx.client.http.get(/sap/bc/adt/ddic/cds/annotation/definitions)` |
+| `ddic_references` | `ctx.client.http.post(.../ddic/where-used, payload)` |
+| `abap_revisions` | `ctx.client.http.get(...versions, Accept: atom+xml)` (already in `AdtClient`) |
+| `abap_pretty_print` | `ctx.client.http.post(.../prettyprinter)` (already in `AdtClient`) |
+
+**~32 of the ~39 dassian-adt tools fall in this bucket.** A plugin author with the §7 `ToolContext` writes them today.
+
+#### 14.5.2 Workflow patterns (mostly ✅, two 🟢)
+
+The interesting IP in dassian-adt is not the tool list — it's the workarounds and orchestration logic. Each one needs a primitive; here is what's available now and what's missing.
+
+| Pattern | Primitive needed | Status | Plugin code shape |
+|---------|------------------|:--:|-------------------|
+| ATC fallback (try `createAtcRun`; on `ciCheckFlavour=true`, fall back to `atcCheckVariant` + `atcWorklists`) | Try one HTTP call, catch error, try alternative | ✅ | `try { await ctx.client.http.post(A); } catch (e) { await ctx.client.http.post(B); }` |
+| `METADATA_TYPES` set (use `transportReference` for FUGR/MSAG/ENHS instead of lock+write) | A constant Set + branch on type | ✅ | `if (METADATA_TYPES.has(type)) { /* transportReference path */ } else { /* lock+write path */ }` |
+| DDLS DELETE bypass (avoid library appending `?corrNr` that SAP rejects) | Direct DELETE with custom query string | ✅ | `ctx.client.http.delete(`${url}?lockHandle=${h}`)` — plugin builds the path |
+| `IF_OO_ADT_CLASSRUN` `~run` vs `~main` detection (release-dependent method name) | One GET on the interface source + grep | ✅ | `const src = await ctx.client.http.get('/sap/bc/adt/oo/interfaces/IF_OO_ADT_CLASSRUN/source/main'); const method = src.includes('~run') ? '~run' : '~main';` |
+| Smart-redirect hints ("you passed a transport ID where an object name was expected") | Regex on input + helpful error message | ✅ | Plugin returns `{ content: [...], isError: true }` with the hint |
+| Retry-on-lock with backoff (3 attempts, 0/3/8s) | try/catch + `setTimeout` | ✅ | Plain JavaScript loop. Optional `ctx.notify` for progress messages (see 14.5.3). |
+| Lockless DDLS write detection (read object metadata; if DDLS without lock support, skip lock) | Read object metadata before deciding strategy | ✅ | Plugin decides based on type + metadata |
+| `withSession` auto-reconnect on session expiry (catch session-timeout, re-login, retry the wrapped block) | Detect session-timeout error class, re-issue request | 🟢 | ARC-1's `AdtHttpClient` already retries 401 internally per request. For *multi-step* blocks (lock→write→unlock as one unit), a plugin would write its own try/catch around `withStatefulSession`. **Recommendation:** ship `ctx.client.http.withRetryOnSessionExpiry(fn)` in §4 — saves every plugin from re-implementing the same try/catch. Not a Phase-1 blocker. |
+| `requireTransport` (read `lockResult.IS_LOCAL` / `CORRNR`, throw if non-`$TMP` and no transport supplied) | Need access to the lock response | 🟢 | Today, `lockObject()` lives in `src/adt/crud.ts` and is *not* on `AdtClient`. Plugins would have to deep-import. **Required §4 addition:** expose `client.lock(objectUrl) → { lockHandle, corrNr, isLocal }` and `client.unlock(objectUrl, lockHandle)` on the public surface. Without this, plugins cannot build any lock-aware write tool. |
+| `resolveTaskNumber` (request → task via E070 query) | A SAP table query | ✅ | Plugin calls `ctx.client.http.post('/sap/bc/adt/datapreview/freestyle', "SELECT TRKORR FROM E070 WHERE STRKORR = '...'")` *or*, when allowed, `ctx.client.runQuery(...)`. Helper recommended (see 14.6). |
+| `classifyTask` (TRFUNCTION='S' via custom PUT XML) | One PUT with arbitrary XML body | ✅ | `ctx.client.http.put('/sap/bc/adt/cts/transportrequests/X', '<tm:root...trfunction="S"/>')` |
+| `resolveNestedUrl` / `resolveFunctionModuleUrl` (FUGR/I, FUGR/FF auto-discovery) | `searchObject` + URL-shape regex | ✅ | `client.searchObject` is already public on `AdtClient`. Plugin reimplements the regex; helper recommended (see 14.6). |
+
+**Conclusion:** every workflow pattern dassian-adt invented can be reproduced inside a plugin handler with the proposed `ToolContext`, **except** for any pattern that needs the lock response object — which is the missing 🟢 in the table above. **Promoting `client.lock()` / `client.unlock()` to the public API is the single most impactful §4 addition** for real-world plugin authors.
+
+#### 14.5.3 MCP capability features (all 🟡 — must be added to `ToolContext`)
+
+Three MCP features dassian-adt uses extensively are *not* in the proposed §7 `ToolContext`. A plugin author cannot build these today. Each is a 5-line injection in the framework — but it has to happen for the API to be useful.
+
+| dassian-adt usage | MCP primitive | Status | What to add |
+|-------------------|---------------|:--:|-------------|
+| `confirmWithUser(message, details)` — yes/no plus optional fields | `Server.elicitInput()` | 🟡 | **Add `ctx.elicit?: (params) => Promise<ElicitResult>`** to §7. Optional because the connected MCP client may not support elicitation; plugins detect and fall back (dassian-adt does this — `if (!this._elicit) return true`). |
+| `notify(message, level)` — UI-visible progress in Claude Code | `Server.sendLoggingMessage()` | 🟡 | **Add `ctx.notify?: (level, message) => Promise<void>`** to §7. Distinct from `ctx.logger` which goes to ARC-1's stderr/audit pipeline — `notify` goes back to the MCP client for the user to see. |
+| `askClaude(systemPrompt, userMessage, maxTokens?)` — handler asks the LLM a sub-question | `Server.createMessage()` (sampling) | 🟡 | **Add `ctx.sampling?: (systemPrompt, userMessage, maxTokens?) => Promise<string>`** to §7. Already noted in §15.6 (was Open Question 11) — promote to Phase-1 yes. |
+
+These three are the entire reason §7's current `ToolContext` is *not yet* sufficient for "real-world ABAP-MCP-style plugins". Without them, plugins can do reads/writes but cannot interact with the user mid-flow, cannot show progress on long operations, and cannot delegate sub-decisions to the LLM. Cheap to add (the underlying MCP `Server` instance is already available inside `handleToolCall`); the cost is just deciding to expose them.
+
+#### 14.5.4 Server-level capabilities (🔵 — not per-plugin)
+
+| Feature | Why it's not a plugin concern | Where it belongs |
+|---------|-------------------------------|------------------|
+| MCP `prompts` capability (`fix-atc`, `transport-review`, `class-overview`, `release-transport` slash templates) | Prompts are registered against the MCP `Server` once at startup. They are not tied to a specific tool. Letting plugins contribute prompts is possible but adds a second registration concept; better to let core ARC-1 own prompts. | Core ARC-1 (separate roadmap item, possibly a new `DOC-XX` for the four templates). The plugin API can extend later (Phase 5+) if customers ask. |
+| Multi-system `sap_system_id` injection (mutate every tool's input schema at startup) | Touches the registry's `tools/list` response, not any single plugin tool. Should auto-apply to plugin tools too. | Core ARC-1 — [FEAT-59](../../docs_page/roadmap.md#feat-59). When/if FEAT-59 ships, the registry should auto-inject `sap_system_id` into plugin tools the same way it does for built-ins. |
+| `validateAndHandle` required-field check from JSON schema | ARC-1 already validates via Zod in `handleToolCall`. Plugins ship Zod schemas (per §7). Same code path. | Already in core. |
+| Auth providers (basic / OAuth / Entra / built-in HTML login form) | Auth is core-only per §10 (centralized control invariant). | Core ARC-1, never plugins. |
+
+#### 14.5.5 Intentional non-goals (❌ — stay blocked)
+
+| Feature | Why blocked |
+|---------|-------------|
+| `raw_http` (arbitrary HTTP execution as a tool) | Defeats the safety system: any LLM call to `raw_http` bypasses `checkOperation()`, `denyActions`, and audit semantics. dassian-adt's own description has more "DO NOT" warnings than parameters. **Make it harder than just a docs note:** registry refuses to register a tool whose `policy.opType` is missing or whose handler signature is "raw HTTP passthrough". |
+| Built-in OAuth HTML login form | Per-session "type your SAP password into a web form" inverts the centralized-control model ARC-1 was built around. ARC-1 uses XSUAA on BTP / OIDC self-hosted. |
+| Adding new MCP transports | Transport ownership stays in core (§10). |
+| `BaseHandler` inheritance abstraction | ARC-1's handler code is split per intent tool with shared helpers via plain function imports. Inheritance would not improve readability and would conflict with the registry-based dispatch in Phase 1. |
+
+### 15.6 Concrete updates the case study makes to the FEAT-61 design
+
+Walking through dassian-adt feature-by-feature surfaced one design-confirming finding and three design-changing findings for the §7 `ToolContext`. Here is the diff against the existing research doc:
+
+**1. `ToolContext` gains three optional capabilities (§7 update — required for Phase 1):**
+
+```ts
+interface ToolContext {
+  readonly client: AdtClient;
+  readonly safety: SafetyConfig;
+  readonly cache?: CachingLayer;
+  readonly logger: Logger;             // ARC-1-side stderr/audit
+  readonly config: PublicServerConfig;
+  readonly authInfo?: AuthInfo;
+  readonly requestId: string;
+
+  // ── Driven by dassian-adt feature analysis ──
+  /** MCP elicitation: forms, choices, confirmations. May be undefined when
+   *  the connected client does not support elicitation. */
+  readonly elicit?: (params: ElicitParams) => Promise<ElicitResult>;
+
+  /** MCP sendLoggingMessage: progress visible in the MCP client UI.
+   *  Distinct from `logger` (which goes to ARC-1's audit pipeline). */
+  readonly notify?: (level: 'info' | 'warning' | 'error', message: string) => Promise<void>;
+
+  /** MCP createMessage (sampling): handler-internal LLM sub-questions.
+   *  May be undefined when the client does not support sampling. */
+  readonly sampling?: (systemPrompt: string, userMessage: string, maxTokens?: number) => Promise<string>;
+}
+```
+
+All three are `?`-optional because the connected MCP client may not advertise the capability. Plugins detect and fall back, identical to how dassian-adt's `confirmWithUser` returns `true` when `_elicit` is undefined.
+
+**2. Public surface gains `client.lock()` / `client.unlock()` (§4 update — required for Phase 1):**
+
+The lock primitives currently live in `src/adt/crud.ts` and are not on `AdtClient`. Without them, plugins cannot build any lock-aware write tool. The public surface gains:
+
+```ts
+class AdtClient {
+  // ... existing read methods ...
+  lock(objectUrl: string): Promise<{ lockHandle: string; corrNr?: string; isLocal: boolean }>;
+  unlock(objectUrl: string, lockHandle: string): Promise<void>;
+}
+```
+
+These are thin wrappers around the existing `crud.ts` functions. The signatures already exist internally; this is just a re-export.
+
+**3. Optional helpers that reduce boilerplate (§4 update — nice to have, not blocking):**
+
+```ts
+// arc-1/public/sap-helpers
+export function resolveNestedUrl(client: AdtClient, name: string, type: string, fugr?: string)
+  : Promise<{ objectUrl: string; sourceUrl: string }>;
+
+export function resolveTaskFromRequest(client: AdtClient, requestNumber: string)
+  : Promise<string>;
+
+export function classifyTaskAsCorrection(client: AdtClient, taskNumber: string)
+  : Promise<void>;
+
+// On client.http
+client.http.withRetryOnSessionExpiry<T>(fn: () => Promise<T>): Promise<T>;
+```
+
+If 80% of plugins re-implement these by hand, ship them. If we observe that only 1–2 plugins ever need them, leave as documented patterns.
+
+**4. Registry must enforce one anti-pattern (§10 update — confirmed):**
+
+The case study makes the §10 `raw_http` anti-pattern concrete: the registry refuses to register a tool whose `policy.opType` is missing, or whose handler signature signals "arbitrary HTTP passthrough". Document an explicit `OperationType.Raw` rejection rule.
+
+**5. MCP `prompts` flagged as a separate roadmap item, not part of FEAT-61 (§11 update):**
+
+dassian-adt validates the LLM-usefulness of MCP prompts. Track this as a separate core-ARC-1 roadmap item (e.g. a new `FEAT-62: MCP Prompts (slash-command templates)`), not as part of the extension API. Phase-5+ extension work can revisit whether plugins should also contribute prompts.
+
+### 15.7 Summary: how a plugin author maps each dassian-adt feature
+
+The full integration model under FEAT-61 with the §15.6 additions applied:
+
+* **~32 of ~39 dassian-adt tools (the domain reads/writes):** straight `defineTool()` calls. Plugin author writes them today.
+* **All workflow workarounds (ATC fallback, METADATA_TYPES, DDLS bypass, retry-on-lock, FUGR auto-discovery, smart redirects, IF_OO_ADT_CLASSRUN detection):** buildable in the plugin handler. The §4.5 expanded public surface gives them what they need.
+* **Mid-flow user interaction (elicitation, progress notify, internal sampling):** **buildable only after §7 ToolContext gains the three new optional capabilities listed in §15.6.** This is the change the case study most strongly recommends for Phase 1.
+* **MCP prompts:** separate core-ARC-1 roadmap item; plugins do not contribute prompts in v1.
+* **Multi-system `sap_system_id`:** FEAT-59 territory; registry handles it transparently for plugin tools.
+* **`raw_http` / OAuth HTML form / new transports / new auth providers:** stay blocked.
+
+That accounts for every distinctive feature the dassian-adt fork demonstrates. The conclusion the case study returns to the extension-API design is small and concrete: **Phase 1 of FEAT-61 must ship `ctx.elicit`, `ctx.notify`, `ctx.sampling` in `ToolContext` and `client.lock()` / `client.unlock()` on the public `AdtClient`**, and the `raw_http`-style escape hatch must be refused by the registry. With those four additions, a plugin author can reproduce ~95% of dassian-adt's distinctive workflow IP without forking ARC-1.
