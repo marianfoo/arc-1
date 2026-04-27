@@ -98,19 +98,11 @@ ARC-1 probes the SAP system at startup and adapts its behavior:
 
 ## ADT API Status and Strategy
 
-There is still uncertainty around the exact long-term support boundary for ADT-based community and partner tooling. SAP published a new [SAP API Policy](https://www.sap.com/documents/2026/04/dce9aee4-497f-0010-bca6-c68f7e60039b.html) in April 2026, and customers or partners should review that policy, their SAP agreements, and their internal security requirements before using any ADT-based automation in production.
+There is still uncertainty around the exact long-term support boundary for ADT-based community and partner tooling. SAP published a new [SAP API Policy](https://www.sap.com/documents/2026/04/dce9aee4-497f-0010-bca6-c68f7e60039b.html) in April 2026, so customers and partners should review the policy, their SAP agreements, and their own security requirements before productive use.
 
-At the same time, the current public signals for ADT are positive. SAP's [ABAP Development Tools download page](https://tools.hana.ondemand.com/#abap) provides an official ADT SDK with JavaDoc and describes it as a public API for implementing or integrating tools with SAP's ABAP IDE. SAP also publishes a guide for [creating and consuming RESTful APIs in ADT](https://www.sap.com/documents/2013/04/12289ce1-527c-0010-82c7-eda71af511fa.html), including discovery-based REST communication. In addition, SAP has publicly described the ABAP language server direction as an ["ADT SDK 2.0"](https://community.sap.com/t5/technology-blog-posts-by-sap/abap-development-tools-for-vs-code-everything-you-need-to-know/bc-p/14263439/highlight/true#M186133) and indicated plans to release it as a standalone component after the first ABAP Development Tools for VS Code release.
+The public signals for ADT are still promising: SAP publishes an [ADT SDK](https://tools.hana.ondemand.com/#abap), a guide for [creating and consuming RESTful APIs in ADT](https://www.sap.com/documents/2013/04/12289ce1-527c-0010-82c7-eda71af511fa.html), and has described the ABAP language server direction as an ["ADT SDK 2.0"](https://community.sap.com/t5/technology-blog-posts-by-sap/abap-development-tools-for-vs-code-everything-you-need-to-know/bc-p/14263439/highlight/true#M186133).
 
-ARC-1's strategy is to stay as close as possible to documented and discoverable ADT behavior:
-
-- Prefer the published ADT SDK model, the ADT REST guide, and backend discovery/compatibility metadata over hard-coded or reverse-engineered assumptions
-- Probe system capabilities before exposing tools, and keep unsupported features unavailable instead of guessing
-- Keep read-only defaults, explicit write gates, package restrictions, transport gates, authentication controls, and audit logging in front of SAP's own authorization checks
-- Treat implementation-specific ADT behavior as conditional: use feature detection, fallbacks, and clear errors instead of promising universal endpoint support
-- Continuously review SAP's API policy, ADT SDK documentation, ABAP Development Tools for VS Code, and the future language-server-based tooling direction
-
-This README is a technical project statement, not a compliance decision for a specific customer landscape. Organizations should make their own assessment, especially for autonomous workflows, bulk extraction, write operations, and centrally deployed MCP servers.
+ARC-1's strategy is to stay close to documented and discoverable ADT behavior, probe system capabilities before exposing tools, keep conservative security defaults, and continuously review SAP's guidance as it evolves. This README is not a compliance decision for any specific customer landscape.
 
 ## Quick Start
 
