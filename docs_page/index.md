@@ -4,20 +4,7 @@
 
 ARC-1 is a TypeScript MCP server (distributed as an npm package and Docker image) that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and translates AI tool calls into [SAP ABAP Development Tools (ADT)](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools) REST API requests. It works with Claude, GitHub Copilot, VS Code, and any MCP-compatible client.
 
-> **This repository** ([marianfoo/arc-1](https://github.com/marianfoo/arc-1)) is the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
-
 ## Why ARC-1?
-
-| | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | **ARC-1** |
-|---|:---:|:---:|:---:|
-| npm package + Docker image | — | — | **Y** |
-| Read-only default / package allowlist | — | — | **Y** |
-| Transport controls (CTS safety) | — | — | **Y** |
-| HTTP Streamable transport (Copilot Studio) | — | — | **Y** |
-| 12 intent-based tools for AI agents | — | — | **Y** |
-| Method-level read/edit (95% token reduction) | — | — | **Y** |
-| Context compression (7-30x) | — | — | **Y** |
-| Works with 8+ MCP clients | — | — | **Y** |
 
 As an **admin**, you control what the AI can and cannot do via positive-opt-in flags:
 
