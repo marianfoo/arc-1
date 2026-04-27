@@ -96,6 +96,14 @@ ARC-1 probes the SAP system at startup and adapts its behavior:
 - Each feature can be forced on/off or left on auto-detect
 - In shared-credential mode (technical user), runs a startup auth preflight once and blocks SAP tool calls with a clear error on 401/403 to avoid repeated failed logins and potential user lockout
 
+## ADT API Status and Strategy
+
+There is still uncertainty around the exact long-term support boundary for ADT-based community and partner tooling. SAP published a new [SAP API Policy](https://www.sap.com/documents/2026/04/dce9aee4-497f-0010-bca6-c68f7e60039b.html) in April 2026, so customers and partners should review the policy, their SAP agreements, and their own security requirements before productive use.
+
+The public signals for ADT are still promising: SAP publishes an [ADT SDK](https://tools.hana.ondemand.com/#abap), a guide for [creating and consuming RESTful APIs in ADT](https://www.sap.com/documents/2013/04/12289ce1-527c-0010-82c7-eda71af511fa.html), and has described the ABAP language server direction as an ["ADT SDK 2.0"](https://community.sap.com/t5/technology-blog-posts-by-sap/abap-development-tools-for-vs-code-everything-you-need-to-know/bc-p/14263439/highlight/true#M186133).
+
+ARC-1's strategy is to stay close to documented and discoverable ADT behavior, probe system capabilities before exposing tools, keep conservative security defaults, and continuously review SAP's guidance as it evolves. This README is not a compliance decision for any specific customer landscape.
+
 ## Quick Start
 
 ```bash
