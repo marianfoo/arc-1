@@ -2444,6 +2444,11 @@ const SLASH_TYPE_MAP: Record<string, string> = {
   'SRVB/SVB': 'SRVB',
   'DDLX/EX': 'DDLX',
   'TABL/DT': 'TABL',
+  // SAP returns DDIC structures (e.g. BAPIRET2) as TABL/DS in quickSearch results.
+  // Without this alias, piping SAPSearch output into SAPWrite/SAPRead is rejected at
+  // pre-Zod normalization. STRU/DS is kept as a defensive alias for any future or
+  // legacy backend that emits it directly. Verified live on A4H 758: BAPIRET2 → TABL/DS.
+  'TABL/DS': 'STRU',
   'STRU/DS': 'STRU',
   'DOMA/DD': 'DOMA',
   'DTEL/DE': 'DTEL',
@@ -2660,13 +2665,19 @@ async function handleSAPWrite(
 
   switch (action) {
     case 'update': {
-      const existingPackage = await enforcePackageForExistingObject();
-
-      // STRU update guard against transparent tables.
+      // STRU update guard against transparent tables — MUST run BEFORE package enforcement.
       // The /sap/bc/adt/ddic/structures/ PUT endpoint silently converts a transparent
       // table (TABL/DT) into a structure (TABL/DS) by creating an inactive INTTAB version,
-      // which corrupts DD02L and confuses SE11. Best-effort pre-flight check via searchObject:
-      // if the existing object is anything other than TABL/DS, refuse the update.
+      // which corrupts DD02L and confuses SE11. The data-corruption risk is independent of
+      // any package allowlist: if the operator has the default `$TMP` allowlist and calls
+      // SAPWrite(type='STRU', name='T000'), enforcePackageForExistingObject() would resolve
+      // T000's package (e.g. SBASIC) and reject with "package blocked" — masking the more
+      // important "this is a transparent table, you'll silently corrupt it" message and
+      // potentially letting the LLM retry with a different allowed package.
+      //
+      // Best-effort pre-flight check via searchObject: if the existing object is anything
+      // other than TABL/DS, refuse the update. Any error in the search is swallowed and we
+      // fall through to the regular flow (package check + SAP-side validation).
       if (type === 'STRU' && name) {
         try {
           const searchResults = await client.searchObject(name, 1);
@@ -2687,6 +2698,8 @@ async function handleSAPWrite(
           // search failed — proceed cautiously; SAP-side validations will catch a wrong type.
         }
       }
+
+      const existingPackage = await enforcePackageForExistingObject();
 
       if (type === 'SKTD') {
         // KTD update requires the full <sktd:docu> XML envelope with the Markdown

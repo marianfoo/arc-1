@@ -7564,6 +7564,10 @@ ENDCLASS.`;
         ['SRVB/SVB', 'SRVB'],
         ['DDLX/EX', 'DDLX'],
         ['TABL/DT', 'TABL'],
+        // SAP returns DDIC structures as TABL/DS (verified live: A4H 758 quickSearch BAPIRET2).
+        // Without this alias, piping objectType from SAPSearch into SAPWrite/SAPRead fails
+        // pre-Zod normalization. Codex review of PR #201 caught this.
+        ['TABL/DS', 'STRU'],
         ['STRU/DS', 'STRU'],
         ['DOMA/DD', 'DOMA'],
         ['DTEL/DE', 'DTEL'],
@@ -9286,6 +9290,48 @@ ENDCLASS.`;
 
       // Verify the guard fell through (more than 1 HTTP call total — search + at least one follow-up).
       expect(mockFetch.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    // ─── Codex review of PR #201: guard must fire BEFORE package enforcement ─────
+    // The data-corruption risk (TABL/DT silently rewritten to TABL/DS via the
+    // /ddic/structures/ PUT endpoint) is independent of any package allowlist. With
+    // the default `$TMP`-only allowlist, calling SAPWrite(type='STRU', name='T000')
+    // would resolve T000's package (e.g. SBASIC) and throw "package blocked" before
+    // the guard fires — masking the more important "transparent table" message and
+    // potentially letting the LLM retry with a different allowed package.
+    it('guard fires BEFORE package enforcement (no package resolution HTTP call)', async () => {
+      mockFetch.mockReset();
+      // searchObject returns TABL/DT for T000.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildSearchResponseXml('T000', 'TABL/DT')));
+      // Subsequent calls would normally include resolveObjectPackage (which is the
+      // HTTP call we want to assert was NOT made because the guard short-circuited).
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      // Restrictive client with $TMP-only allowlist — this WOULD reject T000 (in SBASIC)
+      // if the package check ran first.
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'T000',
+        source: 'define type t000 { mandt : mandt; }',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      // Must surface the data-corruption guard, NOT the package allowlist rejection.
+      expect(text).toContain('transparent table');
+      expect(text).toContain('TABL/DT');
+      expect(text).not.toContain('blocked by safety configuration');
+      expect(text).not.toContain('allowedPackages');
+      // Exactly one HTTP call: searchObject. resolveObjectPackage was never invoked.
+      expect(mockFetch.mock.calls.length).toBe(1);
     });
   });
 });
