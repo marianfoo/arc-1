@@ -1,14 +1,16 @@
-# ETag Conditional GET + Inactive Objects Endpoint Fix
+# ETag Conditional GET + Inactive Objects + Version Parameter
 
 ## Overview
 
-Fixes [GitHub issue #183](https://github.com/marianfoo/arc-1/issues/183) (stale source after external edits) by adopting HTTP-standard `If-None-Match` conditional GET on the source-fetching code path, and along the way improves the inactive-objects listing endpoint.
+Fixes [GitHub issue #183](https://github.com/marianfoo/arc-1/issues/183) (stale source after external edits) AND closes the adjacent UX gap where ARC-1 silently hides the developer's unactivated drafts. Three integrated changes:
 
-The conditional-GET design replaces the current "cache forever" behaviour with a content-validated cache: each cached source carries the SAP-emitted `etag`, every read sends `If-None-Match: <etag>`, and the server is the source of truth for freshness — 304 Not Modified means cached body is still authoritative, 200 means the body changed and cache must be replaced. No TTL, no clock dependency, no system-type detection. Verified live on a4h (S/4HANA 2023) and on NPL (NW 7.50 SP02) — both emit ETag, both honour `If-None-Match` → 304 — and confirmed by primary SAP Notes evidence (notes 1760222, 1814370, 1940316) to predate SAP_BASIS 7.50, so the same mechanism works on every release ARC-1 supports.
+**1. HTTP-standard `If-None-Match` conditional GET** on the source-fetching code path. Each cached source carries the SAP-emitted `etag`; every read sends `If-None-Match: <etag>`; server returns 304 Not Modified (~50 bytes) if unchanged or 200 with new body+etag if anything changed. No TTL, no clock dependency, no system-type detection. Verified live on a4h (S/4HANA 2023) and NPL (NW 7.50 SP02) — both emit ETag, both honour `If-None-Match` → 304. SAP Notes 1760222 (2012), 1814370 (2013), 1940316 (2013) confirm the server-side mechanism predates SAP_BASIS 7.50. Closes #183's reproducer.
 
-The inactive-objects fix is small but layered: ARC-1 already falls back from `/activation/inactive` to `/activation/inactiveobjects` (`src/adt/client.ts:464-478`), so the listing endpoint *works* on modern systems. What the current code wastes is one 404 roundtrip per call, and what it loses is the rich `<ioc:object>` shape (with `user`, `deleted`, `transport`, `parentTransport` metadata) that the same endpoint returns when given `Accept: application/vnd.sap.adt.inactivectsobjects.v1+xml`. The parser only handles the flat `<adtcore:objectReference>` shape today. This plan: skip the leading 404, request the vendor MIME, extend the parser to handle BOTH shapes (rich + flat — the existing fixture for the flat shape is preserved as NW 7.50 + legacy regression coverage).
+**2. Inactive-objects listing improvement**. ARC-1 already falls back from `/activation/inactive` to `/activation/inactiveobjects` (`src/adt/client.ts:464-478`) so the listing *works* on modern systems. This plan: skip the wasted 404 roundtrip, request the vendor MIME (`application/vnd.sap.adt.inactivectsobjects.v1+xml`) to get the rich `<ioc:object>` shape with `user`/`deleted`/`transport` metadata, extend the parser to handle BOTH shapes (rich + flat — flat fixture preserved as NW 7.50 + legacy regression coverage).
 
-Both fixes are independent; PR 1 (Task 1) ships first as a standalone improvement because it is small and low-risk.
+**3. `version` parameter on SAPRead** (`active`/`inactive`/`auto`, default `active`) plus inactive-draft awareness. Closes the silent "Claude doesn't see my Eclipse edits" UX gap that #183 doesn't address. The default preserves existing behaviour. When the developer has an unactivated draft on a read object, the response prepends a one-line warning so the LLM knows about the gap and can re-read with `version='inactive'` if appropriate. The `auto` mode resolves client-side via the cached inactive-objects list — "give me my view" semantics matching Eclipse's `SwitchActiveInactiveHandler`. Live-verified on a4h with ZC_FbClubTP (active etag `...001`, inactive etag `...000`); the per-version cache key is structurally correct because the server-side `cl_adt_utility=>calculate_etag_base()` encodes the version into the trailing 3 digits of the etag.
+
+Task 1 is the standalone PR 1 (small, low-risk path/Accept/parser improvement). Tasks 2-7 build the conditional-GET pipeline. Task 8 adds the version parameter + inactive-list session cache + warning prepending — all wired together at the handler level so they form one coherent UX. Tasks 9-11 cover tests, docs, and verification.
 
 ## Context
 
@@ -36,11 +38,26 @@ Both fixes are independent; PR 1 (Task 1) ships first as a standalone improvemen
 
 ### Target State
 
-**Task 1 (standalone bug fix):**
+**Task 1 (standalone PR 1):**
 - `getInactiveObjects()` calls `/sap/bc/adt/activation/inactiveobjects` directly (no leading 404) with `Accept: application/vnd.sap.adt.inactivectsobjects.v1+xml`, getting the rich `<ioc:inactiveObjects>` shape.
 - `parseInactiveObjects` handles both the rich `<ioc:object><ioc:ref>` shape (new code path) and the existing flat `<adtcore:objectReference>` shape (preserved for NW 7.50 + legacy systems and existing fixture coverage).
 - `InactiveObject` interface gains optional `user`, `deleted`, and `transport` fields populated from the `ioc:` attributes when present.
 - The "not available on this SAP system" message at intent.ts:1242 is removed (it was misleading and only ever fired in genuine total-failure cases).
+
+**Tasks 2-7 (conditional GET pipeline):**
+- ETag plumbed through Cache types, both backends, ADT client (16 source-fetching methods), CachingLayer with 404-invalidation and `'all'` write-invalidation.
+- `handleSAPRead`'s `cachedGet` helper drives the conditional-GET flow.
+- Source reads emit `[cached:revalidated]` on hit; plain `[cached]` reserved for dep-graph hits.
+
+**Task 8 (version parameter + inactive-draft awareness):**
+- `SAPRead` schema accepts `version: 'active' | 'inactive' | 'auto'` (default `'active'`).
+- A session-cached **inactive-list** (per-username for PP mode) backs both the warning-prepending logic AND the `auto`-resolution path. Refreshed on write/activate, plus a 60-second TTL for catching external Eclipse activations mid-session.
+- Read paths:
+  - **`version='active'` (default)**: cache hit → conditional GET → 304/200. **If the object is in the user's inactive list, the response is prefixed with a one-line note**: *"You have an unactivated draft of this object. The source below is the LAST ACTIVATED version. To work with your draft, activate it first or re-run with version='inactive'."* This is the fix for the silent "Claude doesn't see my edits" case.
+  - **`version='inactive'`**: fetches the user's draft. If no draft exists (object not in list), the server falls back to active source — ARC-1 detects this client-side and prefixes the response: *"No inactive draft exists for this object. Returning active version."* Honest signal.
+  - **`version='auto'`**: handler checks the inactive list; if object is present, resolves to `inactive`; otherwise resolves to `active`. The cache key always reflects the resolved version. No warning is prefixed in this mode (the user explicitly opted in to "show me my view").
+- `SAPManage(action='cache_stats')` extended to surface the inactive-list state (size, last refresh).
+- Hyperfocused mode's wrapped `SAPRead` exposes the same `version` parameter.
 
 **Tasks 2-9 (PR 2):**
 - Each `CachedSource` carries the etag returned by SAP. Cache is keyed by `(type, name, version)` so active and inactive views never collide.
@@ -56,7 +73,11 @@ Both fixes are independent; PR 1 (Task 1) ships first as a standalone improvemen
 | `src/adt/client.ts` | `getInactiveObjects()` URL + Accept header (Task 1); source-fetching methods plumb etag through `opts.ifNoneMatch` and return `{ source, etag, notModified, statusCode }` (Task 5) |
 | `src/adt/xml-parser.ts` | `parseInactiveObjects()` updated to handle real server shape + legacy shape (Task 1) |
 | `src/adt/types.ts` | `InactiveObject` interface gains optional fields (Task 1); `CachedSource` referenced from cache types |
-| `src/handlers/intent.ts` | Remove 404 fallback for INACTIVE_OBJECTS (Task 1); update `cachedGet` helper to use conditional-GET-aware path (Task 7) |
+| `src/handlers/intent.ts` | Remove 404 fallback for INACTIVE_OBJECTS (Task 1); update `cachedGet` helper to use conditional-GET-aware path (Task 7); add `version` parameter handling, inactive-list session cache, warning prefix logic (Task 8); switch SAPWrite invalidation calls to `'all'` (Task 6) |
+| `src/handlers/schemas.ts` | Extend SAPRead schema with `version: 'active' \| 'inactive' \| 'auto'`, default `'active'` (Task 8) |
+| `src/handlers/tools.ts` | Document the `version` parameter in the SAPRead tool description (Task 8) |
+| `src/handlers/hyperfocused.ts` | Mirror the `version` parameter exposure on the wrapped SAPRead operation (Task 8) |
+| `src/cache/inactive-list-cache.ts` | New file — per-username inactive-objects list cache with TTL + invalidation triggers (Task 8) |
 | `src/cache/cache.ts` | `CachedSource` gains `etag` and `version` fields; `Cache` interface methods accept `version` (Task 2) |
 | `src/cache/memory.ts` | Multi-version Map keying, store/return etag (Task 3) |
 | `src/cache/sqlite.ts` | Schema migration: `etag` and `version` columns, recreate cache_key derivation (Task 4) |
@@ -86,7 +107,11 @@ Both fixes are independent; PR 1 (Task 1) ships first as a standalone improvemen
 
 5. **Inactive endpoint is a real fix.** Don't paper over the 404 with a fallback message. The endpoint exists and works; ARC-1 calls the wrong path. Same applies to the parser: don't reject the real response shape silently — accept both real and legacy forms defensively.
 
-6. **No breaking changes to the SAPRead schema.** This plan does not add a `version` parameter to the SAPRead Zod schema or tool description. The cache internally tracks versions for correctness; the surface stays exactly as today. A future plan can add the user-facing parameter if there's demand for reading inactive drafts directly.
+6. **`version` parameter default preserves existing behaviour.** The new `version` field on SAPRead defaults to `'active'`, so every existing caller and existing SAPRead invocation continues to work identically. The parameter is opt-in for power users (read your draft) and for LLM-driven flows that received the inactive-draft warning. `'auto'` exists for callers that want "show me my view" semantics (mirrors Eclipse's default behaviour) but is not the schema default — too magic for newcomers; explicit is better than implicit.
+
+7. **Inactive-list cache is per-username, lazy, TTL'd at 60s.** With Principal Propagation each user sees only their own drafts. With shared service account everyone sees the same drafts. The list is fetched lazily on first source read of a session (cost: ~415ms one-time per user, verified live), refreshed on any SAPWrite/SAPActivate (which mutates the user's drafts), and falls back to a 60-second TTL to catch external Eclipse activations done mid-session. The list is stored in-memory only — never persisted to the SQLite cache file — because it is small (KB to ~120 KB), per-user, and inexpensive to re-fetch.
+
+8. **Warnings are prefixed, not embedded.** When the response carries a draft-awareness warning, it is prepended as a separate paragraph BEFORE the `[cached:revalidated]` indicator (if any) and before the source body. This keeps existing `[cached:revalidated]` regex assertions working and gives the LLM clear "warning then content" structure. Warnings only fire when reading `version='active'` AND a draft exists; reading `version='inactive'` against an object with no draft fires its own (different) note.
 
 7. **Cache is rebuildable; migration is destructive.** When SqliteCache encounters a pre-migration schema (no `etag` or `version` column), drop the `sources` table and recreate. The cache is a performance optimization, never authoritative; users lose at most one re-fetch worth of latency.
 
@@ -397,7 +422,130 @@ The `cachedGet` helper at `src/handlers/intent.ts:1244-1252` currently invokes a
 
 ---
 
-### Task 8: Add integration + E2E tests for conditional GET and inactive list
+### Task 8: Add `version` parameter to SAPRead + inactive-list session cache + draft warnings
+
+**Files:**
+- Create: `src/cache/inactive-list-cache.ts`
+- Modify: `src/handlers/schemas.ts`
+- Modify: `src/handlers/tools.ts`
+- Modify: `src/handlers/intent.ts`
+- Modify: `src/handlers/hyperfocused.ts`
+- Modify: `src/handlers/intent.ts` (cache_stats action — extend with inactive-list state)
+- Create: `tests/unit/cache/inactive-list-cache.test.ts`
+- Modify: `tests/unit/handlers/schemas.test.ts` (if it exists, otherwise schema validation gets covered by integration tests)
+
+This task wires the `version` parameter into SAPRead and adds the inactive-draft awareness UX. It depends on Tasks 5 (ADT client accepts `version` opt) and 6 (CachingLayer keys by version). The work is grouped into one task because the schema, the per-session inactive-list cache, the handler routing, and the warning logic are all parts of the same UX surface — splitting them creates ordering hazards (e.g. an isolated schema change without the handler logic produces a parameter that does nothing).
+
+The inactive-list endpoint emits NO etag (verified live), so this cache cannot use conditional GET; it uses TTL + explicit invalidation. Per-username keying covers Principal Propagation; in stdio mode there is one username and the keying is effectively a singleton.
+
+- [ ] Create `src/cache/inactive-list-cache.ts`. Class `InactiveListCache` with the following surface:
+  ```typescript
+  interface CachedInactiveList {
+    username: string;
+    objects: InactiveObject[];           // imported from src/adt/types.js
+    fetchedAt: number;                   // Date.now()
+  }
+
+  export class InactiveListCache {
+    private byUsername = new Map<string, CachedInactiveList>();
+    private ttlMs = 60_000;              // 60 seconds — catches external Eclipse activations
+
+    /** Get the cached list for a user, or fetch and cache if expired/missing. */
+    async getOrFetch(client: AdtClient): Promise<InactiveObject[]> { ... }
+
+    /** Synchronous lookup — returns null if not cached (no fetch). Used for warning checks where a fresh fetch isn't desired mid-handler. */
+    getCached(username: string): InactiveObject[] | null { ... }
+
+    /** Clear the cache for a specific user. Called from SAPWrite/SAPActivate paths. */
+    invalidate(username: string): void { ... }
+
+    /** Clear all entries (used by force_refresh and tests). */
+    clear(): void { ... }
+
+    /** Stats for SAPManage cache_stats. */
+    stats(): { userCount: number; totalEntries: number } { ... }
+  }
+  ```
+  Implementation notes:
+  - `getOrFetch` checks `byUsername.get(client.username)`; if present and `Date.now() - fetchedAt < ttlMs`, return cached. Otherwise call `client.getInactiveObjects()`, store, return.
+  - `username` comes from `AdtClient.username` (already exposed at line 71).
+  - The cache is held by `CachingLayer` (extend it with a `inactiveLists: InactiveListCache` field). This keeps cache lifecycle aligned with the existing source/dep-graph caches.
+- [ ] In `src/handlers/schemas.ts`, extend the SAPRead Zod schema (around line 165 or wherever the SAPRead `args` schema lives) with:
+  ```typescript
+  version: z.enum(['active', 'inactive', 'auto']).optional().default('active'),
+  ```
+  Add at the top-level args object alongside `type`, `name`, `format`, etc. Defaulting to `'active'` preserves all existing callers.
+- [ ] In `src/handlers/tools.ts`, extend the SAPRead tool description string (around line 105-115) with one sentence about the `version` parameter:
+  > Optional `version` parameter (default `'active'`): set to `'inactive'` to read the user's unactivated draft (Eclipse/SE80 working copy), or `'auto'` for "show me my view" — falls back to active when no draft exists. When reading the active version of an object that has an unactivated draft, the response will include a one-line note flagging the draft so you can re-read with `version='inactive'` if appropriate.
+
+  Add a parallel sentence to the BTP-mode description (line ~109) since BTP also supports the parameter (BTP ABAP Environment uses the same ADT contract).
+- [ ] In the SAPRead `inputSchema` JSON Schema in `src/handlers/tools.ts` (around line 380-440), add the `version` property:
+  ```typescript
+  version: { type: 'string', enum: ['active', 'inactive', 'auto'], description: "Source version to read. 'active' (default) returns the last activated version. 'inactive' returns the user's unactivated draft (or active if no draft exists). 'auto' returns the draft if one exists, else active." }
+  ```
+- [ ] In `src/handlers/intent.ts:1230-1257`, refactor `handleSAPRead` to use the inactive-list cache:
+  - Read `args.version ?? 'active'` into a `requestedVersion` local at the top of `handleSAPRead`.
+  - Extract a helper `resolveVersionAndDraftInfo(client, type, name, requestedVersion)` that:
+    1. Calls `cachingLayer?.inactiveLists.getOrFetch(client)` to get the list (lazy + TTL'd internally — first call in a session pays ~415ms; subsequent calls within 60s are O(1)).
+    2. Looks for the object: `const draft = list.find(o => o.type.toUpperCase().split('/')[0] === type.toUpperCase() && o.name.toUpperCase() === name.toUpperCase())`. (The `type.split('/')[0]` strip is because list entries use `BDEF/BDO`, `DDLS/DF` etc. — drop the suffix for matching.)
+    3. Resolves: if `requestedVersion === 'auto'`, return `{ effectiveVersion: draft ? 'inactive' : 'active', draft }`; else return `{ effectiveVersion: requestedVersion, draft }`.
+  - When `cachingLayer` is undefined (i.e. `ARC1_CACHE=none`), skip the inactive-list lookup entirely. `effectiveVersion = requestedVersion === 'auto' ? 'active' : requestedVersion` (degrades gracefully — `auto` falls through to `active` without the list lookup).
+- [ ] Update the `cachedGet` helper inside `handleSAPRead` (the one already updated in Task 7) to take and forward a `version: 'active' | 'inactive'` argument:
+  ```typescript
+  const cachedGet = async (
+    objType, objName, version,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ) => cachingLayer.getSource(objType, objName, fetcher, { version });
+  ```
+  Pass the resolved `effectiveVersion` from `resolveVersionAndDraftInfo` into every `cachedGet` call site. The fetcher closure also forwards it: `(ifNoneMatch) => client.getProgram(name, { ifNoneMatch, version: effectiveVersion })`.
+- [ ] Update the `cachedTextResult` helper to accept and prepend the warning text:
+  ```typescript
+  function cachedTextResult(source, cacheHit, revalidated, warning?: string): ToolResult {
+    const indicator = cacheHit && revalidated ? '[cached:revalidated]\n' : '';
+    const note = warning ? `${warning}\n\n` : '';
+    return textResult(`${note}${indicator}${source}`);
+  }
+  ```
+  Compute the `warning` argument in `handleSAPRead` based on `effectiveVersion` and `draft`:
+  - `effectiveVersion === 'active' && draft` → warning: *"Note: You have an unactivated{draft.deleted ? ' deletion' : ''} draft of this object{draft.transport ? ` (in transport ${draft.transport})` : ''}. The source below is the LAST ACTIVATED version. To work with your draft, activate it first via SAPActivate or re-run with version='inactive' to read it directly."*
+  - `effectiveVersion === 'inactive' && !draft` → warning: *"Note: No inactive draft exists for this object on the server. Returning the active version."*
+  - All other combinations → no warning.
+- [ ] Wire SAPWrite/SAPActivate paths to invalidate the inactive-list cache for the user. After every existing `cachingLayer?.invalidate(type, name, 'all')` call, also call `cachingLayer?.inactiveLists.invalidate(client.username)`. Reasoning: writes/activations mutate the user's draft set. Because invalidation is per-username, cross-user activations don't disturb each other.
+- [ ] Wire `force_refresh` (the per-call escape hatch from PR 5 — handled here as a small piece of plumbing): if `args.force_refresh === true`, call `cachingLayer?.inactiveLists.invalidate(client.username)` AND `cachingLayer?.invalidate(type, name, 'all')` BEFORE the cached read, ensuring fresh data + fresh inactive-list state.
+- [ ] In `src/handlers/hyperfocused.ts`, mirror the `version` parameter exposure on the wrapped SAPRead operation. Hyperfocused mode is a single-tool wrapper that re-exposes a subset of SAP operations; ensure the `version` argument flows through to the underlying handler. Test: `npm run dev:hyperfocused` and call the wrapped SAP tool with `version='inactive'`.
+- [ ] Extend `SAPManage(action='cache_stats')` at `src/handlers/intent.ts:5278-5294` to include the inactive-list cache state. Add to the JSON output:
+  ```json
+  {
+    "enabled": true,
+    "warmupAvailable": ...,
+    "sourceCount": ...,
+    "contractCount": ...,
+    "inactiveListCache": {
+      "userCount": <num users with cached lists>,
+      "totalEntries": <sum across users>
+    }
+  }
+  ```
+- [ ] In `tests/unit/cache/inactive-list-cache.test.ts`, add tests (~7 tests):
+  - `getOrFetch fetches from client on first call and caches` — mock `client.getInactiveObjects()` to return a fixed list; assert first call invokes it once, second call (within TTL) does not.
+  - `getOrFetch refetches after TTL expiry` — set `Date.now()` past the 60s mark via vitest fake timers; assert second call invokes the client again.
+  - `invalidate(username) clears that user's entry only` — populate two users, invalidate one, assert the other still cached.
+  - `getCached returns null when not cached` — no prior call; assert null.
+  - `getCached returns cached list when present` — populate via getOrFetch; assert subsequent getCached returns same list synchronously.
+  - `clear() drops all entries` — populate two users, clear, assert both gone.
+  - `stats() reports counts correctly` — populate two users with N+M entries; assert `userCount=2` and `totalEntries=N+M`.
+- [ ] In `tests/unit/handlers/intent.test.ts` (or extend an existing handler test if present), add unit tests for the version-resolution + warning logic (~6 tests):
+  - `version='active' default with no draft → no warning, active fetched` — mock empty inactive list; assert fetcher called with `version='active'`, response has no warning prefix.
+  - `version='active' with draft in list → active fetched + warning prepended` — mock list containing the object; assert response starts with the "You have an unactivated draft" note, full source follows.
+  - `version='inactive' with draft → inactive fetched, no warning` — mock list containing the object; assert fetcher called with `version='inactive'`, no warning.
+  - `version='inactive' without draft → inactive fetched + "no inactive draft" note` — mock empty list; assert fetcher called with `version='inactive'`, response has the "No inactive draft exists" note.
+  - `version='auto' with draft → resolves to inactive` — mock list with object; assert fetcher called with `version='inactive'`, no warning.
+  - `version='auto' without draft → resolves to active` — mock empty list; assert fetcher called with `version='active'`, no warning.
+- [ ] Run `npm test` — all tests pass.
+
+---
+
+### Task 9: Add integration + E2E tests for conditional GET and inactive list
 
 **Files:**
 - Modify: `tests/integration/cache.integration.test.ts`
@@ -430,13 +578,21 @@ The unit tests cover the conditional-GET flow with mocked HTTP. The integration 
   - `SAPRead — second call uses conditional GET (304)` — call `SAPRead` twice for the persistent fixture `ZARC1_TEST_REPORT`, assert the second result text starts with `[cached:revalidated]`. (Per Task 7's indicator simplification, source reads emit only `[cached:revalidated]` on hit; plain `[cached]` is reserved for dep-graph hits which this test does not cover.)
   - `SAPRead — INACTIVE_OBJECTS returns valid response` — call `SAPRead({ type: 'INACTIVE_OBJECTS' })`, parse the response text as JSON, assert it has `count: number` and `objects: Array` keys. Do not assert non-empty; the list may be empty depending on system state.
   - `SAPRead — second call after external mutation returns fresh body` — use the `ZARC1_TEST_REPORT` fixture: read once, modify via `SAPWrite` + `SAPActivate` (changes the etag), read again, assert the third read body matches the modified body (not the original). Cleanup: restore original body in `finally`. Use `generateUniqueName()` for any transient objects. Skip with `requireOrSkip` if write capability is unavailable.
+- [ ] Add a new describe block `describe('SAPRead version parameter')` to `tests/e2e/cache.e2e.test.ts` with E2E tests (~4 tests):
+  - `version='active' (default) returns active version with no draft warning when none exists` — read `ZARC1_TEST_REPORT`, assert no "unactivated draft" prefix in the response.
+  - `version='inactive' on object with no draft returns active body with note` — read `ZARC1_TEST_REPORT` with `version='inactive'`, assert the response begins with the `"No inactive draft exists for this object on the server. Returning the active version."` note.
+  - `version='auto' on object with no draft returns active` — same fixture, `version='auto'`, assert no warning prefix and source returns normally.
+  - `version='inactive' against a known inactive object returns the draft + warning when read as active` — only runs if a known-inactive object exists in the test fixtures. The test creates a transient `$TMP` object, leaves it inactive (skips `SAPActivate`), reads with `version='active'` and asserts the draft-awareness warning appears, then reads with `version='inactive'` and asserts no warning + draft body returned. Skip with `requireOrSkip` if write capability is unavailable.
+- [ ] Add a new describe block `describe('Inactive-list session cache behaviour')` to `tests/integration/cache.integration.test.ts` (~2 tests):
+  - `inactive-list cache: second call within TTL does not re-fetch from server` — populate the cache via a SAPRead (which triggers `getOrFetch` internally), spy on `client.getInactiveObjects()`, call SAPRead again, assert the spy was called only once.
+  - `inactive-list cache invalidates on SAPWrite` — populate the cache, run a SAPWrite (which calls `inactiveLists.invalidate(client.username)`), assert the next SAPRead causes a re-fetch (spy called twice total).
 - [ ] Run `npm run test:integration` (with credentials configured per `INFRASTRUCTURE.md`) — new tests pass against a4h.
 - [ ] Run `npm run test:e2e` (with MCP server running per `docs/setup-guide.md`) — new tests pass.
 - [ ] Run `npm test` — full unit suite still passes; no regressions introduced by integration/E2E test additions.
 
 ---
 
-### Task 9: Update documentation — README, CLAUDE.md, create docs/caching.md
+### Task 10: Update documentation — README, CLAUDE.md, create docs/caching.md
 
 **Files:**
 - Modify: `README.md`
@@ -446,10 +602,11 @@ The unit tests cover the conditional-GET flow with mocked HTTP. The integration 
 
 The README's "Built-in Object Caching" section claims "repeated reads return instantly without calling SAP" — true within a session, but post-PR the stronger claim is "repeated reads stay correct even after external activations, with one ~50-byte conditional GET per read." CLAUDE.md's "Architecture: Request Flow" section omits the ETag round-trip; adding a step preserves architectural accuracy. The README links to `docs/caching.md` which doesn't exist — create it as part of this task to fix the broken link. The feature matrix row 182 ("Inactive objects list") shows ARC-1 with ✅ but the path bug had it returning empty for years; refresh the row to reflect the genuine state post-fix.
 
-- [ ] In `README.md` at lines 50-57 ("Built-in Object Caching"), rewrite to mention the conditional-GET model. Suggested replacement bullets:
+- [ ] In `README.md` at lines 50-57 ("Built-in Object Caching"), rewrite to mention the conditional-GET model and the version parameter. Suggested replacement bullets:
   - **Server-validated freshness** — every cached source is tagged with the server's ETag. Repeated reads send `If-None-Match`; SAP returns HTTP 304 (~50 bytes) if unchanged or 200 with fresh body if anything changed externally. Cache stays correct across SE80/Eclipse activations.
   - **In-memory or SQLite** — automatic per-process in stdio, persistent SQLite for `http-streamable` and Docker.
   - **Dependency graph caching** — `SAPContext` dep resolution keyed by source hash; unchanged objects skip all dependent ADT calls.
+  - **Inactive-draft awareness** — when the developer has unactivated changes in Eclipse/SE80, ARC-1 surfaces this on every related `SAPRead`. Optional `version='inactive'` reads the draft directly; `version='auto'` returns the developer's view (draft if it exists, else active).
   - **Pre-warmer** (existing bullet, keep as-is).
   - **Write invalidation** (existing bullet, keep as-is).
 - [ ] Create `docs/caching.md`. Structure:
@@ -477,7 +634,9 @@ The README's "Built-in Object Caching" section claims "repeated reads return ins
     ```
   - **Dep graph cache**: keyed by source SHA-256 hash. Naturally correct — when source changes the hash changes and the dep graph misses. Safe to keep across external activations because the source-cache layer above ensures the hash is always fresh.
   - **Why no TTL**: HTTP `If-None-Match` is structurally correct; TTLs gamble on freshness. ETag predates SAP_BASIS 7.50 — works on every supported release. SAP Notes 1760222 (2012), 1814370 (2013) document the server-side mechanism.
-  - **Inactive vs active** (new subsection): cache key includes a `version` dimension because the server emits distinct ETags per `cl_adt_utility=>calculate_etag_base()` (`...001` for active, `...000` for inactive). Currently only the active dimension is exercised by handlers; the inactive dimension is wired internally for future use.
+  - **Inactive vs active** (new subsection): cache key includes a `version` dimension because the server emits distinct ETags per `cl_adt_utility=>calculate_etag_base()` (`...001` for active, `...000` for inactive). The cache layer keeps both views isolated; reads route to the correct one based on the resolved `version` parameter (Task 8).
+  - **`version` parameter on SAPRead** (new subsection): the user-facing parameter accepts `'active'` (default), `'inactive'` ("show me my draft"), or `'auto'` ("show me my view — draft if I have one"). The handler resolves `'auto'` client-side using the inactive-list session cache, so the cache always sees a concrete `'active'` or `'inactive'` key. When reading the active version of an object that has an unactivated draft, the response is prefixed with a one-line note flagging the draft so the LLM can re-read with `version='inactive'` if appropriate. When reading the inactive version of an object that has no draft, the response is prefixed with a confirmation note ("No inactive draft exists for this object on the server. Returning the active version.") — the server falls back to active body in this case, and the note makes that fallback honest. This closes the "Claude doesn't see my Eclipse edits" UX gap that #183 didn't directly address.
+  - **Inactive-list session cache** (new subsection): per-username in-memory cache keyed by SAP user, populated lazily on first source read of a session, refreshed on any SAPWrite/SAPActivate/`force_refresh`, falls back to a 60-second TTL for catching external Eclipse activations. Cost: one ~415ms HTTP call per user per session (verified live). Memory cost: typically 1-15 KB per user, occasionally up to ~120 KB for users with many test artifacts. Never persisted to SQLite — small enough to live entirely in memory.
   - **What invalidates**: SAPWrite/SAPActivate mutations call `cachingLayer.invalidate(type, name, 'all')` to clear BOTH active and inactive cache views — activation consumes the inactive draft (it becomes the new active body), so leaving either entry stale is incorrect. gCTS sync calls `invalidate(type, name, 'all')` per-synced-object for the same reason. External activations done in SE80/Eclipse are caught by the next conditional GET (304 → cached, 200 → replaced). External deletions are caught by the next conditional GET returning 404 — `CachingLayer.getSource` calls `invalidateSource(type, name, 'active')` before re-throwing the `AdtApiError`, keeping the cache database in sync with the backend ([requested in #183 follow-up](https://github.com/marianfoo/arc-1/issues/183)). Read-side 404 handling clears only the active version because we have no signal about the inactive view; an inactive draft that survives an active deletion is uncommon but possible.
   - **Considered alternatives** (new subsection): document why the four other approaches we evaluated were rejected, so future readers don't burn cycles re-discovering the rationale. Each alternative gets one paragraph:
     - **Disable cache by default (the original #183 quick-fix instinct)** — kills the dep-graph cache, which is the killer feature for `SAPContext` (10–30× speedup on dependency-resolution workflows). Trades a fixable correctness bug for a permanent performance regression on the headline token-efficiency feature. Also: doesn't actually fix anything for the within-session case.
@@ -493,7 +652,7 @@ The README's "Built-in Object Caching" section claims "repeated reads return ins
 
 ---
 
-### Task 10: Final verification
+### Task 11: Final verification
 
 - [ ] Run full unit test suite: `npm test` — all tests pass.
 - [ ] Run typecheck: `npm run typecheck` — no errors.
@@ -501,7 +660,13 @@ The README's "Built-in Object Caching" section claims "repeated reads return ins
 - [ ] Run integration tests against a4h: `npm run test:integration` (requires `TEST_SAP_*` env vars per `INFRASTRUCTURE.md`) — all new conditional-GET and inactive-list tests pass.
 - [ ] Run E2E tests: `npm run test:e2e` (requires running MCP server — see `docs/setup-guide.md`) — all new e2e tests pass.
 - [ ] Manual smoke test: with `ARC1_CACHE=memory` and `ARC1_LOG_FORMAT=json`, run `arc-1` against a4h, call `SAPRead(type='PROG', name='RSPARAM')` twice via an MCP client, verify the second response has `[cached:revalidated]` indicator and the audit log shows the second HTTP call returned status 304.
-- [ ] Manual smoke test 2: call `SAPRead(type='INACTIVE_OBJECTS')` against a4h with the test user MARIAN (who has known inactive drafts) — assert the response contains a non-empty `objects` array with `BDEF/BDO`, `DDLS/DF`, etc. entries (not the "Inactive objects listing is not available" message).
+- [ ] Manual smoke test 2: call `SAPRead(type='INACTIVE_OBJECTS')` against a4h with the test user MARIAN (who has known inactive drafts) — assert the response contains a non-empty `objects` array with `BDEF/BDO`, `DDLS/DF`, etc. entries (not the "Inactive objects listing is not available" message). Also assert the rich fields (`user`, `deleted`, `transport`) are populated.
+- [ ] Manual smoke test 2b (version parameter UX): with `ARC1_CACHE=memory` against a4h as user MARIAN:
+  - `SAPRead(type='BDEF', name='ZC_FbClubTP')` (default `version='active'`) — assert the response begins with the draft-awareness note: *"You have an unactivated draft of this object..."*. The active source body follows.
+  - `SAPRead(type='BDEF', name='ZC_FbClubTP', version='inactive')` — assert the response is the inactive draft body with NO warning note.
+  - `SAPRead(type='BDEF', name='ZC_FbClubTP', version='auto')` — assert the response resolves to the inactive draft (because MARIAN has one), with no warning note.
+  - `SAPRead(type='PROG', name='RSPARAM', version='inactive')` — RSPARAM has no inactive draft for MARIAN; assert the response begins with *"No inactive draft exists for this object on the server. Returning the active version."*
+  - `SAPManage(action='cache_stats')` — assert the response includes `inactiveListCache: { userCount: 1, totalEntries: > 0 }`.
 - [ ] Manual smoke test 3 (404-invalidation cycle): the goal is to verify the read-side 404-invalidation path actually fires. The naive approach of using `SAPWrite(delete)` from the same MCP server is a **false positive** — SAPWrite already calls `cachingLayer.invalidate(...)` which removes the cache entry before any read can trigger the 404 path. The deletion must bypass the cache layer entirely. With `SAP_ALLOW_WRITES=true` against a4h, run this exact sequence (all curl variables come from `INFRASTRUCTURE.md`):
 
   ```bash
