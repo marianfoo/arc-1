@@ -2653,7 +2653,15 @@ async function handleSAPWrite(
         // responsible/masterLanguage/packageRef/refObject metadata.
         const currentEnvelope = await client.getKtd(name);
         const body = rewriteKtdText(currentEnvelope, source);
-        await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, transport);
+        await safeUpdateObject(
+          client.http,
+          client.safety,
+          objectUrl,
+          body,
+          SKTD_V2_CONTENT_TYPE,
+          transport,
+          cachedFeatures?.abapRelease,
+        );
         cachingLayer?.invalidate(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
       }
@@ -2667,7 +2675,15 @@ async function handleSAPWrite(
         const description = String(args.description ?? mergedProps._description ?? name);
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
-        await safeUpdateObject(client.http, client.safety, objectUrl, body, vendorContentTypeForType(type), transport);
+        await safeUpdateObject(
+          client.http,
+          client.safety,
+          objectUrl,
+          body,
+          vendorContentTypeForType(type),
+          transport,
+          cachedFeatures?.abapRelease,
+        );
         cachingLayer?.invalidate(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
       }
@@ -2696,7 +2712,15 @@ async function handleSAPWrite(
 
       // If safeUpdateSource throws (lock conflict, network error, etc.), checkNotes
       // is intentionally discarded — pre-check warnings only matter when the write succeeded.
-      await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
+      await safeUpdateSource(
+        client.http,
+        client.safety,
+        objectUrl,
+        srcUrl,
+        source,
+        transport,
+        cachedFeatures?.abapRelease,
+      );
       cachingLayer?.invalidate(type, name);
       const msg = `Successfully updated ${type} ${name}.`;
       const cdsUpdateHint = type === 'DDLS' ? await buildCdsUpdateCrudHint(client, name, objectUrl) : undefined;
@@ -2746,6 +2770,23 @@ async function handleSAPWrite(
         } catch {
           // If transportInfo check fails (older system, permissions, etc.), proceed without it.
           // SAP will return its own error if a transport is actually needed.
+        }
+      }
+
+      // MSAG transport-vs-task guard. Some SAP releases silently drop message inserts when
+      // given a task number as corrNr — CL_ADT_MESSAGE_CLASS_API=>create() passes corrNr to
+      // CTS_WBO_API_INSERT_OBJECTS which only accepts request numbers. The TADIR entry is
+      // created but T100/T100A are never written, leaving a phantom MSAG. Confirmed on NW 7.50;
+      // unclear whether later releases fixed it, so validate everywhere.
+      // Cost: one extra HTTP roundtrip per MSAG create (negligible vs. the data loss risk).
+      if (type === 'MSAG' && effectiveTransport) {
+        const tr = await getTransport(client.http, client.safety, effectiveTransport);
+        if (!tr) {
+          return errorResult(
+            `Transport "${effectiveTransport}" is not a valid transport request. ` +
+              `MSAG creation requires a transport request number, not a task number. ` +
+              `Use SAPTransport(action="get", id="<request>") to verify, or SAPTransport(action="list") to find modifiable requests.`,
+          );
         }
       }
 
@@ -2809,6 +2850,8 @@ async function handleSAPWrite(
           ktdBody,
           SKTD_V2_CONTENT_TYPE,
           effectiveTransport,
+          undefined,
+          cachedFeatures?.abapRelease,
         );
 
         // If initial Markdown was provided, follow up with an update PUT to write it.
@@ -2818,7 +2861,15 @@ async function handleSAPWrite(
         if (source) {
           const currentEnvelope = await client.getKtd(name);
           const body = rewriteKtdText(currentEnvelope, source);
-          await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, effectiveTransport);
+          await safeUpdateObject(
+            client.http,
+            client.safety,
+            objectUrl,
+            body,
+            SKTD_V2_CONTENT_TYPE,
+            effectiveTransport,
+            cachedFeatures?.abapRelease,
+          );
           cachingLayer?.invalidate(type, name);
           return textResult(
             `Created SKTD ${name} in package ${pkg} and wrote Markdown content.\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
@@ -2853,6 +2904,7 @@ async function handleSAPWrite(
           contentType,
           effectiveTransport,
           needsPackageParam ? pkg : undefined,
+          cachedFeatures?.abapRelease,
         );
       } catch (createErr) {
         if (createErr instanceof AdtApiError && (createErr.statusCode === 400 || createErr.statusCode === 409)) {
@@ -2871,7 +2923,7 @@ async function handleSAPWrite(
         if (type === 'DTEL' && dtelNeedsPostCreateUpdate(metadataProperties)) {
           const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
-            const lock = await lockObject(session, client.safety, objectUrl);
+            const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
             const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
             try {
               await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
@@ -2884,7 +2936,7 @@ async function handleSAPWrite(
         if (type === 'MSAG' && Array.isArray(metadataProperties.messages) && metadataProperties.messages.length > 0) {
           const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
-            const lock = await lockObject(session, client.safety, objectUrl);
+            const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
             const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
             try {
               await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
@@ -2911,7 +2963,15 @@ async function handleSAPWrite(
           );
         }
 
-        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
+        await safeUpdateSource(
+          client.http,
+          client.safety,
+          objectUrl,
+          srcUrl,
+          source,
+          effectiveTransport,
+          cachedFeatures?.abapRelease,
+        );
         cachingLayer?.invalidate(type, name);
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
         const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
@@ -2958,7 +3018,15 @@ async function handleSAPWrite(
       );
 
       // Write the full source back (existing lock/modify/unlock flow)
-      await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
+      await safeUpdateSource(
+        client.http,
+        client.safety,
+        objectUrl,
+        srcUrl,
+        spliced.newSource,
+        transport,
+        cachedFeatures?.abapRelease,
+      );
       cachingLayer?.invalidate(type, name);
       const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
       const extras = [lintWarnings.warnings, checkNotes].filter(Boolean).join('\n\n');
@@ -3123,7 +3191,7 @@ async function handleSAPWrite(
       // at the class object URL, and every include PUT carries the same lockHandle.
       // This mirrors how ADT-in-Eclipse saves a multi-include class in one commit.
       await client.http.withStatefulSession(async (session) => {
-        const lock = await lockObject(session, client.safety, objectUrl);
+        const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
         const effectiveTransport = transport ?? (lock.corrNr || undefined);
         try {
           if (changed.main) {
@@ -3193,7 +3261,7 @@ async function handleSAPWrite(
       // Lock, delete, unlock pattern (works for all types including SKTD) — auto-propagate lock corrNr if no explicit transport
       try {
         await client.http.withStatefulSession(async (session) => {
-          const lock = await lockObject(session, client.safety, objectUrl);
+          const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
           const effectiveTransport = transport ?? (lock.corrNr || undefined);
           try {
             await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
@@ -3267,6 +3335,10 @@ async function handleSAPWrite(
 
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
       const batchWarnings: string[] = [];
+      // Per-batch cache for the MSAG transport-vs-task guard. The bug is universal so the
+      // guard fires for every MSAG entry, but a batch typically shares one transport — cache
+      // the lookup result to avoid one HTTP roundtrip per object.
+      const transportLookupCache = new Map<string, Awaited<ReturnType<typeof getTransport>>>();
 
       for (const obj of objects) {
         const objType = normalizeObjectType(String(obj.type ?? ''));
@@ -3274,6 +3346,24 @@ async function handleSAPWrite(
         const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
+
+        // MSAG transport-vs-task guard (per-batch cache to avoid per-object roundtrip).
+        if (objType === 'MSAG' && batchTransport) {
+          let tr = transportLookupCache.get(batchTransport);
+          if (tr === undefined) {
+            tr = await getTransport(client.http, client.safety, batchTransport);
+            transportLookupCache.set(batchTransport, tr);
+          }
+          if (!tr) {
+            results.push({
+              type: objType,
+              name: objName,
+              status: 'failed',
+              error: `Transport "${batchTransport}" is not a valid transport request. MSAG creation requires a transport request number, not a task number.`,
+            });
+            break;
+          }
+        }
 
         // AFF header validation per object (if schema available)
         const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });
@@ -3340,6 +3430,7 @@ async function handleSAPWrite(
               contentType,
               batchTransport,
               needsPackageParam ? pkg : undefined,
+              cachedFeatures?.abapRelease,
             );
           } catch (createErr) {
             if (createErr instanceof AdtApiError && (createErr.statusCode === 400 || createErr.statusCode === 409)) {
@@ -3354,7 +3445,7 @@ async function handleSAPWrite(
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
           if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objMetadataProps)) {
             await client.http.withStatefulSession(async (session) => {
-              const lock = await lockObject(session, client.safety, objUrl);
+              const lock = await lockObject(session, client.safety, objUrl, 'MODIFY', cachedFeatures?.abapRelease);
               const lockTransport = batchTransport ?? (lock.corrNr || undefined);
               try {
                 await updateObject(session, client.safety, objUrl, body, lock.lockHandle, contentType, lockTransport);
@@ -3367,7 +3458,15 @@ async function handleSAPWrite(
           // Step 2: Write source if provided
           if (!metadataObject && objSource) {
             const srcUrl = sourceUrlForType(objType, objName);
-            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, batchTransport);
+            await safeUpdateSource(
+              client.http,
+              client.safety,
+              objUrl,
+              srcUrl,
+              objSource,
+              batchTransport,
+              cachedFeatures?.abapRelease,
+            );
           }
 
           // Step 3: Activate the object
@@ -5178,7 +5277,16 @@ async function handleSAPManage(
         packageType,
       });
 
-      await createObject(client.http, client.safety, '/sap/bc/adt/packages', xml, 'application/*', effectiveTransport);
+      await createObject(
+        client.http,
+        client.safety,
+        '/sap/bc/adt/packages',
+        xml,
+        'application/*',
+        effectiveTransport,
+        undefined,
+        cachedFeatures?.abapRelease,
+      );
       return textResult(`Created package ${name}.`);
     }
 
@@ -5191,7 +5299,7 @@ async function handleSAPManage(
 
       const packageUrl = `/sap/bc/adt/packages/${encodeURIComponent(name)}`;
       await client.http.withStatefulSession(async (session) => {
-        const lock = await lockObject(session, client.safety, packageUrl);
+        const lock = await lockObject(session, client.safety, packageUrl, 'MODIFY', cachedFeatures?.abapRelease);
         const effectiveTransport = transport || lock.corrNr || undefined;
         try {
           await deleteObject(session, client.safety, packageUrl, lock.lockHandle, effectiveTransport);
