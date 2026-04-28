@@ -1032,37 +1032,74 @@ function toStringArray(value: unknown): string[] {
   return [String(value)];
 }
 
-/** Parse inactive objects response from /sap/bc/adt/activation/inactive(objects).
- *  Supports two response shapes:
- *   - Flat (NW 7.50 /inactiveobjects):
- *       <adtcore:objectReferences><adtcore:objectReference .../>...</adtcore:objectReferences>
- *   - Feed-wrapped (newer /inactive):
+/** Parse inactive objects response from /sap/bc/adt/activation/inactiveobjects.
+ *  Supports three response shapes (all live-verified):
+ *   - Rich `<ioc:object>` (vendor MIME on every supported release, includes user/transport/deleted metadata):
+ *       <ioc:inactiveObjects><ioc:entry>
+ *         <ioc:object ioc:user="X" ioc:deleted="false">
+ *           <ioc:ref adtcore:uri="..." adtcore:type="BDEF/BDO" adtcore:name="..."/>
+ *         </ioc:object>
+ *         <ioc:transport ...><ioc:ref adtcore:name="A4HK..."/></ioc:transport>
+ *       </ioc:entry>...</ioc:inactiveObjects>
+ *   - Flat with `application/xml` Accept (NW 7.50 + legacy):
  *       <feed><entry><objectReference .../></entry>...</feed>
+ *   - Flat root-level (very old):
+ *       <adtcore:objectReferences><adtcore:objectReference .../>...</adtcore:objectReferences>
+ *  Detection: rich shape if any <entry><object> has a nested <ref>; otherwise flat.
  */
 export function parseInactiveObjects(xml: string): InactiveObject[] {
   if (!xml.trim()) return [];
   const parsed = parseXml(xml);
-  const toRef = (ref: Record<string, unknown>): InactiveObject => ({
-    name: String(ref['@_name'] ?? ''),
-    type: String(ref['@_type'] ?? ''),
-    uri: String(ref['@_uri'] ?? ''),
-    ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
-  });
-
-  // Feed shape: iterate entries explicitly (findDeepNodes returns early on first match).
   const entries = findDeepNodes(parsed, 'entry');
-  if (entries.length > 0) {
-    const feedRefs: InactiveObject[] = [];
+
+  const hasRichObjects = entries.some((entry) =>
+    toRecordArray((entry as Record<string, unknown>).object).some((object) => {
+      const refs = toRecordArray(object.ref);
+      return refs.length > 0;
+    }),
+  );
+
+  if (hasRichObjects) {
+    const results: InactiveObject[] = [];
     for (const entry of entries) {
-      const refs = findDeepNodes(entry, 'objectReference');
-      for (const ref of refs) feedRefs.push(toRef(ref));
+      const entryRecord = entry as Record<string, unknown>;
+      for (const object of toRecordArray(entryRecord.object)) {
+        const ref = toRecordArray(object.ref)[0];
+        if (!ref) continue;
+        const transportRef = toRecordArray(toRecordArray(entryRecord.transport)[0]?.ref)[0];
+        results.push({
+          name: String(ref['@_name'] ?? ''),
+          type: String(ref['@_type'] ?? ''),
+          uri: String(ref['@_uri'] ?? ''),
+          ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
+          ...(object['@_user'] ? { user: String(object['@_user']) } : {}),
+          ...(object['@_deleted'] !== undefined
+            ? { deleted: String(object['@_deleted']).toLowerCase() === 'true' }
+            : {}),
+          ...(transportRef?.['@_name'] ? { transport: String(transportRef['@_name']) } : {}),
+          ...(transportRef?.['@_parentUri'] ? { parentTransport: String(transportRef['@_parentUri']) } : {}),
+        });
+      }
     }
-    if (feedRefs.length > 0) return feedRefs;
+    return results;
   }
 
-  // Flat shape: objectReference elements sit directly under objectReferences.
-  const refs = findDeepNodes(parsed, 'objectReference');
-  return refs.map(toRef);
+  // Flat objectReference shape (legacy + NW 7.50 with generic Accept). Each inactive object
+  // is usually in its own entry, but very old responses put objectReference nodes directly
+  // under the root. Use entries when present, else search the full doc.
+  const flatResults: InactiveObject[] = [];
+  const flatContainers = entries.length > 0 ? entries : [parsed];
+  for (const container of flatContainers) {
+    for (const ref of findDeepNodes(container, 'objectReference')) {
+      flatResults.push({
+        name: String(ref['@_name'] ?? ''),
+        type: String(ref['@_type'] ?? ''),
+        uri: String(ref['@_uri'] ?? ''),
+        ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
+      });
+    }
+  }
+  return flatResults;
 }
 
 /** Parse source revision history feed from /source/main/versions */

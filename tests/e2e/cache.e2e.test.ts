@@ -4,7 +4,7 @@
  * The e2e server runs with ARC1_CACHE=memory (no SQLite needed in CI).
  * These tests verify:
  *  - SAPManage cache_stats returns valid structure
- *  - Repeated SAPRead calls for the same object are faster on second call
+ *  - Repeated SAPRead calls for the same object use conditional GET revalidation
  *  - SAPContext(deps) second call returns [cached] output
  *  - Warmup is off by default (warmupAvailable: false)
  */
@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { callTool, connectClient, expectToolSuccess } from './helpers.js';
 
 function stripCachedMarker(text: string): string {
-  return text.replace(/^\[cached\]\n/, '');
+  return text.replace(/^\[cached(?::revalidated)?\]\n/, '');
 }
 
 describe('E2E Cache Tests', () => {
@@ -45,6 +45,7 @@ describe('E2E Cache Tests', () => {
     expect(stats).toHaveProperty('nodeCount');
     expect(stats).toHaveProperty('edgeCount');
     expect(stats).toHaveProperty('warmupAvailable');
+    expect(stats).toHaveProperty('inactiveListCache');
 
     // All counts are non-negative integers
     expect(typeof stats.sourceCount).toBe('number');
@@ -71,21 +72,19 @@ describe('E2E Cache Tests', () => {
     const normalizedText1 = stripCachedMarker(text1);
     expect(normalizedText1.length).toBeGreaterThan(0);
 
-    // Second call — should be served from memory cache
+    // Second call — should revalidate the memory cache via If-None-Match/304.
     const t1 = Date.now();
     const r2 = await callTool(client, 'SAPRead', args);
     const cachedMs = Date.now() - t1;
     const text2 = expectToolSuccess(r2);
 
-    // Cached reads prepend "[cached]" marker; compare normalized payload.
-    expect(text2).toContain('[cached]');
+    // Source cache hits prepend "[cached:revalidated]" after the server returns 304.
+    expect(text2).toContain('[cached:revalidated]');
     const normalizedCachedText = stripCachedMarker(text2);
     expect(normalizedCachedText).toBe(normalizedText1);
 
-    // Cache hit should be significantly faster (at least 5x, or within 300ms absolute).
-    // The 300ms cap accounts for network RTT to the remote e2e server (~50-150ms)
-    // even when there is no SAP call. We still verify the content is identical.
-    expect(cachedMs).toBeLessThan(Math.max(firstMs / 5, 300));
+    // Revalidation still performs one SAP roundtrip, so timing is only a broad smoke signal.
+    expect(cachedMs).toBeLessThan(5000);
 
     console.log(`    SAPRead first: ${firstMs}ms, cached: ${cachedMs}ms`);
   });
@@ -100,6 +99,41 @@ describe('E2E Cache Tests', () => {
 
     // After reading, sourceCount must be at least 1
     expect(stats.sourceCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('SAPRead INACTIVE_OBJECTS — returns a valid inactive object list', async () => {
+    const result = await callTool(client, 'SAPRead', { type: 'INACTIVE_OBJECTS' });
+    const text = expectToolSuccess(result);
+    const parsed = JSON.parse(text);
+
+    expect(typeof parsed.count).toBe('number');
+    expect(Array.isArray(parsed.objects)).toBe(true);
+    expect(parsed.count).toBe(parsed.objects.length);
+
+    if (parsed.objects.length > 0) {
+      const first = parsed.objects[0];
+      expect(typeof first.name).toBe('string');
+      expect(typeof first.type).toBe('string');
+      expect(typeof first.uri).toBe('string');
+    }
+  });
+
+  it('SAPRead version=auto — returns the active source when no draft exists', async () => {
+    const args = { type: 'CLAS', name: 'CL_ABAP_CHAR_UTILITIES' };
+
+    const active = expectToolSuccess(await callTool(client, 'SAPRead', { ...args, version: 'active' }));
+    const auto = expectToolSuccess(await callTool(client, 'SAPRead', { ...args, version: 'auto' }));
+
+    expect(stripCachedMarker(auto)).toBe(stripCachedMarker(active));
+  });
+
+  it('SAPRead version=inactive — reports active fallback when no draft exists', async () => {
+    const text = expectToolSuccess(
+      await callTool(client, 'SAPRead', { type: 'CLAS', name: 'CL_ABAP_CHAR_UTILITIES', version: 'inactive' }),
+    );
+
+    expect(text).toContain('No inactive draft exists');
+    expect(text).toContain('CL_ABAP_CHAR_UTILITIES');
   });
 
   // ── SAPContext dep graph caching ──────────────────────────────
@@ -123,8 +157,8 @@ describe('E2E Cache Tests', () => {
     const out2 = expectToolSuccess(r2);
 
     expect(out2).toContain('[cached]');
-    // Cached response completes well within 500ms (just HTTP overhead, no SAP calls)
-    expect(cachedMs).toBeLessThan(500);
+    // Cached response should complete quickly, but local MCP transport overhead varies in CI.
+    expect(cachedMs).toBeLessThan(5000);
 
     console.log(`    SAPContext cached in ${cachedMs}ms`);
   });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdtClient } from '../../../src/adt/client.js';
+import { AdtApiError } from '../../../src/adt/errors.js';
 import { CachingLayer } from '../../../src/cache/caching-layer.js';
 import { MemoryCache } from '../../../src/cache/memory.js';
 
@@ -26,33 +27,147 @@ describe('CachingLayer', () => {
   // ─── Source Caching ──────────────────────────────────────────────────
 
   describe('source caching', () => {
-    it('first call fetches via fetcher, second call returns cached', async () => {
-      const fetcher = vi.fn().mockResolvedValue('CLASS zcl_test. ENDCLASS.');
+    it('cache miss calls fetcher with undefined ifNoneMatch and stores result with etag', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValue({ source: 'CLASS zcl_test. ENDCLASS.', etag: 'e1', notModified: false, statusCode: 200 });
 
-      const first = await layer.getSource('CLAS', 'ZCL_TEST', fetcher);
-      expect(first.source).toBe('CLASS zcl_test. ENDCLASS.');
-      expect(first.hit).toBe(false);
-      expect(fetcher).toHaveBeenCalledTimes(1);
+      const result = await layer.getSource('CLAS', 'ZCL_TEST', fetcher);
+      expect(result).toEqual({ source: 'CLASS zcl_test. ENDCLASS.', hit: false, revalidated: false });
+      expect(fetcher).toHaveBeenCalledWith(undefined);
+      expect(layer.getCachedSourceWithEtag('CLAS', 'ZCL_TEST')).toEqual({
+        source: 'CLASS zcl_test. ENDCLASS.',
+        etag: 'e1',
+      });
+    });
 
-      const second = await layer.getSource('CLAS', 'ZCL_TEST', fetcher);
-      expect(second.source).toBe('CLASS zcl_test. ENDCLASS.');
-      expect(second.hit).toBe(true);
-      expect(fetcher).toHaveBeenCalledTimes(1); // not called again
+    it('cache hit with etag sends If-None-Match and returns cached on 304', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'body', etag: 'e1', notModified: false, statusCode: 200 })
+        .mockResolvedValueOnce({ source: '', etag: 'e1', notModified: true, statusCode: 304 });
+
+      await layer.getSource('PROG', 'ZTEST', fetcher);
+      const second = await layer.getSource('PROG', 'ZTEST', fetcher);
+      expect(fetcher).toHaveBeenNthCalledWith(2, 'e1');
+      expect(second).toEqual({ source: 'body', hit: true, revalidated: true });
+    });
+
+    it('cache hit with etag fetches fresh on 200 when etag changed', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'oldbody', etag: 'e1', notModified: false, statusCode: 200 })
+        .mockResolvedValueOnce({ source: 'newbody', etag: 'e2', notModified: false, statusCode: 200 });
+
+      await layer.getSource('PROG', 'ZTEST', fetcher);
+      const second = await layer.getSource('PROG', 'ZTEST', fetcher);
+      expect(second).toEqual({ source: 'newbody', hit: false, revalidated: false });
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toEqual({ source: 'newbody', etag: 'e2' });
+    });
+
+    it('cache hit with no etag falls back to plain GET and replaces cache', async () => {
+      cache.putSource('PROG', 'ZTEST', 'old');
+      const fetcher = vi.fn().mockResolvedValue({ source: 'fresh', notModified: false, statusCode: 200 });
+
+      const result = await layer.getSource('PROG', 'ZTEST', fetcher);
+      expect(fetcher).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ source: 'fresh', hit: false, revalidated: false });
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toEqual({ source: 'fresh', etag: undefined });
+    });
+
+    it('cache miss when fetcher returns no etag stores entry without etag', async () => {
+      const fetcher = vi.fn().mockResolvedValue({ source: 'body', notModified: false, statusCode: 200 });
+
+      await layer.getSource('PROG', 'ZTEST', fetcher);
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toEqual({ source: 'body', etag: undefined });
+    });
+
+    it('active and inactive entries do not collide', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'active', etag: 'a1', notModified: false, statusCode: 200 })
+        .mockResolvedValueOnce({ source: 'inactive', etag: 'i1', notModified: false, statusCode: 200 });
+
+      await layer.getSource('CLAS', 'ZCL_TEST', fetcher, { version: 'active' });
+      await layer.getSource('CLAS', 'ZCL_TEST', fetcher, { version: 'inactive' });
+      expect(layer.getCachedSourceWithEtag('CLAS', 'ZCL_TEST', 'active')).toEqual({ source: 'active', etag: 'a1' });
+      expect(layer.getCachedSourceWithEtag('CLAS', 'ZCL_TEST', 'inactive')).toEqual({
+        source: 'inactive',
+        etag: 'i1',
+      });
     });
 
     it('returns cache miss after invalidation', async () => {
-      const fetcher = vi.fn().mockResolvedValue('REPORT zprog.');
+      const fetcher = vi
+        .fn()
+        .mockResolvedValue({ source: 'REPORT zprog.', etag: 'e1', notModified: false, statusCode: 200 });
 
       await layer.getSource('PROG', 'ZPROG', fetcher);
       expect(fetcher).toHaveBeenCalledTimes(1);
 
       layer.invalidate('PROG', 'ZPROG');
 
-      const fetcherV2 = vi.fn().mockResolvedValue('REPORT zprog. " updated');
+      const fetcherV2 = vi.fn().mockResolvedValue({
+        source: 'REPORT zprog. " updated',
+        etag: 'e2',
+        notModified: false,
+        statusCode: 200,
+      });
       const result = await layer.getSource('PROG', 'ZPROG', fetcherV2);
       expect(result.hit).toBe(false);
       expect(result.source).toBe('REPORT zprog. " updated');
       expect(fetcherV2).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalidate(type, name) defaults to active version', async () => {
+      cache.putSource('PROG', 'ZTEST', 'active');
+      cache.putSource('PROG', 'ZTEST', 'inactive', { version: 'inactive' });
+      layer.invalidate('PROG', 'ZTEST');
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toBeNull();
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST', 'inactive')).toEqual({
+        source: 'inactive',
+        etag: undefined,
+      });
+    });
+
+    it('getSource invalidates cache and re-throws when conditional GET returns 404', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'body', etag: 'e1', notModified: false, statusCode: 200 })
+        .mockRejectedValueOnce(
+          new AdtApiError(
+            'Resource does not exist',
+            404,
+            '/sap/bc/adt/programs/programs/ZTEST/source/main',
+            '<exc:type id="ExceptionResourceNotFound"/>',
+          ),
+        );
+
+      await layer.getSource('PROG', 'ZTEST', fetcher);
+      await expect(layer.getSource('PROG', 'ZTEST', fetcher)).rejects.toBeInstanceOf(AdtApiError);
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toBeNull();
+    });
+
+    it('getSource invalidates cache and re-throws on 410 Gone', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'body', etag: 'e1', notModified: false, statusCode: 200 })
+        .mockRejectedValueOnce(new AdtApiError('Gone', 410, '/sap/bc/adt/programs/programs/ZTEST/source/main'));
+
+      await layer.getSource('PROG', 'ZTEST', fetcher);
+      await expect(layer.getSource('PROG', 'ZTEST', fetcher)).rejects.toBeInstanceOf(AdtApiError);
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toBeNull();
+    });
+
+    it('getSource does not invalidate cache on transient errors', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'body', etag: 'e1', notModified: false, statusCode: 200 })
+        .mockRejectedValueOnce(new AdtApiError('Unavailable', 503, '/sap/bc/adt/programs/programs/ZTEST/source/main'));
+
+      await layer.getSource('PROG', 'ZTEST', fetcher);
+      await expect(layer.getSource('PROG', 'ZTEST', fetcher)).rejects.toBeInstanceOf(AdtApiError);
+      expect(layer.getCachedSourceWithEtag('PROG', 'ZTEST')).toEqual({ source: 'body', etag: 'e1' });
     });
 
     it('getCachedSource returns null on miss', () => {
@@ -60,7 +175,7 @@ describe('CachingLayer', () => {
     });
 
     it('getCachedSource returns entry after getSource populates cache', async () => {
-      const fetcher = vi.fn().mockResolvedValue('source code');
+      const fetcher = vi.fn().mockResolvedValue({ source: 'source code', notModified: false, statusCode: 200 });
       await layer.getSource('CLAS', 'ZCL_HIT', fetcher);
 
       const cached = layer.getCachedSource('CLAS', 'ZCL_HIT');
@@ -166,7 +281,7 @@ describe('CachingLayer', () => {
 
   describe('write invalidation', () => {
     it('invalidate removes source from cache', async () => {
-      const fetcher = vi.fn().mockResolvedValue('old source');
+      const fetcher = vi.fn().mockResolvedValue({ source: 'old source', notModified: false, statusCode: 200 });
       await layer.getSource('CLAS', 'ZCL_EDIT', fetcher);
 
       expect(layer.getCachedSource('CLAS', 'ZCL_EDIT')).not.toBeNull();
@@ -247,9 +362,13 @@ describe('CachingLayer', () => {
 
     it('reports correct counts after populating cache', async () => {
       // Add a source via getSource
-      const fetcher = vi.fn().mockResolvedValue('source');
+      const fetcher = vi.fn().mockResolvedValue({ source: 'source', notModified: false, statusCode: 200 });
       await layer.getSource('CLAS', 'ZCL_A', fetcher);
-      await layer.getSource('PROG', 'ZPROG', vi.fn().mockResolvedValue('report'));
+      await layer.getSource(
+        'PROG',
+        'ZPROG',
+        vi.fn().mockResolvedValue({ source: 'report', notModified: false, statusCode: 200 }),
+      );
 
       // Add a dep graph
       layer.putDepGraph('source', 'ZCL_A', 'CLAS', []);

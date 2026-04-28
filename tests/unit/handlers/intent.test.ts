@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdtApiError } from '../../../src/adt/errors.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 import type { ResolvedFeatures } from '../../../src/adt/types.js';
+import { CachingLayer } from '../../../src/cache/caching-layer.js';
+import { MemoryCache } from '../../../src/cache/memory.js';
 import { logger } from '../../../src/server/logger.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 import { mockResponse } from '../../helpers/mock-fetch.js';
@@ -73,6 +75,110 @@ describe('Intent Handler', () => {
         include: 'testclasses',
       });
       expect(result.isError).toBeUndefined();
+    });
+
+    it('reads active version with draft warning when inactive list contains the object', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<?xml version="1.0"?><ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects" xmlns:adtcore="http://www.sap.com/adt/core"><ioc:entry><ioc:object ioc:user="admin" ioc:deleted="false"><ioc:ref adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST"/></ioc:object><ioc:transport ioc:linked="true"><ioc:ref adtcore:name="A4HK900001"/></ioc:transport></ioc:entry></ioc:inactiveObjects>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS zcl_test DEFINITION. ENDCLASS.', { etag: 'e1' }));
+      const layer = new CachingLayer(new MemoryCache());
+
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'CLAS', name: 'ZCL_TEST' },
+        undefined,
+        undefined,
+        layer,
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('unactivated draft');
+      expect(result.content[0]?.text).toContain('LAST ACTIVATED');
+      expect(result.content[0]?.text).toContain('CLASS zcl_test');
+    });
+
+    it('continues active source reads when inactive object listing is unavailable', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(404, 'Not Found'))
+        .mockResolvedValueOnce(mockResponse(200, 'CLASS zcl_test DEFINITION. ENDCLASS.', { etag: 'e1' }));
+      const layer = new CachingLayer(new MemoryCache());
+
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'CLAS', name: 'ZCL_TEST' },
+        undefined,
+        undefined,
+        layer,
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toBe('CLASS zcl_test DEFINITION. ENDCLASS.');
+      const sourceCall = mockFetch.mock.calls.find((call: any[]) => String(call[0]).includes('/source/main'));
+      expect(String(sourceCall?.[0])).toContain('/sap/bc/adt/oo/classes/ZCL_TEST/source/main');
+    });
+
+    it("resolves version='auto' to inactive when draft exists", async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<?xml version="1.0"?><ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects" xmlns:adtcore="http://www.sap.com/adt/core"><ioc:entry><ioc:object ioc:user="admin" ioc:deleted="false"><ioc:ref adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST"/></ioc:object></ioc:entry></ioc:inactiveObjects>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, 'inactive source', { etag: 'e1' }));
+      const layer = new CachingLayer(new MemoryCache());
+
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'CLAS', name: 'ZCL_TEST', version: 'auto' },
+        undefined,
+        undefined,
+        layer,
+      );
+
+      const sourceCall = mockFetch.mock.calls.find((call: any[]) => String(call[0]).includes('/source/main'));
+      expect(String(sourceCall?.[0])).toContain('version=inactive');
+      expect(result.content[0]?.text).toBe('inactive source');
+    });
+
+    it("version='inactive' without draft prepends active fallback note", async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<?xml version="1.0"?><ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects"/>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, 'active source', { etag: 'e1' }));
+      const layer = new CachingLayer(new MemoryCache());
+
+      const result = await handleToolCall(
+        createClient(),
+        DEFAULT_CONFIG,
+        'SAPRead',
+        { type: 'CLAS', name: 'ZCL_TEST', version: 'inactive' },
+        undefined,
+        undefined,
+        layer,
+      );
+
+      expect(result.content[0]?.text).toContain('No inactive draft exists');
+      expect(result.content[0]?.text).toContain('active source');
     });
 
     it('reads an interface (INTF)', async () => {
@@ -4468,10 +4574,20 @@ ENDCLASS.`;
   // ─── Cache Hit Indicator ───────────────────────────────────────────
 
   describe('SAPRead cache hit indicator', () => {
-    it('shows [cached] prefix on second read of same object', async () => {
+    it('shows [cached:revalidated] prefix on second read when SAP returns 304', async () => {
       const { CachingLayer } = await import('../../../src/cache/caching-layer.js');
       const { MemoryCache } = await import('../../../src/cache/memory.js');
       const layer = new CachingLayer(new MemoryCache());
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<?xml version="1.0"?><ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects"/>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, "REPORT zhello.\nWRITE: / 'Hello'.", { etag: 'e1' }))
+        .mockResolvedValueOnce(mockResponse(304, '', { etag: 'e1' }));
 
       // First read — no [cached] prefix
       const result1 = await handleToolCall(
@@ -4486,7 +4602,7 @@ ENDCLASS.`;
       expect(result1.isError).toBeUndefined();
       expect(result1.content[0]?.text).not.toMatch(/^\[cached\]/);
 
-      // Second read — should have [cached] prefix
+      // Second read — should have [cached:revalidated] prefix
       const result2 = await handleToolCall(
         createClient(),
         DEFAULT_CONFIG,
@@ -4497,7 +4613,7 @@ ENDCLASS.`;
         layer,
       );
       expect(result2.isError).toBeUndefined();
-      expect(result2.content[0]?.text).toMatch(/^\[cached\]/);
+      expect(result2.content[0]?.text).toMatch(/^\[cached:revalidated\]/);
     });
 
     it('does NOT show [cached] when no cachingLayer is provided', async () => {
@@ -4533,10 +4649,20 @@ ENDCLASS.`;
       expect(result.content[0]?.text).not.toMatch(/^\[cached\]/);
     });
 
-    it('shows [cached] for INTF on second read', async () => {
+    it('shows [cached:revalidated] for INTF on second read', async () => {
       const { CachingLayer } = await import('../../../src/cache/caching-layer.js');
       const { MemoryCache } = await import('../../../src/cache/memory.js');
       const layer = new CachingLayer(new MemoryCache());
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<?xml version="1.0"?><ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects"/>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, 'INTERFACE zif_test. ENDINTERFACE.', { etag: 'e1' }))
+        .mockResolvedValueOnce(mockResponse(304, '', { etag: 'e1' }));
 
       // First read
       await handleToolCall(
@@ -4559,7 +4685,7 @@ ENDCLASS.`;
         layer,
       );
       expect(result2.isError).toBeUndefined();
-      expect(result2.content[0]?.text).toMatch(/^\[cached\]/);
+      expect(result2.content[0]?.text).toMatch(/^\[cached:revalidated\]/);
     });
   });
 
@@ -8637,18 +8763,17 @@ ENDCLASS.`;
     });
   });
 
-  // ─── INACTIVE_OBJECTS 404 guard ─────────────────────────────────────
+  // ─── INACTIVE_OBJECTS ────────────────────────────────────────────────
 
-  describe('INACTIVE_OBJECTS 404 guard', () => {
-    it('returns friendly message when endpoint returns 404', async () => {
+  describe('INACTIVE_OBJECTS', () => {
+    it('surfaces backend 404 through the normal error formatter', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue(mockResponse(404, 'Not Found', { 'x-csrf-token': 'T' }));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'INACTIVE_OBJECTS',
       });
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0]?.text).toContain('not available on this SAP system');
-      expect(result.content[0]?.text).toContain('SAPDiagnose');
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT API error');
     });
 
     it('still returns structured list on success', async () => {

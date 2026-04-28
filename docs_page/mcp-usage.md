@@ -109,8 +109,14 @@ flowchart TD
 | Read message class | `SAPRead` | `type=MESSAGES, name=ZMSG` |
 | Read table structure | `SAPRead` | `type=TABL, name=MARA` |
 | Read table data | `SAPRead` | `type=TABLE_CONTENTS, name=MARA, maxRows=10, sqlFilter="MANDT = '100'"` |
+| **Read user's draft** | `SAPRead` | `type=CLAS, name=ZCL_TEST, version=inactive` |
+| **Show developer's view** (draft if exists, else active) | `SAPRead` | `type=CLAS, name=ZCL_TEST, version=auto` |
+| **Bypass cache for one read** | `SAPRead` | `type=PROG, name=ZTEST, force_refresh=true` |
+| List all pending drafts (for current user) | `SAPRead` | `type=INACTIVE_OBJECTS` |
 | System info | `SAPRead` | `type=SYSTEM` |
 | Installed components | `SAPRead` | `type=COMPONENTS` |
+
+**Cache & freshness:** SAPRead source results are cached and revalidated against SAP on every hit via `If-None-Match`. A response prefixed with `[cached:revalidated]` means SAP confirmed the cached body is still current; no prefix means a fresh fetch. External writes (Eclipse activations, gCTS pulls, etc.) are caught automatically — no staleness window. When the active source has an unactivated draft (created by the same user in Eclipse/SE80), the response prepends a one-line note so you know to consider `version='inactive'` if the draft is what you want. See [Caching System](caching.md) for the full mechanics.
 
 ### Searching
 

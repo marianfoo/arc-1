@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects">
+  <ioc:entry>
+    <ioc:object/>
+    <ioc:transport ioc:user="MARIAN" ioc:linked="false">
+      <ioc:ref adtcore:uri="/sap/bc/adt/cts/transportrequests/A4HK901086" adtcore:type="/RQ" adtcore:name="A4HK901086" adtcore:description="Test transport" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </ioc:transport>
+  </ioc:entry>
+  <ioc:entry>
+    <ioc:object ioc:user="MARIAN" ioc:deleted="false">
+      <ioc:ref adtcore:uri="/sap/bc/adt/bo/behaviordefinitions/zc_fbclubtp" adtcore:type="BDEF/BDO" adtcore:name="ZC_FbClubTP" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </ioc:object>
+    <ioc:transport ioc:user="MARIAN" ioc:linked="true">
+      <ioc:ref adtcore:uri="/sap/bc/adt/cts/transportrequests/A4HK901087" adtcore:type="/RQ" adtcore:name="A4HK901087" adtcore:parentUri="/sap/bc/adt/cts/transportrequests/A4HK901086" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </ioc:transport>
+  </ioc:entry>
+  <ioc:entry>
+    <ioc:object ioc:user="MARIAN" ioc:deleted="false">
+      <ioc:ref adtcore:uri="/sap/bc/adt/ddic/ddl/sources/zarc1_test" adtcore:type="DDLS/DF" adtcore:name="ZARC1_TEST" adtcore:description="Test CDS" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </ioc:object>
+  </ioc:entry>
+</ioc:inactiveObjects>

@@ -203,6 +203,15 @@ describe('Tool Definitions', () => {
     expect(sqlFilterDescription).toContain('no SELECT');
   });
 
+  it('SAPRead schema includes source version controls', () => {
+    const tools = getToolDefinitions(DEFAULT_CONFIG);
+    const sapRead = tools.find((t) => t.name === 'SAPRead')!;
+    const schema = sapRead.inputSchema as Record<string, any>;
+    expect(schema.properties.version.enum).toEqual(['active', 'inactive', 'auto']);
+    expect(schema.properties.force_refresh.type).toBe('boolean');
+    expect(sapRead.description).toContain('version parameter');
+  });
+
   it('SAPLint exposes lint + formatter actions (atc/syntax moved to SAPDiagnose)', () => {
     const tools = getToolDefinitions(DEFAULT_CONFIG);
     const sapLint = tools.find((t) => t.name === 'SAPLint')!;

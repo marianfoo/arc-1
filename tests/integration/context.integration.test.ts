@@ -30,7 +30,7 @@ async function findAnyDdls(client: AdtClient): Promise<{ name: string; source: s
   // Try well-known names first
   for (const name of DDLS_CANDIDATES) {
     try {
-      const source = await client.getDdls(name);
+      const { source } = await client.getDdls(name);
       if (source) return { name, source };
     } catch {
       // discovery-fallback: not available — try next candidate
@@ -42,7 +42,7 @@ async function findAnyDdls(client: AdtClient): Promise<{ name: string; source: s
     const ddls = results.filter((r) => r.objectType?.startsWith('DDLS'));
     for (const r of ddls) {
       try {
-        const source = await client.getDdls(r.objectName);
+        const { source } = await client.getDdls(r.objectName);
         if (source) return { name: r.objectName, source };
       } catch {
         // discovery-fallback: can't read this one — try next
@@ -106,7 +106,7 @@ describe('SAPContext Integration Tests', () => {
   describe('dependency extraction', () => {
     it('extracts dependencies from /DMO/CL_FLIGHT_LEGACY', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const deps = extractDependencies(source, '/DMO/CL_FLIGHT_LEGACY', false);
 
       // This class implements /DMO/IF_FLIGHT_LEGACY and raises /DMO/CX_FLIGHT_LEGACY
@@ -131,7 +131,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('extracts dependencies from /DMO/IF_FLIGHT_LEGACY', async (ctx) => {
       requireIfFlightLegacy(ctx);
-      const source = await client.getInterface('/DMO/IF_FLIGHT_LEGACY');
+      const { source } = await client.getInterface('/DMO/IF_FLIGHT_LEGACY');
       const deps = extractDependencies(source, '/DMO/IF_FLIGHT_LEGACY', false);
 
       // Interface has many type references to /DMO/* data types
@@ -140,7 +140,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('extracts INHERITING FROM from ZCL_DEMO_D_CALC_AMOUNT', async (ctx) => {
       requireBobfDemo(ctx);
-      const source = await client.getClass('ZCL_DEMO_D_CALC_AMOUNT');
+      const { source } = await client.getClass('ZCL_DEMO_D_CALC_AMOUNT');
       const deps = extractDependencies(source, 'ZCL_DEMO_D_CALC_AMOUNT', false);
 
       // This class inherits from /BOBF/CL_LIB_D_SUPERCL_SIMPLE
@@ -155,7 +155,7 @@ describe('SAPContext Integration Tests', () => {
   describe('contract extraction', () => {
     it('extracts class contract with public section only', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const contract = extractContract(source, '/DMO/CL_FLIGHT_LEGACY', 'CLAS');
 
       expect(contract.success).toBe(true);
@@ -174,7 +174,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('extracts interface contract (full source)', async (ctx) => {
       requireIfFlightLegacy(ctx);
-      const source = await client.getInterface('/DMO/IF_FLIGHT_LEGACY');
+      const { source } = await client.getInterface('/DMO/IF_FLIGHT_LEGACY');
       const contract = extractContract(source, '/DMO/IF_FLIGHT_LEGACY', 'INTF');
 
       expect(contract.success).toBe(true);
@@ -189,7 +189,7 @@ describe('SAPContext Integration Tests', () => {
   describe('full compression', () => {
     it('compresses context for /DMO/CL_FLIGHT_LEGACY', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const result = await compressContext(client, source, '/DMO/CL_FLIGHT_LEGACY', 'CLAS', 5, 1);
 
       // Should have resolved at least some dependencies
@@ -203,7 +203,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('compresses context with depth=2', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const shallow = await compressContext(client, source, '/DMO/CL_FLIGHT_LEGACY', 'CLAS', 3, 1);
       const deep = await compressContext(client, source, '/DMO/CL_FLIGHT_LEGACY', 'CLAS', 3, 2);
 
@@ -213,7 +213,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('handles maxDeps limit correctly', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const result = await compressContext(client, source, '/DMO/CL_FLIGHT_LEGACY', 'CLAS', 2, 1);
 
       // Should resolve at most 2
@@ -222,7 +222,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('compresses interface context', async (ctx) => {
       requireIfFlightLegacy(ctx);
-      const source = await client.getInterface('/DMO/IF_FLIGHT_LEGACY');
+      const { source } = await client.getInterface('/DMO/IF_FLIGHT_LEGACY');
       const result = await compressContext(client, source, '/DMO/IF_FLIGHT_LEGACY', 'INTF', 5, 1);
 
       expect(result.output).toContain('Dependency context for /DMO/IF_FLIGHT_LEGACY');
@@ -234,7 +234,7 @@ describe('SAPContext Integration Tests', () => {
   describe('method-level surgery', () => {
     it('lists methods from /DMO/CL_FLIGHT_LEGACY', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
 
       expect(listing.success).toBe(true);
@@ -254,7 +254,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('extracts a single method from /DMO/CL_FLIGHT_LEGACY', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
       expect(listing.success).toBe(true);
       expect(listing.methods.length).toBeGreaterThan(0);
@@ -275,7 +275,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('round-trips spliceMethod without changing source', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
       expect(listing.success).toBe(true);
 
@@ -293,7 +293,7 @@ describe('SAPContext Integration Tests', () => {
 
     it('achieves significant token reduction vs full source', async (ctx) => {
       requireFlightLegacy(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_LEGACY');
       const listing = listMethods(source, '/DMO/CL_FLIGHT_LEGACY');
       expect(listing.success).toBe(true);
 

@@ -15,7 +15,7 @@
  */
 
 import type { Version } from '@abaplint/core';
-import type { AdtClient } from '../adt/client.js';
+import type { AdtClient, SourceReadResult } from '../adt/client.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
 import { extractCdsDependencies } from './cds-deps.js';
 import { extractContract } from './contract.js';
@@ -26,6 +26,10 @@ const DEFAULT_MAX_DEPS = 20;
 const DEFAULT_DEPTH = 1;
 const MAX_DEPTH = 3;
 const MAX_CONCURRENT = 5;
+
+function readResultSource(result: SourceReadResult | string): string {
+  return typeof result === 'string' ? result : result.source;
+}
 
 /**
  * Compress dependency context for an ABAP object.
@@ -224,23 +228,27 @@ async function fetchSource(
   cachingLayer?: CachingLayer,
 ): Promise<string> {
   // Helper: get source with cache
-  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
-    if (!cachingLayer) return fetcher();
+  const cachedGet = async (
+    objType: string,
+    objName: string,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ): Promise<string> => {
+    if (!cachingLayer) return readResultSource(await fetcher());
     const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
 
   switch (type) {
     case 'CLAS':
-      return cachedGet('CLAS', name, () => client.getClass(name));
+      return cachedGet('CLAS', name, (ifNoneMatch) => client.getClass(name, undefined, { ifNoneMatch }));
     case 'INTF':
-      return cachedGet('INTF', name, () => client.getInterface(name));
+      return cachedGet('INTF', name, (ifNoneMatch) => client.getInterface(name, { ifNoneMatch }));
     case 'FUNC': {
       // Use cached func group resolution if available
       if (cachingLayer) {
         const group = await cachingLayer.resolveFuncGroup(client, name);
         if (group) {
-          return cachedGet('FUNC', name, () => client.getFunction(group, name));
+          return cachedGet('FUNC', name, (ifNoneMatch) => client.getFunction(group, name, { ifNoneMatch }));
         }
         throw new Error(`Cannot determine function group for ${name}`);
       }
@@ -253,14 +261,14 @@ async function fetchSource(
         // Extract function group from URI: .../groups/<group>/fmodules/<name>
         const match = fmResult.uri.match(/groups\/([^/]+)/);
         if (match) {
-          return client.getFunction(match[1], name);
+          return readResultSource(await client.getFunction(match[1], name));
         }
       }
       // Fallback: try all search results for a URI match
       for (const r of results) {
         const match = r.uri.match(/groups\/([^/]+)\/fmodules/);
         if (match) {
-          return client.getFunction(match[1], name);
+          return readResultSource(await client.getFunction(match[1], name));
         }
       }
       throw new Error(`Cannot determine function group for ${name}`);
@@ -268,9 +276,9 @@ async function fetchSource(
     default:
       // Try as class first, then interface
       try {
-        return await cachedGet('CLAS', name, () => client.getClass(name));
+        return await cachedGet('CLAS', name, (ifNoneMatch) => client.getClass(name, undefined, { ifNoneMatch }));
       } catch {
-        return cachedGet('INTF', name, () => client.getInterface(name));
+        return cachedGet('INTF', name, (ifNoneMatch) => client.getInterface(name, { ifNoneMatch }));
       }
   }
 }
@@ -422,29 +430,33 @@ async function fetchCdsDependency(
   cachingLayer?: CachingLayer,
 ): Promise<CdsResolvedDep> {
   // Helper: get source with cache
-  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
-    if (!cachingLayer) return fetcher();
+  const cachedGet = async (
+    objType: string,
+    objName: string,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ): Promise<string> => {
+    if (!cachingLayer) return readResultSource(await fetcher());
     const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
 
   // Try DDLS first
   try {
-    const source = await cachedGet('DDLS', dep.name, () => client.getDdls(dep.name));
+    const source = await cachedGet('DDLS', dep.name, (ifNoneMatch) => client.getDdls(dep.name, { ifNoneMatch }));
     return { name: dep.name, kind: dep.kind, resolvedType: 'ddls', source, success: true };
   } catch {
     // Not a DDLS — try TABL
   }
 
   try {
-    const source = await cachedGet('TABL', dep.name, () => client.getTable(dep.name));
+    const source = await cachedGet('TABL', dep.name, (ifNoneMatch) => client.getTable(dep.name, { ifNoneMatch }));
     return { name: dep.name, kind: dep.kind, resolvedType: 'table', source, success: true };
   } catch {
     // Not a TABL — try STRU
   }
 
   try {
-    const source = await cachedGet('STRU', dep.name, () => client.getStructure(dep.name));
+    const source = await cachedGet('STRU', dep.name, (ifNoneMatch) => client.getStructure(dep.name, { ifNoneMatch }));
     return { name: dep.name, kind: dep.kind, resolvedType: 'structure', source, success: true };
   } catch (err) {
     return {

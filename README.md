@@ -49,10 +49,11 @@ Deploy ARC-1 as a Cloud Foundry app on SAP BTP with full platform integration:
 
 ### Built-in Object Caching
 
-- **Automatic source caching** — every SAP object read is cached in memory (stdio) or SQLite (http-streamable). Repeated reads return instantly without calling SAP.
+- **Server-validated source caching** — every SAP object read is cached in memory (stdio) or SQLite (http-streamable). Repeated reads use `If-None-Match`/ETag conditional GET, so unchanged objects return from cache after SAP confirms `304 Not Modified`.
 - **Dependency graph caching** — `SAPContext` dep resolution keyed by source hash; unchanged objects skip all ADT calls on subsequent runs.
 - **Pre-warmer** — start with `ARC1_CACHE_WARMUP=true` to pre-index all custom objects at startup, enabling reverse dependency lookup (`SAPContext(action="usages")`) and fast CDS impact workflows (`SAPContext(action="impact", type="DDLS")`).
-- **Write invalidation** — when `SAPWrite` modifies an object, its cache entry is automatically dropped; next read fetches fresh source.
+- **Active/inactive source views** — `SAPRead` accepts `version="active" | "inactive" | "auto"` and warns when the active source has an unactivated draft.
+- **Write invalidation** — when `SAPWrite` or `SAPActivate` mutates an object, both active and inactive source cache entries are dropped; next read revalidates or fetches fresh source.
 
 See **[docs/caching.md](docs/caching.md)** for full documentation.
 

@@ -5,7 +5,7 @@
  * Missing credentials are treated as setup errors and fail the suite.
  *
  * What is tested:
- * - Source cache hit/miss/invalidation (MemoryCache and SqliteCache)
+ * - Source cache miss/revalidation/invalidation (MemoryCache and SqliteCache)
  * - Dependency graph caching (second SAPContext call returns [cached])
  * - Cache stats reporting via SAPManage
  * - Warmup: TADIR enumeration produces objects on this system
@@ -45,6 +45,10 @@ const TEST_CLASS = 'ZCL_ARC1_TEST';
 const TEST_CLASS_WITH_DEPS = 'ZCL_DEMO_D_CALC_AMOUNT';
 /** Package that contains the test classes with deps */
 const _TEST_PACKAGE = '$DEMO_SOI_DRAFT';
+
+function readTestClass(client: AdtClient) {
+  return (ifNoneMatch?: string) => client.getClass(TEST_CLASS, undefined, { ifNoneMatch });
+}
 
 describe('Cache Integration Tests', () => {
   let client: AdtClient;
@@ -92,34 +96,40 @@ describe('Cache Integration Tests', () => {
   describe('MemoryCache source caching', () => {
     beforeEach((ctx) => requireCacheFixture(ctx));
 
-    it('returns MISS then HIT for same object', async () => {
+    it('returns MISS then revalidated HIT for same object', async () => {
       const cache = new MemoryCache();
       const cl = new CachingLayer(cache);
 
-      const { hit: hit1 } = await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      const { hit: hit1, revalidated: revalidated1 } = await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
       expect(hit1).toBe(false); // first fetch = miss
+      expect(revalidated1).toBe(false);
 
-      const { source: src2, hit: hit2 } = await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
-      expect(hit2).toBe(true); // second fetch = hit
+      const {
+        source: src2,
+        hit: hit2,
+        revalidated: revalidated2,
+      } = await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
+      expect(hit2).toBe(true); // second fetch = 304-backed cache hit
+      expect(revalidated2).toBe(true);
       expect(src2.length).toBeGreaterThan(0);
     }, 15000);
 
-    it('cache hit is significantly faster than miss', async () => {
+    it('revalidated hit returns the same source as the miss', async () => {
       const cache = new MemoryCache();
       const cl = new CachingLayer(cache);
 
-      const t0 = Date.now();
-      await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
-      const missMs = Date.now() - t0;
+      const miss = await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
 
       const t1 = Date.now();
-      await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      const hit = await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
       const hitMs = Date.now() - t1;
 
-      // Cache hit should be dramatically faster than a network fetch.
-      // Floor of 50ms absorbs scheduler jitter on slow/remote SAP systems
-      // (observed ~80ms on a trans-Atlantic 7.50 trial VM).
-      expect(hitMs).toBeLessThan(Math.max(missMs / 10, 50));
+      expect(hit.hit).toBe(true);
+      expect(hit.revalidated).toBe(true);
+      expect(hit.source).toBe(miss.source);
+      // Revalidation is still a live SAP request. Keep timing as a broad smoke
+      // signal only; correctness is covered by hit/revalidated/source assertions.
+      expect(hitMs).toBeLessThan(5000);
     }, 15000);
 
     it('invalidation causes next fetch to go to SAP', async () => {
@@ -127,16 +137,16 @@ describe('Cache Integration Tests', () => {
       const cl = new CachingLayer(cache);
 
       // Populate cache
-      await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
 
       // Invalidate
       cl.invalidate('CLAS', TEST_CLASS);
 
       // Next fetch must be a miss (fetcher called again)
       let fetcherCalled = false;
-      const { hit } = await cl.getSource('CLAS', TEST_CLASS, async () => {
+      const { hit } = await cl.getSource('CLAS', TEST_CLASS, async (ifNoneMatch) => {
         fetcherCalled = true;
-        return client.getClass(TEST_CLASS);
+        return client.getClass(TEST_CLASS, undefined, { ifNoneMatch });
       });
 
       expect(hit).toBe(false);
@@ -147,10 +157,10 @@ describe('Cache Integration Tests', () => {
       const cl1 = new CachingLayer(new MemoryCache());
       const cl2 = new CachingLayer(new MemoryCache());
 
-      await cl1.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      await cl1.getSource('CLAS', TEST_CLASS, readTestClass(client));
 
       // cl2 has its own cache — should be a miss
-      const { hit } = await cl2.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      const { hit } = await cl2.getSource('CLAS', TEST_CLASS, readTestClass(client));
       expect(hit).toBe(false);
     }, 15000);
 
@@ -160,7 +170,7 @@ describe('Cache Integration Tests', () => {
       const stats0 = cl.stats();
       expect(stats0.sourceCount).toBe(0);
 
-      await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
 
       const stats1 = cl.stats();
       expect(stats1.sourceCount).toBe(1);
@@ -189,29 +199,28 @@ describe('Cache Integration Tests', () => {
     it('persists source across cache instances', async () => {
       // Write to first instance
       const cl1 = new CachingLayer(new SqliteCache(dbPath));
-      const { hit: hit1 } = await cl1.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      const { hit: hit1 } = await cl1.getSource('CLAS', TEST_CLASS, readTestClass(client));
       expect(hit1).toBe(false);
 
-      // Second instance on same db — should be a hit without any SAP call
+      // Second instance on same db — should load the cached body, then revalidate it.
       const cl2 = new CachingLayer(new SqliteCache(dbPath));
-      const { hit: hit2 } = await cl2.getSource('CLAS', TEST_CLASS, async () => {
-        throw new Error('Should not call SAP — source should be in persistent cache');
-      });
+      const { hit: hit2, revalidated } = await cl2.getSource('CLAS', TEST_CLASS, readTestClass(client));
       expect(hit2).toBe(true);
+      expect(revalidated).toBe(true);
     }, 15000);
 
     it('SqliteCache invalidation removes the entry', async () => {
       const cl = new CachingLayer(new SqliteCache(dbPath));
 
       // Ensure it's in cache
-      await cl.getSource('CLAS', TEST_CLASS, () => client.getClass(TEST_CLASS));
+      await cl.getSource('CLAS', TEST_CLASS, readTestClass(client));
 
       cl.invalidate('CLAS', TEST_CLASS);
 
       let fetcherCalled = false;
-      const { hit } = await cl.getSource('CLAS', TEST_CLASS, async () => {
+      const { hit } = await cl.getSource('CLAS', TEST_CLASS, async (ifNoneMatch) => {
         fetcherCalled = true;
-        return client.getClass(TEST_CLASS);
+        return client.getClass(TEST_CLASS, undefined, { ifNoneMatch });
       });
       expect(hit).toBe(false);
       expect(fetcherCalled).toBe(true);
@@ -261,7 +270,6 @@ describe('Cache Integration Tests', () => {
     it('cached SAPContext response is much faster than first call', async () => {
       const cl = new CachingLayer(new MemoryCache());
 
-      const t0 = Date.now();
       await handleToolCall(
         client,
         DEFAULT_CONFIG,
@@ -271,7 +279,6 @@ describe('Cache Integration Tests', () => {
         undefined,
         cl,
       );
-      const firstMs = Date.now() - t0;
 
       const t1 = Date.now();
       await handleToolCall(
@@ -285,16 +292,16 @@ describe('Cache Integration Tests', () => {
       );
       const cachedMs = Date.now() - t1;
 
-      // Cache hit should be at least 10x faster
-      // 50ms floor absorbs scheduler jitter on slow/remote SAP systems.
-      expect(cachedMs).toBeLessThan(Math.max(firstMs / 10, 50));
+      // Dependency graph hits avoid dependency traversal. Keep this broad because
+      // the live test host still pays MCP handler and process scheduling overhead.
+      expect(cachedMs).toBeLessThan(5000);
     }, 30000);
 
-    it('SAPRead for same object in same session returns instantly from cache', async () => {
+    it('SAPRead for same object in same session returns revalidated source from cache', async () => {
       const cl = new CachingLayer(new MemoryCache());
 
       const t0 = Date.now();
-      await handleToolCall(
+      const r1 = await handleToolCall(
         client,
         DEFAULT_CONFIG,
         'SAPRead',
@@ -304,9 +311,11 @@ describe('Cache Integration Tests', () => {
         cl,
       );
       const firstMs = Date.now() - t0;
+      const out1 = r1.content[0]?.text ?? '';
+      expect(out1).not.toContain('[cached:revalidated]');
 
       const t1 = Date.now();
-      await handleToolCall(
+      const r2 = await handleToolCall(
         client,
         DEFAULT_CONFIG,
         'SAPRead',
@@ -316,9 +325,11 @@ describe('Cache Integration Tests', () => {
         cl,
       );
       const cachedMs = Date.now() - t1;
+      const out2 = r2.content[0]?.text ?? '';
+      expect(out2).toContain('[cached:revalidated]');
 
-      // 50ms floor absorbs scheduler jitter on slow/remote SAP systems.
-      expect(cachedMs).toBeLessThan(Math.max(firstMs / 10, 50));
+      // Source cache hits still revalidate against SAP, so timing is only a smoke signal.
+      expect(cachedMs).toBeLessThan(Math.max(firstMs, 1000));
     }, 15000);
   });
 
@@ -353,6 +364,7 @@ describe('Cache Integration Tests', () => {
       expect(text).toContain('sourceCount');
       const parsed = JSON.parse(text);
       expect(parsed.sourceCount).toBeGreaterThanOrEqual(1);
+      expect(parsed.inactiveListCache).toBeTruthy();
     }, 15000);
 
     it('stats show warmupAvailable=false before warmup', async () => {
@@ -368,6 +380,7 @@ describe('Cache Integration Tests', () => {
       );
       const parsed = JSON.parse(r.content[0]?.text ?? '{}');
       expect(parsed.warmupAvailable).toBe(false);
+      expect(parsed.inactiveListCache).toBeTruthy();
     }, 10000);
   });
 
@@ -490,7 +503,7 @@ describe('Cache Integration Tests', () => {
       requireDepGraphFixture(ctx);
       const cl = new CachingLayer(new MemoryCache());
 
-      const source = await client.getClass(TEST_CLASS_WITH_DEPS);
+      const { source } = await client.getClass(TEST_CLASS_WITH_DEPS);
       const { compressContext } = await import('../../src/context/compressor.js');
 
       // First call — no cache

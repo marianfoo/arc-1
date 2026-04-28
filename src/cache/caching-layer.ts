@@ -6,7 +6,7 @@
  * graph invalidation.
  *
  * Design:
- * - Source code is cached by (type, name) with a SHA-256 hash.
+ * - Source code is cached by (type, name, active/inactive version) with a SHA-256 hash and SAP ETag.
  * - Dependency graphs (contracts[]) are cached by source hash.
  *   When the source changes, the hash changes, and deps are re-resolved.
  *   When the source hasn't changed, ALL downstream dep fetches are skipped.
@@ -22,10 +22,12 @@
  *   Enables reverse dependency lookup.
  */
 
-import type { AdtClient } from '../adt/client.js';
+import type { AdtClient, SourceReadResult } from '../adt/client.js';
+import { AdtApiError } from '../adt/errors.js';
 import { logger } from '../server/logger.js';
 import type { Cache, CachedDepGraph, CachedSource } from './cache.js';
 import { hashSource } from './cache.js';
+import { InactiveListCache } from './inactive-list-cache.js';
 
 /** Cache hit/miss statistics for a single operation */
 export interface CacheHitInfo {
@@ -37,6 +39,7 @@ export interface CacheHitInfo {
 
 export class CachingLayer {
   readonly cache: Cache;
+  readonly inactiveLists = new InactiveListCache();
   private warmupDone = false;
 
   constructor(cache: Cache) {
@@ -62,18 +65,36 @@ export class CachingLayer {
   async getSource(
     objectType: string,
     objectName: string,
-    fetcher: () => Promise<string>,
-  ): Promise<{ source: string; hit: boolean }> {
-    const cached = this.cache.getSource(objectType, objectName);
-    if (cached) {
-      logger.debug(`[cache] source HIT ${objectType}:${objectName}`);
-      return { source: cached.source, hit: true };
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+    opts: { version?: 'active' | 'inactive' } = {},
+  ): Promise<{ source: string; hit: boolean; revalidated: boolean }> {
+    const version = opts.version ?? 'active';
+    const cached = this.cache.getSource(objectType, objectName, version);
+    if (!cached) {
+      const result = await fetcher(undefined);
+      this.cache.putSource(objectType, objectName, result.source, { version, etag: result.etag });
+      logger.debug(`[cache] source MISS ${objectType}:${objectName}:${version} (${result.source.length} chars stored)`);
+      return { source: result.source, hit: false, revalidated: false };
     }
 
-    const source = await fetcher();
-    this.cache.putSource(objectType, objectName, source);
-    logger.debug(`[cache] source MISS ${objectType}:${objectName} (${source.length} chars stored)`);
-    return { source, hit: false };
+    try {
+      const result = await fetcher(cached.etag);
+      if (cached.etag && result.notModified) {
+        logger.debug(`[cache] source HIT ${objectType}:${objectName}:${version} revalidated`);
+        return { source: cached.source, hit: true, revalidated: true };
+      }
+
+      this.cache.putSource(objectType, objectName, result.source, { version, etag: result.etag });
+      logger.debug(
+        `[cache] source REFRESH ${objectType}:${objectName}:${version} (${result.source.length} chars stored)`,
+      );
+      return { source: result.source, hit: false, revalidated: false };
+    } catch (err) {
+      if (err instanceof AdtApiError && (err.statusCode === 404 || err.statusCode === 410)) {
+        this.cache.invalidateSource(objectType, objectName, version);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -81,6 +102,19 @@ export class CachingLayer {
    */
   getCachedSource(objectType: string, objectName: string): CachedSource | null {
     return this.cache.getSource(objectType, objectName);
+  }
+
+  /**
+   * Get cached source body and ETag without fetching.
+   */
+  getCachedSourceWithEtag(
+    objectType: string,
+    objectName: string,
+    version: 'active' | 'inactive' = 'active',
+  ): { source: string; etag?: string } | null {
+    const cached = this.cache.getSource(objectType, objectName, version);
+    if (!cached) return null;
+    return { source: cached.source, etag: cached.etag };
   }
 
   // ─── Dependency Graph Cache ───────────────────────────────────────
@@ -142,9 +176,9 @@ export class CachingLayer {
    * Invalidate cache entries for a written object.
    * Called after SAPWrite to ensure stale source is not served.
    */
-  invalidate(objectType: string, objectName: string): void {
-    logger.debug(`[cache] invalidate ${objectType}:${objectName}`);
-    this.cache.invalidateSource(objectType, objectName);
+  invalidate(objectType: string, objectName: string, version: 'active' | 'inactive' | 'all' = 'active'): void {
+    logger.debug(`[cache] invalidate ${objectType}:${objectName}:${version}`);
+    this.cache.invalidateSource(objectType, objectName, version);
   }
 
   // ─── Reverse Dependencies (Pre-warmer only) ───────────────────────

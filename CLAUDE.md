@@ -161,7 +161,8 @@ src/
 ├── cache/
 │   ├── cache.ts, memory.ts     # Cache interface + in-memory impl
 │   ├── sqlite.ts               # SQLite cache (default for http-streamable)
-│   ├── caching-layer.ts        # Source + dep caching, invalidation
+│   ├── inactive-list-cache.ts   # Per-user inactive draft list cache
+│   ├── caching-layer.ts        # Source + dep caching, ETag revalidation, invalidation
 │   └── warmup.ts               # Pre-warmer: TADIR scan, bulk fetch
 ├── aff/
 │   ├── validator.ts            # AFF JSON schema validator (Ajv 2020-12)
@@ -235,7 +236,8 @@ tests/
 | Add feature-gated write guard | `src/handlers/intent.ts` (checkRapAvailable pattern), `src/adt/features.ts` |
 | Add E2E test | `tests/e2e/`, helpers in `tests/e2e/helpers.ts`, fixtures in `tests/e2e/fixtures.ts` |
 | Add/modify E2E fixture | `tests/e2e/fixtures.ts` (define object), `tests/fixtures/abap/` (source file), `tests/e2e/setup.ts` (sync logic) |
-| Modify object caching | `src/cache/caching-layer.ts`, `src/cache/cache.ts` |
+| Modify source caching / ETag revalidation | `src/cache/caching-layer.ts`, `src/cache/cache.ts`, `src/cache/memory.ts`, `src/cache/sqlite.ts`, `src/adt/client.ts` |
+| Modify inactive-draft source awareness | `src/cache/inactive-list-cache.ts`, `src/handlers/intent.ts`, `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts` |
 | Add cache warmup feature | `src/cache/warmup.ts`, `src/server/server.ts` |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
@@ -279,6 +281,10 @@ handleToolCall (handlers/intent.ts)
   ├─ 2. Zod validation: getToolSchema(toolName) → safeParse(args) (rejects invalid input with LLM-friendly errors)
   ├─ 3. Route to handler: handleSAPRead(), handleSAPWrite(), etc.
   ├─ 4. Package check: checkPackage(safety, packageName) (for all SAPWrite actions: create, update, delete, edit_method)
+  ├─ SAPRead source path with cache:
+  │   ├─ Inactive-list cache resolves draft warning / version="auto"
+  │   ├─ Source cache key: (object type, name, active|inactive)
+  │   └─ Cached source sends If-None-Match and returns cached body only after SAP 304
   │
   ▼
 ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
@@ -289,6 +295,7 @@ ADT Client Method (adt/client.ts, crud.ts, devtools.ts, etc.)
 HTTP Request (adt/http.ts)
   │
   ├─ Proactive MIME negotiation via `/sap/bc/adt/discovery` map (startup-cached)
+  ├─ ETag / If-None-Match conditional GET for cached source reads
   ├─ CSRF token management (auto-fetch via HEAD, refresh on 403)
   ├─ Content negotiation fallback (one-retry on 406/415 with header mutation)
   ├─ Cookie/session management
@@ -347,10 +354,9 @@ When `ppEnabled=true`, the user's JWT is used to get a per-user SAP session via 
 ### ADT Client Method
 
 ```typescript
-async getProgram(name: string): Promise<string> {
+async getProgram(name: string, opts: SourceReadOptions = {}): Promise<SourceReadResult> {
   checkOperation(this.safety, OperationType.Read, 'GetProgram');
-  const resp = await this.http.get(`/sap/bc/adt/programs/programs/${encodeURIComponent(name)}/source/main`);
-  return resp.body;
+  return this.fetchSource(`/sap/bc/adt/programs/programs/${encodeURIComponent(name)}/source/main`, opts);
 }
 ```
 
@@ -358,9 +364,9 @@ async getProgram(name: string): Promise<string> {
 
 ```typescript
 case 'PROG':
-  return textResult(await client.getProgram(name));
+  return textResult((await client.getProgram(name)).source);
 case 'STRU':
-  return textResult(await client.getStructure(name));
+  return textResult((await client.getStructure(name)).source);
 case 'DOMA': {
   const domain = await client.getDomain(name);
   return textResult(JSON.stringify(domain, null, 2));

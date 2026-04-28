@@ -95,7 +95,7 @@ describe('CRUD lifecycle', () => {
       registry.register(objectUrl, 'PROG', testName);
 
       // 2. READ — verify creation
-      const source1 = await client.getProgram(testName);
+      const { source: source1 } = await client.getProgram(testName);
       expect(typeof source1).toBe('string');
       expect(source1.length).toBeGreaterThan(0);
 
@@ -104,7 +104,7 @@ describe('CRUD lifecycle', () => {
       await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource);
 
       // 4. READ — verify update
-      const source2 = await client.getProgram(testName);
+      const { source: source2 } = await client.getProgram(testName);
       expect(source2).toContain('updated by CRUD lifecycle test');
 
       // 5. ACTIVATE

@@ -112,10 +112,15 @@ program
   .command('read <type> <name>')
   .description('Read an ABAP object via SAPRead (PROG, CLAS, INTF, DDLS, TABL, DOMA, DTEL, ...)')
   .option('--flat', 'Return flat source for CLAS/INTF (instead of structured sections)')
+  .option(
+    '--source-version <version>',
+    'Source version: active (default) | inactive | auto. "auto" returns the user\'s draft if any, else active.',
+  )
   .addOption(outputOption)
-  .action(async (type: string, name: string, opts: { flat?: boolean; output: OutputMode }) => {
+  .action(async (type: string, name: string, opts: { flat?: boolean; sourceVersion?: string; output: OutputMode }) => {
     const args: Record<string, unknown> = { type: type.toUpperCase(), name };
     if (opts.flat) args.flat = true;
+    if (opts.sourceVersion) args.version = opts.sourceVersion;
     process.exit(await runToolCall('SAPRead', args, opts.output));
   });
 
@@ -146,7 +151,7 @@ program
 
 program
   .command('sql <query>')
-  .description('Execute an OpenSQL query (SAPQuery; requires SAP_BLOCK_FREE_SQL=false)')
+  .description('Execute an OpenSQL query (SAPQuery; requires SAP_ALLOW_FREE_SQL=true)')
   .addOption(outputOption)
   .action(async (query: string, opts: { output: OutputMode }) => {
     process.exit(await runToolCall('SAPQuery', { action: 'sql', query }, opts.output));
