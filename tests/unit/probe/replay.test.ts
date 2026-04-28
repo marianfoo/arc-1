@@ -195,8 +195,8 @@ describe('probe replay — npl-750-sp02-dev-edition fixture (recorded from real 
 
     expect(q.verdictHistogram['available-high']).toBe(8);
     expect(q.verdictHistogram['available-medium']).toBe(0);
-    expect(q.verdictHistogram['unavailable-high']).toBe(6);
-    expect(q.verdictHistogram['unavailable-likely']).toBe(3);
+    expect(q.verdictHistogram['unavailable-high']).toBe(8);
+    expect(q.verdictHistogram['unavailable-likely']).toBe(1);
     expect(q.verdictHistogram['auth-blocked']).toBe(0);
     expect(q.verdictHistogram.ambiguous).toBe(3);
   });

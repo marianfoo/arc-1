@@ -104,7 +104,8 @@ export const CATALOG: CatalogEntry[] = [
     collectionUrl: '/sap/bc/adt/ddic/domains',
     objectUrlTemplate: '/sap/bc/adt/ddic/domains/{name}',
     knownObjects: ['ABAP_BOOL', 'MANDT', 'XFELD'],
-    minRelease: 700,
+    minRelease: 751,
+    note: 'Structured domain read endpoint confirmed unavailable on NW 7.50 (404 for existing objects)',
   },
   {
     type: 'DTEL',
@@ -191,8 +192,8 @@ export const CATALOG: CatalogEntry[] = [
     collectionUrl: '/sap/bc/adt/enhancements/enhoxhb',
     objectUrlTemplate: '/sap/bc/adt/enhancements/enhoxhb/{name}',
     knownObjects: [],
-    minRelease: 702,
-    note: 'Enhancement implementations — no universally-shipped ENHO',
+    minRelease: 751,
+    note: 'Enhancement implementations — confirmed unavailable on NW 7.50 (404); no universally-shipped ENHO',
   },
 ];
 

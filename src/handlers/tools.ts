@@ -32,6 +32,59 @@ function isBtpMode(config: ServerConfig): boolean {
   return config.systemType === 'btp';
 }
 
+// ─── Release-gated types/actions ───────────────────────────────────
+
+/** Minimum SAP_BASIS release for SAPRead types. Mirrors READ_RELEASE_GATES in intent.ts. */
+const READ_RELEASE_GATES: Record<string, number> = {
+  DOMA: 751,
+  DDLX: 751,
+  AUTH: 751,
+  ENHO: 751,
+  FTG2: 752,
+  API_STATE: 752,
+  SKTD: 754,
+  BDEF: 754,
+  SRVD: 754,
+  SRVB: 754,
+};
+
+/** Minimum SAP_BASIS release for SAPWrite types. Mirrors WRITE_RELEASE_GATES in intent.ts. */
+const WRITE_RELEASE_GATES: Record<string, number> = {
+  DOMA: 751,
+  DDLX: 751,
+  TABL: 751,
+  SKTD: 754,
+  BDEF: 754,
+  SRVD: 754,
+  SRVB: 754,
+};
+
+/** Minimum SAP_BASIS release for SAPActivate/SAPManage actions. Mirrors ACTION_RELEASE_GATES in intent.ts. */
+const ACTION_RELEASE_GATES: Record<string, number> = {
+  publish_srvb: 754,
+  unpublish_srvb: 754,
+};
+
+function parseReleaseNum(resolvedFeatures?: ResolvedFeatures): number {
+  const release = resolvedFeatures?.abapRelease?.replace(/\D/g, '') ?? '';
+  const num = Number.parseInt(release, 10);
+  return Number.isFinite(num) ? num : 0;
+}
+
+/** Filter an array of type/action strings, removing entries gated above the detected release. */
+function filterByRelease<T extends string>(
+  items: readonly T[],
+  gates: Record<string, number>,
+  resolvedFeatures?: ResolvedFeatures,
+): T[] {
+  const release = parseReleaseNum(resolvedFeatures);
+  if (release === 0) return [...items];
+  return items.filter((item) => {
+    const min = gates[item];
+    return !min || release >= min;
+  });
+}
+
 // ─── SAPRead Types ──────────────────────────────────────────────────
 
 /** All SAPRead types available on on-premise */
@@ -436,7 +489,7 @@ export function getToolDefinitions(
         properties: {
           type: {
             type: 'string',
-            enum: btp ? SAPREAD_TYPES_BTP : SAPREAD_TYPES_ONPREM,
+            enum: filterByRelease(btp ? SAPREAD_TYPES_BTP : SAPREAD_TYPES_ONPREM, READ_RELEASE_GATES, resolvedFeatures),
             description: btp
               ? 'Object type to read (BTP): CLAS, INTF, FUNC, FUGR, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, STRU, DOMA, DTEL, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS.'
               : 'Object type to read (on-prem): PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS, AUTH, FTG2, ENHO, VERSIONS, VERSION_SOURCE.',
@@ -493,6 +546,12 @@ export function getToolDefinitions(
             description:
               'For VERSION_SOURCE: URI of a specific revision from SAPRead(type="VERSIONS") response (.revisions[].uri). Must start with /sap/bc/adt/.',
           },
+          version: {
+            type: 'string',
+            enum: ['active', 'inactive'],
+            description:
+              'Source version to read. Omit to get the default (latest, possibly inactive). Set to "active" to get the last activated version, or "inactive" to explicitly get the pending inactive version. Do not set this routinely — only when you need to compare active vs inactive state.',
+          },
         },
         required: ['type'],
       },
@@ -522,7 +581,18 @@ export function getToolDefinitions(
           },
           type: {
             type: 'string',
-            enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
+            enum: (() => {
+              const types = filterByRelease(
+                [...(btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM)],
+                WRITE_RELEASE_GATES,
+                resolvedFeatures,
+              );
+              // TABL filtered out by WRITE_RELEASE_GATES (751) — add STRU as replacement
+              if (!types.includes('TABL') && !types.includes('STRU')) {
+                types.push('STRU');
+              }
+              return types;
+            })(),
             description: btp
               ? 'Object type (for create/update/delete/edit_method). Supported: CLAS, INTF, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL.'
               : 'Object type (for create/update/delete/edit_method). Supported: PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, TABL, DOMA, DTEL.',
@@ -599,6 +669,18 @@ export function getToolDefinitions(
           setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
           defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
           changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
+          messages: {
+            type: 'array',
+            description: 'MSAG: message entries for create/update',
+            items: {
+              type: 'object',
+              properties: {
+                number: { type: 'string', description: 'Message number (e.g., "001")' },
+                shortText: { type: 'string', description: 'Message short text (use & for placeholders: "&1", "&2")' },
+              },
+              required: ['number', 'shortText'],
+            },
+          },
           serviceDefinition: { type: 'string', description: 'SRVB: service definition name (SRVD) to bind to' },
           bindingType: {
             type: 'string',
@@ -652,7 +734,17 @@ export function getToolDefinitions(
               properties: {
                 type: {
                   type: 'string',
-                  enum: btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM,
+                  enum: (() => {
+                    const types = filterByRelease(
+                      [...(btp ? SAPWRITE_TYPES_BTP : SAPWRITE_TYPES_ONPREM)],
+                      WRITE_RELEASE_GATES,
+                      resolvedFeatures,
+                    );
+                    if (!types.includes('TABL') && !types.includes('STRU')) {
+                      types.push('STRU');
+                    }
+                    return types;
+                  })(),
                   description: 'Object type (includes TABL for RAP stack bootstrapping)',
                 },
                 name: { type: 'string', description: 'Object name' },
@@ -691,6 +783,18 @@ export function getToolDefinitions(
                 setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
                 defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
                 changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
+                messages: {
+                  type: 'array',
+                  description: 'MSAG: message entries',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      number: { type: 'string', description: 'Message number (e.g., "001")' },
+                      shortText: { type: 'string', description: 'Message short text' },
+                    },
+                    required: ['number', 'shortText'],
+                  },
+                },
                 serviceDefinition: { type: 'string', description: 'SRVB: service definition (SRVD)' },
                 bindingType: {
                   type: 'string',
@@ -734,7 +838,11 @@ export function getToolDefinitions(
         properties: {
           action: {
             type: 'string',
-            enum: ['activate', 'publish_srvb', 'unpublish_srvb'],
+            enum: filterByRelease(
+              ['activate', 'publish_srvb', 'unpublish_srvb'],
+              ACTION_RELEASE_GATES,
+              resolvedFeatures,
+            ),
             description:
               'Action to perform. "activate" (default): activate ABAP objects. ' +
               '"publish_srvb": publish a service binding to make OData service available. ' +
@@ -1069,7 +1177,7 @@ export function getToolDefinitions(
       properties: {
         action: {
           type: 'string',
-          enum: sapManageActions,
+          enum: filterByRelease(sapManageActions, ACTION_RELEASE_GATES, resolvedFeatures),
           description:
             'Action to execute. Read actions: features, probe, cache_stats, flp_list_catalogs, flp_list_groups, flp_list_tiles. ' +
             'Mutating package/FLP actions require writable safety config and write scope in authenticated mode.',

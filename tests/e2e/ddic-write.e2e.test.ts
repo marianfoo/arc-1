@@ -194,6 +194,118 @@ describe('E2E DDIC metadata write tests', () => {
     expectToolError(readDomain, domainName);
   });
 
+  it('SAPRead TABL reads a standard table definition', async () => {
+    const result = await callTool(client, 'SAPRead', { type: 'TABL', name: 'T000' });
+    const text = expectToolSuccess(result);
+    expect(text).toContain('mandt');
+  });
+
+  it('SAPWrite STRU full CRUD cycle with version checks', async (ctx) => {
+    const struName = uniqueName('ZARC1_STRU');
+
+    // Create with initial field
+    const createResult = await callTool(client, 'SAPWrite', {
+      action: 'create',
+      type: 'STRU',
+      name: struName,
+      package: '$TMP',
+      description: 'ARC-1 E2E test structure',
+      source: [
+        `@EndUserText.label : 'ARC-1 E2E test structure'`,
+        `@AbapCatalog.enhancementCategory : #NOT_EXTENSIBLE`,
+        `define type ${struName.toLowerCase()} {`,
+        `  key id   : sysuuid_x16 not null;`,
+        `  status  : char1;`,
+        ``,
+        `}`,
+      ].join('\n'),
+    });
+    expectToolSuccessOrSkip(ctx, createResult);
+
+    try {
+      // Activate the initial version
+      const act1 = await callTool(client, 'SAPActivate', {
+        action: 'activate',
+        type: 'STRU',
+        name: struName,
+      });
+      expectToolSuccess(act1);
+
+      // Update — add a field (creates inactive version)
+      const updateResult = await callTool(client, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: struName,
+        source: [
+          `@EndUserText.label : 'ARC-1 E2E test structure'`,
+          `@AbapCatalog.enhancementCategory : #NOT_EXTENSIBLE`,
+          `define type ${struName.toLowerCase()} {`,
+          `  key id   : sysuuid_x16 not null;`,
+          `  status  : char1;`,
+          `  message : char100;`,
+          ``,
+          `}`,
+        ].join('\n'),
+      });
+      expectToolSuccess(updateResult);
+
+      // Default read — should show the new field (inactive version)
+      const readDefault = await callTool(client, 'SAPRead', { type: 'STRU', name: struName });
+      expect(expectToolSuccess(readDefault)).toContain('message');
+
+      // version=inactive — should also show the new field
+      const readInactive = await callTool(client, 'SAPRead', {
+        type: 'STRU',
+        name: struName,
+        version: 'inactive',
+      });
+      expect(expectToolSuccess(readInactive)).toContain('message');
+
+      // version=active — should NOT have the new field (still the old activated version)
+      const readActive = await callTool(client, 'SAPRead', {
+        type: 'STRU',
+        name: struName,
+        version: 'active',
+      });
+      const activeText = expectToolSuccess(readActive);
+      expect(activeText).toContain('status');
+      expect(activeText).not.toContain('message');
+
+      // Activate the update
+      const act2 = await callTool(client, 'SAPActivate', {
+        action: 'activate',
+        type: 'STRU',
+        name: struName,
+      });
+      expectToolSuccess(act2);
+
+      // Now version=active should include the new field
+      const readActiveAfter = await callTool(client, 'SAPRead', {
+        type: 'STRU',
+        name: struName,
+        version: 'active',
+      });
+      expect(expectToolSuccess(readActiveAfter)).toContain('message');
+    } finally {
+      try {
+        await callTool(client, 'SAPWrite', { action: 'delete', type: 'STRU', name: struName });
+      } catch {
+        // best-effort-cleanup
+      }
+    }
+  });
+
+  it('SAPWrite rejects mixed-case object names on create', async () => {
+    const result = await callTool(client, 'SAPWrite', {
+      action: 'create',
+      type: 'DDLS',
+      name: 'Zarc1_Mixed_Case',
+      package: '$TMP',
+      source: 'define view entity Zarc1_Mixed_Case as select from t000 { key mandt }',
+    });
+    expectToolError(result, 'uppercase');
+  });
+
   it('SAPWrite batch_create supports DOMA + DTEL dependency chain', async (ctx) => {
     const domainName = uniqueName('ZARC1_BDOM');
     const dtelName = uniqueName('ZARC1_BDTL');

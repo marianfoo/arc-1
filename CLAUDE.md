@@ -198,11 +198,11 @@ tests/
 | Add RAP deterministic preflight checks | `src/adt/rap-preflight.ts`, `src/handlers/intent.ts` (`runRapPreflightValidation`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-preflight.test.ts` |
 | Add RAP behavior handler scaffolding logic | `src/adt/rap-handlers.ts`, `src/handlers/intent.ts` (`SAPWrite action=scaffold_rap_handlers`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-handlers.test.ts` |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
-| Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
+| Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` — **three-file sync required** (see invariant below) |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |
 | Modify ADT service discovery / MIME types | `src/adt/discovery.ts`, `src/adt/http.ts` |
 | Improve DDIC save diagnostics + SAP-domain error hints (T100/line + lock/auth/dependency hints) | `src/adt/errors.ts` (`extractDdicDiagnostics`, `formatDdicDiagnostics`, `classifySapDomainError`), `src/handlers/intent.ts` (`enrichWithSapDetails`, `formatErrorForLLM`) |
-| Add SAP error classification (new `category` + hint) | `src/adt/errors.ts` (`extractExceptionType`, `extractLockOwner`, `classifySapDomainError`, `SapErrorClassification`), `src/handlers/intent.ts` (`formatErrorForLLM`, `classifyError`), `tests/unit/adt/errors.test.ts`. Current categories: `lock-conflict`, `enqueue-error`, `authorization`, `activation-dependency`, `transport-issue`, `object-exists`, `method-not-supported`, `icf-handler-not-bound`. Ground hints in verified SAP Notes / KBAs when possible (use `mcp__sap-notes__search` or equivalent) — don't ship speculative tcode pointers. |
+| Add SAP error classification (new `category` + hint) | `src/adt/errors.ts` (`extractExceptionType`, `extractLockOwner`, `classifySapDomainError`, `SapErrorClassification`), `src/handlers/intent.ts` (`formatErrorForLLM`, `classifyError`), `tests/unit/adt/errors.test.ts`. Current categories: `lock-conflict`, `enqueue-error`, `authorization`, `activation-dependency`, `transport-issue`, `object-exists`, `method-not-supported`, `icf-handler-not-bound`, `deletion-blocked`. Ground hints in verified SAP Notes / KBAs when possible (use `mcp__sap-notes__search` or equivalent) — don't ship speculative tcode pointers. |
 | Add release-gated content-type fallback (e.g. DTEL v2→v1 on 415) | `src/adt/crud.ts` (`CONTENT_TYPE_FALLBACKS` map — narrow static allowlist, 415-only retry in both `createObject` and `updateObject`), `tests/unit/adt/crud.test.ts`. Don't turn it into a generic retry loop — each entry must be a specific, tested compatibility gap. |
 | Add / update test skip reason (integration or E2E) | `tests/helpers/skip-policy.ts` (`SkipReason` constants + `requireOrSkip`), `tests/e2e/helpers.ts` (`classifyToolErrorSkip` for MCP tool errors), `docs/integration-test-skips.md` (user-facing taxonomy — update the relevant category), `scripts/ci/summarize-skips.mjs` (regex patterns that group skips — extend when adding a new message shape). Every skip message is the public API of the taxonomy — changing wording means updating all four. |
 | Run ADT type-availability probe against a live system (diagnostic; no product behavior) | `scripts/probe-adt-types.ts` (CLI entry: `npm run probe`), `src/probe/catalog.ts` (per-type collection URL + known-object fixtures), `src/probe/runner.ts` (multi-signal classifier), `src/probe/fixtures.ts` (record/replay), `tests/unit/probe/replay.test.ts` (fixture-backed unit tests). Contribute new fixture sets via `npm run probe -- --save-fixtures tests/fixtures/probe/<name>`. See [docs/probe-adt-types.md](docs/probe-adt-types.md). |
@@ -291,7 +291,7 @@ HTTP Request (adt/http.ts)
   ├─ Proactive MIME negotiation via `/sap/bc/adt/discovery` map (startup-cached)
   ├─ CSRF token management (auto-fetch via HEAD, refresh on 403)
   ├─ Content negotiation fallback (one-retry on 406/415 with header mutation)
-  ├─ Cookie/session management
+  ├─ Cookie/session management (hot-reload from file on stale 401)
   ├─ Stateful sessions for lock→modify→unlock sequences
   │
   ▼
@@ -491,10 +491,12 @@ Automated via [release-please](https://github.com/googleapis/release-please). No
 - Sensitive fields (password, token, cookie) are redacted in logs
 - CSRF tokens are auto-managed by `src/adt/http.ts` (fetch via HEAD, refresh on 403)
 - **Safety config is the server ceiling** — per-user scopes (JWT) can only restrict further, never expand beyond server config
-- **Per-user auth never inherits shared credentials.** `buildAdtConfig(config, btpProxy?, bearerTokenProvider?, { perUser: true })` strips `username`/`password`/`cookies`. Any new Layer B field must respect this flag. Never add auth fields directly to `createPerUserClient`'s `adtConfig` without going through `buildAdtConfig`.
+- **Per-user auth never inherits shared credentials.** `buildAdtConfig(config, btpProxy?, bearerTokenProvider?, { perUser: true })` strips `username`/`password`/`cookies`/`cookieFile`/`cookieString`. Any new Layer B field must respect this flag. Never add auth fields directly to `createPerUserClient`'s `adtConfig` without going through `buildAdtConfig`.
+- **Cookie auth hot-reload**: When `SAP_COOKIE_FILE` is set, expired cookies don't require a restart. On persistent 401 the HTTP client clears stale cookies and re-reads the file on the next request (`cookiesCleared` flag in `src/adt/http.ts`). Startup preflight is non-blocking in cookie auth mode. `SAP_COOKIE_STRING` cannot hot-reload (logged warning).
 - **All ADT endpoints have safety guards** — every `http.get/post/put/delete` call is preceded by `checkOperation()`. No unguarded HTTP calls.
 - **Error types matter**: `AdtApiError` (SAP HTTP error), `AdtSafetyError` (blocked by config), `AdtNetworkError` (connectivity). `intent.ts` formats these with LLM-friendly hints.
 - **Stateful sessions**: Lock→modify→unlock sequences must use `http.withStatefulSession()` to share cookies/CSRF tokens across requests
+- **Tool schema three-file sync**: Every tool property must exist in all three files: `tools.ts` (JSON Schema for LLMs), `schemas.ts` (Zod validation), `intent.ts` (handler logic). A property missing from `tools.ts` is invisible to LLMs — they can't use it even though validation and the handler support it. When adding a new property, update all three files. When reviewing changes, verify the property appears in the tool's `inputSchema.properties` (tools.ts), the corresponding Zod schema (schemas.ts), and the handler's `args.*` access (intent.ts). Batch object schemas in `tools.ts` (e.g., `batch_create` items) are defined separately from the top-level schema — check both.
 
 ## History
 

@@ -39,33 +39,7 @@ export async function lockObject(
       Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result, application/*;q=0.8',
     });
   } catch (err) {
-    // NW 7.50 quirk: the LOCK endpoint returns 400 or 401 with an HTML login page when
-    // the object is already locked by another session (Eclipse, SE80). This is not an auth
-    // failure — a GET on the same object succeeds moments earlier with the same credentials.
-    // Reclassify as a clear lock-conflict error so the LLM doesn't chase auth red herrings.
-    // CX_ADT_RES_NO_ACCESS maps to 403 server-side, but with cookie auth (no Basic Auth
-    // header) ICM transforms it to 401 "no logon data". ARC-1's 401 retry handler then
-    // clears the cookie jar and retries without cookies, which returns 400. So we see
-    // 400, 401, or 403 depending on timing — all with the same HTML login page body.
-    //
-    // The "Logon Error Message" HTML body is the de-facto NW 7.50 gate — S/4 returns
-    // structured XML with <exc:exception> here (no "Logon Error Message" string), and
-    // S/4's auth-failure HTML is "Anmeldung fehlgeschlagen" (also no match). So this
-    // branch self-scopes without an explicit detectSystemCapabilities() check.
-    if (
-      err instanceof AdtApiError &&
-      (err.statusCode === 400 || err.statusCode === 401 || err.statusCode === 403) &&
-      err.responseBody?.includes('Logon Error Message')
-    ) {
-      const name = objectUrl.split('/').pop() ?? objectUrl;
-      // Throw as 409 with "locked by" in the message so classifySapDomainError routes
-      // to the 'lock-conflict' category (not the 423 'enqueue-error' / invalid-handle path).
-      throw new AdtApiError(
-        `Object ${name} is locked by another session. Close the editor (Eclipse, SE80) or release the lock in SM12, then retry.`,
-        409,
-        objectUrl,
-      );
-    }
+    rethrowIfNw750LockConflict(err, objectUrl);
     throw err;
   }
 
@@ -134,6 +108,7 @@ export async function createObject(
     const resp = await http.post(url, body, contentType);
     return resp.body;
   } catch (err) {
+    rethrowIfNw750LockConflict(err, objectUrl);
     const fallback = CONTENT_TYPE_FALLBACKS[contentType];
     if (fallback && isUnsupportedMediaTypeError(err)) {
       const resp = await http.post(url, body, fallback);
@@ -266,6 +241,26 @@ export async function safeUpdateObject(
       await unlockObject(session, objectUrl, lock.lockHandle);
     }
   });
+}
+
+// NW 7.50 quirk: several ADT endpoints return 400/401/403 with an HTML login page
+// when an object is locked or already exists. This is not an auth failure — a GET on
+// the same object succeeds moments earlier with the same credentials.
+// The "Logon Error Message" body marker self-scopes to NW 7.50 (S/4 uses structured
+// XML or "Anmeldung fehlgeschlagen" — neither contains this string).
+function rethrowIfNw750LockConflict(err: unknown, objectUrl: string): void {
+  if (
+    err instanceof AdtApiError &&
+    (err.statusCode === 400 || err.statusCode === 401 || err.statusCode === 403) &&
+    err.responseBody?.includes('Logon Error Message')
+  ) {
+    const name = objectUrl.split('/').pop() ?? objectUrl;
+    throw new AdtApiError(
+      `Object ${name} is locked by another session (or already exists). Close the editor (Eclipse, SE80) or release the lock in SM12, then retry.`,
+      409,
+      objectUrl,
+    );
+  }
 }
 
 /** Simple XML value extractor (for lock responses) */

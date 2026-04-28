@@ -492,6 +492,15 @@ describe('AdtApiError', () => {
       expect(classification?.category).toBe('method-not-supported');
     });
 
+    it('classifies 404 deletion-blocked when object is still referenced', () => {
+      const classification = classifySapDomainError(
+        404,
+        'Object ZDTEL_EXAMPLE cannot be deleted as it is still referenced by other objects.',
+      );
+      expect(classification?.category).toBe('deletion-blocked');
+      expect(classification?.hint).toContain('where_used');
+    });
+
     it('returns undefined for unclassifiable errors', () => {
       expect(classifySapDomainError(418, 'teapot')).toBeUndefined();
     });

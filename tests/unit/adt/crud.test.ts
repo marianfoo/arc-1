@@ -369,6 +369,44 @@ describe('CRUD Operations', () => {
       ).rejects.toThrow(error400);
       expect(http.post).toHaveBeenCalledTimes(1);
     });
+
+    describe('NW 7.50 lock-conflict reclassification on create', () => {
+      const html = '<html><body>Logon Error Message — please log on again.</body></html>';
+
+      function mockHttpThatRejectsCreate(status: number, body: string): AdtHttpClient {
+        const http = mockHttp();
+        (http.post as ReturnType<typeof vi.fn>).mockRejectedValue(new AdtApiError('reject', status, '/url', body));
+        return http;
+      }
+
+      it('reclassifies 401 + "Logon Error Message" as 409 lock-conflict', async () => {
+        const http = mockHttpThatRejectsCreate(401, html);
+        await expect(
+          createObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/ddic/ddl/sources', '<xml/>'),
+        ).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('locked by another session') });
+      });
+
+      it('reclassifies 400 + "Logon Error Message" as 409', async () => {
+        const http = mockHttpThatRejectsCreate(400, html);
+        await expect(
+          createObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/ddic/ddl/sources', '<xml/>'),
+        ).rejects.toMatchObject({ statusCode: 409 });
+      });
+
+      it('reclassifies 403 + "Logon Error Message" as 409', async () => {
+        const http = mockHttpThatRejectsCreate(403, html);
+        await expect(
+          createObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/ddic/ddl/sources', '<xml/>'),
+        ).rejects.toMatchObject({ statusCode: 409 });
+      });
+
+      it('does NOT reclassify 401 without "Logon Error Message" body', async () => {
+        const http = mockHttpThatRejectsCreate(401, 'Authentication required');
+        await expect(
+          createObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/ddic/ddl/sources', '<xml/>'),
+        ).rejects.toMatchObject({ statusCode: 401 });
+      });
+    });
   });
 
   // ─── updateSource ──────────────────────────────────────────────────

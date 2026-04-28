@@ -40,7 +40,8 @@ export interface SapErrorClassification {
     | 'transport-issue'
     | 'object-exists'
     | 'method-not-supported'
-    | 'icf-handler-not-bound';
+    | 'icf-handler-not-bound'
+    | 'deletion-blocked';
   hint: string;
   transaction?: string;
   details?: Record<string, string>;
@@ -407,6 +408,16 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
         '(often caused by incomplete activation after an upgrade or on minimally-configured ' +
         'systems). Consult your Basis admin or SAP KBA 3128830 (Troubleshooting ICF 404 Errors).',
       transaction: 'SICF',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  if (statusCode === 404 && /\bcannot be deleted\b.*\breferenced\b/i.test(bodyRaw)) {
+    return {
+      category: 'deletion-blocked',
+      hint:
+        'The object cannot be deleted because other objects still reference it. ' +
+        'Use SAPNavigate(action="where_used") to find referencing objects, remove or update those references first, then retry the deletion.',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }

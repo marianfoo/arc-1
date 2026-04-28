@@ -375,8 +375,14 @@ function getWriteInfrastructureHint(err: AdtApiError, tool: string, args: Record
 }
 
 /** Format error messages with LLM-friendly remediation hints */
-function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
-  const base = buildBaseErrorMessage(err, message, tool, args);
+function formatErrorForLLM(
+  err: unknown,
+  message: string,
+  tool: string,
+  args: Record<string, unknown>,
+  config: ServerConfig,
+): string {
+  const base = buildBaseErrorMessage(err, message, tool, args, config);
   // Handler-attached remediation hints (e.g., CDS delete blocker list) always
   // appear last so the message reads "what happened → diagnostics → how to fix".
   if (err instanceof AdtApiError && err.extraHint && !base.includes(err.extraHint)) {
@@ -385,7 +391,13 @@ function formatErrorForLLM(err: unknown, message: string, tool: string, args: Re
   return base;
 }
 
-function buildBaseErrorMessage(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
+function buildBaseErrorMessage(
+  err: unknown,
+  message: string,
+  tool: string,
+  args: Record<string, unknown>,
+  config: ServerConfig,
+): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
@@ -407,6 +419,14 @@ function buildBaseErrorMessage(err: unknown, message: string, tool: string, args
       return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
     }
     if (err.isUnauthorized || err.isForbidden) {
+      if (config.cookieFile || config.cookieString) {
+        return (
+          `${enriched}\n\n` +
+          'Hint: SAP cookies have expired. Ask the user to re-extract cookies ' +
+          'with `arc1-cli extract-cookies`. The next SAP call after extraction ' +
+          'will automatically reload the fresh cookies — no restart needed.'
+        );
+      }
       return `${enriched}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
     }
     // Transport / corrNr specific hints
@@ -1121,7 +1141,7 @@ export async function handleToolCall(
           result = await handleSAPWrite(client, args, config, cachingLayer);
           break;
         case 'SAPActivate':
-          result = await handleSAPActivate(client, args);
+          result = await handleSAPActivate(client, args, cachingLayer);
           break;
         case 'SAPNavigate':
           result = await handleSAPNavigate(client, args);
@@ -1209,7 +1229,7 @@ export async function handleToolCall(
         errorMessage: message,
       });
 
-      return errorResult(formatErrorForLLM(err, message, toolName, args));
+      return errorResult(formatErrorForLLM(err, message, toolName, args, config));
     }
   });
 }
@@ -1219,6 +1239,13 @@ export async function handleToolCall(
 /** Check if the connected system is BTP ABAP Environment */
 function isBtpSystem(): boolean {
   return cachedFeatures?.systemType === 'btp';
+}
+
+/** Check if the connected system is NW 7.50 (missing several ADT endpoints) */
+function isRelease750(): boolean {
+  const r = cachedFeatures?.abapRelease?.replace(/\D/g, '') ?? '';
+  const num = Number.parseInt(r, 10);
+  return Number.isFinite(num) && num >= 750 && num < 751;
 }
 
 /** BTP-specific error messages for unavailable operations */
@@ -1233,6 +1260,115 @@ const BTP_HINTS: Record<string, string> = {
   TRAN: 'Transaction codes (TRAN) are not available on BTP ABAP Environment. Use SAPSearch to find apps and services instead.',
 };
 
+/** Static release-gating tables: minimum SAP_BASIS release required for each type/action.
+ *  Values from probe catalog + empirical verification. Separated by operation because
+ *  read and write endpoints for the same type may have different minimum releases. */
+interface ReleaseGate {
+  minRelease: number;
+  hint: string;
+}
+
+const READ_RELEASE_GATES: Record<string, ReleaseGate> = {
+  DOMA: {
+    minRelease: 751,
+    hint:
+      'Structured domain reads (DOMA) are not available on this system. ' +
+      'Alternative: use SAPQuery to read domain metadata from DD01L (type, length, value table) ' +
+      'and fixed values from DD07T. Example: SELECT DOMNAME, DATATYPE, LENG, OUTPUTLEN, ENTITYTAB ' +
+      "FROM DD01L WHERE DOMNAME = '<name>' AND AS4LOCAL = 'A'",
+  },
+  DDLX: {
+    minRelease: 751,
+    hint: 'CDS metadata extensions (DDLX) are not available on this system. Requires SAP_BASIS >= 7.51.',
+  },
+  AUTH: {
+    minRelease: 751,
+    hint: 'Authorization field metadata (AUTH) is not available on this system. Use transaction SU20/SU21 instead.',
+  },
+  ENHO: {
+    minRelease: 751,
+    hint: 'Enhancement implementation reads (ENHO) are not available on this system. Use SE18/SE19 instead.',
+  },
+  FTG2: {
+    minRelease: 752,
+    hint: 'Feature toggles (FTG2) are not available on this system. Use transaction SFW5 instead.',
+  },
+  API_STATE: {
+    minRelease: 752,
+    hint: 'API release state checking is not available on this system. Use SE24 to check API deprecation.',
+  },
+  SKTD: {
+    minRelease: 754,
+    hint: 'Knowledge Transfer Documents (SKTD) are not available on this system. Requires SAP_BASIS >= 7.54.',
+  },
+  BDEF: {
+    minRelease: 754,
+    hint: 'Behavior definitions (BDEF) are not available on this system. Requires SAP_BASIS >= 7.54 (S/4HANA).',
+  },
+  SRVD: {
+    minRelease: 754,
+    hint: 'Service definitions (SRVD) are not available on this system. Requires SAP_BASIS >= 7.54 (S/4HANA).',
+  },
+  SRVB: {
+    minRelease: 754,
+    hint: 'Service bindings (SRVB) are not available on this system. Requires SAP_BASIS >= 7.54 (S/4HANA).',
+  },
+};
+
+const WRITE_RELEASE_GATES: Record<string, ReleaseGate> = {
+  DOMA: {
+    minRelease: 751,
+    hint: 'Domain (DOMA) writes are not available on this system. Use SE11 to create or modify domains instead.',
+  },
+  DDLX: {
+    minRelease: 751,
+    hint: 'CDS metadata extension (DDLX) writes are not available on this system. Requires SAP_BASIS >= 7.51.',
+  },
+  SKTD: {
+    minRelease: 754,
+    hint: 'Knowledge Transfer Document (SKTD) writes are not available on this system. Requires SAP_BASIS >= 7.54.',
+  },
+  BDEF: {
+    minRelease: 754,
+    hint: 'Behavior definition (BDEF) writes are not available on this system. Requires SAP_BASIS >= 7.54 (S/4HANA).',
+  },
+  SRVD: {
+    minRelease: 754,
+    hint: 'Service definition (SRVD) writes are not available on this system. Requires SAP_BASIS >= 7.54 (S/4HANA).',
+  },
+  SRVB: {
+    minRelease: 754,
+    hint: 'Service binding (SRVB) writes are not available on this system. Requires SAP_BASIS >= 7.54 (S/4HANA).',
+  },
+};
+
+const ACTION_RELEASE_GATES: Record<string, ReleaseGate> = {
+  publish_srvb: {
+    minRelease: 754,
+    hint: 'Service binding publishing is not available on this system. Requires SAP_BASIS >= 7.54.',
+  },
+  unpublish_srvb: {
+    minRelease: 754,
+    hint: 'Service binding unpublishing is not available on this system. Requires SAP_BASIS >= 7.54.',
+  },
+};
+
+/** Parse abapRelease string to a numeric value (e.g. "750" → 750, "7.54" → 754). */
+function parseRelease(abapRelease?: string): number {
+  if (!abapRelease) return 0;
+  const num = Number.parseInt(abapRelease.replace(/\D/g, ''), 10);
+  return Number.isFinite(num) ? num : 0;
+}
+
+/** Check if a type/action is gated by release. Returns the hint string if blocked, undefined if allowed. */
+function checkReleaseGate(gates: Record<string, ReleaseGate>, key: string): string | undefined {
+  const gate = gates[key];
+  if (!gate) return undefined;
+  const release = parseRelease(cachedFeatures?.abapRelease);
+  if (release > 0 && release < gate.minRelease) return gate.hint;
+  return undefined;
+}
+
 async function handleSAPRead(
   client: AdtClient,
   args: Record<string, unknown>,
@@ -1240,10 +1376,38 @@ async function handleSAPRead(
 ): Promise<ToolResult> {
   const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
+  const sourceVersion = args.version as string | undefined;
 
   // BTP: return helpful error for unavailable types
   if (isBtpSystem() && BTP_HINTS[type]) {
     return errorResult(BTP_HINTS[type]);
+  }
+
+  const releaseGateHint = checkReleaseGate(READ_RELEASE_GATES, type);
+  if (releaseGateHint) {
+    return errorResult(releaseGateHint);
+  }
+
+  // When version="active", fetch the active source directly via ?version=active
+  // for source-based types. Handled before the main switch to avoid per-case duplication.
+  const SOURCE_TYPES = new Set([
+    'PROG',
+    'CLAS',
+    'INTF',
+    'FUNC',
+    'INCL',
+    'DDLS',
+    'DCLS',
+    'DDLX',
+    'BDEF',
+    'SRVD',
+    'TABL',
+    'STRU',
+  ]);
+  if (sourceVersion && SOURCE_TYPES.has(type) && name) {
+    const srcUrl = sourceUrlForType(type, name);
+    const resp = await client.http.get(`${srcUrl}${srcUrl.includes('?') ? '&' : '?'}version=${sourceVersion}`);
+    return textResult(resp.body);
   }
 
   // Helper: get source with cache support, returns cache hit status
@@ -1252,7 +1416,7 @@ async function handleSAPRead(
     objName: string,
     fetcher: () => Promise<string>,
   ): Promise<{ source: string; cacheHit: boolean }> => {
-    if (!cachingLayer) return { source: await fetcher(), cacheHit: false };
+    if (sourceVersion || !cachingLayer) return { source: await fetcher(), cacheHit: false };
     const { source, hit } = await cachingLayer.getSource(objType, objName, fetcher);
     return { source, cacheHit: hit };
   };
@@ -1409,7 +1573,8 @@ async function handleSAPRead(
       }
     }
     case 'TABL': {
-      const { source, cacheHit } = await cachedGet('TABL', name, () => client.getTable(name));
+      const tablReader = isRelease750() ? () => client.getStructure(name) : () => client.getTable(name);
+      const { source, cacheHit } = await cachedGet('TABL', name, tablReader);
       return cachedTextResult(source, cacheHit);
     }
     case 'VIEW': {
@@ -1890,6 +2055,7 @@ function needsVendorContentType(type: string): boolean {
 function createContentTypeForType(type: string): string {
   // SRVB creation works with wildcard content type; updates use vendor v2 type.
   if (type === 'SRVB') return 'application/*';
+  if (type === 'STRU') return 'application/vnd.sap.adt.blues.v1+xml';
   return needsVendorContentType(type) ? vendorContentTypeForType(type) : 'application/*';
 }
 
@@ -2264,7 +2430,7 @@ export function buildCreateXml(
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </dcl:dclSource>`;
     case 'TABL':
-      // TABL creation also uses SAP's "blue" framework envelope, then source is written via /source/main.
+    case 'STRU':
       return `<?xml version="1.0" encoding="UTF-8"?>
 <blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
                  xmlns:adtcore="http://www.sap.com/adt/core"
@@ -2628,6 +2794,55 @@ async function handleSAPWrite(
     return errorResult('"type" and "name" are required for this action.');
   }
 
+  const releaseGateHint = checkReleaseGate(WRITE_RELEASE_GATES, type);
+  if (releaseGateHint) {
+    return errorResult(releaseGateHint);
+  }
+
+  // SAP object names must be uppercase — mixed-case names cause silent corruption
+  // (e.g. DDLS created as "Zc_MyView" instead of "ZC_MYVIEW" confuses the TADIR registry).
+  // Note: source code inside the object CAN use mixed case (e.g. "define view ZC_MyView").
+  if (action === 'create' && name && name !== name.toUpperCase()) {
+    return errorResult(
+      `Object name "${name}" contains lowercase characters. SAP object names must be uppercase (e.g. "${name.toUpperCase()}").\n\n` +
+        `Note: the object NAME in TADIR must be uppercase, but the source code inside the object can use mixed case ` +
+        `(e.g. for DDLS: name="${name.toUpperCase()}" but source can contain "define view entity ${name}").`,
+    );
+  }
+
+  // STRU update guard: the /ddic/structures/ PUT endpoint silently converts transparent
+  // tables (TABL/DT) into structures (TABL/DS) by creating an inactive INTTAB version.
+  // This corrupts DD02L and confuses SE11. Block STRU updates on objects that are actually tables.
+  if (type === 'STRU' && action === 'update' && name) {
+    try {
+      const searchResults = await client.searchObject(name, 1);
+      const match = searchResults.find((r) => r.objectName.toUpperCase() === name.toUpperCase());
+      if (match && match.objectType !== 'TABL/DS') {
+        if (match.objectType === 'TABL/DT') {
+          const hint = isRelease750()
+            ? 'Use SE11 to modify transparent tables on this system.'
+            : 'Use SAPWrite(type="TABL") instead.';
+          return errorResult(`"${name}" is a transparent table (TABL/DT), not a structure. ${hint}`);
+        }
+        return errorResult(
+          `"${name}" exists as ${match.objectType}, not a structure (TABL/DS). ` +
+            `SAPWrite(type="STRU") only works with DDIC structures.`,
+        );
+      }
+    } catch {
+      // search failed — proceed cautiously (SAP's own 405 on create guards against new collisions)
+    }
+  }
+
+  // NW 7.50: /ddic/tables/ doesn't exist — TABL is hidden from the tool schema,
+  // but guard at runtime too in case an LLM hallucinates the type.
+  if (type === 'TABL' && isRelease750() && (action === 'create' || action === 'update')) {
+    return errorResult(
+      `TABL create/update is not available on this SAP release (NW 7.50). ` +
+        `Use SE11 to create or modify tables and structures. SAPRead(type="TABL") works for reading.`,
+    );
+  }
+
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
@@ -2746,6 +2961,21 @@ async function handleSAPWrite(
         } catch {
           // If transportInfo check fails (older system, permissions, etc.), proceed without it.
           // SAP will return its own error if a transport is actually needed.
+        }
+      }
+
+      // MSAG create with a task number silently fails — CL_ADT_MESSAGE_CLASS_API=>create()
+      // passes corrNr to CTS_WBO_API_INSERT_OBJECTS which only accepts request numbers.
+      // The TADIR entry is created but T100/T100A are never written (phantom object).
+      // Confirmed on NW 7.50; unclear whether later releases fixed it, so validate everywhere.
+      if (type === 'MSAG' && effectiveTransport) {
+        const tr = await getTransport(client.http, client.safety, effectiveTransport);
+        if (!tr) {
+          return errorResult(
+            `Transport "${effectiveTransport}" is not a valid transport request. ` +
+              `On this SAP release, MSAG creation requires the transport request number, not a task number. ` +
+              `Use SAPTransport(action="get", id="<request>") to verify, or SAPTransport(action="list") to find modifiable requests.`,
+          );
         }
       }
 
@@ -3275,6 +3505,16 @@ async function handleSAPWrite(
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
 
+        if (objName !== objName.toUpperCase()) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: `Object name "${objName}" contains lowercase characters. SAP object names must be uppercase (e.g. "${objName.toUpperCase()}"). Source code inside the object can use mixed case.`,
+          });
+          break;
+        }
+
         // AFF header validation per object (if schema available)
         const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });
         if (!affResult.valid) {
@@ -3642,11 +3882,20 @@ async function runPreWriteSyntaxCheck(
 
 // ─── SAPActivate Handler ─────────────────────────────────────────────
 
-async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function handleSAPActivate(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
+): Promise<ToolResult> {
   const action = String(args.action ?? 'activate');
   const name = String(args.name ?? '');
   const version = String(args.version ?? '0001');
   const explicitServiceType = args.service_type as string | undefined;
+
+  const releaseGateHint = checkReleaseGate(ACTION_RELEASE_GATES, action);
+  if (releaseGateHint) {
+    return errorResult(releaseGateHint);
+  }
 
   // Resolve the OData service type for publish/unpublish endpoints.
   // Explicit service_type parameter takes precedence; otherwise auto-detect from SRVB metadata.
@@ -3764,6 +4013,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     const statusDetails = formatBatchActivationStatuses(batchStatuses);
 
     if (result.success) {
+      for (const o of objects) cachingLayer?.invalidate(o.type, o.name);
       return textResult(`Successfully activated ${objects.length} objects: ${names}.${statusDetails}`);
     }
     // On batch failure enrich with per-object inactive-version syntax errors —
@@ -3787,6 +4037,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   const result = await activate(client.http, client.safety, objectUrl, { ...activateOpts, name });
 
   if (result.success) {
+    cachingLayer?.invalidate(type, name);
     return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
   // On failure, try to enrich with the actual compiler errors from the inactive version —
@@ -5102,6 +5353,11 @@ async function handleSAPManage(
   const action = String(args.action ?? '');
   const flpUnavailableMessage =
     'FLP customization service (PAGE_BUILDER_CUST) is not available on this system. Check ICF service activation in SICF.';
+
+  const releaseGateHint = checkReleaseGate(ACTION_RELEASE_GATES, action);
+  if (releaseGateHint) {
+    return errorResult(releaseGateHint);
+  }
 
   switch (action) {
     case 'features': {

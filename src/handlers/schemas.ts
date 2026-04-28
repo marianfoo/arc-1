@@ -170,6 +170,7 @@ export const SAPReadSchema = z
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
     versionUri: z.string().optional(),
+    version: z.enum(['active', 'inactive']).optional(),
   })
   .superRefine((input, ctx) => validateSapReadInput(input, ctx));
 
@@ -185,6 +186,7 @@ export const SAPReadSchemaBtp = z
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
     versionUri: z.string().optional(),
+    version: z.enum(['active', 'inactive']).optional(),
   })
   .superRefine((input, ctx) => validateSapReadInput(input, ctx));
 
@@ -226,6 +228,7 @@ const SAPWRITE_TYPES_ONPREM = [
   'SRVB',
   'SKTD',
   'TABL',
+  'STRU',
   'DOMA',
   'DTEL',
   'MSAG',
