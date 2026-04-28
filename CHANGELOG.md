@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.7.1](https://github.com/marianfoo/arc-1/compare/v0.7.0...v0.7.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* restore npx package execution ([#189](https://github.com/marianfoo/arc-1/issues/189)) ([da05e01](https://github.com/marianfoo/arc-1/commit/da05e01ea30b0702126a9d12000a2b187fca6c9b))
+
+## [0.7.0](https://github.com/marianfoo/arc-1/compare/v0.6.10...v0.7.0) (2026-04-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* authorization refactor ([#181](https://github.com/marianfoo/arc-1/issues/181))
+
+### Features
+
+* add cds crud dependency guidance for ddls workflows ([#176](https://github.com/marianfoo/arc-1/issues/176)) ([f597486](https://github.com/marianfoo/arc-1/commit/f597486e71948356137e7d0111f5c3956a350c9c))
+* authorization refactor ([#181](https://github.com/marianfoo/arc-1/issues/181)) ([7be4ff0](https://github.com/marianfoo/arc-1/commit/7be4ff0af8029c32a4fc7e8949905922bb7320f4))
+* close RAP on-prem authoring gaps with preflight and handler scaffolding ([#173](https://github.com/marianfoo/arc-1/issues/173)) ([29ee0b5](https://github.com/marianfoo/arc-1/commit/29ee0b58f2224646a22a711cb68af03f70750233))
+* detect sibling DDLS DDLX coverage mismatches in SAPContext impact ([#177](https://github.com/marianfoo/arc-1/issues/177)) ([4f6e822](https://github.com/marianfoo/arc-1/commit/4f6e82242b4e0b439401a4f2daf9398d3638a06f))
+* harden SAPDiagnose dump and gateway diagnostics ([#174](https://github.com/marianfoo/arc-1/issues/174)) ([9383891](https://github.com/marianfoo/arc-1/commit/9383891055c009e9390988e1ff4553ad10917697))
+
+
+### Bug Fixes
+
+* harden SAP data preview diagnostics and SAPManage scope behavior ([#171](https://github.com/marianfoo/arc-1/issues/171)) ([6697d3e](https://github.com/marianfoo/arc-1/commit/6697d3ef17f9b490805dc2ae5bcc435611e15ab4))
+* SAPActivate phantom success + CLI/server alignment gaps (NW 7.50) ([#179](https://github.com/marianfoo/arc-1/issues/179)) ([4f2028e](https://github.com/marianfoo/arc-1/commit/4f2028e048b611b1ba106aeb3042ce99202388f9))
+
 ## [Unreleased] — v0.7 — Authorization Refactor (**breaking change**)
 
 Complete rewrite of the authorization model. Introduces a single `ACTION_POLICY` matrix as the source of truth for `(tool, action) → (scope, opType)`; replaces negated safety flags with positive opt-ins; adds per-user `transports` and `git` scopes; makes `admin` imply all scopes; and makes `allowWrites=false` truly block every mutation.

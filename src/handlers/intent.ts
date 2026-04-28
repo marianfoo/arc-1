@@ -871,9 +871,9 @@ async function buildCdsActivationDependencyHint(client: AdtClient, name: string,
   return lines.join('\n');
 }
 
-async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
-  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
-
+/** Run a syntax check on the inactive version and format the errors for appending to an
+ *  error message. Returns '' on any failure or when no errors are reported. */
+async function inactiveSyntaxDiagnostic(client: AdtClient, type: string, name: string): Promise<string> {
   try {
     const checkResult = await syntaxCheck(client.http, client.safety, objectUrlForType(type, name), {
       version: 'inactive',
@@ -884,14 +884,20 @@ async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: str
     if (errors.length === 0) return '';
 
     const lines = errors.map((msg) => {
-      const line = msg.line ? `Line ${msg.line}` : 'Line ?';
-      return `  - ${line}: ${msg.text}`;
+      const prefix = msg.line ? `[line ${msg.line}] ` : '';
+      const suffix = msg.uri ? ` (${msg.uri})` : '';
+      return `- ${prefix}${msg.text}${suffix}`;
     });
 
     return `\nServer syntax check (inactive):\n${lines.join('\n')}`;
   } catch {
     return '';
   }
+}
+
+async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
+  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
+  return inactiveSyntaxDiagnostic(client, type, name);
 }
 
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
@@ -2744,6 +2750,7 @@ async function handleSAPWrite(
   const transport = args.transport as string | undefined;
   const lintOverride = args.lintBeforeWrite as boolean | undefined;
   const preflightOverride = args.preflightBeforeWrite as boolean | undefined;
+  const checkOverride = args.checkBeforeWrite as boolean | undefined;
 
   // type and name are required for all actions except batch_create
   if (action !== 'batch_create' && (!type || !name)) {
@@ -2818,11 +2825,21 @@ async function handleSAPWrite(
       const lintWarnings = runPreWriteLint(source, type, name, config, lintOverride);
       if (lintWarnings.blocked) return lintWarnings.result!;
 
+      // Pre-write server-side syntax check (opt-in; never blocks — warnings only).
+      const checkNotes = await runPreWriteSyntaxCheck(client, type, source, objectUrl, config, checkOverride);
+
+      // If safeUpdateSource throws (lock conflict, network error, etc.), checkNotes
+      // is intentionally discarded — pre-check warnings only matter when the write succeeded.
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
       invalidateWrittenObject();
       const msg = `Successfully updated ${type} ${name}.`;
       const cdsUpdateHint = type === 'DDLS' ? await buildCdsUpdateCrudHint(client, name, objectUrl) : undefined;
-      const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings, cdsUpdateHint);
+      const warnings = mergePreWriteWarnings(
+        preflightWarnings.warnings,
+        lintWarnings.warnings,
+        checkNotes,
+        cdsUpdateHint,
+      );
       return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
     }
     case 'create': {
@@ -3068,11 +3085,22 @@ async function handleSAPWrite(
       const lintWarnings = runPreWriteLint(spliced.newSource, type, name, config, lintOverride);
       if (lintWarnings.blocked) return lintWarnings.result!;
 
+      // Pre-write server-side syntax check on the full spliced source (opt-in; warnings only).
+      const checkNotes = await runPreWriteSyntaxCheck(
+        client,
+        type,
+        spliced.newSource,
+        objectUrl,
+        config,
+        checkOverride,
+      );
+
       // Write the full source back (existing lock/modify/unlock flow)
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
       invalidateWrittenObject();
       const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
-      return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+      const extras = [lintWarnings.warnings, checkNotes].filter(Boolean).join('\n\n');
+      return extras ? textResult(`${msg}\n\n${extras}`) : textResult(msg);
     }
     case 'scaffold_rap_handlers': {
       // What this action does:
@@ -3691,6 +3719,66 @@ function runPreWriteLint(
   }
 }
 
+/** Types that carry source code that SAP's /checkruns endpoint can meaningfully compile.
+ *  Metadata-write types (DOMA/DTEL/TABL/STRU/MSAG/DEVC/SKTD) have no /source/main artifact. */
+const SYNTAX_CHECKABLE_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'FUGR',
+  'INCL',
+  'DDLS',
+  'DCLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+]);
+
+/** Pre-write SAP server-side syntax check via /checkruns with inline <chkrun:content>.
+ *  Sends the proposed source to SAP's compiler without writing. Surfaces errors AND
+ *  warnings as informational text appended to the write's success message — never
+ *  blocks the write. Rationale: multi-file edits have inter-object dependencies, so
+ *  intermediate writes legitimately trip compile errors that resolve once the whole
+ *  sequence lands. Real blocking is deferred to SAPActivate, which runs after all
+ *  dependencies are in place. Best-effort: network/endpoint failures return ''. */
+async function runPreWriteSyntaxCheck(
+  client: AdtClient,
+  type: string,
+  source: string,
+  objectUrl: string,
+  config: ServerConfig,
+  perCallOverride?: boolean,
+): Promise<string> {
+  const enabled = perCallOverride ?? config.checkBeforeWrite;
+  if (!enabled || !source) return '';
+  if (!SYNTAX_CHECKABLE_TYPES.has(type.toUpperCase())) return '';
+
+  try {
+    const result = await syntaxCheck(client.http, client.safety, objectUrl, { content: source, version: 'active' });
+    if (result.messages.length === 0) return '';
+
+    const errors = result.messages.filter((m) => m.severity === 'error');
+    const warnings = result.messages.filter((m) => m.severity === 'warning');
+    const parts: string[] = [];
+
+    if (errors.length > 0) {
+      const lines = errors.map((m) => `  Line ${m.line || '?'}${m.column ? `:${m.column}` : ''}: ${m.text}`).join('\n');
+      parts.push(
+        `Server syntax check errors (source was still written — activate to confirm whether these resolve once dependencies are in place):\n${lines}`,
+      );
+    }
+    if (warnings.length > 0) {
+      const lines = warnings.map((m) => `  Line ${m.line || '?'}: ${m.text}`).join('\n');
+      parts.push(`Server syntax check warnings:\n${lines}`);
+    }
+    return parts.join('\n\n');
+  } catch {
+    // Best-effort: never let a failing pre-check fail the write.
+    return '';
+  }
+}
+
 // ─── SAPActivate Handler ─────────────────────────────────────────────
 
 async function handleSAPActivate(
@@ -3806,7 +3894,8 @@ async function handleSAPActivate(
   const activateOpts = preaudit !== undefined ? { preaudit } : undefined;
 
   if (args.objects && Array.isArray(args.objects)) {
-    const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
+    const rawObjects = args.objects as Array<Record<string, unknown>>;
+    const objects = rawObjects.map((o) => {
       const objType = normalizeObjectType(String(o.type ?? type));
       const objName = String(o.name ?? '');
       return { type: objType, name: objName, url: objectUrlForType(objType, objName) };
@@ -3824,20 +3913,37 @@ async function handleSAPActivate(
       cachingLayer?.inactiveLists.invalidate(client.username);
       return textResult(`Successfully activated ${objects.length} objects: ${names}.${statusDetails}`);
     }
-    return errorResult(`Batch activation failed for: ${names}.${statusDetails}`);
+    // On batch failure enrich with per-object inactive-version syntax errors —
+    // only for objects whose activation returned no error details, to avoid duplicating messages.
+    const objectsNeedingSyntaxCheck = objects.filter((_o, i) => batchStatuses[i].status !== 'error');
+    const diagnostics = await Promise.all(
+      objectsNeedingSyntaxCheck.map((o) => inactiveSyntaxDiagnostic(client, o.type, o.name)),
+    );
+    const combinedDiag = diagnostics
+      .map((d, i) => (d ? `\n[${objectsNeedingSyntaxCheck[i].name}]${d}` : ''))
+      .filter(Boolean)
+      .join('');
+    return errorResult(
+      `Batch activation failed for: ${names}.${statusDetails}\n${formatActivationMessages(result)}${combinedDiag}`,
+    );
   }
 
   // Single activation (existing behavior)
   const objectUrl = objectUrlForType(type, name);
 
-  const result = await activate(client.http, client.safety, objectUrl, activateOpts);
+  const result = await activate(client.http, client.safety, objectUrl, { ...activateOpts, name });
 
   if (result.success) {
     cachingLayer?.invalidate(type, name, 'all');
     cachingLayer?.inactiveLists.invalidate(client.username);
     return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
-  let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`;
+  // On failure, try to enrich with the actual compiler errors from the inactive version —
+  // especially useful when SAP returned <ioc:inactiveObjects> with no <msg> detail.
+  // Skip when activation already returned error details to avoid duplicating the same messages.
+  const hasActivationErrors = result.details.some((d) => d.severity === 'error');
+  const syntaxDetail = hasActivationErrors ? '' : await inactiveSyntaxDiagnostic(client, type, name);
+  let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}${syntaxDetail}`;
   if (type === 'DDLS') {
     activationError += `\n\n${await buildCdsActivationDependencyHint(client, name, objectUrl)}`;
   }
@@ -3893,32 +3999,38 @@ interface BatchActivationObjectStatus {
 
 function normalizeActivationUri(uri: string | undefined): string | undefined {
   if (!uri) return undefined;
-  return uri.replace(/#.*$/, '').replace(/\/+$/, '');
+  return uri.replace(/#.*$/, '').replace(/\/+$/, '').toLowerCase();
 }
 
 function buildBatchActivationStatuses(
   objects: BatchActivationObject[],
   result: ActivationResult,
 ): BatchActivationObjectStatus[] {
-  const byUri = new Map<string, Array<{ severity: 'error' | 'warning' | 'info'; text: string }>>();
+  // Group error details by object. SAP error URIs may be subpaths of the object URL
+  // (e.g. .../classes/zcl_demo/source/main for object .../classes/ZCL_DEMO) and may
+  // differ in case, so we lowercase and use startsWith for matching.
+  const objectKeys = objects.map((obj) => normalizeActivationUri(obj.url) ?? '');
+  const perObject: Array<Array<{ severity: 'error' | 'warning' | 'info'; text: string }>> = objects.map(() => []);
   const unassigned: string[] = [];
 
   for (const detail of result.details) {
-    const key = normalizeActivationUri(detail.uri);
-    if (!key) {
-      const prefix = detail.line ? `[line ${detail.line}] ` : '';
-      unassigned.push(`${prefix}${detail.text}`);
+    const detailUri = normalizeActivationUri(detail.uri);
+    const prefix = detail.line ? `[line ${detail.line}] ` : '';
+    const suffix = detail.uri ? ` (${detail.uri})` : '';
+    if (!detailUri) {
+      unassigned.push(`${prefix}${detail.text}${suffix}`);
       continue;
     }
-    const list = byUri.get(key) ?? [];
-    const prefix = detail.line ? `[line ${detail.line}] ` : '';
-    list.push({ severity: detail.severity, text: `${prefix}${detail.text}` });
-    byUri.set(key, list);
+    const matchIdx = objectKeys.findIndex((k) => k && detailUri.startsWith(k));
+    if (matchIdx >= 0) {
+      perObject[matchIdx].push({ severity: detail.severity, text: `${prefix}${detail.text}${suffix}` });
+    } else {
+      unassigned.push(`${prefix}${detail.text}${suffix}`);
+    }
   }
 
   return objects.map((obj, index) => {
-    const key = normalizeActivationUri(obj.url) ?? '';
-    const details = byUri.get(key) ?? [];
+    const details = perObject[index];
     const hasError = details.some((detail) => detail.severity === 'error');
     const hasWarning = details.some((detail) => detail.severity === 'warning');
     const status: BatchActivationObjectStatus['status'] = hasError ? 'error' : hasWarning ? 'warning' : 'active';
@@ -3937,11 +4049,17 @@ function buildBatchActivationStatuses(
 
 function formatBatchActivationStatuses(statuses: BatchActivationObjectStatus[]): string {
   if (statuses.length === 0) return '';
-  const lines = statuses.map((status) => {
-    const messages = status.messages.length > 0 ? ` — ${status.messages.join('; ')}` : '';
-    return `- ${status.name} (${status.type}): ${status.status}${messages}`;
-  });
-  return `\nPer-object status:\n${lines.join('\n')}`;
+  const lines: string[] = [];
+  for (const status of statuses) {
+    if (status.messages.length === 0) {
+      lines.push(`- ${status.name} (${status.type}): ${status.status}`);
+    } else {
+      for (const msg of status.messages) {
+        lines.push(`- ${status.name} (${status.type}) ${msg}`);
+      }
+    }
+  }
+  return `\n${lines.join('\n')}`;
 }
 
 // ─── SAPNavigate Handler ─────────────────────────────────────────────
@@ -4114,7 +4232,17 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
   switch (action) {
     case 'syntax': {
       const objectUrl = objectUrlForType(type, name);
-      const result = await syntaxCheck(client.http, client.safety, objectUrl);
+      const version = args.version === 'inactive' ? 'inactive' : args.version === 'active' ? 'active' : undefined;
+      const content = typeof args.source === 'string' ? (args.source as string) : undefined;
+      const opts: { version?: 'active' | 'inactive'; content?: string } = {};
+      if (version) opts.version = version;
+      if (content !== undefined) opts.content = content;
+      const result = await syntaxCheck(
+        client.http,
+        client.safety,
+        objectUrl,
+        Object.keys(opts).length > 0 ? opts : undefined,
+      );
       return textResult(JSON.stringify(result, null, 2));
     }
     case 'unittest': {

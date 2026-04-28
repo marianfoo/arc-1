@@ -3600,9 +3600,8 @@ ENDCLASS.`;
       });
 
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('Per-object status:');
-      expect(result.content[0]?.text).toContain('ZI_TRAVEL (DDLS): warning');
-      expect(result.content[0]?.text).toContain('ZI_TRAVEL (BDEF): error');
+      expect(result.content[0]?.text).toContain('ZI_TRAVEL (DDLS)');
+      expect(result.content[0]?.text).toContain('ZI_TRAVEL (BDEF)');
       expect(result.content[0]?.text).toContain('[line 21] BDEF activation failed');
     });
 
@@ -9284,7 +9283,7 @@ ENDCLASS.`;
 
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Server syntax check (inactive):');
-      expect(result.content[0]?.text).toContain('Line 5: Unknown annotation');
+      expect(result.content[0]?.text).toContain('[line 5] Unknown annotation');
     });
   });
 });

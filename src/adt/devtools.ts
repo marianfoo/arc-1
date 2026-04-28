@@ -8,22 +8,51 @@
  * - RunATCCheck: ABAP Test Cockpit (code quality)
  */
 
+import { logger } from '../server/logger.js';
 import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type { FixDelta, FixProposal, SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
-import { escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
+import { decodeXmlEntities, escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
-/** Run syntax check on an ABAP object */
+/** Run syntax check on an ABAP object.
+ *
+ *  Two modes:
+ *   - URI-only (default): compile whatever is stored at the URI (active or inactive version).
+ *   - Inline content: compile arbitrary source as if it lived at the URI. Lets callers
+ *     validate a proposed edit BEFORE it is written. Body shape matches Eclipse ADT /
+ *     vibing-steampunk (base64-encoded artifact under <chkrun:artifacts>). Verified on
+ *     NetWeaver 7.50 via scripts/probe-checkrun-content.ts.
+ */
 export async function syntaxCheck(
   http: AdtHttpClient,
   safety: SafetyConfig,
   objectUrl: string,
-  options?: { version?: 'active' | 'inactive' },
+  options?: { version?: 'active' | 'inactive'; content?: string },
 ): Promise<SyntaxCheckResult> {
   checkOperation(safety, OperationType.Read, 'SyntaxCheck');
 
   const version = options?.version ?? 'active';
+
+  if (options?.content !== undefined) {
+    const artifactUri = `${objectUrl}/source/main`;
+    const encoded = Buffer.from(options.content, 'utf-8').toString('base64');
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" xmlns:adtcore="http://www.sap.com/adt/core">
+  <chkrun:checkObject adtcore:uri="${escapeXmlAttr(objectUrl)}" chkrun:version="${version}">
+    <chkrun:artifacts>
+      <chkrun:artifact chkrun:contentType="text/plain; charset=utf-8" chkrun:uri="${escapeXmlAttr(artifactUri)}">
+        <chkrun:content>${encoded}</chkrun:content>
+      </chkrun:artifact>
+    </chkrun:artifacts>
+  </chkrun:checkObject>
+</chkrun:checkObjectList>`;
+    const resp = await http.post('/sap/bc/adt/checkruns?reporters=abapCheckRun', body, 'application/*', {
+      Accept: 'application/vnd.sap.adt.checkmessages+xml',
+    });
+    return parseSyntaxCheckResult(resp.body);
+  }
+
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" xmlns:adtcore="http://www.sap.com/adt/core">
   <chkrun:checkObject adtcore:uri="${escapeXmlAttr(objectUrl)}" chkrun:version="${version}"/>
@@ -105,31 +134,46 @@ export interface ActivationResult {
   details: ActivationMessage[];
 }
 
-/** Activate (publish) ABAP objects */
+/** Activate (publish) ABAP objects.
+ *
+ *  Implements the ADT preaudit handshake: the first POST with preauditRequested=true
+ *  may return an <ioc:inactiveObjects> prompt listing related objects that must be
+ *  included. When that happens, a second POST with the full list and preauditRequested=false
+ *  commits the activation. */
 export async function activate(
   http: AdtHttpClient,
   safety: SafetyConfig,
   objectUrl: string,
-  options?: { preaudit?: boolean },
+  options?: { preaudit?: boolean; name?: string },
 ): Promise<ActivationResult> {
   checkOperation(safety, OperationType.Activate, 'Activate');
 
-  const preaudit = options?.preaudit !== false;
-  const body = `<?xml version="1.0" encoding="UTF-8"?>
+  try {
+    const preaudit = options?.preaudit !== false;
+    const nameAttr = options?.name ? ` adtcore:name="${escapeXmlAttr(options.name)}"` : '';
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"/>
+  <adtcore:objectReference adtcore:uri="${escapeXmlAttr(objectUrl)}"${nameAttr}/>
 </adtcore:objectReferences>`;
 
-  // Use application/* wildcard for Content-Type — matches how ADT Eclipse
-  // and abap-adt-api send activation requests. More resilient across SAP versions.
-  const resp = await http.post(
-    `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
-    body,
-    'application/*',
-    { Accept: 'application/xml' },
-  );
+    const phase1Start = Date.now();
+    const resp = await http.post(
+      `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
+      body,
+      'application/*',
+      { Accept: 'application/xml' },
+    );
+    const phase1DurationMs = Date.now() - phase1Start;
 
-  return parseActivationResult(resp.body);
+    const outcome = parseActivationOutcome(resp.body);
+    if (outcome.kind !== 'preaudit' || !preaudit) {
+      return outcomeToResult(outcome);
+    }
+
+    return confirmPreaudit(http, outcome.refs, options?.name ?? objectUrl, phase1DurationMs);
+  } catch (err) {
+    return rethrowOrLockHint(err, options?.name ?? objectUrl);
+  }
 }
 
 /**
@@ -160,14 +204,125 @@ export async function activateBatch(
 ${refs}
 </adtcore:objectReferences>`;
 
-  const resp = await http.post(
-    `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
-    body,
-    'application/*',
-    { Accept: 'application/xml' },
-  );
+  try {
+    const phase1Start = Date.now();
+    const resp = await http.post(
+      `/sap/bc/adt/activation?method=activate&preauditRequested=${preaudit}`,
+      body,
+      'application/*',
+      { Accept: 'application/xml' },
+    );
+    const phase1DurationMs = Date.now() - phase1Start;
 
-  return parseActivationResult(resp.body);
+    const outcome = parseActivationOutcome(resp.body);
+    if (outcome.kind !== 'preaudit' || !preaudit) {
+      return outcomeToResult(outcome);
+    }
+
+    return confirmPreaudit(http, outcome.refs, objects.map((o) => o.name).join(', '), phase1DurationMs);
+  } catch (err) {
+    return rethrowOrLockHint(err, objects.map((o) => o.name).join(', '));
+  }
+}
+
+/** Second POST of the preaudit handshake: send the full object list with preauditRequested=false.
+ *
+ *  Emits an `activation_preaudit_completed` audit event so SIEM/audit consumers can correlate
+ *  the two http_request events as one logical handshake instead of greppping for the
+ *  preauditRequested=true→false pattern. */
+async function confirmPreaudit(
+  http: AdtHttpClient,
+  refs: Array<{ uri: string; name: string }>,
+  objectLabel: string,
+  phase1DurationMs: number,
+): Promise<ActivationResult> {
+  logger.debug('Activation preaudit: SAP returned inactive objects, confirming with preauditRequested=false', {
+    count: refs.length,
+    objects: refs.map((r) => ({ name: r.name, uri: r.uri })),
+  });
+  const refLines = refs
+    .map(
+      (r) =>
+        `  <adtcore:objectReference adtcore:uri="${escapeXmlAttr(r.uri)}" adtcore:name="${escapeXmlAttr(r.name)}"/>`,
+    )
+    .join('\n');
+
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+${refLines}
+</adtcore:objectReferences>`;
+
+  const phase2Start = Date.now();
+  let result: ActivationResult | undefined;
+  try {
+    const resp = await http.post(
+      '/sap/bc/adt/activation?method=activate&preauditRequested=false',
+      body,
+      'application/*',
+      { Accept: 'application/xml' },
+    );
+    result = outcomeToResult(parseActivationOutcome(resp.body));
+    return result;
+  } finally {
+    logger.emitAudit({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      event: 'activation_preaudit_completed',
+      objectLabel,
+      refCount: refs.length,
+      phase1DurationMs,
+      phase2DurationMs: Date.now() - phase2Start,
+      outcome: result?.success ? 'success' : 'error',
+    });
+  }
+}
+
+// NW 7.50 lock-conflict-as-auth-error quirk:
+// The activation handler raises CX_ADT_RES_NO_ACCESS (→ 403) for lock conflicts.
+// With cookie auth (no Basic Auth header), ICM transforms 403 → 401 "no logon data".
+// ARC-1's 401 retry handler then clears cookies and retries → 400.
+// So we see 400, 401, or 403 depending on timing — all with the same HTML login page.
+// Other ADT endpoints work fine with the same session. Detected by matching
+// "Logon Error Message" in the HTML body on the activation path.
+//
+// The "Logon Error Message" HTML body is the de-facto NW 7.50 gate — S/4 returns
+// structured XML with <exc:exception> here (no "Logon Error Message" string), and
+// S/4's auth-failure HTML is "Anmeldung fehlgeschlagen" (also no match). So this
+// branch self-scopes without an explicit detectSystemCapabilities() check.
+function rethrowOrLockHint(err: unknown, objectLabel: string): never | ActivationResult {
+  if (
+    err instanceof AdtApiError &&
+    (err.statusCode === 400 || err.statusCode === 401 || err.statusCode === 403) &&
+    err.responseBody?.includes('Logon Error Message')
+  ) {
+    logger.debug(`Activation ${err.statusCode} interpreted as lock conflict (NW 7.50 CX_ADT_RES_NO_ACCESS quirk)`, {
+      object: objectLabel,
+      path: err.path,
+    });
+    return {
+      success: false,
+      messages: [
+        `Object ${objectLabel} is locked by another session. Close the editor (Eclipse, SE80) or release the lock in SM12, then retry activation.`,
+      ],
+      details: [{ severity: 'error', text: `Object ${objectLabel} is locked by another session.` }],
+    };
+  }
+  throw err;
+}
+
+function outcomeToResult(outcome: ActivationOutcome): ActivationResult {
+  if (outcome.kind === 'preaudit') {
+    const messages = [...outcome.messages];
+    const details = [...outcome.details];
+    for (const ref of outcome.refs) {
+      const label = ref.name || 'object';
+      const text = `Activation did not complete — ${label} is still inactive.`;
+      messages.push(text);
+      details.push({ severity: 'error', text, uri: ref.uri });
+    }
+    return { success: false, messages, details };
+  }
+  return { success: outcome.kind === 'success', messages: outcome.messages, details: outcome.details };
 }
 
 /** Result of a publish/unpublish operation */
@@ -403,9 +558,20 @@ export interface AtcFinding {
   hasQuickfix?: boolean;
 }
 
-/** Parse activation response XML to detect errors via proper XML parsing */
-export function parseActivationResult(xml: string): ActivationResult {
-  if (!xml.trim()) return { success: true, messages: [], details: [] };
+/** Discriminated outcome from parsing an activation response. */
+export type ActivationOutcome =
+  | { kind: 'success'; messages: string[]; details: ActivationMessage[] }
+  | { kind: 'error'; messages: string[]; details: ActivationMessage[] }
+  | {
+      kind: 'preaudit';
+      refs: Array<{ uri: string; name: string }>;
+      messages: string[];
+      details: ActivationMessage[];
+    };
+
+/** Parse activation response into a discriminated outcome. */
+export function parseActivationOutcome(xml: string): ActivationOutcome {
+  if (!xml.trim()) return { kind: 'success', messages: [], details: [] };
 
   const parsed = parseXml(xml);
   const msgs = findDeepNodes(parsed, 'msg');
@@ -428,18 +594,85 @@ export function parseActivationResult(xml: string): ActivationResult {
         ? 'warning'
         : 'info';
 
-    const rawUri = m['@_uri'];
+    const rawUri = m['@_uri'] ?? m['@_href'];
     const rawLine = m['@_line'];
     const detail: ActivationMessage = { severity, text: shortText };
     if (rawUri) detail.uri = String(rawUri);
-    if (rawLine != null) {
-      const parsed = Number.parseInt(String(rawLine), 10);
-      if (!Number.isNaN(parsed) && parsed > 0) detail.line = parsed;
+    // Prefer #start=LINE,COL from the URI — @_line is often an ordinal message index, not source line.
+    let line = 0;
+    const uriStr = rawUri ? String(rawUri) : '';
+    const startMatch = uriStr.match(/#start=(\d+),(\d+)/);
+    if (startMatch) {
+      line = Number.parseInt(startMatch[1], 10);
     }
+    if (!line && rawLine != null) {
+      line = Number.parseInt(String(rawLine), 10);
+    }
+    if (Number.isFinite(line) && line > 0) detail.line = line;
     details.push(detail);
   }
 
-  return { success: !hasErrors, messages, details };
+  if (hasErrors) return { kind: 'error', messages, details };
+
+  // <ioc:inactiveObjects> with no <msg> errors = preaudit prompt.
+  // SAP lists the related inactive objects and asks the client to confirm.
+  const inactive = extractInactiveObjectEntries(parsed);
+  if (inactive.length > 0) {
+    return {
+      kind: 'preaudit',
+      refs: inactive.map((r) => ({ uri: r.uri, name: r.name })),
+      messages,
+      details,
+    };
+  }
+
+  return { kind: 'success', messages, details };
+}
+
+/** Parse activation response XML to detect errors via proper XML parsing.
+ *  Treats preaudit prompts as errors — use parseActivationOutcome for handshake support. */
+export function parseActivationResult(xml: string): ActivationResult {
+  const outcome = parseActivationOutcome(xml);
+  if (outcome.kind === 'preaudit') {
+    const messages = [...outcome.messages];
+    const details = [...outcome.details];
+    for (const ref of outcome.refs) {
+      const label = ref.name || 'object';
+      const text = `Activation did not complete — ${label} is still inactive.`;
+      messages.push(text);
+      details.push({ severity: 'error', text, uri: ref.uri });
+    }
+    return { success: false, messages, details };
+  }
+  return { success: outcome.kind === 'success', messages: outcome.messages, details: outcome.details };
+}
+
+/** Extract still-inactive object refs from an <ioc:inactiveObjects> response.
+ *  Entries with no <object> child (transport-only rows) are ignored. */
+function extractInactiveObjectEntries(
+  parsed: Record<string, unknown>,
+): Array<{ name: string; uri: string; user: string }> {
+  const entries = findDeepNodes(parsed, 'entry');
+  const out: Array<{ name: string; uri: string; user: string }> = [];
+  for (const entry of entries) {
+    const objectNode = entry.object;
+    if (!objectNode || typeof objectNode !== 'object') continue;
+    const refs = findDeepNodes(objectNode as Record<string, unknown>, 'ref');
+    if (refs.length === 0) continue;
+    const transportNode = entry.transport;
+    const transportUser =
+      transportNode && typeof transportNode === 'object'
+        ? String((transportNode as Record<string, unknown>)['@_user'] ?? '')
+        : '';
+    for (const ref of refs) {
+      out.push({
+        name: String(ref['@_name'] ?? '').trim(),
+        uri: String(ref['@_uri'] ?? ''),
+        user: transportUser,
+      });
+    }
+  }
+  return out;
 }
 
 /** Extract shortText from an activation message node.
@@ -465,14 +698,27 @@ function extractShortText(m: Record<string, unknown>): string {
 
 function parseSyntaxCheckResult(xml: string): SyntaxCheckResult {
   const parsed = parseXml(xml);
-  const msgs = findDeepNodes(parsed, 'msg');
+  // Two response shapes observed:
+  //   - <msg type="E" shortText="..." line="..." col="..."/> (older / some variants)
+  //   - <chkrun:checkMessage chkrun:type="E" chkrun:shortText="..." chkrun:uri="...#start=LINE,COL"/>
+  //     (NW 7.50 /checkruns response — uri carries the position via #start=line,col)
+  const msgs = [...findDeepNodes(parsed, 'msg'), ...findDeepNodes(parsed, 'checkMessage')];
   const messages: SyntaxMessage[] = msgs.map((m) => {
     const type = String(m['@_type'] ?? '');
+    let line = Number.parseInt(String(m['@_line'] ?? '0'), 10);
+    let column = Number.parseInt(String(m['@_col'] ?? '0'), 10);
+    const uri = String(m['@_uri'] ?? '');
+    const startMatch = uri.match(/#start=(\d+),(\d+)/);
+    if (startMatch) {
+      if (!line) line = Number.parseInt(startMatch[1], 10);
+      if (!column) column = Number.parseInt(startMatch[2], 10);
+    }
     return {
       severity: type === 'E' ? 'error' : type === 'W' ? 'warning' : 'info',
-      text: String(m['@_shortText'] ?? ''),
-      line: Number.parseInt(String(m['@_line'] ?? '0'), 10),
-      column: Number.parseInt(String(m['@_col'] ?? '0'), 10),
+      text: decodeXmlEntities(String(m['@_shortText'] ?? '')),
+      line: Number.isFinite(line) ? line : 0,
+      column: Number.isFinite(column) ? column : 0,
+      ...(uri ? { uri } : {}),
     };
   });
 

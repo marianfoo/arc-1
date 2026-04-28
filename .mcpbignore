@@ -14,7 +14,6 @@ biome.json
 # Config/CI
 .github/
 .claude/
-.claude-plugin/
 .cursor-plugin/
 scripts/
 docs/

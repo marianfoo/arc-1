@@ -279,6 +279,7 @@ export interface SyntaxMessage {
   text: string;
   line: number;
   column: number;
+  uri?: string;
 }
 
 /** Transport request */

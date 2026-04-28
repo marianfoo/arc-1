@@ -156,7 +156,8 @@ function resolveBrowserBinary(browser: BrowserChoice, platform: NodeJS.Platform)
 }
 
 function printUsage(): void {
-  process.stderr.write(`Usage: tsx scripts/extract-sap-cookies.ts --url <SAP_URL> [options]
+  process.stderr.write(`Usage: arc1-cli extract-cookies --url <SAP_URL> [options]
+       (or: npx tsx src/extract-sap-cookies.ts --url <SAP_URL> [options])
 
 Options:
   --url <url>               Target SAP URL (required). Precedence: CLI > env > .env
@@ -264,7 +265,8 @@ async function fetchCookiesViaCdp(wsUrl: string, origin: string): Promise<CdpCoo
     };
 
     ws.onmessage = (event) => {
-      const raw = typeof event.data === 'string' ? event.data : Buffer.from(event.data as ArrayBuffer).toString('utf-8');
+      const raw =
+        typeof event.data === 'string' ? event.data : Buffer.from(event.data as ArrayBuffer).toString('utf-8');
       const msg = JSON.parse(raw) as { id?: number; result?: unknown; error?: { message?: string } };
       if (!msg.id) return;
       const request = pending.get(msg.id);
@@ -340,9 +342,8 @@ export function planExtraction(input: ExtractionPlanInput): ExtractionPlan {
   };
 }
 
-async function run(): Promise<void> {
+export async function run(argv: string[] = process.argv.slice(2)): Promise<void> {
   loadDotEnv();
-  const argv = process.argv.slice(2);
   const scriptArgs = parseScriptArgs(argv);
   if (scriptArgs.help) {
     printUsage();

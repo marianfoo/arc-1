@@ -32,7 +32,6 @@
       "args": [
         "--url", "https://prod:44300",
         "--user", "PROD_USER",
-        "--read-only",
         "--allowed-packages", "Z*,Y*"
       ],
       "env": {"SAP_PASSWORD": "prod_password"}

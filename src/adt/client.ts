@@ -18,7 +18,7 @@
 
 import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
-import { isNotFoundError } from './errors.js';
+import { AdtApiError, isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import { Semaphore } from './semaphore.js';
@@ -480,7 +480,12 @@ export class AdtClient {
     return parseApiReleaseState(resp.body);
   }
 
-  /** List objects pending activation (inactive objects) */
+  /** List objects pending activation (inactive objects).
+   *  Endpoint is `/sap/bc/adt/activation/inactiveobjects` on every supported SAP release
+   *  (verified live on S/4HANA 2023 and NW 7.50 SP02).
+   *  The vendor MIME `application/vnd.sap.adt.inactivectsobjects.v1+xml` returns the rich
+   *  `<ioc:object>` shape (with user/deleted/transport/parentTransport metadata); the
+   *  `application/xml;q=0.5` fallback covers any release that ignores the vendor type. */
   async getInactiveObjects(): Promise<InactiveObject[]> {
     checkOperation(this.safety, OperationType.Read, 'GetInactiveObjects');
     const resp = await this.http.get('/sap/bc/adt/activation/inactiveobjects', {
@@ -567,8 +572,13 @@ export class AdtClient {
   /** Get installed SAP components */
   async getInstalledComponents(): Promise<Array<{ name: string; release: string; description: string }>> {
     checkOperation(this.safety, OperationType.Read, 'GetInstalledComponents');
-    const resp = await this.http.get('/sap/bc/adt/system/components');
-    return parseInstalledComponents(resp.body);
+    try {
+      const resp = await this.http.get('/sap/bc/adt/system/components', { Accept: 'application/atom+xml;type=feed' });
+      return parseInstalledComponents(resp.body);
+    } catch (err) {
+      if (err instanceof AdtApiError && err.statusCode === 406) return [];
+      throw err;
+    }
   }
 
   /** Get message class messages (legacy endpoint — may fail for some classes) */

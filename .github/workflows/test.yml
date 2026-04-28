@@ -37,6 +37,9 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: npx package smoke test
+        run: npm run test:npx-smoke
+
       - name: Run unit tests
         run: npm test
 

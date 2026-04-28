@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-23
+**Last Updated:** 2026-04-28
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -72,6 +72,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 | [FEAT-30](#feat-30) | ABAP Cleaner Integration | P2 | M | Features |
 | [FEAT-34](#feat-34) | i18n Translation Management | P2 | M | Features |
 | [FEAT-60](#feat-60) | CLI/server alignment (shortcut parity with MCP tool schemas) | P2 | S | Features |
+| [FEAT-62](#feat-62) | ADT Transaction (`TRAN/T`) source/write support | P2 | M | Features |
 | [SEC-05](#sec-05) | Rate Limiting | P2 | S | Security |
 | [OPS-02](#ops-02) | Health Check Enhancements | P2 | XS | Ops |
 | [DOC-03](#doc-03) | SAP Community Blog Post | P2 | S | Docs |
@@ -81,6 +82,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 | [FEAT-29](#feat-29) | P3 Backlog (14 items) | P3 | various | Features |
 | [FEAT-50](#feat-50) | ADT Probe Fixture Coverage (contributed fixtures) | P3 | XS-each | Diagnostics |
 | [FEAT-59](#feat-59) | Embeddable multi-tenant server (per-instance `systemType`) | P3 | M | Features |
+| [FEAT-61](#feat-61) | Tool Extension Points (custom tools on top of ARC-1) | P3 | M-L (phased) | Features |
 | [OPS-03](#ops-03) | Multi-System Routing | P3 | L | Ops |
 | ~~[COMPAT-01](#compat-01)~~ | ~~modificationSupport guard in lockObject()~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
 | ~~[COMPAT-02](#compat-02)~~ | ~~CSRF HEAD→GET fallback (S/4HANA Public Cloud)~~ | ~~P0~~ | ~~XS~~ | ~~Completed 2026-04-16~~ |
@@ -211,6 +213,9 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 > - **BUG-01** (P0) — SAPActivate phantom success + CLI/server alignment (tracked by PR #179)
 > - **FEAT-59** (P3) — Embeddable multi-tenant server with per-instance `systemType`. Competitive-tracking item inspired by fr0ster v6.4.0. ARC-1 is "one gateway per SAP system" today; a multi-tenant embedding story would matter for customers running many SAP systems behind one MCP gateway.
 > - **FEAT-60** (P2) — CLI/server alignment. PR #179's matrix shows 9 of 12 MCP tools have no CLI shortcut, and the 3 that do expose fewer knobs than their Zod schemas accept. Auto-generating shortcuts from schemas would close the gap and prevent future drift.
+>
+> **2026-04-28 addition:**
+> - **FEAT-62** (P2) — ADT Transaction (`TRAN/T`) source/write support. Research was triggered by [`jfilak/sapcli` PR #156](https://github.com/jfilak/sapcli/pull/156), which added `/sap/bc/adt/aps/iam/tran` transaction lifecycle support with JSON source and server-driven creation content. ARC-1 currently has metadata-only `SAPRead(type="TRAN")` through VIT. Live read-only probes found VIT metadata works on the configured 7.58 systems, but `/aps/iam/tran` returns 404 and is absent from discovery; the NPL 7.50 profile was reachable but auth-blocked. Track as feature-detected, on-prem-only source/write support. Full notes: [docs/research/adt-transaction-source-write.md](../docs/research/adt-transaction-source-write.md).
 >
 > Priority re-eval (competitor-driven, 2026-04-23):
 > - **FEAT-18** (Function Group Bulk Fetch) — still P1. The `npm run probe` (FEAT-56) and SQLite cache mitigate the round-trip cost; revisit if evals show LLMs hit 20+ FM groups repeatedly. Not downgrading yet — dassian's confirmed parallel fetch pattern means the gap is visible to users comparing tools.
@@ -1814,6 +1819,70 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 **Why not:** CLI usage is minor compared to MCP-first usage (Claude Desktop, Cursor, etc.). Option 2 adds build-time complexity. Defer if CLI shortcut requests stay sporadic.
 
 **Related follow-up from PR #179:** rename the local `lint` CLI command to `lint-local` or `offline-lint` to free `lint` for the `SAPLint` MCP tool; clean up XML entity residue (`&quot;`, `&gt;`) in `SyntaxMessage.text`.
+
+---
+
+<a id="feat-61"></a>
+### FEAT-61: Tool Extension Points (Custom Tools on Top of ARC-1)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | M-L (phased: Phase 0+1 ≈ M, Phase 2 ≈ S, Phase 3 ≈ M, Phase 4 if ever ≈ M) |
+| **Risk** | Medium — touches the central tool registration / scope policy / audit path |
+| **Usefulness** | Medium-High — unblocks customer-specific tools without forking; the prerequisite for any later marketplace |
+| **Status** | Research only — see [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) |
+| **Source** | User-requested 2026-04-26 — reuse ARC-1 plumbing (ADT, HTTP, OData) for in-house tooling |
+
+**What:** A documented, opinionated way for downstream users to add their own MCP tools to an ARC-1 instance and reuse the same building blocks the built-in tools rely on (`AdtClient`, `AdtHttpClient`, `SafetyConfig`, `CachingLayer`, `logger`, typed errors), without forking the repository.
+
+**Why:** Today the only way to add a tool is to fork the repo and edit six files (`tools.ts`, `schemas.ts`, `intent.ts`, `policy.ts`, plus tests). Customers with private/internal tools cannot upstream them. A defined extension point keeps the in-tree tool surface focused on the universally useful tools while letting teams extend their own instance.
+
+**Phased plan (recommended):**
+
+1. **Phase 0** — define the public API boundary (`src/public/` or `package.json#exports`). No new feature; just declare what is stable. Prerequisite for everything else.
+2. **Phase 1** — internal `ToolRegistry` behind a feature flag. Built-ins register through it. No external behaviour change but the codebase becomes extension-shaped. One built-in (e.g. `SAPManage(action="cache_stats")`) converted end-to-end as a self-test.
+3. **Phase 2** — local trusted plugin loader: `ARC1_PLUGINS=/path/to/plugin.js`. Admin-explicit, file-permission-checked, fail-fast on registration errors. Same trust model as any binary the admin runs.
+4. **Phase 3 (optional)** — manifest-only plugins (declarative JSON, no JS) for thin endpoint wrappers — safest tier, fits the "I just want to wrap one OData endpoint" case.
+5. **Phase 4 (only if asked)** — npm peer-package plugins. Not recommended unless customers explicitly request it; an npm marketplace fights the centralized-gateway model.
+
+**Why not (yet):** ARC-1's value comes from the opinionated central safety/scope/audit pipeline. A poorly-designed plugin API could let a third-party tool bypass `allowWrites`, `allowedPackages`, scope policy, or PP. The research doc lists eight invariants that any plugin API must enforce; getting them right takes time. Deferred to P3 until either (a) a concrete customer asks for it, or (b) the in-tree tool count starts to feel like a marketplace candidate.
+
+**Out of scope:** Embedding ARC-1 *into* another app (already deferred as [FEAT-29g](#feat-29) — contradicts the centralized-gateway model). This item is the *opposite* — adding tools *to* an ARC-1 instance.
+
+**Related research:**
+- [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) — full design with public-surface map, seven extension-pattern survey, security model, anti-patterns, open questions, and a sketch of `defineTool()` + `ToolContext`.
+
+---
+
+<a id="feat-62"></a>
+### FEAT-62: ADT Transaction (`TRAN/T`) Source/Write Support
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | M |
+| **Risk** | Medium — transaction lifecycle needs a separate ADT endpoint, JSON source MIME handling, and type-specific create payloads |
+| **Usefulness** | Medium — closes a real ADT parity gap for transaction-code authoring, but endpoint availability is backend-dependent |
+| **Status** | Research complete; not started. See [docs/research/adt-transaction-source-write.md](../docs/research/adt-transaction-source-write.md) |
+| **Source** | [`jfilak/sapcli` PR #156](https://github.com/jfilak/sapcli/pull/156), merged 2026-04-28 |
+
+**What:** Add on-prem transaction source/lifecycle support for `TRAN/T` through `/sap/bc/adt/aps/iam/tran`, while preserving existing metadata-only `SAPRead(type="TRAN")` through `/sap/bc/adt/vit/wb/object_type/trant/object_name/{name}`.
+
+**Why:** ARC-1 currently returns transaction description/package and optionally `TSTC` program metadata, but cannot read/write the JSON transaction source or create/update/delete transaction objects. sapcli now has a concrete implementation: `TRAN/T`, `blue:blueSource`, JSON `source/main`, and base64-encoded server-driven creation JSON in `blue:additionalCreationProperties`.
+
+**Implementation notes:**
+1. Keep current VIT metadata read as the default `SAPRead(type="TRAN")` behavior.
+2. Add explicit source read/write support for systems that expose `/sap/bc/adt/aps/iam/tran`.
+3. Add `TRAN/T` type normalization and make lifecycle object URLs use the real transaction endpoint, not the VIT endpoint.
+4. Make source writes MIME-aware so `TRAN` uses `application/json` while ABAP source objects keep `text/plain`.
+5. Add a transaction create definition for report, parameter, dialog, OO, and variant transaction kinds, then embed compact JSON as base64 `application/vnd.sap.adt.serverdriven.content.v1+json`.
+6. Skip ABAP lint/checkruns for transaction JSON; validate JSON locally and let SAP validate semantic references.
+7. Feature-detect endpoint support through discovery/probe and return an explicit backend-unsupported message when VIT metadata exists but `/aps/iam/tran` does not.
+
+**Research result:** Live read-only probes against the configured 7.58 systems returned 200 for VIT metadata (`adtcore:type="TRAN/T"`) but 404 for `/sap/bc/adt/aps/iam/tran`, `/SE38`, and `/SE38/source/main`; discovery did not list the endpoint. The NPL 7.50 profile was reachable but returned 401 for both VIT and `/aps/iam/tran`; the existing real NPL 7.50 SP02 fixture also does not list `/aps/iam/tran` in discovery. This means the implementation must be feature-detected and fixture-heavy until a backend exposing the endpoint is available.
+
+**Why not immediately universal:** `TRAN/T` is not available on BTP in ARC-1 today and should remain excluded there. Even on on-prem, tested systems may expose only the VIT metadata endpoint. A naive replacement of `objectBasePath('TRAN')` would break existing metadata reads and produce confusing 404s.
 
 ---
 

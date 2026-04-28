@@ -2,12 +2,12 @@
 
 > Tracking commits and issues from [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk) (ARC-1's upstream) for features and bug fixes worth adopting.
 
-_Last updated: 2026-04-16_
+_Last updated: 2026-04-27_
 
 ## Approach
 
 - **Commits**: Grouped by release in `commits.json`. Auto-triaged by commit prefix.
-- **Issues**: All 55 issues evaluated in `issues.json`
+- **Issues**: All 67 issues evaluated in `issues.json`
 - **Evaluations**: Detailed write-ups for high/medium priority items in `evaluations/`
 - **Scope**: Tracking from v2.22.0 (2026-02-01) onwards
 - **Key difference from fr0ster**: VSP is ARC-1's upstream — same safety system design, shared heritage. ~70% of commits are experimental (WASM/LLVM compilers, Lua, JS evaluator) and not relevant.
@@ -16,12 +16,12 @@ _Last updated: 2026-04-16_
 
 | Metric | Commits | Issues |
 |--------|---------|--------|
-| Total | 517+ | 55 |
-| Tracked | 117 | 55 |
-| Evaluated | 109 | 55 |
+| Total | 517+ | 67 |
+| Tracked | 117 | 67 |
+| Evaluated | 109 | 67 |
 | Pending evaluation | 0 | 0 |
-| Skipped (not relevant) | 68 | 25 |
-| Evaluation files | 34 | 9 |
+| Skipped (not relevant) | 68 | 30 |
+| Evaluation files | 34 | 10 |
 
 ## Priority Summary
 
@@ -34,6 +34,7 @@ _Last updated: 2026-04-16_
 | commit | **22517d4** | **Fix lock-handle bug class: add modificationSupport check to lockObject()** | **crud.ts reliability** |
 | issue | **#104** | **CSRF fetch via HEAD fails on S/4HANA public cloud (CL_ADT_WB_RES_APP returns 403)** | **http.ts CSRF resilience** |
 | issue | **#98** | **423 on DDLS LOCK+UPDATE in separate sessions — root cause confirmed** | **Verify withStatefulSession for CDS** |
+| issue | **#124** | **STRATEGIC: SAP API Policy v.4.2026 may classify ADT REST as off-limits for productive use** | **Project narrative — not code** |
 | ~~issue~~ | ~~#9~~ | ~~Transport 406 Accept header (same class as fr0ster 415)~~ | ~~Critical #3~~ ✅ ARC-1 has 415/406 retry |
 
 ### Medium Priority (evaluate/verify)

@@ -1,16 +1,157 @@
 {
   "$schema": "Issue tracker for oisee/vibing-steampunk — relevance to ARC-1",
   "repo": "https://github.com/oisee/vibing-steampunk",
-  "lastUpdated": "2026-04-16",
+  "lastUpdated": "2026-04-27",
   "stats": {
-    "total": 55,
-    "open": 22,
-    "closed": 33,
-    "relevantToArc1": 21,
-    "evaluated": 55,
+    "total": 67,
+    "open": 35,
+    "closed": 32,
+    "relevantToArc1": 27,
+    "evaluated": 67,
     "pending": 0
   },
   "issues": [
+    {
+      "number": 124,
+      "state": "open",
+      "date": "2026-04-24",
+      "title": "SAP API Policy v.4.2026 impacts direct ADT endpoint use",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "high",
+      "relevance": "STRATEGIC: SAP's new v.4.2026 API Policy says 'every endpoint a customer or partner uses in productive use must be a Published API on Business Accelerator Hub'. ADT (`/sap/bc/adt/*`) is documented only as the Eclipse Java SDK, not as an external HTTP contract. Affects every ADT-based MCP tool including ARC-1. No direct code action — strategic question for the project's productive-use narrative.",
+      "evaluationFile": "evaluations/issue-124-sap-api-policy-v42026.md"
+    },
+    {
+      "number": 123,
+      "state": "open",
+      "date": "2026-04-23",
+      "title": "GetRevisions returns 404 for INTF and DDLS despite schema declaring support",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "vsp uses /sap/bc/adt/oo/interfaces/{name}/includes/main/versions for INTF (404 — INTF has no includes; only CLAS does). ARC-1 uses /source/main/versions for INTF (likely correct). ARC-1 verify: run getRevisions on INTF/DDLS against test system to confirm we don't have the same bug class."
+    },
+    {
+      "number": 119,
+      "state": "open",
+      "date": "2026-04-23",
+      "title": "Bug in CLI vsp search",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "vsp CLI bug — different CLI surface than ARC-1."
+    },
+    {
+      "number": 118,
+      "state": "open",
+      "date": "2026-04-21",
+      "title": "A few usage issues noted when refactoring code with Kiro and steampunk as mcp",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "User feedback on Kiro+vsp UX — no specific bug actionable in ARC-1."
+    },
+    {
+      "number": 117,
+      "state": "open",
+      "date": "2026-04-20",
+      "title": "vsp advertises support for --allow-transportable-edits, but rejected as unknown on real write commands",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "vsp CLI flag bug — not relevant to ARC-1 (different flag set)."
+    },
+    {
+      "number": 116,
+      "state": "open",
+      "date": "2026-04-20",
+      "title": "WriteSource in the SAP MCP servers does not currently support ABAP include objects (INCL)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "vsp's WriteSource rejects INCL: 'Unsupported object type: INCL (supported: PROG, CLAS, INTF, DDLS, BDEF, SRVD, SRVB)'. ARC-1 already supports INCL in SAPWRITE_TYPES_ONPREM (schemas.ts:220), with case 'INCL' in buildCreateXml + objectBasePath('/sap/bc/adt/programs/includes/'). Win for ARC-1."
+    },
+    {
+      "number": 115,
+      "state": "closed",
+      "date": "2026-04-20",
+      "title": "runReport times out in WebSocket/APC context — REPORT_SERVICE uses sync SUBMIT",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 doesn't have a runReport equivalent."
+    },
+    {
+      "number": 114,
+      "state": "open",
+      "date": "2026-04-20",
+      "title": "HANA detection still fails on S/4HANA 758 — COMPONENTS endpoint returns 406, probe never reaches S4CORE fallback",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "S/4HANA 758: COMPONENTS endpoint returns 406, vsp's probe doesn't fall back to S4CORE check. ARC-1 verify on a 758 system that capability detection has a fallback path."
+    },
+    {
+      "number": 113,
+      "state": "open",
+      "date": "2026-04-20",
+      "title": "runReport times out in WebSocket/APC context — REPORT_SERVICE uses sync SUBMIT",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "Duplicate of #115."
+    },
+    {
+      "number": 112,
+      "state": "open",
+      "date": "2026-04-19",
+      "title": "MCP server does not reload cookies from --cookie-file after external session refresh",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "ARC-1 reads SAP_COOKIE_FILE per request — verify hot-reload behavior matches expectation."
+    },
+    {
+      "number": 111,
+      "state": "open",
+      "date": "2026-04-19",
+      "title": "get_user_transports returns empty while list_transports returns same data (follow-up to #9)",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "low",
+      "relevance": "ARC-1 has `getUserTransports`/`listTransports` separately — verify user-filter returns expected subset."
+    },
+    {
+      "number": 110,
+      "state": "open",
+      "date": "2026-04-19",
+      "title": "Regression v2.32 → v2.36: 423 ExceptionResourceInvalidLockHandle on S/4HANA 758",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "medium",
+      "relevance": "Lock-handle regression on S/4HANA 758 — vsp v2.36 introduced something that invalidates lock handles. ARC-1 uses withStatefulSession to share cookies/CSRF across lock→update→unlock; cross-check whenever we touch crud.ts."
+    },
+    {
+      "number": 109,
+      "state": "open",
+      "date": "2026-04-18",
+      "title": "[Feature Request] Support for Creating Domains and Data Elements",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "ARC-1 already supports DOMA/DTEL create+update via metadata XML writes (ddic-xml.ts). Win over vsp."
+    },
+    {
+      "number": 105,
+      "state": "open",
+      "date": "2026-04-17",
+      "title": "ExecuteABAP false-negatively rejects $TMP via CreateObject packageExists() precheck",
+      "labels": [],
+      "status": "evaluated",
+      "priority": "skip",
+      "relevance": "vsp-specific package-existence precheck bug. ARC-1's safety system handles $TMP correctly via SAP_ALLOWED_PACKAGES default."
+    },
     {
       "number": 104,
       "state": "open",

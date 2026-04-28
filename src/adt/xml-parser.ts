@@ -904,7 +904,7 @@ export function parseBspFolderListing(xml: string, appName: string): BspFileNode
  * fast-xml-parser with processEntities:false + parseAttributeValue:false
  * keeps raw encoded strings — we decode them for human-readable output.
  */
-function decodeXmlEntities(s: string): string {
+export function decodeXmlEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -1032,7 +1032,21 @@ function toStringArray(value: unknown): string[] {
   return [String(value)];
 }
 
-/** Parse inactive objects response from /sap/bc/adt/activation/inactive */
+/** Parse inactive objects response from /sap/bc/adt/activation/inactiveobjects.
+ *  Supports three response shapes (all live-verified):
+ *   - Rich `<ioc:object>` (vendor MIME on every supported release, includes user/transport/deleted metadata):
+ *       <ioc:inactiveObjects><ioc:entry>
+ *         <ioc:object ioc:user="X" ioc:deleted="false">
+ *           <ioc:ref adtcore:uri="..." adtcore:type="BDEF/BDO" adtcore:name="..."/>
+ *         </ioc:object>
+ *         <ioc:transport ...><ioc:ref adtcore:name="A4HK..."/></ioc:transport>
+ *       </ioc:entry>...</ioc:inactiveObjects>
+ *   - Flat with `application/xml` Accept (NW 7.50 + legacy):
+ *       <feed><entry><objectReference .../></entry>...</feed>
+ *   - Flat root-level (very old):
+ *       <adtcore:objectReferences><adtcore:objectReference .../>...</adtcore:objectReferences>
+ *  Detection: rich shape if any <entry><object> has a nested <ref>; otherwise flat.
+ */
 export function parseInactiveObjects(xml: string): InactiveObject[] {
   if (!xml.trim()) return [];
   const parsed = parseXml(xml);
@@ -1070,14 +1084,14 @@ export function parseInactiveObjects(xml: string): InactiveObject[] {
     return results;
   }
 
-  // Flat objectReference shape. Each inactive object is usually in its own entry,
-  // but some older responses put objectReference nodes directly under the root.
-  const results: InactiveObject[] = [];
+  // Flat objectReference shape (legacy + NW 7.50 with generic Accept). Each inactive object
+  // is usually in its own entry, but very old responses put objectReference nodes directly
+  // under the root. Use entries when present, else search the full doc.
+  const flatResults: InactiveObject[] = [];
   const flatContainers = entries.length > 0 ? entries : [parsed];
-  for (const entry of flatContainers) {
-    const refs = findDeepNodes(entry, 'objectReference');
-    for (const ref of refs) {
-      results.push({
+  for (const container of flatContainers) {
+    for (const ref of findDeepNodes(container, 'objectReference')) {
+      flatResults.push({
         name: String(ref['@_name'] ?? ''),
         type: String(ref['@_type'] ?? ''),
         uri: String(ref['@_uri'] ?? ''),
@@ -1085,7 +1099,7 @@ export function parseInactiveObjects(xml: string): InactiveObject[] {
       });
     }
   }
-  return results;
+  return flatResults;
 }
 
 /** Parse source revision history feed from /source/main/versions */

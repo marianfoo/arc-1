@@ -4,20 +4,7 @@
 
 ARC-1 is a TypeScript MCP server (distributed as an npm package and Docker image) that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and translates AI tool calls into [SAP ABAP Development Tools (ADT)](https://help.sap.com/docs/abap-cloud/abap-development-tools-user-guide/about-abap-development-tools) REST API requests. It works with Claude, GitHub Copilot, VS Code, and any MCP-compatible client.
 
-> **This repository** ([marianfoo/arc-1](https://github.com/marianfoo/arc-1)) is the actively maintained fork, continued from the original [oisee/vibing-steampunk](https://github.com/oisee/vibing-steampunk).
-
 ## Why ARC-1?
-
-| | [abap-adt-api](https://github.com/marcellourbani/abap-adt-api) | [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt) | **ARC-1** |
-|---|:---:|:---:|:---:|
-| npm package + Docker image | — | — | **Y** |
-| Read-only default / package allowlist | — | — | **Y** |
-| Transport controls (CTS safety) | — | — | **Y** |
-| HTTP Streamable transport (Copilot Studio) | — | — | **Y** |
-| 12 intent-based tools for AI agents | — | — | **Y** |
-| Method-level read/edit (95% token reduction) | — | — | **Y** |
-| Context compression (7-30x) | — | — | **Y** |
-| Works with 8+ MCP clients | — | — | **Y** |
 
 As an **admin**, you control what the AI can and cannot do via positive-opt-in flags:
 
@@ -124,9 +111,29 @@ Add `.mcp.json` to your project root:
 }
 ```
 
-### GitHub Copilot / VS Code (HTTP Streamable)
+### GitHub Copilot / VS Code
 
-Start arc1 as an HTTP server, then point your MCP client to it:
+For local stdio mode, use the same `npx` command shape shown above. VS Code's `servers` form looks like this:
+
+```json
+{
+  "servers": {
+    "sap": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "your-username",
+        "SAP_PASSWORD": "your-password",
+        "SAP_CLIENT": "100"
+      }
+    }
+  }
+}
+```
+
+For HTTP Streamable mode, start arc1 as an HTTP server, then point your MCP client to it:
 
 ```bash
 SAP_URL=https://host:44300 SAP_USER=dev SAP_PASSWORD=secret \

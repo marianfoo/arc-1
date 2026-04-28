@@ -293,20 +293,45 @@ export function extractExceptionType(xml: string): string | undefined {
   return match?.[1] ?? match?.[2];
 }
 
-/** Extract lock owner details (user + transport/task) from SAP lock messages. */
+/** Reject regex captures that hit a generic placeholder ("another", "the", etc.) instead of a real userid. */
+const PLACEHOLDER_USERS = /^(another|the|user|session|someone|somebody)$/i;
+
+/** Extract lock owner details (user + transport/task) from SAP lock messages.
+ *
+ *  Prefers the structured `<entry key="T100KEY-V1">…</entry>` property bag (SAP `MSGV1` slot,
+ *  populated by message `EU 510` on lock-conflict 403s). Falls back to free-text regex when
+ *  the property bag isn't present (e.g. NW 7.50 plain-text bodies). The placeholder filter
+ *  guards against false positives like "currently being edited by another user". */
 export function extractLockOwner(text: string): { user?: string; transport?: string } | undefined {
   if (!text) return undefined;
 
-  const userMatch =
-    text.match(/\blocked by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
-    text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
-    text.match(/\buser\s+["']?([A-Z0-9_.$/-]+)["']?\s+is\s+currently\s+editing\b/i);
-  const transportMatch =
-    text.match(/\b(?:in\s+)?(?:task|transport|request)\s+([A-Z0-9]{3,}\d{4,})\b/i) ??
-    text.match(/\b([A-Z]\d{2}[A-Z]\d{6})\b/i);
+  // 1. Structured T100 property bag (S/4 / modern releases via <exc:exception>):
+  //    <entry key="T100KEY-V1">MARIAN</entry>      → MSGV1 = lock owner
+  //    <entry key="T100KEY-V3">A4HK900502</entry>  → MSGV3 = transport (when present)
+  const v1Match = text.match(/<entry\s+key="T100KEY-V1">([^<]+)<\/entry>/i);
+  const v3Match = text.match(/<entry\s+key="T100KEY-V3">([^<]+)<\/entry>/i);
+  let user = v1Match?.[1]?.trim();
+  let transport = v3Match?.[1]?.trim();
 
-  const user = userMatch?.[1]?.replace(/[.,;:)]$/, '');
-  const transport = transportMatch?.[1]?.replace(/[.,;:)]$/, '');
+  // 2. Regex fallback (NW 7.50, plain-text messages, T100 properties absent).
+  //    Order: most specific phrasing first so generic LONGTEXT phrasing never
+  //    wins over the structured `<message>` line.
+  if (!user) {
+    const userMatch =
+      text.match(/\buser\s+["']?([A-Z0-9_.$/-]+)["']?\s+is\s+currently\s+editing\b/i) ??
+      text.match(/\blocked by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
+      text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i);
+    const candidate = userMatch?.[1]?.replace(/[.,;:)]$/, '');
+    if (candidate && !PLACEHOLDER_USERS.test(candidate)) user = candidate;
+  }
+
+  if (!transport) {
+    const transportMatch =
+      text.match(/\b(?:in\s+)?(?:task|transport|request)\s+([A-Z0-9]{3,}\d{4,})\b/i) ??
+      text.match(/\b([A-Z]\d{2}[A-Z]\d{6})\b/i);
+    transport = transportMatch?.[1]?.replace(/[.,;:)]$/, '');
+  }
+
   if (!user && !transport) return undefined;
 
   return {

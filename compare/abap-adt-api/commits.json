@@ -1,16 +1,164 @@
 {
   "$schema": "Commit tracker for marcellourbani/abap-adt-api — API reference for ARC-1 ADT implementation",
   "repo": "https://github.com/marcellourbani/abap-adt-api",
-  "lastUpdated": "2026-04-08",
-  "lastCheckedSha": "9ec2038",
+  "lastUpdated": "2026-04-27",
+  "lastCheckedSha": "4a58dde",
   "stats": {
-    "totalTracked": 36,
-    "evaluated": 36,
+    "totalTracked": 53,
+    "evaluated": 53,
     "pending": 0,
-    "skipped": 16,
-    "evaluationFiles": 8
+    "skipped": 26,
+    "evaluationFiles": 11
   },
   "releases": [
+    {
+      "version": "v8.3.0",
+      "date": "2026-04-26",
+      "commits": [
+        {
+          "sha": "4a58dde",
+          "date": "2026-04-26",
+          "message": "8.3.0",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "a3a8ffd",
+          "date": "2026-04-26",
+          "message": "text element support",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "consider-future",
+          "relevance": "New textelements API module (+188 lines + 286 lines of tests + disruptive write tests). ARC-1 already has read-only getTextElements (returns raw body). Gap: structured TextSymbol[]/SelectionText[] parsing + write support. Low priority — text-element editing is rare in LLM workflows; current read path serves 'what does TEXT-001 mean' code-review questions.",
+          "evaluationFile": "evaluations/text-element-support.md"
+        }
+      ]
+    },
+    {
+      "version": "v8.2.0",
+      "date": "2026-04-25",
+      "commits": [
+        {
+          "sha": "f5f7a1b",
+          "date": "2026-04-25",
+          "message": "fix link",
+          "status": "skipped",
+          "reason": "docs only"
+        },
+        {
+          "sha": "0c815c0",
+          "date": "2026-04-25",
+          "message": "8.2.0",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "9b419ed",
+          "date": "2026-04-25",
+          "message": "Merge pull request #45 from hfandreoli:dtel-and-doma-maintenance",
+          "status": "skipped",
+          "reason": "merge commit — see 17b754a"
+        },
+        {
+          "sha": "84934d8",
+          "date": "2026-04-25",
+          "message": "unit tests",
+          "status": "skipped",
+          "reason": "test additions"
+        },
+        {
+          "sha": "17b754a",
+          "date": "2026-04-16",
+          "message": "Expansion of functionalities related to Data Element and Domain Maintenance",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Adds getDomainProperties() / getDataElementProperties() readers (was missing). Removes typeKind from DataElementProperties (breaking). ARC-1 already has structured DOMA/DTEL read since v0.x (getDomain/getDataElement returning DomainInfo/DataElementInfo via parseDomainMetadata/parseDataElementMetadata in xml-parser.ts). ARC-1 keeps typeKind correctly — controls <dtel:typeKind>domain|predefinedAbapType</dtel:typeKind> on writes. abap-adt-api removed it because they hadn't wired it correctly.",
+          "evaluationFile": "evaluations/dtel-doma-domain-read.md"
+        }
+      ]
+    },
+    {
+      "version": "v8.1.0",
+      "date": "2026-04-21",
+      "commits": [
+        {
+          "sha": "28e13e1",
+          "date": "2026-04-21",
+          "message": "8.1.0",
+          "status": "skipped",
+          "reason": "version bump"
+        },
+        {
+          "sha": "d8c4390",
+          "date": "2026-04-21",
+          "message": "Merge pull request #43 from sle118/pr/feat-ench (ENHO splicing & include expansion)",
+          "status": "evaluated",
+          "priority": "medium",
+          "decision": "consider-future",
+          "relevance": "New objectEnhancements(objectUrl, includeSource) API: given a base PROG/INCL/FUGR, list all enhancement implementations bound to it (with URI, fullname `\\PR:<prog>\\FO:<form>\\SE:<section>\\EI`, mode, replacing flag, optional decoded source, 0-based line/column position) + include expansion that splices enhancement source back into base text. Mirror image of ARC-1's by-name ENHO read. Genuinely useful gap for code-review/impact-analysis workflows. Probe ADT endpoint shape on a4h + BTP first; consider as new SAPRead(type='ENHO', target=...) variant or SAPDiagnose action.",
+          "evaluationFile": "evaluations/enho-splicing-include-expansion.md"
+        },
+        {
+          "sha": "48eefd0",
+          "date": "2026-04-21",
+          "message": "refactor",
+          "status": "skipped",
+          "reason": "internal refactor — see d8c4390"
+        },
+        {
+          "sha": "5e4cdda",
+          "date": "2026-04-19",
+          "message": "refactor",
+          "status": "skipped",
+          "reason": "internal refactor — see d8c4390"
+        },
+        {
+          "sha": "410bc6b",
+          "date": "2026-04-18",
+          "message": "docs: remove PR_FOR_MAINTAINER.md per author request",
+          "status": "skipped",
+          "reason": "docs only"
+        },
+        {
+          "sha": "3e87242",
+          "date": "2026-04-18",
+          "message": "docs: add PR note for maintainer",
+          "status": "skipped",
+          "reason": "docs only"
+        },
+        {
+          "sha": "1b562f2",
+          "date": "2026-04-17",
+          "message": "feat(objectstructure): fold /objectstructure into objectStructure (opt-in structureElements); remove detailed types; update consumers",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Internal API consolidation — folded /objectstructure into objectStructure with opt-in structureElements parameter, removed detailed types. ARC-1 calls /sap/bc/adt/repository/nodestructure/* directly (in client.ts) — different entry point, doesn't depend on abap-adt-api's wrapper, so no impact."
+        },
+        {
+          "sha": "04da060",
+          "date": "2026-04-15",
+          "message": "test case for enhancements",
+          "status": "skipped",
+          "reason": "test additions"
+        },
+        {
+          "sha": "5085d6d",
+          "date": "2026-04-15",
+          "message": "fix test",
+          "status": "skipped",
+          "reason": "test fix"
+        },
+        {
+          "sha": "a6a1fb3",
+          "date": "2026-04-14",
+          "message": "chore(pr): prepare PR — include enhancement and test changes",
+          "status": "skipped",
+          "reason": "PR prep"
+        }
+      ]
+    },
     {
       "version": "v8.0.1",
       "date": "2026-04-05",

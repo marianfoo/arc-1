@@ -115,9 +115,29 @@ Project-scoped: create `.mcp.json` in the repo root with the same shape as above
 
 Cursor Settings → MCP — same JSON shape as Claude Desktop.
 
-### VS Code / GitHub Copilot (HTTP mode)
+### VS Code / GitHub Copilot
 
-VS Code + Copilot speak HTTP Streamable, not stdio. Run ARC-1 as an HTTP server:
+For local stdio mode, use the same shape as Claude Desktop:
+
+```json
+{
+  "servers": {
+    "sap": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "arc-1@latest"],
+      "env": {
+        "SAP_URL": "https://your-sap-host:44300",
+        "SAP_USER": "YOUR_USER",
+        "SAP_PASSWORD": "YOUR_PASS",
+        "SAP_CLIENT": "100"
+      }
+    }
+  }
+}
+```
+
+For a long-running local server or shared endpoint, run ARC-1 as an HTTP Streamable server:
 
 ```bash
 npx arc-1@latest --url https://host:44300 --user dev --password secret \

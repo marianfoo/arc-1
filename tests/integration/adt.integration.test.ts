@@ -122,7 +122,7 @@ describe('ADT Integration Tests', () => {
 
   describe('discovery MIME negotiation', () => {
     it('fetches discovery map with key ADT endpoints and MIME types', async (ctx) => {
-      const discoveryMap = await fetchDiscoveryDocument(client.http);
+      const { map: discoveryMap } = await fetchDiscoveryDocument(client.http);
       const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
       requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
 
@@ -135,7 +135,7 @@ describe('ADT Integration Tests', () => {
     });
 
     it('resolveAcceptType returns sensible MIME type for known endpoints', async (ctx) => {
-      const discoveryMap = await fetchDiscoveryDocument(client.http);
+      const { map: discoveryMap } = await fetchDiscoveryDocument(client.http);
       const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
       requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
 

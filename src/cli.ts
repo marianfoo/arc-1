@@ -1,26 +1,35 @@
 /**
  * ARC-1 CLI — command-line interface for SAP ADT operations.
  *
- * Minimal CLI for direct SAP interaction without an MCP client.
- * For the full MCP server, use `arc1` (runs index.ts).
+ * Exposed via the `arc1-cli` bin (separate from `arc1`, which is the MCP server entry).
  *
- * Commands:
- *   arc1 search <query>       - Search for ABAP objects
- *   arc1 source <type> <name> - Get source code
- *   arc1 lint <source-file>   - Lint ABAP source code
- *   arc1 version              - Show version
+ * Two layers:
+ *   - `arc1-cli serve`                  Start the MCP server (same as `arc1`).
+ *   - `arc1-cli call <tool> [...]`      Call any of the 12 MCP tools directly.
+ *   - `arc1-cli tools [<tool>]`         List tools / show a tool's JSON schema.
+ *   - Shortcuts: `read`, `source` (alias), `activate`, `syntax`, `sql`, `lint`,
+ *     `search`, `extract-cookies`, `version` — one-liners over `call` or helpers
+ *     for common operations.
+ *
+ * The `call` command bypasses the MCP transport but reuses the same dispatch
+ * path (`handleToolCall` in src/handlers/intent.ts), so Zod validation,
+ * safety gates (`SAP_READ_ONLY`, `SAP_ALLOWED_PACKAGES`, ...), and audit
+ * logging all apply exactly as they do under `arc1 serve` stdio mode.
  */
 
 import { readFileSync } from 'node:fs';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { config } from 'dotenv';
 import { AdtClient } from './adt/client.js';
-import { resolveCookies } from './adt/cookies.js';
+import type { AdtClientConfig } from './adt/config.js';
+import { buildArgs, type OutputMode } from './cli-args.js';
+import { handleToolCall, type ToolResult } from './handlers/intent.js';
+import { getToolDefinitions } from './handlers/tools.js';
 import { detectFilename, lintAbapSource } from './lint/lint.js';
 import { parseArgs, resolveConfig } from './server/config.js';
 import { initLogger } from './server/logger.js';
-import { VERSION } from './server/server.js';
-import type { ConfigSource } from './server/types.js';
+import { buildAdtConfig, VERSION } from './server/server.js';
+import type { ConfigSource, ServerConfig } from './server/types.js';
 
 // Load .env without printing dotenv tips to stdout.
 config({ quiet: true });
@@ -47,57 +56,155 @@ program
     await createAndStartServer(serverConfig);
   });
 
-// Search command
-program
-  .command('search <query>')
-  .description('Search for ABAP objects')
-  .option('--max <number>', 'Maximum results', '50')
-  .action(async (query: string, opts: { max: string }) => {
-    const client = createClientFromEnv();
-    const results = await client.searchObject(query, Number(opts.max));
-    console.log(JSON.stringify(results, null, 2));
-  });
+// ─── Direct tool invocation ────────────────────────────────────────────
 
-// Source command
+const outputOption = new Option('--output <mode>', 'Output mode').choices(['text', 'json']).default('text');
+
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 program
-  .command('source <type> <name>')
-  .description('Get source code of an ABAP object')
-  .action(async (type: string, name: string) => {
-    const client = createClientFromEnv();
-    switch (type.toUpperCase()) {
-      case 'PROG':
-        console.log((await client.getProgram(name)).source);
-        break;
-      case 'CLAS':
-        console.log((await client.getClass(name)).source);
-        break;
-      case 'INTF':
-        console.log((await client.getInterface(name)).source);
-        break;
-      default:
-        console.error(`Unsupported type: ${type}`);
-        process.exit(1);
+  .command('call <tool>')
+  .description('Call any MCP tool directly (e.g. SAPRead, SAPWrite, SAPGit...)')
+  .option('--arg <key=value>', 'Tool argument; repeatable. Values are coerced: true/false/number/JSON.', collect, [])
+  .option('--json <source>', 'JSON args: inline object, path to a file, or "-" for stdin')
+  .addOption(outputOption)
+  .action(async (tool: string, opts: { arg: string[]; json?: string; output: OutputMode }) => {
+    try {
+      const args = buildArgs(opts);
+      const code = await runToolCall(tool, args, opts.output);
+      process.exit(code);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(2);
     }
   });
 
-// Lint command
+program
+  .command('tools [tool]')
+  .description('List MCP tools, or show the JSON input schema for a specific tool')
+  .action((tool: string | undefined) => {
+    const { config: serverConfig } = resolveCliContext();
+    const defs = getToolDefinitions(serverConfig);
+    if (!tool) {
+      for (const def of defs) {
+        const firstLine = def.description.split('\n')[0].trim();
+        console.log(`${def.name.padEnd(14)} ${firstLine}`);
+      }
+      return;
+    }
+    const match = defs.find((d) => d.name.toLowerCase() === tool.toLowerCase());
+    if (!match) {
+      console.error(`Unknown tool: ${tool}`);
+      console.error(`Available: ${defs.map((d) => d.name).join(', ')}`);
+      process.exit(2);
+    }
+    console.log(match.description);
+    console.log('');
+    console.log('Input schema:');
+    console.log(JSON.stringify(match.inputSchema, null, 2));
+  });
+
+// ─── Ergonomic shortcuts (thin wrappers over `call`) ───────────────────
+
+program
+  .command('read <type> <name>')
+  .description('Read an ABAP object via SAPRead (PROG, CLAS, INTF, DDLS, TABL, DOMA, DTEL, ...)')
+  .option('--flat', 'Return flat source for CLAS/INTF (instead of structured sections)')
+  .option(
+    '--source-version <version>',
+    'Source version: active (default) | inactive | auto. "auto" returns the user\'s draft if any, else active.',
+  )
+  .addOption(outputOption)
+  .action(async (type: string, name: string, opts: { flat?: boolean; sourceVersion?: string; output: OutputMode }) => {
+    const args: Record<string, unknown> = { type: type.toUpperCase(), name };
+    if (opts.flat) args.flat = true;
+    if (opts.sourceVersion) args.version = opts.sourceVersion;
+    process.exit(await runToolCall('SAPRead', args, opts.output));
+  });
+
+// `source` kept as an alias of `read` with flat=true to preserve legacy CLI behavior.
+program
+  .command('source <type> <name>')
+  .description('Alias of `read --flat` (legacy)')
+  .addOption(outputOption)
+  .action(async (type: string, name: string, opts: { output: OutputMode }) => {
+    process.exit(await runToolCall('SAPRead', { type: type.toUpperCase(), name, flat: true }, opts.output));
+  });
+
+program
+  .command('activate <type> <name>')
+  .description('Activate an ADT object (SAPActivate) — e.g. `activate CLAS ZCL_FOO`')
+  .addOption(outputOption)
+  .action(async (type: string, name: string, opts: { output: OutputMode }) => {
+    process.exit(await runToolCall('SAPActivate', { action: 'activate', type: type.toUpperCase(), name }, opts.output));
+  });
+
+program
+  .command('syntax <type> <name>')
+  .description('Remote syntax check on an ABAP object (SAPDiagnose syntax)')
+  .addOption(outputOption)
+  .action(async (type: string, name: string, opts: { output: OutputMode }) => {
+    process.exit(await runToolCall('SAPDiagnose', { action: 'syntax', type: type.toUpperCase(), name }, opts.output));
+  });
+
+program
+  .command('sql <query>')
+  .description('Execute an OpenSQL query (SAPQuery; requires SAP_ALLOW_FREE_SQL=true)')
+  .addOption(outputOption)
+  .action(async (query: string, opts: { output: OutputMode }) => {
+    process.exit(await runToolCall('SAPQuery', { action: 'sql', query }, opts.output));
+  });
+
+// ─── Legacy / local-only commands ──────────────────────────────────────
+
+program
+  .command('search <query>')
+  .description('Search for ABAP objects (SAPSearch)')
+  .option('--max <number>', 'Maximum results', '50')
+  .addOption(outputOption)
+  .action(async (query: string, opts: { max: string; output: OutputMode }) => {
+    process.exit(
+      await runToolCall('SAPSearch', { action: 'object', query, maxResults: Number(opts.max) }, opts.output),
+    );
+  });
+
+program
+  .command('extract-cookies [args...]')
+  .description('Launch a browser, log into SAP, and write a Netscape cookie file. Pass --help for options.')
+  .allowUnknownOption(true)
+  .helpOption(false)
+  .action(async () => {
+    const idx = process.argv.indexOf('extract-cookies');
+    const forwarded = idx >= 0 ? process.argv.slice(idx + 1) : [];
+    const { run } = await import('./extract-sap-cookies.js');
+    try {
+      await run(forwarded);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`${message}\n`);
+      process.exit(1);
+    }
+  });
+
 program
   .command('lint <file>')
-  .description('Lint an ABAP source file')
+  .description('Lint a local ABAP source file (offline; no SAP connection)')
   .action((file: string) => {
     const source = readFileSync(file, 'utf-8');
     const filename = detectFilename(source, file.replace(/\.abap$/, ''));
     const issues = lintAbapSource(source, filename);
     if (issues.length === 0) {
       console.log('No issues found.');
-    } else {
-      for (const issue of issues) {
-        console.log(`${issue.line}:${issue.column} [${issue.severity}] ${issue.rule}: ${issue.message}`);
-      }
+      return;
     }
+    for (const issue of issues) {
+      console.log(`${issue.line}:${issue.column} [${issue.severity}] ${issue.rule}: ${issue.message}`);
+    }
+    process.exit(issues.some((i) => i.severity === 'error') ? 1 : 0);
   });
 
-// Version command (explicit)
 program
   .command('version')
   .description('Show ARC-1 version')
@@ -176,19 +283,43 @@ function formatConfigSource(s: ConfigSource | undefined): string {
   return 'unknown';
 }
 
-function createClientFromEnv(): AdtClient {
+// ─── Helpers ───────────────────────────────────────────────────────────
+
+function renderToolResult(result: ToolResult, mode: OutputMode): number {
+  if (mode === 'json') {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const stream = result.isError ? console.error : console.log;
+    for (const block of result.content) {
+      if (block.type === 'text') stream(block.text);
+    }
+  }
+  return result.isError ? 1 : 0;
+}
+
+function resolveCliContext(): { client: AdtClient; config: ServerConfig } {
   const serverConfig = parseArgs([]);
   initLogger(serverConfig.logFormat, serverConfig.verbose);
-  const cookies = resolveCookies(serverConfig.cookieFile, serverConfig.cookieString);
-  return new AdtClient({
-    baseUrl: serverConfig.url,
-    username: serverConfig.username,
-    password: serverConfig.password,
-    client: serverConfig.client,
-    language: serverConfig.language,
-    insecure: serverConfig.insecure,
-    ...(cookies ? { cookies } : {}),
-  });
+  const adtConfig = buildAdtConfig(serverConfig) as AdtClientConfig;
+  const client = new AdtClient(adtConfig);
+  return { client, config: serverConfig };
+}
+
+async function runToolCall(toolName: string, args: Record<string, unknown>, outputMode: OutputMode): Promise<number> {
+  const { client, config: serverConfig } = resolveCliContext();
+  const available = new Set(getToolDefinitions(serverConfig).map((t) => t.name));
+  if (!available.has(toolName)) {
+    console.error(`Unknown tool: ${toolName}`);
+    console.error(`Available tools: ${[...available].join(', ')}`);
+    return 2;
+  }
+  try {
+    const result = await handleToolCall(client, serverConfig, toolName, args);
+    return renderToolResult(result, outputMode);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return 1;
+  }
 }
 
 program.parse();
