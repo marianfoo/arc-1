@@ -9727,4 +9727,64 @@ ENDCLASS.`;
       expect(text).not.toContain('SAP cookies have expired');
     });
   });
+
+  // ─── Mixed-case object name rejection ──────────────────────────────
+  describe('SAPWrite mixed-case object name rejection', () => {
+    it('rejects create with lowercase characters in object name', async () => {
+      mockFetch.mockReset();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'Zarc1_Mixed',
+        package: '$TMP',
+        source: 'define view entity Zarc1_Mixed as select from t000 { key mandt }',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('uppercase');
+      expect(text).toContain('ZARC1_MIXED');
+      // No HTTP traffic should have happened — guard fires before locking.
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+
+    it('proceeds past the guard when name is fully uppercase', async () => {
+      mockFetch.mockReset();
+      // CSRF + create + activate-related calls — let them all succeed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'ZARC1_OK',
+        package: '$TMP',
+        source: 'define view entity ZARC1_OK as select from t000 { key mandt }',
+      });
+      // Guard didn't fire → at least one HTTP call was attempted (CSRF or POST).
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('rejects mixed-case names per object inside batch_create', async () => {
+      mockFetch.mockReset();
+      // Stub HTTP minimally — the batch may attempt the first uppercase object before hitting the bad one.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          {
+            type: 'DDLS',
+            name: 'Zc_Bad',
+            description: 'bad',
+            source: 'define view entity Zc_Bad as select from t000 { key mandt }',
+          },
+          { type: 'CLAS', name: 'ZCL_LATER', description: 'never reached' },
+        ],
+      });
+      const text = result.content[0]?.text ?? '';
+      // First object should be marked failed for the mixed-case reason.
+      expect(text).toContain('Zc_Bad');
+      expect(text).toContain('uppercase');
+      // Second object should NOT have been attempted (batch breaks on first failure).
+      expect(text).not.toContain('ZCL_LATER: success');
+    });
+  });
 });

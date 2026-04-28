@@ -2959,6 +2959,20 @@ async function handleSAPWrite(
     return errorResult('"type" and "name" are required for this action.');
   }
 
+  // SAP TADIR stores object names uppercase. Mixed-case names cause silent corruption
+  // (e.g. DDLS created as "Zc_MyView" registers as "ZC_MYVIEW" in TADIR but the source body
+  // still contains "Zc_MyView", confusing every downstream tool). Reject pre-flight on create —
+  // applies on every SAP release; this is universal SAP convention, not a 7.50 quirk.
+  // Note: source code INSIDE the object can use mixed case (e.g. for DDLS: name="ZC_MYVIEW"
+  // but `define view entity Zc_MyView` is fine inside the source body).
+  if (action === 'create' && name && name !== name.toUpperCase()) {
+    return errorResult(
+      `Object name "${name}" contains lowercase characters. SAP object names must be uppercase (e.g. "${name.toUpperCase()}").\n\n` +
+        `Note: the object NAME in TADIR must be uppercase, but the source code inside the object can use mixed case ` +
+        `(e.g. for DDLS: name="${name.toUpperCase()}" but source can contain "define view entity ${name}").`,
+    );
+  }
+
   // For TABL update/delete/edit_method, the existing object may live at /tables/
   // (transparent) or /structures/ (DDIC structure). Resolve once via the client's
   // cached URL probe. For 'create' the default /tables/ URL is correct (we only
@@ -3626,6 +3640,18 @@ async function handleSAPWrite(
         const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
+
+        // Mixed-case object name rejection (matches the create-path check above).
+        // Universal SAP convention — TADIR is uppercase on every release.
+        if (objName && objName !== objName.toUpperCase()) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: `Object name "${objName}" contains lowercase characters. SAP object names must be uppercase (e.g. "${objName.toUpperCase()}"). Source code inside the object can use mixed case.`,
+          });
+          break;
+        }
 
         // AFF header validation per object (if schema available)
         const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });

@@ -647,4 +647,40 @@ describe('Tool Definitions', () => {
       }
     });
   });
+
+  // ─── Three-file sync coverage for messages + STRU (PR-β) ──────────
+  describe('three-file sync invariants', () => {
+    function getSAPWriteSchema(btp: boolean): Record<string, any> {
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, systemType: btp ? 'btp' : 'onprem' });
+      const sapWrite = tools.find((t) => t.name === 'SAPWrite');
+      if (!sapWrite) throw new Error('SAPWrite tool not found in definitions');
+      return sapWrite.inputSchema as Record<string, any>;
+    }
+
+    it('exposes the messages property at top-level SAPWrite (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const messages = schema.properties.messages;
+      expect(messages).toBeDefined();
+      expect(messages.type).toBe('array');
+      expect(messages.items.required).toEqual(['number', 'shortText']);
+      expect(messages.items.properties.number).toBeDefined();
+      expect(messages.items.properties.shortText).toBeDefined();
+    });
+
+    it('exposes the messages property inside batch_create items (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const batchObjects = schema.properties.objects;
+      expect(batchObjects?.type).toBe('array');
+      const item = batchObjects.items;
+      expect(item.properties.messages).toBeDefined();
+      expect(item.properties.messages.type).toBe('array');
+      expect(item.properties.messages.items.required).toEqual(['number', 'shortText']);
+    });
+
+    it('exposes the messages property at top-level SAPWrite (BTP)', () => {
+      const schema = getSAPWriteSchema(true);
+      expect(schema.properties.messages).toBeDefined();
+      expect(schema.properties.messages.type).toBe('array');
+    });
+  });
 });

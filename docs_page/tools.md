@@ -233,7 +233,9 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 **DDIC metadata writes:** `DOMA`, `DTEL`, `MSAG`, and `SRVB` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. `SRVB` create uses wildcard content type (`application/*`) and SRVB update uses vendor type (`application/vnd.sap.adt.businessservices.servicebinding.v2+xml`).
 
-**Source-based DDIC writes:** `TABL`, `DDLS`, `DCLS`, `BDEF`, and `SRVD` are source-based and write source via `/source/main`.
+**Source-based DDIC writes:** `TABL`, `DDLS`, `DCLS`, `BDEF`, and `SRVD` are source-based and write source via `/source/main`. `TABL` covers both transparent tables (`TABL/DT`) and DDIC structures (`TABL/DS`); ARC-1 auto-resolves between `/ddic/tables/` and `/ddic/structures/` for read/update.
+
+**Mixed-case object names rejected on create.** SAP TADIR is uppercase on every release; mixed-case names cause silent corruption (e.g., a DDLS named `Zc_MyView` registers as `ZC_MYVIEW` in TADIR but the source body keeps mixed case, confusing every downstream tool). `SAPWrite(action="create"\|"batch_create")` rejects mixed-case names pre-flight with an actionable error. The source code *inside* the object can still use mixed case (e.g., `define view entity Zc_MyView`); only the TADIR object name needs to be uppercase.
 
 **BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
 

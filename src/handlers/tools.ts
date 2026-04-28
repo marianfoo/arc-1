@@ -617,6 +617,18 @@ export function getToolDefinitions(
           setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
           defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
           changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
+          messages: {
+            type: 'array',
+            description: 'MSAG: message entries for create/update',
+            items: {
+              type: 'object',
+              properties: {
+                number: { type: 'string', description: 'Message number (e.g., "001")' },
+                shortText: { type: 'string', description: 'Message short text (use & for placeholders: "&1", "&2")' },
+              },
+              required: ['number', 'shortText'],
+            },
+          },
           serviceDefinition: { type: 'string', description: 'SRVB: service definition name (SRVD) to bind to' },
           bindingType: {
             type: 'string',
@@ -709,6 +721,18 @@ export function getToolDefinitions(
                 setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
                 defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
                 changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
+                messages: {
+                  type: 'array',
+                  description: 'MSAG: message entries',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      number: { type: 'string', description: 'Message number (e.g., "001")' },
+                      shortText: { type: 'string', description: 'Message short text' },
+                    },
+                    required: ['number', 'shortText'],
+                  },
+                },
                 serviceDefinition: { type: 'string', description: 'SRVB: service definition (SRVD)' },
                 bindingType: {
                   type: 'string',
