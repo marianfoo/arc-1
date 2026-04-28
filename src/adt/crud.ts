@@ -301,11 +301,20 @@ export function convertHtmlConflictToProperError(
   }
 
   // Layer 2: HTML body marker, scoped by release
+  //
+  // Case-insensitive HTML detection: real SAP ICM error pages use a mix of casings
+  // — lowercase `<html>` (NPL 7.50, verified live), uppercase `<HTML>` (some
+  // releases / language packs), and `<!DOCTYPE HTML PUBLIC ...>` (W3C-style
+  // doctype). Picking ONE casing (codex review of PR #202 pre-fix used
+  // lowercase-only) regresses #196's behavior on releases that emit any of the
+  // other two. The "Logon Error Message" marker is itself emitted as written
+  // (no localization on that string), so it can stay case-sensitive.
   const release = parseReleaseNum(abapRelease);
   const fallbackEligible = release === 0 || release < 751;
+  const looksLikeHtml = /<!doctype\s+html|<html[\s>]/i.test(body);
   const isHtml4xx =
     (err.statusCode === 400 || err.statusCode === 401 || err.statusCode === 403) &&
-    body.includes('<html') &&
+    looksLikeHtml &&
     body.includes('Logon Error Message');
   if (fallbackEligible && isHtml4xx) {
     return new AdtApiError(

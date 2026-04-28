@@ -253,6 +253,40 @@ describe('CRUD Operations', () => {
         const http = mockHttpThatRejectsLock(401, 'Authentication required');
         await expect(lockObject(http, unrestrictedSafetyConfig(), '/url')).rejects.toMatchObject({ statusCode: 401 });
       });
+
+      // ─── Codex review of PR #202: HTML detection must be case-insensitive ────
+      // Real SAP ICM error pages use a mix of casings — lowercase `<html>` (NPL
+      // 7.50 verified live), uppercase `<HTML>`, and `<!DOCTYPE HTML PUBLIC ...>`
+      // doctype. The original lowercase-only check would regress on releases that
+      // emit any of the other two.
+      it('Layer 2 fires on uppercase `<HTML>` body (case-insensitive)', async () => {
+        const upperHtml = '<HTML><BODY>Logon Error Message — please log on again.</BODY></HTML>';
+        const http = mockHttpThatRejectsLock(401, upperHtml);
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url', 'MODIFY', '750')).rejects.toMatchObject({
+          statusCode: 409,
+          message: expect.stringContaining('may be locked'),
+        });
+      });
+
+      it('Layer 2 fires on `<!DOCTYPE HTML>` doctype-prefixed body', async () => {
+        const doctypeHtml =
+          '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"><html><body>Logon Error Message — session expired</body></html>';
+        const http = mockHttpThatRejectsLock(401, doctypeHtml);
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url', 'MODIFY', '750')).rejects.toMatchObject({
+          statusCode: 409,
+        });
+      });
+
+      it('Layer 2 does NOT misfire on a non-HTML body that mentions "html" in plain text', async () => {
+        // Defensive: a plain-text 401 mentioning "html" without an actual HTML tag must not
+        // be reclassified. The /<!doctype\s+html|<html[\s>]/i regex requires a real opening
+        // tag context, so prose-only bodies fall through.
+        const proseBody = 'Authentication required (the html-formatted error page is hidden by your proxy).';
+        const http = mockHttpThatRejectsLock(401, proseBody);
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url', 'MODIFY', '750')).rejects.toMatchObject({
+          statusCode: 401,
+        });
+      });
     });
 
     // The same helper applies to createObject — reclassify lock/exists conflicts that arrive
