@@ -42,6 +42,82 @@ arc1
 arc1 --transport http-streamable --http-addr 0.0.0.0:3000
 ```
 
+### call
+
+Call any of the 12 MCP tools directly from the shell. Same Zod validation, safety gates, and audit logging as the MCP server path.
+
+```bash
+# Repeatable --arg flags (values are coerced: true/false/number/JSON)
+arc1 call SAPRead --arg type=CLAS --arg name=ZCL_ORDER
+
+# Or pass JSON args (inline, file, or stdin)
+arc1 call SAPRead --json '{"type":"CLAS","name":"ZCL_ORDER","version":"inactive"}'
+arc1 call SAPRead --json args.json
+echo '{"type":"PROG","name":"ZARC1_FOO"}' | arc1 call SAPRead --json -
+
+# Output mode (default: text; alternative: json)
+arc1 call SAPManage --arg action=cache_stats --output json
+```
+
+### tools
+
+List available MCP tools, or show one tool's input schema.
+
+```bash
+arc1 tools                # list with one-line descriptions
+arc1 tools SAPRead        # show full description + JSON schema
+```
+
+### read
+
+Ergonomic shortcut over `call SAPRead`.
+
+```bash
+arc1 read PROG ZTEST_REPORT
+arc1 read CLAS ZCL_MY_CLASS
+arc1 read CLAS ZCL_MY_CLASS --flat                   # raw source instead of structured
+arc1 read CLAS ZCL_MY_CLASS --source-version inactive # read your draft
+arc1 read PROG ZARC1_FOO --source-version auto        # draft if exists, else active
+```
+
+`--source-version` accepts `active` (default), `inactive`, or `auto`. See [tools.md → SAPRead → Active vs Inactive Source](tools.md#active-vs-inactive-source).
+
+### source
+
+Legacy alias of `read --flat`. Kept for backwards compatibility.
+
+```bash
+arc1 source PROG ZTEST_REPORT       # equivalent to: arc1 read PROG ZTEST_REPORT --flat
+arc1 source CLAS ZCL_MY_CLASS
+arc1 source INTF ZIF_MY_INTERFACE
+```
+
+### activate
+
+Activate an inactive ABAP object via SAPActivate.
+
+```bash
+arc1 activate CLAS ZCL_FOO
+arc1 activate DDLS ZI_TRAVEL
+```
+
+### syntax
+
+Run a remote syntax check (SAPDiagnose syntax action).
+
+```bash
+arc1 syntax CLAS ZCL_FOO
+arc1 syntax PROG ZTEST
+```
+
+### sql
+
+Execute an OpenSQL query via SAPQuery. Requires `SAP_ALLOW_FREE_SQL=true`.
+
+```bash
+arc1 sql "SELECT mandt, matnr FROM mara WHERE mandt = '100' INTO @DATA(rows) UP TO 10 ROWS"
+```
+
 ### search
 
 Search for ABAP objects by name pattern.
@@ -53,17 +129,13 @@ arc1 search "Z*TEST*" --max 20
 
 Returns JSON with object type, name, package, and description.
 
-### source
+### extract-cookies
 
-Get source code of an ABAP object.
+Launch a browser, log into SAP via SSO/SAML, and write a Netscape cookie file. Useful for cookie-based auth in development.
 
 ```bash
-arc1 source PROG ZTEST_REPORT
-arc1 source CLAS ZCL_MY_CLASS
-arc1 source INTF ZIF_MY_INTERFACE
+arc1 extract-cookies --help
 ```
-
-Supported types: `PROG`, `CLAS`, `INTF`.
 
 ### lint
 

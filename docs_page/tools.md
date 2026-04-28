@@ -27,6 +27,8 @@ Read any SAP ABAP object.
 | `maxRows` | number | No | For TABLE_CONTENTS: max rows (default 100) |
 | `sqlFilter` | string | No | For TABLE_CONTENTS: condition expression only (no `WHERE`, no `SELECT`), e.g. `MANDT = '100'` |
 | `objectType` | string | No | For API_STATE: SAP object type (CLAS, INTF, PROG, FUGR, etc.) — auto-detected from name if omitted |
+| `version` | string | No | Source version: `active` (default), `inactive`, or `auto`. Applies to source-bearing types (PROG, CLAS, INTF, FUNC, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, FUGR, SRVB, SKTD, TABL, VIEW, STRU). See [Active vs Inactive Source](#active-vs-inactive-source) below. |
+| `force_refresh` | boolean | No | For source reads: bypass the cached source AND the inactive-list cache before reading. Use when you know the object changed outside ARC-1 in a way conditional GET can't catch. |
 
 **Supported types:**
 
@@ -65,7 +67,7 @@ Read any SAP ABAP object.
 | `MESSAGES` | Message class texts (structured JSON with `number`, `shortText`, `longText` per message) |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
-| `INACTIVE_OBJECTS` | List all objects pending activation (no name needed). Returns 404-friendly fallback on systems where the endpoint is unavailable. |
+| `INACTIVE_OBJECTS` | List all objects pending activation for the calling user (no `name` needed). Returns rich metadata: `name`, `type`, `uri`, `description?`, `user`, `deleted`, `transport`, `parentTransport`. |
 
 **Structured format (CLAS only):**
 
@@ -114,6 +116,36 @@ SAPRead(type="TABLE_CONTENTS", name="MARA", maxRows=10, sqlFilter="MATNR LIKE 'Z
 SAPRead(type="SYSTEM")
 SAPRead(type="INACTIVE_OBJECTS")                 — list objects pending activation
 ```
+
+### Active vs Inactive Source
+
+Source-bearing types accept a `version` parameter to choose between the activated source and the calling user's unactivated draft:
+
+| `version` | Behaviour |
+|-----------|-----------|
+| `active` (default) | Reads the last activated source. If the user has an unactivated draft (created in Eclipse/SE80, not yet activated), the response is prefixed with a one-line note flagging the draft so the LLM knows there's a gap and can re-read with `version='inactive'` if appropriate. |
+| `inactive` | Reads the user's draft directly. If no draft exists, SAP falls back to the active source and the response is prefixed with: *"No inactive draft exists for this object on the server. Returning the active version."* |
+| `auto` | Resolves client-side via the cached inactive-objects list: returns the draft if one exists, otherwise active. No warning is prefixed (the caller explicitly opted into "show me my view"). |
+
+The default preserves all existing caller behaviour; `version` is an opt-in extension.
+
+```
+SAPRead(type="CLAS", name="ZCL_ORDER")                          — active source (default)
+SAPRead(type="CLAS", name="ZCL_ORDER", version="inactive")       — your draft
+SAPRead(type="CLAS", name="ZCL_ORDER", version="auto")           — draft if it exists, else active
+```
+
+### Cache Behaviour
+
+ARC-1 caches every source read with the SAP-emitted `ETag`. On the next read, ARC-1 sends `If-None-Match` so the server itself confirms freshness:
+
+- **`304 Not Modified`** → cached body is still authoritative; response is prefixed with `[cached:revalidated]`.
+- **`200 OK` with new body and ETag** → cache is replaced; no prefix on the response.
+- **`404` / `410`** → cache entry is invalidated and the error is propagated.
+
+This means external writes (Eclipse activations, gCTS pulls, abapGit imports) are caught automatically — there's no staleness window. To force a fresh fetch and bypass the cache for one read, pass `force_refresh: true`.
+
+The full caching architecture (per-version cache keys, conditional GET, dependency-graph caching, inactive-list session cache, write invalidation) is documented in [Caching System](caching.md).
 
 ---
 
@@ -567,10 +599,12 @@ ENDCLASS.
 * Stats: 5 deps found, 3 resolved, 0 failed, 25 lines
 ```
 
-**Cache indicator:** When the dependency graph is served from the object cache (no ADT calls needed), the header changes to:
+**Cache indicator:** When the dependency graph is served from the hash-keyed dep-graph cache (no further ADT calls beyond the source revalidation), the header changes to:
 ```
 * === Dependency context for ZCL_ORDER (3 deps resolved) [cached] ===
 ```
+
+The `[cached]` label here is for **dependency graph hits** (hash-keyed, naturally correct without server validation). It is distinct from `[cached:revalidated]` which appears on `SAPRead` source responses after SAP confirms freshness via `304 Not Modified`. See [Caching System → Response Indicators](caching.md#response-indicators) for details.
 
 ### action="impact" — CDS upstream + downstream impact (DDLS only)
 
@@ -809,7 +843,7 @@ Probe and report SAP system capabilities, inspect the object cache state, and ma
 **Actions:**
 - `probe` — Re-probe the SAP system now (feature probes + auth checks + ADT discovery refresh). Detects optional features.
 - `features` — Get cached feature status from last probe (fast, no SAP round-trip).
-- `cache_stats` — Return object cache statistics: number of cached sources, dep graphs, edges, and whether warmup has run.
+- `cache_stats` — Return object cache statistics: cached sources, dep graphs, edges, warmup state, and the per-username inactive-list session cache (`inactiveListCache.userCount`, `inactiveListCache.totalEntries`).
 - `create_package` — Create a package (`DEVC`) via `/sap/bc/adt/packages`.
 - `delete_package` — Delete a package via lock/delete/unlock.
 - `change_package` — Move an existing object into a different package (DEVC reassignment).

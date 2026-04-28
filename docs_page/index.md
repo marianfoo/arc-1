@@ -200,7 +200,7 @@ The three-layer model (server flag + user scope + SAP authorization) is describe
 | [tools.md](tools.md) | Complete tool reference (12 intent-based tools) |
 | [mcp-usage.md](mcp-usage.md) | AI agent usage guide & workflow patterns |
 | [architecture.md](architecture.md) | System architecture with Mermaid diagrams |
-| [caching.md](caching.md) | Object caching — memory, SQLite, pre-warmer, reverse dep lookup |
+| [caching.md](caching.md) | Object caching — server-validated via `ETag`/`If-None-Match`, active/inactive source views, pre-warmer, reverse dep lookup |
 | [security-guide.md](security-guide.md) | Security hardening checklist for production |
 | [cli-guide.md](cli-guide.md) | CLI commands and configuration |
 | [docker.md](docker.md) | Full Docker reference |
