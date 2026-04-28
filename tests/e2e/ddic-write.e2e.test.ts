@@ -194,6 +194,17 @@ describe('E2E DDIC metadata write tests', () => {
     expectToolError(readDomain, domainName);
   });
 
+  it('SAPWrite rejects mixed-case object names on create', async () => {
+    const result = await callTool(client, 'SAPWrite', {
+      action: 'create',
+      type: 'DDLS',
+      name: 'Zarc1_Mixed_Case',
+      package: '$TMP',
+      source: 'define view entity Zarc1_Mixed_Case as select from t000 { key mandt }',
+    });
+    expectToolError(result, 'uppercase');
+  });
+
   it('SAPWrite batch_create supports DOMA + DTEL dependency chain', async (ctx) => {
     const domainName = uniqueName('ZARC1_BDOM');
     const dtelName = uniqueName('ZARC1_BDTL');

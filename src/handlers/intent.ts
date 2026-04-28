@@ -1890,6 +1890,8 @@ function needsVendorContentType(type: string): boolean {
 function createContentTypeForType(type: string): string {
   // SRVB creation works with wildcard content type; updates use vendor v2 type.
   if (type === 'SRVB') return 'application/*';
+  // STRU uses the "blues" v1 vendor type (same body shape as TABL but addressed at /ddic/structures).
+  if (type === 'STRU') return 'application/vnd.sap.adt.blues.v1+xml';
   return needsVendorContentType(type) ? vendorContentTypeForType(type) : 'application/*';
 }
 
@@ -2264,13 +2266,15 @@ export function buildCreateXml(
   <adtcore:packageRef adtcore:name="${escapeXml(pkg)}"/>
 </dcl:dclSource>`;
     case 'TABL':
-      // TABL creation also uses SAP's "blue" framework envelope, then source is written via /source/main.
+    case 'STRU':
+      // TABL/STRU creation uses SAP's "blue" framework envelope; source is written via /source/main.
+      // The adtcore:type marker disambiguates: TABL/DT for transparent tables, TABL/DS for structures.
       return `<?xml version="1.0" encoding="UTF-8"?>
 <blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
                  xmlns:adtcore="http://www.sap.com/adt/core"
                  adtcore:description="${escapeXml(description)}"
                  adtcore:name="${escapeXml(name)}"
-                 adtcore:type="TABL/DT"
+                 adtcore:type="${type === 'STRU' ? 'TABL/DS' : 'TABL/DT'}"
                  adtcore:masterLanguage="EN"
                  adtcore:masterSystem="H00"
                  adtcore:responsible="DEVELOPER">
@@ -2628,6 +2632,20 @@ async function handleSAPWrite(
     return errorResult('"type" and "name" are required for this action.');
   }
 
+  // SAP TADIR stores object names uppercase. Mixed-case names cause silent corruption
+  // (e.g. DDLS created as "Zc_MyView" registers as "ZC_MYVIEW" in TADIR but the source body
+  // still contains "Zc_MyView", confusing every downstream tool). Reject pre-flight on create —
+  // applies on every SAP release; this is universal SAP convention, not a 7.50 quirk.
+  // Note: source code INSIDE the object can use mixed case (e.g. for DDLS: name="ZC_MYVIEW"
+  // but `define view entity Zc_MyView` is fine inside the source body).
+  if (action === 'create' && name && name !== name.toUpperCase()) {
+    return errorResult(
+      `Object name "${name}" contains lowercase characters. SAP object names must be uppercase (e.g. "${name.toUpperCase()}").\n\n` +
+        `Note: the object NAME in TADIR must be uppercase, but the source code inside the object can use mixed case ` +
+        `(e.g. for DDLS: name="${name.toUpperCase()}" but source can contain "define view entity ${name}").`,
+    );
+  }
+
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
@@ -2643,6 +2661,32 @@ async function handleSAPWrite(
   switch (action) {
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
+
+      // STRU update guard against transparent tables.
+      // The /sap/bc/adt/ddic/structures/ PUT endpoint silently converts a transparent
+      // table (TABL/DT) into a structure (TABL/DS) by creating an inactive INTTAB version,
+      // which corrupts DD02L and confuses SE11. Best-effort pre-flight check via searchObject:
+      // if the existing object is anything other than TABL/DS, refuse the update.
+      if (type === 'STRU' && name) {
+        try {
+          const searchResults = await client.searchObject(name, 1);
+          const match = searchResults.find((r) => r.objectName.toUpperCase() === name.toUpperCase());
+          if (match && match.objectType !== 'TABL/DS') {
+            if (match.objectType === 'TABL/DT') {
+              return errorResult(
+                `"${name}" is a transparent table (TABL/DT), not a structure. ` +
+                  `Use SAPWrite(type="TABL") instead, or SE11 if your SAP release does not expose the /ddic/tables/ endpoint.`,
+              );
+            }
+            return errorResult(
+              `"${name}" exists as ${match.objectType}, not a structure (TABL/DS). ` +
+                `SAPWrite(type="STRU") only works with DDIC structures.`,
+            );
+          }
+        } catch {
+          // search failed — proceed cautiously; SAP-side validations will catch a wrong type.
+        }
+      }
 
       if (type === 'SKTD') {
         // KTD update requires the full <sktd:docu> XML envelope with the Markdown
@@ -2842,7 +2886,7 @@ async function handleSAPWrite(
       // 'application/*' — the wildcard lets the SAP server resolve the correct
       // handler (matching how ADT Eclipse and abap-adt-api send requests).
       const contentType = createContentTypeForType(type);
-      const needsPackageParam = type === 'BDEF' || type === 'TABL';
+      const needsPackageParam = type === 'BDEF' || type === 'TABL' || type === 'STRU';
       let result: string;
       try {
         result = await createObject(
@@ -3275,6 +3319,18 @@ async function handleSAPWrite(
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
 
+        // Mixed-case object name rejection (matches the create-path check above).
+        // Universal SAP convention — TADIR is uppercase on every release.
+        if (objName && objName !== objName.toUpperCase()) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: `Object name "${objName}" contains lowercase characters. SAP object names must be uppercase (e.g. "${objName.toUpperCase()}"). Source code inside the object can use mixed case.`,
+          });
+          break;
+        }
+
         // AFF header validation per object (if schema available)
         const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });
         if (!affResult.valid) {
@@ -3330,7 +3386,7 @@ async function handleSAPWrite(
           const objMetadataProps = getMetadataWriteProperties(obj);
           const body = buildCreateXml(objType, objName, pkg, objDescription, objMetadataProps);
           const contentType = createContentTypeForType(objType);
-          const needsPackageParam = objType === 'BDEF' || objType === 'TABL';
+          const needsPackageParam = objType === 'BDEF' || objType === 'TABL' || objType === 'STRU';
           try {
             await createObject(
               client.http,

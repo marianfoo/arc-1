@@ -9161,4 +9161,131 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('[line 5] Unknown annotation');
     });
   });
+
+  // ─── Mixed-case object name rejection ──────────────────────────────
+  describe('SAPWrite mixed-case object name rejection', () => {
+    it('rejects create with lowercase characters in object name', async () => {
+      mockFetch.mockReset();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'Zarc1_Mixed',
+        package: '$TMP',
+        source: 'define view entity Zarc1_Mixed as select from t000 { key mandt }',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('uppercase');
+      expect(text).toContain('ZARC1_MIXED');
+      // No HTTP traffic should have happened — guard fires before locking.
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+
+    it('proceeds past the guard when name is fully uppercase', async () => {
+      mockFetch.mockReset();
+      // CSRF + create + activate-related calls — let them all succeed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'ZARC1_OK',
+        package: '$TMP',
+        source: 'define view entity ZARC1_OK as select from t000 { key mandt }',
+      });
+      // Guard didn't fire → at least one HTTP call was attempted (CSRF or POST).
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('rejects mixed-case names per object inside batch_create', async () => {
+      mockFetch.mockReset();
+      // Stub HTTP minimally — the batch may attempt the first uppercase object before hitting the bad one.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          {
+            type: 'DDLS',
+            name: 'Zc_Bad',
+            description: 'bad',
+            source: 'define view entity Zc_Bad as select from t000 { key mandt }',
+          },
+          { type: 'CLAS', name: 'ZCL_LATER', description: 'never reached' },
+        ],
+      });
+      const text = result.content[0]?.text ?? '';
+      // First object should be marked failed for the mixed-case reason.
+      expect(text).toContain('Zc_Bad');
+      expect(text).toContain('uppercase');
+      // Second object should NOT have been attempted (batch breaks on first failure).
+      expect(text).not.toContain('ZCL_LATER: success');
+    });
+  });
+
+  // ─── STRU update guard against TABL/DT ────────────────────────────
+  describe('SAPWrite STRU update guard', () => {
+    function buildSearchResponseXml(name: string, objectType: string): string {
+      return (
+        `<?xml version="1.0" encoding="utf-8"?>` +
+        `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">` +
+        `<adtcore:objectReference adtcore:name="${name}" adtcore:type="${objectType}" ` +
+        `adtcore:description="x" adtcore:packageName="$TMP" adtcore:uri="/sap/bc/adt/x"/>` +
+        `</adtcore:objectReferences>`
+      );
+    }
+
+    it('rejects STRU update on a transparent table (TABL/DT)', async () => {
+      mockFetch.mockReset();
+      // searchObject GET → returns the existing object as TABL/DT.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildSearchResponseXml('T000', 'TABL/DT')));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'T000',
+        source: 'define type t000 { mandt : mandt; }',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('transparent table');
+      expect(text).toContain('TABL/DT');
+      expect(text).toContain('SAPWrite(type="TABL")');
+    });
+
+    it('rejects STRU update on a non-structure object (e.g. CLAS)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildSearchResponseXml('ZCL_FOO', 'CLAS/OC')));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'ZCL_FOO',
+        source: 'define type zcl_foo { mandt : mandt; }',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('CLAS/OC');
+      expect(text).toContain('not a structure');
+    });
+
+    it('proceeds past the guard when search throws (best-effort)', async () => {
+      mockFetch.mockReset();
+      // searchObject fails → guard swallows; subsequent lock+update HTTP calls fire.
+      mockFetch.mockResolvedValueOnce(mockResponse(500, 'search broke'));
+      // CSRF + lock + update + unlock all stubbed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'ZSTRU_OK',
+        source: 'define type zstru_ok { mandt : mandt; }',
+      });
+
+      // Verify the guard fell through (more than 1 HTTP call total — search + at least one follow-up).
+      expect(mockFetch.mock.calls.length).toBeGreaterThan(1);
+    });
+  });
 });

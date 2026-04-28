@@ -123,6 +123,7 @@ const SAPWRITE_TYPES_ONPREM = [
   'SRVD',
   'SRVB',
   'TABL',
+  'STRU',
   'DOMA',
   'DTEL',
   'MSAG',
@@ -138,15 +139,17 @@ const SAPWRITE_TYPES_BTP = [
   'SRVB',
   'SKTD',
   'TABL',
+  'STRU',
   'DOMA',
   'DTEL',
   'MSAG',
 ];
 
 const SAPWRITE_DESC_ONPREM =
-  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
+  'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, STRU, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
   'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
+  'STRU (DDIC structures) uses the same source-based write path as TABL — same `define type` syntax. Choose STRU for parameter/return-type composition; choose TABL for persistent transparent tables. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
   'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name), odataVersion ("V2"/"V4"), optional category (0=UI, 1=Web API). ' +
@@ -158,9 +161,10 @@ const SAPWRITE_DESC_ONPREM =
   'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
 
 const SAPWRITE_DESC_BTP =
-  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
+  'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, STRU, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
   'TABL supports custom table source writes via /source/main (define table syntax). ' +
+  'STRU (DDIC structures) uses the same source-based write path as TABL — same `define type` syntax. Choose STRU for parameter/return-type composition; choose TABL for persistent transparent tables. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
   'SRVB (service bindings) use metadata XML writes: provide serviceDefinition (SRVD name), odataVersion ("V2"/"V4"), optional category (0=UI, 1=Web API). ' +
@@ -599,6 +603,18 @@ export function getToolDefinitions(
           setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
           defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
           changeDocument: { type: 'boolean', description: 'DTEL: enable change document flag' },
+          messages: {
+            type: 'array',
+            description: 'MSAG: message entries for create/update',
+            items: {
+              type: 'object',
+              properties: {
+                number: { type: 'string', description: 'Message number (e.g., "001")' },
+                shortText: { type: 'string', description: 'Message short text (use & for placeholders: "&1", "&2")' },
+              },
+              required: ['number', 'shortText'],
+            },
+          },
           serviceDefinition: { type: 'string', description: 'SRVB: service definition name (SRVD) to bind to' },
           bindingType: {
             type: 'string',
@@ -691,6 +707,18 @@ export function getToolDefinitions(
                 setGetParameter: { type: 'string', description: 'DTEL: SET/GET parameter ID' },
                 defaultComponentName: { type: 'string', description: 'DTEL: default component name' },
                 changeDocument: { type: 'boolean', description: 'DTEL: change document flag' },
+                messages: {
+                  type: 'array',
+                  description: 'MSAG: message entries',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      number: { type: 'string', description: 'Message number (e.g., "001")' },
+                      shortText: { type: 'string', description: 'Message short text' },
+                    },
+                    required: ['number', 'shortText'],
+                  },
+                },
                 serviceDefinition: { type: 'string', description: 'SRVB: service definition (SRVD)' },
                 bindingType: {
                   type: 'string',
