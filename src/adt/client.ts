@@ -18,7 +18,7 @@
 
 import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
-import { isNotFoundError } from './errors.js';
+import { AdtApiError, isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import { Semaphore } from './semaphore.js';
@@ -555,8 +555,13 @@ export class AdtClient {
   /** Get installed SAP components */
   async getInstalledComponents(): Promise<Array<{ name: string; release: string; description: string }>> {
     checkOperation(this.safety, OperationType.Read, 'GetInstalledComponents');
-    const resp = await this.http.get('/sap/bc/adt/system/components');
-    return parseInstalledComponents(resp.body);
+    try {
+      const resp = await this.http.get('/sap/bc/adt/system/components', { Accept: 'application/atom+xml;type=feed' });
+      return parseInstalledComponents(resp.body);
+    } catch (err) {
+      if (err instanceof AdtApiError && err.statusCode === 406) return [];
+      throw err;
+    }
   }
 
   /** Get message class messages (legacy endpoint — may fail for some classes) */
