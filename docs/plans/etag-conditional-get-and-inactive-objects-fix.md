@@ -59,7 +59,7 @@ Task 1 is the standalone PR 1 (small, low-risk path/Accept/parser improvement). 
 - `SAPManage(action='cache_stats')` extended to surface the inactive-list state (size, last refresh).
 - Hyperfocused mode's wrapped `SAPRead` exposes the same `version` parameter.
 
-**Tasks 2-9 (PR 2):**
+**Tasks 2-7 (conditional GET pipeline) — additional design notes:**
 - Each `CachedSource` carries the etag returned by SAP. Cache is keyed by `(type, name, version)` so active and inactive views never collide.
 - Every cached source-read path sends `If-None-Match: <etag>`. On 304: return cached body, refresh `cachedAt`, do not call any further parsing. On 200 with new etag: replace cache, return fresh body. On 200 with no etag (graceful fallback for objects whose handlers don't emit one): store body without etag, next read fetches plain.
 - The `[cached:revalidated]` indicator on source reads marks server-validated cache hits (304). Plain `[cached]` is reserved for dep-graph hits in `compressor.ts` (hash-keyed; naturally correct without server validation). Source reads never emit unprefixed `[cached]` post-PR.
@@ -89,11 +89,12 @@ Task 1 is the standalone PR 1 (small, low-risk path/Accept/parser improvement). 
 | `tests/unit/cache/memory.test.ts` | Etag + version round-trip tests (Task 3) |
 | `tests/unit/cache/sqlite.test.ts` | Etag + version round-trip + schema migration tests (Task 4) |
 | `tests/unit/cache/caching-layer.test.ts` | Conditional GET flow tests: 304-hit, 200-replace, no-etag-fallback (Task 6) |
-| `tests/integration/cache.integration.test.ts` | Live a4h test: read object twice, assert second read uses 304 (Task 8) |
-| `tests/e2e/cache.e2e.test.ts` | E2E: SAPRead twice, assert `[cached:revalidated]` indicator and conditional-GET correctness (Task 8); SAPRead INACTIVE_OBJECTS returns valid list (Task 8) |
-| `README.md` | Update "Built-in Object Caching" section to mention conditional GET (Task 9) |
-| `CLAUDE.md` | Update Architecture: Request Flow + Key Files for Common Tasks table (Task 9) |
-| `docs/caching.md` | New file — architecture doc that fixes the broken README link (Task 9) |
+| `tests/integration/cache.integration.test.ts` | Live a4h test: read object twice, assert second read uses 304; inactive-list cache + version-parameter integration tests (Task 9) |
+| `tests/e2e/cache.e2e.test.ts` | E2E: SAPRead twice, assert `[cached:revalidated]` indicator and conditional-GET correctness; SAPRead INACTIVE_OBJECTS returns valid list; version-parameter end-to-end (Task 9) |
+| `tests/unit/cache/inactive-list-cache.test.ts` | Unit tests for the per-username inactive-list session cache (Task 8) |
+| `README.md` | Update "Built-in Object Caching" section to mention conditional GET + version parameter + inactive-draft awareness (Task 10) |
+| `CLAUDE.md` | Update Architecture: Request Flow + Key Files for Common Tasks table (Task 10) |
+| `docs/caching.md` | New file — architecture doc that fixes the broken README link, includes "Considered alternatives" section (Task 10) |
 
 ### Design Principles
 
@@ -103,7 +104,7 @@ Task 1 is the standalone PR 1 (small, low-risk path/Accept/parser improvement). 
 
 3. **Opportunistic, not required.** Some specific resource handlers historically had ETag emission bugs (notes 1915257, 2641168). The implementation falls back to a plain GET when the response carries no `etag` header — never errors, just stores body without a validator. Next read on that same object does a plain re-fetch.
 
-4. **Cache key is `(type, name, version)`.** ETag includes a version discriminator (`001` active, `000` inactive) per `cl_adt_utility=>calculate_etag_base` on the server. Sending an active ETag against an inactive request is a guaranteed mismatch; cache must key both dimensions to avoid wasted misses. Default `version` is `'active'` for all current callers — no surface change to SAPRead API in this plan; the version field is internal-only.
+4. **Cache key is `(type, name, version)`.** ETag includes a version discriminator (`001` active, `000` inactive) per `cl_adt_utility=>calculate_etag_base` on the server. Sending an active ETag against an inactive request is a guaranteed mismatch; cache must key both dimensions to avoid wasted misses. The version axis is also user-facing on SAPRead (Task 8) — the same value flows through to the cache key, so the surface and the cache layer share one source of truth.
 
 5. **Inactive endpoint is a real fix.** Don't paper over the 404 with a fallback message. The endpoint exists and works; ARC-1 calls the wrong path. Same applies to the parser: don't reject the real response shape silently — accept both real and legacy forms defensively.
 
@@ -113,11 +114,11 @@ Task 1 is the standalone PR 1 (small, low-risk path/Accept/parser improvement). 
 
 8. **Warnings are prefixed, not embedded.** When the response carries a draft-awareness warning, it is prepended as a separate paragraph BEFORE the `[cached:revalidated]` indicator (if any) and before the source body. This keeps existing `[cached:revalidated]` regex assertions working and gives the LLM clear "warning then content" structure. Warnings only fire when reading `version='active'` AND a draft exists; reading `version='inactive'` against an object with no draft fires its own (different) note.
 
-7. **Cache is rebuildable; migration is destructive.** When SqliteCache encounters a pre-migration schema (no `etag` or `version` column), drop the `sources` table and recreate. The cache is a performance optimization, never authoritative; users lose at most one re-fetch worth of latency.
+9. **Cache is rebuildable; migration is destructive.** When SqliteCache encounters a pre-migration schema (no `etag` or `version` column), drop the `sources` table and recreate. The cache is a performance optimization, never authoritative; users lose at most one re-fetch worth of latency.
 
 ## Development Approach
 
-Tasks 1 and 2 are foundation work — Task 1 is fully independent (PR 1) and Task 2 only adds types/interface declarations without behaviour changes. Tasks 3 and 4 implement those interfaces in the two cache backends; they can be done in either order. Task 5 widens the ADT client method signatures and is the largest single task; it must come before Task 6 (which uses those signatures) and Task 7 (which depends on the new fetcher contract via the caching layer). Tasks 8-9 add integration/E2E tests and documentation. Task 10 is final verification.
+Tasks 1 and 2 are foundation work — Task 1 is fully independent (PR 1) and Task 2 only adds types/interface declarations without behaviour changes. Tasks 3 and 4 implement those interfaces in the two cache backends; they can be done in either order. Task 5 widens the ADT client method signatures and is the largest single task; it must come before Task 6 (which uses those signatures) and Task 7 (which depends on the new fetcher contract via the caching layer). Task 8 adds the version-parameter UX (schema + handler + inactive-list cache + draft warnings) — depends on Tasks 5/6/7 having landed. Tasks 9-10 add integration/E2E tests and documentation. Task 11 is final verification.
 
 Each task's checklist is self-contained — every task references the file paths, line numbers, function names, and patterns the agent needs. Each code-changing task includes a final `npm test` checkbox. Integration-touching tasks reference `INFRASTRUCTURE.md` for the live test system credentials.
 
