@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.2](https://github.com/marianfoo/arc-1/compare/v0.7.1...v0.7.2) (2026-04-28)
+
+
+### Features
+
+* ETag-validated source cache + active/inactive SAPRead version parameter ([#186](https://github.com/marianfoo/arc-1/issues/186)) ([70bed22](https://github.com/marianfoo/arc-1/commit/70bed22859663106aba54b0213be57758ad51829))
+
+
+### Bug Fixes
+
+* detect HANA via S4CORE/HDB components ([#182](https://github.com/marianfoo/arc-1/issues/182)) ([87ec553](https://github.com/marianfoo/arc-1/commit/87ec553fa8011a3ffdddf41f12f252f7184c2057))
+
 ## [0.7.1](https://github.com/marianfoo/arc-1/compare/v0.7.0...v0.7.1) (2026-04-27)
 
 
