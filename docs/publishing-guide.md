@@ -12,7 +12,6 @@ This document describes how to publish ARC-1 to various MCP server registries, m
 | [VS Code / GitHub Copilot](#4-vs-code--github-copilot) | Via MCP Registry | Automatic | VS Code Extensions `@mcp` gallery |
 | [Cursor Marketplace](#5-cursor-marketplace) | Manual | Ready | Cursor IDE built-in marketplace |
 | [Claude Desktop Extensions](#6-claude-desktop-extensions) | Manual (CI builds .mcpb) | Ready | Claude Desktop Extensions directory |
-| [Claude Code Plugins](#7-claude-code-plugins) | Manual | Ready | Claude Code `/plugin` discovery |
 
 ## Files in This Repository
 
@@ -24,8 +23,6 @@ This document describes how to publish ARC-1 to various MCP server registries, m
 | `.cursor-plugin/plugin.json` | Cursor Marketplace plugin manifest |
 | `mcpb-manifest.json` | Claude Desktop Extension (MCPB) manifest |
 | `.mcpbignore` | Files excluded from MCPB bundle |
-| `.claude-plugin/plugin.json` | Claude Code plugin manifest |
-| `.mcp.json` | Claude Code MCP server config |
 
 ---
 
@@ -321,40 +318,7 @@ Add to `.github/workflows/release.yml` to build and attach `.mcpb` to releases:
 
 ---
 
-## 7. Claude Code Plugins
-
-**URL:** Claude Code → `/plugin` → Discover  
-**Impact:** Medium-high. Native Claude Code integration.
-
-### Files Already in Repo
-
-- `.claude-plugin/plugin.json` — Plugin manifest
-- `.mcp.json` — MCP server configuration (auto-discovered by Claude Code)
-
-### Steps
-
-1. **Submit via the plugin directory form:**
-   https://claude.ai/settings/plugins/submit
-   (or https://platform.claude.com/plugins/submit)
-
-2. **Provide:**
-   - Repository URL: `https://github.com/marianfoo/arc-1`
-   - The form triggers automated security scanning and review
-
-3. **Once approved**, users install via:
-   ```bash
-   claude plugin install arc-1
-   ```
-
-### Community Directory Alternative
-
-If the official directory is slow to process:
-- The community plugins repository at `anthropics/claude-plugins-community` is synced from Anthropic's internal pipeline
-- PRs directly to the community repo are auto-closed — use the submission form
-
----
-
-## 8. Additional Directories (Manual, Lower Priority)
+## 7. Additional Directories (Manual, Lower Priority)
 
 These don't require files in the repo — just web submissions:
 
