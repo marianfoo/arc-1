@@ -403,7 +403,7 @@ describe('Transport Integration Tests', () => {
       await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource);
 
       // Verify update succeeded
-      const source = await client.getProgram(testName);
+      const { source } = await client.getProgram(testName);
       expect(source).toContain('corrNr auto-propagated');
     }, 60_000);
 
@@ -435,7 +435,7 @@ describe('Transport Integration Tests', () => {
       await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource, transportId);
 
       // Verify update succeeded
-      const source = await client.getProgram(testName);
+      const { source } = await client.getProgram(testName);
       expect(source).toContain('explicit transport used');
     }, 60_000);
   });

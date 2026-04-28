@@ -154,20 +154,20 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
 
   describe('read released objects on BTP', () => {
     it('reads a released SAP class', async () => {
-      const source = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source).toBeTruthy();
       expect(source.length).toBeGreaterThan(0);
     });
 
     it('reads a released interface', async () => {
-      const source = await client.getInterface('IF_SERIALIZABLE_OBJECT');
+      const { source } = await client.getInterface('IF_SERIALIZABLE_OBJECT');
       expect(source).toBeTruthy();
     });
 
     it('reads CDS view (DDLS)', async () => {
       // I_Language is a commonly available released CDS view
       try {
-        const source = await client.getDdls('I_LANGUAGE');
+        const { source } = await client.getDdls('I_LANGUAGE');
         expect(source).toBeTruthy();
       } catch (err) {
         // May not be available on all BTP systems — acceptable
@@ -176,7 +176,7 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
     });
 
     it('reads class with includes', async () => {
-      const source = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
+      const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
       expect(typeof source).toBe('string');
     });
   });
@@ -271,10 +271,10 @@ describeIf('BTP ABAP Environment Integration Tests', () => {
   describe('HTTP session management with OAuth', () => {
     it('maintains session across multiple requests', async () => {
       // Verify CSRF + Bearer token work together
-      const source1 = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source: source1 } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source1).toBeTruthy();
 
-      const source2 = await client.getInterface('IF_SERIALIZABLE_OBJECT');
+      const { source: source2 } = await client.getInterface('IF_SERIALIZABLE_OBJECT');
       expect(source2).toBeTruthy();
     });
 

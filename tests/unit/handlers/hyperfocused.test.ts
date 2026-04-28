@@ -14,12 +14,13 @@ import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 describe('hyperfocused mode', () => {
   describe('expandHyperfocusedArgs', () => {
     it('routes read action to SAPRead', () => {
-      const result = expandHyperfocusedArgs({ action: 'read', type: 'CLAS', name: 'ZCL_TEST' });
+      const result = expandHyperfocusedArgs({ action: 'read', type: 'CLAS', name: 'ZCL_TEST', version: 'inactive' });
       expect('error' in result).toBe(false);
       if (!('error' in result)) {
         expect(result.toolName).toBe('SAPRead');
         expect(result.expandedArgs.type).toBe('CLAS');
         expect(result.expandedArgs.name).toBe('ZCL_TEST');
+        expect(result.expandedArgs.version).toBe('inactive');
       }
     });
 

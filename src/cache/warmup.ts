@@ -221,10 +221,13 @@ async function indexObject(
   // Fetch source
   let source: string;
   try {
+    const cached = cachingLayer.getCachedSourceWithEtag(objectType, objectName);
     if (objectType === 'CLAS') {
-      source = await client.getClass(objectName);
+      const result = await client.getClass(objectName, undefined, { ifNoneMatch: cached?.etag });
+      source = result.notModified && cached ? cached.source : result.source;
     } else if (objectType === 'INTF') {
-      source = await client.getInterface(objectName);
+      const result = await client.getInterface(objectName, { ifNoneMatch: cached?.etag });
+      source = result.notModified && cached ? cached.source : result.source;
     } else {
       return { status: 'failed', edges: 0 };
     }
@@ -295,8 +298,9 @@ async function indexFunctionGroup(
       cachingLayer.cache.putFuncGroup(funcName, groupName);
 
       try {
-        const source = await client.getFunction(groupName, funcName);
         const cached = cachingLayer.getCachedSource('FUNC', funcName);
+        const result = await client.getFunction(groupName, funcName, { ifNoneMatch: cached?.etag });
+        const source = result.notModified && cached ? cached.source : result.source;
         const newHash = hashSource(source);
 
         if (cached && cached.hash === newHash) continue;

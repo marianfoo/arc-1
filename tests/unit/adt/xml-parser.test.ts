@@ -1023,6 +1023,31 @@ describe('XML Parser', () => {
       expect(parseInactiveObjects('  ')).toEqual([]);
     });
 
+    it('parses rich ioc shape with user/deleted/transport metadata', () => {
+      const objects = parseInactiveObjects(loadFixture('inactive-objects-ioc.xml'));
+      expect(objects).toHaveLength(2);
+      expect(objects[0]).toEqual({
+        name: 'ZC_FbClubTP',
+        type: 'BDEF/BDO',
+        uri: '/sap/bc/adt/bo/behaviordefinitions/zc_fbclubtp',
+        user: 'MARIAN',
+        deleted: false,
+        transport: 'A4HK901087',
+        parentTransport: '/sap/bc/adt/cts/transportrequests/A4HK901086',
+      });
+      expect(objects[0]).not.toHaveProperty('description');
+      expect(objects[1]).toEqual({
+        name: 'ZARC1_TEST',
+        type: 'DDLS/DF',
+        uri: '/sap/bc/adt/ddic/ddl/sources/zarc1_test',
+        description: 'Test CDS',
+        user: 'MARIAN',
+        deleted: false,
+      });
+      expect(objects[1]).not.toHaveProperty('transport');
+      expect(objects[1]).not.toHaveProperty('parentTransport');
+    });
+
     it('returns empty array when no objectReference nodes', () => {
       const xml = '<?xml version="1.0"?><root><empty/></root>';
       expect(parseInactiveObjects(xml)).toEqual([]);

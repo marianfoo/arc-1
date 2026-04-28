@@ -70,6 +70,7 @@ export function expandHyperfocusedArgs(args: Record<string, unknown>):
   // Copy standard top-level fields
   if (args.type !== undefined) expandedArgs.type = args.type;
   if (args.name !== undefined) expandedArgs.name = args.name;
+  if (args.version !== undefined) expandedArgs.version = args.version;
 
   // For write/activate, copy action from params if not already set
   // (the real SAPWrite has its own "action" field like "create"/"update"/"delete")
@@ -124,6 +125,11 @@ export function getHyperfocusedToolDefinition(
         },
         type: { type: 'string', description: 'Object or action type (e.g., CLAS, PROG, INTF, syntax, unittest)' },
         name: { type: 'string', description: 'Object name' },
+        version: {
+          type: 'string',
+          enum: ['active', 'inactive', 'auto'],
+          description: 'For read action: source version (active, inactive, auto)',
+        },
         params: {
           type: 'object',
           description: 'Additional parameters (tool-specific). Merged with type/name.',

@@ -92,23 +92,36 @@ export class MemoryCache implements Cache {
 
   // ─── Source Code Cache ────────────────────────────────────────────
 
-  putSource(objectType: string, objectName: string, source: string): void {
-    const key = sourceKey(objectType, objectName);
+  putSource(
+    objectType: string,
+    objectName: string,
+    source: string,
+    opts: { version?: 'active' | 'inactive'; etag?: string } = {},
+  ): void {
+    const version = opts.version ?? 'active';
+    const key = sourceKey(objectType, objectName, version);
     this.sources.set(key, {
       objectType: objectType.toUpperCase(),
       objectName: objectName.toUpperCase(),
+      version,
       source,
       hash: hashSource(source),
+      etag: opts.etag,
       cachedAt: new Date().toISOString(),
     });
   }
 
-  getSource(objectType: string, objectName: string): CachedSource | null {
-    return this.sources.get(sourceKey(objectType, objectName)) ?? null;
+  getSource(objectType: string, objectName: string, version: 'active' | 'inactive' = 'active'): CachedSource | null {
+    return this.sources.get(sourceKey(objectType, objectName, version)) ?? null;
   }
 
-  invalidateSource(objectType: string, objectName: string): void {
-    this.sources.delete(sourceKey(objectType, objectName));
+  invalidateSource(objectType: string, objectName: string, version: 'active' | 'inactive' | 'all' = 'active'): void {
+    if (version === 'all') {
+      this.sources.delete(sourceKey(objectType, objectName, 'active'));
+      this.sources.delete(sourceKey(objectType, objectName, 'inactive'));
+      return;
+    }
+    this.sources.delete(sourceKey(objectType, objectName, version));
   }
 
   // ─── Dependency Graph Cache ───────────────────────────────────────

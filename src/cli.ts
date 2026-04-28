@@ -66,13 +66,13 @@ program
     const client = createClientFromEnv();
     switch (type.toUpperCase()) {
       case 'PROG':
-        console.log(await client.getProgram(name));
+        console.log((await client.getProgram(name)).source);
         break;
       case 'CLAS':
-        console.log(await client.getClass(name));
+        console.log((await client.getClass(name)).source);
         break;
       case 'INTF':
-        console.log(await client.getInterface(name));
+        console.log((await client.getInterface(name)).source);
         break;
       default:
         console.error(`Unsupported type: ${type}`);

@@ -290,14 +290,14 @@ describe('ADT Integration Tests', () => {
   describe('read operations', () => {
     it('reads a standard SAP program', async () => {
       // RSHOWTIM is a standard SAP report available on most systems
-      const source = await client.getProgram('RSHOWTIM');
+      const { source } = await client.getProgram('RSHOWTIM');
       expect(source).toBeTruthy();
       // Standard SAP programs start with a comment header
       expect(source.length).toBeGreaterThan(10);
     });
 
     it('reads a standard SAP class', async () => {
-      const source = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source).toBeTruthy();
       expect(source.length).toBeGreaterThan(0);
     });
@@ -445,14 +445,14 @@ describe('ADT Integration Tests', () => {
 
   describe('DDIC operations', () => {
     it('reads structure definition (BAPIRET2)', async () => {
-      const source = await client.getStructure('BAPIRET2');
+      const { source } = await client.getStructure('BAPIRET2');
       expect(source).toBeTruthy();
       expect(source).toContain('bapiret2');
       expect(source).toContain('message');
     });
 
     it('reads structure definition (SYST)', async () => {
-      const source = await client.getStructure('SYST');
+      const { source } = await client.getStructure('SYST');
       expect(source).toBeTruthy();
       expect(source).toContain('syst');
       expect(source).toContain('subrc');
@@ -645,14 +645,14 @@ describe('ADT Integration Tests', () => {
 
   describe('class operations', () => {
     it('reads class main source', async () => {
-      const source = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source).toBeTruthy();
     });
 
     it('reads class with specific include', async () => {
       // Try reading definitions include
       try {
-        const source = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
+        const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
         expect(typeof source).toBe('string');
         expect(source.length).toBeGreaterThan(0);
       } catch (err) {
@@ -667,21 +667,21 @@ describe('ADT Integration Tests', () => {
 
     it('reads class local definitions include', async (ctx) => {
       requireFlightAmdp(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions');
       expect(typeof source).toBe('string');
       expect(source).toContain('=== definitions ===');
     });
 
     it('reads class local implementations include', async (ctx) => {
       requireFlightAmdp(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'implementations');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'implementations');
       expect(typeof source).toBe('string');
       expect(source).toContain('=== implementations ===');
     });
 
     it('reads class with multiple includes', async (ctx) => {
       requireFlightAmdp(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions,implementations');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions,implementations');
       expect(source).toContain('=== definitions ===');
       expect(source).toContain('=== implementations ===');
     });
@@ -689,14 +689,14 @@ describe('ADT Integration Tests', () => {
     it('gracefully handles non-existent testclasses include', async (ctx) => {
       requireFlightAmdp(ctx);
       // If the class has no test classes, should return a helpful note rather than throwing
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'testclasses');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'testclasses');
       expect(typeof source).toBe('string');
       expect(source).toContain('testclasses');
     });
 
     it('reads full class source without include (default)', async (ctx) => {
       requireFlightAmdp(ctx);
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP');
       expect(source).toBeTruthy();
       expect(source.length).toBeGreaterThan(0);
     });
@@ -708,7 +708,7 @@ describe('ADT Integration Tests', () => {
     it('reads a standard SAP interface', async () => {
       // IF_SERIALIZABLE_OBJECT exists on all systems
       try {
-        const source = await client.getInterface('IF_SERIALIZABLE_OBJECT');
+        const { source } = await client.getInterface('IF_SERIALIZABLE_OBJECT');
         expect(typeof source).toBe('string');
         expect(source.length).toBeGreaterThan(0);
       } catch (err) {
@@ -792,11 +792,11 @@ describe('ADT Integration Tests', () => {
     it('maintains session cookies across requests', async () => {
       // This test verifies the cookie jar fix — CSRF token + session cookie correlation
       // First request (GET) should establish a session, POST should reuse it
-      const source = await client.getProgram('RSHOWTIM');
+      const { source } = await client.getProgram('RSHOWTIM');
       expect(source).toBeTruthy();
 
       // Second request should work with the same session
-      const source2 = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source: source2 } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source2).toBeTruthy();
     });
 
@@ -1064,10 +1064,10 @@ describe('ADT Integration Tests', () => {
       createdPrograms.push(prog2);
 
       // Verify both exist by reading them
-      const source1 = await client.getProgram(prog1);
+      const { source: source1 } = await client.getProgram(prog1);
       expect(typeof source1).toBe('string');
 
-      const source2 = await client.getProgram(prog2);
+      const { source: source2 } = await client.getProgram(prog2);
       expect(typeof source2).toBe('string');
     });
   });
@@ -1126,7 +1126,7 @@ describe('ADT Integration Tests', () => {
       classStructured: Awaited<ReturnType<AdtClient['getClassStructured']>>;
     }> {
       try {
-        const bdefSource = await client.getBdef(bdefFixture);
+        const { source: bdefSource } = await client.getBdef(bdefFixture);
         const behaviorPoolClass = bdefSource.match(/implementation\s+in\s+class\s+([^\s;]+)/i)?.[1];
         requireOrSkip(ctx, behaviorPoolClass, `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no implementation class`);
         const classStructured = await client.getClassStructured(behaviorPoolClass);
@@ -1229,7 +1229,7 @@ describe('ADT Integration Tests', () => {
     it('reads a DDLX metadata extension source', async (ctx) => {
       requireDmoDdlx(ctx);
       // /DMO/C_AGENCYTP is a standard demo DDLX from the Flight Reference Scenario
-      const source = await client.getDdlx('/DMO/C_AGENCYTP');
+      const { source } = await client.getDdlx('/DMO/C_AGENCYTP');
       expect(source).toBeTruthy();
       expect(source).toContain('@Metadata.layer');
       expect(source).toContain('annotate');
@@ -1237,7 +1237,7 @@ describe('ADT Integration Tests', () => {
 
     it('reads DDLX with UI annotations', async (ctx) => {
       requireDmoDdlx(ctx);
-      const source = await client.getDdlx('/DMO/C_TRAVEL_A_D');
+      const { source } = await client.getDdlx('/DMO/C_TRAVEL_A_D');
       expect(source).toBeTruthy();
       expect(source).toContain('@UI');
     });
@@ -1253,8 +1253,8 @@ describe('ADT Integration Tests', () => {
     it('reads a service binding and returns parsed JSON', async (ctx) => {
       requireDmoSrvb(ctx);
       // /DMO/UI_AGENCY_O4 is a standard demo SRVB from the Flight Reference Scenario
-      const result = await client.getSrvb('/DMO/UI_AGENCY_O4');
-      const parsed = JSON.parse(result);
+      const { source } = await client.getSrvb('/DMO/UI_AGENCY_O4');
+      const parsed = JSON.parse(source);
       expect(parsed.name).toBe('/DMO/UI_AGENCY_O4');
       expect(parsed.type).toBe('SRVB/SVB');
       expect(parsed.odataVersion).toBe('V4');
@@ -1265,8 +1265,8 @@ describe('ADT Integration Tests', () => {
 
     it('reads a V2 service binding', async (ctx) => {
       requireDmoSrvb(ctx);
-      const result = await client.getSrvb('/DMO/UI_TRAVEL_U_V2');
-      const parsed = JSON.parse(result);
+      const { source } = await client.getSrvb('/DMO/UI_TRAVEL_U_V2');
+      const parsed = JSON.parse(source);
       expect(parsed.name).toBe('/DMO/UI_TRAVEL_U_V2');
       expect(parsed.odataVersion).toBe('V2');
     });

@@ -1036,11 +1036,45 @@ function toStringArray(value: unknown): string[] {
 export function parseInactiveObjects(xml: string): InactiveObject[] {
   if (!xml.trim()) return [];
   const parsed = parseXml(xml);
-  // Each inactive object is in its own entry → objectReference is nested per-entry.
-  // findDeepNodes returns early on first match, so we iterate entries instead.
   const entries = findDeepNodes(parsed, 'entry');
+
+  const hasRichObjects = entries.some((entry) =>
+    toRecordArray((entry as Record<string, unknown>).object).some((object) => {
+      const refs = toRecordArray(object.ref);
+      return refs.length > 0;
+    }),
+  );
+
+  if (hasRichObjects) {
+    const results: InactiveObject[] = [];
+    for (const entry of entries) {
+      const entryRecord = entry as Record<string, unknown>;
+      for (const object of toRecordArray(entryRecord.object)) {
+        const ref = toRecordArray(object.ref)[0];
+        if (!ref) continue;
+        const transportRef = toRecordArray(toRecordArray(entryRecord.transport)[0]?.ref)[0];
+        results.push({
+          name: String(ref['@_name'] ?? ''),
+          type: String(ref['@_type'] ?? ''),
+          uri: String(ref['@_uri'] ?? ''),
+          ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
+          ...(object['@_user'] ? { user: String(object['@_user']) } : {}),
+          ...(object['@_deleted'] !== undefined
+            ? { deleted: String(object['@_deleted']).toLowerCase() === 'true' }
+            : {}),
+          ...(transportRef?.['@_name'] ? { transport: String(transportRef['@_name']) } : {}),
+          ...(transportRef?.['@_parentUri'] ? { parentTransport: String(transportRef['@_parentUri']) } : {}),
+        });
+      }
+    }
+    return results;
+  }
+
+  // Flat objectReference shape. Each inactive object is usually in its own entry,
+  // but some older responses put objectReference nodes directly under the root.
   const results: InactiveObject[] = [];
-  for (const entry of entries) {
+  const flatContainers = entries.length > 0 ? entries : [parsed];
+  for (const entry of flatContainers) {
     const refs = findDeepNodes(entry, 'objectReference');
     for (const ref of refs) {
       results.push({

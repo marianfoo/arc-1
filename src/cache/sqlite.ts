@@ -19,7 +19,18 @@ export class SqliteCache implements Cache {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
+    this.dropOldSourcesTableIfNeeded();
     this.createTables();
+  }
+
+  private dropOldSourcesTableIfNeeded(): void {
+    const cols = this.db.prepare("PRAGMA table_info('sources')").all() as Array<{ name: string }>;
+    if (cols.length === 0) return;
+    const hasEtag = cols.some((c) => c.name === 'etag');
+    const hasVersion = cols.some((c) => c.name === 'version');
+    if (!hasEtag || !hasVersion) {
+      this.db.exec('DROP TABLE IF EXISTS sources;');
+    }
   }
 
   private createTables(): void {
@@ -58,8 +69,10 @@ export class SqliteCache implements Cache {
         cache_key TEXT PRIMARY KEY,
         object_type TEXT NOT NULL,
         object_name TEXT NOT NULL,
+        version TEXT NOT NULL DEFAULT 'active',
         source TEXT NOT NULL,
         hash TEXT NOT NULL,
+        etag TEXT,
         cached_at TEXT NOT NULL
       );
 
@@ -80,6 +93,7 @@ export class SqliteCache implements Cache {
       CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id);
       CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id);
       CREATE INDEX IF NOT EXISTS idx_sources_hash ON sources(hash);
+      CREATE INDEX IF NOT EXISTS idx_sources_objname_version ON sources(object_name, object_type, version);
     `);
   }
 
@@ -162,23 +176,31 @@ export class SqliteCache implements Cache {
 
   // ─── Source Code Cache ────────────────────────────────────────────
 
-  putSource(objectType: string, objectName: string, source: string): void {
-    const key = sourceKey(objectType, objectName);
+  putSource(
+    objectType: string,
+    objectName: string,
+    source: string,
+    opts: { version?: 'active' | 'inactive'; etag?: string } = {},
+  ): void {
+    const version = opts.version ?? 'active';
+    const key = sourceKey(objectType, objectName, version);
     const stmt = this.db.prepare(
-      'INSERT OR REPLACE INTO sources (cache_key, object_type, object_name, source, hash, cached_at) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sources (cache_key, object_type, object_name, version, source, hash, etag, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     );
     stmt.run(
       key,
       objectType.toUpperCase(),
       objectName.toUpperCase(),
+      version,
       source,
       hashSource(source),
+      opts.etag ?? null,
       new Date().toISOString(),
     );
   }
 
-  getSource(objectType: string, objectName: string): CachedSource | null {
-    const key = sourceKey(objectType, objectName);
+  getSource(objectType: string, objectName: string, version: 'active' | 'inactive' = 'active'): CachedSource | null {
+    const key = sourceKey(objectType, objectName, version);
     const row = this.db.prepare('SELECT * FROM sources WHERE cache_key = ?').get(key) as
       | Record<string, unknown>
       | undefined;
@@ -186,14 +208,22 @@ export class SqliteCache implements Cache {
     return {
       objectType: String(row.object_type),
       objectName: String(row.object_name),
+      version: String(row.version) as 'active' | 'inactive',
       source: String(row.source),
       hash: String(row.hash),
+      etag: row.etag ? String(row.etag) : undefined,
       cachedAt: String(row.cached_at),
     };
   }
 
-  invalidateSource(objectType: string, objectName: string): void {
-    const key = sourceKey(objectType, objectName);
+  invalidateSource(objectType: string, objectName: string, version: 'active' | 'inactive' | 'all' = 'active'): void {
+    if (version === 'all') {
+      this.db
+        .prepare('DELETE FROM sources WHERE object_type = ? AND object_name = ?')
+        .run(objectType.toUpperCase(), objectName.toUpperCase());
+      return;
+    }
+    const key = sourceKey(objectType, objectName, version);
     this.db.prepare('DELETE FROM sources WHERE cache_key = ?').run(key);
   }
 

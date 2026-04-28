@@ -32,7 +32,7 @@ import {
   isSiblingNameMatch,
   type SiblingExtensionCandidate,
 } from '../adt/cds-impact.js';
-import type { AdtClient } from '../adt/client.js';
+import type { AdtClient, SourceReadResult } from '../adt/client.js';
 import {
   findDefinition,
   findReferences,
@@ -146,7 +146,13 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../adt/transport.js';
-import type { ClassHierarchy, DumpDetail, ObjectTransportHistory, ResolvedFeatures } from '../adt/types.js';
+import type {
+  ClassHierarchy,
+  DumpDetail,
+  InactiveObject,
+  ObjectTransportHistory,
+  ResolvedFeatures,
+} from '../adt/types.js';
 import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
@@ -1115,7 +1121,7 @@ export async function handleToolCall(
           result = await handleSAPWrite(client, args, config, cachingLayer);
           break;
         case 'SAPActivate':
-          result = await handleSAPActivate(client, args);
+          result = await handleSAPActivate(client, args, cachingLayer);
           break;
         case 'SAPNavigate':
           result = await handleSAPNavigate(client, args);
@@ -1227,6 +1233,80 @@ const BTP_HINTS: Record<string, string> = {
   TRAN: 'Transaction codes (TRAN) are not available on BTP ABAP Environment. Use SAPSearch to find apps and services instead.',
 };
 
+type SourceVersion = 'active' | 'inactive';
+type RequestedSourceVersion = SourceVersion | 'auto';
+
+const VERSIONED_SOURCE_READ_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'INCL',
+  'DDLS',
+  'DCLS',
+  'BDEF',
+  'SRVD',
+  'DDLX',
+  'SRVB',
+  'SKTD',
+  'TABL',
+  'VIEW',
+  'STRU',
+]);
+
+function inactiveTypeMatches(readType: string, inactiveType: string): boolean {
+  return (inactiveType.split('/')[0] ?? inactiveType).toUpperCase() === readType.toUpperCase();
+}
+
+async function resolveVersionAndDraftInfo(
+  client: AdtClient,
+  cachingLayer: CachingLayer | undefined,
+  type: string,
+  name: string,
+  requestedVersion: RequestedSourceVersion,
+): Promise<{ effectiveVersion: SourceVersion; draft?: InactiveObject }> {
+  if (!VERSIONED_SOURCE_READ_TYPES.has(type)) {
+    return { effectiveVersion: requestedVersion === 'auto' ? 'active' : requestedVersion };
+  }
+
+  let draft: InactiveObject | undefined;
+  if (cachingLayer || requestedVersion !== 'active') {
+    try {
+      const inactiveObjects = cachingLayer
+        ? await cachingLayer.inactiveLists.getOrFetch(client)
+        : await client.getInactiveObjects();
+      const upperName = name.toUpperCase();
+      draft = inactiveObjects.find(
+        (object) => inactiveTypeMatches(type, object.type) && object.name.toUpperCase() === upperName,
+      );
+    } catch (err) {
+      logger.debug('Inactive object list unavailable while resolving source version', {
+        type,
+        name,
+        requestedVersion,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (requestedVersion === 'auto') {
+    return { effectiveVersion: draft ? 'inactive' : 'active', draft };
+  }
+  return { effectiveVersion: requestedVersion, draft };
+}
+
+function sourceVersionWarning(effectiveVersion: SourceVersion, draft?: InactiveObject): string | undefined {
+  if (effectiveVersion === 'active' && draft) {
+    const deletion = draft.deleted ? ' deletion' : '';
+    const transport = draft.transport ? ` (in transport ${draft.transport})` : '';
+    return `Note: You have an unactivated${deletion} draft of this object${transport}. The source below is the LAST ACTIVATED version. To work with your draft, activate it first via SAPActivate or re-run with version='inactive' to read it directly.`;
+  }
+  if (effectiveVersion === 'inactive' && !draft) {
+    return 'Note: No inactive draft exists for this object on the server. Returning the active version.';
+  }
+  return undefined;
+}
+
 async function handleSAPRead(
   client: AdtClient,
   args: Record<string, unknown>,
@@ -1234,26 +1314,47 @@ async function handleSAPRead(
 ): Promise<ToolResult> {
   const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
+  const requestedVersion = (args.version ?? 'active') as RequestedSourceVersion;
 
   // BTP: return helpful error for unavailable types
   if (isBtpSystem() && BTP_HINTS[type]) {
     return errorResult(BTP_HINTS[type]);
   }
 
+  if (args.force_refresh === true && cachingLayer && VERSIONED_SOURCE_READ_TYPES.has(type)) {
+    cachingLayer.inactiveLists.invalidate(client.username);
+    cachingLayer.invalidate(type, name, 'all');
+  }
+
+  const { effectiveVersion, draft } = await resolveVersionAndDraftInfo(
+    client,
+    cachingLayer,
+    type,
+    name,
+    requestedVersion,
+  );
+  const versionWarning = sourceVersionWarning(effectiveVersion, draft);
+
   // Helper: get source with cache support, returns cache hit status
   const cachedGet = async (
     objType: string,
     objName: string,
-    fetcher: () => Promise<string>,
-  ): Promise<{ source: string; cacheHit: boolean }> => {
-    if (!cachingLayer) return { source: await fetcher(), cacheHit: false };
-    const { source, hit } = await cachingLayer.getSource(objType, objName, fetcher);
-    return { source, cacheHit: hit };
+    version: SourceVersion,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ): Promise<{ source: string; cacheHit: boolean; revalidated: boolean }> => {
+    if (!cachingLayer) {
+      const result = await fetcher(undefined);
+      return { source: result.source, cacheHit: false, revalidated: false };
+    }
+    const { source, hit, revalidated } = await cachingLayer.getSource(objType, objName, fetcher, { version });
+    return { source, cacheHit: hit, revalidated };
   };
 
-  /** Prepend [cached] indicator when result came from cache */
-  const cachedTextResult = (source: string, cacheHit: boolean): ToolResult => {
-    return textResult(cacheHit ? `[cached]\n${source}` : source);
+  /** Prepend draft-awareness notes and cache indicator when the server revalidated a cached source. */
+  const cachedTextResult = (source: string, cacheHit: boolean, revalidated: boolean, warning?: string): ToolResult => {
+    const note = warning ? `${warning}\n\n` : '';
+    const indicator = cacheHit && revalidated ? '[cached:revalidated]\n' : '';
+    return textResult(`${note}${indicator}${source}`);
   };
 
   // Structured format is only supported for CLAS type
@@ -1263,8 +1364,10 @@ async function handleSAPRead(
 
   switch (type) {
     case 'PROG': {
-      const { source, cacheHit } = await cachedGet('PROG', name, () => client.getProgram(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('PROG', name, effectiveVersion, (ifNoneMatch) =>
+        client.getProgram(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'CLAS': {
       // Structured format: return JSON with metadata + decomposed source
@@ -1275,7 +1378,9 @@ async function handleSAPRead(
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
         // Method-level read — fetch full source then extract (no cache indicator for derived results)
-        const { source: fullSource } = await cachedGet('CLAS', name, () => client.getClass(name));
+        const { source: fullSource } = await cachedGet('CLAS', name, effectiveVersion, (ifNoneMatch) =>
+          client.getClass(name, undefined, { ifNoneMatch, version: effectiveVersion }),
+        );
         const abaplintVer = cachedFeatures?.abapRelease
           ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
           : undefined;
@@ -1287,18 +1392,25 @@ async function handleSAPRead(
         if (!extracted.success) {
           return errorResult(extracted.error ?? `Method "${methodParam}" not found in ${name}.`);
         }
-        return textResult(extracted.methodSource);
+        return cachedTextResult(extracted.methodSource, false, false, versionWarning);
       }
       // Only cache the full merged source (no include param), not individual includes
       if (!args.include) {
-        const { source, cacheHit } = await cachedGet('CLAS', name, () => client.getClass(name));
-        return cachedTextResult(source, cacheHit);
+        const { source, cacheHit, revalidated } = await cachedGet('CLAS', name, effectiveVersion, (ifNoneMatch) =>
+          client.getClass(name, undefined, { ifNoneMatch, version: effectiveVersion }),
+        );
+        return cachedTextResult(source, cacheHit, revalidated, versionWarning);
       }
-      return textResult(await client.getClass(name, args.include as string | undefined));
+      const includeResult = await client.getClass(name, args.include as string | undefined, {
+        version: effectiveVersion,
+      });
+      return cachedTextResult(includeResult.source, false, false, versionWarning);
     }
     case 'INTF': {
-      const { source, cacheHit } = await cachedGet('INTF', name, () => client.getInterface(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('INTF', name, effectiveVersion, (ifNoneMatch) =>
+        client.getInterface(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'FUNC': {
       let group = String(args.group ?? '');
@@ -1314,13 +1426,15 @@ async function handleSAPRead(
         }
         group = resolved;
       }
-      const { source, cacheHit } = await cachedGet('FUNC', name, () => client.getFunction(group, name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('FUNC', name, effectiveVersion, (ifNoneMatch) =>
+        client.getFunction(group, name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'FUGR': {
       const expand = Boolean(args.expand_includes);
       if (expand) {
-        const source = await client.getFunctionGroupSource(name);
+        const { source } = await client.getFunctionGroupSource(name, { version: effectiveVersion });
         // Match INCLUDE statements but skip ABAP comment lines (starting with *)
         const includePattern = /^[^*\n]*\bINCLUDE\s+(\S+)\s*\./gim;
         const parts: string[] = [`=== FUGR ${name} (main) ===\n${source}`];
@@ -1328,7 +1442,7 @@ async function handleSAPRead(
         while ((m = includePattern.exec(source)) !== null) {
           const inclName = m[1]!;
           try {
-            const inclSource = await client.getInclude(inclName);
+            const { source: inclSource } = await client.getInclude(inclName, { version: effectiveVersion });
             parts.push(`\n=== ${inclName} ===\n${inclSource}`);
           } catch {
             parts.push(`\n=== ${inclName} ===\n[Could not read include "${inclName}"]`);
@@ -1340,11 +1454,19 @@ async function handleSAPRead(
       return textResult(JSON.stringify(fg, null, 2));
     }
     case 'INCL': {
-      const { source, cacheHit } = await cachedGet('INCL', name, () => client.getInclude(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('INCL', name, effectiveVersion, (ifNoneMatch) =>
+        client.getInclude(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'DDLS': {
-      const { source: ddlSource, cacheHit } = await cachedGet('DDLS', name, () => client.getDdls(name));
+      const {
+        source: ddlSource,
+        cacheHit,
+        revalidated,
+      } = await cachedGet('DDLS', name, effectiveVersion, (ifNoneMatch) =>
+        client.getDdls(name, { ifNoneMatch, version: effectiveVersion }),
+      );
       if (ddlSource.trim() === '') {
         return textResult(
           `DDLS ${name} exists in the object directory but has no source code stored. ` +
@@ -1353,26 +1475,34 @@ async function handleSAPRead(
       }
       if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
         // Elements extraction is derived from source — no cache indicator
-        return textResult(extractCdsElements(ddlSource, name));
+        return cachedTextResult(extractCdsElements(ddlSource, name), false, false, versionWarning);
       }
-      return cachedTextResult(ddlSource, cacheHit);
+      return cachedTextResult(ddlSource, cacheHit, revalidated, versionWarning);
     }
     case 'DCLS': {
-      const { source, cacheHit } = await cachedGet('DCLS', name, () => client.getDcl(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('DCLS', name, effectiveVersion, (ifNoneMatch) =>
+        client.getDcl(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'BDEF': {
-      const { source, cacheHit } = await cachedGet('BDEF', name, () => client.getBdef(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('BDEF', name, effectiveVersion, (ifNoneMatch) =>
+        client.getBdef(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'SRVD': {
-      const { source, cacheHit } = await cachedGet('SRVD', name, () => client.getSrvd(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('SRVD', name, effectiveVersion, (ifNoneMatch) =>
+        client.getSrvd(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'DDLX': {
       try {
-        const { source, cacheHit } = await cachedGet('DDLX', name, () => client.getDdlx(name));
-        return cachedTextResult(source, cacheHit);
+        const { source, cacheHit, revalidated } = await cachedGet('DDLX', name, effectiveVersion, (ifNoneMatch) =>
+          client.getDdlx(name, { ifNoneMatch, version: effectiveVersion }),
+        );
+        return cachedTextResult(source, cacheHit, revalidated, versionWarning);
       } catch (err) {
         if (isNotFoundError(err)) {
           return textResult(
@@ -1383,16 +1513,20 @@ async function handleSAPRead(
       }
     }
     case 'SRVB': {
-      const { source, cacheHit } = await cachedGet('SRVB', name, () => client.getSrvb(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('SRVB', name, effectiveVersion, (ifNoneMatch) =>
+        client.getSrvb(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'SKTD': {
       try {
         // ADT returns a <sktd:docu> XML envelope with the Markdown body base64-encoded
         // inside <sktd:text>. Cache the raw envelope (update flow re-uses it) and
         // return the decoded Markdown to the LLM.
-        const { source, cacheHit } = await cachedGet('SKTD', name, () => client.getKtd(name));
-        return cachedTextResult(decodeKtdText(source), cacheHit);
+        const { source, cacheHit, revalidated } = await cachedGet('SKTD', name, effectiveVersion, (ifNoneMatch) =>
+          client.getKtd(name, { ifNoneMatch, version: effectiveVersion }),
+        );
+        return cachedTextResult(decodeKtdText(source), cacheHit, revalidated, versionWarning);
       } catch (err) {
         if (isNotFoundError(err)) {
           return textResult(
@@ -1403,16 +1537,22 @@ async function handleSAPRead(
       }
     }
     case 'TABL': {
-      const { source, cacheHit } = await cachedGet('TABL', name, () => client.getTable(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('TABL', name, effectiveVersion, (ifNoneMatch) =>
+        client.getTable(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'VIEW': {
-      const { source, cacheHit } = await cachedGet('VIEW', name, () => client.getView(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('VIEW', name, effectiveVersion, (ifNoneMatch) =>
+        client.getView(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'STRU': {
-      const { source, cacheHit } = await cachedGet('STRU', name, () => client.getStructure(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('STRU', name, effectiveVersion, (ifNoneMatch) =>
+        client.getStructure(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'DOMA': {
       const domain = await client.getDomain(name);
@@ -1538,7 +1678,7 @@ async function handleSAPRead(
           if (!prog) {
             return errorResult(`BOR method "${method}" on "${name}" has no program assigned.`);
           }
-          const source = await client.getProgram(prog);
+          const { source } = await client.getProgram(prog);
           return textResult(
             `=== BOR ${name}.${method} (program: ${prog}, form: ${String(data.rows[0]!.FORMNAME ?? '').trim()}) ===\n${source}`,
           );
@@ -1620,19 +1760,8 @@ async function handleSAPRead(
       return textResult(JSON.stringify(info, null, 2));
     }
     case 'INACTIVE_OBJECTS': {
-      try {
-        const objects = await client.getInactiveObjects();
-        return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
-      } catch (err) {
-        if (isNotFoundError(err)) {
-          return textResult(
-            'Inactive objects listing is not available on this SAP system ' +
-              '(the /sap/bc/adt/activation/inactive endpoint returned 404). ' +
-              'Use SAPDiagnose(action="syntax", type="...", name="...") to check specific objects instead.',
-          );
-        }
-        throw err;
-      }
+      const objects = await client.getInactiveObjects();
+      return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
     }
     default:
       return errorResult(
@@ -2042,7 +2171,7 @@ async function mergeMetadataWriteProperties(
       };
     }
     if (type === 'SRVB') {
-      const existingRaw = await client.getSrvb(name);
+      const { source: existingRaw } = await client.getSrvb(name);
       const existing = JSON.parse(existingRaw) as Record<string, unknown>;
       return {
         _description: existing.description,
@@ -2624,6 +2753,11 @@ async function handleSAPWrite(
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
+  const invalidateWrittenObject = (objType = type, objName = name): void => {
+    cachingLayer?.invalidate(objType, objName, 'all');
+    cachingLayer?.inactiveLists.invalidate(client.username);
+  };
+
   // Helper: enforce allowedPackages for existing objects (update/delete/edit_method/scaffold_rap_handlers).
   // Only fetches metadata when package restrictions are configured — no extra HTTP call otherwise.
   async function enforcePackageForExistingObject(): Promise<string | undefined> {
@@ -2644,10 +2778,10 @@ async function handleSAPWrite(
         // no-ops (or 415s on strict systems). Fetch the current envelope,
         // replace only the <sktd:text> body, and PUT it back — preserves
         // responsible/masterLanguage/packageRef/refObject metadata.
-        const currentEnvelope = await client.getKtd(name);
+        const { source: currentEnvelope } = await client.getKtd(name);
         const body = rewriteKtdText(currentEnvelope, source);
         await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, transport);
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         return textResult(`Successfully updated ${type} ${name}.`);
       }
 
@@ -2661,7 +2795,7 @@ async function handleSAPWrite(
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
         await safeUpdateObject(client.http, client.safety, objectUrl, body, vendorContentTypeForType(type), transport);
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         return textResult(`Successfully updated ${type} ${name}.`);
       }
 
@@ -2685,7 +2819,7 @@ async function handleSAPWrite(
       if (lintWarnings.blocked) return lintWarnings.result!;
 
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
-      cachingLayer?.invalidate(type, name);
+      invalidateWrittenObject();
       const msg = `Successfully updated ${type} ${name}.`;
       const cdsUpdateHint = type === 'DDLS' ? await buildCdsUpdateCrudHint(client, name, objectUrl) : undefined;
       const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings, cdsUpdateHint);
@@ -2799,15 +2933,15 @@ async function handleSAPWrite(
         // PUT back exactly the shape SAP gave us (with all the server-assigned
         // metadata), only swapping <sktd:text>.
         if (source) {
-          const currentEnvelope = await client.getKtd(name);
+          const { source: currentEnvelope } = await client.getKtd(name);
           const body = rewriteKtdText(currentEnvelope, source);
           await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, effectiveTransport);
-          cachingLayer?.invalidate(type, name);
+          invalidateWrittenObject();
           return textResult(
             `Created SKTD ${name} in package ${pkg} and wrote Markdown content.\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
           );
         }
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         return textResult(
           `Created SKTD ${name} in package ${pkg} (no Markdown content written — pass "source" to write the body).\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
         );
@@ -2876,7 +3010,7 @@ async function handleSAPWrite(
             }
           });
         }
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         const followUpHint =
           type === 'SRVB'
             ? `\n\nNext steps:\n1. SAPActivate(type="SRVB", name="${name}")\n2. SAPActivate(action="publish_srvb", name="${name}")`
@@ -2895,7 +3029,7 @@ async function handleSAPWrite(
         }
 
         await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
         const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
         return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
@@ -2912,8 +3046,12 @@ async function handleSAPWrite(
 
       // Fetch current full source (use cache if available)
       const currentSource = cachingLayer
-        ? (await cachingLayer.getSource('CLAS', name, () => client.getClass(name))).source
-        : await client.getClass(name);
+        ? (
+            await cachingLayer.getSource('CLAS', name, (ifNoneMatch) =>
+              client.getClass(name, undefined, { ifNoneMatch }),
+            )
+          ).source
+        : (await client.getClass(name)).source;
 
       // Use detected ABAP version from probe if available
       const abaplintVer = cachedFeatures?.abapRelease
@@ -2932,7 +3070,7 @@ async function handleSAPWrite(
 
       // Write the full source back (existing lock/modify/unlock flow)
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
-      cachingLayer?.invalidate(type, name);
+      invalidateWrittenObject();
       const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
       return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
     }
@@ -2989,8 +3127,9 @@ async function handleSAPWrite(
         .filter(Boolean)
         .join('\n\n');
       const bdefSource = cachingLayer
-        ? (await cachingLayer.getSource('BDEF', bdefName, () => client.getBdef(bdefName))).source
-        : await client.getBdef(bdefName);
+        ? (await cachingLayer.getSource('BDEF', bdefName, (ifNoneMatch) => client.getBdef(bdefName, { ifNoneMatch })))
+            .source
+        : (await client.getBdef(bdefName)).source;
 
       let requirements = extractRapHandlerRequirements(bdefSource);
       if (targetAlias) {
@@ -3132,7 +3271,7 @@ async function handleSAPWrite(
           }
         }
       });
-      cachingLayer?.invalidate(type, name);
+      invalidateWrittenObject();
 
       const msg =
         `Scaffolded ${scaffoldPlan.insertedSignatureCount} RAP handler signature(s) and ${scaffoldPlan.insertedImplementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
@@ -3190,7 +3329,7 @@ async function handleSAPWrite(
         }
         throw err;
       }
-      cachingLayer?.invalidate(type, name);
+      invalidateWrittenObject();
       return textResult(`Deleted ${type} ${name}.`);
     }
     case 'batch_create': {
@@ -3354,7 +3493,7 @@ async function handleSAPWrite(
             break;
           }
 
-          cachingLayer?.invalidate(objType, objName);
+          invalidateWrittenObject(objType, objName);
           results.push({ type: objType, name: objName, status: 'success' });
         } catch (err) {
           results.push({
@@ -3554,7 +3693,11 @@ function runPreWriteLint(
 
 // ─── SAPActivate Handler ─────────────────────────────────────────────
 
-async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function handleSAPActivate(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
+): Promise<ToolResult> {
   const action = String(args.action ?? 'activate');
   const name = String(args.name ?? '');
   const version = String(args.version ?? '0001');
@@ -3565,7 +3708,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   async function resolveServiceType(): Promise<'odatav2' | 'odatav4'> {
     if (explicitServiceType === 'odatav4' || explicitServiceType === 'odatav2') return explicitServiceType;
     try {
-      const srvbJson = await client.getSrvb(name);
+      const { source: srvbJson } = await client.getSrvb(name);
       const srvb = JSON.parse(srvbJson);
       if (srvb.odataVersion === 'V4') return 'odatav4';
     } catch {
@@ -3588,7 +3731,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     }
     let srvbInfo: string;
     try {
-      srvbInfo = await client.getSrvb(name);
+      srvbInfo = (await client.getSrvb(name)).source;
     } catch {
       if (result.severity === 'UNKNOWN') {
         return errorResult(
@@ -3632,7 +3775,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     }
     let srvbInfo: string | undefined;
     try {
-      srvbInfo = await client.getSrvb(name);
+      srvbInfo = (await client.getSrvb(name)).source;
     } catch {
       // Readback failed — fall through with what we have
     }
@@ -3675,6 +3818,10 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     const statusDetails = formatBatchActivationStatuses(batchStatuses);
 
     if (result.success) {
+      for (const object of objects) {
+        cachingLayer?.invalidate(object.type, object.name, 'all');
+      }
+      cachingLayer?.inactiveLists.invalidate(client.username);
       return textResult(`Successfully activated ${objects.length} objects: ${names}.${statusDetails}`);
     }
     return errorResult(`Batch activation failed for: ${names}.${statusDetails}`);
@@ -3686,6 +3833,8 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   const result = await activate(client.http, client.safety, objectUrl, activateOpts);
 
   if (result.success) {
+    cachingLayer?.invalidate(type, name, 'all');
+    cachingLayer?.inactiveLists.invalidate(client.username);
     return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
   let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`;
@@ -4612,8 +4761,12 @@ async function handleSAPContext(
   }
 
   // Helper: get source with cache support
-  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
-    if (!cachingLayer) return fetcher();
+  const cachedGet = async (
+    objType: string,
+    objName: string,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ): Promise<string> => {
+    if (!cachingLayer) return (await fetcher()).source;
     const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
@@ -4625,7 +4778,7 @@ async function handleSAPContext(
       );
     }
 
-    const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
+    const ddlSource = await cachedGet('DDLS', name, (ifNoneMatch) => client.getDdls(name, { ifNoneMatch }));
     const upstream = buildCdsUpstream(extractCdsDependencies(ddlSource));
     const includeIndirect = args.includeIndirect === true;
     const siblingCheck = args.siblingCheck !== false;
@@ -4836,13 +4989,13 @@ async function handleSAPContext(
   } else {
     switch (type) {
       case 'CLAS':
-        source = await cachedGet('CLAS', name, () => client.getClass(name));
+        source = await cachedGet('CLAS', name, (ifNoneMatch) => client.getClass(name, undefined, { ifNoneMatch }));
         break;
       case 'INTF':
-        source = await cachedGet('INTF', name, () => client.getInterface(name));
+        source = await cachedGet('INTF', name, (ifNoneMatch) => client.getInterface(name, { ifNoneMatch }));
         break;
       case 'PROG':
-        source = await cachedGet('PROG', name, () => client.getProgram(name));
+        source = await cachedGet('PROG', name, (ifNoneMatch) => client.getProgram(name, { ifNoneMatch }));
         break;
       case 'FUNC': {
         const group = String(args.group ?? '');
@@ -4851,11 +5004,11 @@ async function handleSAPContext(
             'The "group" parameter is required for FUNC type. Use SAPSearch to find the function group.',
           );
         }
-        source = await cachedGet('FUNC', name, () => client.getFunction(group, name));
+        source = await cachedGet('FUNC', name, (ifNoneMatch) => client.getFunction(group, name, { ifNoneMatch }));
         break;
       }
       case 'DDLS': {
-        const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
+        const ddlSource = await cachedGet('DDLS', name, (ifNoneMatch) => client.getDdls(name, { ifNoneMatch }));
         const cdsResult = await compressCdsContext(client, ddlSource, name, maxDeps, depth, cachingLayer);
         return textResult(cdsResult.output);
       }
@@ -5286,6 +5439,7 @@ async function handleSAPManage(
             enabled: true,
             warmupAvailable: cachingLayer.isWarmupAvailable,
             ...stats,
+            inactiveListCache: cachingLayer.inactiveLists.stats(),
           },
           null,
           2,

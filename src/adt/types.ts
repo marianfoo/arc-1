@@ -717,6 +717,10 @@ export interface InactiveObject {
   type: string;
   uri: string;
   description?: string;
+  user?: string;
+  deleted?: boolean;
+  transport?: string;
+  parentTransport?: string;
 }
 
 // ─── Authorization & Switch Framework Types ────────────────────────

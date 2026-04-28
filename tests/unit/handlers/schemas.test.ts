@@ -24,6 +24,7 @@ describe('SAPReadSchema', () => {
   it('accepts valid on-prem input', () => {
     const result = SAPReadSchema.safeParse({ type: 'PROG', name: 'ZTEST' });
     expect(result.success).toBe(true);
+    if (result.success) expect(result.data.version).toBe('active');
   });
 
   it('accepts all optional fields', () => {
@@ -33,10 +34,17 @@ describe('SAPReadSchema', () => {
       include: 'definitions',
       method: '*',
       expand_includes: true,
+      version: 'inactive',
+      force_refresh: true,
       maxRows: 50,
       sqlFilter: "MANDT = '100'",
     });
     expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid source version', () => {
+    const result = SAPReadSchema.safeParse({ type: 'PROG', name: 'ZTEST', version: 'latest' });
+    expect(result.success).toBe(false);
   });
 
   it('rejects missing required type', () => {
