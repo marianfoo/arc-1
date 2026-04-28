@@ -14,12 +14,12 @@ Both fixes are independent; PR 1 (Task 1) ships first as a standalone bug fix be
 
 ### Current State
 
-**Inactive endpoint (the silent 404 bug):**
-- `src/adt/client.ts:461-466` calls `GET /sap/bc/adt/activation/inactive` with `Accept: application/xml`. Live probe against a4h.marianzeis.de returns **HTTP 404** for that path.
-- The actual endpoint exposed by the discovery feed is `/sap/bc/adt/activation/inactiveobjects` with MIME `application/vnd.sap.adt.inactivectsobjects.v1+xml`. Live probe returns **HTTP 200** with a real list.
-- `src/adt/xml-parser.ts:1035-1055` (`parseInactiveObjects`) walks for `<adtcore:objectReference>` elements inside `<entry>`. The actual server response uses `<ioc:object><ioc:ref>` and a different namespace (`http://www.sap.com/abapxml/inactiveCtsObjects`). The parser silently returns an empty list against real responses.
-- `src/handlers/intent.ts:1235-1249` catches the 404 and returns *"Inactive objects listing is not available on this SAP system (the /sap/bc/adt/activation/inactive endpoint returned 404)"* — masking the bug as an apparent feature gap.
-- The fixture at `tests/fixtures/xml/inactive-objects.xml` was written against the inferred (wrong) shape and namespace, so all unit tests pass against fictional XML while the production code path returns nothing.
+**Inactive endpoint (wasted roundtrip + missing rich data):**
+- `src/adt/client.ts:464-478` already has a fallback: it tries `/sap/bc/adt/activation/inactive` first, catches the 404, then retries `/sap/bc/adt/activation/inactiveobjects`. The endpoint listing therefore *works* on modern systems via this fallback — the diagnosis in earlier drafts of this plan ("404s on every system newer than 7.40") was wrong. What the current code actually does is waste one 404 roundtrip on every list call against any system newer than ~7.40.
+- Both attempts use `Accept: application/xml`, which causes the server to return the flat `<adtcore:objectReferences>` shape — a list of object URIs/names with no metadata. Live verification confirmed the same endpoint returns the rich `<ioc:inactiveObjects>` shape (with `ioc:user`, `ioc:deleted`, sibling `<ioc:transport><ioc:ref>` for transport context) when the request specifies `Accept: application/vnd.sap.adt.inactivectsobjects.v1+xml`. The vendor MIME is content-negotiated and works on both S/4HANA 2023 and NW 7.50 SP02.
+- `src/adt/xml-parser.ts:1035-1055` (`parseInactiveObjects`) only handles the flat `<adtcore:objectReference>` shape. It silently returns an empty list when given the rich ioc shape — so even if the client switched to vendor MIME, the parser would discard the new fields.
+- `src/handlers/intent.ts:1235-1249` catches a 404 and returns *"Inactive objects listing is not available on this SAP system"* — only triggered if BOTH endpoint paths fail, which is rare in practice. The message is misleading rather than always-firing.
+- The fixture at `tests/fixtures/xml/inactive-objects.xml` is in the flat shape (same shape NW 7.50 returns when given the generic Accept). It is not "fictional" — keep it as the legacy/flat-shape coverage. The plan adds a NEW fixture for the rich ioc shape.
 
 **Cache freshness (the issue #183 reproducer):**
 - `CachedSource` schema in `src/cache/cache.ts:62-69` has `cachedAt` but no `etag` field. `Cache.putSource` and `Cache.getSource` accept only `(objectType, objectName)` — no `version` dimension.
@@ -37,10 +37,10 @@ Both fixes are independent; PR 1 (Task 1) ships first as a standalone bug fix be
 ### Target State
 
 **Task 1 (standalone bug fix):**
-- `getInactiveObjects()` calls the correct path, returns a non-empty list when the user has unactivated drafts.
-- `parseInactiveObjects` handles both the real `<ioc:object><ioc:ref>` shape and the legacy `<adtcore:objectReference>` shape (defensive — historical SAP releases may still emit the older form).
+- `getInactiveObjects()` calls `/sap/bc/adt/activation/inactiveobjects` directly (no leading 404) with `Accept: application/vnd.sap.adt.inactivectsobjects.v1+xml`, getting the rich `<ioc:inactiveObjects>` shape.
+- `parseInactiveObjects` handles both the rich `<ioc:object><ioc:ref>` shape (new code path) and the existing flat `<adtcore:objectReference>` shape (preserved for NW 7.50 + legacy systems and existing fixture coverage).
 - `InactiveObject` interface gains optional `user`, `deleted`, and `transport` fields populated from the `ioc:` attributes when present.
-- The "not available on this SAP system" 404 fallback is removed.
+- The "not available on this SAP system" message at intent.ts:1242 is removed (it was misleading and only ever fired in genuine total-failure cases).
 
 **Tasks 2-9 (PR 2):**
 - Each `CachedSource` carries the etag returned by SAP. Cache is keyed by `(type, name, version)` so active and inactive views never collide.
@@ -116,18 +116,17 @@ Each task's checklist is self-contained — every task references the file paths
 - Modify: `tests/unit/adt/xml-parser.test.ts`
 - Modify: `tests/unit/adt/client.test.ts`
 
-ARC-1's `getInactiveObjects()` calls `/sap/bc/adt/activation/inactive` which returns HTTP 404 on every supported SAP release (S/4HANA 2023 verified live, NW 7.50 fixtures confirm same path is unavailable). The correct endpoint is `/sap/bc/adt/activation/inactiveobjects` per the discovery feed (`<adtcomp:templateLink rel="http://www.sap.com/adt/relations/activation/inactiveobjects" template="/sap/bc/adt/activation/inactiveobjects{?USERNAME}"/>`). The parser also rejects the real server response shape because it expects `<adtcore:objectReference>` while the server emits `<ioc:object><ioc:ref>`. The 404 fallback in the handler masks the bug as an apparent feature gap. This task fixes all three layers and replaces the fixture with a real captured response.
+ARC-1's `getInactiveObjects()` at `src/adt/client.ts:464-478` already has a fallback from `/sap/bc/adt/activation/inactive` to `/sap/bc/adt/activation/inactiveobjects` (catches 404, retries). The fallback works correctly on modern systems but wastes one 404 roundtrip per call. Both attempts use `Accept: application/xml` which returns the flat `<adtcore:objectReferences>` shape — missing the rich user/transport/deleted metadata that the same endpoint returns when given `Accept: application/vnd.sap.adt.inactivectsobjects.v1+xml`. The parser at `src/adt/xml-parser.ts:1035-1055` only handles the flat shape, so even with vendor Accept the rich data would be discarded. This task: (1) call `/inactiveobjects` directly without the leading 404, (2) request the vendor MIME, (3) extend the parser to handle BOTH the rich ioc shape and the existing flat shape (preserve the existing fixture for NW 7.50 + legacy coverage; add a new fixture for the rich shape).
 
-- [ ] In `src/adt/client.ts:461-466`, change the URL in `getInactiveObjects()` from `/sap/bc/adt/activation/inactive` to `/sap/bc/adt/activation/inactiveobjects`.
-- [ ] Change the `Accept` header from `application/xml` to `application/vnd.sap.adt.inactivectsobjects.v1+xml`. Match `getRevisions()` at line 412 for header style.
+- [ ] In `src/adt/client.ts:464-478`, replace the entire `getInactiveObjects()` body with a single direct call: `const resp = await this.http.get('/sap/bc/adt/activation/inactiveobjects', { Accept: 'application/vnd.sap.adt.inactivectsobjects.v1+xml, application/xml;q=0.5' });`. The dual Accept header lets older systems that ignore the vendor MIME fall through to `application/xml`. Drop the try/catch fallback — `/inactiveobjects` works on every release ARC-1 supports (verified live on S/4HANA 2023 and NW 7.50 SP02).
 - [ ] In `src/adt/types.ts:714-720`, extend the `InactiveObject` interface with optional fields: `user?: string` (from `ioc:user` on `<ioc:object>`), `deleted?: boolean` (from `ioc:deleted` on `<ioc:object>`), `transport?: string` (from `adtcore:name` on the sibling `<ioc:transport><ioc:ref>` element when `ioc:linked="true"`), and `parentTransport?: string` (from `adtcore:parentUri` when present). Existing fields (`name`, `type`, `uri`, `description?`) stay as-is.
-- [ ] In `src/adt/xml-parser.ts`, replace the body of `parseInactiveObjects` (line ~1036). The new implementation must:
-  - Walk all top-level `<ioc:entry>` elements (after XML parsing strips the `ioc:` namespace prefix, this surfaces as `entry`).
-  - For each entry, look for an `object` child with a nested `ref` element (the real shape), OR an `object` child with a nested `objectReference` element (the legacy shape — keep handling it defensively for older systems and existing fixtures elsewhere in the codebase).
-  - Skip entries whose only child is `transport` (those represent transport requests with no source object — they appear in the real feed but should not be returned as inactive *objects*).
-  - For matching entries, capture: `name` (from `@_name`), `type` (from `@_type`), `uri` (from `@_uri`), `description` (from `@_description` if present), `user` (from `<object>`'s `@_user` if present), `deleted` (parse `<object>`'s `@_deleted` as boolean: true if string equals `'true'`), `transport` (from sibling `<transport><ref>`'s `@_name` if present), `parentTransport` (from sibling `<transport><ref>`'s `@_parentUri` if present).
+- [ ] In `src/adt/xml-parser.ts`, extend `parseInactiveObjects` (line ~1036). The new implementation must handle BOTH shapes:
+  - **Rich ioc shape** (new code path): walk all top-level `<entry>` elements (after XML parsing strips the `ioc:` namespace prefix), find each `<object>` child with a nested `<ref>` element. Skip entries whose only child is `<transport>` (those represent transport requests with no source object). Capture `name` (from `@_name`), `type` (from `@_type`), `uri` (from `@_uri`), `description` (from `@_description` if present), `user` (from `<object>`'s `@_user`), `deleted` (parse `<object>`'s `@_deleted` as boolean: true iff string equals `'true'`), `transport` (from sibling `<transport><ref>`'s `@_name`), `parentTransport` (from sibling `<transport><ref>`'s `@_parentUri`).
+  - **Flat shape** (existing code path): walk `<entry><object><objectReference>` elements (or top-level `<objectReference>` for the very-old shape). Capture only `name`, `type`, `uri`, `description` — the flat shape doesn't have user/deleted/transport metadata. This branch is what NW 7.50 returns when given `application/xml`, and what `tests/fixtures/xml/inactive-objects.xml` contains.
+  - Detection rule: if the parsed XML has any `<object>` element with a nested `<ref>` (not `<objectReference>`), use the rich path. Otherwise fall through to the flat path. Both paths can coexist in the same parser without ordering ambiguity.
   - Return `[]` for empty/whitespace-only XML (existing behaviour; preserve).
-- [ ] Replace the contents of `tests/fixtures/xml/inactive-objects.xml` with the real shape captured live from a4h. Use this exact content (drop in two source-bearing entries plus one transport-only entry to verify the skip behaviour):
+- [ ] **Keep the existing fixture** `tests/fixtures/xml/inactive-objects.xml` as-is. It's the flat-shape coverage that NW 7.50 emits with generic Accept and serves as legacy-system regression coverage. Do not modify or replace it.
+- [ ] Create a new fixture `tests/fixtures/xml/inactive-objects-ioc.xml` with the rich ioc shape captured live from a4h:
   ```xml
   <?xml version="1.0" encoding="utf-8"?>
   <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects">
@@ -152,25 +151,17 @@ ARC-1's `getInactiveObjects()` calls `/sap/bc/adt/activation/inactive` which ret
     </ioc:entry>
   </ioc:inactiveObjects>
   ```
-- [ ] In `tests/unit/adt/xml-parser.test.ts`, update the `parseInactiveObjects` describe block (line ~995). Update the existing "parses inactive objects with description" test to use the new fixture and assert the new shape:
-  - `objects` must have length 2 (the transport-only entry is skipped).
-  - First object: `name='ZC_FbClubTP'`, `type='BDEF/BDO'`, `uri='/sap/bc/adt/bo/behaviordefinitions/zc_fbclubtp'`, `user='MARIAN'`, `deleted=false`, `transport='A4HK901087'`, `parentTransport='/sap/bc/adt/cts/transportrequests/A4HK901086'`. No `description`.
-  - Second object: `name='ZARC1_TEST'`, `type='DDLS/DF'`, `description='Test CDS'`, `user='MARIAN'`, `deleted=false`, no `transport`, no `parentTransport`.
-- [ ] Add a new test `it('parses legacy adtcore:objectReference shape for older systems', ...)` to the same describe block with this fixture string, asserting one object is returned with `name='ZCL_TEST', type='CLAS/OC'`:
-  ```xml
-  <?xml version="1.0"?>
-  <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects" xmlns:adtcore="http://www.sap.com/adt/core">
-    <ioc:entry><ioc:object>
-      <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Test class"/>
-    </ioc:object></ioc:entry>
-  </ioc:inactiveObjects>
-  ```
+- [ ] In `tests/unit/adt/xml-parser.test.ts:995-1029`, **keep the existing tests for the flat shape** (they verify backwards-compat with NW 7.50 output and the legacy fixture). Add a new `it('parses rich ioc shape with user/deleted/transport metadata', ...)` test that loads `inactive-objects-ioc.xml`, asserts:
+  - `objects` has length 2 (the transport-only entry is skipped).
+  - First: `name='ZC_FbClubTP'`, `type='BDEF/BDO'`, `uri='/sap/bc/adt/bo/behaviordefinitions/zc_fbclubtp'`, `user='MARIAN'`, `deleted=false`, `transport='A4HK901087'`, `parentTransport='/sap/bc/adt/cts/transportrequests/A4HK901086'`. No `description`.
+  - Second: `name='ZARC1_TEST'`, `type='DDLS/DF'`, `description='Test CDS'`, `user='MARIAN'`, `deleted=false`, no `transport`, no `parentTransport`.
 - [ ] In `tests/unit/adt/client.test.ts:950-973`, update the `getInactiveObjects` test:
-  - Change the mocked URL assertion: assert that the fetch call URL contains `/sap/bc/adt/activation/inactiveobjects` (not `/inactive`).
-  - Update the mocked response body to the real `<ioc:object><ioc:ref>` shape (not the legacy `<adtcore:objectReference>` form).
+  - Change the mocked URL assertion: assert the fetch call URL is `/sap/bc/adt/activation/inactiveobjects` (no leading `/inactive` 404).
+  - Update the mocked Accept header expectation to include `application/vnd.sap.adt.inactivectsobjects.v1+xml`.
+  - Change the mocked response body to the rich `<ioc:object><ioc:ref>` shape.
   - Assert the parsed result includes the new fields (`user`, `deleted`, `transport`).
-- [ ] In `src/handlers/intent.ts:1235-1249`, simplify the `INACTIVE_OBJECTS` case. Remove the `try/catch` with the misleading "not available on this SAP system" 404 fallback. The new body should be a plain call: `const objects = await client.getInactiveObjects(); return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));`. Real 404s from genuinely unavailable systems will surface naturally as `AdtApiError` and be formatted by the existing error path.
-- [ ] Run `npm test` — all tests must pass.
+- [ ] In `src/handlers/intent.ts:1235-1249`, simplify the `INACTIVE_OBJECTS` case. Remove the `try/catch` with the "not available on this SAP system" 404 fallback. New body: `const objects = await client.getInactiveObjects(); return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));`. Real 404s from genuinely unavailable systems will surface naturally as `AdtApiError` and be formatted by the existing error path.
+- [ ] Run `npm test` — all tests must pass (existing flat-shape tests still pass + new rich-shape tests pass).
 
 ---
 
@@ -185,7 +176,7 @@ The cache currently keys source by `(type, name)`. To support conditional GET co
 - [ ] Update `Cache` interface methods at lines 113-116:
   - `putSource(objectType: string, objectName: string, source: string, opts?: { version?: 'active' | 'inactive'; etag?: string }): void`
   - `getSource(objectType: string, objectName: string, version?: 'active' | 'inactive'): CachedSource | null` (default version is `'active'`)
-  - `invalidateSource(objectType: string, objectName: string, version?: 'active' | 'inactive'): void` (default invalidates only the `'active'` entry; pass explicit `'inactive'` to clear that view; pass nothing to default to active. A future plan may add `'all'` to clear both.)
+  - `invalidateSource(objectType: string, objectName: string, version?: 'active' | 'inactive' | 'all'): void`. Semantics: `'active'` (default) clears the active entry only — preserves existing behaviour for the 12 SAPWrite invalidate sites. `'inactive'` clears the inactive entry only — used by future inactive-aware code. `'all'` clears both — used by SAPWrite/SAPActivate paths so that activating a draft invalidates BOTH the old active body AND the now-consumed inactive draft. Activate consumes the inactive version (it becomes the new active), so leaving a stale inactive entry in cache is wrong. Invalidating with `'all'` is the correct symmetric default for write paths.
 - [ ] Update the `sourceKey()` helper at lines 139-142 to take an optional version parameter: `export function sourceKey(objectType: string, objectName: string, version: 'active' | 'inactive' = 'active'): string { return `${objectType.toUpperCase()}:${objectName.toUpperCase()}:${version}`; }`. Existing callers that don't pass version get `'active'` by default — preserves keying for code that hasn't migrated yet, and the active/inactive split is a new dimension so no migration is needed for callers reading active.
 - [ ] Run `npm run typecheck` — expect compile errors in `memory.ts`, `sqlite.ts`, and `caching-layer.ts` (those are intentionally fixed in Tasks 3-6).
 - [ ] Run `npm test` — same expectation: this task changes types, the implementations are updated next. If `npm test` still passes (because the type errors are only surfaced by `tsc`, not vitest), that's fine.
@@ -222,21 +213,35 @@ The cache currently keys source by `(type, name)`. To support conditional GET co
 
 `SqliteCache` writes a SQLite database file (default `.arc1-cache.db`) for `http-streamable` deployments. The `sources` table needs two new columns (`etag`, `version`) and the `cache_key` derivation must include the version. Existing cache files from previous ARC-1 versions don't have these columns — we handle this by detecting the missing column on startup and dropping/recreating the `sources` table only (keeping `nodes`, `edges`, `apis`, `dep_graphs`, `func_groups` intact). The cache is a performance optimization, not authoritative — a one-time loss of cached source bodies is acceptable.
 
-- [ ] In `src/cache/sqlite.ts:25-84`, update `createTables()`:
-  - Change the `sources` CREATE TABLE statement to include `etag TEXT` and `version TEXT NOT NULL DEFAULT 'active'` columns (keep `cached_at TEXT NOT NULL` for stats).
-  - The `cache_key` PRIMARY KEY stays — but its content now includes the version (constructed by `sourceKey()`).
-  - Add an index `CREATE INDEX IF NOT EXISTS idx_sources_objname_version ON sources(object_name, object_type, version)` (used for invalidation by name+version when `cache_key` derivation changes are not desired).
-- [ ] Add a migration helper `migrateSourcesTableIfNeeded()` that runs after `createTables()` in the constructor. Implementation:
+- [ ] **Migration must run BEFORE `createTables()`** to avoid a chicken-and-egg failure: the new `idx_sources_objname_version` index references the new `version` column, so attempting to create the index against an old `sources` table without that column fails before migration can drop it. Reorder the constructor:
   ```typescript
-  const cols = this.db.prepare("PRAGMA table_info('sources')").all() as Array<{ name: string }>;
-  const hasEtag = cols.some((c) => c.name === 'etag');
-  const hasVersion = cols.some((c) => c.name === 'version');
-  if (!hasEtag || !hasVersion) {
-    this.db.exec('DROP TABLE IF EXISTS sources;');
-    this.db.exec(/* same CREATE TABLE as in createTables() */);
+  constructor(dbPath: string) {
+    this.db = new Database(dbPath);
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('synchronous = NORMAL');
+    this.dropOldSourcesTableIfNeeded();  // 1. Drop sources table if old schema (must run first)
+    this.createTables();                 // 2. Create all tables (sources gets recreated fresh)
   }
   ```
-  Keep the CREATE statement DRY by extracting it to a class-level constant or a small private method.
+- [ ] Add a private helper `dropOldSourcesTableIfNeeded()`:
+  ```typescript
+  private dropOldSourcesTableIfNeeded(): void {
+    // PRAGMA table_info returns empty array if the table doesn't exist (fresh install) — that's fine, createTables will create it.
+    const cols = this.db.prepare("PRAGMA table_info('sources')").all() as Array<{ name: string }>;
+    if (cols.length === 0) return;  // fresh install
+    const hasEtag = cols.some((c) => c.name === 'etag');
+    const hasVersion = cols.some((c) => c.name === 'version');
+    if (!hasEtag || !hasVersion) {
+      this.db.exec('DROP TABLE IF EXISTS sources;');
+      // Note: we deliberately drop, not ALTER. Cache is rebuildable; a destructive migration is simpler than column-add + backfill.
+    }
+  }
+  ```
+  Other tables (`nodes`, `edges`, `apis`, `dep_graphs`, `func_groups`) are unaffected — they keep their data.
+- [ ] Update `createTables()` at lines 25-84:
+  - Change the `sources` CREATE TABLE statement to include `etag TEXT` and `version TEXT NOT NULL DEFAULT 'active'` columns (keep `cached_at TEXT NOT NULL` for stats).
+  - The `cache_key` PRIMARY KEY stays — but its content now includes the version (constructed by `sourceKey()`).
+  - Add an index `CREATE INDEX IF NOT EXISTS idx_sources_objname_version ON sources(object_name, object_type, version)` (used for invalidation by name+version when `cache_key` derivation changes are not desired). Because migration ran first, the index creation is now safe — the table either is fresh (this is the first start) or was just dropped+recreated.
 - [ ] Update `putSource()` at lines 165-178 to accept `opts?: { version?: 'active' | 'inactive'; etag?: string }`. The INSERT statement now includes `etag` and `version` columns; `cache_key` is derived from `sourceKey(type, name, opts?.version ?? 'active')`.
 - [ ] Update `getSource()` at lines 180-193 to accept optional `version`, derive the right `cache_key`, and return the `etag` and `version` fields in the returned `CachedSource`.
 - [ ] Update `invalidateSource()` at lines 195-198 to accept optional `version` and delete by the version-aware `cache_key`.
@@ -275,11 +280,19 @@ This is the widest single task. The method signatures change but the existing ca
   - `getDdlx(name, opts?)` (line 297)
   - `getFunctionGroupSource(name, opts?)` (line 244)
   - `getClass(name, include?, opts?)` (line 120) — **special case**: the method has multi-include logic. Plumb opts through to the `/source/main` call only (the default `!include` branch at line 124-128 and the `inc === 'main'` branch at line 147). The other includes don't need conditional-GET support (they're rare and the cache layer doesn't track them — see `src/handlers/intent.ts:1292-1297` which only caches the no-include CLAS path). For the multi-include path, return concatenated body via `{ source: parts.join('\n\n'), notModified: false, statusCode: 200, etag: undefined }`.
-  
+
   For each method, replace the existing `const resp = await this.http.get(...); return resp.body;` body with `return this.fetchSource(path, opts);` (use the existing path expression).
-- [ ] Existing callers in `src/handlers/intent.ts` use the return value as a string (e.g., `client.getProgram(name)` directly fed into `textResult(...)`). Update them to access `.source`. Search for all `client.getProgram(`, `client.getClass(`, `client.getInterface(`, `client.getFunction(`, `client.getInclude(`, `client.getDdls(`, `client.getDcl(`, `client.getBdef(`, `client.getSrvd(`, `client.getDdlx(`, `client.getFunctionGroupSource(` calls in `intent.ts` and update them. Most are wrapped through the `cachedGet` helper (lines 1244-1252 in handleSAPRead) — that helper is rewritten in Task 7 to accept the new shape. For non-cached call sites (e.g. `client.getDdlx` at line 4660 etc.), unwrap `.source` directly: `const result = await client.getDdlx(name); return textResult(result.source);`.
-  
-  **Hint:** `grep -n 'client\.get\(Program\|Class\|Interface\|Function\|Include\|Ddls\|Dcl\|Bdef\|Srvd\|Ddlx\|FunctionGroupSource\)' src/handlers/intent.ts` enumerates the sites.
+- [ ] **Audit ALL caller sites first** — these methods are called from more than just `handleSAPRead`. Run this before editing:
+  ```
+  grep -rnE 'client\.(getProgram|getClass|getInterface|getFunction|getInclude|getDdls|getDcl|getBdef|getSrvd|getDdlx|getFunctionGroupSource)\(' src/
+  ```
+  Expected sites (verified during plan research):
+  - `src/handlers/intent.ts` — many sites in `handleSAPRead` (around lines 1264-1360 — go through the `cachedGet` helper which is rewritten in Task 7) PLUS direct `cachingLayer.getSource(...)` call sites at lines 2932 (CLAS), 3020 (BDEF), 4745 (compressor-style fetch). All of these must unwrap `.source` and forward `ifNoneMatch` correctly.
+  - `src/context/compressor.ts` — 6 sites: lines 235, 237, 243, 256, 263, 271, 273, 433. The lines wrapped in `cachedGet(...)` (235, 237, 243, 271, 273, 433) need the same fetcher signature update as Task 7's handler. The bare `client.getFunction(match[1], name)` at lines 256 and 263 must just unwrap `.source`.
+  - `src/cache/warmup.ts` — 3 source-fetching sites: lines 225 (`getClass`), 227 (`getInterface`), 298 (`getFunction`). Warmup is a first-time pre-population path — no benefit from conditional GET (cache is empty). These callers just need `.source` unwrapping. Pass through `opts: { ifNoneMatch: cached?.etag }` if a cached entry already exists (warmup at line 236 / 299 already does a `getCachedSource` lookup before fetching) — this lets re-running warmup against an unchanged system skip body transfers.
+- [ ] For each caller site identified above, update the call site to use the new return shape. Two patterns:
+  - **Cached path** (call goes through `cachedGet` or `cachingLayer.getSource`): the fetcher closure becomes `(ifNoneMatch) => client.getProgram(name, { ifNoneMatch })`. The caller code that destructures `{ source, hit }` continues to work — the wrapping returns the same shape.
+  - **Bare path** (direct `client.getX()` call without caching): unwrap `.source` directly: `const { source } = await client.getDdlx(name); return textResult(source);`.
 - [ ] In `tests/unit/adt/client.test.ts:46-238`, update the `source code read operations` describe block to assert the new return shape:
   - `getProgram returns source code` (line 47): change `expect(source).toBe(...)` to `expect(result.source).toBe(...)`. Also assert `result.notModified === false` and `result.statusCode === 200`.
   - Add new tests (~6 tests):
@@ -314,7 +327,7 @@ The 404-invalidation behaviour was specifically requested in [issue #183 follow-
        - If `result.statusCode === 200`: replace cache via `cache.putSource(type, name, result.source, { version, etag: result.etag })`, return `{ source: result.source, hit: false, revalidated: false }`.
        - On error: see step 5.
     5. **Error path with cached entry present:** wrap the fetcher call (steps 3 and 4) in a try/catch. On `AdtApiError` with `statusCode === 404` or `statusCode === 410`, call `this.cache.invalidateSource(objectType, objectName, version)` before re-throwing. On any other error, just re-throw. The invalidation must happen *before* re-throwing so callers and tests see consistent state. Import `AdtApiError` from `'../adt/errors.js'` if not already imported (existing imports start at line 25).
-- [ ] Update `invalidate(type, name)` at line 145-148 to accept optional `version`. Default behaviour invalidates the active version (preserves existing semantics for the 12 SAPWrite call sites in intent.ts).
+- [ ] Update `invalidate(type, name)` at line 145-148 to accept optional `version: 'active' | 'inactive' | 'all'`. The default for SAPWrite/SAPActivate paths should be `'all'` — activation consumes the inactive draft and replaces the active body in one step, so leaving either cache view stale is incorrect. Update the 12 SAPWrite invalidation call sites in intent.ts (lines 2650, 2664, 2688, 2805, 2810, 2879, 2898, 2935, 3135, 3193, 3357 plus any others added in the meantime) to pass `'all'` explicitly: `cachingLayer?.invalidate(type, name, 'all');`. Read-side 404 invalidation in `CachingLayer.getSource` (the new code added by codex's #1 finding) uses `'active'` only because we only know the active view was deleted — the inactive view, if any, may still exist on the server and be accessible via `?version=inactive`.
 - [ ] Add a new method `getCachedSourceWithEtag(objectType: string, objectName: string, version?: 'active' | 'inactive'): { source: string; etag?: string } | null` that the caller can use to retrieve cached info without fetching — returns the active version by default. Existing `getCachedSource` keeps its current signature and behaviour for backwards compat.
 - [ ] In `tests/unit/cache/caching-layer.test.ts:28-70`, replace the `source caching` describe block with new tests reflecting the conditional-GET flow (~10 tests):
   - `cache miss calls fetcher with undefined ifNoneMatch and stores result with etag` — fetcher mock returns `{ source: 'body', etag: 'e1', notModified: false, statusCode: 200 }`; assert `hit=false, revalidated=false`, then assert subsequent `getCachedSourceWithEtag` returns `{ source: 'body', etag: 'e1' }`.
@@ -341,11 +354,18 @@ The `cachedGet` helper at `src/handlers/intent.ts:1244-1252` currently invokes a
 
 - [ ] In `src/handlers/intent.ts:1244-1252`, update the `cachedGet` helper inside `handleSAPRead`:
   - Change the fetcher signature to accept `ifNoneMatch?: string` and return `SourceReadResult` (the type defined in Task 5).
-  - Inside `cachedGet`, when `cachingLayer` is set, get the cached entry via `cachingLayer.getCachedSourceWithEtag(objType, objName, 'active')` to obtain the etag for `If-None-Match`. Then call `cachingLayer.getSource(objType, objName, fetcher, { version: 'active' })`.
-  - Update the return shape: `{ source: string; cacheHit: boolean; revalidated: boolean }`.
-- [ ] Update each call site that uses `cachedGet` (the `case 'PROG'`, `case 'CLAS'` no-include path, `case 'INTF'`, `case 'FUNC'`, `case 'INCL'`, `case 'DDLS'` branches in `handleSAPRead` around lines 1264-1360). The fetcher closure now receives `ifNoneMatch` and forwards it: `(ifNoneMatch) => client.getProgram(name, { ifNoneMatch })`.
-- [ ] Update the `cachedTextResult` helper at line 1255-1257 to accept the new `revalidated` flag: when `cacheHit && revalidated` prefix `[cached:revalidated]`; when `cacheHit && !revalidated` prefix `[cached]` (preserves existing E2E test expectations); when `!cacheHit` no prefix.
-- [ ] Update the existing E2E test expectation in `tests/e2e/cache.e2e.test.ts:107` (the SAPContext-deps test that asserts `[cached]` output) to accept either prefix, since the dep cache is hash-keyed and not affected by this change but uses the same indicator pattern.
+  - **Do NOT do a separate cache lookup in the handler.** `CachingLayer.getSource` already owns the lookup and passes the cached etag to the fetcher via the `ifNoneMatch` argument. Calling `getCachedSourceWithEtag` from the handler before invoking `getSource` would create two sources of truth (handler reads cache, then layer reads cache again) and is a redundancy bug.
+  - The new helper body is just: `const { source, hit, revalidated } = await cachingLayer.getSource(objType, objName, (ifNoneMatch) => fetcher(ifNoneMatch), { version: 'active' });`.
+  - Update the return shape to `{ source: string; cacheHit: boolean; revalidated: boolean }`. (`getCachedSourceWithEtag` from Task 6 stays in the API for non-handler callers like compressor.ts that need to peek at the etag for other reasons, but is unused by `cachedGet` itself.)
+- [ ] Update each call site that uses `cachedGet` (PROG, CLAS no-include, INTF, FUNC, INCL, DDLS, DCLS, BDEF, SRVD, DDLX, SRVB, SKTD, TABL, VIEW, STRU branches in `handleSAPRead` around lines 1264-1360 — these are ALL types that go through cachedGet, not just the 6 from earlier draft). The fetcher closure now receives `ifNoneMatch` and forwards it: `(ifNoneMatch) => client.getProgram(name, { ifNoneMatch })`.
+- [ ] Update the `cachedTextResult` helper at line 1255-1257 with the cleaner indicator semantics (per codex Q4 — distinguish server-validated source hits from non-validated):
+  - `cacheHit && revalidated` → prefix `[cached:revalidated]` (server confirmed via 304 — the common case post-PR for source reads)
+  - `cacheHit && !revalidated` → prefix `[cached:unvalidated]` (rare — only when the cache entry has no stored etag, i.e., a server response that didn't emit one)
+  - `!cacheHit` → no prefix
+  - The unprefixed `[cached]` is reserved for **dep-graph cache hits** in `src/context/compressor.ts` (those are hash-keyed and naturally correct without server validation — different mechanism, different label). Source reads should never emit plain `[cached]` post-PR.
+- [ ] Audit and update existing E2E test expectations that assert `[cached]` for source reads:
+  - `tests/e2e/cache.e2e.test.ts:63` ("SAPRead — second call for same object is served from cache") — change expectation to accept `[cached:revalidated]` (the new label for source reads).
+  - `tests/e2e/cache.e2e.test.ts:107` ("SAPContext deps — second call returns [cached] output") — keep `[cached]` expectation (this is the dep-graph hit path which retains the unprefixed label).
 - [ ] Run `npm test` — all unit tests pass.
 
 ---
@@ -358,10 +378,24 @@ The `cachedGet` helper at `src/handlers/intent.ts:1244-1252` currently invokes a
 
 The unit tests cover the conditional-GET flow with mocked HTTP. The integration and E2E tests verify the live ADT contract on a4h (S/4HANA 2023). Before adding tests, read `INFRASTRUCTURE.md` for SAP system credentials — the host is `http://a4h.marianzeis.de:50000`, user `MARIAN`, client `001`. Tests must follow the skip taxonomy in `docs/testing-skip-policy.md` (`requireOrSkip` for missing credentials, `expectSapFailureClass` for error assertions).
 
-- [ ] In `tests/integration/cache.integration.test.ts`, add new integration tests under a new describe block `describe('Conditional GET (ETag-driven freshness)')` (~3 tests):
-  - `SAPRead PROG returns 304 on second read with valid etag` — read `RSPARAM` once, capture the cached entry's etag via `cachingLayer.getCachedSourceWithEtag('PROG', 'RSPARAM', 'active')`, read again, assert second call hit returns `revalidated=true` (or check audit logs for the conditional fetch). Use `getTestClient()` factory at top of file.
-  - `SAPRead returns fresh body when source changes` — this requires either an external write or a force-invalidation. Document that this test requires manual setup OR use `SAPWrite` + `SAPActivate` against a `$TMP` test object to legitimately change the etag, then assert the next read fetches fresh content. Use `generateUniqueName()` from `tests/integration/crud-harness.ts`. Skip with `requireOrSkip` if write capability is not available (`SAP_ALLOW_WRITES != 'true'`).
+- [ ] **First, audit and update existing assertions that no longer hold post-PR.** The current `tests/integration/cache.integration.test.ts` tests around lines 95-145 and `tests/e2e/cache.e2e.test.ts` lines 63-105 implicitly assume "second cache hit makes ZERO HTTP calls" (the test for "cache hit is significantly faster" works by comparing call counts or timing). Post-PR, every cache hit makes ONE conditional-GET roundtrip (which returns 304 with ~50 byte body). Update:
+  - `cache hit is significantly faster than miss` (cache.integration.test.ts:107) — keep the test, but update the expectation: a 304 response is still substantially faster than fetching a full source body, so the timing comparison should still pass. Adjust the assertion margin if needed.
+  - `returns MISS then HIT for same object` (cache.integration.test.ts:95) — keep, but update the implementation note: the second call is now a 304-validated hit, not a zero-HTTP cache hit. Verify the call count via mock fetch spy if the test inspects fetch invocations. If the test currently asserts `mockFetch` was called only once across both reads, change to assert it was called twice with the second call having an `If-None-Match` header.
+  - `SAPRead — second call for same object is served from cache` (cache.e2e.test.ts:63) — update to accept `[cached:revalidated]` prefix instead of `[cached]` (per Task 7's indicator change). The semantic of "served from cache" is preserved; the wire-level mechanism changed.
+- [ ] Add new integration tests under a new describe block `describe('Conditional GET (ETag-driven freshness)')` (~3 tests):
+  - `SAPRead PROG returns 304 on second read with valid etag` — read `RSPARAM` once, capture the cached entry's etag via `cachingLayer.getCachedSourceWithEtag('PROG', 'RSPARAM', 'active')`, read again, assert the second call result has `revalidated=true`. Use `getTestClient()` factory at top of file.
+  - `SAPRead returns fresh body when source changes` — uses `SAPWrite` + `SAPActivate` against a `$TMP` test object to change the etag, asserts next read fetches fresh content. **Note: this test specifically exercises the 200-replacement path, NOT the 404-invalidation path** (SAPWrite already calls `cachingLayer.invalidate(...)` so the next read is a cache miss, not a conditional GET that gets 200 with new etag — but for purposes of verifying the cache reflects new content, this is fine). Use `generateUniqueName()` from `tests/integration/crud-harness.ts`. Skip with `requireOrSkip` if write capability is not available (`SAP_ALLOW_WRITES != 'true'`).
   - `cache key separates active and inactive views` — only practical to verify if a known inactive object exists; otherwise skip with reason `NO_FIXTURE`. The test reads same object with `version: 'active'` and `version: 'inactive'` opts, asserts different etags returned.
+- [ ] Add a separate describe block `describe('404 cache invalidation (external delete simulation)')` with ~1 test that **must NOT use SAPWrite to do the delete** (because SAPWrite already invalidates the cache via the write path, which would mask any failure of the read-side 404 invalidation). Implementation:
+  ```typescript
+  // 1. Create a transient $TMP program via SAPWrite. Cache will be empty for it.
+  // 2. Read it via SAPRead — this populates cache with body + etag.
+  // 3. Capture cached etag via cachingLayer.getCachedSourceWithEtag(...).
+  // 4. Delete the program by calling the ADT REST endpoint DIRECTLY via raw http.delete on a SECOND AdtClient instance configured WITHOUT a cachingLayer. This bypasses the SAPWrite invalidation path entirely — the cache under test still has the stale entry.
+  // 5. Read it via SAPRead on the FIRST (cached) client. This triggers the conditional GET against a now-deleted object → 404 → CachingLayer.getSource invalidates the cache entry before re-throwing.
+  // 6. Assert: the SAPRead call rejects with AdtApiError(404) AND cachingLayer.getCachedSourceWithEtag(...) returns null afterwards (the entry is gone).
+  ```
+  Use `expectSapFailureClass(err, [404], [/not exist/i])` from `tests/helpers/expected-error.ts` for the rejection assertion. Cleanup is irrelevant — the object is already deleted. Skip with `requireOrSkip` if `SAP_ALLOW_WRITES != 'true'`.
 - [ ] In the same file, add a new describe block `describe('Inactive objects endpoint')` (~2 tests):
   - `getInactiveObjects returns 200 (not 404) on supported systems` — use `getTestClient().getInactiveObjects()`, expect a non-throwing call, assert result is `Array.isArray()`. The list may be empty (no drafts) or non-empty (drafts exist) — both are valid.
   - `INACTIVE_OBJECTS handler returns valid JSON listing` — call the MCP handler at the integration test layer (see existing patterns in `cache.integration.test.ts` for handler-level tests), assert the result text parses as `{ count: number, objects: Array }`.
@@ -402,12 +436,12 @@ The README's "Built-in Object Caching" section claims "repeated reads return ins
       fetcher → http.get(/source/main) → 200 + etag=E1 + body
       cache.putSource(type, name, body, { etag: E1 })
       return body
-    
+
     Read 2 (cache hit, server says unchanged):
       handler → CachingLayer.getSource → has cached etag=E1 → fetcher(E1)
       fetcher → http.get(/source/main, { 'If-None-Match': E1 }) → 304 + empty body
       return cached body, hit=true, revalidated=true  →  [cached:revalidated]
-    
+
     Read 3 (external activation; server returns new body):
       handler → CachingLayer.getSource → has cached etag=E1 → fetcher(E1)
       fetcher → http.get(/source/main, { 'If-None-Match': E1 }) → 200 + etag=E2 + new body
@@ -441,5 +475,13 @@ The README's "Built-in Object Caching" section claims "repeated reads return ins
 - [ ] Run E2E tests: `npm run test:e2e` (requires running MCP server — see `docs/setup-guide.md`) — all new e2e tests pass.
 - [ ] Manual smoke test: with `ARC1_CACHE=memory` and `ARC1_LOG_FORMAT=json`, run `arc-1` against a4h, call `SAPRead(type='PROG', name='RSPARAM')` twice via an MCP client, verify the second response has `[cached]` indicator and the audit log shows the second HTTP call returned status 304.
 - [ ] Manual smoke test 2: call `SAPRead(type='INACTIVE_OBJECTS')` against a4h with the test user MARIAN (who has known inactive drafts) — assert the response contains a non-empty `objects` array with `BDEF/BDO`, `DDLS/DF`, etc. entries (not the "Inactive objects listing is not available" message).
-- [ ] Manual smoke test 3 (404-invalidation cycle): with `ARC1_CACHE=memory` and `SAP_ALLOW_WRITES=true` against a4h, create a transient `$TMP` program via `SAPWrite(action='create', type='PROG', name='ZARC1_TMP_404TEST', source='REPORT zarc1_tmp_404test.', package='$TMP')`. Read it via `SAPRead(type='PROG', name='ZARC1_TMP_404TEST')` — verify the source returns and the cache_stats sourceCount increments. Delete it via `SAPWrite(action='delete', type='PROG', name='ZARC1_TMP_404TEST')`. Read it again — verify the read fails with a 404 error message AND that a subsequent `SAPManage(action='cache_stats')` shows `sourceCount` decremented (the cache entry was invalidated by the 404 path in `CachingLayer.getSource`). Verifies the issue #183 follow-up requirement that "if the element is not there, the database entries should be deleted as well."
+- [ ] Manual smoke test 3 (404-invalidation cycle): the goal is to verify the read-side 404-invalidation path actually fires. The naive approach of using `SAPWrite(delete)` to remove the object is a **false positive** — SAPWrite already calls `cachingLayer.invalidate(...)` which removes the cache entry before any read can trigger the 404 path. To exercise the read-side path, the deletion must bypass the cache layer entirely. With `ARC1_CACHE=memory` and `SAP_ALLOW_WRITES=true` against a4h:
+  1. Run ARC-1 with `ARC1_CACHE=memory` and connect via an MCP client.
+  2. Create a transient `$TMP` program via `SAPWrite(action='create', type='PROG', name='ZARC1_TMP_404TEST', source='REPORT zarc1_tmp_404test.', package='$TMP')`.
+  3. Read it via `SAPRead(type='PROG', name='ZARC1_TMP_404TEST')` — verify source returns and `SAPManage(action='cache_stats')` shows `sourceCount=1`.
+  4. Delete the object **outside the running ARC-1 process** — open a second terminal and run a raw curl: `curl -sS -u "$TEST_SAP_USER:$TEST_SAP_PASSWORD" -X DELETE "$TEST_SAP_URL/sap/bc/adt/programs/programs/ZARC1_TMP_404TEST?lockHandle=$(...)"` (you'll need to acquire a lock first via `_action=LOCK` and pass the handle). The point is: the running ARC-1 has no signal of the deletion — its cache still holds the stale entry. Alternative: use SE80/Eclipse to delete (works if you have GUI access).
+  5. Read again via the same MCP session — verify the read fails with a 404 error.
+  6. Verify `SAPManage(action='cache_stats')` now shows `sourceCount=0` — the 404-invalidation path in `CachingLayer.getSource` removed the stale entry.
+
+  This test demonstrates the issue #183 follow-up requirement that "if the element is not there, the database entries should be deleted as well." A test that uses `SAPWrite(delete)` from the same MCP server can NOT verify this code path — SAPWrite's invalidation runs before any read-side 404 is observed.
 - [ ] Move this plan to `docs/plans/completed/etag-conditional-get-and-inactive-objects-fix.md`.
