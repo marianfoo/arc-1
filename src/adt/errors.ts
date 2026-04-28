@@ -350,6 +350,7 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
     /\blocked by\b|\bbeing edited by\b|\bcurrently editing\b|\bresource is locked\b|\balready locked\b/i.test(bodyRaw);
   if (
     typeId === 'ExceptionResourceLockedByAnotherUser' ||
+    typeId === 'ExceptionResourceNoAccess' ||
     ((statusCode === 409 || statusCode === 403) && lockPattern)
   ) {
     const owner = extractLockOwner(bodyRaw);
