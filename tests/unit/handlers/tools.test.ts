@@ -640,4 +640,64 @@ describe('Tool Definitions', () => {
       }
     });
   });
+
+  // ─── Three-file sync coverage for messages + STRU (PR-β) ──────────
+  describe('three-file sync invariants', () => {
+    function getSAPWriteSchema(btp: boolean): Record<string, any> {
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, systemType: btp ? 'btp' : 'onprem' });
+      const sapWrite = tools.find((t) => t.name === 'SAPWrite');
+      if (!sapWrite) throw new Error('SAPWrite tool not found in definitions');
+      return sapWrite.inputSchema as Record<string, any>;
+    }
+
+    it('exposes the messages property at top-level SAPWrite (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const messages = schema.properties.messages;
+      expect(messages).toBeDefined();
+      expect(messages.type).toBe('array');
+      expect(messages.items.required).toEqual(['number', 'shortText']);
+      expect(messages.items.properties.number).toBeDefined();
+      expect(messages.items.properties.shortText).toBeDefined();
+    });
+
+    it('exposes the messages property inside batch_create items (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const batchObjects = schema.properties.objects;
+      expect(batchObjects?.type).toBe('array');
+      const item = batchObjects.items;
+      expect(item.properties.messages).toBeDefined();
+      expect(item.properties.messages.type).toBe('array');
+      expect(item.properties.messages.items.required).toEqual(['number', 'shortText']);
+    });
+
+    it('exposes the messages property at top-level SAPWrite (BTP)', () => {
+      const schema = getSAPWriteSchema(true);
+      expect(schema.properties.messages).toBeDefined();
+      expect(schema.properties.messages.type).toBe('array');
+    });
+
+    it('lists STRU as a writable type unconditionally (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const typeEnum: string[] = schema.properties.type.enum;
+      expect(typeEnum).toContain('STRU');
+      expect(typeEnum).toContain('TABL');
+      // batch_create item type enum must also list STRU.
+      const batchEnum: string[] = schema.properties.objects.items.properties.type.enum;
+      expect(batchEnum).toContain('STRU');
+    });
+
+    it('lists STRU as a writable type unconditionally (BTP)', () => {
+      const schema = getSAPWriteSchema(true);
+      const typeEnum: string[] = schema.properties.type.enum;
+      expect(typeEnum).toContain('STRU');
+      const batchEnum: string[] = schema.properties.objects.items.properties.type.enum;
+      expect(batchEnum).toContain('STRU');
+    });
+
+    it('mentions STRU in the SAPWrite description text (on-prem)', () => {
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, systemType: 'onprem' });
+      const sapWrite = tools.find((t) => t.name === 'SAPWrite');
+      expect(sapWrite?.description).toContain('STRU');
+    });
+  });
 });

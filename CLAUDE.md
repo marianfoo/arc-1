@@ -501,6 +501,7 @@ Automated via [release-please](https://github.com/googleapis/release-please). No
 - **All ADT endpoints have safety guards** — every `http.get/post/put/delete` call is preceded by `checkOperation()`. No unguarded HTTP calls.
 - **Error types matter**: `AdtApiError` (SAP HTTP error), `AdtSafetyError` (blocked by config), `AdtNetworkError` (connectivity). `intent.ts` formats these with LLM-friendly hints.
 - **Stateful sessions**: Lock→modify→unlock sequences must use `http.withStatefulSession()` to share cookies/CSRF tokens across requests
+- **Tool schema three-file sync.** Every tool property must exist in all three files: `tools.ts` (JSON Schema for LLMs), `schemas.ts` (Zod validation), `intent.ts` (handler logic). A property that exists in handler+Zod but is missing from `tools.ts` is invisible to LLMs — they cannot discover or use it. When adding a new property, update all three files. Batch object schemas (e.g., `batch_create` items) are defined separately from the top-level schema — check both.
 
 ## History
 

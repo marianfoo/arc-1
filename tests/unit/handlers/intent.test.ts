@@ -7690,6 +7690,10 @@ ENDCLASS.`;
         ['SRVB/SVB', 'SRVB'],
         ['DDLX/EX', 'DDLX'],
         ['TABL/DT', 'TABL'],
+        // SAP returns DDIC structures as TABL/DS (verified live: A4H 758 quickSearch BAPIRET2).
+        // Without this alias, piping objectType from SAPSearch into SAPWrite/SAPRead fails
+        // pre-Zod normalization. Codex review of PR #201 caught this.
+        ['TABL/DS', 'STRU'],
         ['STRU/DS', 'STRU'],
         ['DOMA/DD', 'DOMA'],
         ['DTEL/DE', 'DTEL'],
@@ -9284,6 +9288,175 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Server syntax check (inactive):');
       expect(result.content[0]?.text).toContain('[line 5] Unknown annotation');
+    });
+  });
+
+  // ─── Mixed-case object name rejection ──────────────────────────────
+  describe('SAPWrite mixed-case object name rejection', () => {
+    it('rejects create with lowercase characters in object name', async () => {
+      mockFetch.mockReset();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'Zarc1_Mixed',
+        package: '$TMP',
+        source: 'define view entity Zarc1_Mixed as select from t000 { key mandt }',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('uppercase');
+      expect(text).toContain('ZARC1_MIXED');
+      // No HTTP traffic should have happened — guard fires before locking.
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+
+    it('proceeds past the guard when name is fully uppercase', async () => {
+      mockFetch.mockReset();
+      // CSRF + create + activate-related calls — let them all succeed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'ZARC1_OK',
+        package: '$TMP',
+        source: 'define view entity ZARC1_OK as select from t000 { key mandt }',
+      });
+      // Guard didn't fire → at least one HTTP call was attempted (CSRF or POST).
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('rejects mixed-case names per object inside batch_create', async () => {
+      mockFetch.mockReset();
+      // Stub HTTP minimally — the batch may attempt the first uppercase object before hitting the bad one.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          {
+            type: 'DDLS',
+            name: 'Zc_Bad',
+            description: 'bad',
+            source: 'define view entity Zc_Bad as select from t000 { key mandt }',
+          },
+          { type: 'CLAS', name: 'ZCL_LATER', description: 'never reached' },
+        ],
+      });
+      const text = result.content[0]?.text ?? '';
+      // First object should be marked failed for the mixed-case reason.
+      expect(text).toContain('Zc_Bad');
+      expect(text).toContain('uppercase');
+      // Second object should NOT have been attempted (batch breaks on first failure).
+      expect(text).not.toContain('ZCL_LATER: success');
+    });
+  });
+
+  // ─── STRU update guard against TABL/DT ────────────────────────────
+  describe('SAPWrite STRU update guard', () => {
+    function buildSearchResponseXml(name: string, objectType: string): string {
+      return (
+        `<?xml version="1.0" encoding="utf-8"?>` +
+        `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">` +
+        `<adtcore:objectReference adtcore:name="${name}" adtcore:type="${objectType}" ` +
+        `adtcore:description="x" adtcore:packageName="$TMP" adtcore:uri="/sap/bc/adt/x"/>` +
+        `</adtcore:objectReferences>`
+      );
+    }
+
+    it('rejects STRU update on a transparent table (TABL/DT)', async () => {
+      mockFetch.mockReset();
+      // searchObject GET → returns the existing object as TABL/DT.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildSearchResponseXml('T000', 'TABL/DT')));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'T000',
+        source: 'define type t000 { mandt : mandt; }',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('transparent table');
+      expect(text).toContain('TABL/DT');
+      expect(text).toContain('SAPWrite(type="TABL")');
+    });
+
+    it('rejects STRU update on a non-structure object (e.g. CLAS)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildSearchResponseXml('ZCL_FOO', 'CLAS/OC')));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'ZCL_FOO',
+        source: 'define type zcl_foo { mandt : mandt; }',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('CLAS/OC');
+      expect(text).toContain('not a structure');
+    });
+
+    it('proceeds past the guard when search throws (best-effort)', async () => {
+      mockFetch.mockReset();
+      // searchObject fails → guard swallows; subsequent lock+update HTTP calls fire.
+      mockFetch.mockResolvedValueOnce(mockResponse(500, 'search broke'));
+      // CSRF + lock + update + unlock all stubbed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'ZSTRU_OK',
+        source: 'define type zstru_ok { mandt : mandt; }',
+      });
+
+      // Verify the guard fell through (more than 1 HTTP call total — search + at least one follow-up).
+      expect(mockFetch.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    // ─── Codex review of PR #201: guard must fire BEFORE package enforcement ─────
+    // The data-corruption risk (TABL/DT silently rewritten to TABL/DS via the
+    // /ddic/structures/ PUT endpoint) is independent of any package allowlist. With
+    // the default `$TMP`-only allowlist, calling SAPWrite(type='STRU', name='T000')
+    // would resolve T000's package (e.g. SBASIC) and throw "package blocked" before
+    // the guard fires — masking the more important "transparent table" message and
+    // potentially letting the LLM retry with a different allowed package.
+    it('guard fires BEFORE package enforcement (no package resolution HTTP call)', async () => {
+      mockFetch.mockReset();
+      // searchObject returns TABL/DT for T000.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildSearchResponseXml('T000', 'TABL/DT')));
+      // Subsequent calls would normally include resolveObjectPackage (which is the
+      // HTTP call we want to assert was NOT made because the guard short-circuited).
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      // Restrictive client with $TMP-only allowlist — this WOULD reject T000 (in SBASIC)
+      // if the package check ran first.
+      const restrictedClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['$TMP'] },
+      });
+
+      const result = await handleToolCall(restrictedClient, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'STRU',
+        name: 'T000',
+        source: 'define type t000 { mandt : mandt; }',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      // Must surface the data-corruption guard, NOT the package allowlist rejection.
+      expect(text).toContain('transparent table');
+      expect(text).toContain('TABL/DT');
+      expect(text).not.toContain('blocked by safety configuration');
+      expect(text).not.toContain('allowedPackages');
+      // Exactly one HTTP call: searchObject. resolveObjectPackage was never invoked.
+      expect(mockFetch.mock.calls.length).toBe(1);
     });
   });
 });
