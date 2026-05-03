@@ -201,6 +201,8 @@ export function buildAdtConfig(
     if (cookies) {
       adtConfig.cookies = cookies;
     }
+    adtConfig.cookieFile = config.cookieFile;
+    adtConfig.cookieString = config.cookieString;
   }
 
   return adtConfig;
@@ -362,8 +364,24 @@ export interface StartupAuthPreflightResult {
 
 const STARTUP_AUTH_ENDPOINT = '/sap/bc/adt/core/discovery';
 
-function buildStartupAuthFailureReason(statusCode: number): string {
+function buildStartupAuthFailureReason(statusCode: number, config: ServerConfig): string {
   if (statusCode === 401) {
+    // Only SAP_COOKIE_FILE supports hot-reload: the file is re-read on the next request.
+    // SAP_COOKIE_STRING is a static env var read once at process start — it cannot
+    // change in the running process, so we must not promise "no restart needed".
+    if (config.cookieFile) {
+      return (
+        'Authentication failed (401) during startup auth preflight. ' +
+        'Your SAP cookies have expired. Re-extract them with `arc1-cli extract-cookies` — no restart needed, the next SAP call will reload them automatically.'
+      );
+    }
+    if (config.cookieString) {
+      return (
+        'Authentication failed (401) during startup auth preflight. ' +
+        'SAP_COOKIE_STRING is a static value and cannot be hot-reloaded. ' +
+        'Restart ARC-1 with a refreshed SAP_COOKIE_STRING, or switch to SAP_COOKIE_FILE for automatic reload on the next request.'
+      );
+    }
     return (
       'Authentication failed (401) during startup auth preflight. ' +
       'Check SAP_USER/SAP_PASSWORD/SAP_CLIENT (or destination/service-key credentials), then restart ARC-1.'
@@ -419,7 +437,15 @@ export async function runStartupAuthPreflight(
     return { status: 'ok', blocking: false, endpoint, checkedAt, reason };
   } catch (err) {
     if (err instanceof AdtApiError && (err.statusCode === 401 || err.statusCode === 403)) {
-      const reason = buildStartupAuthFailureReason(err.statusCode);
+      const reason = buildStartupAuthFailureReason(err.statusCode, config);
+      // Non-blocking downgrade only applies to cookieFile mode — that's the path
+      // the runtime client can actually recover from via the lazy reload. cookieString
+      // is static; downgrading there would just defer the same failure to the first
+      // tool call without giving the operator a way to fix it without restart.
+      if (config.cookieFile && err.statusCode === 401) {
+        logger.warn(`${reason} (non-blocking: runtime cookie reload will retry)`, { endpoint, statusCode: 401 });
+        return { status: 'inconclusive', blocking: false, endpoint, checkedAt, statusCode: 401, reason };
+      }
       logger.warn(reason, { endpoint, statusCode: err.statusCode });
       return {
         status: 'failed',
@@ -475,6 +501,15 @@ export function createServer(
   // Create default ADT client (shared, uses startup-time credentials or OAuth bearer)
   const defaultClient = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
 
+  // Cookie-auth preflight propagation: when startup preflight returned a non-blocking
+  // 401 in SAP_COOKIE_FILE mode, the throwaway preflight client marked itself stale —
+  // but the long-lived defaultClient was constructed independently with cookies read at
+  // startup and is unaware. Without explicit propagation, the first real tool call would
+  // re-emit the same stale cookies and hit 401 again before the lazy reload triggers,
+  // wasting one round-trip per startup-stale-cookie cycle. We propagate the stale state
+  // once on first tool call — idempotent flag keeps later calls O(1).
+  let preflightStalePropagated = false;
+
   // Register tool listing — filtered by user's scopes when auth is active
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
     // Wait for the startup probe (if provided), but with a timeout so a slow/unreachable
@@ -511,6 +546,13 @@ export function createServer(
           ],
           isError: true,
         } as Record<string, unknown>;
+      }
+      // Non-blocking 401 from cookie-auth preflight → mark the runtime client's cookies
+      // stale so its first call goes straight to the lazy reload path instead of repeating
+      // the failure. Fires once per process; subsequent calls early-return.
+      if (!preflightStalePropagated && startupAuth.status === 'inconclusive' && startupAuth.statusCode === 401) {
+        defaultClient.http.markCookiesStale();
+        preflightStalePropagated = true;
       }
     }
 
