@@ -1848,10 +1848,12 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 **Why not (yet):** ARC-1's value comes from the opinionated central safety/scope/audit pipeline. A poorly-designed plugin API could let a third-party tool bypass `allowWrites`, `allowedPackages`, scope policy, or PP. The research doc lists eight invariants that any plugin API must enforce; getting them right takes time. Deferred to P3 until either (a) a concrete customer asks for it, or (b) the in-tree tool count starts to feel like a marketplace candidate.
 
+**Motivating example (2026-04-26):** the [samibouge NW 7.50 fork](https://github.com/marianfoo/arc-1/compare/main...samibouge:arc-1:feat/nw750-version-fix) is the first concrete case for this feature. 17 of its 18 commits are vanilla upstream candidates (and several are already merged via #179). The 18th — [`8dedcb0`, NW 7.50 dump detail via custom ICF endpoint](https://github.com/marianfoo/arc-1/commit/8dedcb0) — requires installing `ZCL_ARC1_DUMP_HANDLER` on the SAP system, which contradicts ARC-1's "no SAP-side install" principle and would bind upstream to maintaining customer-side ABAP. This is exactly the shape the extension model is meant to absorb: customer keeps the ABAP class in their own repo, ships a small TS plugin that calls `/sap/rest/arc1/dumps` via `client.http.get(...)`, admins opt in via `ARC1_PLUGINS=...`. Full bucketing of the 18 commits and a worked plugin sketch are in [§14 of the research doc](../docs/research/tool-extension-points.md#14-worked-example-samibouge-nw-750-fork--what-fits-what-doesnt).
+
 **Out of scope:** Embedding ARC-1 *into* another app (already deferred as [FEAT-29g](#feat-29) — contradicts the centralized-gateway model). This item is the *opposite* — adding tools *to* an ARC-1 instance.
 
 **Related research:**
-- [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) — full design with public-surface map, seven extension-pattern survey, security model, anti-patterns, open questions, and a sketch of `defineTool()` + `ToolContext`.
+- [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) — full design with public-surface map, seven extension-pattern survey, security model, anti-patterns, open questions, a sketch of `defineTool()` + `ToolContext`, and the §14 case study against the samibouge NW 7.50 fork.
 
 ---
 
