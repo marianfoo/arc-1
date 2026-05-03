@@ -4,6 +4,8 @@
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
+> **2026-04-28 update:** Reviewed PR [#196](https://github.com/marianfoo/arc-1/pull/196) (NW 7.50 compatibility fixes). Bundled scope, fragile heuristics, and a release-gating shape that conflicted with existing plans. Decision: split into PR-α (cookie hot-reload), PR-β (three-file sync + universal write guards), PR-γ (NW 7.50 quirks refined), with the static release maps replaced by ARCH-01 (discovery-driven routing) and PR-ε (gate removal). Three architectural decisions captured in `docs/adr/0001..0003.md`. Live evidence captured against A4H 758 SP02 and NPL 750 SP02 informs the design. Plans in `docs/plans/pr-{alpha,beta,gamma}-*.md` and `docs/plans/discovery-driven-endpoint-routing.md` are ready for execution. The `version` parameter on SAPRead proposed in PR #196 is deferred to FEAT-24 (CompareSource/Diff) per [ADR-0003](../docs/adr/0003-sapread-version-stays-internal.md).
+
 ---
 
 ## Vision
@@ -51,8 +53,13 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 | ID | Feature | Priority | Effort | Category |
 |-----|---------|----------|--------|----------|
 | [BUG-01](#bug-01) | SAPActivate phantom success + CLI/server alignment (NW 7.50) — PR [#179](https://github.com/marianfoo/arc-1/pull/179) open | P0 | S | Bugs |
+| [PR-α](#pr-alpha) | Cookie hot-reload on stale 401 — split from PR [#196](https://github.com/marianfoo/arc-1/pull/196) | P1 | XS | Features |
+| [PR-β](#pr-beta) | Three-file sync (`messages` + STRU writes) + universal write guards (mixed-case rejection, STRU-vs-TABL guard) — split from PR [#196](https://github.com/marianfoo/arc-1/pull/196) | P1 | XS | Features |
+| [PR-γ](#pr-gamma) | NW 7.50 lock-conflict reclassification (refined per [ADR-0002](../docs/adr/0002-structured-exception-lock-conflict-reclassification.md)) + MSAG transport-vs-task guard — split from PR [#196](https://github.com/marianfoo/arc-1/pull/196) | P1 | S | Compatibility |
+| [ARCH-01](#arch-01) | Discovery-driven endpoint routing (foundation; [ADR-0001](../docs/adr/0001-discovery-driven-endpoint-routing.md)) — replaces release-version gating proposed in PR [#196](https://github.com/marianfoo/arc-1/pull/196) | P1 | M | Architecture |
+| [PR-ε](#pr-epsilon) | Remove static release gates and `isRelease750()`; consume ARCH-01 — must follow ARCH-01 | P1 | S | Architecture |
 | [FEAT-18](#feat-18) | Function Group Bulk Fetch | P1 | S | Features |
-| [FEAT-24](#feat-24) | CompareSource (Diff) | P1 ↑ (from P2, 2026-04-23 — last piece of code-review workflow trio with FEAT-20 + FEAT-49) | S | Features |
+| [FEAT-24](#feat-24) | CompareSource (Diff) — see [ADR-0003](../docs/adr/0003-sapread-version-stays-internal.md), this is where user-facing `version` belongs | P1 ↑ (from P2, 2026-04-23 — last piece of code-review workflow trio with FEAT-20 + FEAT-49) | S | Features |
 | [DOC-01](#doc-01) | Copilot Studio Setup Guide | P1 | S | Docs |
 | [DOC-02](#doc-02) | Basis Admin Security Guide | P1 | S | Docs |
 | [FEAT-09](#feat-09) | SQL Trace Monitoring | P2 | S | Features |
@@ -77,6 +84,8 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 | [OPS-02](#ops-02) | Health Check Enhancements | P2 | XS | Ops |
 | [DOC-03](#doc-03) | SAP Community Blog Post | P2 | S | Docs |
 | [COMPAT-04](#compat-04) | BTP transport omission in safeUpdateSource() — verify only | P2 | XS | Compatibility |
+| [ARCH-02](#arch-02) | Structured-exception lock-conflict classification ([ADR-0002](../docs/adr/0002-structured-exception-lock-conflict-reclassification.md)) — already partially shipped in PR-γ | P2 | XS | Architecture |
+| [ARCH-03](#arch-03) | Per-request `getTransport()` cache (avoid roundtrip per MSAG batch_create) — already partially shipped in PR-γ | P3 | XS | Performance |
 | [FEAT-05](#feat-05) | Code Refactoring (Rename, Extract) | P3 | L | Features |
 | [FEAT-07](#feat-07) | TLS/HTTPS for HTTP Streamable | P3 | S | Features |
 | [FEAT-29](#feat-29) | P3 Backlog (14 items) | P3 | various | Features |
@@ -1773,6 +1782,144 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 **PR #179 fix summary:** inactive-objects detection in parse result (including owning user from `ioc:transport[@_user]`), endpoint fallback, flat-shape parser support, new `version` parameter plumbed through, `<chkrun:checkMessage>` position extraction, and a new `inactiveSyntaxDiagnostic()` primitive invoked on activation failure to append compiler errors from the inactive version.
 
 **Blast radius:** Every activation path (`SAPActivate`, RAP batch activation, E2E suites). Needs the missing E2E regression test the PR description calls out: create a class with a deliberate type error → attempt `SAPActivate` → assert failure → assert the returned message names the user and includes compiler text.
+
+---
+
+<a id="pr-alpha"></a>
+### PR-α: Cookie Hot-Reload on Stale 401
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low — orthogonal infra; pure client-side reload logic |
+| **Usefulness** | High — eliminates restart-on-cookie-expiry for cookie-auth deployments |
+| **Status** | **Plan ready** — [docs/plans/pr-alpha-cookie-hot-reload.md](../docs/plans/pr-alpha-cookie-hot-reload.md) |
+| **Source** | Split from PR [#196](https://github.com/marianfoo/arc-1/pull/196) (samibouge) |
+
+**What:** When ARC-1 is configured with `SAP_COOKIE_FILE` and the SAP session cookies expire, every subsequent ADT call fails with a 401 until the operator restarts the process. PR-α adds a lazy cookie-reload mechanism: on a persistent 401 in cookie-auth mode, the client clears the in-memory cookie jar and re-reads the configured `cookieFile` on the next outgoing request. Per-user PP clients continue to strip cookie auth via `buildAdtConfig({ perUser: true })`. Startup auth-preflight downgrades to non-blocking when in cookie-auth mode so deployments don't deadlock on stale cookies.
+
+**Why P1:** Operator pain — cookie-auth deployments behind SSO often need cookies refreshed every few hours. Restarting ARC-1 to refresh cookies defeats the purpose of a long-running service.
+
+**Independence:** Fully orthogonal to NW 7.50 work. Ships as a standalone PR.
+
+---
+
+<a id="pr-beta"></a>
+### PR-β: Three-file Sync (`messages` + STRU writes) + Universal Write Guards
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low — pure three-file-sync + universal SAP-convention guards |
+| **Usefulness** | High — closes LLM-discoverability gaps that block real workflows (MSAG batch with `messages`, STRU write surface) |
+| **Status** | **Plan ready** — [docs/plans/pr-beta-three-file-sync-and-universal-guards.md](../docs/plans/pr-beta-three-file-sync-and-universal-guards.md) |
+| **Source** | Split from PR [#196](https://github.com/marianfoo/arc-1/pull/196) (samibouge) |
+
+**What:** Bundles four universal write-side improvements:
+
+1. **MSAG `messages` exposure in tool schema** — three-file sync fix; handler+Zod already accept it, but tools.ts never exposed the property to LLMs.
+2. **STRU as a first-class writable type** — adds STRU to `SAPWRITE_TYPES_ONPREM`/`SAPWRITE_TYPES_BTP` unconditionally; the conditional fallback proposed in PR #196 was a release-gating workaround.
+3. **Mixed-case object name rejection** — TADIR uses uppercase universally; mixed-case names cause silent corruption. Reject pre-flight in `handleSAPWrite` create + `batch_create`.
+4. **STRU update guard against `TABL/DT`** — block STRU updates on transparent tables to prevent the silent DD02L corruption that happens on every release where the `/ddic/structures/` PUT endpoint exists.
+
+**Why P1:** Each item fixes a real discoverability or safety gap that applies on every supported SAP release.
+
+**Independence:** Fully independent of NW 7.50 work and ARCH-01. Ships standalone.
+
+---
+
+<a id="pr-gamma"></a>
+### PR-γ: NW 7.50 Quirks Refined (Lock Conflict + MSAG Transport Guard)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Medium — refactors error reclassification path |
+| **Usefulness** | High — eliminates "phantom auth error" UX on NW 7.50 lock conflicts |
+| **Status** | **Plan ready** — [docs/plans/pr-gamma-nw750-quirks-refined.md](../docs/plans/pr-gamma-nw750-quirks-refined.md) |
+| **Source** | Split from PR [#196](https://github.com/marianfoo/arc-1/pull/196) (samibouge); refined per [ADR-0002](../docs/adr/0002-structured-exception-lock-conflict-reclassification.md) |
+
+**What:**
+
+1. **Layered lock-conflict reclassification** replaces PR #196's body-marker heuristic. Layer 1: structured `<exc:exception>` extraction (release-agnostic). Layer 2: HTML body-marker fallback gated by `cachedFeatures.abapRelease < 751`. Live probe (2026-04-28) showed the original heuristic happens to fire only on NPL because of UI-language differences, not because of release — re-localizing either system breaks it. The layered version is robust.
+2. **MSAG transport-vs-task guard** rejects task numbers passed as MSAG `corrNr`, with a per-batch `getTransport()` cache to keep `batch_create` fast.
+
+**Why P1:** Lock conflicts on NW 7.50 surface today as misleading auth errors. The MSAG silent-failure on task numbers leaves phantom TADIR entries.
+
+**Independence:** Fully independent of ARCH-01.
+
+---
+
+<a id="arch-01"></a>
+### ARCH-01: Discovery-driven Endpoint Routing
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | M (3-5 days) |
+| **Risk** | Medium — touches discovery, intent, tools layers |
+| **Usefulness** | High — replaces brittle release-version gating with self-correcting primitive |
+| **Status** | **Plan ready** — [docs/plans/discovery-driven-endpoint-routing.md](../docs/plans/discovery-driven-endpoint-routing.md); decision recorded in [ADR-0001](../docs/adr/0001-discovery-driven-endpoint-routing.md) |
+| **Blocks** | PR-ε (release-gate cleanup) |
+
+**What:** Replace the static SAP_BASIS release maps proposed in PR #196 with a routing primitive that reads the truth from the SAP system's own `/sap/bc/adt/discovery` feed. Adds `discoveryHasCollection(uri)` helper and `resolveSourceUrl(type, name)` with an ordered candidate-URL list per type. Self-corrects across SAP support packs. Eliminates the CLI-vs-server feature-cache divergence surfaced by live probe (2026-04-28: NPL TABL via CLI 404s because `cachedFeatures` was undefined; discovery-driven routing eliminates the dependency).
+
+**Why P1:** Foundation for PR-ε, and the cleanest way to ship the routing capability the PR #196 author actually wanted (TABL→STRU on systems without `/ddic/tables`, gated tool enums).
+
+**Live evidence:** `/sap/bc/adt/discovery` on A4H 758 publishes `/ddic/tables, /ddic/structures, /ddic/domains, /ddic/ddlx/sources, /bo/behaviordefinitions, /businessservices/bindings, /enhancements/{enhoxh, enhoxhb}`. NPL 750 publishes only `/ddic/structures, /ddic/dataelements, /ddic/ddl/sources, /enhancements/enhoxh, /messageclass, /businesslogicextensions/badis`. The discovery feed is a precise, machine-readable answer to "is this collection available."
+
+---
+
+<a id="pr-epsilon"></a>
+### PR-ε: Remove Static Release Gates (consumes ARCH-01)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Medium — pure deletion + swap-in, but every gated type needs regression coverage |
+| **Usefulness** | High — eliminates the duplicate release-map maintenance burden |
+| **Status** | **Blocked on ARCH-01** — see `docs/todo.md` for tracking |
+| **Source** | Cleanup of PR [#196](https://github.com/marianfoo/arc-1/pull/196) static gates |
+
+**What:** Remove `READ_RELEASE_GATES`, `WRITE_RELEASE_GATES`, `ACTION_RELEASE_GATES`, `parseRelease`, `parseReleaseNum`, `filterByRelease`, `isRelease750()`, the TABL→STRU read fallback, and the TABL write block from `intent.ts` and `tools.ts`. Replace each with a discovery-driven equivalent (`resolveSourceUrl`, `filterByDiscovery`) introduced by ARCH-01.
+
+**Verification:** Each removal must be paired with a regression test against the NPL-7.50 probe fixture and the new A4H-758 fixture, confirming the routing decision is identical to or better than the static map.
+
+---
+
+<a id="arch-02"></a>
+### ARCH-02: Structured-Exception Lock-Conflict Classification (full migration)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Medium — hardens lock-conflict classification across all paths |
+| **Status** | **Partially shipped** — Layer 1 (structured exception) lands in PR-γ; this entry tracks migration of any remaining body-marker checks to the structured path |
+| **Source** | [ADR-0002](../docs/adr/0002-structured-exception-lock-conflict-reclassification.md) |
+
+**What:** Audit `src/adt/*.ts` for any remaining HTML-body-string heuristics that should switch to `<exc:exception><type id="…"/>` extraction. PR-γ converts the lock-conflict path; this entry catches future similar patterns.
+
+---
+
+<a id="arch-03"></a>
+### ARCH-03: Per-Request Transport Cache
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P3 |
+| **Effort** | XS (< 1 day) |
+| **Risk** | Low |
+| **Usefulness** | Low — small perf win for MSAG batch_create on systems with the bug |
+| **Status** | **Partially shipped** in PR-γ MSAG guard; this entry tracks generalization |
+| **Source** | PR review of [#196](https://github.com/marianfoo/arc-1/pull/196) MSAG guard |
+
+**What:** Generalize the per-batch `transportCache: Map<string, TransportRequest | null>` introduced by PR-γ into a request-scoped helper that any handler can use to memoize `getTransport()` calls within a single user request. Avoids extra HTTP roundtrips on batch operations that touch the same transport.
 
 ---
 
