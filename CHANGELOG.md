@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/marianfoo/arc-1/compare/v0.7.2...v0.7.3) (2026-05-04)
+
+
+### Bug Fixes
+
+* defensive dumpId encoding + endpoint-aware 403 hints ([#206](https://github.com/marianfoo/arc-1/issues/206)) ([9046fa7](https://github.com/marianfoo/arc-1/commit/9046fa7170f7b4f2bd347406e1524da9df57f0dd))
+
 ## [0.7.2](https://github.com/marianfoo/arc-1/compare/v0.7.1...v0.7.2) (2026-04-28)
 
 
