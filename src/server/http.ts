@@ -29,6 +29,7 @@ import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import express from 'express';
+import helmet from 'helmet';
 import { expandScopes } from '../authz/policy.js';
 import { API_KEY_PROFILES } from './config.js';
 import { logger } from './logger.js';
@@ -121,6 +122,8 @@ export async function startHttpServer(
   // Trust first proxy (CF gorouter) — required for express-rate-limit
   // and correct client IP detection behind CF's reverse proxy.
   app.set('trust proxy', 1);
+  // Security headers via helmet (applied before all routes).
+  app.use(helmet());
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
