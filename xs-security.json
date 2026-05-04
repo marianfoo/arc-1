@@ -19,8 +19,16 @@
       "description": "Execute freestyle SQL queries (implies data)"
     },
     {
+      "name": "$XSAPPNAME.transports",
+      "description": "Create, release, and manage CTS transport requests"
+    },
+    {
+      "name": "$XSAPPNAME.git",
+      "description": "Push, pull, and manage abapGit/gCTS repositories"
+    },
+    {
       "name": "$XSAPPNAME.admin",
-      "description": "Administrative access to ARC-1"
+      "description": "Administrative access to ARC-1 (implies all other scopes at runtime)"
     }
   ],
   "role-templates": [
@@ -31,8 +39,13 @@
     },
     {
       "name": "MCPDeveloper",
-      "description": "Read and write access to SAP via ARC-1 MCP",
-      "scope-references": ["$XSAPPNAME.read", "$XSAPPNAME.write"]
+      "description": "Read, write, transport, and git access for developers",
+      "scope-references": [
+        "$XSAPPNAME.read",
+        "$XSAPPNAME.write",
+        "$XSAPPNAME.transports",
+        "$XSAPPNAME.git"
+      ]
     },
     {
       "name": "MCPDataViewer",
@@ -46,12 +59,14 @@
     },
     {
       "name": "MCPAdmin",
-      "description": "Full administrative access to ARC-1",
+      "description": "Full administrative access to ARC-1 — admin scope implies all other scopes at runtime",
       "scope-references": [
         "$XSAPPNAME.read",
         "$XSAPPNAME.write",
         "$XSAPPNAME.data",
         "$XSAPPNAME.sql",
+        "$XSAPPNAME.transports",
+        "$XSAPPNAME.git",
         "$XSAPPNAME.admin"
       ]
     }
@@ -64,7 +79,7 @@
     },
     {
       "name": "ARC-1 Developer",
-      "description": "Read-write SAP access via ARC-1 MCP",
+      "description": "Read, write, transport, and git access via ARC-1 MCP",
       "role-template-references": ["$XSAPPNAME.MCPDeveloper"]
     },
     {
@@ -93,7 +108,7 @@
     },
     {
       "name": "ARC-1 Admin",
-      "description": "Full ARC-1 administrative access",
+      "description": "Full ARC-1 administrative access (admin implies all scopes)",
       "role-template-references": ["$XSAPPNAME.MCPAdmin"]
     }
   ],

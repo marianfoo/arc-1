@@ -59,9 +59,9 @@ These skills assume you have:
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [generate-rap-service](generate-rap-service.md) | Creates a complete RAP OData service stack (table, CDS views, BDEF, SRVD, SRVB, class) from a natural language description | Quick prototyping, simple CRUD with standard patterns, user knows exactly what they want |
-| [generate-rap-service-researched](generate-rap-service-researched.md) | Same output as above, but researches the target system first (existing naming conventions, architecture patterns, SAP docs) and builds an approved plan before creating anything | Production-quality services in transportable packages, complex domains, "measure twice, cut once" mode |
-| [generate-rap-logic](generate-rap-logic.md) | Implements determination and validation methods in an existing RAP behavior pool | After creating a RAP service — fills in the empty method stubs with ABAP Cloud logic |
+| [generate-rap-service](generate-rap-service.md) | Creates a complete RAP OData service stack (table, CDS views, BDEF, SRVD, SRVB, class) from a natural language description, with provider-contract-aware service generation | Quick prototyping, simple CRUD, standard UI service generation |
+| [generate-rap-service-researched](generate-rap-service-researched.md) | Same output as above, but researches the target system first (existing naming conventions, architecture patterns, revisions, docs, formatter settings, impact) and builds an approved plan before creating anything | Production-quality services in transportable packages, complex domains, "measure twice, cut once" mode |
+| [generate-rap-logic](generate-rap-logic.md) | Implements determination and validation methods in an existing RAP behavior pool using structured class reads, version-aware edits, and quickfix-aware validation | After creating a RAP service — fills in the empty method stubs with ABAP Cloud logic |
 | [generate-cds-unit-test](generate-cds-unit-test.md) | Generates ABAP Unit tests for CDS entities using the CDS Test Double Framework | When a CDS view has calculations, CASE expressions, WHERE filters, JOINs, or aggregations worth testing |
 | [generate-abap-unit-test](generate-abap-unit-test.md) | Generates ABAP Unit tests for classes with dependency analysis and test doubles | When a class has non-trivial business logic and uses dependency injection |
 
@@ -78,12 +78,36 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | **Best for** | Quick prototyping, proof of concept, simple CRUD | Production services, complex domains, teams with established conventions |
 | **Guardrails** | Managed only, UUID, single entity, standard CRUD | Any scenario — managed/unmanaged, compositions, custom keys |
 
+### Recent ARC-1 Features These Skills Use
+
+- `SAPContext(action="impact")` for RAP/CDS reuse and "what breaks if I change this?" analysis
+- `SAPRead(type="VERSIONS")` and `SAPRead(type="VERSION_SOURCE")` for pattern mining and safer edits of existing RAP stacks
+- `SAPTransport(action="history")` for object-to-transport traceability during later iterations
+- `SAPLint(action="format" | "get_formatter_settings")` for SAP-native keyword case and indentation
+- `SAPRead` / `SAPWrite` for `SKTD` so generated RAP services can carry attached Markdown documentation
+- `SAPGit` when a package is already part of an abapGit or gCTS-backed delivery flow
+
 ### Analyzing & Understanding
 
 | Skill | What it does | When to use |
 |---|---|---|
 | [explain-abap-code](explain-abap-code.md) | Reads an ABAP object, fetches all dependencies via SAPContext, and produces a structured explanation | Onboarding to unfamiliar code, investigating bugs, documenting undocumented objects |
 | [migrate-custom-code](migrate-custom-code.md) | Runs ATC readiness checks, groups findings by priority, and generates replacement code | Preparing custom code for S/4HANA migration or ABAP Cloud readiness |
+| [sap-object-documenter](sap-object-documenter.md) | Batch-documents many custom objects at once — purpose, style (Classic/Modern/Mixed), dependencies — as Markdown | Onboarding packages, handoffs, seeding a repo wiki (vs. explain-abap-code which is single-object interactive) |
+
+### Clean Core & Custom Code Retirement
+
+| Skill | What it does | When to use |
+|---|---|---|
+| [sap-clean-core-atc](sap-clean-core-atc.md) | Audits a package of custom code and buckets every Z/Y object into Clean Core Levels A–D using mcp-sap-docs + ATC | Planning an ECC→S/4HANA Cloud or BTP move; quarterly custom-code health check |
+| [sap-unused-code](sap-unused-code.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_ALLOW_FREE_SQL=true` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
+
+### System Context & Local Workflow
+
+| Skill | What it does | When to use |
+|---|---|---|
+| [bootstrap-system-context](bootstrap-system-context.md) | Probes SID, release, installed components, feature flags, and lint preset; writes a local `system-info.md` | First step of a session against an unfamiliar system — grounds the assistant in real constraints before any code work |
+| [setup-abap-mirror](setup-abap-mirror.md) | Creates a local abapGit-style mirror of a package or object list for IDE context and `git diff` | Onboarding a codebase, pre-migration snapshotting, feeding local context to tools that can't call MCP per-read |
 
 ### Meta / Quality
 
@@ -96,9 +120,30 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 Skills are designed to chain together. A typical RAP development flow:
 
 ```
-1. generate-rap-service-researched  →  Create the service stack
-2. generate-rap-logic               →  Add business logic (validations, determinations)
-3. generate-abap-unit-test          →  Generate tests for the behavior pool
-4. generate-cds-unit-test           →  Generate tests for the CDS views
-5. analyze-chat-session             →  Review what worked, file improvements
+1. bootstrap-system-context         →  Capture SID, release, features, lint preset
+2. generate-rap-service-researched  →  Create the service stack (uses system-info.md)
+3. generate-rap-logic               →  Add business logic (validations, determinations)
+4. generate-abap-unit-test          →  Generate tests for the behavior pool
+5. generate-cds-unit-test           →  Generate tests for the CDS views
+6. optional: attach SKTD docs / inspect revisions / inspect transport history
+7. analyze-chat-session             →  Review what worked, file improvements
+```
+
+For codebase onboarding or pre-migration work:
+
+```
+1. bootstrap-system-context  →  Know the system
+2. setup-abap-mirror         →  Pull the target package(s) into abapGit-style files
+3. explain-abap-code         →  Understand key objects with dependency context
+4. migrate-custom-code       →  Run ATC readiness checks and group findings
+```
+
+For clean-core / custom-code retirement planning:
+
+```
+1. bootstrap-system-context  →  Know the system
+2. sap-unused-code           →  Scope the retirement (what even runs?)
+3. sap-clean-core-atc        →  Classify the USED code into Levels A–D
+4. sap-object-documenter     →  Document the keepers before rewriting
+5. migrate-custom-code       →  Fix the Level B/C/D findings one at a time
 ```

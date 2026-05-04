@@ -1,0 +1,20 @@
+{
+  "result": {
+    "sid": "A4H",
+    "name": "A4H",
+    "sapsid": "A4H",
+    "workstate": "ready",
+    "config": "A4H",
+    "status": [
+      { "name": "tp", "status": "GREEN", "text": "Available" },
+      { "name": "dataset", "status": "GREEN", "text": "Available" },
+      { "name": "cts", "status": "GREEN", "text": "Available" },
+      { "name": "java", "status": "GREEN", "text": "Available" },
+      { "name": "gcts_path", "status": "GREEN", "text": "Available" }
+    ],
+    "client": "100",
+    "servername": "vhcalhci",
+    "version": "2.7.1",
+    "availableVsid": ["A4H"]
+  }
+}

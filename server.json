@@ -3,7 +3,7 @@
   "name": "io.github.marianfoo/arc-1",
   "title": "ARC-1",
   "description": "MCP server for SAP ABAP systems",
-  "version": "0.6.8",
+  "version": "0.7.2",
   "websiteUrl": "https://marianfoo.github.io/arc-1/",
   "repository": {
     "url": "https://github.com/marianfoo/arc-1.git",
@@ -52,9 +52,9 @@
           "default": "false"
         },
         {
-          "name": "SAP_READ_ONLY",
-          "description": "Block all write operations (safe default)",
-          "default": "true"
+          "name": "SAP_ALLOW_WRITES",
+          "description": "Allow ABAP object mutations (safe default: false)",
+          "default": "false"
         }
       ]
     },
@@ -98,9 +98,9 @@
           "default": "false"
         },
         {
-          "name": "SAP_READ_ONLY",
-          "description": "Block all write operations (safe default)",
-          "default": "true"
+          "name": "SAP_ALLOW_WRITES",
+          "description": "Allow ABAP object mutations (safe default: false)",
+          "default": "false"
         },
         {
           "name": "SAP_TRANSPORT",

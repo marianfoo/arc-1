@@ -182,7 +182,7 @@ describe('BTP Audit Log Sink', () => {
         event: 'server_start',
         version: '3.0.0',
         transport: 'stdio',
-        readOnly: false,
+        allowWrites: true,
         url: 'http://test',
       };
       sink.write(event);
@@ -199,7 +199,7 @@ describe('BTP Audit Log Sink', () => {
         level: 'warn',
         event: 'safety_blocked',
         operation: 'CreateObject',
-        reason: 'readOnly mode',
+        reason: 'allowWrites=false',
       };
       sink.write(event);
 

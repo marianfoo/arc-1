@@ -6,7 +6,7 @@
  *
  * Transport tests require:
  *   - SAP credentials (TEST_SAP_URL / SAP_URL, etc.)
- *   - enableTransports safety config
+ *   - allowTransportWrites safety config
  *
  * Transportable-package tests additionally require:
  *   - TEST_TRANSPORT_PACKAGE env var (e.g., Z_LLM_TEST_PACKAGE)
@@ -24,6 +24,7 @@ import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import {
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   listTransports,
   reassignTransport,
@@ -34,7 +35,7 @@ import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { buildCreateXml, CrudRegistry, cleanupAll, generateUniqueName } from './crud-harness.js';
 import { requireSapCredentials } from './helpers.js';
 
-/** Create an ADT client with transports enabled */
+/** Create an ADT client with transport writes enabled */
 function getTransportEnabledClient(): AdtClient {
   requireSapCredentials();
 
@@ -46,7 +47,7 @@ function getTransportEnabledClient(): AdtClient {
   const insecure = (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true';
 
   const safety = unrestrictedSafetyConfig();
-  safety.enableTransports = true;
+  safety.allowTransportWrites = true;
 
   return new AdtClient({
     baseUrl: url,
@@ -131,9 +132,21 @@ describe('Transport Integration Tests', () => {
       }
     });
 
-    it('creates a transport with corrected namespace and media type', async () => {
+    it('creates a transport with corrected namespace and media type', async (ctx) => {
       const desc = `ARC-1 IT ${Date.now()}`;
-      const id = await createTransport(client.http, client.safety, desc);
+      let id: string;
+      try {
+        id = await createTransport(client.http, client.safety, desc);
+      } catch (err) {
+        // NW 7.50 SP02 rejects transport creation with 400
+        // "user action  is not supported" — a backend limitation of this
+        // release, not an ARC-1 bug. Skip rather than fail.
+        if (err instanceof Error && /user action\s+is not supported/i.test(err.message)) {
+          ctx.skip(`${SkipReason.BACKEND_UNSUPPORTED}: transport create not supported on this SAP release`);
+          return;
+        }
+        throw err;
+      }
 
       expect(id).toBeTruthy();
       // SAP transport IDs follow pattern: <SID>K<number>
@@ -176,11 +189,60 @@ describe('Transport Integration Tests', () => {
     });
   });
 
+  // ─── getObjectTransports ───────────────────────────────────────
+
+  describe('getObjectTransports (object → transports reverse lookup)', () => {
+    it('$TMP fixture object returns no related transports', async (ctx) => {
+      try {
+        const result = await getObjectTransports(client.http, client.safety, '/sap/bc/adt/oo/classes/zcl_arc1_test');
+        expect(result.relatedTransports.length).toBe(0);
+        expect(result.lockedTransport).toBeUndefined();
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.NO_FIXTURE}: ZCL_ARC1_TEST not found — run npm run test:e2e:fixtures first`,
+        );
+      }
+    });
+
+    it('supports probing a transportable object when configured', async (ctx) => {
+      const transportPkg = process.env.TEST_TRANSPORT_PACKAGE;
+      requireOrSkip(ctx, transportPkg, SkipReason.NO_TRANSPORT_PACKAGE);
+
+      const objectName = process.env.TEST_TRANSPORT_OBJECT_NAME;
+      requireOrSkip(ctx, objectName, 'TEST_TRANSPORT_OBJECT_NAME not configured');
+
+      const objectUrl = `/sap/bc/adt/oo/classes/${encodeURIComponent(objectName.toLowerCase())}`;
+      try {
+        const result = await getObjectTransports(client.http, client.safety, objectUrl);
+        expect(Array.isArray(result.relatedTransports)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: configured TEST_TRANSPORT_OBJECT_NAME "${objectName}" is not available`,
+        );
+      }
+    });
+  });
+
   // ─── deleteTransport ───────────────────────────────────────────
 
   describe('deleteTransport', () => {
-    it('creates and deletes a transport', async () => {
-      const id = await createTransport(client.http, client.safety, `ARC-1 IT delete ${Date.now()}`);
+    it('creates and deletes a transport', async (ctx) => {
+      let id: string;
+      try {
+        id = await createTransport(client.http, client.safety, `ARC-1 IT delete ${Date.now()}`);
+      } catch (err) {
+        if (err instanceof Error && /user action\s+is not supported/i.test(err.message)) {
+          ctx.skip(`${SkipReason.BACKEND_UNSUPPORTED}: transport create not supported on this SAP release`);
+          return;
+        }
+        throw err;
+      }
       expect(id).toBeTruthy();
 
       await deleteTransport(client.http, client.safety, id);
@@ -341,7 +403,7 @@ describe('Transport Integration Tests', () => {
       await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource);
 
       // Verify update succeeded
-      const source = await client.getProgram(testName);
+      const { source } = await client.getProgram(testName);
       expect(source).toContain('corrNr auto-propagated');
     }, 60_000);
 
@@ -373,7 +435,7 @@ describe('Transport Integration Tests', () => {
       await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource, transportId);
 
       // Verify update succeeded
-      const source = await client.getProgram(testName);
+      const { source } = await client.getProgram(testName);
       expect(source).toContain('explicit transport used');
     }, 60_000);
   });

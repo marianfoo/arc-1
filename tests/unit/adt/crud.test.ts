@@ -140,25 +140,13 @@ describe('CRUD Operations', () => {
       expect(url).toContain('accessMode=MODIFY');
     });
 
-    it('is blocked when safety disallows Lock', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'L' };
-      await expect(lockObject(http, safety, '/url')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('Lock type L is not in WRITE_OPS — readOnly does not block lock', async () => {
-      // Lock is gated by its own operation type 'L', not by readOnly flag.
-      // readOnly blocks CDUAW (Create, Delete, Update, Activate, Workflow).
+    it('Lock type L is not a mutating operation — allowWrites=false does not block lock', async () => {
+      // Lock is gated by its own operation type 'L', not by the write gate.
+      // allowWrites=false blocks CDUAWX (Create, Delete, Update, Activate, Workflow, Transport).
       // This is intentional: lock is needed for read operations like syntax check.
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(lockObject(http, safety, '/url')).resolves.toBeDefined();
-    });
-
-    it('is blocked when Lock ops are explicitly disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'L' };
-      await expect(lockObject(http, safety, '/url')).rejects.toThrow(AdtSafetyError);
     });
 
     it('handles namespaced objects (Issue #18)', async () => {
@@ -171,6 +159,51 @@ describe('CRUD Operations', () => {
         undefined,
         expect.any(Object),
       );
+    });
+
+    describe('NW 7.50 lock-conflict reclassification', () => {
+      function mockHttpThatRejectsLock(status: number, body: string): AdtHttpClient {
+        const post = vi.fn().mockRejectedValue(new AdtApiError('reject', status, '/url', body));
+        return {
+          get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+          post,
+          put: vi.fn(),
+          delete: vi.fn(),
+          fetchCsrfToken: vi.fn(),
+          withStatefulSession: vi.fn(),
+        } as unknown as AdtHttpClient;
+      }
+
+      const html = '<html><body>Logon Error Message — please log on again.</body></html>';
+
+      it('reclassifies 403 + "Logon Error Message" body as 409 lock-conflict', async () => {
+        const http = mockHttpThatRejectsLock(403, html);
+        await expect(
+          lockObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/programs/programs/ZTEST'),
+        ).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('locked by another session') });
+      });
+
+      it('reclassifies 401 + "Logon Error Message" body as 409 (cookie-clear retry path)', async () => {
+        const http = mockHttpThatRejectsLock(401, html);
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url')).rejects.toMatchObject({ statusCode: 409 });
+      });
+
+      it('reclassifies 400 + "Logon Error Message" body as 409 (ICM 403→401→400 cascade)', async () => {
+        const http = mockHttpThatRejectsLock(400, html);
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url')).rejects.toMatchObject({ statusCode: 409 });
+      });
+
+      it('does NOT reclassify S/4 auth-failure body ("Anmeldung fehlgeschlagen")', async () => {
+        const http = mockHttpThatRejectsLock(401, '<html><body>Anmeldung fehlgeschlagen</body></html>');
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url')).rejects.toMatchObject({ statusCode: 401 });
+      });
+
+      it('does NOT reclassify S/4 lock-conflict structured XML (no "Logon Error Message")', async () => {
+        const xml =
+          '<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><type id="ExceptionResourceNoAccess"/><message lang="EN">User MARIAN is currently editing ZTEST</message></exc:exception>';
+        const http = mockHttpThatRejectsLock(403, xml);
+        await expect(lockObject(http, unrestrictedSafetyConfig(), '/url')).rejects.toMatchObject({ statusCode: 403 });
+      });
     });
   });
 
@@ -278,8 +311,63 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(createObject(http, safety, '/url', '<xml/>')).rejects.toThrow(AdtSafetyError);
+    });
+
+    // ─── DTEL v1 content-type fallback (pre-7.52 compat) ────────────────
+
+    it('retries DTEL v2 create with v1 MIME on HTTP 415', async () => {
+      const http = mockHttp();
+      // First call: 415 on the versioned v2 type (what NW 7.50 returns).
+      // Second call: 201 after falling back to v1.
+      const error415 = new AdtApiError('Unsupported Media Type', 415, '/sap/bc/adt/ddic/dataelements', '');
+      (http.post as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(error415)
+        .mockResolvedValueOnce({ statusCode: 201, body: '<created/>', headers: {} });
+
+      await createObject(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/ddic/dataelements',
+        '<wbobj/>',
+        'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8',
+      );
+
+      const calls = (http.post as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls).toHaveLength(2);
+      // First call used v2
+      expect(calls[0][2]).toBe('application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8');
+      // Second call used v1
+      expect(calls[1][2]).toBe('application/vnd.sap.adt.dataelements.v1+xml; charset=utf-8');
+    });
+
+    it('does not retry when 415 is returned for a non-fallback content type', async () => {
+      const http = mockHttp();
+      const error415 = new AdtApiError('Unsupported Media Type', 415, '/sap/bc/adt/oo/classes', '');
+      (http.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(error415);
+
+      await expect(
+        createObject(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes', '<xml/>', 'application/xml'),
+      ).rejects.toThrow(error415);
+      expect(http.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry on non-415 errors even for fallback-capable content types', async () => {
+      const http = mockHttp();
+      const error400 = new AdtApiError('Bad Request', 400, '/sap/bc/adt/ddic/dataelements', '');
+      (http.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(error400);
+
+      await expect(
+        createObject(
+          http,
+          unrestrictedSafetyConfig(),
+          '/sap/bc/adt/ddic/dataelements',
+          '<wbobj/>',
+          'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8',
+        ),
+      ).rejects.toThrow(error400);
+      expect(http.post).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -316,7 +404,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(updateSource(http, safety, '/url', 'source', 'handle')).rejects.toThrow(AdtSafetyError);
     });
   });
@@ -360,7 +448,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(updateObject(http, safety, '/url', '<xml/>', 'handle', 'application/xml')).rejects.toThrow(
         AdtSafetyError,
       );
@@ -385,13 +473,7 @@ describe('CRUD Operations', () => {
 
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), readOnly: true };
-      await expect(deleteObject(http, safety, '/url', 'handle')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when Delete operations are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'D' };
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(deleteObject(http, safety, '/url', 'handle')).rejects.toThrow(AdtSafetyError);
     });
   });

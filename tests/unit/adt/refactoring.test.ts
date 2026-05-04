@@ -199,7 +199,7 @@ describe('refactoring — change package', () => {
     });
 
     it('throws AdtSafetyError when Update operation is blocked', async () => {
-      const readOnlySafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const readOnlySafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       await expect(changePackage(createClient(readOnlySafety).http, readOnlySafety, BASE_PARAMS)).rejects.toThrow(
         AdtSafetyError,
       );

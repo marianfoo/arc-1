@@ -1,10 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   AdtApiError,
+  classifyAbapgitError,
+  classifyGctsError,
   classifySapDomainError,
   extractExceptionType,
   extractLockOwner,
 } from '../../../src/adt/errors.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FIXTURES_DIR = join(__dirname, '..', '..', 'fixtures', 'xml');
+const loadXmlFixture = (name: string): string => readFileSync(join(FIXTURES_DIR, name), 'utf-8');
 
 describe('AdtApiError', () => {
   describe('extractCleanMessage', () => {
@@ -328,6 +337,32 @@ describe('AdtApiError', () => {
     it('returns undefined when no lock owner details exist', () => {
       expect(extractLockOwner('Syntax error in line 5')).toBeUndefined();
     });
+
+    it('extracts MARIAN from real S/4 lock-conflict body (T100KEY-V1 wins over LONGTEXT "another user")', () => {
+      // The captured S/4 body contains BOTH:
+      //   <message>User MARIAN is currently editing ZARC1_BAT1_MNW93T2K</message>
+      //   <entry key="LONGTEXT">…being edited by another user…</entry>
+      //   <entry key="T100KEY-V1">MARIAN</entry>
+      // Without the T100 path, the regex chain matched "by another" first → bug.
+      const owner = extractLockOwner(loadXmlFixture('lock-conflict-s4.xml'));
+      expect(owner?.user).toBe('MARIAN');
+    });
+
+    it('falls back to regex when T100KEY-V1 is absent', () => {
+      expect(extractLockOwner('User DEVELOPER is currently editing ZTEST')).toEqual({ user: 'DEVELOPER' });
+    });
+
+    it('rejects placeholder "another" capture and falls through to undefined', () => {
+      // Body has the LONGTEXT-style phrasing but no structured T100 and no specific message.
+      // Without the placeholder filter, the old chain captured "another" as a userid.
+      const owner = extractLockOwner('This object is currently being edited by another user.');
+      expect(owner).toBeUndefined();
+    });
+
+    it('rejects placeholder words (case-insensitive)', () => {
+      expect(extractLockOwner('locked by Another')).toBeUndefined();
+      expect(extractLockOwner('locked by THE backend')).toBeUndefined();
+    });
   });
 
   describe('classifySapDomainError', () => {
@@ -373,8 +408,36 @@ describe('AdtApiError', () => {
     it('classifies enqueue errors for 423', () => {
       const classification = classifySapDomainError(423, 'Lock handle invalid');
       expect(classification?.category).toBe('enqueue-error');
-      expect(classification?.hint).toContain('fresh lock');
-      expect(classification?.transaction).toBe('SM12');
+      // First-line advice: retry (transient expiry is the common case).
+      expect(classification?.hint).toContain('retry');
+      // Cites the specific SAP Note verified via the SAP Knowledge Base
+      // search — the concrete grounded reference for persistent 423s.
+      expect(classification?.hint).toContain('2727890');
+      expect(classification?.hint).toContain('BC-DWB-AIE');
+    });
+
+    it('classifies 404 "No suitable resource found" as ICF handler not bound', () => {
+      const classification = classifySapDomainError(
+        404,
+        '<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework"><type id="ExceptionResourceNotFound"/><message lang="EN">No suitable resource found</message></exc:exception>',
+      );
+      expect(classification?.category).toBe('icf-handler-not-bound');
+      expect(classification?.hint).toContain('SICF');
+      // The hint distinguishes the ADT-framework-level "No suitable resource"
+      // path from a regular missing-object 404.
+      expect(classification?.hint).toContain('Handler List');
+      expect(classification?.transaction).toBe('SICF');
+    });
+
+    it('does NOT treat generic 404 "does not exist" as ICF handler not bound', () => {
+      // "does not exist" is the normal missing-object path and gets no domain
+      // classification — the default "not found" message already tells the LLM
+      // what to do.
+      const classification = classifySapDomainError(
+        404,
+        '<exc:exception><type id="ExceptionResourceNotFound"/><message>Resource /sap/bc/adt/ddic/domains does not exist.</message></exc:exception>',
+      );
+      expect(classification).toBeUndefined();
     });
 
     it('classifies authorization errors via XML type', () => {
@@ -482,6 +545,42 @@ describe('AdtApiError', () => {
       );
       expect(err.responseBody).toContain('exc:exception'); // Raw body preserved for debugging
       expect(err.message).not.toContain('<'); // No XML in message
+    });
+  });
+
+  describe('classifyGctsError', () => {
+    it('extracts exception and first ERROR log message', () => {
+      const classified = classifyGctsError(
+        '{"exception":"No relation between system and repository","log":[{"severity":"INFO","message":"x"},{"severity":"ERROR","message":"remote failed"}]}',
+      );
+      expect(classified.exception).toBe('No relation between system and repository');
+      expect(classified.logMessage).toBe('remote failed');
+    });
+
+    it('returns empty classification for malformed JSON', () => {
+      expect(classifyGctsError('{not-json')).toEqual({});
+    });
+  });
+
+  describe('classifyAbapgitError', () => {
+    it('extracts namespace, message, and T100 key from XML payload', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <namespace id="org.abapgit.adt">org.abapgit.adt</namespace>
+  <exc:localizedMessage lang="EN">Repository not found in database. Key: REPO, 000000009999</exc:localizedMessage>
+  <exc:properties>
+    <entry key="T100KEY-MSGID">SADT_HTTP</entry>
+    <entry key="T100KEY-MSGNO">404</entry>
+  </exc:properties>
+</exc:exception>`;
+      const classified = classifyAbapgitError(xml);
+      expect(classified.namespace).toBe('org.abapgit.adt');
+      expect(classified.message).toContain('Repository not found in database');
+      expect(classified.t100Key).toBe('SADT_HTTP/404');
+    });
+
+    it('returns empty object for empty payload', () => {
+      expect(classifyAbapgitError('')).toEqual({});
     });
   });
 });

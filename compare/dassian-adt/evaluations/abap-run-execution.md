@@ -54,7 +54,7 @@ This is the same endpoint used by Eclipse ADT's "Run as ABAP Application" featur
 This is intentionally excluded from ARC-1's roadmap for good reasons:
 
 1. **Arbitrary code execution** — any ABAP runs with the SAP user's full authorization (S_DEVELOP ACTVT=16)
-2. **Bypasses all safety gates** — read-only mode, package restrictions, operation whitelist are all irrelevant once arbitrary code runs
+2. **Bypasses all safety gates** — read-only mode, package restrictions, operation allowlist are all irrelevant once arbitrary code runs
 3. **Database modifications** — ABAP can UPDATE/DELETE any table the user has access to
 4. **Side effects** — workflow actions, mail sends, external system calls
 5. **No audit trail** — the execution itself is not captured in ARC-1's audit log (only the tool call)

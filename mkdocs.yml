@@ -3,9 +3,9 @@ site_description: Enterprise-ready MCP proxy for SAP ABAP Development Tools. npm
 site_url: https://marianfoo.github.io/arc-1/
 repo_url: https://github.com/marianfoo/arc-1
 repo_name: marianfoo/arc-1
-edit_uri: edit/main/docs/
+edit_uri: edit/main/docs_page/
 
-docs_dir: docs
+docs_dir: docs_page
 
 theme:
   name: material
@@ -37,15 +37,16 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-      - Setup Guide: setup-guide.md
+      - Quickstart: quickstart.md
+      - Local Development: local-development.md
       - CLI Guide: cli-guide.md
       - SAP Trial Setup: sap-trial-setup.md
-  - Using ARC-1:
-      - Tools Reference: tools.md
-      - MCP Usage Guide: mcp-usage.md
   - Deployment:
+      - Overview: deployment.md
       - Docker: docker.md
       - BTP Cloud Foundry: phase4-btp-deployment.md
+      - BTP ABAP Environment: btp-abap-environment.md
+      - Best Practices: deployment-best-practices.md
   - Authentication:
       - Overview: enterprise-auth.md
       - Authorization & Roles: authorization.md
@@ -55,8 +56,17 @@ nav:
       - XSUAA Setup: xsuaa-setup.md
       - BTP Destination Setup: btp-destination-setup.md
       - Auth Test Process: auth-test-process.md
+  - Using ARC-1:
+      - Tools Reference: tools.md
+      - MCP Usage Guide: mcp-usage.md
+      - Skills: skills.md
   - Reference:
       - Architecture: architecture.md
+      - Configuration: configuration-reference.md
+      - Caching: caching.md
+      - Security: security-guide.md
+      - Updating: updating.md
+      - Log Analysis: log-analysis.md
       - Roadmap: roadmap.md
 
 markdown_extensions:
@@ -77,6 +87,9 @@ markdown_extensions:
 
 plugins:
   - search
+
+extra_javascript:
+  - javascripts/posthog.js
 
 extra:
   social:

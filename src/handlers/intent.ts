@@ -2,7 +2,7 @@
  * Intent-based tool handler for ARC-1.
  *
  * Routes MCP tool calls to the appropriate ADT client methods.
- * Each of the 11 tools (SAPRead, SAPSearch, etc.) dispatches
+ * Each of the 12 tools (SAPRead, SAPSearch, etc.) dispatches
  * based on its `type` or `action` parameter.
  *
  * Error handling: all errors are caught and returned as MCP error
@@ -12,12 +12,33 @@
 
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { AdtClient } from '../adt/client.js';
+import {
+  checkRepo as abapGitCheckRepo,
+  createBranch as abapGitCreateBranch,
+  createRepo as abapGitCreateRepo,
+  getExternalInfo as abapGitGetExternalInfo,
+  listRepos as abapGitListRepos,
+  pullRepo as abapGitPullRepo,
+  pushRepo as abapGitPushRepo,
+  stageRepo as abapGitStageRepo,
+  switchBranch as abapGitSwitchBranch,
+  unlinkRepo as abapGitUnlinkRepo,
+} from '../adt/abapgit.js';
+import {
+  buildSiblingExtensionFinding,
+  type CdsImpactDownstream,
+  classifyCdsImpact,
+  deriveSiblingStem,
+  isSiblingNameMatch,
+  type SiblingExtensionCandidate,
+} from '../adt/cds-impact.js';
+import type { AdtClient, SourceReadResult } from '../adt/client.js';
 import {
   findDefinition,
   findReferences,
   findWhereUsed,
   getCompletion,
+  getWhereUsedScope,
   type ReferenceResult,
   type WhereUsedResult,
 } from '../adt/codeintel.js';
@@ -29,6 +50,7 @@ import {
   safeUpdateSource,
   unlockObject,
   updateObject,
+  updateSource,
 } from '../adt/crud.js';
 import {
   buildDataElementXml,
@@ -50,18 +72,25 @@ import {
   activateBatch,
   applyFixProposal,
   getFixProposals,
+  getPrettyPrinterSettings,
+  type PrettyPrinterSettings,
+  prettyPrint,
   publishServiceBinding,
   runAtcCheck,
   runUnitTests,
+  setPrettyPrinterSettings,
   syntaxCheck,
   unpublishServiceBinding,
 } from '../adt/devtools.js';
 import {
   getDump,
+  getGatewayErrorDetail,
   getTraceDbAccesses,
   getTraceHitlist,
   getTraceStatements,
   listDumps,
+  listGatewayErrors,
+  listSystemMessages,
   listTraces,
 } from '../adt/diagnostics.js';
 import {
@@ -82,11 +111,34 @@ import {
   listGroups,
   listTiles,
 } from '../adt/flp.js';
+import {
+  type GctsCloneParams,
+  cloneRepo as gctsCloneRepo,
+  commitRepo as gctsCommitRepo,
+  createBranch as gctsCreateBranch,
+  deleteRepo as gctsDeleteRepo,
+  getCommitHistory as gctsGetCommitHistory,
+  getConfig as gctsGetConfig,
+  getUserInfo as gctsGetUserInfo,
+  listBranches as gctsListBranches,
+  listRepoObjects as gctsListRepoObjects,
+  listRepos as gctsListRepos,
+  pullRepo as gctsPullRepo,
+  switchBranch as gctsSwitchBranch,
+} from '../adt/gcts.js';
+import {
+  applyRapHandlerScaffold,
+  extractRapHandlerRequirements,
+  findMissingRapHandlerImplementationStubs,
+  findMissingRapHandlerRequirements,
+} from '../adt/rap-handlers.js';
+import { formatRapPreflightFindings, validateRapSource } from '../adt/rap-preflight.js';
 import { changePackage } from '../adt/refactoring.js';
 import { checkOperation, checkPackage, isOperationAllowed, OperationType } from '../adt/safety.js';
 import {
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   getTransportInfo,
   listTransports,
@@ -94,11 +146,17 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../adt/transport.js';
-import type { ClassHierarchy, ResolvedFeatures } from '../adt/types.js';
+import type {
+  ClassHierarchy,
+  DumpDetail,
+  InactiveObject,
+  ObjectTransportHistory,
+  ResolvedFeatures,
+} from '../adt/types.js';
 import { getAppInfo } from '../adt/ui5-repository.js';
 import { validateAffHeader } from '../aff/validator.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
-import { extractCdsElements } from '../context/cds-deps.js';
+import { extractCdsDependencies, extractCdsElements } from '../context/cds-deps.js';
 import { compressCdsContext, compressContext } from '../context/compressor.js';
 import { extractMethod, formatMethodListing, listMethods, spliceMethod } from '../context/method-surgery.js';
 import {
@@ -112,7 +170,7 @@ import { sanitizeArgs } from '../server/audit.js';
 import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
 import type { ServerConfig } from '../server/types.js';
-import { expandHyperfocusedArgs, getHyperfocusedScope } from './hyperfocused.js';
+import { expandHyperfocusedArgs } from './hyperfocused.js';
 import { getToolSchema } from './schemas.js';
 import { formatZodError } from './zod-errors.js';
 
@@ -126,40 +184,46 @@ export interface ToolResult {
  * Scope required for each tool.
  *
  * Scope enforcement is ADDITIVE to the safety system:
- * - Safety system (readOnly, allowedOps, etc.) gates operations at the ADT client level
+ * - Safety system (allowWrites, allowedPackages, etc.) gates operations at the ADT client level
  * - Scopes gate operations at the MCP tool level (only enforced when authInfo is present)
  * - Both must pass for an operation to succeed
  *
- * A user with `write` scope but `readOnly=true` in config still can't write.
+ * A user with `write` scope but `allowWrites=false` in config still can't write.
+ *
+ * Scope lookup and implication rules are defined in `src/authz/policy.ts` (ACTION_POLICY,
+ * getActionPolicy, hasRequiredScope). This module routes through them.
  */
-export const TOOL_SCOPES: Record<string, string> = {
-  SAPRead: 'read',
-  SAPSearch: 'read',
-  SAPQuery: 'sql',
-  SAPNavigate: 'read',
-  SAPContext: 'read',
-  SAPLint: 'read',
-  SAPDiagnose: 'read',
-  SAPWrite: 'write',
-  SAPActivate: 'write',
-  SAPManage: 'write',
-  SAPTransport: 'write',
-};
+import { getActionPolicy, hasRequiredScope as hasScopeHelper } from '../authz/policy.js';
 
 /**
- * Check if authInfo has the required scope, respecting implied scopes:
- * - `write` implies `read`
- * - `sql` implies `data`
+ * Back-compat re-export of a tool→scope map derived from ACTION_POLICY.
+ * New code should use `getActionPolicy(tool, action)` directly.
+ */
+export const TOOL_SCOPES: Record<string, string> = Object.fromEntries(
+  [
+    'SAPRead',
+    'SAPSearch',
+    'SAPQuery',
+    'SAPGit',
+    'SAPNavigate',
+    'SAPContext',
+    'SAPLint',
+    'SAPDiagnose',
+    'SAPWrite',
+    'SAPActivate',
+    'SAPManage',
+    'SAPTransport',
+  ].map((t) => [t, getActionPolicy(t)?.scope ?? 'read']),
+);
+
+/**
+ * Check if authInfo has the required scope, routing through policy.hasRequiredScope.
  */
 export function hasRequiredScope(authInfo: AuthInfo, requiredScope: string): boolean {
-  const scopes = authInfo.scopes;
-  if (scopes.includes(requiredScope)) return true;
-
-  // Implied scopes
-  if (requiredScope === 'read' && scopes.includes('write')) return true;
-  if (requiredScope === 'data' && scopes.includes('sql')) return true;
-
-  return false;
+  return hasScopeHelper(
+    authInfo.scopes,
+    requiredScope as 'read' | 'write' | 'data' | 'sql' | 'transports' | 'git' | 'admin',
+  );
 }
 
 function textResult(text: string): ToolResult {
@@ -172,6 +236,76 @@ function errorResult(message: string): ToolResult {
 
 const DDIC_SAVE_HINT_TYPES = new Set(['TABL', 'DDLS', 'DCLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX', 'DOMA', 'DTEL']);
 const DDIC_POST_SAVE_CHECK_TYPES = new Set(['TABL', 'DDLS', 'DCLS', 'BDEF', 'SRVD', 'SRVB', 'DDLX']);
+const CDS_DEPENDENCY_SENSITIVE_TYPES = new Set(['DDLS', 'DCLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB', 'TABL']);
+
+type CdsImpactBucket = Exclude<keyof CdsImpactDownstream, 'summary'>;
+
+const CDS_IMPACT_BUCKET_ORDER: CdsImpactBucket[] = [
+  'projectionViews',
+  'bdefs',
+  'serviceDefinitions',
+  'serviceBindings',
+  'accessControls',
+  'metadataExtensions',
+  'abapConsumers',
+  'tables',
+  'documentation',
+  'other',
+];
+
+const CDS_IMPACT_BUCKET_LABEL: Record<CdsImpactBucket, string> = {
+  projectionViews: 'Projection views (DDLS)',
+  bdefs: 'Behavior definitions (BDEF)',
+  serviceDefinitions: 'Service definitions (SRVD)',
+  serviceBindings: 'Service bindings (SRVB)',
+  accessControls: 'Access controls (DCLS)',
+  metadataExtensions: 'Metadata extensions (DDLX)',
+  abapConsumers: 'ABAP consumers',
+  tables: 'Tables',
+  documentation: 'Documentation (SKTD)',
+  other: 'Other',
+};
+
+const CDS_REACTIVATION_BUCKET_ORDER: CdsImpactBucket[] = [
+  'projectionViews',
+  'accessControls',
+  'metadataExtensions',
+  'bdefs',
+  'serviceDefinitions',
+  'serviceBindings',
+  'other',
+];
+
+const CDS_DELETE_BUCKET_ORDER: CdsImpactBucket[] = [
+  'serviceBindings',
+  'serviceDefinitions',
+  'bdefs',
+  'metadataExtensions',
+  'accessControls',
+  'projectionViews',
+  'other',
+];
+
+interface CdsOrderedObject {
+  type: string;
+  name: string;
+}
+
+const CDS_ORDERABLE_TYPES = new Set(['DDLS', 'DCLS', 'DDLX', 'BDEF', 'SRVD', 'SRVB']);
+const CDS_IMPACT_WHERE_USED_TYPES = new Set([
+  'DDLS',
+  'DCLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'CLAS',
+  'INTF',
+  'PROG',
+  'FUGR',
+  'TABL',
+  'SKTD',
+]);
 
 // ─── Search Helpers ─────────────────────────────────────────────────
 
@@ -214,8 +348,50 @@ export function looksLikeFieldName(query: string): boolean {
   return true;
 }
 
+function hasSqlParserSignature(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes('only one select statement is allowed') ||
+    normalized.includes('only select statement is allowed') ||
+    normalized.includes('invalid query string') ||
+    normalized.includes('due to grammar') ||
+    normalized.includes('is invalid here') ||
+    normalized.includes('is invalid at this position')
+  );
+}
+
+function getWriteInfrastructureHint(err: AdtApiError, tool: string, args: Record<string, unknown>): string | undefined {
+  if (tool !== 'SAPWrite') return undefined;
+  const action = String(args.action ?? '').toLowerCase();
+  if (!['create', 'update', 'batch_create', 'edit_method', 'delete'].includes(action)) return undefined;
+
+  // These failures happen around ADT session management, often after SAP has
+  // already accepted a mutation. They need cleanup guidance, not DDIC syntax hints.
+  const combined = `${err.message}\n${err.responseBody ?? ''}\n${err.path}`.toLowerCase();
+  const failedDuringCsrfFetch = err.path.includes('/sap/bc/adt/core/discovery') || combined.includes('no csrf token');
+  const failedDuringUnlock = combined.includes('_action=unlock');
+  const serviceRoutingFailure = combined.includes('service cannot be reached');
+  if (!failedDuringCsrfFetch && !failedDuringUnlock && !serviceRoutingFailure) return undefined;
+
+  return (
+    'SAP ADT write/session infrastructure failed, not a DDIC source save failure. ' +
+    'The object may have been partially created or changed before the session failed; verify with SAPRead/SAPSearch, ' +
+    'wait briefly, then retry cleanup. If an edit lock remains, release it in ADT/SM12 or ask Basis to clear it.'
+  );
+}
+
 /** Format error messages with LLM-friendly remediation hints */
-function formatErrorForLLM(err: unknown, message: string, _tool: string, args: Record<string, unknown>): string {
+function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
+  const base = buildBaseErrorMessage(err, message, tool, args);
+  // Handler-attached remediation hints (e.g., CDS delete blocker list) always
+  // appear last so the message reads "what happened → diagnostics → how to fix".
+  if (err instanceof AdtApiError && err.extraHint && !base.includes(err.extraHint)) {
+    return `${base}\n\n${err.extraHint}`;
+  }
+  return base;
+}
+
+function buildBaseErrorMessage(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
@@ -228,6 +404,10 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     }
 
     if (err.isNotFound) {
+      const diagnosticsHint = buildDiagnosticsNotFoundHint(tool, args);
+      if (diagnosticsHint) {
+        return `${enriched}\n\nHint: ${diagnosticsHint}`;
+      }
       const name = String(args.name ?? '');
       const type = String(args.type ?? '');
       return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
@@ -240,7 +420,34 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     if (transportHint) {
       return `${enriched}\n\nHint: ${transportHint}`;
     }
-    if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType)) {
+    if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS' && err.statusCode === 400) {
+      const combined = `${err.message}\n${err.responseBody ?? ''}`;
+      if (hasSqlParserSignature(combined)) {
+        return (
+          `${enriched}\n\nHint: TABLE_CONTENTS sqlFilter must be a condition expression only ` +
+          '(no WHERE, no SELECT, no semicolon). Examples: ' +
+          `sqlFilter="MANDT = '100'" or sqlFilter="MATNR LIKE 'Z%'".`
+        );
+      }
+    }
+    const behaviorPoolHint = getBehaviorPoolSaveFailureHint(err, args);
+    if (behaviorPoolHint) {
+      return `${enriched}\n\nHint: ${behaviorPoolHint}`;
+    }
+    const writeInfrastructureHint = getWriteInfrastructureHint(err, tool, args);
+    if (writeInfrastructureHint) {
+      return `${enriched}\n\nHint: ${writeInfrastructureHint}`;
+    }
+    // Save hint — applies to create/update/batch_create/edit_method, not delete.
+    // Delete failures on DDIC types have different remediation (dependency resolution, not annotation fixes).
+    const action = String(args.action ?? '').toLowerCase();
+    const isSaveAction =
+      action === '' ||
+      action === 'create' ||
+      action === 'update' ||
+      action === 'batch_create' ||
+      action === 'edit_method';
+    if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType) && isSaveAction) {
       return (
         `${enriched}\n\nHint: DDIC save failed. Check the diagnostic details above for specific field or annotation errors. ` +
         'Common fixes: add missing @AbapCatalog annotations, fix field type names, check key field definitions.'
@@ -259,11 +466,112 @@ function formatErrorForLLM(err: unknown, message: string, _tool: string, args: R
     return enriched;
   }
 
+  if (err instanceof AdtSafetyError) {
+    const argType = String(args.type ?? '').toUpperCase();
+    if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS') {
+      return (
+        `${message}\n\nHint: TABLE_CONTENTS is blocked by safety configuration or missing data scope. ` +
+        'Set SAP_ALLOW_DATA_PREVIEW=true at the server level and, in authenticated HTTP mode, ' +
+        'ensure the token includes data (or sql) scope.'
+      );
+    }
+    return message;
+  }
+
   if (err instanceof AdtNetworkError) {
-    return `${message}\n\nHint: Cannot reach the SAP system. This is a connectivity issue, not a usage error.`;
+    if (tool === 'SAPRead' && String(args.type ?? '').toUpperCase() === 'SYSTEM') {
+      return (
+        `${message}\n\nHint: Connectivity probe failed. Fix connectivity first, then retry ` +
+        'SAPRead(type="SYSTEM") before running any batch or parallel tool calls.'
+      );
+    }
+    return (
+      `${message}\n\nHint: Cannot reach the SAP system. Run SAPRead(type="SYSTEM") once as a connectivity ` +
+      'probe before retrying batch/parallel calls.'
+    );
   }
 
   return message;
+}
+
+function buildDiagnosticsNotFoundHint(tool: string, args: Record<string, unknown>): string | undefined {
+  if (tool !== 'SAPDiagnose') return undefined;
+
+  const action = String(args.action ?? '');
+  const id = String(args.id ?? '').trim();
+  const detailUrl = String(args.detailUrl ?? '').trim();
+
+  if (action === 'dumps' && id) {
+    return `Dump ID "${id}" was not found. Re-list dumps with SAPDiagnose(action="dumps", maxResults=50), then retry with a fresh ID from that list.`;
+  }
+
+  if (action === 'traces' && id) {
+    return `Trace ID "${id}" was not found. Re-list traces with SAPDiagnose(action="traces") and retry using an existing trace ID.`;
+  }
+
+  if (action === 'gateway_errors' && (detailUrl || id)) {
+    return 'Gateway error detail was not found. Re-list SAPDiagnose(action="gateway_errors") and reuse a current detailUrl from the list output.';
+  }
+
+  return undefined;
+}
+
+function buildAuditResultPreview(toolName: string, args: Record<string, unknown>, fullText: string): string {
+  const maxLen = 500;
+  const truncate = (value: string): string => (value.length > maxLen ? `${value.slice(0, maxLen)}...` : value);
+
+  if (toolName !== 'SAPDiagnose') return truncate(fullText);
+
+  const action = String(args.action ?? '');
+  const isDetailDump = action === 'dumps' && Boolean(args.id);
+  const isDetailGateway =
+    action === 'gateway_errors' && (Boolean(args.detailUrl) || (Boolean(args.id) && Boolean(args.errorType)));
+
+  if (!isDetailDump && !isDetailGateway) return truncate(fullText);
+
+  try {
+    const payload = JSON.parse(fullText) as Record<string, unknown>;
+    if (isDetailDump) {
+      const sections =
+        payload.sections && typeof payload.sections === 'object' ? (payload.sections as Record<string, unknown>) : {};
+      const compact = {
+        id: payload.id,
+        error: payload.error,
+        program: payload.program,
+        user: payload.user,
+        timestamp: payload.timestamp,
+        selectedSectionIds: payload.selectedSectionIds,
+        sections: Object.fromEntries(
+          Object.entries(sections).map(([key, value]) => {
+            if (typeof value === 'string') return [key, `[omitted ${value.length} chars]`];
+            return [key, '[omitted]'];
+          }),
+        ),
+        formattedText:
+          typeof payload.formattedText === 'string' ? `[omitted ${payload.formattedText.length} chars]` : undefined,
+      };
+      return truncate(JSON.stringify(compact));
+    }
+
+    if (isDetailGateway && payload.sourceCode && typeof payload.sourceCode === 'object') {
+      const sourceCode = payload.sourceCode as Record<string, unknown>;
+      const lines = Array.isArray(sourceCode.lines) ? sourceCode.lines.length : 0;
+      const compact = {
+        type: payload.type,
+        shortText: payload.shortText,
+        transactionId: payload.transactionId,
+        username: payload.username,
+        dateTime: payload.dateTime,
+        sourceCode: `[omitted ${lines} lines]`,
+        callStackCount: Array.isArray(payload.callStack) ? payload.callStack.length : 0,
+      };
+      return truncate(JSON.stringify(compact));
+    }
+
+    return truncate(JSON.stringify(payload));
+  } catch {
+    return truncate(fullText);
+  }
 }
 
 /** Enrich error message with additional SAP XML diagnostic detail (extra messages, properties) */
@@ -300,9 +608,272 @@ function enrichWithSapDetails(err: AdtApiError, message: string): string {
   return parts.join('\n');
 }
 
-async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
-  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
+function isDeleteDependencyError(err: AdtApiError): boolean {
+  const clean = AdtApiError.extractCleanMessage(err.responseBody ?? err.message).toLowerCase();
+  const body = (err.responseBody ?? '').toLowerCase();
+  const diagnostics = err.responseBody ? AdtApiError.extractDdicDiagnostics(err.responseBody) : [];
 
+  if (diagnostics.some((diag) => diag.messageNumber === '039')) return true;
+
+  return /could not be deleted|cannot be deleted|still in use|used by|dependent object|existing reference/.test(
+    `${clean}\n${body}`,
+  );
+}
+
+function formatCdsImpactBuckets(downstream: CdsImpactDownstream, maxNames = 4): string[] {
+  const lines: string[] = [];
+
+  for (const bucket of CDS_IMPACT_BUCKET_ORDER) {
+    const entries = downstream[bucket];
+    if (entries.length === 0) continue;
+    const unique = Array.from(
+      new Set(
+        entries.map((entry) => {
+          const mainType = entry.type.split('/')[0] || entry.type || '?';
+          return `${entry.name} (${mainType})`;
+        }),
+      ),
+    );
+    const listed = unique.slice(0, maxNames).join(', ');
+    const more = unique.length > maxNames ? ` (+${unique.length - maxNames} more)` : '';
+    lines.push(`- ${CDS_IMPACT_BUCKET_LABEL[bucket]}: ${listed}${more}`);
+  }
+
+  return lines;
+}
+
+function mainObjectType(type: string): string {
+  return type.split('/')[0]?.toUpperCase() ?? '';
+}
+
+function collectOrderedCdsObjects(
+  downstream: CdsImpactDownstream,
+  bucketOrder: readonly CdsImpactBucket[],
+): CdsOrderedObject[] {
+  const seen = new Set<string>();
+  const ordered: CdsOrderedObject[] = [];
+
+  for (const bucket of bucketOrder) {
+    for (const entry of downstream[bucket]) {
+      const type = mainObjectType(entry.type);
+      const name = String(entry.name ?? '').toUpperCase();
+      if (!type || !name || !CDS_ORDERABLE_TYPES.has(type)) continue;
+      const key = `${type}:${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ordered.push({ type, name });
+    }
+  }
+
+  return ordered;
+}
+
+function dedupeCdsObjects(objects: readonly CdsOrderedObject[]): CdsOrderedObject[] {
+  const seen = new Set<string>();
+  const deduped: CdsOrderedObject[] = [];
+  for (const obj of objects) {
+    const key = `${obj.type}:${obj.name.toUpperCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(obj);
+  }
+  return deduped;
+}
+
+function formatCdsObjectList(objects: readonly CdsOrderedObject[], max = 8): string {
+  if (objects.length === 0) return '';
+  const listed = objects
+    .slice(0, max)
+    .map((obj) => `${obj.type} ${obj.name}`)
+    .join(', ');
+  return objects.length > max ? `${listed} (+${objects.length - max} more)` : listed;
+}
+
+function formatCdsActivationPayload(objects: readonly CdsOrderedObject[], max = 8): string {
+  if (objects.length === 0) return '[]';
+  const listed = objects
+    .slice(0, max)
+    .map((obj) => `{type:"${obj.type}",name:"${obj.name}"}`)
+    .join(', ');
+  return objects.length > max ? `[${listed}, ...] (+${objects.length - max} more)` : `[${listed}]`;
+}
+
+function dedupeWhereUsedResults(results: readonly WhereUsedResult[]): WhereUsedResult[] {
+  const seen = new Set<string>();
+  const deduped: WhereUsedResult[] = [];
+
+  for (const result of results) {
+    const uriKey = result.uri.toLowerCase();
+    const fallbackKey = `${mainObjectType(result.type)}:${String(result.name ?? '').toUpperCase()}`;
+    const key = uriKey || fallbackKey;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(result);
+  }
+
+  return deduped;
+}
+
+function isCdsImpactWhereUsedType(objectType: string): boolean {
+  return CDS_IMPACT_WHERE_USED_TYPES.has(mainObjectType(objectType));
+}
+
+async function loadScopedCdsWhereUsedResults(client: AdtClient, objectUrl: string): Promise<WhereUsedResult[]> {
+  try {
+    const scope = await getWhereUsedScope(client.http, client.safety, objectUrl);
+    const scopedTypes = Array.from(
+      new Set(
+        scope.entries
+          .filter((entry) => entry.count > 0 && isCdsImpactWhereUsedType(entry.objectType))
+          .map((entry) => entry.objectType),
+      ),
+    );
+    const scopedResults: WhereUsedResult[] = [];
+
+    for (const objectType of scopedTypes) {
+      try {
+        scopedResults.push(...(await findWhereUsed(client.http, client.safety, objectUrl, objectType)));
+      } catch {
+        // Scoped results only enrich guidance; one unsupported filter must not
+        // make the write/delete/activate path fail.
+      }
+    }
+
+    return scopedResults;
+  } catch (err) {
+    if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+      return [];
+    }
+    // Where-used enrichment is advisory; the original write/delete/activate
+    // result should not fail just because a scoped lookup is unavailable.
+    return [];
+  }
+}
+
+async function loadCdsImpactDownstream(client: AdtClient, objectUrl: string): Promise<CdsImpactDownstream | undefined> {
+  try {
+    const whereUsed = await findWhereUsed(client.http, client.safety, objectUrl);
+    // Some SAP releases return a shallow/default result set for unfiltered
+    // usageReferences. Scope + object-type filters usually expose the full
+    // bucket fan-out, which is exactly what CRUD guidance needs.
+    const scopedWhereUsed = await loadScopedCdsWhereUsedResults(client, objectUrl);
+    const combinedWhereUsed = dedupeWhereUsedResults([...whereUsed, ...scopedWhereUsed]);
+    return classifyCdsImpact(combinedWhereUsed, { includeIndirect: true });
+  } catch (err) {
+    if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+      return undefined;
+    }
+    return undefined;
+  }
+}
+
+async function buildCdsUpdateCrudHint(client: AdtClient, name: string, objectUrl: string): Promise<string> {
+  const lines: string[] = [];
+  lines.push(`CDS update follow-up for ${name}:`);
+
+  const downstream = await loadCdsImpactDownstream(client, objectUrl);
+  let orderedReactivation: CdsOrderedObject[] = [];
+  if (downstream) {
+    const bucketLines = formatCdsImpactBuckets(downstream);
+    if (bucketLines.length > 0) {
+      lines.push(`- Downstream consumers in ADT where-used index: ${downstream.summary.total}`);
+      lines.push(...bucketLines);
+      orderedReactivation = collectOrderedCdsObjects(downstream, CDS_REACTIVATION_BUCKET_ORDER);
+    } else {
+      lines.push('- No downstream consumers found in the current ADT where-used index.');
+    }
+  } else {
+    lines.push('- Where-used index is unavailable on this system (impact list could not be fetched).');
+  }
+
+  lines.push(`- SAPWrite(update) stores inactive source only. Run SAPActivate(type="DDLS", name="${name}").`);
+  lines.push('- Field/alias/signature changes may require re-activation of dependent DDLS/BDEF/SRVD/DDLX objects.');
+  if (orderedReactivation.length > 0) {
+    const activationPlan = dedupeCdsObjects([{ type: 'DDLS', name }, ...orderedReactivation]);
+    lines.push(`- Suggested re-activation order: ${formatCdsObjectList(activationPlan)}.`);
+    lines.push(`- Batch call template: SAPActivate(objects=${formatCdsActivationPayload(activationPlan)}).`);
+  }
+
+  return lines.join('\n');
+}
+
+async function buildCdsDeleteDependencyHint(
+  client: AdtClient,
+  type: string,
+  name: string,
+  objectUrl: string,
+): Promise<string | undefined> {
+  const downstream = await loadCdsImpactDownstream(client, objectUrl);
+  if (!downstream || downstream.summary.total === 0) {
+    const lines: string[] = [];
+    lines.push(`Delete dependency follow-up for ${type} ${name}:`);
+    if (!downstream) {
+      lines.push('- ADT where-used lookup is unavailable on this system or failed during error enrichment.');
+    } else {
+      lines.push(
+        '- No current ADT where-used dependents were returned, but SAP still rejected delete with a DDIC dependency error.',
+      );
+    }
+    lines.push(
+      '- If dependents were just deleted, wait briefly and retry; SAP active dependency/index state can lag in the same cleanup session.',
+    );
+    lines.push(
+      `- If source was stripped or restored, run SAPActivate(type="${type}", name="${name}") first; delete checks active DDIC dependencies.`,
+    );
+    lines.push(
+      `- If it keeps failing, run SAPNavigate(action="references", type="${type}", name="${name}") and check for edit locks/inactive objects before retrying.`,
+    );
+    return lines.join('\n');
+  }
+
+  const lines: string[] = [];
+  lines.push(`Blocking dependents for ${type} ${name} (ADT where-used):`);
+  lines.push(...formatCdsImpactBuckets(downstream));
+  const orderedDelete = collectOrderedCdsObjects(downstream, CDS_DELETE_BUCKET_ORDER);
+  if (orderedDelete.length > 0) {
+    lines.push(`Suggested delete order: ${formatCdsObjectList(orderedDelete)}, then ${type} ${name}.`);
+  }
+  lines.push(
+    `Delete/refactor these dependents first, then retry SAPWrite(action="delete", type="${type}", name="${name}").`,
+  );
+  lines.push(
+    'If the listed dependents were just deleted, wait briefly and retry; SAP active dependency/index state can lag in the same cleanup session.',
+  );
+  lines.push(
+    'For cyclic CDS projection graphs, temporarily strip redirected/composition associations, activate stripped DDLS, then delete.',
+  );
+  lines.push('If source was already stripped, activate first — delete checks active version dependencies.');
+
+  return lines.join('\n');
+}
+
+async function buildCdsActivationDependencyHint(client: AdtClient, name: string, objectUrl: string): Promise<string> {
+  const lines: string[] = [];
+  const downstream = await loadCdsImpactDownstream(client, objectUrl);
+  let orderedReactivation: CdsOrderedObject[] = [];
+
+  lines.push(`CDS activation impact for ${name}:`);
+  if (!downstream || downstream.summary.total === 0) {
+    lines.push('- No downstream consumers found in ADT where-used index, or index is unavailable.');
+  } else {
+    lines.push(...formatCdsImpactBuckets(downstream));
+    orderedReactivation = collectOrderedCdsObjects(downstream, CDS_REACTIVATION_BUCKET_ORDER);
+  }
+  lines.push('- When fields/elements change, dependents may fail until re-activated in dependency order.');
+  if (orderedReactivation.length > 0) {
+    const activationPlan = dedupeCdsObjects([{ type: 'DDLS', name }, ...orderedReactivation]);
+    lines.push(`- Suggested re-activation order: ${formatCdsObjectList(activationPlan)}.`);
+    lines.push(`- Batch call template: SAPActivate(objects=${formatCdsActivationPayload(activationPlan)}).`);
+  } else {
+    lines.push(`- Try SAPActivate(objects=[{type:"DDLS",name:"${name}"}, ...dependents...]).`);
+  }
+
+  return lines.join('\n');
+}
+
+/** Run a syntax check on the inactive version and format the errors for appending to an
+ *  error message. Returns '' on any failure or when no errors are reported. */
+async function inactiveSyntaxDiagnostic(client: AdtClient, type: string, name: string): Promise<string> {
   try {
     const checkResult = await syntaxCheck(client.http, client.safety, objectUrlForType(type, name), {
       version: 'inactive',
@@ -313,14 +884,20 @@ async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: str
     if (errors.length === 0) return '';
 
     const lines = errors.map((msg) => {
-      const line = msg.line ? `Line ${msg.line}` : 'Line ?';
-      return `  - ${line}: ${msg.text}`;
+      const prefix = msg.line ? `[line ${msg.line}] ` : '';
+      const suffix = msg.uri ? ` (${msg.uri})` : '';
+      return `- ${prefix}${msg.text}${suffix}`;
     });
 
     return `\nServer syntax check (inactive):\n${lines.join('\n')}`;
   } catch {
     return '';
   }
+}
+
+async function tryPostSaveSyntaxCheck(client: AdtClient, type: string, name: string): Promise<string> {
+  if (!DDIC_POST_SAVE_CHECK_TYPES.has(type.toUpperCase())) return '';
+  return inactiveSyntaxDiagnostic(client, type, name);
 }
 
 /** Detect transport/corrNr failure signatures and return a remediation hint, or undefined if not transport-related. */
@@ -372,6 +949,40 @@ function getTransportHint(err: AdtApiError): string | undefined {
   return undefined;
 }
 
+function inferBdefNameFromBehaviorPoolSource(source: string): string | undefined {
+  const match = source.match(/\bfor\s+behavior\s+of\s+([A-Za-z_][\w/]+)/i);
+  return match?.[1];
+}
+
+function getBehaviorPoolSaveFailureHint(err: AdtApiError, args: Record<string, unknown>): string | undefined {
+  const type = normalizeObjectType(String(args.type ?? ''));
+  if (type !== 'CLAS') return undefined;
+
+  const name = String(args.name ?? '');
+  const source = String(args.source ?? '');
+  const clean = AdtApiError.extractCleanMessage(err.responseBody ?? '').toLowerCase();
+  const body = (err.responseBody ?? '').toLowerCase();
+  const isGenericSaveFailure =
+    clean.includes('an error occured during the save operation') ||
+    clean.includes('an error occurred during the save operation') ||
+    body.includes('an error occured during the save operation') ||
+    body.includes('an error occurred during the save operation');
+  if (!isGenericSaveFailure) return undefined;
+
+  const looksLikeBehaviorPool = /\bfor\s+behavior\s+of\b/i.test(source) || /^zbp_/i.test(name) || /^ybp_/i.test(name);
+  if (!looksLikeBehaviorPool) return undefined;
+
+  const inferredBdef = inferBdefNameFromBehaviorPoolSource(source);
+  const bdefHint = inferredBdef ? `, bdefName="${inferredBdef}"` : ', bdefName="<interface_bdef_name>"';
+
+  return (
+    `Behavior-pool class save failed on handler declarations. Use ` +
+    `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="${name}"${bdefHint}) ` +
+    `to list missing RAP handler signatures, then rerun with autoApply=true to inject declarations. ` +
+    `If SAP still rejects the full-class write, use ADT quick-fix to stamp signatures and continue with SAPWrite(action="edit_method").`
+  );
+}
+
 function classifyError(err: unknown): string {
   if (err instanceof AdtApiError) {
     const classification = classifySapDomainError(err.statusCode, err.responseBody);
@@ -420,10 +1031,22 @@ export async function handleToolCall(
     args: sanitizeArgs(args),
   });
 
-  // Scope enforcement — only when authInfo is present (XSUAA/OIDC mode)
-  if (authInfo) {
-    const requiredScope = TOOL_SCOPES[toolName];
-    if (requiredScope && !hasRequiredScope(authInfo, requiredScope)) {
+  // Unified scope enforcement via ACTION_POLICY — routes through action/type-aware lookup.
+  // For SAPRead, the policy key is Tool.{type}; for other action-bearing tools, Tool.{action};
+  // for tools without an action/type enum (SAPSearch, SAPQuery), the tool-level default applies.
+  // Runs BEFORE Zod validation so scope errors don't leak schema details to unauthorized callers.
+  const actionOrType =
+    toolName === 'SAPRead'
+      ? typeof args.type === 'string'
+        ? args.type
+        : undefined
+      : typeof args.action === 'string'
+        ? args.action
+        : undefined;
+  const policy = getActionPolicy(toolName, actionOrType);
+
+  if (authInfo && policy) {
+    if (!hasRequiredScope(authInfo, policy.scope)) {
       logger.emitAudit({
         timestamp: new Date().toISOString(),
         level: 'warn',
@@ -432,19 +1055,38 @@ export async function handleToolCall(
         user,
         clientId,
         tool: toolName,
-        requiredScope,
+        requiredScope: policy.scope,
         availableScopes: authInfo.scopes,
       });
+      const actionLabel = actionOrType
+        ? `${toolName}(${toolName === 'SAPRead' ? 'type' : 'action'}="${actionOrType}")`
+        : toolName;
       return errorResult(
-        `Insufficient scope: '${requiredScope}' required for ${toolName}. Your scopes: [${authInfo.scopes.join(', ')}]`,
+        `Insufficient scope: '${policy.scope}' required for ${actionLabel}. Your scopes: [${authInfo.scopes.join(', ')}]`,
       );
     }
   }
 
-  // Validate tool arguments with Zod schema
+  // Server-level denyActions (SAP_DENY_ACTIONS) — blocks before any per-user scope allows it.
+  const { isActionDenied } = await import('../server/deny-actions.js');
+  if (isActionDenied(toolName, actionOrType, config.denyActions ?? [])) {
+    logger.emitAudit({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      event: 'safety_blocked',
+      requestId: reqId,
+      user,
+      clientId,
+      operation: `${toolName}${actionOrType ? `.${actionOrType}` : ''}`,
+      reason: 'Action denied by SAP_DENY_ACTIONS',
+    });
+    return errorResult(
+      `Action '${toolName}${actionOrType ? `.${actionOrType}` : ''}' is denied by server policy (SAP_DENY_ACTIONS).`,
+    );
+  }
+
+  // Validate tool arguments with Zod schema (runs AFTER scope + deny check).
   const isBtp = config.systemType === 'btp';
-  // Always use the full search schema for validation — the handler checks text search availability
-  // and returns a proper error message with the probe reason when source_code search is unavailable
   const schema = getToolSchema(toolName, isBtp);
   if (schema) {
     args = normalizeTypeArgsForValidation(toolName, args);
@@ -485,7 +1127,7 @@ export async function handleToolCall(
           result = await handleSAPWrite(client, args, config, cachingLayer);
           break;
         case 'SAPActivate':
-          result = await handleSAPActivate(client, args);
+          result = await handleSAPActivate(client, args, cachingLayer);
           break;
         case 'SAPNavigate':
           result = await handleSAPNavigate(client, args);
@@ -498,6 +1140,9 @@ export async function handleToolCall(
           break;
         case 'SAPTransport':
           result = await handleSAPTransport(client, args);
+          break;
+        case 'SAPGit':
+          result = await handleSAPGit(client, args, authInfo);
           break;
         case 'SAPContext':
           result = await handleSAPContext(client, args, cachingLayer);
@@ -512,17 +1157,8 @@ export async function handleToolCall(
             result = errorResult(expanded.error);
             break;
           }
-          // Check scope for the delegated action
-          if (authInfo) {
-            const requiredScope = getHyperfocusedScope(String(args.action ?? ''));
-            if (!hasRequiredScope(authInfo, requiredScope)) {
-              result = errorResult(
-                `Insufficient scope: '${requiredScope}' required for SAP(action="${args.action}"). Your scopes: [${authInfo.scopes.join(', ')}]`,
-              );
-              break;
-            }
-          }
           // Delegate to the real handler (recursive call, but with the mapped tool name)
+          // The concrete tool/action policy is enforced by the recursive call.
           result = await handleToolCall(
             client,
             config,
@@ -542,7 +1178,7 @@ export async function handleToolCall(
       const durationMs = Date.now() - start;
       const fullText = result.content.map((c) => c.text).join('');
       const resultSize = fullText.length;
-      const resultPreview = fullText.length > 500 ? `${fullText.slice(0, 500)}...` : fullText;
+      const resultPreview = buildAuditResultPreview(toolName, args, fullText);
 
       logger.emitAudit({
         timestamp: new Date().toISOString(),
@@ -603,6 +1239,80 @@ const BTP_HINTS: Record<string, string> = {
   TRAN: 'Transaction codes (TRAN) are not available on BTP ABAP Environment. Use SAPSearch to find apps and services instead.',
 };
 
+type SourceVersion = 'active' | 'inactive';
+type RequestedSourceVersion = SourceVersion | 'auto';
+
+const VERSIONED_SOURCE_READ_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'INCL',
+  'DDLS',
+  'DCLS',
+  'BDEF',
+  'SRVD',
+  'DDLX',
+  'SRVB',
+  'SKTD',
+  'TABL',
+  'VIEW',
+  'STRU',
+]);
+
+function inactiveTypeMatches(readType: string, inactiveType: string): boolean {
+  return (inactiveType.split('/')[0] ?? inactiveType).toUpperCase() === readType.toUpperCase();
+}
+
+async function resolveVersionAndDraftInfo(
+  client: AdtClient,
+  cachingLayer: CachingLayer | undefined,
+  type: string,
+  name: string,
+  requestedVersion: RequestedSourceVersion,
+): Promise<{ effectiveVersion: SourceVersion; draft?: InactiveObject }> {
+  if (!VERSIONED_SOURCE_READ_TYPES.has(type)) {
+    return { effectiveVersion: requestedVersion === 'auto' ? 'active' : requestedVersion };
+  }
+
+  let draft: InactiveObject | undefined;
+  if (cachingLayer || requestedVersion !== 'active') {
+    try {
+      const inactiveObjects = cachingLayer
+        ? await cachingLayer.inactiveLists.getOrFetch(client)
+        : await client.getInactiveObjects();
+      const upperName = name.toUpperCase();
+      draft = inactiveObjects.find(
+        (object) => inactiveTypeMatches(type, object.type) && object.name.toUpperCase() === upperName,
+      );
+    } catch (err) {
+      logger.debug('Inactive object list unavailable while resolving source version', {
+        type,
+        name,
+        requestedVersion,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (requestedVersion === 'auto') {
+    return { effectiveVersion: draft ? 'inactive' : 'active', draft };
+  }
+  return { effectiveVersion: requestedVersion, draft };
+}
+
+function sourceVersionWarning(effectiveVersion: SourceVersion, draft?: InactiveObject): string | undefined {
+  if (effectiveVersion === 'active' && draft) {
+    const deletion = draft.deleted ? ' deletion' : '';
+    const transport = draft.transport ? ` (in transport ${draft.transport})` : '';
+    return `Note: You have an unactivated${deletion} draft of this object${transport}. The source below is the LAST ACTIVATED version. To work with your draft, activate it first via SAPActivate or re-run with version='inactive' to read it directly.`;
+  }
+  if (effectiveVersion === 'inactive' && !draft) {
+    return 'Note: No inactive draft exists for this object on the server. Returning the active version.';
+  }
+  return undefined;
+}
+
 async function handleSAPRead(
   client: AdtClient,
   args: Record<string, unknown>,
@@ -610,26 +1320,47 @@ async function handleSAPRead(
 ): Promise<ToolResult> {
   const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
+  const requestedVersion = (args.version ?? 'active') as RequestedSourceVersion;
 
   // BTP: return helpful error for unavailable types
   if (isBtpSystem() && BTP_HINTS[type]) {
     return errorResult(BTP_HINTS[type]);
   }
 
+  if (args.force_refresh === true && cachingLayer && VERSIONED_SOURCE_READ_TYPES.has(type)) {
+    cachingLayer.inactiveLists.invalidate(client.username);
+    cachingLayer.invalidate(type, name, 'all');
+  }
+
+  const { effectiveVersion, draft } = await resolveVersionAndDraftInfo(
+    client,
+    cachingLayer,
+    type,
+    name,
+    requestedVersion,
+  );
+  const versionWarning = sourceVersionWarning(effectiveVersion, draft);
+
   // Helper: get source with cache support, returns cache hit status
   const cachedGet = async (
     objType: string,
     objName: string,
-    fetcher: () => Promise<string>,
-  ): Promise<{ source: string; cacheHit: boolean }> => {
-    if (!cachingLayer) return { source: await fetcher(), cacheHit: false };
-    const { source, hit } = await cachingLayer.getSource(objType, objName, fetcher);
-    return { source, cacheHit: hit };
+    version: SourceVersion,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ): Promise<{ source: string; cacheHit: boolean; revalidated: boolean }> => {
+    if (!cachingLayer) {
+      const result = await fetcher(undefined);
+      return { source: result.source, cacheHit: false, revalidated: false };
+    }
+    const { source, hit, revalidated } = await cachingLayer.getSource(objType, objName, fetcher, { version });
+    return { source, cacheHit: hit, revalidated };
   };
 
-  /** Prepend [cached] indicator when result came from cache */
-  const cachedTextResult = (source: string, cacheHit: boolean): ToolResult => {
-    return textResult(cacheHit ? `[cached]\n${source}` : source);
+  /** Prepend draft-awareness notes and cache indicator when the server revalidated a cached source. */
+  const cachedTextResult = (source: string, cacheHit: boolean, revalidated: boolean, warning?: string): ToolResult => {
+    const note = warning ? `${warning}\n\n` : '';
+    const indicator = cacheHit && revalidated ? '[cached:revalidated]\n' : '';
+    return textResult(`${note}${indicator}${source}`);
   };
 
   // Structured format is only supported for CLAS type
@@ -639,8 +1370,10 @@ async function handleSAPRead(
 
   switch (type) {
     case 'PROG': {
-      const { source, cacheHit } = await cachedGet('PROG', name, () => client.getProgram(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('PROG', name, effectiveVersion, (ifNoneMatch) =>
+        client.getProgram(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'CLAS': {
       // Structured format: return JSON with metadata + decomposed source
@@ -651,7 +1384,9 @@ async function handleSAPRead(
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
         // Method-level read — fetch full source then extract (no cache indicator for derived results)
-        const { source: fullSource } = await cachedGet('CLAS', name, () => client.getClass(name));
+        const { source: fullSource } = await cachedGet('CLAS', name, effectiveVersion, (ifNoneMatch) =>
+          client.getClass(name, undefined, { ifNoneMatch, version: effectiveVersion }),
+        );
         const abaplintVer = cachedFeatures?.abapRelease
           ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
           : undefined;
@@ -663,18 +1398,25 @@ async function handleSAPRead(
         if (!extracted.success) {
           return errorResult(extracted.error ?? `Method "${methodParam}" not found in ${name}.`);
         }
-        return textResult(extracted.methodSource);
+        return cachedTextResult(extracted.methodSource, false, false, versionWarning);
       }
       // Only cache the full merged source (no include param), not individual includes
       if (!args.include) {
-        const { source, cacheHit } = await cachedGet('CLAS', name, () => client.getClass(name));
-        return cachedTextResult(source, cacheHit);
+        const { source, cacheHit, revalidated } = await cachedGet('CLAS', name, effectiveVersion, (ifNoneMatch) =>
+          client.getClass(name, undefined, { ifNoneMatch, version: effectiveVersion }),
+        );
+        return cachedTextResult(source, cacheHit, revalidated, versionWarning);
       }
-      return textResult(await client.getClass(name, args.include as string | undefined));
+      const includeResult = await client.getClass(name, args.include as string | undefined, {
+        version: effectiveVersion,
+      });
+      return cachedTextResult(includeResult.source, false, false, versionWarning);
     }
     case 'INTF': {
-      const { source, cacheHit } = await cachedGet('INTF', name, () => client.getInterface(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('INTF', name, effectiveVersion, (ifNoneMatch) =>
+        client.getInterface(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'FUNC': {
       let group = String(args.group ?? '');
@@ -690,13 +1432,15 @@ async function handleSAPRead(
         }
         group = resolved;
       }
-      const { source, cacheHit } = await cachedGet('FUNC', name, () => client.getFunction(group, name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('FUNC', name, effectiveVersion, (ifNoneMatch) =>
+        client.getFunction(group, name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'FUGR': {
       const expand = Boolean(args.expand_includes);
       if (expand) {
-        const source = await client.getFunctionGroupSource(name);
+        const { source } = await client.getFunctionGroupSource(name, { version: effectiveVersion });
         // Match INCLUDE statements but skip ABAP comment lines (starting with *)
         const includePattern = /^[^*\n]*\bINCLUDE\s+(\S+)\s*\./gim;
         const parts: string[] = [`=== FUGR ${name} (main) ===\n${source}`];
@@ -704,7 +1448,7 @@ async function handleSAPRead(
         while ((m = includePattern.exec(source)) !== null) {
           const inclName = m[1]!;
           try {
-            const inclSource = await client.getInclude(inclName);
+            const { source: inclSource } = await client.getInclude(inclName, { version: effectiveVersion });
             parts.push(`\n=== ${inclName} ===\n${inclSource}`);
           } catch {
             parts.push(`\n=== ${inclName} ===\n[Could not read include "${inclName}"]`);
@@ -716,11 +1460,19 @@ async function handleSAPRead(
       return textResult(JSON.stringify(fg, null, 2));
     }
     case 'INCL': {
-      const { source, cacheHit } = await cachedGet('INCL', name, () => client.getInclude(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('INCL', name, effectiveVersion, (ifNoneMatch) =>
+        client.getInclude(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'DDLS': {
-      const { source: ddlSource, cacheHit } = await cachedGet('DDLS', name, () => client.getDdls(name));
+      const {
+        source: ddlSource,
+        cacheHit,
+        revalidated,
+      } = await cachedGet('DDLS', name, effectiveVersion, (ifNoneMatch) =>
+        client.getDdls(name, { ifNoneMatch, version: effectiveVersion }),
+      );
       if (ddlSource.trim() === '') {
         return textResult(
           `DDLS ${name} exists in the object directory but has no source code stored. ` +
@@ -729,26 +1481,34 @@ async function handleSAPRead(
       }
       if ((args.include as string | undefined)?.toLowerCase() === 'elements') {
         // Elements extraction is derived from source — no cache indicator
-        return textResult(extractCdsElements(ddlSource, name));
+        return cachedTextResult(extractCdsElements(ddlSource, name), false, false, versionWarning);
       }
-      return cachedTextResult(ddlSource, cacheHit);
+      return cachedTextResult(ddlSource, cacheHit, revalidated, versionWarning);
     }
     case 'DCLS': {
-      const { source, cacheHit } = await cachedGet('DCLS', name, () => client.getDcl(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('DCLS', name, effectiveVersion, (ifNoneMatch) =>
+        client.getDcl(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'BDEF': {
-      const { source, cacheHit } = await cachedGet('BDEF', name, () => client.getBdef(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('BDEF', name, effectiveVersion, (ifNoneMatch) =>
+        client.getBdef(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'SRVD': {
-      const { source, cacheHit } = await cachedGet('SRVD', name, () => client.getSrvd(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('SRVD', name, effectiveVersion, (ifNoneMatch) =>
+        client.getSrvd(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'DDLX': {
       try {
-        const { source, cacheHit } = await cachedGet('DDLX', name, () => client.getDdlx(name));
-        return cachedTextResult(source, cacheHit);
+        const { source, cacheHit, revalidated } = await cachedGet('DDLX', name, effectiveVersion, (ifNoneMatch) =>
+          client.getDdlx(name, { ifNoneMatch, version: effectiveVersion }),
+        );
+        return cachedTextResult(source, cacheHit, revalidated, versionWarning);
       } catch (err) {
         if (isNotFoundError(err)) {
           return textResult(
@@ -759,16 +1519,20 @@ async function handleSAPRead(
       }
     }
     case 'SRVB': {
-      const { source, cacheHit } = await cachedGet('SRVB', name, () => client.getSrvb(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('SRVB', name, effectiveVersion, (ifNoneMatch) =>
+        client.getSrvb(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'SKTD': {
       try {
         // ADT returns a <sktd:docu> XML envelope with the Markdown body base64-encoded
         // inside <sktd:text>. Cache the raw envelope (update flow re-uses it) and
         // return the decoded Markdown to the LLM.
-        const { source, cacheHit } = await cachedGet('SKTD', name, () => client.getKtd(name));
-        return cachedTextResult(decodeKtdText(source), cacheHit);
+        const { source, cacheHit, revalidated } = await cachedGet('SKTD', name, effectiveVersion, (ifNoneMatch) =>
+          client.getKtd(name, { ifNoneMatch, version: effectiveVersion }),
+        );
+        return cachedTextResult(decodeKtdText(source), cacheHit, revalidated, versionWarning);
       } catch (err) {
         if (isNotFoundError(err)) {
           return textResult(
@@ -779,16 +1543,22 @@ async function handleSAPRead(
       }
     }
     case 'TABL': {
-      const { source, cacheHit } = await cachedGet('TABL', name, () => client.getTable(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('TABL', name, effectiveVersion, (ifNoneMatch) =>
+        client.getTable(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'VIEW': {
-      const { source, cacheHit } = await cachedGet('VIEW', name, () => client.getView(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('VIEW', name, effectiveVersion, (ifNoneMatch) =>
+        client.getView(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'STRU': {
-      const { source, cacheHit } = await cachedGet('STRU', name, () => client.getStructure(name));
-      return cachedTextResult(source, cacheHit);
+      const { source, cacheHit, revalidated } = await cachedGet('STRU', name, effectiveVersion, (ifNoneMatch) =>
+        client.getStructure(name, { ifNoneMatch, version: effectiveVersion }),
+      );
+      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'DOMA': {
       const domain = await client.getDomain(name);
@@ -809,6 +1579,54 @@ async function handleSAPRead(
     case 'ENHO': {
       const enhancement = await client.getEnhancementImplementation(name);
       return textResult(JSON.stringify(enhancement, null, 2));
+    }
+    case 'VERSIONS': {
+      const include = typeof args.include === 'string' ? args.include : undefined;
+      let group = typeof args.group === 'string' ? args.group : undefined;
+      const objectType = normalizeObjectType(String(args.objectType ?? '')) || inferObjectType(name) || 'PROG';
+
+      if (objectType === 'FUNC' && !group) {
+        const resolved = cachingLayer
+          ? await cachingLayer.resolveFuncGroup(client, name)
+          : await client.resolveFunctionGroup(name);
+        if (!resolved) {
+          return errorResult(
+            `Cannot resolve function group for "${name}". Provide the group parameter explicitly, or use SAPSearch("${name}") to find the function group.`,
+          );
+        }
+        group = resolved;
+      }
+
+      try {
+        const revisions = await client.getRevisions(objectType, name, { include, group });
+        return textResult(JSON.stringify(revisions, null, 2));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return textResult(
+            `No version history available for ${objectType} "${name}" on this SAP system. ` +
+              `This usually means the object does not exist, or the ADT versions endpoint is not supported for ${objectType} on this backend release.`,
+          );
+        }
+        throw err;
+      }
+    }
+    case 'VERSION_SOURCE': {
+      const versionUri = String(args.versionUri ?? '');
+      if (!versionUri) {
+        return errorResult(
+          'VERSION_SOURCE requires a versionUri parameter. Get it from SAPRead(type="VERSIONS", name="...") response (.revisions[].uri).',
+        );
+      }
+      try {
+        return textResult(await client.getRevisionSource(versionUri));
+      } catch (err) {
+        if (isNotFoundError(err)) {
+          return errorResult(
+            `Revision at URI "${versionUri}" was not found. The revision may have been removed, or the URI is malformed. Fetch a fresh list via SAPRead(type="VERSIONS", name="...").`,
+          );
+        }
+        throw err;
+      }
     }
     case 'TRAN': {
       const tran = await client.getTransaction(name);
@@ -866,7 +1684,7 @@ async function handleSAPRead(
           if (!prog) {
             return errorResult(`BOR method "${method}" on "${name}" has no program assigned.`);
           }
-          const source = await client.getProgram(prog);
+          const { source } = await client.getProgram(prog);
           return textResult(
             `=== BOR ${name}.${method} (program: ${prog}, form: ${String(data.rows[0]!.FORMNAME ?? '').trim()}) ===\n${source}`,
           );
@@ -948,23 +1766,12 @@ async function handleSAPRead(
       return textResult(JSON.stringify(info, null, 2));
     }
     case 'INACTIVE_OBJECTS': {
-      try {
-        const objects = await client.getInactiveObjects();
-        return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
-      } catch (err) {
-        if (isNotFoundError(err)) {
-          return textResult(
-            'Inactive objects listing is not available on this SAP system ' +
-              '(the /sap/bc/adt/activation/inactive endpoint returned 404). ' +
-              'Use SAPDiagnose(action="syntax", type="...", name="...") to check specific objects instead.',
-          );
-        }
-        throw err;
-      }
+      const objects = await client.getInactiveObjects();
+      return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
     }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, AUTH, FTG2, ENHO, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, AUTH, FTG2, ENHO, VERSIONS, VERSION_SOURCE, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
           'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, DCLS/DL → DCLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
@@ -1027,6 +1834,29 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   return textResult(transliterationNote + JSON.stringify(results, null, 2));
 }
 
+function classifySapQueryParserError(err: AdtApiError, sql: string): string | undefined {
+  if (err.statusCode !== 400) return undefined;
+
+  const combined = `${err.message}\n${err.responseBody ?? ''}`;
+  if (!hasSqlParserSignature(combined)) return undefined;
+
+  const hints = [
+    'ADT freestyle SQL parser rejected this query on this backend/version.',
+    'Submit exactly one SELECT statement (no semicolons, no multi-statement scripts).',
+    'Remove ABAP target clauses from SQL text (INTO, APPENDING, PACKAGE SIZE).',
+  ];
+
+  if (/\bJOIN\b/i.test(sql)) {
+    hints.push('JOIN parsing can fail on some systems (SAP Note 3605050); split into staged single-table queries.');
+  }
+
+  if (/\bINTO\b|\bAPPENDING\b|\bPACKAGE\s+SIZE\b/i.test(sql)) {
+    hints.push('Use the MCP maxRows parameter for row limits instead of ABAP target-table clauses.');
+  }
+
+  return `${err.message}\n\nHint: ${hints.join(' ')}`;
+}
+
 async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
   const sql = String(args.sql ?? '');
   const maxRows = Number(args.maxRows ?? 100);
@@ -1060,20 +1890,17 @@ async function handleSAPQuery(client: AdtClient, args: Record<string, unknown>):
         }
       }
     }
-    // JOIN-aware error: ADT freestyle SQL parser has known edge cases with JOINs (SAP Note 3605050)
-    if (err instanceof AdtApiError && err.statusCode === 400 && /\bJOIN\b/i.test(sql)) {
-      return errorResult(
-        `${err.message}\n\nMulti-table JOIN query failed. The ADT freestyle SQL endpoint has known parser edge cases with JOINs (SAP Note 3605050). Try splitting into separate single-table queries.`,
-      );
+    if (err instanceof AdtApiError) {
+      const parserHint = classifySapQueryParserError(err, sql);
+      if (parserHint) return errorResult(parserHint);
     }
     throw err;
   }
 }
 
-// _client unused: SAPLint runs offline via @abaplint/core (no SAP round-trip).
-// Signature matches other handlers for consistency with handleToolCall dispatch.
+// Some SAPLint actions run offline (@abaplint/core), others call SAP ADT formatter APIs.
 async function handleSAPLint(
-  _client: AdtClient,
+  client: AdtClient,
   args: Record<string, unknown>,
   config: ServerConfig,
 ): Promise<ToolResult> {
@@ -1120,9 +1947,33 @@ async function handleSAPLint(
         ),
       );
     }
+    case 'format': {
+      const source = String(args.source ?? '');
+      if (!source) return errorResult('"source" is required for format action.');
+      const formatted = await prettyPrint(client.http, client.safety, source);
+      return textResult(formatted);
+    }
+    case 'get_formatter_settings': {
+      const settings = await getPrettyPrinterSettings(client.http, client.safety);
+      return textResult(JSON.stringify(settings, null, 2));
+    }
+    case 'set_formatter_settings': {
+      const indentation = args.indentation as boolean | undefined;
+      const style = args.style as PrettyPrinterSettings['style'] | undefined;
+      if (indentation === undefined && style === undefined) {
+        return errorResult('At least one of "indentation" or "style" is required for set_formatter_settings.');
+      }
+      const current = await getPrettyPrinterSettings(client.http, client.safety);
+      const next: PrettyPrinterSettings = {
+        indentation: indentation ?? current.indentation,
+        style: style ?? current.style,
+      };
+      await setPrettyPrinterSettings(client.http, client.safety, next);
+      return textResult(JSON.stringify(next, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPLint action: "${action}". Supported: lint, lint_and_fix, list_rules. For atc/syntax/unittest, use SAPDiagnose instead.`,
+        `Unknown SAPLint action: "${action}". Supported: lint, lint_and_fix, list_rules, format, get_formatter_settings, set_formatter_settings. For atc/syntax/unittest, use SAPDiagnose instead.`,
       );
   }
 }
@@ -1326,7 +2177,7 @@ async function mergeMetadataWriteProperties(
       };
     }
     if (type === 'SRVB') {
-      const existingRaw = await client.getSrvb(name);
+      const { source: existingRaw } = await client.getSrvb(name);
       const existing = JSON.parse(existingRaw) as Record<string, unknown>;
       return {
         _description: existing.description,
@@ -1879,6 +2730,11 @@ function sourceUrlForType(type: string, name: string): string {
   return `${objectUrlForType(type, name)}/source/main`;
 }
 
+/** Get a CLAS include URL (definitions/implementations/macros/testclasses) */
+function classIncludeUrl(name: string, include: 'definitions' | 'implementations' | 'macros' | 'testclasses'): string {
+  return `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${include}`;
+}
+
 // ─── SAPWrite Handler ────────────────────────────────────────────────
 
 async function handleSAPWrite(
@@ -1893,6 +2749,8 @@ async function handleSAPWrite(
   const source = String(args.source ?? '');
   const transport = args.transport as string | undefined;
   const lintOverride = args.lintBeforeWrite as boolean | undefined;
+  const preflightOverride = args.preflightBeforeWrite as boolean | undefined;
+  const checkOverride = args.checkBeforeWrite as boolean | undefined;
 
   // type and name are required for all actions except batch_create
   if (action !== 'batch_create' && (!type || !name)) {
@@ -1902,7 +2760,12 @@ async function handleSAPWrite(
   const objectUrl = objectUrlForType(type, name);
   const srcUrl = sourceUrlForType(type, name);
 
-  // Helper: enforce allowedPackages for existing objects (update/delete/edit_method).
+  const invalidateWrittenObject = (objType = type, objName = name): void => {
+    cachingLayer?.invalidate(objType, objName, 'all');
+    cachingLayer?.inactiveLists.invalidate(client.username);
+  };
+
+  // Helper: enforce allowedPackages for existing objects (update/delete/edit_method/scaffold_rap_handlers).
   // Only fetches metadata when package restrictions are configured — no extra HTTP call otherwise.
   async function enforcePackageForExistingObject(): Promise<string | undefined> {
     if (client.safety.allowedPackages.length === 0) return undefined;
@@ -1922,10 +2785,10 @@ async function handleSAPWrite(
         // no-ops (or 415s on strict systems). Fetch the current envelope,
         // replace only the <sktd:text> body, and PUT it back — preserves
         // responsible/masterLanguage/packageRef/refObject metadata.
-        const currentEnvelope = await client.getKtd(name);
+        const { source: currentEnvelope } = await client.getKtd(name);
         const body = rewriteKtdText(currentEnvelope, source);
         await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, transport);
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         return textResult(`Successfully updated ${type} ${name}.`);
       }
 
@@ -1939,9 +2802,20 @@ async function handleSAPWrite(
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
         await safeUpdateObject(client.http, client.safety, objectUrl, body, vendorContentTypeForType(type), transport);
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         return textResult(`Successfully updated ${type} ${name}.`);
       }
+
+      // RAP deterministic preflight validation
+      const preflightWarnings = runRapPreflightValidation(
+        source,
+        type,
+        name,
+        cachedFeatures,
+        config.systemType,
+        preflightOverride,
+      );
+      if (preflightWarnings.blocked) return preflightWarnings.result!;
 
       // CDS pre-write validation: reject unsupported syntax early
       const cdsGuardUpdate = guardCdsSyntax(type, source, cachedFeatures);
@@ -1951,10 +2825,22 @@ async function handleSAPWrite(
       const lintWarnings = runPreWriteLint(source, type, name, config, lintOverride);
       if (lintWarnings.blocked) return lintWarnings.result!;
 
+      // Pre-write server-side syntax check (opt-in; never blocks — warnings only).
+      const checkNotes = await runPreWriteSyntaxCheck(client, type, source, objectUrl, config, checkOverride);
+
+      // If safeUpdateSource throws (lock conflict, network error, etc.), checkNotes
+      // is intentionally discarded — pre-check warnings only matter when the write succeeded.
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
-      cachingLayer?.invalidate(type, name);
+      invalidateWrittenObject();
       const msg = `Successfully updated ${type} ${name}.`;
-      return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+      const cdsUpdateHint = type === 'DDLS' ? await buildCdsUpdateCrudHint(client, name, objectUrl) : undefined;
+      const warnings = mergePreWriteWarnings(
+        preflightWarnings.warnings,
+        lintWarnings.warnings,
+        checkNotes,
+        cdsUpdateHint,
+      );
+      return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
     }
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
@@ -2000,6 +2886,17 @@ async function handleSAPWrite(
       // CDS pre-write validation: reject unsupported syntax early
       const cdsGuard = guardCdsSyntax(type, source, cachedFeatures);
       if (cdsGuard) return cdsGuard;
+
+      // RAP deterministic preflight validation (before object creation to avoid stubs)
+      const preflightWarnings = runRapPreflightValidation(
+        source,
+        type,
+        name,
+        cachedFeatures,
+        config.systemType,
+        preflightOverride,
+      );
+      if (preflightWarnings.blocked) return preflightWarnings.result!;
 
       // AFF header validation (if schema available for this type)
       const affResult = validateAffHeader(type, { description, originalLanguage: 'en' });
@@ -2053,15 +2950,15 @@ async function handleSAPWrite(
         // PUT back exactly the shape SAP gave us (with all the server-assigned
         // metadata), only swapping <sktd:text>.
         if (source) {
-          const currentEnvelope = await client.getKtd(name);
+          const { source: currentEnvelope } = await client.getKtd(name);
           const body = rewriteKtdText(currentEnvelope, source);
           await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, effectiveTransport);
-          cachingLayer?.invalidate(type, name);
+          invalidateWrittenObject();
           return textResult(
             `Created SKTD ${name} in package ${pkg} and wrote Markdown content.\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
           );
         }
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         return textResult(
           `Created SKTD ${name} in package ${pkg} (no Markdown content written — pass "source" to write the body).\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
         );
@@ -2130,7 +3027,7 @@ async function handleSAPWrite(
             }
           });
         }
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         const followUpHint =
           type === 'SRVB'
             ? `\n\nNext steps:\n1. SAPActivate(type="SRVB", name="${name}")\n2. SAPActivate(action="publish_srvb", name="${name}")`
@@ -2149,9 +3046,10 @@ async function handleSAPWrite(
         }
 
         await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
-        cachingLayer?.invalidate(type, name);
+        invalidateWrittenObject();
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
-        return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+        const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
+        return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
       }
 
       return textResult(`Created ${type} ${name} in package ${pkg}.\n${result}`);
@@ -2165,8 +3063,12 @@ async function handleSAPWrite(
 
       // Fetch current full source (use cache if available)
       const currentSource = cachingLayer
-        ? (await cachingLayer.getSource('CLAS', name, () => client.getClass(name))).source
-        : await client.getClass(name);
+        ? (
+            await cachingLayer.getSource('CLAS', name, (ifNoneMatch) =>
+              client.getClass(name, undefined, { ifNoneMatch }),
+            )
+          ).source
+        : (await client.getClass(name)).source;
 
       // Use detected ABAP version from probe if available
       const abaplintVer = cachedFeatures?.abapRelease
@@ -2183,30 +3085,279 @@ async function handleSAPWrite(
       const lintWarnings = runPreWriteLint(spliced.newSource, type, name, config, lintOverride);
       if (lintWarnings.blocked) return lintWarnings.result!;
 
+      // Pre-write server-side syntax check on the full spliced source (opt-in; warnings only).
+      const checkNotes = await runPreWriteSyntaxCheck(
+        client,
+        type,
+        spliced.newSource,
+        objectUrl,
+        config,
+        checkOverride,
+      );
+
       // Write the full source back (existing lock/modify/unlock flow)
       await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
-      cachingLayer?.invalidate(type, name);
+      invalidateWrittenObject();
       const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
-      return lintWarnings.warnings ? textResult(`${msg}\n\n${lintWarnings.warnings}`) : textResult(msg);
+      const extras = [lintWarnings.warnings, checkNotes].filter(Boolean).join('\n\n');
+      return extras ? textResult(`${msg}\n\n${extras}`) : textResult(msg);
+    }
+    case 'scaffold_rap_handlers': {
+      // What this action does:
+      //   Given a behavior-pool class (ZBP_*) and its interface BDEF, inspect
+      //   the class for every `lhc_<alias>` local handler class and make
+      //   sure it declares a METHOD for every action / determination /
+      //   validation / authorization master the BDEF requires. When autoApply
+      //   is true, missing METHODS signatures plus empty METHOD stubs are
+      //   inserted directly and the class is saved.
+      //
+      // Why this exists:
+      //   Without it, the LLM agent trying to author a RAP behavior pool has
+      //   to manually read the BDEF, compute the required handler signatures,
+      //   paste them into the correct local class, and then save — a
+      //   boilerplate-heavy step that is easy to get wrong (alias case,
+      //   RESULT vs no RESULT, factory/static modifiers). The activation
+      //   errors for an incomplete pool are particularly unhelpful. See
+      //   docs/plans/completed/rap-onprem-agent-gap-closure.md.
+      if (type !== 'CLAS') {
+        return errorResult('scaffold_rap_handlers is only supported for type=CLAS behavior pool classes.');
+      }
+      const bdefName = String(args.bdefName ?? '').trim();
+      if (!bdefName) {
+        return errorResult('"bdefName" is required for scaffold_rap_handlers (interface behavior definition name).');
+      }
+      const autoApply = Boolean(args.autoApply ?? false);
+      const targetAlias = String(args.targetAlias ?? '')
+        .trim()
+        .toLowerCase();
+
+      if (autoApply) {
+        await enforcePackageForExistingObject();
+      }
+
+      // Why scan all three CLAS includes (main, definitions, implementations):
+      //   Behavior-pool handler classes CAN live in any of the three, and
+      //   which include they occupy depends on how the pool was generated:
+      //     - "main" (source/main) — unusual; some hand-written pools put
+      //       lhc_* alongside the global class definition
+      //     - "definitions" (CCDEF) — the ADT "Create Behavior Impl Class"
+      //       wizard default target
+      //     - "implementations" (CCIMP) — older SAP templates and every
+      //       example under /DMO/* ship the handler classes here
+      //   We read all three so the diff (findMissingRapHandlerRequirements)
+      //   reflects what's actually declared anywhere in the class, and the
+      //   apply flow can fall through main → definitions → implementations.
+      const classStructured = await client.getClassStructured(name);
+      const classMainSource = classStructured.main ?? '';
+      const classDefinitionsSource = classStructured.definitions ?? '';
+      const classImplementationsSource = classStructured.implementations ?? '';
+      const classCombinedSource = [classMainSource, classDefinitionsSource, classImplementationsSource]
+        .filter(Boolean)
+        .join('\n\n');
+      const bdefSource = cachingLayer
+        ? (await cachingLayer.getSource('BDEF', bdefName, (ifNoneMatch) => client.getBdef(bdefName, { ifNoneMatch })))
+            .source
+        : (await client.getBdef(bdefName)).source;
+
+      let requirements = extractRapHandlerRequirements(bdefSource);
+      if (targetAlias) {
+        requirements = requirements.filter((req) => req.entityAlias.toLowerCase() === targetAlias);
+      }
+
+      if (requirements.length === 0) {
+        const allAliases = Array.from(new Set(extractRapHandlerRequirements(bdefSource).map((req) => req.entityAlias)));
+        const aliasHint =
+          targetAlias && allAliases.length > 0
+            ? ` Available aliases in ${bdefName}: ${allAliases.join(', ')}.`
+            : ' No RAP action/determination/validation/auth handler declarations were found in the BDEF source.';
+        return errorResult(`No RAP handler requirements were found for the requested scope.${aliasHint}`);
+      }
+
+      const missing = findMissingRapHandlerRequirements(requirements, classCombinedSource);
+      const missingImplementationStubs = findMissingRapHandlerImplementationStubs(requirements, classCombinedSource);
+      const summary = {
+        className: name,
+        bdefName,
+        targetAlias: targetAlias || undefined,
+        scannedSections: [
+          'main',
+          classDefinitionsSource ? 'definitions' : undefined,
+          classImplementationsSource ? 'implementations' : undefined,
+        ].filter(Boolean),
+        requiredCount: requirements.length,
+        missingCount: missing.length,
+        missing,
+        missingImplementationStubCount: missingImplementationStubs.length,
+        missingImplementationStubs,
+      };
+
+      if (!autoApply || (missing.length === 0 && missingImplementationStubs.length === 0)) {
+        return textResult(JSON.stringify({ ...summary, applied: false }, null, 2));
+      }
+
+      // Pure RAP transformation planning lives in rap-handlers.ts. Keep this
+      // handler focused on MCP/ADT concerns: safety, linting, locking, writes.
+      const scaffoldPlan = applyRapHandlerScaffold(
+        {
+          main: classMainSource,
+          definitions: classDefinitionsSource || undefined,
+          implementations: classImplementationsSource || undefined,
+        },
+        missing,
+        missingImplementationStubs,
+      );
+
+      if (scaffoldPlan.changedSections.length === 0) {
+        const unresolvedHandlerClasses = Array.from(
+          new Set(scaffoldPlan.unresolved.map((req) => req.targetHandlerClass)),
+        );
+        const unresolvedHint =
+          unresolvedHandlerClasses.length > 0
+            ? `No source changes were applied because handler class skeleton(s) ${unresolvedHandlerClasses.join(', ')} were not found in main, definitions, or implementations. Create the local handler class skeleton(s) first (for example with the ADT quick fix "Create local handler class"), then rerun with autoApply=true.`
+            : undefined;
+        return textResult(
+          JSON.stringify(
+            {
+              ...summary,
+              applied: false,
+              hint: unresolvedHint,
+              applyResult: {
+                main: scaffoldPlan.signatures.main,
+                definitions: scaffoldPlan.signatures.definitions,
+                implementations: scaffoldPlan.signatures.implementations,
+                implementationStubs: scaffoldPlan.implementationStubs,
+                unresolved: scaffoldPlan.unresolved,
+              },
+            },
+            null,
+            2,
+          ),
+        );
+      }
+
+      const finalMainSource = scaffoldPlan.sections.main;
+      const finalDefinitionsSource = scaffoldPlan.sections.definitions;
+      const finalImplementationsSource = scaffoldPlan.sections.implementations;
+      const { changed } = scaffoldPlan;
+
+      // Run lint for every section we are about to update; block before any write to avoid partial state.
+      let lintWarningsMain: PreWriteLintResult | undefined;
+      if (changed.main) {
+        lintWarningsMain = runPreWriteLint(finalMainSource, type, name, config, lintOverride);
+        if (lintWarningsMain.blocked) return lintWarningsMain.result!;
+      }
+      let lintWarningsDefinitions: PreWriteLintResult | undefined;
+      if (changed.definitions && finalDefinitionsSource) {
+        lintWarningsDefinitions = runPreWriteLint(finalDefinitionsSource, type, name, config, lintOverride);
+        if (lintWarningsDefinitions.blocked) return lintWarningsDefinitions.result!;
+      }
+      let lintWarningsImplementations: PreWriteLintResult | undefined;
+      if (changed.implementations && finalImplementationsSource) {
+        lintWarningsImplementations = runPreWriteLint(finalImplementationsSource, type, name, config, lintOverride);
+        if (lintWarningsImplementations.blocked) return lintWarningsImplementations.result!;
+      }
+      // All modified includes share one lock so we never end up in a partial-state
+      // (e.g. main written, implementations errored → handler class declares but
+      // doesn't implement methods → class cannot activate). The lock is taken once
+      // at the class object URL, and every include PUT carries the same lockHandle.
+      // This mirrors how ADT-in-Eclipse saves a multi-include class in one commit.
+      await client.http.withStatefulSession(async (session) => {
+        const lock = await lockObject(session, client.safety, objectUrl);
+        const effectiveTransport = transport ?? (lock.corrNr || undefined);
+        try {
+          if (changed.main) {
+            await updateSource(session, client.safety, srcUrl, finalMainSource, lock.lockHandle, effectiveTransport);
+          }
+          if (changed.definitions && finalDefinitionsSource) {
+            await updateSource(
+              session,
+              client.safety,
+              classIncludeUrl(name, 'definitions'),
+              finalDefinitionsSource,
+              lock.lockHandle,
+              effectiveTransport,
+            );
+          }
+          if (changed.implementations && finalImplementationsSource) {
+            await updateSource(
+              session,
+              client.safety,
+              classIncludeUrl(name, 'implementations'),
+              finalImplementationsSource,
+              lock.lockHandle,
+              effectiveTransport,
+            );
+          }
+        } finally {
+          // Best-effort unlock — if the object was already removed or the session
+          // expired, we still want to surface the original error instead of masking
+          // it with an unlock failure.
+          try {
+            await unlockObject(session, objectUrl, lock.lockHandle);
+          } catch {
+            // Swallowed intentionally; see comment above.
+          }
+        }
+      });
+      invalidateWrittenObject();
+
+      const msg =
+        `Scaffolded ${scaffoldPlan.insertedSignatureCount} RAP handler signature(s) and ${scaffoldPlan.insertedImplementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
+        `Updated section(s): ${scaffoldPlan.changedSections.join(', ')}.`;
+      const warnings = mergePreWriteWarnings(
+        lintWarningsMain?.warnings,
+        lintWarningsDefinitions?.warnings,
+        lintWarningsImplementations?.warnings,
+      );
+      const details = JSON.stringify(
+        {
+          ...summary,
+          applied: true,
+          applyResult: {
+            main: scaffoldPlan.signatures.main,
+            definitions: scaffoldPlan.signatures.definitions,
+            implementations: scaffoldPlan.signatures.implementations,
+            implementationStubs: scaffoldPlan.implementationStubs,
+            unresolved: scaffoldPlan.unresolved,
+          },
+        },
+        null,
+        2,
+      );
+      return warnings ? textResult(`${msg}\n\n${warnings}\n\n${details}`) : textResult(`${msg}\n\n${details}`);
     }
     case 'delete': {
       await enforcePackageForExistingObject();
 
       // Lock, delete, unlock pattern (works for all types including SKTD) — auto-propagate lock corrNr if no explicit transport
-      await client.http.withStatefulSession(async (session) => {
-        const lock = await lockObject(session, client.safety, objectUrl);
-        const effectiveTransport = transport ?? (lock.corrNr || undefined);
-        try {
-          await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
-        } finally {
+      try {
+        await client.http.withStatefulSession(async (session) => {
+          const lock = await lockObject(session, client.safety, objectUrl);
+          const effectiveTransport = transport ?? (lock.corrNr || undefined);
           try {
-            await unlockObject(session, objectUrl, lock.lockHandle);
-          } catch {
-            // Object may already be deleted — unlock failure is expected
+            await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
+          } finally {
+            try {
+              await unlockObject(session, objectUrl, lock.lockHandle);
+            } catch {
+              // Object may already be deleted — unlock failure is expected
+            }
+          }
+        });
+      } catch (err) {
+        if (err instanceof AdtApiError && CDS_DEPENDENCY_SENSITIVE_TYPES.has(type) && isDeleteDependencyError(err)) {
+          const hint = await buildCdsDeleteDependencyHint(client, type, name, objectUrl);
+          if (hint) {
+            // Attach via extraHint so the LLM-facing formatter renders it after
+            // DDIC diagnostics ("what happened → diagnostics → how to fix").
+            // Mutating err.message would surface the hint before diagnostics and
+            // leak into any other consumer of the same error instance.
+            err.extraHint = hint;
           }
         }
-      });
-      cachingLayer?.invalidate(type, name);
+        throw err;
+      }
+      invalidateWrittenObject();
       return textResult(`Deleted ${type} ${name}.`);
     }
     case 'batch_create': {
@@ -2254,6 +3405,7 @@ async function handleSAPWrite(
       }
 
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
+      const batchWarnings: string[] = [];
 
       for (const obj of objects) {
         const objType = normalizeObjectType(String(obj.type ?? ''));
@@ -2278,6 +3430,27 @@ async function handleSAPWrite(
           // Pre-validate source with lint BEFORE creating the object to avoid orphaned objects.
           // Metadata objects (DOMA/DTEL) are XML-only and intentionally skip source lint.
           if (!metadataObject && objSource) {
+            const preflightWarnings = runRapPreflightValidation(
+              objSource,
+              objType,
+              objName,
+              cachedFeatures,
+              config.systemType,
+              preflightOverride,
+            );
+            if (preflightWarnings.blocked) {
+              results.push({
+                type: objType,
+                name: objName,
+                status: 'failed',
+                error: preflightWarnings.result!.content[0].text,
+              });
+              break;
+            }
+            if (preflightWarnings.warnings) {
+              batchWarnings.push(`${objType} ${objName}: ${preflightWarnings.warnings}`);
+            }
+
             const lintWarnings = runPreWriteLint(objSource, objType, objName, config, lintOverride);
             if (lintWarnings.blocked) {
               results.push({
@@ -2348,7 +3521,7 @@ async function handleSAPWrite(
             break;
           }
 
-          cachingLayer?.invalidate(objType, objName);
+          invalidateWrittenObject(objType, objName);
           results.push({ type: objType, name: objName, status: 'success' });
         } catch (err) {
           results.push({
@@ -2377,6 +3550,8 @@ async function handleSAPWrite(
         .join(', ');
       const successCount = results.filter((r) => r.status === 'success').length;
       const hasFailure = results.some((r) => r.status === 'failed');
+      const warningSuffix =
+        batchWarnings.length > 0 ? `\n\nRAP preflight warnings:\n- ${batchWarnings.join('\n- ')}` : '';
 
       if (hasFailure) {
         const cleanupHint =
@@ -2384,14 +3559,14 @@ async function handleSAPWrite(
             ? ` Note: ${successCount} already-created object(s) remain on the SAP system and may need manual cleanup.`
             : '';
         return errorResult(
-          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}`,
+          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}${warningSuffix}`,
         );
       }
-      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}`);
+      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}${warningSuffix}`);
     }
     default:
       return errorResult(
-        `Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method, batch_create`,
+        `Unknown SAPWrite action: ${action}. Supported: create, update, delete, edit_method, batch_create, scaffold_rap_handlers`,
       );
   }
 }
@@ -2404,6 +3579,70 @@ interface PreWriteLintResult {
   result?: ToolResult;
   /** Warning text to append to success message */
   warnings?: string;
+}
+
+/** Pre-write RAP preflight check result */
+interface PreWriteRapPreflightResult {
+  /** Whether the write was blocked by RAP preflight errors */
+  blocked: boolean;
+  /** Error result to return if blocked */
+  result?: ToolResult;
+  /** Warning text to append to success message */
+  warnings?: string;
+}
+
+/**
+ * Run deterministic RAP preflight checks for non-ABAP RAP artifact types.
+ *
+ * Unlike lint, this check is intentionally narrow and rule-based. It focuses on
+ * known activation churn patterns (TABL curr/quan semantics, BDEF enum/header
+ * misuse, DDLX scope/duplicate annotations) and can cover types that offline
+ * abaplint does not parse well.
+ */
+function runRapPreflightValidation(
+  source: string,
+  type: string,
+  name: string,
+  features: ResolvedFeatures | undefined,
+  configSystemType: ServerConfig['systemType'],
+  perCallOverride?: boolean,
+): PreWriteRapPreflightResult {
+  const enabled = perCallOverride ?? true;
+  if (!enabled || !source) {
+    return { blocked: false };
+  }
+
+  const systemType = features?.systemType ?? (configSystemType !== 'auto' ? configSystemType : undefined);
+  const result = validateRapSource(type, source, {
+    systemType,
+    abapRelease: features?.abapRelease,
+  });
+
+  if (result.errors.length > 0) {
+    const details = formatRapPreflightFindings(result.errors);
+    return {
+      blocked: true,
+      result: errorResult(
+        `RAP preflight validation failed for ${type} ${name}. Fix these issues before writing:\n${details}\n\n` +
+          'Set preflightBeforeWrite=false only when you intentionally need to bypass these checks.',
+      ),
+    };
+  }
+
+  if (result.warnings.length > 0) {
+    return {
+      blocked: false,
+      warnings: `RAP preflight warnings:\n${formatRapPreflightFindings(result.warnings)}`,
+    };
+  }
+
+  return { blocked: false };
+}
+
+function mergePreWriteWarnings(...warnings: Array<string | undefined>): string | undefined {
+  const parts = warnings.filter((w): w is string => Boolean(w));
+  if (parts.length === 0) return undefined;
+  return parts.join('\n\n');
 }
 
 /**
@@ -2480,9 +3719,73 @@ function runPreWriteLint(
   }
 }
 
+/** Types that carry source code that SAP's /checkruns endpoint can meaningfully compile.
+ *  Metadata-write types (DOMA/DTEL/TABL/STRU/MSAG/DEVC/SKTD) have no /source/main artifact. */
+const SYNTAX_CHECKABLE_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'FUNC',
+  'FUGR',
+  'INCL',
+  'DDLS',
+  'DCLS',
+  'DDLX',
+  'BDEF',
+  'SRVD',
+]);
+
+/** Pre-write SAP server-side syntax check via /checkruns with inline <chkrun:content>.
+ *  Sends the proposed source to SAP's compiler without writing. Surfaces errors AND
+ *  warnings as informational text appended to the write's success message — never
+ *  blocks the write. Rationale: multi-file edits have inter-object dependencies, so
+ *  intermediate writes legitimately trip compile errors that resolve once the whole
+ *  sequence lands. Real blocking is deferred to SAPActivate, which runs after all
+ *  dependencies are in place. Best-effort: network/endpoint failures return ''. */
+async function runPreWriteSyntaxCheck(
+  client: AdtClient,
+  type: string,
+  source: string,
+  objectUrl: string,
+  config: ServerConfig,
+  perCallOverride?: boolean,
+): Promise<string> {
+  const enabled = perCallOverride ?? config.checkBeforeWrite;
+  if (!enabled || !source) return '';
+  if (!SYNTAX_CHECKABLE_TYPES.has(type.toUpperCase())) return '';
+
+  try {
+    const result = await syntaxCheck(client.http, client.safety, objectUrl, { content: source, version: 'active' });
+    if (result.messages.length === 0) return '';
+
+    const errors = result.messages.filter((m) => m.severity === 'error');
+    const warnings = result.messages.filter((m) => m.severity === 'warning');
+    const parts: string[] = [];
+
+    if (errors.length > 0) {
+      const lines = errors.map((m) => `  Line ${m.line || '?'}${m.column ? `:${m.column}` : ''}: ${m.text}`).join('\n');
+      parts.push(
+        `Server syntax check errors (source was still written — activate to confirm whether these resolve once dependencies are in place):\n${lines}`,
+      );
+    }
+    if (warnings.length > 0) {
+      const lines = warnings.map((m) => `  Line ${m.line || '?'}: ${m.text}`).join('\n');
+      parts.push(`Server syntax check warnings:\n${lines}`);
+    }
+    return parts.join('\n\n');
+  } catch {
+    // Best-effort: never let a failing pre-check fail the write.
+    return '';
+  }
+}
+
 // ─── SAPActivate Handler ─────────────────────────────────────────────
 
-async function handleSAPActivate(client: AdtClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function handleSAPActivate(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  cachingLayer?: CachingLayer,
+): Promise<ToolResult> {
   const action = String(args.action ?? 'activate');
   const name = String(args.name ?? '');
   const version = String(args.version ?? '0001');
@@ -2493,7 +3796,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   async function resolveServiceType(): Promise<'odatav2' | 'odatav4'> {
     if (explicitServiceType === 'odatav4' || explicitServiceType === 'odatav2') return explicitServiceType;
     try {
-      const srvbJson = await client.getSrvb(name);
+      const { source: srvbJson } = await client.getSrvb(name);
       const srvb = JSON.parse(srvbJson);
       if (srvb.odataVersion === 'V4') return 'odatav4';
     } catch {
@@ -2516,7 +3819,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     }
     let srvbInfo: string;
     try {
-      srvbInfo = await client.getSrvb(name);
+      srvbInfo = (await client.getSrvb(name)).source;
     } catch {
       if (result.severity === 'UNKNOWN') {
         return errorResult(
@@ -2560,7 +3863,7 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
     }
     let srvbInfo: string | undefined;
     try {
-      srvbInfo = await client.getSrvb(name);
+      srvbInfo = (await client.getSrvb(name)).source;
     } catch {
       // Readback failed — fall through with what we have
     }
@@ -2591,32 +3894,60 @@ async function handleSAPActivate(client: AdtClient, args: Record<string, unknown
   const activateOpts = preaudit !== undefined ? { preaudit } : undefined;
 
   if (args.objects && Array.isArray(args.objects)) {
-    const objects = (args.objects as Array<Record<string, unknown>>).map((o) => {
+    const rawObjects = args.objects as Array<Record<string, unknown>>;
+    const objects = rawObjects.map((o) => {
       const objType = normalizeObjectType(String(o.type ?? type));
       const objName = String(o.name ?? '');
-      return { url: objectUrlForType(objType, objName), name: objName };
+      return { type: objType, name: objName, url: objectUrlForType(objType, objName) };
     });
 
     const result = await activateBatch(client.http, client.safety, objects, activateOpts);
     const names = objects.map((o) => o.name).join(', ');
+    const batchStatuses = buildBatchActivationStatuses(objects, result);
+    const statusDetails = formatBatchActivationStatuses(batchStatuses);
 
     if (result.success) {
-      return textResult(
-        `Successfully activated ${objects.length} objects: ${names}.${formatActivationMessages(result)}`,
-      );
+      for (const object of objects) {
+        cachingLayer?.invalidate(object.type, object.name, 'all');
+      }
+      cachingLayer?.inactiveLists.invalidate(client.username);
+      return textResult(`Successfully activated ${objects.length} objects: ${names}.${statusDetails}`);
     }
-    return errorResult(`Batch activation failed for: ${names}.\n${formatActivationMessages(result)}`);
+    // On batch failure enrich with per-object inactive-version syntax errors —
+    // only for objects whose activation returned no error details, to avoid duplicating messages.
+    const objectsNeedingSyntaxCheck = objects.filter((_o, i) => batchStatuses[i].status !== 'error');
+    const diagnostics = await Promise.all(
+      objectsNeedingSyntaxCheck.map((o) => inactiveSyntaxDiagnostic(client, o.type, o.name)),
+    );
+    const combinedDiag = diagnostics
+      .map((d, i) => (d ? `\n[${objectsNeedingSyntaxCheck[i].name}]${d}` : ''))
+      .filter(Boolean)
+      .join('');
+    return errorResult(
+      `Batch activation failed for: ${names}.${statusDetails}\n${formatActivationMessages(result)}${combinedDiag}`,
+    );
   }
 
   // Single activation (existing behavior)
   const objectUrl = objectUrlForType(type, name);
 
-  const result = await activate(client.http, client.safety, objectUrl, activateOpts);
+  const result = await activate(client.http, client.safety, objectUrl, { ...activateOpts, name });
 
   if (result.success) {
+    cachingLayer?.invalidate(type, name, 'all');
+    cachingLayer?.inactiveLists.invalidate(client.username);
     return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
   }
-  return errorResult(`Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}`);
+  // On failure, try to enrich with the actual compiler errors from the inactive version —
+  // especially useful when SAP returned <ioc:inactiveObjects> with no <msg> detail.
+  // Skip when activation already returned error details to avoid duplicating the same messages.
+  const hasActivationErrors = result.details.some((d) => d.severity === 'error');
+  const syntaxDetail = hasActivationErrors ? '' : await inactiveSyntaxDiagnostic(client, type, name);
+  let activationError = `Activation failed for ${type} ${name}.\n${formatActivationMessages(result)}${syntaxDetail}`;
+  if (type === 'DDLS') {
+    activationError += `\n\n${await buildCdsActivationDependencyHint(client, name, objectUrl)}`;
+  }
+  return errorResult(activationError);
 }
 
 /** Format activation result messages with structured detail (line numbers, URIs) when available */
@@ -2651,6 +3982,84 @@ function formatActivationMessages(result: ActivationResult): string {
   }
 
   return parts.length > 0 ? `\n${parts.join('\n')}` : '';
+}
+
+interface BatchActivationObject {
+  type: string;
+  name: string;
+  url: string;
+}
+
+interface BatchActivationObjectStatus {
+  type: string;
+  name: string;
+  status: 'active' | 'warning' | 'error';
+  messages: string[];
+}
+
+function normalizeActivationUri(uri: string | undefined): string | undefined {
+  if (!uri) return undefined;
+  return uri.replace(/#.*$/, '').replace(/\/+$/, '').toLowerCase();
+}
+
+function buildBatchActivationStatuses(
+  objects: BatchActivationObject[],
+  result: ActivationResult,
+): BatchActivationObjectStatus[] {
+  // Group error details by object. SAP error URIs may be subpaths of the object URL
+  // (e.g. .../classes/zcl_demo/source/main for object .../classes/ZCL_DEMO) and may
+  // differ in case, so we lowercase and use startsWith for matching.
+  const objectKeys = objects.map((obj) => normalizeActivationUri(obj.url) ?? '');
+  const perObject: Array<Array<{ severity: 'error' | 'warning' | 'info'; text: string }>> = objects.map(() => []);
+  const unassigned: string[] = [];
+
+  for (const detail of result.details) {
+    const detailUri = normalizeActivationUri(detail.uri);
+    const prefix = detail.line ? `[line ${detail.line}] ` : '';
+    const suffix = detail.uri ? ` (${detail.uri})` : '';
+    if (!detailUri) {
+      unassigned.push(`${prefix}${detail.text}${suffix}`);
+      continue;
+    }
+    const matchIdx = objectKeys.findIndex((k) => k && detailUri.startsWith(k));
+    if (matchIdx >= 0) {
+      perObject[matchIdx].push({ severity: detail.severity, text: `${prefix}${detail.text}${suffix}` });
+    } else {
+      unassigned.push(`${prefix}${detail.text}${suffix}`);
+    }
+  }
+
+  return objects.map((obj, index) => {
+    const details = perObject[index];
+    const hasError = details.some((detail) => detail.severity === 'error');
+    const hasWarning = details.some((detail) => detail.severity === 'warning');
+    const status: BatchActivationObjectStatus['status'] = hasError ? 'error' : hasWarning ? 'warning' : 'active';
+    const messages = details.map((detail) => detail.text);
+    if (index === 0 && unassigned.length > 0) {
+      messages.push(...unassigned);
+    }
+    return {
+      type: obj.type,
+      name: obj.name,
+      status,
+      messages,
+    };
+  });
+}
+
+function formatBatchActivationStatuses(statuses: BatchActivationObjectStatus[]): string {
+  if (statuses.length === 0) return '';
+  const lines: string[] = [];
+  for (const status of statuses) {
+    if (status.messages.length === 0) {
+      lines.push(`- ${status.name} (${status.type}): ${status.status}`);
+    } else {
+      for (const msg of status.messages) {
+        lines.push(`- ${status.name} (${status.type}) ${msg}`);
+      }
+    }
+  }
+  return `\n${lines.join('\n')}`;
 }
 
 // ─── SAPNavigate Handler ─────────────────────────────────────────────
@@ -2755,7 +4164,8 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
       if (!canFreeSQL && !canQuery) {
         return errorResult(
           'Class hierarchy requires data access permissions. ' +
-            'Enable free SQL (--block-free-sql=false) or table preview (--block-data=false).',
+            'Enable free SQL (SAP_ALLOW_FREE_SQL=true / --allow-free-sql=true) or table preview ' +
+            '(SAP_ALLOW_DATA_PREVIEW=true / --allow-data-preview=true), and grant the matching sql/data scope in HTTP auth mode.',
         );
       }
 
@@ -2822,7 +4232,17 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
   switch (action) {
     case 'syntax': {
       const objectUrl = objectUrlForType(type, name);
-      const result = await syntaxCheck(client.http, client.safety, objectUrl);
+      const version = args.version === 'inactive' ? 'inactive' : args.version === 'active' ? 'active' : undefined;
+      const content = typeof args.source === 'string' ? (args.source as string) : undefined;
+      const opts: { version?: 'active' | 'inactive'; content?: string } = {};
+      if (version) opts.version = version;
+      if (content !== undefined) opts.content = content;
+      const result = await syntaxCheck(
+        client.http,
+        client.safety,
+        objectUrl,
+        Object.keys(opts).length > 0 ? opts : undefined,
+      );
       return textResult(JSON.stringify(result, null, 2));
     }
     case 'unittest': {
@@ -2892,11 +4312,33 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
     case 'dumps': {
       const id = args.id as string | undefined;
       if (id) {
-        // Get single dump detail
         const detail = await getDump(client.http, client.safety, id);
-        return textResult(JSON.stringify(detail, null, 2));
+        const includeFullText = args.includeFullText === true || String(args.includeFullText ?? '') === 'true';
+        const selectedSections = selectDumpSections(detail, args.sections);
+
+        const payload: Record<string, unknown> = {
+          id: detail.id,
+          error: detail.error,
+          exception: detail.exception,
+          program: detail.program,
+          user: detail.user,
+          timestamp: detail.timestamp,
+          chapters: detail.chapters,
+          terminationUri: detail.terminationUri,
+          sections: selectedSections,
+          selectedSectionIds: Object.keys(selectedSections),
+          availableSections: detail.chapters.map((chapter) => ({
+            id: chapter.name,
+            title: chapter.title,
+            line: chapter.line,
+          })),
+        };
+        if (includeFullText) {
+          payload.formattedText = detail.formattedText;
+        }
+        return textResult(JSON.stringify(payload, null, 2));
       }
-      // List dumps
+
       const user = args.user as string | undefined;
       const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
       const dumps = await listDumps(client.http, client.safety, { user, maxResults });
@@ -2928,11 +4370,324 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
       const traces = await listTraces(client.http, client.safety);
       return textResult(JSON.stringify(traces, null, 2));
     }
+    case 'system_messages': {
+      const user = args.user as string | undefined;
+      const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
+      const from = args.from as string | undefined;
+      const to = args.to as string | undefined;
+      const messages = await listSystemMessages(client.http, client.safety, { user, maxResults, from, to });
+      return textResult(JSON.stringify(messages, null, 2));
+    }
+    case 'gateway_errors': {
+      if (isBtpSystem()) {
+        return errorResult(
+          'SAP Gateway error log is not available on BTP ABAP Environment. Use this action on on-prem systems.',
+        );
+      }
+
+      const user = args.user as string | undefined;
+      const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
+      const from = args.from as string | undefined;
+      const to = args.to as string | undefined;
+      const detailUrl = args.detailUrl as string | undefined;
+      const id = args.id as string | undefined;
+      const errorType = args.errorType as string | undefined;
+
+      if (detailUrl || id) {
+        const detail = await getGatewayErrorDetail(client.http, client.safety, { detailUrl, id, errorType });
+        return textResult(JSON.stringify(detail, null, 2));
+      }
+
+      const errors = await listGatewayErrors(client.http, client.safety, { user, maxResults, from, to });
+      return textResult(JSON.stringify(errors, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces`,
+        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, atc, quickfix, apply_quickfix, dumps, traces, system_messages, gateway_errors`,
       );
   }
+}
+
+function selectDumpSections(detail: DumpDetail, requestedSections: unknown): Record<string, string> {
+  const availableSections = detail.sections ?? {};
+  const availableIds = Object.keys(availableSections);
+  if (availableIds.length === 0) return {};
+
+  const requestedIds = resolveRequestedDumpSectionIds(detail, requestedSections);
+  const selectedIds = requestedIds.length > 0 ? requestedIds : pickDefaultDumpSectionIds(detail);
+  const finalIds = selectedIds.length > 0 ? selectedIds : availableIds.slice(0, 5);
+
+  return Object.fromEntries(finalIds.map((id) => [id, availableSections[id] ?? '']));
+}
+
+function resolveRequestedDumpSectionIds(detail: DumpDetail, requestedSections: unknown): string[] {
+  if (!Array.isArray(requestedSections)) return [];
+  const availableIds = new Set(Object.keys(detail.sections ?? {}));
+  const resolved = requestedSections
+    .map((entry) => resolveDumpSectionId(detail, String(entry ?? '')))
+    .filter((entry): entry is string => typeof entry === 'string' && availableIds.has(entry));
+  return Array.from(new Set(resolved));
+}
+
+function resolveDumpSectionId(detail: DumpDetail, candidate: string): string | undefined {
+  const normalizedCandidate = normalizeDumpSectionKey(candidate);
+  if (!normalizedCandidate) return undefined;
+
+  const direct = detail.chapters.find((chapter) => normalizeDumpSectionKey(chapter.name) === normalizedCandidate)?.name;
+  if (direct) return direct;
+
+  const exactTitle = detail.chapters.find(
+    (chapter) => normalizeDumpSectionKey(chapter.title) === normalizedCandidate,
+  )?.name;
+  if (exactTitle) return exactTitle;
+
+  const fuzzyTitle = detail.chapters.find((chapter) =>
+    normalizeDumpSectionKey(chapter.title).includes(normalizedCandidate),
+  )?.name;
+  return fuzzyTitle;
+}
+
+function pickDefaultDumpSectionIds(detail: DumpDetail): string[] {
+  const wanted = ['short text', 'what happened', 'error analysis', 'source code extract', 'active calls', 'call stack'];
+  const selected: string[] = [];
+
+  for (const pattern of wanted) {
+    const found = detail.chapters.find(
+      (chapter) => normalizeDumpSectionKey(chapter.title).includes(normalizeDumpSectionKey(pattern)) && chapter.name,
+    );
+    if (found?.name && !selected.includes(found.name) && detail.sections[found.name]) {
+      selected.push(found.name);
+    }
+  }
+
+  if (selected.length > 0) return selected;
+
+  const ordered = [...detail.chapters]
+    .sort((a, b) => {
+      if (a.line !== b.line) return a.line - b.line;
+      return a.chapterOrder - b.chapterOrder;
+    })
+    .map((chapter) => chapter.name)
+    .filter((name) => Boolean(name) && Boolean(detail.sections[name]));
+  return Array.from(new Set(ordered)).slice(0, 5);
+}
+
+function normalizeDumpSectionKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// ─── SAPGit Handler ──────────────────────────────────────────────────
+
+type SapGitBackend = 'gcts' | 'abapgit';
+
+function resolveSapGitBackend(args: Record<string, unknown>): { backend?: SapGitBackend; error?: string } {
+  const forced = args.backend as SapGitBackend | undefined;
+  const hasGcts = Boolean(cachedFeatures?.gcts?.available);
+  const hasAbapGit = Boolean(cachedFeatures?.abapGit?.available);
+
+  if (!hasGcts && !hasAbapGit) {
+    return {
+      error:
+        'Neither gCTS nor abapGit is available on this SAP system. Run SAPManage(action="probe") to refresh feature detection.',
+    };
+  }
+
+  if (forced) {
+    if (forced === 'gcts' && !hasGcts) return { error: 'gCTS backend is not available on this SAP system.' };
+    if (forced === 'abapgit' && !hasAbapGit) return { error: 'abapGit backend is not available on this SAP system.' };
+    return { backend: forced };
+  }
+
+  return { backend: hasGcts ? 'gcts' : 'abapgit' };
+}
+
+async function loadAbapGitRepo(client: AdtClient, repoId: string) {
+  const repos = await abapGitListRepos(client.http, client.safety);
+  const repo = repos.find((candidate) => candidate.key === repoId);
+  if (!repo) {
+    throw new Error(
+      `abapGit repository "${repoId}" was not found. Run SAPGit(action="list_repos", backend="abapgit").`,
+    );
+  }
+  return repo;
+}
+
+async function handleSAPGit(
+  client: AdtClient,
+  args: Record<string, unknown>,
+  _authInfo?: AuthInfo,
+): Promise<ToolResult> {
+  // Scope enforcement happens at handleToolCall level via ACTION_POLICY.
+  // This handler only dispatches action logic.
+  const action = String(args.action ?? '');
+  if (!getActionPolicy('SAPGit', action)) {
+    return errorResult(`Unknown SAPGit action: ${action}`);
+  }
+
+  const resolved = resolveSapGitBackend(args);
+  if (!resolved.backend) {
+    return errorResult(resolved.error ?? 'Unable to resolve SAPGit backend.');
+  }
+
+  const backend = resolved.backend;
+  const repoId = String(args.repoId ?? '').trim();
+  const url = String(args.url ?? '').trim();
+  const branch = String(args.branch ?? '').trim();
+  const packageName = String(args.package ?? '').trim();
+  const user = String(args.user ?? '').trim() || undefined;
+  const password = String(args.password ?? '').trim() || undefined;
+  const token = String(args.token ?? '').trim() || undefined;
+  const limit = Number(args.limit ?? 20);
+
+  const gctsOnlyActions = new Set(['whoami', 'config', 'branches', 'history', 'objects', 'commit']);
+  const abapGitOnlyActions = new Set(['external_info', 'check', 'stage', 'push']);
+  if (backend === 'abapgit' && gctsOnlyActions.has(action)) {
+    return errorResult(`Action '${action}' is only supported by gCTS; this system uses abapGit.`);
+  }
+  if (backend === 'gcts' && abapGitOnlyActions.has(action)) {
+    return errorResult(`Action '${action}' is only supported by abapGit; this system uses gCTS.`);
+  }
+
+  let result: unknown;
+  switch (action) {
+    case 'list_repos':
+      result =
+        backend === 'gcts'
+          ? await gctsListRepos(client.http, client.safety)
+          : await abapGitListRepos(client.http, client.safety);
+      break;
+    case 'whoami':
+      result = await gctsGetUserInfo(client.http, client.safety);
+      break;
+    case 'config':
+      result = await gctsGetConfig(client.http, client.safety, repoId || undefined);
+      break;
+    case 'branches':
+      if (!repoId) return errorResult('SAPGit(action="branches") requires repoId.');
+      result = await gctsListBranches(client.http, client.safety, repoId);
+      break;
+    case 'external_info':
+      if (!url) return errorResult('SAPGit(action="external_info") requires url.');
+      result = await abapGitGetExternalInfo(client.http, client.safety, url, user, password);
+      break;
+    case 'history':
+      if (!repoId) return errorResult('SAPGit(action="history") requires repoId.');
+      result = await gctsGetCommitHistory(client.http, client.safety, repoId, Number.isFinite(limit) ? limit : 20);
+      break;
+    case 'objects':
+      if (!repoId) return errorResult('SAPGit(action="objects") requires repoId.');
+      result = await gctsListRepoObjects(client.http, client.safety, repoId);
+      break;
+    case 'check': {
+      if (!repoId) return errorResult('SAPGit(action="check") requires repoId.');
+      const repo = await loadAbapGitRepo(client, repoId);
+      result = await abapGitCheckRepo(client.http, client.safety, repo);
+      break;
+    }
+    case 'stage': {
+      if (!repoId) return errorResult('SAPGit(action="stage") requires repoId.');
+      const repo = await loadAbapGitRepo(client, repoId);
+      result = await abapGitStageRepo(client.http, client.safety, repo);
+      break;
+    }
+    case 'clone':
+      if (!url) return errorResult('SAPGit(action="clone") requires url.');
+      if (backend === 'gcts') {
+        const params: GctsCloneParams = {
+          rid: repoId || undefined,
+          name: repoId || undefined,
+          url,
+          ...(packageName ? { package: packageName } : {}),
+          user,
+          password,
+          token,
+        };
+        result = await gctsCloneRepo(client.http, client.safety, params);
+      } else {
+        if (!packageName) return errorResult('SAPGit(action="clone", backend="abapgit") requires package.');
+        result = await abapGitCreateRepo(client.http, client.safety, {
+          package: packageName,
+          url,
+          branchName: branch || undefined,
+          transportRequest: String(args.transport ?? '').trim() || undefined,
+          user,
+          password,
+        });
+      }
+      break;
+    case 'pull':
+      if (!repoId) return errorResult('SAPGit(action="pull") requires repoId.');
+      if (backend === 'gcts') {
+        result = await gctsPullRepo(client.http, client.safety, repoId, String(args.commit ?? '').trim() || undefined);
+      } else {
+        result = await abapGitPullRepo(client.http, client.safety, repoId, {
+          ...(packageName ? { package: packageName } : {}),
+          ...(url ? { url } : {}),
+          ...(branch ? { branchName: branch } : {}),
+          transportRequest: String(args.transport ?? '').trim() || undefined,
+          user,
+          password,
+        });
+      }
+      break;
+    case 'push': {
+      if (!repoId) return errorResult('SAPGit(action="push") requires repoId.');
+      const repo = await loadAbapGitRepo(client, repoId);
+      const staging =
+        Array.isArray(args.objects) && args.objects.length > 0
+          ? { repoKey: repo.key, branchName: repo.branchName, objects: args.objects as Array<Record<string, unknown>> }
+          : await abapGitStageRepo(client.http, client.safety, repo);
+      await abapGitPushRepo(client.http, client.safety, repo, staging);
+      result = { ok: true };
+      break;
+    }
+    case 'commit':
+      if (!repoId) return errorResult('SAPGit(action="commit") requires repoId.');
+      result = await gctsCommitRepo(client.http, client.safety, repoId, {
+        message: String(args.message ?? '').trim() || undefined,
+        description: String(args.description ?? '').trim() || undefined,
+        objects: Array.isArray(args.objects) ? (args.objects as Array<{ type?: string; name?: string }>) : undefined,
+      });
+      break;
+    case 'switch_branch':
+      if (!repoId || !branch) return errorResult('SAPGit(action="switch_branch") requires repoId and branch.');
+      if (backend === 'gcts') {
+        result = await gctsSwitchBranch(client.http, client.safety, repoId, branch);
+      } else {
+        await abapGitSwitchBranch(client.http, client.safety, repoId, branch, false);
+        result = { ok: true };
+      }
+      break;
+    case 'create_branch':
+      if (!repoId || !branch) return errorResult('SAPGit(action="create_branch") requires repoId and branch.');
+      if (backend === 'gcts') {
+        result = await gctsCreateBranch(client.http, client.safety, repoId, {
+          branch,
+          ...(packageName ? { package: packageName } : {}),
+        });
+      } else {
+        await abapGitCreateBranch(client.http, client.safety, repoId, branch);
+        result = { ok: true };
+      }
+      break;
+    case 'unlink':
+      if (!repoId) return errorResult('SAPGit(action="unlink") requires repoId.');
+      if (backend === 'gcts') {
+        await gctsDeleteRepo(client.http, client.safety, repoId);
+      } else {
+        await abapGitUnlinkRepo(client.http, client.safety, repoId);
+      }
+      result = { ok: true };
+      break;
+    default:
+      return errorResult(`Unknown SAPGit action: ${action}`);
+  }
+
+  const payload = backend === 'gcts' || backend === 'abapgit' ? { backend, result } : result;
+  return textResult(JSON.stringify(payload, null, 2));
 }
 
 // ─── SAPTransport Handler ────────────────────────────────────────────
@@ -2995,7 +4750,7 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
     }
     case 'check': {
       // Check transport requirements for an object/package combination.
-      // Does NOT require enableTransports — this is a read-only check.
+      // Does NOT require allowTransportWrites — this is a read-only check.
       const objectType = String(args.type ?? '');
       const objectName = String(args.name ?? '');
       const pkg = String(args.package ?? '');
@@ -3027,14 +4782,66 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
         ),
       );
     }
+    case 'history': {
+      const objectType = String(args.type ?? '');
+      const objectName = String(args.name ?? '');
+      if (!objectType || !objectName) {
+        return errorResult('"type" and "name" are required for "history" action.');
+      }
+
+      const objectUrl = objectUrlForType(objectType, objectName);
+      const primary = await getObjectTransports(client.http, client.safety, objectUrl);
+      let candidateTransports = primary.candidateTransports;
+
+      // Fallback: if per-object transport lookup is empty, derive the package via
+      // the object metadata endpoint and ask transportchecks for candidate transports.
+      if (primary.relatedTransports.length === 0 && candidateTransports.length === 0) {
+        try {
+          const pkg = await client.resolveObjectPackage(objectUrl);
+          if (pkg && pkg !== '$TMP') {
+            const info = await getTransportInfo(client.http, client.safety, objectUrl, pkg, '');
+            candidateTransports = info.existingTransports;
+          }
+        } catch {
+          // best-effort-fallback
+        }
+      }
+
+      const lockOwner = primary.relatedTransports[0]?.owner;
+      const summary = primary.lockedTransport
+        ? `Object ${objectName} is locked in transport ${primary.lockedTransport}${lockOwner ? ` by ${lockOwner}` : ''}.`
+        : candidateTransports.length > 0
+          ? `Object ${objectName} has no active lock; ${candidateTransports.length} transport(s) available for assignment.`
+          : `Object ${objectName} has no related or candidate transports (likely $TMP / local object).`;
+
+      const history: ObjectTransportHistory = {
+        object: { type: objectType, name: objectName, uri: objectUrl },
+        ...(primary.lockedTransport ? { lockedTransport: primary.lockedTransport } : {}),
+        relatedTransports: primary.relatedTransports,
+        candidateTransports,
+        summary,
+      };
+
+      return textResult(JSON.stringify(history, null, 2));
+    }
     default:
       return errorResult(
-        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check`,
+        `Unknown SAPTransport action: ${action}. Supported: list, get, create, release, delete, reassign, release_recursive, check, history`,
       );
   }
 }
 
 // ─── SAPContext Handler ───────────────────────────────────────────────
+
+const DEFAULT_SIBLING_MAX_CANDIDATES = 4;
+const HARD_MAX_SIBLING_MAX_CANDIDATES = 10;
+
+function parseSiblingMaxCandidates(value: unknown): number {
+  const parsed = Number(value ?? DEFAULT_SIBLING_MAX_CANDIDATES);
+  if (!Number.isFinite(parsed)) return DEFAULT_SIBLING_MAX_CANDIDATES;
+  const rounded = Math.trunc(parsed);
+  return Math.min(Math.max(rounded, 1), HARD_MAX_SIBLING_MAX_CANDIDATES);
+}
 
 async function handleSAPContext(
   client: AdtClient,
@@ -3042,7 +4849,11 @@ async function handleSAPContext(
   cachingLayer?: CachingLayer,
 ): Promise<ToolResult> {
   const action = String(args.action ?? '');
-  const type = normalizeObjectType(String(args.type ?? ''));
+  // action="impact" is DDLS-only on the server side — default the type so LLMs
+  // don't have to supply it redundantly (and don't get a validation retry when
+  // they don't). Any non-DDLS value still fails the guardrail below.
+  const rawType = String(args.type ?? '');
+  const type = normalizeObjectType(rawType || (action === 'impact' ? 'DDLS' : ''));
   const name = String(args.name ?? '');
   const maxDeps = Number(args.maxDeps ?? 20);
   const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);
@@ -3078,11 +4889,226 @@ async function handleSAPContext(
   }
 
   // Helper: get source with cache support
-  const cachedGet = async (objType: string, objName: string, fetcher: () => Promise<string>): Promise<string> => {
-    if (!cachingLayer) return fetcher();
+  const cachedGet = async (
+    objType: string,
+    objName: string,
+    fetcher: (ifNoneMatch?: string) => Promise<SourceReadResult>,
+  ): Promise<string> => {
+    if (!cachingLayer) return (await fetcher()).source;
     const { source } = await cachingLayer.getSource(objType, objName, fetcher);
     return source;
   };
+
+  if (action === 'impact') {
+    if (type !== 'DDLS') {
+      return errorResult(
+        'SAPContext(action="impact") supports DDLS only. For non-CDS objects, use SAPNavigate(action="references").',
+      );
+    }
+
+    const ddlSource = await cachedGet('DDLS', name, (ifNoneMatch) => client.getDdls(name, { ifNoneMatch }));
+    const upstream = buildCdsUpstream(extractCdsDependencies(ddlSource));
+    const includeIndirect = args.includeIndirect === true;
+    const siblingCheck = args.siblingCheck !== false;
+    const siblingMaxCandidates = parseSiblingMaxCandidates(args.siblingMaxCandidates);
+    let downstream = classifyCdsImpact([], { includeIndirect });
+    const warnings: string[] = [];
+    const consistencyHints: string[] = [];
+    let siblingExtensionAnalysis:
+      | {
+          enabled: boolean;
+          stem: string;
+          searchQuery: string;
+          includeIndirect: boolean;
+          maxCandidates: number;
+          filters: {
+            samePackage: boolean;
+            siblingStem: string;
+          };
+          target: {
+            name: string;
+            packageName?: string;
+            metadataExtensions: number;
+          };
+          consideredCandidates: number;
+          checkedCandidates: Array<SiblingExtensionCandidate & { downstreamTotal: number }>;
+          skipped: {
+            self: number;
+            nonDdls: number;
+            packageMismatch: number;
+            nameMismatch: number;
+            overLimit: number;
+          };
+        }
+      | undefined;
+
+    try {
+      const whereUsed = await findWhereUsed(client.http, client.safety, objectUrlForType('DDLS', name));
+      downstream = classifyCdsImpact(whereUsed, { includeIndirect });
+    } catch (err) {
+      if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+        warnings.push('Where-used endpoint not available on this system');
+      } else {
+        throw err;
+      }
+    }
+
+    if (siblingCheck && warnings.length === 0) {
+      try {
+        const targetName = name.toUpperCase();
+        const stem = deriveSiblingStem(targetName);
+        // Guard against over-broad sibling searches for short/degenerate stems
+        // (e.g., target "Z1" -> stem "Z" -> searchQuery "Z*" would scan the full Z namespace).
+        if (stem.length < 3) {
+          warnings.push(
+            `Sibling consistency check skipped: derived stem "${stem}" is too short to identify siblings safely.`,
+          );
+        } else {
+          const targetMatches = await client.searchObject(targetName, 25);
+          const targetMatch = targetMatches.find(
+            (candidate) =>
+              normalizeObjectType(candidate.objectType) === 'DDLS' && candidate.objectName.toUpperCase() === targetName,
+          );
+          const targetPackageName = targetMatch?.packageName;
+
+          if (!targetPackageName) {
+            warnings.push(`Sibling consistency check skipped: could not resolve package for DDLS "${targetName}".`);
+          } else {
+            const searchQuery = `${stem}*`;
+            const searchMaxResults = Math.min(100, Math.max(siblingMaxCandidates * 4, siblingMaxCandidates + 4));
+            const siblingCandidates = await client.searchObject(searchQuery, searchMaxResults);
+            const skipped = {
+              self: 0,
+              nonDdls: 0,
+              packageMismatch: 0,
+              nameMismatch: 0,
+              overLimit: 0,
+            };
+            const filteredCandidates: Array<{ name: string; packageName: string }> = [];
+            const seenNames = new Set<string>();
+
+            for (const candidate of siblingCandidates) {
+              if (normalizeObjectType(candidate.objectType) !== 'DDLS') {
+                skipped.nonDdls += 1;
+                continue;
+              }
+
+              const candidateName = candidate.objectName.toUpperCase();
+              if (candidateName === targetName) {
+                skipped.self += 1;
+                continue;
+              }
+              if (candidate.packageName !== targetPackageName) {
+                skipped.packageMismatch += 1;
+                continue;
+              }
+              if (!isSiblingNameMatch(targetName, candidateName, stem)) {
+                skipped.nameMismatch += 1;
+                continue;
+              }
+              if (seenNames.has(candidateName)) {
+                continue;
+              }
+              seenNames.add(candidateName);
+              filteredCandidates.push({ name: candidateName, packageName: candidate.packageName });
+            }
+
+            const selectedCandidates = filteredCandidates.slice(0, siblingMaxCandidates);
+            skipped.overLimit = Math.max(filteredCandidates.length - selectedCandidates.length, 0);
+
+            const checkedCandidates: Array<SiblingExtensionCandidate & { downstreamTotal: number }> = [];
+            let skippedWhereUsedCandidates = 0;
+
+            for (const candidate of selectedCandidates) {
+              try {
+                const siblingWhereUsed = await findWhereUsed(
+                  client.http,
+                  client.safety,
+                  objectUrlForType('DDLS', candidate.name),
+                );
+                const siblingDownstream = classifyCdsImpact(siblingWhereUsed, { includeIndirect });
+                checkedCandidates.push({
+                  name: candidate.name,
+                  packageName: candidate.packageName,
+                  metadataExtensions: siblingDownstream.metadataExtensions.length,
+                  downstreamTotal: siblingDownstream.summary.total,
+                });
+              } catch (err) {
+                if (err instanceof AdtApiError && [404, 405, 415, 501].includes(err.statusCode)) {
+                  skippedWhereUsedCandidates += 1;
+                  continue;
+                }
+                throw err;
+              }
+            }
+
+            if (skippedWhereUsedCandidates > 0) {
+              warnings.push(
+                `Sibling consistency check skipped ${skippedWhereUsedCandidates} candidate(s) due to where-used endpoint errors.`,
+              );
+            }
+
+            const siblingFinding = buildSiblingExtensionFinding({
+              targetName,
+              targetPackageName,
+              stem,
+              targetMetadataExtensions: downstream.metadataExtensions.length,
+              siblings: checkedCandidates,
+            });
+            if (siblingFinding) {
+              consistencyHints.push(siblingFinding.message);
+            }
+
+            siblingExtensionAnalysis = {
+              enabled: true,
+              stem,
+              searchQuery,
+              includeIndirect,
+              maxCandidates: siblingMaxCandidates,
+              filters: {
+                samePackage: true,
+                siblingStem: stem,
+              },
+              target: {
+                name: targetName,
+                packageName: targetPackageName,
+                metadataExtensions: downstream.metadataExtensions.length,
+              },
+              consideredCandidates: filteredCandidates.length,
+              checkedCandidates,
+              skipped,
+            };
+          }
+        }
+      } catch (err) {
+        logger.debug('Sibling consistency check aborted', {
+          name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        warnings.push('Sibling consistency check skipped due to search or where-used processing errors.');
+      }
+    }
+
+    const upstreamCount =
+      upstream.tables.length + upstream.views.length + upstream.associations.length + upstream.compositions.length;
+
+    const response = {
+      name,
+      type: 'DDLS',
+      upstream,
+      downstream,
+      summary: {
+        upstreamCount,
+        downstreamTotal: downstream.summary.total,
+        downstreamDirect: downstream.summary.direct,
+      },
+      ...(consistencyHints.length > 0 ? { consistencyHints } : {}),
+      ...(siblingExtensionAnalysis ? { siblingExtensionAnalysis } : {}),
+      ...(warnings.length > 0 ? { warnings } : {}),
+    };
+
+    return textResult(JSON.stringify(response, null, 2));
+  }
 
   // Get source — either provided or fetched from SAP
   let source: string;
@@ -3091,13 +5117,13 @@ async function handleSAPContext(
   } else {
     switch (type) {
       case 'CLAS':
-        source = await cachedGet('CLAS', name, () => client.getClass(name));
+        source = await cachedGet('CLAS', name, (ifNoneMatch) => client.getClass(name, undefined, { ifNoneMatch }));
         break;
       case 'INTF':
-        source = await cachedGet('INTF', name, () => client.getInterface(name));
+        source = await cachedGet('INTF', name, (ifNoneMatch) => client.getInterface(name, { ifNoneMatch }));
         break;
       case 'PROG':
-        source = await cachedGet('PROG', name, () => client.getProgram(name));
+        source = await cachedGet('PROG', name, (ifNoneMatch) => client.getProgram(name, { ifNoneMatch }));
         break;
       case 'FUNC': {
         const group = String(args.group ?? '');
@@ -3106,11 +5132,11 @@ async function handleSAPContext(
             'The "group" parameter is required for FUNC type. Use SAPSearch to find the function group.',
           );
         }
-        source = await cachedGet('FUNC', name, () => client.getFunction(group, name));
+        source = await cachedGet('FUNC', name, (ifNoneMatch) => client.getFunction(group, name, { ifNoneMatch }));
         break;
       }
       case 'DDLS': {
-        const ddlSource = await cachedGet('DDLS', name, () => client.getDdls(name));
+        const ddlSource = await cachedGet('DDLS', name, (ifNoneMatch) => client.getDdls(name, { ifNoneMatch }));
         const cdsResult = await compressCdsContext(client, ddlSource, name, maxDeps, depth, cachingLayer);
         return textResult(cdsResult.output);
       }
@@ -3159,6 +5185,58 @@ async function handleSAPContext(
 
   const result = await compressContext(client, source, name, type, maxDeps, depth, abaplintVersion, cachingLayer);
   return textResult(result.output);
+}
+
+function buildCdsUpstream(
+  deps: Array<{
+    name: string;
+    kind: 'data_source' | 'association' | 'composition' | 'projection_base';
+  }>,
+): {
+  tables: Array<{ name: string }>;
+  views: Array<{ name: string }>;
+  associations: Array<{ name: string }>;
+  compositions: Array<{ name: string }>;
+} {
+  const tableNames = new Set<string>();
+  const viewNames = new Set<string>();
+  const associationNames = new Set<string>();
+  const compositionNames = new Set<string>();
+
+  for (const dep of deps) {
+    const upperName = dep.name.toUpperCase();
+    if (dep.kind === 'association') {
+      associationNames.add(upperName);
+      continue;
+    }
+    if (dep.kind === 'composition') {
+      compositionNames.add(upperName);
+      continue;
+    }
+    if (dep.kind === 'projection_base') {
+      viewNames.add(upperName);
+      continue;
+    }
+    if (isLikelyCdsViewName(upperName)) {
+      viewNames.add(upperName);
+    } else {
+      tableNames.add(upperName);
+    }
+  }
+
+  return {
+    tables: [...tableNames].sort().map((name) => ({ name })),
+    views: [...viewNames].sort().map((name) => ({ name })),
+    associations: [...associationNames].sort().map((name) => ({ name })),
+    compositions: [...compositionNames].sort().map((name) => ({ name })),
+  };
+}
+
+function isLikelyCdsViewName(name: string): boolean {
+  if (name.startsWith('/')) {
+    return /\/[ICRPAZ][A-Z0-9_]*_/.test(name);
+  }
+  return /^(ZI_|ZC_|ZR_|ZP_|I_|C_|R_|P_)/.test(name);
 }
 
 // ─── SAPManage Handler ────────────────────────────────────────────────
@@ -3489,6 +5567,7 @@ async function handleSAPManage(
             enabled: true,
             warmupAvailable: cachingLayer.isWarmupAvailable,
             ...stats,
+            inactiveListCache: cachingLayer.inactiveLists.stats(),
           },
           null,
           2,
@@ -3535,7 +5614,7 @@ async function handleSAPManage(
 
     default:
       return errorResult(
-        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
+        `Unknown SAPManage action: ${action}. Supported: features, probe, cache_stats, create_package, delete_package, change_package, flp_list_catalogs, flp_list_groups, flp_list_tiles, flp_create_catalog, flp_create_group, flp_create_tile, flp_add_tile_to_group, flp_delete_catalog`,
       );
   }
 }

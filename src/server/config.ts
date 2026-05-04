@@ -4,30 +4,128 @@
  * Resolves configuration from CLI flags, environment variables, and defaults.
  * Priority: CLI > env > .env > defaults
  *
- * Environment variable names match the Go version exactly (SAP_URL, SAP_USER, etc.)
- * for drop-in compatibility with existing deployments and documentation.
+ * Post-authz-refactor-v2 (v0.7):
+ *   - Profile layer (`ARC1_PROFILE`) was removed. Use explicit `SAP_ALLOW_*` env vars.
+ *   - Op-code allowlist/blocklist env vars (`SAP_ALLOWED_OPS` / `SAP_DISALLOWED_OPS`)
+ *     were removed. Use `SAP_DENY_ACTIONS` for fine-grained per-action denials.
+ *   - Single `ARC1_API_KEY` was removed. Use `ARC1_API_KEYS="key:profile"` instead.
+ *   - Negated safety flags (`SAP_READ_ONLY`, `SAP_BLOCK_DATA`, `SAP_BLOCK_FREE_SQL`,
+ *     `SAP_ENABLE_TRANSPORTS`, `SAP_ENABLE_GIT`) were replaced with positive opt-ins
+ *     (`SAP_ALLOW_WRITES`, `SAP_ALLOW_DATA_PREVIEW`, `SAP_ALLOW_FREE_SQL`,
+ *     `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOW_GIT_WRITES`).
+ *   - See docs_page/updating.md for the full migration table.
  */
 
-import type { FeatureToggle, ServerConfig, TransportType } from './types.js';
+import type { SafetyConfig } from '../adt/safety.js';
+import { parseDenyActions, validateDenyActions } from './deny-actions.js';
+import { logger } from './logger.js';
+import type { ConfigSource, FeatureToggle, ServerConfig, TransportType } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
+
+/**
+ * Named API-key profiles — the safety config + scope set granted to a key
+ * with that profile name. Used by multi-key auth (`ARC1_API_KEYS=key:profile`).
+ *
+ * For BTP/XSUAA deployments, the equivalent concept is role templates in
+ * xs-security.json. The two stay conceptually aligned.
+ */
+export interface ApiKeyProfile {
+  scopes: string[];
+  /** Partial SafetyConfig — intersected with the server ceiling at request time. */
+  safety: Partial<SafetyConfig>;
+}
+
+export const API_KEY_PROFILES: Record<string, ApiKeyProfile> = {
+  viewer: {
+    scopes: ['read'],
+    safety: {
+      allowWrites: false,
+      allowDataPreview: false,
+      allowFreeSQL: false,
+      allowTransportWrites: false,
+      allowGitWrites: false,
+    },
+  },
+  'viewer-data': {
+    scopes: ['read', 'data'],
+    safety: {
+      allowWrites: false,
+      allowDataPreview: true,
+      allowFreeSQL: false,
+      allowTransportWrites: false,
+      allowGitWrites: false,
+    },
+  },
+  'viewer-sql': {
+    scopes: ['read', 'data', 'sql'],
+    safety: {
+      allowWrites: false,
+      allowDataPreview: true,
+      allowFreeSQL: true,
+      allowTransportWrites: false,
+      allowGitWrites: false,
+    },
+  },
+  developer: {
+    scopes: ['read', 'write', 'transports', 'git'],
+    safety: {
+      allowWrites: true,
+      allowDataPreview: false,
+      allowFreeSQL: false,
+      allowTransportWrites: true,
+      allowGitWrites: true,
+      allowedPackages: ['$TMP'],
+    },
+  },
+  'developer-data': {
+    scopes: ['read', 'write', 'data', 'transports', 'git'],
+    safety: {
+      allowWrites: true,
+      allowDataPreview: true,
+      allowFreeSQL: false,
+      allowTransportWrites: true,
+      allowGitWrites: true,
+      allowedPackages: ['$TMP'],
+    },
+  },
+  'developer-sql': {
+    scopes: ['read', 'write', 'data', 'sql', 'transports', 'git'],
+    safety: {
+      allowWrites: true,
+      allowDataPreview: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
+      allowGitWrites: true,
+      allowedPackages: ['$TMP'],
+    },
+  },
+  admin: {
+    scopes: ['read', 'write', 'data', 'sql', 'transports', 'git', 'admin'],
+    safety: {
+      allowWrites: true,
+      allowDataPreview: true,
+      allowFreeSQL: true,
+      allowTransportWrites: true,
+      allowGitWrites: true,
+      allowedPackages: [],
+    },
+  },
+};
 
 /**
  * Parse API keys string into structured array.
  * Format: "key1:profile1,key2:profile2"
- * Each entry maps an API key to a named profile.
  */
 export function parseApiKeys(raw: string): Array<{ key: string; profile: string }> {
   const entries: Array<{ key: string; profile: string }> = [];
   for (const pair of raw.split(',')) {
     const trimmed = pair.trim();
     if (!trimmed) continue;
-    // Use LAST colon as separator — keys may contain colons (e.g. base64)
-    // but profile names never do
     const colonIdx = trimmed.lastIndexOf(':');
     if (colonIdx === -1) {
       throw new Error(
         `Invalid API key entry '${trimmed}': expected 'key:profile' format. ` +
-          `Valid profiles: ${Object.keys(PROFILES).join(', ')}`,
+          `Valid profiles: ${Object.keys(API_KEY_PROFILES).join(', ')}`,
       );
     }
     const key = trimmed.slice(0, colonIdx);
@@ -35,9 +133,9 @@ export function parseApiKeys(raw: string): Array<{ key: string; profile: string 
     if (!key) {
       throw new Error('Invalid API key entry: key cannot be empty');
     }
-    if (!PROFILES[profile]) {
+    if (!API_KEY_PROFILES[profile]) {
       throw new Error(
-        `Invalid profile '${profile}' in API key entry. Valid profiles: ${Object.keys(PROFILES).join(', ')}`,
+        `Invalid profile '${profile}' in API key entry. Valid profiles: ${Object.keys(API_KEY_PROFILES).join(', ')}`,
       );
     }
     entries.push({ key, profile });
@@ -48,125 +146,167 @@ export function parseApiKeys(raw: string): Array<{ key: string; profile: string 
   return entries;
 }
 
-/**
- * Maps profile names to the scopes they grant.
- * Used when API keys are assigned to profiles — the key inherits these scopes.
- * Kept in sync with PROFILES: each profile's safety flags determine its scopes.
- */
-export const PROFILE_SCOPES: Record<string, string[]> = {
-  viewer: ['read'],
-  'viewer-data': ['read', 'data'],
-  'viewer-sql': ['read', 'data', 'sql'],
-  developer: ['read', 'write'],
-  'developer-data': ['read', 'write', 'data'],
-  'developer-sql': ['read', 'write', 'data', 'sql'],
+/** Map of legacy env-var names → human-readable migration hint. */
+const LEGACY_ENV_VARS: Record<string, string> = {
+  SAP_READ_ONLY: 'Replaced by SAP_ALLOW_WRITES (inverted). Set SAP_ALLOW_WRITES=true to enable writes.',
+  SAP_BLOCK_DATA:
+    'Replaced by SAP_ALLOW_DATA_PREVIEW (inverted). Set SAP_ALLOW_DATA_PREVIEW=true to enable table preview.',
+  SAP_BLOCK_FREE_SQL: 'Replaced by SAP_ALLOW_FREE_SQL (inverted). Set SAP_ALLOW_FREE_SQL=true to enable freestyle SQL.',
+  SAP_ENABLE_TRANSPORTS:
+    'Replaced by SAP_ALLOW_TRANSPORT_WRITES. Transport reads are always available; writes need SAP_ALLOW_TRANSPORT_WRITES=true + SAP_ALLOW_WRITES=true.',
+  SAP_ENABLE_GIT:
+    'Replaced by SAP_ALLOW_GIT_WRITES. Git reads are always available; writes need SAP_ALLOW_GIT_WRITES=true + SAP_ALLOW_WRITES=true.',
+  SAP_ALLOWED_OPS:
+    'Op-code allowlist was removed. Use SAP_DENY_ACTIONS for fine-grained per-action denials (e.g., SAP_DENY_ACTIONS="SAPWrite.delete,SAPManage.flp_*").',
+  SAP_DISALLOWED_OPS: 'Op-code blocklist was removed. Use SAP_DENY_ACTIONS instead.',
+  ARC1_PROFILE:
+    'Server-side profile presets were removed. Set individual SAP_ALLOW_* flags (see .env.example for recipes).',
+  ARC1_API_KEY:
+    'Single API-key mode was removed. Use ARC1_API_KEYS="key:profile" with a profile name (valid: viewer, viewer-data, viewer-sql, developer, developer-data, developer-sql, admin).',
 };
 
-/**
- * Named profiles — convenience presets for common safety configurations.
- * Each profile sets a combination of safety flags. Individual CLI flags
- * applied after the profile can override any profile default.
- */
-export const PROFILES: Record<string, Partial<ServerConfig>> = {
-  viewer: {
-    readOnly: true,
-    blockData: true,
-    blockFreeSQL: true,
-    enableTransports: false,
-  },
-  'viewer-data': {
-    readOnly: true,
-    blockData: false,
-    blockFreeSQL: true,
-    enableTransports: false,
-  },
-  'viewer-sql': {
-    readOnly: true,
-    blockData: false,
-    blockFreeSQL: false,
-    enableTransports: false,
-  },
-  developer: {
-    readOnly: false,
-    blockData: true,
-    blockFreeSQL: true,
-    enableTransports: true,
-    allowedPackages: ['$TMP'],
-  },
-  'developer-data': {
-    readOnly: false,
-    blockData: false,
-    blockFreeSQL: true,
-    enableTransports: true,
-    allowedPackages: ['$TMP'],
-  },
-  'developer-sql': {
-    readOnly: false,
-    blockData: false,
-    blockFreeSQL: false,
-    enableTransports: true,
-    allowedPackages: ['$TMP'],
-  },
+const LEGACY_CLI_FLAGS: Record<string, string> = {
+  'read-only': LEGACY_ENV_VARS.SAP_READ_ONLY,
+  'block-data': LEGACY_ENV_VARS.SAP_BLOCK_DATA,
+  'block-free-sql': LEGACY_ENV_VARS.SAP_BLOCK_FREE_SQL,
+  'enable-transports': LEGACY_ENV_VARS.SAP_ENABLE_TRANSPORTS,
+  'enable-git': LEGACY_ENV_VARS.SAP_ENABLE_GIT,
+  'allowed-ops': LEGACY_ENV_VARS.SAP_ALLOWED_OPS,
+  'disallowed-ops': LEGACY_ENV_VARS.SAP_DISALLOWED_OPS,
+  profile: LEGACY_ENV_VARS.ARC1_PROFILE,
+  'api-key': LEGACY_ENV_VARS.ARC1_API_KEY,
 };
 
+/** Migration guard — throws a helpful error if any legacy identifier is set. */
+function detectLegacyConfig(args: string[]): void {
+  const violations: string[] = [];
+
+  for (const env of Object.keys(LEGACY_ENV_VARS)) {
+    if (process.env[env] !== undefined) {
+      violations.push(`  ${env}: ${LEGACY_ENV_VARS[env]}`);
+    }
+  }
+
+  for (const flag of Object.keys(LEGACY_CLI_FLAGS)) {
+    if (args.some((a) => a === `--${flag}` || a.startsWith(`--${flag}=`))) {
+      violations.push(`  --${flag}: ${LEGACY_CLI_FLAGS[flag]}`);
+    }
+  }
+
+  if (violations.length > 0) {
+    throw new Error(
+      `Legacy authorization config detected (removed in v0.7):\n${violations.join('\n')}\n\nSee docs_page/updating.md#v07-authorization-refactor-breaking-change for the full migration guide.`,
+    );
+  }
+}
+
 /**
- * Parse CLI arguments and environment variables into a ServerConfig.
- *
- * We use a simple hand-rolled parser here (not commander) because
- * the MCP server entry point needs to be fast and lightweight.
- * Commander is used for the full CLI (cli.ts), not the server startup.
+ * Parse CLI args + env into a `{ config, sources }` pair.
+ * `sources` records where each field's value came from (default / env / flag / file).
+ * Consumed by the startup effective-policy log and the `arc1 config show` subcommand.
  */
-export function parseArgs(args: string[]): ServerConfig {
+export function resolveConfig(args: string[]): { config: ServerConfig; sources: Record<string, ConfigSource> } {
+  detectLegacyConfig(args);
+
   const config = { ...DEFAULT_CONFIG };
+  const sources: Record<string, ConfigSource> = {};
 
-  // Helper: get a CLI flag value (--flag value or --flag=value)
+  // ── Resolvers ──────────────────────────────────────────────────────
   const getFlag = (name: string): string | undefined => {
     const prefix = `--${name}=`;
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === `--${name}` && i + 1 < args.length) {
-        return args[i + 1];
-      }
-      if (args[i]?.startsWith(prefix)) {
-        return args[i].slice(prefix.length);
-      }
+      if (args[i] === `--${name}` && i + 1 < args.length) return args[i + 1];
+      if (args[i]?.startsWith(prefix)) return args[i].slice(prefix.length);
     }
     return undefined;
   };
 
-  // Helper: resolve value from CLI > env > default
-  const resolve = (flag: string, envVar: string, defaultVal: string): string => {
-    return getFlag(flag) ?? process.env[envVar] ?? defaultVal;
+  const resolveStr = (flag: string, envVar: string, defaultVal: string, fieldName: string): string => {
+    const flagVal = getFlag(flag);
+    if (flagVal !== undefined) {
+      sources[fieldName] = { flag: `--${flag}` };
+      return flagVal;
+    }
+    if (process.env[envVar] !== undefined) {
+      sources[fieldName] = { env: envVar };
+      return process.env[envVar] as string;
+    }
+    sources[fieldName] = 'default';
+    return defaultVal;
   };
 
-  const resolveBool = (flag: string, envVar: string, defaultVal: boolean): boolean => {
-    const val = getFlag(flag) ?? process.env[envVar];
-    if (val === undefined) return defaultVal;
-    return val === 'true' || val === '1';
+  const resolveBool = (flag: string, envVar: string, defaultVal: boolean, fieldName: string): boolean => {
+    const flagVal = getFlag(flag);
+    if (flagVal !== undefined) {
+      sources[fieldName] = { flag: `--${flag}` };
+      return flagVal === 'true' || flagVal === '1';
+    }
+    if (process.env[envVar] !== undefined) {
+      sources[fieldName] = { env: envVar };
+      return process.env[envVar] === 'true' || process.env[envVar] === '1';
+    }
+    sources[fieldName] = 'default';
+    return defaultVal;
   };
 
-  const resolveFeature = (flag: string, envVar: string): FeatureToggle => {
-    const val = getFlag(flag) ?? process.env[envVar] ?? 'auto';
-    if (val === 'on' || val === 'off') return val;
+  const resolveFeature = (flag: string, envVar: string, fieldName: string): FeatureToggle => {
+    const flagVal = getFlag(flag);
+    if (flagVal !== undefined) {
+      sources[fieldName] = { flag: `--${flag}` };
+      if (flagVal === 'on' || flagVal === 'off') return flagVal;
+      return 'auto';
+    }
+    const envVal = process.env[envVar];
+    if (envVal !== undefined) {
+      sources[fieldName] = { env: envVar };
+      if (envVal === 'on' || envVal === 'off') return envVal;
+      return 'auto';
+    }
+    sources[fieldName] = 'default';
     return 'auto';
   };
 
-  // --- SAP Connection ---
-  config.url = resolve('url', 'SAP_URL', '');
-  config.username = resolve('user', 'SAP_USER', '');
-  config.password = resolve('password', 'SAP_PASSWORD', '');
-  config.client = resolve('client', 'SAP_CLIENT', '100');
-  config.language = resolve('language', 'SAP_LANGUAGE', 'EN');
-  config.insecure = resolveBool('insecure', 'SAP_INSECURE', false);
+  const resolveOptionalStr = (flag: string, envVar: string, fieldName: string): string | undefined => {
+    const flagVal = getFlag(flag);
+    if (flagVal !== undefined) {
+      sources[fieldName] = { flag: `--${flag}` };
+      return flagVal;
+    }
+    if (process.env[envVar] !== undefined) {
+      sources[fieldName] = { env: envVar };
+      return process.env[envVar];
+    }
+    sources[fieldName] = 'default';
+    return undefined;
+  };
 
-  // --- Cookie Auth ---
-  config.cookieFile = getFlag('cookie-file') ?? process.env.SAP_COOKIE_FILE;
-  config.cookieString = getFlag('cookie-string') ?? process.env.SAP_COOKIE_STRING;
+  // ── SAP Connection ─────────────────────────────────────────────────
+  config.url = resolveStr('url', 'SAP_URL', '', 'url');
+  config.username = resolveStr('user', 'SAP_USER', '', 'username');
+  config.password = resolveStr('password', 'SAP_PASSWORD', '', 'password');
+  config.client = resolveStr('client', 'SAP_CLIENT', '100', 'client');
+  config.language = resolveStr('language', 'SAP_LANGUAGE', 'EN', 'language');
+  config.insecure = resolveBool('insecure', 'SAP_INSECURE', false, 'insecure');
 
-  // --- Transport ---
-  const transport = resolve('transport', 'SAP_TRANSPORT', 'stdio');
+  // ── Cookie Auth ────────────────────────────────────────────────────
+  config.cookieFile = resolveOptionalStr('cookie-file', 'SAP_COOKIE_FILE', 'cookieFile');
+  config.cookieString = resolveOptionalStr('cookie-string', 'SAP_COOKIE_STRING', 'cookieString');
+
+  // ── Transport ──────────────────────────────────────────────────────
+  const transport = resolveStr('transport', 'SAP_TRANSPORT', 'stdio', 'transport');
   config.transport = (transport === 'http-streamable' ? 'http-streamable' : 'stdio') as TransportType;
-  config.httpAddr = resolve('http-addr', 'SAP_HTTP_ADDR', '0.0.0.0:8080');
-  // --port / ARC1_PORT overrides just the port part of httpAddr (simpler alternative to --http-addr)
+  const httpAddrFlag = getFlag('http-addr');
+  const httpAddrEnv = process.env.ARC1_HTTP_ADDR ?? process.env.SAP_HTTP_ADDR;
+  if (httpAddrFlag !== undefined) {
+    config.httpAddr = httpAddrFlag;
+    sources.httpAddr = { flag: '--http-addr' };
+  } else if (httpAddrEnv !== undefined) {
+    config.httpAddr = httpAddrEnv;
+    sources.httpAddr = process.env.ARC1_HTTP_ADDR !== undefined ? { env: 'ARC1_HTTP_ADDR' } : { env: 'SAP_HTTP_ADDR' };
+  } else {
+    config.httpAddr = '0.0.0.0:8080';
+    sources.httpAddr = 'default';
+  }
   const portOverride = getFlag('port') ?? process.env.ARC1_PORT;
   if (portOverride) {
     const parsedPort = Number.parseInt(portOverride, 10);
@@ -175,127 +315,183 @@ export function parseArgs(args: string[]): ServerConfig {
     }
     const addrHost = config.httpAddr.includes(':') ? config.httpAddr.split(':')[0] : '0.0.0.0';
     config.httpAddr = `${addrHost}:${parsedPort}`;
+    sources.httpAddr = getFlag('port') !== undefined ? { flag: '--port' } : { env: 'ARC1_PORT' };
   }
 
-  // --- Profile (apply before individual safety flags so flags can override) ---
-  const profileName = getFlag('profile') ?? process.env.ARC1_PROFILE;
-  if (profileName) {
-    const profile = PROFILES[profileName];
-    if (!profile) {
-      throw new Error(`Unknown profile '${profileName}'. Valid profiles: ${Object.keys(PROFILES).join(', ')}`);
-    }
-    Object.assign(config, profile);
-  }
+  // ── Safety (positive opt-ins) ──────────────────────────────────────
+  config.allowWrites = resolveBool('allow-writes', 'SAP_ALLOW_WRITES', false, 'allowWrites');
+  config.allowDataPreview = resolveBool('allow-data-preview', 'SAP_ALLOW_DATA_PREVIEW', false, 'allowDataPreview');
+  config.allowFreeSQL = resolveBool('allow-free-sql', 'SAP_ALLOW_FREE_SQL', false, 'allowFreeSQL');
+  config.allowTransportWrites = resolveBool(
+    'allow-transport-writes',
+    'SAP_ALLOW_TRANSPORT_WRITES',
+    false,
+    'allowTransportWrites',
+  );
+  config.allowGitWrites = resolveBool('allow-git-writes', 'SAP_ALLOW_GIT_WRITES', false, 'allowGitWrites');
 
-  // --- Safety (individual flags override profile defaults) ---
-  // Only override profile defaults when the flag/env is explicitly set
-  const readOnlyExplicit = getFlag('read-only') ?? process.env.SAP_READ_ONLY;
-  if (readOnlyExplicit !== undefined) config.readOnly = readOnlyExplicit === 'true' || readOnlyExplicit === '1';
-  else if (!profileName) config.readOnly = true;
-
-  const blockFreeSQLExplicit = getFlag('block-free-sql') ?? process.env.SAP_BLOCK_FREE_SQL;
-  if (blockFreeSQLExplicit !== undefined)
-    config.blockFreeSQL = blockFreeSQLExplicit === 'true' || blockFreeSQLExplicit === '1';
-  else if (!profileName) config.blockFreeSQL = true;
-
-  const blockDataExplicit = getFlag('block-data') ?? process.env.SAP_BLOCK_DATA;
-  if (blockDataExplicit !== undefined) config.blockData = blockDataExplicit === 'true' || blockDataExplicit === '1';
-  else if (!profileName) config.blockData = true;
-  config.allowedOps = resolve('allowed-ops', 'SAP_ALLOWED_OPS', '');
-  config.disallowedOps = resolve('disallowed-ops', 'SAP_DISALLOWED_OPS', '');
   const pkgs = getFlag('allowed-packages') ?? process.env.SAP_ALLOWED_PACKAGES;
-  if (pkgs) config.allowedPackages = pkgs.split(',').map((p) => p.trim());
-  const enableTransportsExplicit = getFlag('enable-transports') ?? process.env.SAP_ENABLE_TRANSPORTS;
-  if (enableTransportsExplicit !== undefined)
-    config.enableTransports = enableTransportsExplicit === 'true' || enableTransportsExplicit === '1';
-  else if (!profileName) config.enableTransports = false;
+  if (pkgs !== undefined) {
+    const raw = pkgs.split(',').map((p) => p.trim());
+    const filtered = raw.filter((p) => p.length > 0);
+    if (raw.length !== filtered.length) {
+      logger.warn(
+        "SAP_ALLOWED_PACKAGES contained empty entries — likely shell expansion of unset $VARs. Use single quotes: SAP_ALLOWED_PACKAGES='$TMP,Z*'",
+        { raw: pkgs, parsed: filtered },
+      );
+    }
+    config.allowedPackages = filtered;
+    sources.allowedPackages =
+      getFlag('allowed-packages') !== undefined ? { flag: '--allowed-packages' } : { env: 'SAP_ALLOWED_PACKAGES' };
+  } else {
+    sources.allowedPackages = 'default';
+  }
 
-  // --- Features ---
-  config.featureAbapGit = resolveFeature('feature-abapgit', 'SAP_FEATURE_ABAPGIT');
-  config.featureRap = resolveFeature('feature-rap', 'SAP_FEATURE_RAP');
-  config.featureAmdp = resolveFeature('feature-amdp', 'SAP_FEATURE_AMDP');
-  config.featureUi5 = resolveFeature('feature-ui5', 'SAP_FEATURE_UI5');
-  config.featureTransport = resolveFeature('feature-transport', 'SAP_FEATURE_TRANSPORT');
-  config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA');
-  config.featureUi5Repo = resolveFeature('feature-ui5repo', 'SAP_FEATURE_UI5REPO');
-  config.featureFlp = resolveFeature('feature-flp', 'SAP_FEATURE_FLP');
+  const transports = getFlag('allowed-transports') ?? process.env.SAP_ALLOWED_TRANSPORTS;
+  if (transports !== undefined) {
+    config.allowedTransports = transports
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    sources.allowedTransports =
+      getFlag('allowed-transports') !== undefined
+        ? { flag: '--allowed-transports' }
+        : { env: 'SAP_ALLOWED_TRANSPORTS' };
+  } else {
+    sources.allowedTransports = 'default';
+  }
 
-  // --- System Type Detection ---
-  const systemType = resolve('system-type', 'SAP_SYSTEM_TYPE', 'auto');
+  // ── Deny Actions (parsed + validated; fails fast on error) ─────────
+  const denyActionsRaw = getFlag('deny-actions') ?? process.env.SAP_DENY_ACTIONS;
+  if (denyActionsRaw) {
+    const fromFile =
+      denyActionsRaw.startsWith('/') ||
+      denyActionsRaw.startsWith('./') ||
+      denyActionsRaw.startsWith('~/') ||
+      denyActionsRaw.startsWith('../');
+    const parsed = parseDenyActions(denyActionsRaw);
+    validateDenyActions(parsed);
+    config.denyActions = parsed;
+    sources.denyActions = fromFile
+      ? { file: denyActionsRaw.replace(/^~/, process.env.HOME ?? '~') }
+      : getFlag('deny-actions') !== undefined
+        ? { flag: '--deny-actions' }
+        : { env: 'SAP_DENY_ACTIONS' };
+  } else {
+    sources.denyActions = 'default';
+  }
+
+  // ── Features ───────────────────────────────────────────────────────
+  config.featureAbapGit = resolveFeature('feature-abapgit', 'SAP_FEATURE_ABAPGIT', 'featureAbapGit');
+  config.featureGcts = resolveFeature('feature-gcts', 'SAP_FEATURE_GCTS', 'featureGcts');
+  config.featureRap = resolveFeature('feature-rap', 'SAP_FEATURE_RAP', 'featureRap');
+  config.featureAmdp = resolveFeature('feature-amdp', 'SAP_FEATURE_AMDP', 'featureAmdp');
+  config.featureUi5 = resolveFeature('feature-ui5', 'SAP_FEATURE_UI5', 'featureUi5');
+  config.featureTransport = resolveFeature('feature-transport', 'SAP_FEATURE_TRANSPORT', 'featureTransport');
+  config.featureHana = resolveFeature('feature-hana', 'SAP_FEATURE_HANA', 'featureHana');
+  config.featureUi5Repo = resolveFeature('feature-ui5repo', 'SAP_FEATURE_UI5REPO', 'featureUi5Repo');
+  config.featureFlp = resolveFeature('feature-flp', 'SAP_FEATURE_FLP', 'featureFlp');
+
+  // ── System Type Detection ──────────────────────────────────────────
+  const systemType = resolveStr('system-type', 'SAP_SYSTEM_TYPE', 'auto', 'systemType');
   config.systemType = (['btp', 'onprem'].includes(systemType) ? systemType : 'auto') as ServerConfig['systemType'];
 
-  // --- Authentication (MCP client → ARC-1) ---
-  config.apiKey = getFlag('api-key') ?? process.env.ARC1_API_KEY;
-
-  // Multiple API keys with per-key profiles: "key1:viewer,key2:developer"
+  // ── Authentication ─────────────────────────────────────────────────
   const apiKeysRaw = getFlag('api-keys') ?? process.env.ARC1_API_KEYS;
   if (apiKeysRaw) {
     config.apiKeys = parseApiKeys(apiKeysRaw);
+    sources.apiKeys = getFlag('api-keys') !== undefined ? { flag: '--api-keys' } : { env: 'ARC1_API_KEYS' };
+  } else {
+    sources.apiKeys = 'default';
   }
 
-  config.oidcIssuer = getFlag('oidc-issuer') ?? process.env.SAP_OIDC_ISSUER;
-  config.oidcAudience = getFlag('oidc-audience') ?? process.env.SAP_OIDC_AUDIENCE;
+  config.oidcIssuer = resolveOptionalStr('oidc-issuer', 'SAP_OIDC_ISSUER', 'oidcIssuer');
+  config.oidcAudience = resolveOptionalStr('oidc-audience', 'SAP_OIDC_AUDIENCE', 'oidcAudience');
   const clockTolerance = getFlag('oidc-clock-tolerance') ?? process.env.SAP_OIDC_CLOCK_TOLERANCE;
   if (clockTolerance) {
     const parsed = Number.parseInt(clockTolerance, 10);
     config.oidcClockTolerance = Number.isNaN(parsed) ? undefined : parsed;
   }
-  config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false);
+  config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false, 'xsuaaAuth');
 
-  // --- BTP ABAP Environment (direct connection via service key) ---
-  config.btpServiceKey = getFlag('btp-service-key') ?? process.env.SAP_BTP_SERVICE_KEY;
-  config.btpServiceKeyFile = getFlag('btp-service-key-file') ?? process.env.SAP_BTP_SERVICE_KEY_FILE;
-  const cbPort = resolve('btp-oauth-callback-port', 'SAP_BTP_OAUTH_CALLBACK_PORT', '0');
+  // ── BTP ABAP Environment ───────────────────────────────────────────
+  config.btpServiceKey = resolveOptionalStr('btp-service-key', 'SAP_BTP_SERVICE_KEY', 'btpServiceKey');
+  config.btpServiceKeyFile = resolveOptionalStr(
+    'btp-service-key-file',
+    'SAP_BTP_SERVICE_KEY_FILE',
+    'btpServiceKeyFile',
+  );
+  const cbPort = resolveStr('btp-oauth-callback-port', 'SAP_BTP_OAUTH_CALLBACK_PORT', '0', 'btpOAuthCallbackPort');
   config.btpOAuthCallbackPort = Number.parseInt(cbPort, 10) || 0;
 
-  // --- Principal Propagation ---
-  config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false);
-  config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false);
+  // ── Principal Propagation ──────────────────────────────────────────
+  config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false, 'ppEnabled');
+  config.ppStrict = resolveBool('pp-strict', 'SAP_PP_STRICT', false, 'ppStrict');
+  config.ppAllowSharedCookies = resolveBool(
+    'pp-allow-shared-cookies',
+    'SAP_PP_ALLOW_SHARED_COOKIES',
+    false,
+    'ppAllowSharedCookies',
+  );
 
-  // --- Tool Mode ---
-  const toolMode = resolve('tool-mode', 'ARC1_TOOL_MODE', 'standard');
+  // ── SAML Behavior ──────────────────────────────────────────────────
+  config.disableSaml2 = resolveBool('disable-saml', 'SAP_DISABLE_SAML', false, 'disableSaml2');
+
+  // ── Tool Mode ──────────────────────────────────────────────────────
+  const toolMode = resolveStr('tool-mode', 'ARC1_TOOL_MODE', 'standard', 'toolMode');
   config.toolMode = (toolMode === 'hyperfocused' ? 'hyperfocused' : 'standard') as ServerConfig['toolMode'];
 
-  // --- Lint ---
-  config.abaplintConfig = getFlag('abaplint-config') ?? process.env.SAP_ABAPLINT_CONFIG;
-  config.lintBeforeWrite = resolveBool('lint-before-write', 'SAP_LINT_BEFORE_WRITE', true);
+  // ── Lint ───────────────────────────────────────────────────────────
+  config.abaplintConfig = resolveOptionalStr('abaplint-config', 'SAP_ABAPLINT_CONFIG', 'abaplintConfig');
+  config.lintBeforeWrite = resolveBool('lint-before-write', 'SAP_LINT_BEFORE_WRITE', true, 'lintBeforeWrite');
+  config.checkBeforeWrite = resolveBool('check-before-write', 'SAP_CHECK_BEFORE_WRITE', false, 'checkBeforeWrite');
 
-  // --- Cache ---
-  const cacheMode = resolve('cache', 'ARC1_CACHE', 'auto');
+  // ── Cache ──────────────────────────────────────────────────────────
+  const cacheMode = resolveStr('cache', 'ARC1_CACHE', 'auto', 'cacheMode');
   config.cacheMode = (
     ['memory', 'sqlite', 'none'].includes(cacheMode) ? cacheMode : 'auto'
   ) as ServerConfig['cacheMode'];
-  config.cacheFile = resolve('cache-file', 'ARC1_CACHE_FILE', '.arc1-cache.db');
-  config.cacheWarmup = resolveBool('cache-warmup', 'ARC1_CACHE_WARMUP', false);
-  config.cacheWarmupPackages = resolve('cache-warmup-packages', 'ARC1_CACHE_WARMUP_PACKAGES', '');
+  config.cacheFile = resolveStr('cache-file', 'ARC1_CACHE_FILE', '.arc1-cache.db', 'cacheFile');
+  config.cacheWarmup = resolveBool('cache-warmup', 'ARC1_CACHE_WARMUP', false, 'cacheWarmup');
+  config.cacheWarmupPackages = resolveStr(
+    'cache-warmup-packages',
+    'ARC1_CACHE_WARMUP_PACKAGES',
+    '',
+    'cacheWarmupPackages',
+  );
 
-  // --- Concurrency ---
+  // ── Concurrency ────────────────────────────────────────────────────
   const maxConcurrent = getFlag('max-concurrent') ?? process.env.ARC1_MAX_CONCURRENT;
   if (maxConcurrent) {
     const parsed = Number.parseInt(maxConcurrent, 10);
     config.maxConcurrent = Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
   }
 
-  // --- Logging ---
-  config.logFile = getFlag('log-file') ?? process.env.ARC1_LOG_FILE;
-  const logLevel = resolve('log-level', 'ARC1_LOG_LEVEL', 'info');
+  // ── Logging ────────────────────────────────────────────────────────
+  config.logFile = resolveOptionalStr('log-file', 'ARC1_LOG_FILE', 'logFile');
+  const logLevel = resolveStr('log-level', 'ARC1_LOG_LEVEL', 'info', 'logLevel');
   config.logLevel = (
     ['debug', 'info', 'warn', 'error'].includes(logLevel) ? logLevel : 'info'
   ) as ServerConfig['logLevel'];
-  const logFormat = resolve('log-format', 'ARC1_LOG_FORMAT', 'text');
+  const logFormat = resolveStr('log-format', 'ARC1_LOG_FORMAT', 'text', 'logFormat');
   config.logFormat = (logFormat === 'json' ? 'json' : 'text') as ServerConfig['logFormat'];
 
-  // --- Misc ---
-  config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false);
-  // --verbose is sugar for --log-level debug
-  if (config.verbose) {
-    config.logLevel = 'debug';
-  }
+  // ── Misc ───────────────────────────────────────────────────────────
+  config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false, 'verbose');
+  if (config.verbose) config.logLevel = 'debug';
 
-  // --- Startup Validation ---
+  // ── Startup Validation ─────────────────────────────────────────────
   validateConfig(config);
 
-  return config;
+  return { config, sources };
+}
+
+/**
+ * Thin wrapper around `resolveConfig` that returns only the config object.
+ * Kept for callers that don't need per-field source attribution.
+ */
+export function parseArgs(args: string[]): ServerConfig {
+  return resolveConfig(args).config;
 }
 
 /**
@@ -303,7 +499,6 @@ export function parseArgs(args: string[]): ServerConfig {
  * Fails fast at startup for invalid or dangerous config combinations.
  */
 export function validateConfig(config: ServerConfig): void {
-  // OIDC: audience is required when issuer is set (RFC 9700 §2.3 audience restriction)
   if (config.oidcIssuer && !config.oidcAudience) {
     throw new Error(
       'SAP_OIDC_AUDIENCE is required when SAP_OIDC_ISSUER is set — ' +
@@ -314,10 +509,37 @@ export function validateConfig(config: ServerConfig): void {
     throw new Error('SAP_OIDC_ISSUER is required when SAP_OIDC_AUDIENCE is set');
   }
 
-  // PP: ppStrict requires ppEnabled
   if (config.ppStrict && !config.ppEnabled) {
     throw new Error(
       'SAP_PP_STRICT=true requires SAP_PP_ENABLED=true — strict mode has no effect without principal propagation enabled',
+    );
+  }
+
+  const hasCookieAuth = !!(config.cookieFile || config.cookieString);
+  const hasBtpServiceKey = !!(config.btpServiceKey || config.btpServiceKeyFile);
+
+  if (config.ppEnabled && hasCookieAuth && !config.ppAllowSharedCookies) {
+    throw new Error(
+      'SAP_PP_ENABLED=true is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING — shared cookies would leak into per-user requests. ' +
+        'If you genuinely need both, set SAP_PP_ALLOW_SHARED_COOKIES=true (cookies will be used only for the shared client, not for per-user PP requests).',
+    );
+  }
+
+  if (hasBtpServiceKey && hasCookieAuth) {
+    throw new Error(
+      'SAP_BTP_SERVICE_KEY is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING — pick one SAP auth method.',
+    );
+  }
+
+  if (hasBtpServiceKey && config.ppEnabled) {
+    throw new Error(
+      'SAP_BTP_SERVICE_KEY (BTP ABAP) is incompatible with SAP_PP_ENABLED=true — BTP ABAP Environment is single-tenant OAuth and does not support principal propagation.',
+    );
+  }
+
+  if (config.disableSaml2 && config.systemType === 'btp') {
+    console.error(
+      '[warn] SAP_DISABLE_SAML=true on a BTP system usually breaks login — BTP ABAP and S/4HANA Public Cloud require SAML. Continuing because you explicitly set this, but check docs/enterprise-auth.md if login starts failing.',
     );
   }
 }

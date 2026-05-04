@@ -39,14 +39,35 @@ export interface SapErrorClassification {
     | 'activation-dependency'
     | 'transport-issue'
     | 'object-exists'
-    | 'method-not-supported';
+    | 'method-not-supported'
+    | 'icf-handler-not-bound';
   hint: string;
   transaction?: string;
   details?: Record<string, string>;
 }
 
+export interface GctsErrorClassification {
+  exception?: string;
+  logMessage?: string;
+}
+
+export interface AbapGitErrorClassification {
+  namespace?: string;
+  message?: string;
+  t100Key?: string;
+}
+
 /** HTTP-level API error from SAP ADT */
 export class AdtApiError extends AdtError {
+  /**
+   * Optional remediation hint attached by a handler when it has context the
+   * generic error formatter lacks (e.g., the list of blocking dependents
+   * fetched via `/usageReferences` after a `[?/039]` delete failure).
+   * Appended at the very end of the LLM-facing error message so it reads as
+   * "what happened → diagnostics → how to fix".
+   */
+  extraHint?: string;
+
   constructor(
     message: string,
     public readonly statusCode: number,
@@ -272,20 +293,45 @@ export function extractExceptionType(xml: string): string | undefined {
   return match?.[1] ?? match?.[2];
 }
 
-/** Extract lock owner details (user + transport/task) from SAP lock messages. */
+/** Reject regex captures that hit a generic placeholder ("another", "the", etc.) instead of a real userid. */
+const PLACEHOLDER_USERS = /^(another|the|user|session|someone|somebody)$/i;
+
+/** Extract lock owner details (user + transport/task) from SAP lock messages.
+ *
+ *  Prefers the structured `<entry key="T100KEY-V1">…</entry>` property bag (SAP `MSGV1` slot,
+ *  populated by message `EU 510` on lock-conflict 403s). Falls back to free-text regex when
+ *  the property bag isn't present (e.g. NW 7.50 plain-text bodies). The placeholder filter
+ *  guards against false positives like "currently being edited by another user". */
 export function extractLockOwner(text: string): { user?: string; transport?: string } | undefined {
   if (!text) return undefined;
 
-  const userMatch =
-    text.match(/\blocked by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
-    text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
-    text.match(/\buser\s+["']?([A-Z0-9_.$/-]+)["']?\s+is\s+currently\s+editing\b/i);
-  const transportMatch =
-    text.match(/\b(?:in\s+)?(?:task|transport|request)\s+([A-Z0-9]{3,}\d{4,})\b/i) ??
-    text.match(/\b([A-Z]\d{2}[A-Z]\d{6})\b/i);
+  // 1. Structured T100 property bag (S/4 / modern releases via <exc:exception>):
+  //    <entry key="T100KEY-V1">MARIAN</entry>      → MSGV1 = lock owner
+  //    <entry key="T100KEY-V3">A4HK900502</entry>  → MSGV3 = transport (when present)
+  const v1Match = text.match(/<entry\s+key="T100KEY-V1">([^<]+)<\/entry>/i);
+  const v3Match = text.match(/<entry\s+key="T100KEY-V3">([^<]+)<\/entry>/i);
+  let user = v1Match?.[1]?.trim();
+  let transport = v3Match?.[1]?.trim();
 
-  const user = userMatch?.[1]?.replace(/[.,;:)]$/, '');
-  const transport = transportMatch?.[1]?.replace(/[.,;:)]$/, '');
+  // 2. Regex fallback (NW 7.50, plain-text messages, T100 properties absent).
+  //    Order: most specific phrasing first so generic LONGTEXT phrasing never
+  //    wins over the structured `<message>` line.
+  if (!user) {
+    const userMatch =
+      text.match(/\buser\s+["']?([A-Z0-9_.$/-]+)["']?\s+is\s+currently\s+editing\b/i) ??
+      text.match(/\blocked by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i) ??
+      text.match(/\bbeing edited by(?:\s+user)?\s+["']?([A-Z0-9_.$/-]+)["']?/i);
+    const candidate = userMatch?.[1]?.replace(/[.,;:)]$/, '');
+    if (candidate && !PLACEHOLDER_USERS.test(candidate)) user = candidate;
+  }
+
+  if (!transport) {
+    const transportMatch =
+      text.match(/\b(?:in\s+)?(?:task|transport|request)\s+([A-Z0-9]{3,}\d{4,})\b/i) ??
+      text.match(/\b([A-Z]\d{2}[A-Z]\d{6})\b/i);
+    transport = transportMatch?.[1]?.replace(/[.,;:)]$/, '');
+  }
+
   if (!user && !transport) return undefined;
 
   return {
@@ -333,8 +379,34 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   if (typeId === 'ExceptionResourceInvalidLockHandle' || statusCode === 423) {
     return {
       category: 'enqueue-error',
-      hint: 'Lock handle is invalid or expired. The lock may have timed out. Retry the operation so ARC-1 acquires a fresh lock. If the error persists, check SM12 for stale lock entries.',
-      transaction: 'SM12',
+      hint:
+        'Lock handle is invalid or expired. First, retry — transient expiry is the common case. ' +
+        'If 423 persists on the first PUT after a successful LOCK, see SAP Note 2727890 ' +
+        '"ADT: fix unstable adt lock handle" (component BC-DWB-AIE) — a known ABAP Development ' +
+        'Tools bug where the lock handle is not stable under certain conditions. Apply the note ' +
+        'or a support package that includes it.',
+      details: typeId ? { exceptionType: typeId } : undefined,
+    };
+  }
+
+  // Some ADT endpoints return `HTTP 404 "No suitable resource found"` for every
+  // verb while still appearing in `/discovery` — this is the ADT framework's
+  // way of saying the resource URI didn't match any registered handler inside
+  // the ADT framework (or the ICF service is active but its handler class is
+  // not bound). Distinct from a regular "does not exist" 404 on a missing
+  // object. See `icf-handler-not-bound`.
+  if (statusCode === 404 && /No suitable resource found/i.test(bodyRaw)) {
+    return {
+      category: 'icf-handler-not-bound',
+      hint:
+        'The ADT framework returned "No suitable resource found" — this endpoint is listed in ' +
+        '`/sap/bc/adt/discovery` but no handler matches the URI. In tcode `SICF`, navigate to the ' +
+        'service node under `/default_host/sap/bc/adt/...` and verify (a) the service is activated ' +
+        'and (b) its "Handler List" tab references the correct ADT handler class. If the service ' +
+        'looks active, the ADT framework itself may be missing the internal resource registration ' +
+        '(often caused by incomplete activation after an upgrade or on minimally-configured ' +
+        'systems). Consult your Basis admin or SAP KBA 3128830 (Troubleshooting ICF 404 Errors).',
+      transaction: 'SICF',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }
@@ -356,7 +428,7 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   if ((typeId === 'ExceptionResourceCreationFailure' || resourceExistsPattern) && objectExistsPattern) {
     return {
       category: 'object-exists',
-      hint: 'An object with this name already exists. Use SAPRead to inspect the existing object, or choose a different name.',
+      hint: 'An object with this name already exists. Recovery path: rerun the same payload with SAPWrite(action="update") to overwrite source/content, instead of retrying create.',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
   }
@@ -390,6 +462,59 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
   }
 
   return undefined;
+}
+
+/**
+ * Parse gCTS JSON error payloads.
+ *
+ * Known shapes:
+ * - {"exception":"..."}
+ * - {"log":[{"severity":"ERROR","message":"..."}]}
+ */
+export function classifyGctsError(body: string): GctsErrorClassification {
+  if (!body) return {};
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const exception = typeof parsed.exception === 'string' ? parsed.exception : undefined;
+
+    const logs = Array.isArray(parsed.log) ? parsed.log : [];
+    const errorLog = logs.find(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        String((entry as Record<string, unknown>).severity ?? '').toUpperCase() === 'ERROR',
+    ) as Record<string, unknown> | undefined;
+    const logMessage = typeof errorLog?.message === 'string' ? errorLog.message : undefined;
+
+    return {
+      ...(exception ? { exception } : {}),
+      ...(logMessage ? { logMessage } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Parse abapGit bridge/framework XML errors from /sap/bc/adt/abapgit/*.
+ */
+export function classifyAbapgitError(xmlBody: string): AbapGitErrorClassification {
+  if (!xmlBody) return {};
+
+  const namespace =
+    xmlBody.match(/<(?:\w+:)?namespace[^>]*\sid="([^"]+)"/i)?.[1] ??
+    xmlBody.match(/<(?:\w+:)?namespace[^>]*>([^<]+)</i)?.[1];
+  const message = AdtApiError.extractCleanMessage(xmlBody);
+  const props = AdtApiError.extractProperties(xmlBody);
+  const msgId = props['T100KEY-MSGID'];
+  const msgNo = props['T100KEY-MSGNO'] ?? props['T100KEY-NO'];
+  const t100Key = msgId || msgNo ? `${msgId ?? '?'}/${msgNo ?? '?'}` : undefined;
+
+  return {
+    ...(namespace ? { namespace } : {}),
+    ...(message && message !== 'Unknown error' ? { message } : {}),
+    ...(t100Key ? { t100Key } : {}),
+  };
 }
 
 function parseOptionalInt(value: string | undefined): number | undefined {

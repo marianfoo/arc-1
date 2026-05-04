@@ -1,6 +1,13 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
+import {
+  callTool,
+  connectClient,
+  expectToolError,
+  expectToolSuccess,
+  expectToolSuccessOrSkip,
+  skipOnBatchCreateFailure,
+} from './helpers.js';
 
 function uniqueName(prefix: string): string {
   const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e5)
@@ -28,7 +35,7 @@ describe('E2E DDIC metadata write tests', () => {
     }
   });
 
-  it('SAPWrite create DOMA with fixed values', async () => {
+  it('SAPWrite create DOMA with fixed values', async (ctx) => {
     const domainName = uniqueName('ZARC1_DOMA');
 
     const createResult = await callTool(client, 'SAPWrite', {
@@ -40,7 +47,7 @@ describe('E2E DDIC metadata write tests', () => {
       length: 1,
       fixedValues: [{ low: 'X', description: 'Test' }],
     });
-    expectToolSuccess(createResult);
+    expectToolSuccessOrSkip(ctx, createResult);
 
     try {
       const readResult = await callTool(client, 'SAPRead', { type: 'DOMA', name: domainName });
@@ -57,12 +64,12 @@ describe('E2E DDIC metadata write tests', () => {
     }
   });
 
-  it('SAPWrite create DTEL (domain-based + predefined)', async () => {
+  it('SAPWrite create DTEL (domain-based + predefined)', async (ctx) => {
     const domainName = uniqueName('ZARC1_DMD');
     const dtelDomain = uniqueName('ZARC1_DTD');
     const dtelPredef = uniqueName('ZARC1_DTP');
 
-    await callTool(client, 'SAPWrite', {
+    const domaResult = await callTool(client, 'SAPWrite', {
       action: 'create',
       type: 'DOMA',
       name: domainName,
@@ -70,6 +77,9 @@ describe('E2E DDIC metadata write tests', () => {
       dataType: 'CHAR',
       length: 3,
     });
+    // Skip the whole test if DOMA create isn't supported on this release —
+    // DTEL needs it as a dependency.
+    expectToolSuccessOrSkip(ctx, domaResult);
 
     try {
       const byDomain = await callTool(client, 'SAPWrite', {
@@ -81,7 +91,7 @@ describe('E2E DDIC metadata write tests', () => {
         typeName: domainName,
         shortLabel: 'Ref',
       });
-      expectToolSuccess(byDomain);
+      expectToolSuccessOrSkip(ctx, byDomain);
 
       const byType = await callTool(client, 'SAPWrite', {
         action: 'create',
@@ -93,7 +103,7 @@ describe('E2E DDIC metadata write tests', () => {
         length: 20,
         shortLabel: 'Text',
       });
-      expectToolSuccess(byType);
+      expectToolSuccessOrSkip(ctx, byType);
     } finally {
       for (const [type, name] of [
         ['DTEL', dtelDomain],
@@ -109,10 +119,10 @@ describe('E2E DDIC metadata write tests', () => {
     }
   });
 
-  it('SAPWrite update DOMA and verify via SAPRead', async () => {
+  it('SAPWrite update DOMA and verify via SAPRead', async (ctx) => {
     const domainName = uniqueName('ZARC1_UPD');
 
-    await callTool(client, 'SAPWrite', {
+    const createResult = await callTool(client, 'SAPWrite', {
       action: 'create',
       type: 'DOMA',
       name: domainName,
@@ -121,6 +131,7 @@ describe('E2E DDIC metadata write tests', () => {
       length: 1,
       fixedValues: [{ low: 'A', description: 'Active' }],
     });
+    expectToolSuccessOrSkip(ctx, createResult);
 
     try {
       const updateResult = await callTool(client, 'SAPWrite', {
@@ -150,11 +161,11 @@ describe('E2E DDIC metadata write tests', () => {
     }
   });
 
-  it('SAPWrite delete DOMA/DTEL removes objects', async () => {
+  it('SAPWrite delete DOMA/DTEL removes objects', async (ctx) => {
     const domainName = uniqueName('ZARC1_DEL');
     const dtelName = uniqueName('ZARC1_DELD');
 
-    await callTool(client, 'SAPWrite', {
+    const domaCreate = await callTool(client, 'SAPWrite', {
       action: 'create',
       type: 'DOMA',
       name: domainName,
@@ -162,7 +173,8 @@ describe('E2E DDIC metadata write tests', () => {
       dataType: 'CHAR',
       length: 1,
     });
-    await callTool(client, 'SAPWrite', {
+    expectToolSuccessOrSkip(ctx, domaCreate);
+    const dtelCreate = await callTool(client, 'SAPWrite', {
       action: 'create',
       type: 'DTEL',
       name: dtelName,
@@ -171,6 +183,7 @@ describe('E2E DDIC metadata write tests', () => {
       typeName: domainName,
       shortLabel: 'Del',
     });
+    expectToolSuccessOrSkip(ctx, dtelCreate);
 
     await callTool(client, 'SAPWrite', { action: 'delete', type: 'DTEL', name: dtelName });
     await callTool(client, 'SAPWrite', { action: 'delete', type: 'DOMA', name: domainName });
@@ -181,7 +194,7 @@ describe('E2E DDIC metadata write tests', () => {
     expectToolError(readDomain, domainName);
   });
 
-  it('SAPWrite batch_create supports DOMA + DTEL dependency chain', async () => {
+  it('SAPWrite batch_create supports DOMA + DTEL dependency chain', async (ctx) => {
     const domainName = uniqueName('ZARC1_BDOM');
     const dtelName = uniqueName('ZARC1_BDTL');
 
@@ -205,7 +218,11 @@ describe('E2E DDIC metadata write tests', () => {
         },
       ],
     });
-    expectToolSuccess(batchResult);
+    // batch_create aggregates per-object errors. The handler surfaces them as
+    // either isError=true (with "Batch created 0/N") or isError=false (success
+    // payload but same "Batch created 0/N" summary). Handle both.
+    const batchText = expectToolSuccessOrSkip(ctx, batchResult);
+    if (skipOnBatchCreateFailure(ctx, batchText)) return;
 
     try {
       const readDtel = await callTool(client, 'SAPRead', { type: 'DTEL', name: dtelName });

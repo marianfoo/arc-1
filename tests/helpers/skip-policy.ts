@@ -9,6 +9,7 @@ import type { TaskContext } from 'vitest';
 /** Standard skip reason constants for common precondition failures. */
 export const SkipReason = {
   NO_CREDENTIALS: 'SAP credentials not configured',
+  NO_FIXTURE: 'Required test fixture not found on SAP system',
   NO_DDLS: 'No DDLS object found on system',
   NO_DUMPS: 'No short dumps found on system',
   NO_TRANSPORT_PACKAGE: 'TEST_TRANSPORT_PACKAGE not configured (transportable package required)',

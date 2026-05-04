@@ -96,24 +96,55 @@ describe('MemoryCache', () => {
   });
 
   describe('sources', () => {
-    it('stores and retrieves source code', () => {
+    it('stores and retrieves source with active version by default', () => {
       cache.putSource('CLAS', 'ZCL_TEST', 'CLASS zcl_test DEFINITION.');
       const src = cache.getSource('CLAS', 'ZCL_TEST');
       expect(src).not.toBeNull();
       expect(src?.source).toBe('CLASS zcl_test DEFINITION.');
       expect(src?.objectType).toBe('CLAS');
       expect(src?.objectName).toBe('ZCL_TEST');
+      expect(src?.version).toBe('active');
       expect(src?.hash).toBe(hashSource('CLASS zcl_test DEFINITION.'));
+    });
+
+    it('stores etag when provided', () => {
+      cache.putSource('PROG', 'ZTEST', 'REPORT ztest.', { etag: '20231201001' });
+      expect(cache.getSource('PROG', 'ZTEST')?.etag).toBe('20231201001');
+    });
+
+    it('keeps active and inactive source entries separate', () => {
+      cache.putSource('CLAS', 'ZCL_TEST', 'active body');
+      cache.putSource('CLAS', 'ZCL_TEST', 'inactive body', { version: 'inactive' });
+      expect(cache.getSource('CLAS', 'ZCL_TEST')?.source).toBe('active body');
+      expect(cache.getSource('CLAS', 'ZCL_TEST', 'inactive')?.source).toBe('inactive body');
     });
 
     it('returns null for missing source', () => {
       expect(cache.getSource('CLAS', 'MISSING')).toBeNull();
     });
 
-    it('invalidates a source entry', () => {
-      cache.putSource('PROG', 'ZTEST', 'REPORT ztest.');
+    it('invalidateSource defaults to active version', () => {
+      cache.putSource('PROG', 'ZTEST', 'active');
+      cache.putSource('PROG', 'ZTEST', 'inactive', { version: 'inactive' });
       cache.invalidateSource('PROG', 'ZTEST');
       expect(cache.getSource('PROG', 'ZTEST')).toBeNull();
+      expect(cache.getSource('PROG', 'ZTEST', 'inactive')?.source).toBe('inactive');
+    });
+
+    it("invalidateSource with explicit 'inactive' clears that view only", () => {
+      cache.putSource('PROG', 'ZTEST', 'active');
+      cache.putSource('PROG', 'ZTEST', 'inactive', { version: 'inactive' });
+      cache.invalidateSource('PROG', 'ZTEST', 'inactive');
+      expect(cache.getSource('PROG', 'ZTEST')?.source).toBe('active');
+      expect(cache.getSource('PROG', 'ZTEST', 'inactive')).toBeNull();
+    });
+
+    it("invalidateSource with 'all' clears both views", () => {
+      cache.putSource('PROG', 'ZTEST', 'active');
+      cache.putSource('PROG', 'ZTEST', 'inactive', { version: 'inactive' });
+      cache.invalidateSource('PROG', 'ZTEST', 'all');
+      expect(cache.getSource('PROG', 'ZTEST')).toBeNull();
+      expect(cache.getSource('PROG', 'ZTEST', 'inactive')).toBeNull();
     });
   });
 

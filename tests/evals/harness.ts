@@ -13,6 +13,7 @@
  *   - Wrong tool / forbidden tool: 0.0
  */
 
+import type { LiveExecutor } from './live-backend.js';
 import type {
   EvalRunResult,
   EvalScenario,
@@ -185,13 +186,14 @@ export async function runScenario(
   provider: LLMProvider,
   scenario: EvalScenario,
   tools: ToolDefinitionForLLM[],
-  options?: { passThreshold?: number },
+  options?: { passThreshold?: number; liveExecutor?: LiveExecutor },
 ): Promise<ScenarioScore> {
   const startTime = Date.now();
   const trace: LLMToolCall[] = [];
   let totalTokens = 0;
   const maxCalls = scenario.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
   const passThreshold = options?.passThreshold ?? DEFAULT_PASS_THRESHOLD;
+  const liveExecutor = options?.liveExecutor;
 
   // Build initial messages
   const messages: Message[] = [
@@ -199,7 +201,7 @@ export async function runScenario(
     { role: 'user', content: scenario.prompt },
   ];
 
-  // Agentic loop: LLM → tool call → mock response → LLM → ...
+  // Agentic loop: LLM → tool call → {mock or live} response → LLM → ...
   let callCount = 0;
   while (callCount < maxCalls) {
     const response = await provider.chat(messages, tools);
@@ -218,8 +220,20 @@ export async function runScenario(
       trace.push(toolCall);
       callCount++;
 
-      // Get mock response for this tool
-      const mockResponse = getMockResponse(scenario, toolCall);
+      // Live mode routes to a real MCP server; otherwise fall back to mocks.
+      // Live calls can throw (network, auth); surface the error back to the
+      // LLM as tool output so the agentic loop can observe and react — same
+      // shape it would see in production.
+      let toolContent: string;
+      if (liveExecutor) {
+        try {
+          toolContent = await liveExecutor(toolCall.name, toolCall.arguments);
+        } catch (err) {
+          toolContent = `[tool error] ${err instanceof Error ? err.message : String(err)}`;
+        }
+      } else {
+        toolContent = getMockResponse(scenario, toolCall);
+      }
 
       // Add assistant message with tool call
       messages.push({
@@ -230,7 +244,7 @@ export async function runScenario(
       // Add tool result
       messages.push({
         role: 'tool',
-        content: mockResponse,
+        content: toolContent,
         toolCallId: `call_${callCount}`,
         toolName: toolCall.name,
       });
@@ -285,7 +299,7 @@ export async function runEval(
   scenarios: EvalScenario[],
   tools: ToolDefinitionForLLM[],
   toolMode: 'standard' | 'hyperfocused' = 'standard',
-  options?: { passThreshold?: number },
+  options?: { passThreshold?: number; liveExecutor?: LiveExecutor },
 ): Promise<EvalRunResult> {
   const scores: ScenarioScore[] = [];
 

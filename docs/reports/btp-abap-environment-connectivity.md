@@ -11,7 +11,7 @@ The ADT API (`/sap/bc/adt/*`) is fully available on BTP ABAP Environment (Steamp
 
 ARC-1 now has full BTP ABAP support across three areas:
 
-1. **Authentication** — Service key + OAuth Authorization Code flow (browser login) for local development. See [BTP ABAP Environment Setup](../btp-abap-environment.md).
+1. **Authentication** — Service key + OAuth Authorization Code flow (browser login) for local development. See [BTP ABAP Environment Setup](../../docs_page/btp-abap-environment.md).
 2. **System detection** — Auto-detects BTP vs on-premise from SAP_CLOUD component (zero extra HTTP calls), with `SAP_SYSTEM_TYPE` manual override.
 3. **Tool adaptation** — Dynamic tool descriptions, type filtering, and helpful error messages tailored to BTP constraints.
 
@@ -413,13 +413,13 @@ const BTP_HINTS: Record<string, string> = {
 
 This is the same model used by Eclipse ADT, SAP Business Application Studio, and SAP GUI. The LLM sees separate tool sets from each MCP server and picks the right one.
 
-Documented in [deployment-best-practices.md](../deployment-best-practices.md).
+Documented in [deployment-best-practices.md](../../docs_page/deployment-best-practices.md).
 
 ---
 
 ## 8. ARC-1 Usage — See Setup Guide
 
-For end-to-end setup instructions, see **[docs/btp-abap-environment.md](../btp-abap-environment.md)**.
+For end-to-end setup instructions, see **[docs/btp-abap-environment.md](../../docs_page/btp-abap-environment.md)**.
 
 Quick start (local dev):
 ```bash
@@ -427,8 +427,8 @@ SAP_BTP_SERVICE_KEY_FILE=/path/to/service-key.json SAP_SYSTEM_TYPE=btp arc1
 ```
 
 For deployment to BTP Cloud Foundry, see:
-- [deployment-best-practices.md](../deployment-best-practices.md) — Architecture, config, key files
-- [phase4-btp-deployment.md](../phase4-btp-deployment.md) — Step-by-step CF deployment (Docker + nodejs_buildpack)
+- [deployment-best-practices.md](../../docs_page/deployment-best-practices.md) — Architecture, config, key files
+- [phase4-btp-deployment.md](../../docs_page/phase4-btp-deployment.md) — Step-by-step CF deployment (Docker + nodejs_buildpack)
 - `manifest-btp-abap.yml` — CF manifest template for BTP ABAP
 
 ---

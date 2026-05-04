@@ -46,20 +46,55 @@ describe('AdtClient', () => {
   describe('source code read operations', () => {
     it('getProgram returns source code', async () => {
       const client = createClient();
-      const source = await client.getProgram('ZHELLO');
-      expect(source).toContain('REPORT zhello');
+      const result = await client.getProgram('ZHELLO');
+      expect(result.source).toContain('REPORT zhello');
+      expect(result.notModified).toBe(false);
+      expect(result.statusCode).toBe(200);
+    });
+
+    it('getProgram captures etag from response header', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, 'REPORT zhello.', { etag: '20231201001' }));
+      const client = createClient();
+      const result = await client.getProgram('ZHELLO');
+      expect(result.etag).toBe('20231201001');
+    });
+
+    it('getProgram returns notModified=true on 304', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(304, '', { etag: '20231201001' }));
+      const client = createClient();
+      const result = await client.getProgram('ZHELLO');
+      expect(result.notModified).toBe(true);
+      expect(result.source).toBe('');
+      expect(result.statusCode).toBe(304);
+    });
+
+    it('getProgram sends If-None-Match when opts.ifNoneMatch is set', async () => {
+      const client = createClient();
+      await client.getProgram('ZHELLO', { ifNoneMatch: 'abc123' });
+      expect(fetchHeaders(0)['If-None-Match']).toBe('abc123');
+    });
+
+    it('getProgram appends version query when opts.version is set', async () => {
+      const client = createClient();
+      await client.getProgram('ZHELLO', { version: 'inactive' });
+      const url = mockFetch.mock.calls[0]?.[0] as string;
+      expect(url).toContain('/sap/bc/adt/programs/programs/ZHELLO/source/main?version=inactive');
     });
 
     it('getClass returns source code', async () => {
       const client = createClient();
-      const source = await client.getClass('ZCL_TEST');
-      expect(typeof source).toBe('string');
+      const result = await client.getClass('ZCL_TEST');
+      expect(typeof result.source).toBe('string');
+      expect(result.notModified).toBe(false);
+      expect(result.statusCode).toBe(200);
     });
 
     it('getClass with include returns include source', async () => {
       const client = createClient();
-      const source = await client.getClass('ZCL_TEST', 'testclasses');
-      expect(typeof source).toBe('string');
+      const result = await client.getClass('ZCL_TEST', 'testclasses');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getClass with include uses correct URL path (no /source/main suffix)', async () => {
@@ -80,9 +115,17 @@ describe('AdtClient', () => {
       expect(urlUsed).toContain('/source/main');
     });
 
+    it('getClass with non-main include forwards version option', async () => {
+      const client = createClient();
+      await client.getClass('ZCL_TEST', 'definitions', { version: 'inactive' });
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
+      const urlUsed = urls.find((u) => u.includes('ZCL_TEST'));
+      expect(urlUsed).toContain('/includes/definitions?version=inactive');
+    });
+
     it('getClass with multiple comma-separated includes', async () => {
       const client = createClient();
-      const source = await client.getClass('ZCL_TEST', 'definitions,implementations');
+      const result = await client.getClass('ZCL_TEST', 'definitions,implementations');
       // Should make two HTTP calls for includes
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
       const classUrls = urls.filter((u) => u.includes('ZCL_TEST'));
@@ -90,8 +133,8 @@ describe('AdtClient', () => {
       expect(classUrls[0]).toContain('/includes/definitions');
       expect(classUrls[1]).toContain('/includes/implementations');
       // Result should contain both section headers
-      expect(source).toContain('=== definitions ===');
-      expect(source).toContain('=== implementations ===');
+      expect(result.source).toContain('=== definitions ===');
+      expect(result.source).toContain('=== implementations ===');
     });
 
     it('getClass gracefully handles 404 for non-existent includes', async () => {
@@ -99,17 +142,17 @@ describe('AdtClient', () => {
       mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/includes/testclasses'));
       const client = createClient();
-      const source = await client.getClass('ZCL_TEST', 'testclasses');
+      const result = await client.getClass('ZCL_TEST', 'testclasses');
       // Should not throw; should contain a helpful message
-      expect(source).toContain('testclasses');
-      expect(source).toContain('not available');
+      expect(result.source).toContain('testclasses');
+      expect(result.source).toContain('not available');
     });
 
     it('getClass validates include values', async () => {
       const client = createClient();
-      const source = await client.getClass('ZCL_TEST', 'foobar');
-      expect(source).toContain('Unknown include');
-      expect(source).toContain('foobar');
+      const result = await client.getClass('ZCL_TEST', 'foobar');
+      expect(result.source).toContain('Unknown include');
+      expect(result.source).toContain('foobar');
     });
 
     it('getClass normalizes include to lowercase', async () => {
@@ -123,32 +166,34 @@ describe('AdtClient', () => {
 
     it('getInterface returns source code', async () => {
       const client = createClient();
-      const source = await client.getInterface('ZIF_TEST');
-      expect(typeof source).toBe('string');
+      const result = await client.getInterface('ZIF_TEST');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getFunction returns source code', async () => {
       const client = createClient();
-      const source = await client.getFunction('ZGROUP', 'ZFUNC');
-      expect(typeof source).toBe('string');
+      const result = await client.getFunction('ZGROUP', 'ZFUNC');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getInclude returns source code', async () => {
       const client = createClient();
-      const source = await client.getInclude('ZINCLUDE');
-      expect(typeof source).toBe('string');
+      const result = await client.getInclude('ZINCLUDE');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getDdls returns CDS source code', async () => {
       const client = createClient();
-      const source = await client.getDdls('ZTRAVEL');
-      expect(typeof source).toBe('string');
+      const result = await client.getDdls('ZTRAVEL');
+      expect(typeof result.source).toBe('string');
+      expect(result.notModified).toBe(false);
+      expect(result.statusCode).toBe(200);
     });
 
     it('getDcl returns source code', async () => {
       const client = createClient();
-      const source = await client.getDcl('ZI_TRAVEL_DCL');
-      expect(typeof source).toBe('string');
+      const result = await client.getDcl('ZI_TRAVEL_DCL');
+      expect(typeof result.source).toBe('string');
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0] as string);
       const urlUsed = urls.find((u) => u.includes('ZI_TRAVEL_DCL'));
       expect(urlUsed).toContain('/sap/bc/adt/acm/dcl/sources/ZI_TRAVEL_DCL/source/main');
@@ -156,20 +201,20 @@ describe('AdtClient', () => {
 
     it('getBdef returns behavior definition source', async () => {
       const client = createClient();
-      const source = await client.getBdef('ZTRAVEL');
-      expect(typeof source).toBe('string');
+      const result = await client.getBdef('ZTRAVEL');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getSrvd returns service definition source', async () => {
       const client = createClient();
-      const source = await client.getSrvd('ZTRAVEL');
-      expect(typeof source).toBe('string');
+      const result = await client.getSrvd('ZTRAVEL');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getDdlx returns metadata extension source', async () => {
       const client = createClient();
-      const source = await client.getDdlx('ZC_TRAVEL');
-      expect(typeof source).toBe('string');
+      const result = await client.getDdlx('ZC_TRAVEL');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getDdlx uses correct ADT URL', async () => {
@@ -182,8 +227,8 @@ describe('AdtClient', () => {
 
     it('getKtd returns the raw <sktd:docu> XML envelope (decoding to Markdown happens at the handler layer)', async () => {
       const client = createClient();
-      const source = await client.getKtd('ZTR_C_PAYMENT_VALUE_DATE');
-      expect(typeof source).toBe('string');
+      const result = await client.getKtd('ZTR_C_PAYMENT_VALUE_DATE');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getKtd uses correct ADT URL with lowercase name and vendor Accept header', async () => {
@@ -205,7 +250,7 @@ describe('AdtClient', () => {
       );
       const client = createClient();
       const result = await client.getSrvb('ZUI_TRAVEL_O4');
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(result.source);
       expect(parsed.name).toBe('ZUI_TRAVEL_O4');
       expect(parsed.odataVersion).toBe('V4');
       expect(parsed.bindingCategory).toBe('UI');
@@ -231,14 +276,79 @@ describe('AdtClient', () => {
 
     it('getTable returns table definition source', async () => {
       const client = createClient();
-      const source = await client.getTable('MARA');
-      expect(typeof source).toBe('string');
+      const result = await client.getTable('MARA');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getView returns view definition source', async () => {
       const client = createClient();
-      const source = await client.getView('ZVIEW');
-      expect(typeof source).toBe('string');
+      const result = await client.getView('ZVIEW');
+      expect(typeof result.source).toBe('string');
+    });
+  });
+
+  describe('getRevisions', () => {
+    it('returns parsed revision list for a program', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, loadFixture('revision-feed-prog.xml'), { 'x-csrf-token': 'T' }));
+      const client = createClient();
+      const result = await client.getRevisions('PROG', 'ZARC1_TEST_REPORT');
+      expect(result.object.name).toBe('ZARC1_TEST_REPORT');
+      expect(result.revisions).toHaveLength(2);
+      expect(result.revisions[0]?.uri.startsWith('/sap/bc/adt/')).toBe(true);
+    });
+
+    it('uses CLAS include endpoint for explicit include', async () => {
+      const client = createClient();
+      await client.getRevisions('CLAS', 'ZCL_TEST', { include: 'definitions' });
+      const urls = mockFetch.mock.calls.map((c: any[]) => String(c[0]));
+      expect(urls.some((u) => u.includes('/oo/classes/ZCL_TEST/includes/definitions/versions'))).toBe(true);
+    });
+
+    it('defaults CLAS include to main when omitted', async () => {
+      const client = createClient();
+      await client.getRevisions('CLAS', 'ZCL_TEST');
+      const urls = mockFetch.mock.calls.map((c: any[]) => String(c[0]));
+      expect(urls.some((u) => u.includes('/oo/classes/ZCL_TEST/includes/main/versions'))).toBe(true);
+    });
+
+    it('uses source/main revisions endpoint for INTF', async () => {
+      const client = createClient();
+      await client.getRevisions('INTF', 'ZIF_TEST');
+      const urls = mockFetch.mock.calls.map((c: any[]) => String(c[0]));
+      expect(urls.some((u) => u.includes('/oo/interfaces/ZIF_TEST/source/main/versions'))).toBe(true);
+    });
+
+    it('throws descriptive error for FUNC revisions without group', async () => {
+      const client = createClient();
+      await expect(client.getRevisions('FUNC', 'Z_MY_FUNC')).rejects.toThrow(/Function group is required/i);
+    });
+
+    it('throws for unsupported type and includes type name', async () => {
+      const client = createClient();
+      await expect(client.getRevisions('TRAN', 'SE38')).rejects.toThrow(/Unsupported object type "TRAN"/);
+    });
+  });
+
+  describe('getRevisionSource', () => {
+    it('rejects non-ADT URIs', async () => {
+      const client = createClient();
+      await expect(client.getRevisionSource('https://evil.example/foo')).rejects.toThrow(/\/sap\/bc\/adt\//);
+    });
+
+    it('returns plain source text for valid revision URI', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(200, "REPORT zarc1_test_report.\nWRITE: / 'hello'.", { 'x-csrf-token': 'T' }),
+      );
+      const client = createClient();
+      const source = await client.getRevisionSource(
+        '/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/20260410185851/00000/content',
+      );
+      expect(source).toContain('REPORT zarc1_test_report');
+      const calledUrl = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(calledUrl).toContain('/versions/20260410185851/00000/content');
+      expect(fetchHeaders(0).Accept).toBe('text/plain');
     });
   });
 
@@ -274,8 +384,8 @@ describe('AdtClient', () => {
   describe('DDIC read operations', () => {
     it('getStructure returns source code', async () => {
       const client = createClient();
-      const source = await client.getStructure('BAPIRET2');
-      expect(typeof source).toBe('string');
+      const result = await client.getStructure('BAPIRET2');
+      expect(typeof result.source).toBe('string');
     });
 
     it('getDomain returns parsed metadata', async () => {
@@ -438,13 +548,6 @@ describe('AdtClient', () => {
       const calledHeaders = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
       expect(calledHeaders?.Accept).toBe('application/vnd.sap.adt.apirelease.v10+xml');
     });
-
-    it('is blocked when read operations are disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: new Set(['R']) },
-      });
-      await expect(client.getApiReleaseState('/sap/bc/adt/oo/classes/cl_test')).rejects.toThrow();
-    });
   });
 
   // ─── URL Encoding (Issues #18, #52) ─────────────────────────────
@@ -484,10 +587,10 @@ describe('AdtClient', () => {
   describe('withSafety', () => {
     it('returns a new client with the given safety config', () => {
       const client = createClient();
-      const restrictedSafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const restrictedSafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       const derived = client.withSafety(restrictedSafety);
-      expect(derived.safety.readOnly).toBe(true);
-      expect(client.safety.readOnly).toBe(false);
+      expect(derived.safety.allowWrites).toBe(false);
+      expect(client.safety.allowWrites).toBe(true);
     });
 
     it('shares the same HTTP client instance', () => {
@@ -504,7 +607,7 @@ describe('AdtClient', () => {
 
     it('derived client blocks operations per its safety config', async () => {
       const client = createClient();
-      const restrictedSafety = { ...unrestrictedSafetyConfig(), readOnly: true };
+      const restrictedSafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
       const derived = client.withSafety(restrictedSafety);
       // Original client can still read (unrestricted)
       const source = await client.getProgram('ZHELLO');
@@ -522,23 +625,9 @@ describe('AdtClient', () => {
   });
 
   describe('safety checks', () => {
-    it('blocks read operations when disallowed', async () => {
+    it('blocks free SQL when allowFreeSQL is false', async () => {
       const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getProgram('ZHELLO')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('blocks search when not in allowedOps', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'R' },
-      });
-      await expect(client.searchObject('Z*')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('blocks free SQL when blockFreeSQL is true', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), blockFreeSQL: true },
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false },
       });
       await expect(client.runQuery('SELECT * FROM T000')).rejects.toThrow(AdtSafetyError);
     });
@@ -547,21 +636,6 @@ describe('AdtClient', () => {
       const client = createClient();
       const source = await client.getProgram('ZHELLO');
       expect(source).toBeDefined();
-    });
-
-    it('allows operations when matching allowedOps', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'RS' },
-      });
-      const source = await client.getProgram('ZHELLO');
-      expect(source).toBeDefined();
-    });
-
-    it('getDcl is blocked when read operations are disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getDcl('ZI_TRAVEL_DCL')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -664,13 +738,6 @@ describe('AdtClient', () => {
         .mockResolvedValueOnce(mockResponse(200, '')); // macros
       const client = createClient();
       await expect(client.getClassStructured('ZCL_EXAMPLE')).rejects.toThrow(AdtApiError);
-    });
-
-    it('getClassStructured blocked when operation filter blocks Read', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), allowedOps: 'S' }, // only Search allowed
-      });
-      await expect(client.getClassStructured('ZCL_EXAMPLE')).rejects.toThrow(AdtSafetyError);
     });
 
     it('getClassStructured makes parallel requests for includes', async () => {
@@ -793,27 +860,6 @@ describe('AdtClient', () => {
       expect(url).toContain(encodeURIComponent('ZAPP_BOOKING/view/Main.view.xml'));
     });
 
-    it('listBspApps blocked when read operations disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.listBspApps()).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('getBspAppStructure blocked when read operations disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getBspAppStructure('ZAPP')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('getBspFileContent blocked when read operations disallowed', async () => {
-      const client = createClient({
-        safety: { ...unrestrictedSafetyConfig(), disallowedOps: 'R' },
-      });
-      await expect(client.getBspFileContent('ZAPP', 'file.js')).rejects.toThrow(AdtSafetyError);
-    });
-
     it('getBspAppStructure normalizes subPath without leading slash', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue(mockResponse(200, bspFolderXml));
@@ -889,21 +935,32 @@ describe('AdtClient', () => {
         mockResponse(
           200,
           `<?xml version="1.0"?>
-          <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects" xmlns:adtcore="http://www.sap.com/adt/core">
-            <ioc:entry><ioc:object>
-              <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Test class"/>
-            </ioc:object></ioc:entry>
+          <ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects" xmlns:adtcore="http://www.sap.com/adt/core">
+            <ioc:entry>
+              <ioc:object ioc:user="MARIAN" ioc:deleted="false">
+                <ioc:ref adtcore:uri="/sap/bc/adt/oo/classes/zcl_test" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Test class"/>
+              </ioc:object>
+              <ioc:transport ioc:linked="true">
+                <ioc:ref adtcore:uri="/sap/bc/adt/cts/transportrequests/A4HK901087" adtcore:type="/RQ" adtcore:name="A4HK901087"/>
+              </ioc:transport>
+            </ioc:entry>
           </ioc:inactiveObjects>`,
         ),
       );
       const client = createClient();
       const objects = await client.getInactiveObjects();
+      const url = mockFetch.mock.calls[0]?.[0] as string;
+      expect(url).toContain('/sap/bc/adt/activation/inactiveobjects');
+      expect(fetchHeaders(0).Accept).toContain('application/vnd.sap.adt.inactivectsobjects.v1+xml');
       expect(objects).toHaveLength(1);
       expect(objects[0]).toEqual({
         name: 'ZCL_TEST',
         type: 'CLAS/OC',
         uri: '/sap/bc/adt/oo/classes/zcl_test',
         description: 'Test class',
+        user: 'MARIAN',
+        deleted: false,
+        transport: 'A4HK901087',
       });
     });
   });

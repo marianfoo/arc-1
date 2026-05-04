@@ -1,0 +1,8 @@
+{
+  "log": [
+    {
+      "severity": "ERROR",
+      "message": "Remote pull failed: SSL certificate verify failed"
+    }
+  ]
+}

@@ -85,7 +85,7 @@ describeIf('BTP ABAP smoke', { timeout: 30_000 }, () => {
   // ─── Released Object Read ──────────────────────────────────────
 
   it('reads a released SAP class', async () => {
-    const source = await client.getClass('CL_ABAP_RANDOM');
+    const { source } = await client.getClass('CL_ABAP_RANDOM');
     expect(typeof source).toBe('string');
     expect(source.length).toBeGreaterThan(0);
   });

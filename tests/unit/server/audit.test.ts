@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { AuditEvent, ToolCallEndEvent, ToolCallStartEvent } from '../../../src/server/audit.js';
+import type {
+  ActivationPreauditEvent,
+  AuditEvent,
+  ToolCallEndEvent,
+  ToolCallStartEvent,
+} from '../../../src/server/audit.js';
 import { sanitizeArgs } from '../../../src/server/audit.js';
 
 describe('Audit Events', () => {
@@ -108,11 +113,41 @@ describe('Audit Events', () => {
           event: 'server_start',
           version: '3.0.0',
           transport: 'stdio',
-          readOnly: false,
+          allowWrites: true,
           url: 'http://sap:8000',
         },
       ];
       expect(events).toHaveLength(5);
+    });
+
+    it('ActivationPreauditEvent has the expected fields', () => {
+      const event: ActivationPreauditEvent = {
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        event: 'activation_preaudit_completed',
+        objectLabel: 'ZCL_TEST',
+        refCount: 3,
+        phase1DurationMs: 120,
+        phase2DurationMs: 85,
+        outcome: 'success',
+      };
+      expect(event.event).toBe('activation_preaudit_completed');
+      expect(event.outcome).toBe('success');
+      expect(event.refCount).toBe(3);
+    });
+
+    it('AuditEvent union accepts ActivationPreauditEvent', () => {
+      const event: AuditEvent = {
+        timestamp: '',
+        level: 'info',
+        event: 'activation_preaudit_completed',
+        objectLabel: 'ZTEST,ZTEST2',
+        refCount: 2,
+        phase1DurationMs: 0,
+        phase2DurationMs: 0,
+        outcome: 'error',
+      };
+      expect(event.event).toBe('activation_preaudit_completed');
     });
   });
 });

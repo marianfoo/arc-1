@@ -31,11 +31,43 @@ export async function lockObject(
     checkOperation(safety, OperationType.Lock, 'LockObject');
   }
 
-  const resp = await http.post(`${objectUrl}?_action=LOCK&accessMode=${accessMode}`, undefined, undefined, {
-    // Dual Accept: vendor-specific type for structured lock result parsing,
-    // plus wildcard fallback for SAP versions that don't support the vendor type.
-    Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result, application/*;q=0.8',
-  });
+  let resp: Awaited<ReturnType<AdtHttpClient['post']>>;
+  try {
+    resp = await http.post(`${objectUrl}?_action=LOCK&accessMode=${accessMode}`, undefined, undefined, {
+      // Dual Accept: vendor-specific type for structured lock result parsing,
+      // plus wildcard fallback for SAP versions that don't support the vendor type.
+      Accept: 'application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result, application/*;q=0.8',
+    });
+  } catch (err) {
+    // NW 7.50 quirk: the LOCK endpoint returns 400 or 401 with an HTML login page when
+    // the object is already locked by another session (Eclipse, SE80). This is not an auth
+    // failure — a GET on the same object succeeds moments earlier with the same credentials.
+    // Reclassify as a clear lock-conflict error so the LLM doesn't chase auth red herrings.
+    // CX_ADT_RES_NO_ACCESS maps to 403 server-side, but with cookie auth (no Basic Auth
+    // header) ICM transforms it to 401 "no logon data". ARC-1's 401 retry handler then
+    // clears the cookie jar and retries without cookies, which returns 400. So we see
+    // 400, 401, or 403 depending on timing — all with the same HTML login page body.
+    //
+    // The "Logon Error Message" HTML body is the de-facto NW 7.50 gate — S/4 returns
+    // structured XML with <exc:exception> here (no "Logon Error Message" string), and
+    // S/4's auth-failure HTML is "Anmeldung fehlgeschlagen" (also no match). So this
+    // branch self-scopes without an explicit detectSystemCapabilities() check.
+    if (
+      err instanceof AdtApiError &&
+      (err.statusCode === 400 || err.statusCode === 401 || err.statusCode === 403) &&
+      err.responseBody?.includes('Logon Error Message')
+    ) {
+      const name = objectUrl.split('/').pop() ?? objectUrl;
+      // Throw as 409 with "locked by" in the message so classifySapDomainError routes
+      // to the 'lock-conflict' category (not the 423 'enqueue-error' / invalid-handle path).
+      throw new AdtApiError(
+        `Object ${name} is locked by another session. Close the editor (Eclipse, SE80) or release the lock in SM12, then retry.`,
+        409,
+        objectUrl,
+      );
+    }
+    throw err;
+  }
 
   // Parse lock response (asx:abap format) — simple regex extraction
   const lockHandle = extractXmlValue(resp.body, 'LOCK_HANDLE');
@@ -61,6 +93,22 @@ export async function unlockObject(http: AdtHttpClient, objectUrl: string, lockH
   await http.post(`${objectUrl}?_action=UNLOCK&lockHandle=${encodeURIComponent(lockHandle)}`);
 }
 
+/**
+ * Some vendor content types are versioned, and the server-side release
+ * determines which versions are accepted. DTEL is a concrete case: modern
+ * systems (SAP_BASIS ≥ 7.52) accept `…dataelements.v2+xml`, NW 7.50/7.51
+ * only accept `…dataelements.v1+xml` — same XML body, different MIME version
+ * suffix. On HTTP 415, retry once with the fallback.
+ *
+ * Kept as a narrow static map so a backport never falls back into an
+ * unintended retry loop for unrelated content types.
+ */
+const CONTENT_TYPE_FALLBACKS: Record<string, string> = {
+  'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8':
+    'application/vnd.sap.adt.dataelements.v1+xml; charset=utf-8',
+  'application/vnd.sap.adt.dataelements.v2+xml': 'application/vnd.sap.adt.dataelements.v1+xml',
+};
+
 /** Create a new ABAP object */
 export async function createObject(
   http: AdtHttpClient,
@@ -82,8 +130,22 @@ export async function createObject(
   }
   const url = params.length > 0 ? `${objectUrl}?${params.join('&')}` : objectUrl;
 
-  const resp = await http.post(url, body, contentType);
-  return resp.body;
+  try {
+    const resp = await http.post(url, body, contentType);
+    return resp.body;
+  } catch (err) {
+    const fallback = CONTENT_TYPE_FALLBACKS[contentType];
+    if (fallback && isUnsupportedMediaTypeError(err)) {
+      const resp = await http.post(url, body, fallback);
+      return resp.body;
+    }
+    throw err;
+  }
+}
+
+function isUnsupportedMediaTypeError(err: unknown): boolean {
+  if (!(err instanceof AdtApiError)) return false;
+  return err.statusCode === 415;
 }
 
 /** Update source code of an ABAP object (requires lock) */
@@ -130,7 +192,16 @@ export async function updateObject(
     url += (url.includes('?') ? '&' : '?') + params.join('&');
   }
 
-  await http.put(url, body, contentType);
+  try {
+    await http.put(url, body, contentType);
+  } catch (err) {
+    const fallback = CONTENT_TYPE_FALLBACKS[contentType];
+    if (fallback && isUnsupportedMediaTypeError(err)) {
+      await http.put(url, body, fallback);
+      return;
+    }
+    throw err;
+  }
 }
 
 /** Delete an ABAP object (requires lock) */

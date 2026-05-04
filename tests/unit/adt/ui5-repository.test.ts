@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdtApiError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient, AdtResponse } from '../../../src/adt/http.js';
-import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 import { getAppInfo, SERVICE_PATH } from '../../../src/adt/ui5-repository.js';
 
 function mockHttp(responseBody = '', statusCode = 200): AdtHttpClient {
@@ -65,12 +65,6 @@ describe('UI5 Repository', () => {
         expect.stringContaining(SERVICE_PATH),
         expect.objectContaining({ Accept: 'application/json' }),
       );
-    });
-
-    it('throws on safety check when read is blocked', async () => {
-      const safety = { ...defaultSafetyConfig(), disallowedOps: 'R' };
-      const http = mockHttp();
-      await expect(getAppInfo(http, safety, 'ZAPP')).rejects.toThrow('blocked by safety');
     });
 
     it('re-throws non-404 errors', async () => {

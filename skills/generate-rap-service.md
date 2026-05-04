@@ -4,7 +4,7 @@ Generate a complete RAP OData UI service from a natural language description of 
 
 This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
-**v1 Guardrails** (matching SAP Joule): managed scenario only, UUID internal early numbering, single root entity (no compositions), standard CRUD only (no custom actions/determinations/validations), draft optional, OData V4 preferred.
+**v1 Guardrails** (fast path): managed scenario only, UUID internal early numbering, single root entity by default, standard CRUD first, draft optional, OData V4 preferred. For multi-entity compositions or heavy custom actions, prefer `generate-rap-service-researched`.
 
 ## Smart Defaults (apply silently, do NOT ask)
 
@@ -14,11 +14,12 @@ This skill replicates SAP Joule's "RAP Service Generation" capability by combini
 | Key strategy | UUID (`sysuuid_x16`), managed numbering | Simplest, no collision risk |
 | Behavior scenario | Managed | Framework handles CRUD |
 | OData version | V4 | Current SAP standard |
-| Draft | Yes on BTP, No on-prem | BTP Fiori Elements expects draft |
+| Draft | Prefer for transactional Fiori Elements UI services; verify against release/constraints | Best default for editable FE apps, but not every RAP service needs draft |
 | Admin fields | `syuname`/`timestampl` (on-prem) or `abp_*` types (BTP) | System-appropriate |
-| Strict mode | `strict ( 2 )` | Current RAP best practice |
+| Strict mode | `strict ( 2 )` unless system patterns or SAP constraints justify otherwise | Current RAP best practice, but not universal |
 | Entity prefix | `Z` + entity name (e.g., `ZTRAVEL`) | SAP standard Z namespace |
 | Naming | SAP standard: `ZI_`, `ZC_`, `ZSD_`, `ZSB_`, `ZBP_I_` | Consistent with SAP docs |
+| Service exposure | OData V4 UI provider contract by default | Best fit for Fiori Elements unless the use case is API-first |
 
 ## Input
 
@@ -41,7 +42,15 @@ Verify the SAP system supports RAP/CDS and detect the system type.
 SAPManage(action="probe")
 ```
 
-**Note:** `rap.available` in the probe response is informational — it indicates whether the DDL source endpoint was detected, but RAP may still be available. Proceed with creation and handle errors if they occur.
+If you need a firmer baseline for syntax and formatter behavior, also read:
+
+```
+SAPRead(type="SYSTEM")
+SAPLint(action="list_rules")
+SAPLint(action="get_formatter_settings")
+```
+
+**Critical gate:** If probe clearly reports RAP/CDS unavailable, stop and tell the user RAP object creation cannot proceed via ARC-1 until the endpoint/system setup is fixed.
 
 Determine BTP vs on-prem — this affects naming conventions, language version, and draft handling.
 
@@ -64,6 +73,12 @@ This checks if a transport is required and returns existing transports for the p
 
 **If transport is required but unavailable, STOP** — all write operations will fail without a valid transport for non-`$TMP` packages.
 
+If the package does not exist yet and the user wants a new one, create it first:
+
+```
+SAPManage(action="create_package", name="<package>", description="<description>", transport="<transport_if_required>")
+```
+
 ### BTP vs On-Prem Differences
 
 | Aspect | BTP (ABAP Cloud) | On-Prem (ABAP Platform) |
@@ -74,6 +89,15 @@ This checks if a transport is required and returns existing transports for the p
 | OData version | V4 preferred | V2 or V4 |
 | Behavior pool | `ABSTRACT` class, ABAP Cloud only | `ABSTRACT` class, classic ABAP allowed |
 | Table entity | `DEFINE TABLE ENTITY` DDL syntax | Classic DDIC table (SE11) or table entity |
+
+### On-Prem 7.5x Fast Guardrails
+
+- In TABL source, use `syuname` + `timestampl` (not `abap.uname` / `abap.utclong`).
+- Use `abap.char(1)` for boolean-like flags in TABL (not `abap.boolean`).
+- Every `abap.curr(...)` field needs `@Semantics.amount.currencyCode` above it.
+- Keep projection BDEF header as `projection;` (do not add `use etag` header lines).
+- Keep RAP preflight checks enabled (default) so deterministic TABL/BDEF/DDLX issues are blocked before activation churn. Only use `preflightBeforeWrite=false` as a local escape hatch.
+- If behavior-pool full-class writes fail with generic save errors, use `SAPWrite(action="scaffold_rap_handlers", ...)` first to derive/apply signatures, then use quickfix fallback + `SAPWrite(action="edit_method")` for method bodies.
 
 ## Step 2: Design the Data Model
 
@@ -145,21 +169,25 @@ Ask the user: **"Should I proceed with this design? (yes / modify fields / chang
 
 ## Step 3: (Optional) Research RAP Patterns
 
-If mcp-sap-docs is available, fetch current RAP best practices:
+If mcp-sap-docs is available, fetch current RAP best practices. Start with reference-style queries (`includeSamples=false`) and then use examples (`includeSamples=true`) only where needed:
 
 ```
-search("RAP managed business object CDS behavior definition")
-```
-
-```
-search("RAP draft handling total ETag")
+search(query="RAP projection BO vs RAP BO interface", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 ```
-search("CDS annotation Fiori Elements list report")
+search(query="RAP draft handling total etag draft-enabled associations", includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
-Use the returned documentation to inform correct annotation patterns, draft handling, and behavior definition syntax.
+```
+search(query="service definition provider contracts odata_v4_ui odata_v4_webapi", includeSamples=false, abapFlavor="<cloud|standard>")
+```
+
+```
+search(query="metadata-driven UI metadata extension RAP Fiori Elements", includeSamples=false, abapFlavor="<cloud|standard>")
+```
+
+Use the returned documentation to inform correct annotation patterns, draft handling, provider contracts, and behavior definition syntax.
 
 ## Batch Creation (Preferred)
 
@@ -231,7 +259,7 @@ SAPWrite(action="create", type="DDLS", name="ZI_<entity>", package="<package>", 
 ### Interface View DDL Template
 
 ```cds
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: '<Entity description>'
 define root view entity ZI_<Entity>
   as select from <table_name>
@@ -410,7 +438,7 @@ SAPWrite(action="create", type="DDLS", name="ZC_<entity>", package="<package>", 
 ### Projection View DDL Template
 
 ```cds
-@AccessControl.authorizationCheck: #CHECK
+@AccessControl.authorizationCheck: #MANDATORY
 @EndUserText.label: '<Entity description> - Projection'
 @Metadata.allowExtensions: true
 @Search.searchable: true
@@ -577,7 +605,19 @@ SAPWrite(action="create", type="SRVD", name="ZSD_<entity>", package="<package>",
 
 ```cds
 @EndUserText.label: '<Entity description> Service'
-define service ZSD_<Entity> {
+define service ZSD_<Entity>
+  provider contracts odata_v4_ui
+{
+  expose ZC_<Entity> as <Entity>;
+}
+```
+
+If the primary consumer is an API/integration use case rather than Fiori Elements, switch the provider contract and binding type together:
+
+```cds
+define service ZSD_<Entity>
+  provider contracts odata_v4_webapi
+{
   expose ZC_<Entity> as <Entity>;
 }
 ```
@@ -591,6 +631,12 @@ SAPActivate(type="SRVD", name="ZSD_<entity>")
 ## Step 11: Create Behavior Pool Class
 
 Create the behavior pool class BEFORE batch activation — the interface BDEF references this class via `implementation in class ZBP_I_<Entity>`.
+
+Before writing, optionally run the SAP PrettyPrinter so the class source matches the system's keyword style and indentation:
+
+```
+SAPLint(action="format", source="<class_source>", name="ZBP_I_<entity>")
+```
 
 ```
 SAPWrite(action="create", type="CLAS", name="ZBP_I_<entity>", package="<package>", transport="<transport>", source="<class_source>")
@@ -653,6 +699,12 @@ If batch activation fails, activate sequentially in dependency order:
 8. Metadata extension
 9. Service definition
 
+If behavior pool activation fails because `METHODS ... FOR ...` signatures are missing:
+- Use `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="ZI_<entity>")` to list missing signatures.
+- If needed, rerun with `autoApply=true` to inject signatures into class declarations plus empty method stubs.
+- If signatures are still unresolved, use `SAPDiagnose(action="quickfix", ...)` and `SAPDiagnose(action="apply_quickfix", ...)` when proposals are available.
+- Fallback to ADT editor quick-fix generation, then patch method bodies with `SAPWrite(action="edit_method", ...)`.
+
 For any failing object, run syntax check to identify the issue:
 
 ```
@@ -686,7 +738,7 @@ Verify the publish status and service URL:
 SAPRead(type="SRVB", name="ZSB_<entity>_V4")
 ```
 
-⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true` and a service URL. If not published, retry `publish_srvb`.
+⚠️ **CHECKPOINT**: Verify the SRVB read shows `published: true`, the expected binding type, and a service URL. For OData V4 bindings, publish/unpublish applies to the whole binding.
 
 ## Step 14: Verify Complete Service
 
@@ -725,6 +777,8 @@ Next steps:
   - Generate unit tests (use generate-abap-unit-test skill)
   - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
   - Create proper DOMA/DTEL for reusable typing (use SAPWrite with type=DOMA/DTEL)
+  - Attach SKTD documentation to the service or BDEF (optional)
+  - Review later iterations with `SAPTransport(action="history")` + `SAPRead(type="VERSIONS", ...)`
 ```
 
 ## Error Handling
@@ -734,31 +788,34 @@ Next steps:
 | Error | Cause | Fix |
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
-| Object already exists | Entity name collision | Choose different name prefix, or read existing object and update |
+| `Resource X does already exist` on create | Existing object or stub collision | Switch to `SAPWrite(action="update", ...)` and resend full source. Do not retry create blindly. |
 | Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
 | Field mapping incomplete | BDEF field names don't match CDS aliases | Verify CDS field aliases match BDEF field references exactly |
 | ETag field not found | `LocalLastChangedAt` missing or misnamed | Verify admin fields exist in CDS view with correct aliases |
 | Behavior pool not found | Class name doesn't match BDEF `implementation in class` | Ensure class name in BDEF matches the created class exactly |
-| BDEF creation fails | Generic XML template issue | Try creating with minimal source, then update with full source |
+| BDEF creation/save fails with generic `[?/011]` | Behavior-pool full-class save path is unstable for RAP handler declarations | Keep class minimal, generate signatures via quickfix (MCP or ADT), then use `edit_method` for bodies |
 | Lint blocks write | Generated code has lint warnings | Review lint findings, adjust code patterns to pass lint rules |
 | Table entity creation not supported | Older on-prem system | Create table via SE11 manually, provide field list |
 | Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Step 1b |
 | Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
+| Currency reference annotation missing | `abap.curr` field has no currency semantics annotation | Add `@Semantics.amount.currencyCode` above each amount field and ensure a `abap.cuky` field exists |
+| `"draft or side" was expected, not "etag"` | Invalid projection BDEF header syntax on 7.5x | Keep header as `projection;` only |
 
 ## Notes
 
 ### BTP vs On-Prem Summary
 
-- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables must be explicitly created (framework manages draft data at runtime), V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax.
+- **BTP**: Z*/Y* namespace only, ABAP Cloud syntax enforced, draft tables must be explicitly created (framework manages draft data at runtime), V4 OData preferred, `strict ( 2 )` in BDEF, table entity DDL syntax, released SAP APIs only.
 - **On-Prem**: More namespace flexibility, classic ABAP allowed in behavior pool (not recommended), explicit draft table creation may be needed, V2 or V4, `strict` level depends on release.
 
 ### What This Skill Does NOT Do (v1)
 
-- **Compositions / child entities**: No parent-child relationships. Use this skill for the root entity, then manually add compositions.
+- **Complex compositions / child hierarchies**: Use `generate-rap-service-researched` for multi-entity BOs and two-pass rollout.
 - **Custom actions**: No `action` declarations beyond draft actions. Use generate-rap-logic skill after.
 - **Determinations / validations**: No business logic. Use generate-rap-logic skill to add these after.
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
+- **Feature control / side effects**: No backend-driven UI behavior beyond standard CRUD. Add manually when the UI needs dynamic enablement or recalculation hints.
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
 - **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
 - **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.

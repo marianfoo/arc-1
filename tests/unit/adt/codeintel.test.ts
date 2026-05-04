@@ -8,7 +8,6 @@ import {
   getCompletion,
   getWhereUsedScope,
 } from '../../../src/adt/codeintel.js';
-import { AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
@@ -71,12 +70,6 @@ describe('Code Intelligence', () => {
       const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
       expect(url).toContain('line=42');
       expect(url).toContain('column=15');
-    });
-
-    it('is blocked when Intelligence ops are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(findDefinition(http, safety, '/source', 1, 1, 'x')).rejects.toThrow(AdtSafetyError);
     });
   });
 
@@ -154,12 +147,6 @@ describe('Code Intelligence', () => {
         expect.objectContaining({ Accept: 'application/xml' }),
       );
     });
-
-    it('is blocked when Intelligence ops are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(getWhereUsedScope(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
-    });
   });
 
   // ─── findWhereUsed ────────────────────────────────────────────────
@@ -179,6 +166,14 @@ describe('Code Intelligence', () => {
         packageName: '$TMP',
         snippet: '',
         objectDescription: 'Test Program 1',
+        parentUri: '/sap/bc/adt/packages/%24tmp',
+        isResult: true,
+        canHaveChildren: false,
+        usageInformation: {
+          direct: true,
+          productive: true,
+          raw: 'gradeDirect,includeProductive',
+        },
       });
       expect(results[1]).toEqual({
         uri: '/sap/bc/adt/oo/classes/ZCL_CALLER/source/main',
@@ -189,6 +184,51 @@ describe('Code Intelligence', () => {
         packageName: 'ZPACKAGE',
         snippet: '',
         objectDescription: 'Caller Class',
+        parentUri: '/sap/bc/adt/packages/zpackage',
+        isResult: true,
+        canHaveChildren: true,
+        usageInformation: {
+          direct: true,
+          productive: true,
+          raw: 'gradeDirect,includeProductive',
+        },
+      });
+    });
+
+    it('parses parentUri from referencedObject attributes', async () => {
+      const xml = readFileSync(join(fixturesDir, 'where-used-results.xml'), 'utf-8');
+      const http = mockHttp(xml);
+      const results = await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results[0]?.parentUri).toBe('/sap/bc/adt/packages/%24tmp');
+      expect(results[1]?.parentUri).toBe('/sap/bc/adt/packages/zpackage');
+    });
+
+    it('parses isResult true and false values', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/u1" isResult="true" canHaveChildren="false">
+      <usageReferences:adtObject adtcore:name="A" adtcore:type="PROG/P" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+    <usageReferences:referencedObject uri="/u2" isResult="false" canHaveChildren="true">
+      <usageReferences:adtObject adtcore:name="B" adtcore:type="DEVC/K" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+      const http = mockHttp(xml);
+      const results = await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results[0]?.isResult).toBe(true);
+      expect(results[1]?.isResult).toBe(false);
+    });
+
+    it('parses usageInformation tokens into structured flags', async () => {
+      const xml = readFileSync(join(fixturesDir, 'where-used-results.xml'), 'utf-8');
+      const http = mockHttp(xml);
+      const results = await findWhereUsed(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/ZCL_TEST');
+      expect(results[0]?.usageInformation).toEqual({
+        direct: true,
+        productive: true,
+        raw: 'gradeDirect,includeProductive',
       });
     });
 
@@ -225,12 +265,6 @@ describe('Code Intelligence', () => {
           Accept: 'application/vnd.sap.adt.repository.usagereferences.result.v1+xml',
         }),
       );
-    });
-
-    it('is blocked when Intelligence ops are disallowed', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), disallowedOps: 'I' };
-      await expect(findWhereUsed(http, safety, '/sap/bc/adt/oo/classes/ZCL_TEST')).rejects.toThrow(AdtSafetyError);
     });
   });
 

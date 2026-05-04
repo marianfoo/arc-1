@@ -63,8 +63,11 @@ echo "-- Starting MCP server..."
 SAP_TRANSPORT=http-streamable \
 ARC1_PORT="${MCP_PORT}" \
 SAP_INSECURE=true \
-ARC1_PROFILE=developer-sql \
-SAP_ENABLE_TRANSPORTS=true \
+SAP_ALLOW_WRITES=true \
+SAP_ALLOW_DATA_PREVIEW=true \
+SAP_ALLOW_FREE_SQL=true \
+SAP_ALLOW_TRANSPORT_WRITES=true \
+SAP_ALLOW_GIT_WRITES=false \
 ARC1_CACHE=memory \
 nohup node dist/index.js >> "${LOG_FILE}" 2>&1 &
 echo $! > "$PID_FILE"
@@ -85,7 +88,7 @@ for i in $(seq 1 30); do
     echo "  PID:       ${NEW_PID}"
     echo "  Version:   ${HEALTH_VERSION}"
     echo "  Started:   ${HEALTH_STARTED}"
-    echo "  Profile:   developer-sql"
+    echo "  Safety:    writes/data/sql/transports enabled; git writes disabled"
     echo "======================================================================"
     echo ""
     exit 0

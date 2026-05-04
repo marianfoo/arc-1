@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
 import {
+  checkGit,
   checkOperation,
   checkPackage,
   checkTransport,
   defaultSafetyConfig,
   deriveUserSafety,
+  deriveUserSafetyFromProfile,
   describeSafety,
   isOperationAllowed,
   isPackageAllowed,
@@ -14,12 +16,36 @@ import {
   unrestrictedSafetyConfig,
 } from '../../../src/adt/safety.js';
 
-/** Helper to create a config with overrides */
+/** Helper to create a config with overrides on top of UNRESTRICTED. */
 function config(overrides: Partial<SafetyConfig> = {}): SafetyConfig {
   return { ...unrestrictedSafetyConfig(), ...overrides };
 }
 
 describe('Safety System', () => {
+  describe('defaults', () => {
+    it('defaultSafetyConfig is restrictive (all allow* false, $TMP only)', () => {
+      const cfg = defaultSafetyConfig();
+      expect(cfg.allowWrites).toBe(false);
+      expect(cfg.allowDataPreview).toBe(false);
+      expect(cfg.allowFreeSQL).toBe(false);
+      expect(cfg.allowTransportWrites).toBe(false);
+      expect(cfg.allowGitWrites).toBe(false);
+      expect(cfg.allowedPackages).toEqual(['$TMP']);
+      expect(cfg.allowedTransports).toEqual([]);
+      expect(cfg.denyActions).toEqual([]);
+    });
+
+    it('unrestrictedSafetyConfig enables everything', () => {
+      const cfg = unrestrictedSafetyConfig();
+      expect(cfg.allowWrites).toBe(true);
+      expect(cfg.allowDataPreview).toBe(true);
+      expect(cfg.allowFreeSQL).toBe(true);
+      expect(cfg.allowTransportWrites).toBe(true);
+      expect(cfg.allowGitWrites).toBe(true);
+      expect(cfg.allowedPackages).toEqual([]);
+    });
+  });
+
   describe('isOperationAllowed', () => {
     it('allows all operations when unrestricted', () => {
       const cfg = config();
@@ -27,400 +53,351 @@ describe('Safety System', () => {
       expect(isOperationAllowed(cfg, OperationType.Create)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Delete)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(true);
+      expect(isOperationAllowed(cfg, OperationType.Transport)).toBe(true);
     });
 
-    it('blocks write ops in read-only mode', () => {
-      const cfg = config({ readOnly: true });
+    it('blocks mutations when allowWrites=false', () => {
+      const cfg = config({ allowWrites: false });
       expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Search)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
       expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.Update)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.Delete)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.Activate)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.Workflow)).toBe(false);
-    });
-
-    it('blocks free SQL when blockFreeSQL is true', () => {
-      const cfg = config({ blockFreeSQL: true });
-      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
-    });
-
-    it('blocks Query when blockData is true', () => {
-      const cfg = config({ blockData: true });
-      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
-    });
-
-    it('blocks both Query and FreeSQL when blockData and blockFreeSQL are true', () => {
-      const cfg = config({ blockData: true, blockFreeSQL: true });
-      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
-    });
-
-    it('dryRun bypasses blockData', () => {
-      const cfg = config({ blockData: true, dryRun: true });
-      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
-    });
-
-    it('enforces allowedOps whitelist', () => {
-      const cfg = config({ allowedOps: 'RSQ' });
-      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Search)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.Delete)).toBe(false);
-    });
-
-    it('enforces disallowedOps blacklist', () => {
-      const cfg = config({ disallowedOps: 'CD' });
-      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.Delete)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.Update)).toBe(true);
-    });
-
-    it('disallowedOps takes precedence over allowedOps', () => {
-      const cfg = config({ allowedOps: 'RSQC', disallowedOps: 'C' });
-      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
-    });
-
-    it('transport operations require explicit opt-in', () => {
-      const cfg = config({ enableTransports: false });
       expect(isOperationAllowed(cfg, OperationType.Transport)).toBe(false);
-
-      const cfg2 = config({ enableTransports: true });
-      expect(isOperationAllowed(cfg2, OperationType.Transport)).toBe(true);
     });
 
-    it('dryRun allows everything', () => {
-      const cfg = config({ readOnly: true, blockFreeSQL: true, dryRun: true });
-      expect(isOperationAllowed(cfg, OperationType.Create)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(true);
-    });
-
-    it('default config blocks writes, free SQL, and data queries', () => {
-      const cfg = defaultSafetyConfig();
-      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Search)).toBe(true);
-      expect(isOperationAllowed(cfg, OperationType.Create)).toBe(false);
-      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
+    it('Query requires allowDataPreview', () => {
+      const cfg = config({ allowDataPreview: false });
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(false);
+      expect(isOperationAllowed(cfg, OperationType.Read)).toBe(true);
     });
 
-    it('unrestricted config allows Query', () => {
-      const cfg = unrestrictedSafetyConfig();
+    it('FreeSQL requires allowFreeSQL', () => {
+      const cfg = config({ allowFreeSQL: false });
+      expect(isOperationAllowed(cfg, OperationType.FreeSQL)).toBe(false);
       expect(isOperationAllowed(cfg, OperationType.Query)).toBe(true);
     });
-  });
 
-  describe('checkOperation', () => {
-    it('throws AdtSafetyError when operation is blocked', () => {
-      const cfg = config({ readOnly: true });
-      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).toThrow(AdtSafetyError);
+    it('Transport requires BOTH allowWrites AND allowTransportWrites', () => {
+      expect(
+        isOperationAllowed(config({ allowWrites: true, allowTransportWrites: true }), OperationType.Transport),
+      ).toBe(true);
+      expect(
+        isOperationAllowed(config({ allowWrites: false, allowTransportWrites: true }), OperationType.Transport),
+      ).toBe(false);
+      expect(
+        isOperationAllowed(config({ allowWrites: true, allowTransportWrites: false }), OperationType.Transport),
+      ).toBe(false);
     });
 
-    it('does not throw when operation is allowed', () => {
-      const cfg = config();
-      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).not.toThrow();
-    });
-
-    it('throws AdtSafetyError when Query is blocked by blockData', () => {
-      const cfg = config({ blockData: true });
-      expect(() => checkOperation(cfg, OperationType.Query, 'GetTableContents')).toThrow(AdtSafetyError);
-    });
-
-    it('error message includes operation name and type', () => {
-      const cfg = config({ readOnly: true });
-      try {
-        checkOperation(cfg, OperationType.Create, 'CreateObject');
-      } catch (e) {
-        expect((e as Error).message).toContain('CreateObject');
-        expect((e as Error).message).toContain('C');
+    it('Read/Search/Intelligence/Test/Lock are always allowed at safety layer', () => {
+      const cfg = config({ allowWrites: false, allowDataPreview: false, allowFreeSQL: false });
+      for (const op of [
+        OperationType.Read,
+        OperationType.Search,
+        OperationType.Intelligence,
+        OperationType.Test,
+        OperationType.Lock,
+      ]) {
+        expect(isOperationAllowed(cfg, op)).toBe(true);
       }
     });
   });
 
-  describe('isPackageAllowed', () => {
-    it('allows all packages when allowedPackages is empty', () => {
+  describe('checkOperation', () => {
+    it('throws AdtSafetyError with reason when blocked', () => {
+      const cfg = config({ allowWrites: false });
+      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).toThrow(AdtSafetyError);
+      expect(() => checkOperation(cfg, OperationType.Create, 'CreateObject')).toThrow(/allowWrites=false/);
+    });
+
+    it('allowDataPreview reason is specific', () => {
+      const cfg = config({ allowDataPreview: false });
+      expect(() => checkOperation(cfg, OperationType.Query, 'GetTableContents')).toThrow(/allowDataPreview=false/);
+    });
+
+    it('allowFreeSQL reason is specific', () => {
+      const cfg = config({ allowFreeSQL: false });
+      expect(() => checkOperation(cfg, OperationType.FreeSQL, 'RunQuery')).toThrow(/allowFreeSQL=false/);
+    });
+
+    it('does not throw when operation allowed', () => {
       const cfg = config();
-      expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ZTEST')).toBe(true);
-      expect(isPackageAllowed(cfg, 'SAP_BASIS')).toBe(true);
+      expect(() => checkOperation(cfg, OperationType.Read, 'GetProgram')).not.toThrow();
+      expect(() => checkOperation(cfg, OperationType.Create, 'CreateProgram')).not.toThrow();
+    });
+  });
+
+  describe('isPackageAllowed', () => {
+    it('allows any package when list is empty', () => {
+      expect(isPackageAllowed(config({ allowedPackages: [] }), 'ANY_PKG')).toBe(true);
     });
 
     it('allows exact match', () => {
-      const cfg = config({ allowedPackages: ['$TMP', 'ZTEST'] });
-      expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ZTEST')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ZOTHER')).toBe(false);
+      expect(isPackageAllowed(config({ allowedPackages: ['ZTEST'] }), 'ZTEST')).toBe(true);
+      expect(isPackageAllowed(config({ allowedPackages: ['ZTEST'] }), 'ztest')).toBe(true);
     });
 
-    it('supports wildcard matching', () => {
-      const cfg = config({ allowedPackages: ['Z*', '$TMP'] });
-      expect(isPackageAllowed(cfg, 'ZTEST')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ZRAY')).toBe(true);
-      expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, 'SAP_BASIS')).toBe(false);
+    it('allows wildcard match', () => {
+      expect(isPackageAllowed(config({ allowedPackages: ['Z*'] }), 'ZRAY')).toBe(true);
+      expect(isPackageAllowed(config({ allowedPackages: ['Z*'] }), 'YRAY')).toBe(false);
     });
 
-    it('is case-insensitive', () => {
-      const cfg = config({ allowedPackages: ['z*'] });
-      expect(isPackageAllowed(cfg, 'ZTEST')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ztest')).toBe(true);
+    it('blocks unlisted packages', () => {
+      expect(isPackageAllowed(config({ allowedPackages: ['$TMP'] }), 'ZTEST')).toBe(false);
+    });
+
+    it('accepts multiple entries (any match wins)', () => {
+      const cfg = config({ allowedPackages: ['$TMP', 'Z*'] });
+      expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
+      expect(isPackageAllowed(cfg, 'ZMORE')).toBe(true);
+      expect(isPackageAllowed(cfg, 'YXX')).toBe(false);
     });
   });
 
   describe('checkPackage', () => {
-    it('throws AdtSafetyError when package is blocked', () => {
-      const cfg = config({ allowedPackages: ['$TMP'] });
-      expect(() => checkPackage(cfg, 'ZTEST')).toThrow(AdtSafetyError);
+    it('throws when not allowed', () => {
+      expect(() => checkPackage(config({ allowedPackages: ['$TMP'] }), 'OTHER')).toThrow(AdtSafetyError);
     });
 
-    it('does not throw when package is allowed', () => {
-      const cfg = config({ allowedPackages: ['$TMP'] });
-      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
+    it('does not throw when allowed', () => {
+      expect(() => checkPackage(config({ allowedPackages: ['$TMP'] }), '$TMP')).not.toThrow();
     });
   });
 
   describe('checkTransport', () => {
-    it('blocks read operations when enableTransports is false', () => {
-      const cfg = config({ enableTransports: false });
-      expect(() => checkTransport(cfg, '', 'ListTransports', false)).toThrow(AdtSafetyError);
+    it('read operations are always allowed at safety layer', () => {
+      // Reads gated only by scope check upstream, not by safety flags
+      expect(() =>
+        checkTransport(config({ allowTransportWrites: false }), 'DEV900001', 'ListTransports', false),
+      ).not.toThrow();
     });
 
-    it('allows read operations when enableTransports is true', () => {
-      const cfg = config({ enableTransports: true });
-      expect(() => checkTransport(cfg, '', 'ListTransports', false)).not.toThrow();
+    it('writes require allowWrites=true', () => {
+      expect(() =>
+        checkTransport(
+          config({ allowWrites: false, allowTransportWrites: true }),
+          'DEV900001',
+          'CreateTransport',
+          true,
+        ),
+      ).toThrow(/allowWrites=false/);
     });
 
-    it('blocks write operations without enableTransports', () => {
-      const cfg = config({ enableTransports: false });
-      expect(() => checkTransport(cfg, '', 'CreateTransport', true)).toThrow(AdtSafetyError);
+    it('writes require allowTransportWrites=true', () => {
+      expect(() =>
+        checkTransport(
+          config({ allowWrites: true, allowTransportWrites: false }),
+          'DEV900001',
+          'CreateTransport',
+          true,
+        ),
+      ).toThrow(/allowTransportWrites=false/);
     });
 
-    it('blocks write operations in transport read-only mode', () => {
-      const cfg = config({ enableTransports: true, transportReadOnly: true });
-      expect(() => checkTransport(cfg, '', 'ReleaseTransport', true)).toThrow(AdtSafetyError);
+    it('writes allowed when both flags true', () => {
+      expect(() =>
+        checkTransport(config({ allowWrites: true, allowTransportWrites: true }), 'DEV900001', 'CreateTransport', true),
+      ).not.toThrow();
     });
 
-    it('allows write operations when fully enabled', () => {
-      const cfg = config({ enableTransports: true });
-      expect(() => checkTransport(cfg, '', 'CreateTransport', true)).not.toThrow();
-    });
-  });
-
-  describe('checkPackage with $TMP default', () => {
-    it('default config (allowedPackages: [$TMP]) allows $TMP', () => {
-      const cfg = config({ allowedPackages: ['$TMP'] });
-      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
+    it('transport whitelist blocks non-listed IDs', () => {
+      const cfg = config({ allowedTransports: ['DEVK9*'] });
+      expect(() => checkTransport(cfg, 'OTHER', 'Op', false)).toThrow(/blocked by safety configuration/);
+      expect(() => checkTransport(cfg, 'DEVK900001', 'Op', false)).not.toThrow();
     });
 
-    it('default config (allowedPackages: [$TMP]) blocks ZTEST', () => {
-      const cfg = config({ allowedPackages: ['$TMP'] });
-      expect(() => checkPackage(cfg, 'ZTEST')).toThrow(AdtSafetyError);
-    });
-
-    it('allowedPackages: [Z*, $TMP] allows both', () => {
-      const cfg = config({ allowedPackages: ['Z*', '$TMP'] });
-      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
-      expect(() => checkPackage(cfg, 'ZTEST')).not.toThrow();
-      expect(() => checkPackage(cfg, 'SAP_BASIS')).toThrow(AdtSafetyError);
-    });
-
-    it('allowedPackages: [] allows anything (unrestricted)', () => {
-      const cfg = config({ allowedPackages: [] });
-      expect(() => checkPackage(cfg, '$TMP')).not.toThrow();
-      expect(() => checkPackage(cfg, 'ZTEST')).not.toThrow();
-      expect(() => checkPackage(cfg, 'SAP_BASIS')).not.toThrow();
+    it('transport whitelist is a passthrough when empty', () => {
+      const cfg = config({ allowedTransports: [] });
+      expect(() => checkTransport(cfg, 'ANY_TRKORR', 'Op', false)).not.toThrow();
     });
   });
 
-  describe('isPackageAllowed edge cases', () => {
-    it('blocks empty string package name (Issue #71)', () => {
-      const cfg = config({ allowedPackages: ['Z*', '$TMP'] });
-      expect(isPackageAllowed(cfg, '')).toBe(false);
+  describe('checkGit', () => {
+    it('read operations are always allowed (isWrite=false)', () => {
+      expect(() => checkGit(config({ allowGitWrites: false }), 'ListRepos', false)).not.toThrow();
     });
 
-    it('handles $-prefixed packages with wildcard', () => {
-      const cfg = config({ allowedPackages: ['$*'] });
-      expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ZTEST')).toBe(false);
+    it('writes require allowWrites=true', () => {
+      expect(() => checkGit(config({ allowWrites: false, allowGitWrites: true }), 'Push', true)).toThrow(
+        /allowWrites=false/,
+      );
     });
 
-    it('supports multiple wildcard patterns (Issue #54)', () => {
-      // Users need Z* AND $* to support both custom and local packages
-      const cfg = config({ allowedPackages: ['Z*', '$*'] });
-      expect(isPackageAllowed(cfg, 'ZTEST')).toBe(true);
-      expect(isPackageAllowed(cfg, '$TMP')).toBe(true);
-      expect(isPackageAllowed(cfg, 'SAP_BASIS')).toBe(false);
+    it('writes require allowGitWrites=true', () => {
+      expect(() => checkGit(config({ allowWrites: true, allowGitWrites: false }), 'Push', true)).toThrow(
+        /allowGitWrites=false/,
+      );
     });
 
-    it('handles single character wildcard', () => {
-      const cfg = config({ allowedPackages: ['Z*'] });
-      expect(isPackageAllowed(cfg, 'Z')).toBe(true); // just 'Z' matches Z*
+    it('writes allowed when both flags true', () => {
+      expect(() => checkGit(config({ allowWrites: true, allowGitWrites: true }), 'Push', true)).not.toThrow();
     });
 
-    it('exact match when no wildcard', () => {
-      const cfg = config({ allowedPackages: ['ZPACKAGE'] });
-      expect(isPackageAllowed(cfg, 'ZPACKAGE')).toBe(true);
-      expect(isPackageAllowed(cfg, 'ZPACKAGE1')).toBe(false);
+    it('default isWrite=true (backward-compatible call shape)', () => {
+      // No third argument → treated as write
+      expect(() => checkGit(config({ allowWrites: false, allowGitWrites: true }), 'Push')).toThrow(/allowWrites=false/);
     });
   });
 
   describe('deriveUserSafety', () => {
-    it('no write scope → readOnly=true, enableTransports=false', () => {
-      const server = config({ readOnly: false, enableTransports: true });
-      const result = deriveUserSafety(server, ['read', 'data']);
-      expect(result.readOnly).toBe(true);
-      expect(result.enableTransports).toBe(false);
+    it('admin scope implies all scopes (all allow* stay true on unrestricted server)', () => {
+      const server = unrestrictedSafetyConfig();
+      const result = deriveUserSafety(server, ['admin']);
+      expect(result.allowWrites).toBe(true);
+      expect(result.allowDataPreview).toBe(true);
+      expect(result.allowFreeSQL).toBe(true);
+      expect(result.allowTransportWrites).toBe(true);
+      expect(result.allowGitWrites).toBe(true);
     });
 
-    it('no data and no sql scope → blockData=true', () => {
-      const server = config({ blockData: false });
-      const result = deriveUserSafety(server, ['read', 'write']);
-      expect(result.blockData).toBe(true);
+    it('admin scope cannot exceed server ceiling', () => {
+      const server = config({ allowWrites: false });
+      const result = deriveUserSafety(server, ['admin']);
+      expect(result.allowWrites).toBe(false); // server ceiling wins
     });
 
-    it('no sql scope → blockFreeSQL=true', () => {
-      const server = config({ blockFreeSQL: false });
-      const result = deriveUserSafety(server, ['read', 'data']);
-      expect(result.blockFreeSQL).toBe(true);
-    });
-
-    it('write scope present → readOnly unchanged from server', () => {
-      const server = config({ readOnly: false });
-      const result = deriveUserSafety(server, ['read', 'write']);
-      expect(result.readOnly).toBe(false);
-    });
-
-    it('sql scope present → blockFreeSQL unchanged from server', () => {
-      const server = config({ blockFreeSQL: false });
-      const result = deriveUserSafety(server, ['read', 'sql']);
-      expect(result.blockFreeSQL).toBe(false);
-    });
-
-    it('data scope present → blockData unchanged from server', () => {
-      const server = config({ blockData: false });
-      const result = deriveUserSafety(server, ['read', 'data']);
-      expect(result.blockData).toBe(false);
-    });
-
-    it('server readOnly=true + write scope → still readOnly (server wins)', () => {
-      const server = config({ readOnly: true });
-      const result = deriveUserSafety(server, ['read', 'write']);
-      expect(result.readOnly).toBe(true);
-    });
-
-    it('server blockFreeSQL=true + sql scope → still blocked (server wins)', () => {
-      const server = config({ blockFreeSQL: true });
-      const result = deriveUserSafety(server, ['read', 'sql']);
-      expect(result.blockFreeSQL).toBe(true);
-    });
-
-    it('server blockData=true + data scope → still blocked (server wins)', () => {
-      const server = config({ blockData: true });
-      const result = deriveUserSafety(server, ['read', 'data']);
-      expect(result.blockData).toBe(true);
-    });
-
-    it('implied scopes: sql without data → blockData unchanged', () => {
-      const server = config({ blockData: false, blockFreeSQL: false });
-      const result = deriveUserSafety(server, ['read', 'sql']);
-      expect(result.blockData).toBe(false);
-      expect(result.blockFreeSQL).toBe(false);
-    });
-
-    it('implied scopes: write without read → readOnly unchanged', () => {
-      const server = config({ readOnly: false });
+    it('write scope implies read (does not force allowWrites off)', () => {
+      const server = unrestrictedSafetyConfig();
       const result = deriveUserSafety(server, ['write']);
-      expect(result.readOnly).toBe(false);
+      expect(result.allowWrites).toBe(true);
+      // No data/sql/transports/git in scope → those are tightened off
+      expect(result.allowDataPreview).toBe(false);
+      expect(result.allowFreeSQL).toBe(false);
+      expect(result.allowTransportWrites).toBe(false);
+      expect(result.allowGitWrites).toBe(false);
     });
 
-    it('empty scopes → most restrictive', () => {
-      const server = config({ readOnly: false, blockFreeSQL: false, blockData: false, enableTransports: true });
-      const result = deriveUserSafety(server, []);
-      expect(result.readOnly).toBe(true);
-      expect(result.blockFreeSQL).toBe(true);
-      expect(result.blockData).toBe(true);
-      expect(result.enableTransports).toBe(false);
+    it('sql scope implies data', () => {
+      const server = unrestrictedSafetyConfig();
+      const result = deriveUserSafety(server, ['read', 'sql']);
+      expect(result.allowDataPreview).toBe(true); // implied by sql
+      expect(result.allowFreeSQL).toBe(true);
     });
 
-    it('all scopes → nothing restricted beyond server config', () => {
-      const server = config({ readOnly: false, blockFreeSQL: false, blockData: false, enableTransports: true });
-      const result = deriveUserSafety(server, ['read', 'write', 'data', 'sql', 'admin']);
-      expect(result.readOnly).toBe(false);
-      expect(result.blockFreeSQL).toBe(false);
-      expect(result.blockData).toBe(false);
-      expect(result.enableTransports).toBe(true);
+    it('no write scope → allowWrites forced false', () => {
+      const server = unrestrictedSafetyConfig();
+      const result = deriveUserSafety(server, ['read']);
+      expect(result.allowWrites).toBe(false);
     });
 
-    it('preserves other server config fields unchanged', () => {
-      const server = config({ allowedOps: 'RSQ', disallowedOps: 'D', allowedPackages: ['Z*'], dryRun: true });
-      const result = deriveUserSafety(server, ['read', 'write', 'data', 'sql']);
-      expect(result.allowedOps).toBe('RSQ');
-      expect(result.disallowedOps).toBe('D');
-      expect(result.allowedPackages).toEqual(['Z*']);
-      expect(result.dryRun).toBe(true);
+    it('transports scope enables transport writes (if server allows)', () => {
+      const server = unrestrictedSafetyConfig();
+      const result = deriveUserSafety(server, ['read', 'write', 'transports']);
+      expect(result.allowTransportWrites).toBe(true);
+    });
+
+    it('git scope enables git writes (if server allows)', () => {
+      const server = unrestrictedSafetyConfig();
+      const result = deriveUserSafety(server, ['read', 'write', 'git']);
+      expect(result.allowGitWrites).toBe(true);
     });
 
     it('does not mutate the original server config', () => {
-      const server = config({ readOnly: false, blockData: false, blockFreeSQL: false });
+      const server = config({ allowWrites: true, allowDataPreview: true });
       deriveUserSafety(server, []);
-      expect(server.readOnly).toBe(false);
-      expect(server.blockData).toBe(false);
-      expect(server.blockFreeSQL).toBe(false);
+      expect(server.allowWrites).toBe(true);
+      expect(server.allowDataPreview).toBe(true);
     });
 
-    it('write scope enables transports if server allows', () => {
-      const server = config({ enableTransports: true });
-      const result = deriveUserSafety(server, ['read', 'write']);
-      expect(result.enableTransports).toBe(true);
-    });
-
-    it('server enableTransports=false + write scope → still disabled (server wins)', () => {
-      const server = config({ enableTransports: false });
-      const result = deriveUserSafety(server, ['read', 'write']);
-      expect(result.enableTransports).toBe(false);
-    });
-
-    it('data scope without sql → blockFreeSQL=true', () => {
-      const server = config({ blockFreeSQL: false, blockData: false });
-      const result = deriveUserSafety(server, ['read', 'data']);
-      expect(result.blockData).toBe(false);
-      expect(result.blockFreeSQL).toBe(true);
-    });
-
-    it('only admin scope → most restrictive (admin does not imply read/write/data)', () => {
-      const server = config({ readOnly: false, blockData: false, blockFreeSQL: false });
+    it('preserves allowedPackages/allowedTransports/denyActions as deep copies', () => {
+      const server = config({ allowedPackages: ['Z*'], allowedTransports: ['DEV*'], denyActions: ['SAPWrite.delete'] });
       const result = deriveUserSafety(server, ['admin']);
-      expect(result.readOnly).toBe(true);
-      expect(result.blockData).toBe(true);
-      expect(result.blockFreeSQL).toBe(true);
+      expect(result.allowedPackages).toEqual(['Z*']);
+      expect(result.allowedTransports).toEqual(['DEV*']);
+      expect(result.denyActions).toEqual(['SAPWrite.delete']);
+      // Mutate result; server untouched
+      result.allowedPackages.push('OTHER');
+      expect(server.allowedPackages).toEqual(['Z*']);
+    });
+  });
+
+  describe('deriveUserSafetyFromProfile', () => {
+    it('tight side wins for booleans — server=true + profile=false → false', () => {
+      const server = unrestrictedSafetyConfig();
+      const profile = { allowWrites: false };
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowWrites).toBe(false);
+    });
+
+    it('tight side wins — server=false + profile=true → false', () => {
+      const server = config({ allowWrites: false });
+      const profile = { allowWrites: true };
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowWrites).toBe(false);
+    });
+
+    it('both true → true', () => {
+      const server = unrestrictedSafetyConfig();
+      const profile = { allowWrites: true };
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowWrites).toBe(true);
+    });
+
+    it('profile missing a field → inherits server value', () => {
+      const server = config({ allowDataPreview: true });
+      const profile = { allowWrites: true }; // no allowDataPreview key
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowDataPreview).toBe(true);
+    });
+
+    it('allowedPackages: profile narrows server (profile=$TMP, server=*)', () => {
+      const server = config({ allowedPackages: [] }); // [] = no restriction
+      const profile = { allowedPackages: ['$TMP'] };
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowedPackages).toEqual(['$TMP']);
+    });
+
+    it('allowedPackages: server narrows profile (server=$TMP, profile=*)', () => {
+      const server = config({ allowedPackages: ['$TMP'] });
+      const profile = { allowedPackages: [] }; // profile = no restriction
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowedPackages).toEqual(['$TMP']);
+    });
+
+    it('allowedPackages: disjoint profile/server restrictions deny all packages', () => {
+      const server = config({ allowedPackages: ['$TMP'] });
+      const profile = { allowedPackages: ['Z*'] }; // profile wanted Z*, server only allows $TMP
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(isPackageAllowed(result, '$TMP')).toBe(false);
+      expect(isPackageAllowed(result, 'ZTEST')).toBe(false);
+      expect(() => checkPackage(result, '$TMP')).toThrow(/allowed: \[\]/);
+    });
+
+    it('allowedPackages: profile subset of server wildcards → profile wins', () => {
+      const server = config({ allowedPackages: ['Z*'] });
+      const profile = { allowedPackages: ['ZTEST'] }; // ZTEST is covered by Z*
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.allowedPackages).toEqual(['ZTEST']);
+    });
+
+    it('denyActions: union of server and profile', () => {
+      const server = config({ denyActions: ['SAPWrite.delete'] });
+      const profile = { denyActions: ['SAPManage.flp_*'] };
+      const result = deriveUserSafetyFromProfile(server, profile);
+      expect(result.denyActions.sort()).toEqual(['SAPManage.flp_*', 'SAPWrite.delete']);
     });
   });
 
   describe('describeSafety', () => {
-    it('returns UNRESTRICTED for default unrestricted config', () => {
-      expect(describeSafety(unrestrictedSafetyConfig())).toBe('UNRESTRICTED');
+    it('returns READ-ONLY for default restrictive config', () => {
+      expect(describeSafety(defaultSafetyConfig())).toContain('Packages=[$TMP]');
     });
 
-    it('lists active flags', () => {
-      const cfg = config({ readOnly: true, blockFreeSQL: true, allowedPackages: ['$TMP'] });
-      const desc = describeSafety(cfg);
-      expect(desc).toContain('READ-ONLY');
-      expect(desc).toContain('NO-FREE-SQL');
-      expect(desc).toContain('AllowedPackages=');
+    it('lists active flags on unrestricted', () => {
+      const desc = describeSafety(unrestrictedSafetyConfig());
+      expect(desc).toContain('WRITES');
+      expect(desc).toContain('DATA-PREVIEW');
+      expect(desc).toContain('FREE-SQL');
+      expect(desc).toContain('TRANSPORT-WRITES');
+      expect(desc).toContain('GIT-WRITES');
     });
 
-    it('includes NO-DATA when blockData is true', () => {
-      const cfg = config({ blockData: true });
-      const desc = describeSafety(cfg);
-      expect(desc).toContain('NO-DATA');
+    it('includes denyActions count when non-empty', () => {
+      const desc = describeSafety(config({ denyActions: ['SAPWrite.delete', 'SAPManage.flp_*'] }));
+      expect(desc).toContain('DenyActions=2');
     });
   });
 });

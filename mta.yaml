@@ -1,6 +1,6 @@
 _schema-version: "3.1"
 ID: arc1-mcp
-version: 0.6.8 # x-release-please-version
+version: 0.7.2 # x-release-please-version
 description: ARC-1 — MCP Server for SAP ABAP Systems
 
 # ──────────────────────────────────────────────────────────────────────
@@ -85,8 +85,14 @@ modules:
       # PrincipalPropagation destination for per-user requests (with JWT)
       SAP_BTP_PP_DESTINATION: ex1
       SAP_PP_ENABLED: "true"
-      SAP_READ_ONLY: "true"
-      SAP_BLOCK_FREE_SQL: "true"
+      # Authorization / safety defaults. Keep the MTA conservative; widen per
+      # environment with cf set-env only when the test or landscape needs it.
+      SAP_ALLOW_WRITES: "false"
+      SAP_ALLOW_DATA_PREVIEW: "false"
+      SAP_ALLOW_FREE_SQL: "false"
+      SAP_ALLOW_TRANSPORT_WRITES: "false"
+      SAP_ALLOW_GIT_WRITES: "false"
+      SAP_ALLOWED_PACKAGES: "$TMP"
     requires:
       - name: arc1-xsuaa
       - name: arc1-destination

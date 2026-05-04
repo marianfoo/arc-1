@@ -5,6 +5,7 @@ import {
   SAPContextSchema,
   SAPContextSchemaBtp,
   SAPDiagnoseSchema,
+  SAPGitSchema,
   SAPHyperfocusedSchema,
   SAPLintSchema,
   SAPManageSchema,
@@ -23,6 +24,7 @@ describe('SAPReadSchema', () => {
   it('accepts valid on-prem input', () => {
     const result = SAPReadSchema.safeParse({ type: 'PROG', name: 'ZTEST' });
     expect(result.success).toBe(true);
+    if (result.success) expect(result.data.version).toBe('active');
   });
 
   it('accepts all optional fields', () => {
@@ -32,10 +34,17 @@ describe('SAPReadSchema', () => {
       include: 'definitions',
       method: '*',
       expand_includes: true,
+      version: 'inactive',
+      force_refresh: true,
       maxRows: 50,
       sqlFilter: "MANDT = '100'",
     });
     expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid source version', () => {
+    const result = SAPReadSchema.safeParse({ type: 'PROG', name: 'ZTEST', version: 'latest' });
+    expect(result.success).toBe(false);
   });
 
   it('rejects missing required type', () => {
@@ -56,6 +65,60 @@ describe('SAPReadSchema', () => {
     }
   });
 
+  it('accepts TABLE_CONTENTS sqlFilter as condition expression', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "MANDT = '100' AND MATNR LIKE 'Z%'",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts TABLE_CONTENTS sqlFilter when identifier contains SELECT as substring', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'ZTAB',
+      sqlFilter: "SELECTFLAG = 'X' AND MANDT = '100'",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects TABLE_CONTENTS sqlFilter that starts with SELECT', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "SELECT * FROM MARA WHERE MANDT = '100'",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('condition expression only');
+    }
+  });
+
+  it('rejects TABLE_CONTENTS sqlFilter that starts with WHERE', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "WHERE MANDT = '100'",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('must not start with WHERE');
+    }
+  });
+
+  it('rejects TABLE_CONTENTS sqlFilter with semicolons', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'TABLE_CONTENTS',
+      name: 'MARA',
+      sqlFilter: "MANDT = '100'; DELETE FROM T000",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('no semicolons');
+    }
+  });
+
   it('coerces boolean expand_includes from string', () => {
     const result = SAPReadSchema.safeParse({ type: 'FUGR', expand_includes: 'true' });
     expect(result.success).toBe(true);
@@ -73,6 +136,35 @@ describe('SAPReadSchema', () => {
     expect(SAPReadSchema.safeParse({ type: 'AUTH', name: 'BUKRS' }).success).toBe(true);
     expect(SAPReadSchema.safeParse({ type: 'FTG2', name: 'ABC_TOGGLE' }).success).toBe(true);
     expect(SAPReadSchema.safeParse({ type: 'ENHO', name: 'ZMY_BADI_IMPL' }).success).toBe(true);
+  });
+
+  it('accepts VERSIONS on on-prem', () => {
+    const result = SAPReadSchema.safeParse({ type: 'VERSIONS', name: 'ZARC1_TEST_REPORT' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts VERSION_SOURCE only when versionUri is provided and ADT-scoped', () => {
+    const result = SAPReadSchema.safeParse({
+      type: 'VERSION_SOURCE',
+      versionUri: '/sap/bc/adt/programs/programs/ZARC1_TEST_REPORT/source/main/versions/20260410185851/00000/content',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects VERSION_SOURCE when versionUri is missing', () => {
+    const result = SAPReadSchema.safeParse({ type: 'VERSION_SOURCE' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'versionUri')).toBe(true);
+    }
+  });
+
+  it('rejects VERSION_SOURCE when versionUri is not an ADT path', () => {
+    const result = SAPReadSchema.safeParse({ type: 'VERSION_SOURCE', versionUri: 'https://evil.example/source' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('/sap/bc/adt/');
+    }
   });
 
   it('accepts format field with valid values', () => {
@@ -275,6 +367,20 @@ describe('SAPWriteSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts preflightBeforeWrite override', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'update',
+      type: 'TABL',
+      name: 'ZTABL_TEST',
+      source: 'define table ztabl_test { key client : abap.clnt not null; }',
+      preflightBeforeWrite: false,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.preflightBeforeWrite).toBe(false);
+    }
+  });
+
   it('accepts TABL for source-based writes', () => {
     const result = SAPWriteSchema.safeParse({
       action: 'create',
@@ -304,6 +410,21 @@ describe('SAPWriteSchema', () => {
       ],
     });
     expect(result.success).toBe(true);
+  });
+
+  it('accepts scaffold_rap_handlers action fields', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'scaffold_rap_handlers',
+      type: 'CLAS',
+      name: 'ZBP_I_TRAVELREQ',
+      bdefName: 'ZI_TRAVELREQ',
+      autoApply: 'true',
+      targetAlias: 'Travel',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.autoApply).toBe(true);
+    }
   });
 
   it('validates objects array structure', () => {
@@ -427,6 +548,20 @@ describe('SAPLintSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts formatter actions', () => {
+    expect(SAPLintSchema.safeParse({ action: 'format', source: 'report ztest.' }).success).toBe(true);
+    expect(SAPLintSchema.safeParse({ action: 'get_formatter_settings' }).success).toBe(true);
+    expect(SAPLintSchema.safeParse({ action: 'set_formatter_settings', style: 'keywordLower' }).success).toBe(true);
+  });
+
+  it('coerces indentation for set_formatter_settings', () => {
+    const result = SAPLintSchema.safeParse({ action: 'set_formatter_settings', indentation: 0 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.indentation).toBe(false);
+    }
+  });
+
   it('rejects invalid action', () => {
     const result = SAPLintSchema.safeParse({ action: 'invalid' });
     expect(result.success).toBe(false);
@@ -440,7 +575,13 @@ describe('SAPDiagnoseSchema', () => {
   });
 
   it('accepts dumps with optional filters', () => {
-    const result = SAPDiagnoseSchema.safeParse({ action: 'dumps', user: 'DEVELOPER', maxResults: 10 });
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'dumps',
+      user: 'DEVELOPER',
+      maxResults: 10,
+      sections: ['kap0', 'kap3'],
+      includeFullText: false,
+    });
     expect(result.success).toBe(true);
   });
 
@@ -452,6 +593,44 @@ describe('SAPDiagnoseSchema', () => {
   it('rejects invalid analysis type', () => {
     const result = SAPDiagnoseSchema.safeParse({ action: 'traces', id: '123', analysis: 'invalid' });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts system_messages feed filters', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'system_messages',
+      user: 'BASISADM',
+      maxResults: '25',
+      from: '20260401090000',
+      to: '20260401120000',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.maxResults).toBe(25);
+    }
+  });
+
+  it('accepts gateway_errors list and detail modes', () => {
+    expect(
+      SAPDiagnoseSchema.safeParse({
+        action: 'gateway_errors',
+        maxResults: 20,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SAPDiagnoseSchema.safeParse({
+        action: 'gateway_errors',
+        detailUrl: '/sap/bc/adt/gw/errorlog/Frontend%20Error/ABC123',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SAPDiagnoseSchema.safeParse({
+        action: 'gateway_errors',
+        id: 'ABC123',
+        errorType: 'Frontend Error',
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts quickfix with source position fields', () => {
@@ -499,6 +678,56 @@ describe('SAPTransportSchema', () => {
     const result = SAPTransportSchema.safeParse({ action: 'invalid' });
     expect(result.success).toBe(false);
   });
+
+  it('accepts history with type and name', () => {
+    const result = SAPTransportSchema.safeParse({ action: 'history', type: 'CLAS', name: 'ZCL_X' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts history without type/name at schema level', () => {
+    const result = SAPTransportSchema.safeParse({ action: 'history' });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('SAPGitSchema', () => {
+  it('accepts valid read action payload', () => {
+    const result = SAPGitSchema.safeParse({ action: 'list_repos', backend: 'gcts' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects unknown action', () => {
+    const result = SAPGitSchema.safeParse({ action: 'status' });
+    expect(result.success).toBe(false);
+  });
+
+  it('restricts backend enum to gcts|abapgit', () => {
+    expect(SAPGitSchema.safeParse({ action: 'list_repos', backend: 'gcts' }).success).toBe(true);
+    expect(SAPGitSchema.safeParse({ action: 'list_repos', backend: 'abapgit' }).success).toBe(true);
+    expect(SAPGitSchema.safeParse({ action: 'list_repos', backend: 'unknown' }).success).toBe(false);
+  });
+
+  it('validates objects array shape', () => {
+    const ok = SAPGitSchema.safeParse({
+      action: 'commit',
+      repoId: 'ZARC1',
+      objects: [{ type: 'CLAS', name: 'ZCL_ARC1_TEST', operation: 'M' }],
+    });
+    expect(ok.success).toBe(true);
+
+    const invalid = SAPGitSchema.safeParse({
+      action: 'commit',
+      repoId: 'ZARC1',
+      objects: [{ type: 'CLAS' }],
+    });
+    expect(invalid.success).toBe(false);
+  });
+
+  it('coerces limit from string to number', () => {
+    const result = SAPGitSchema.safeParse({ action: 'history', repoId: 'ZARC1', limit: '25' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.limit).toBe(25);
+  });
 });
 
 describe('SAPContextSchema', () => {
@@ -509,13 +738,51 @@ describe('SAPContextSchema', () => {
 
   it('accepts full input', () => {
     const result = SAPContextSchema.safeParse({
-      action: 'deps',
+      action: 'impact',
       type: 'CLAS',
       name: 'ZCL_ORDER',
       maxDeps: 10,
       depth: 2,
+      includeIndirect: true,
+      siblingCheck: false,
+      siblingMaxCandidates: 5,
     });
     expect(result.success).toBe(true);
+  });
+
+  it('accepts sibling controls for impact', () => {
+    const result = SAPContextSchema.safeParse({
+      action: 'impact',
+      type: 'DDLS',
+      name: 'ZI_SALES',
+      siblingCheck: true,
+      siblingMaxCandidates: 3,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('clamps siblingMaxCandidates to hard bounds', () => {
+    const low = SAPContextSchema.safeParse({
+      action: 'impact',
+      type: 'DDLS',
+      name: 'ZI_SALES',
+      siblingMaxCandidates: 0,
+    });
+    expect(low.success).toBe(true);
+    if (low.success) {
+      expect(low.data.siblingMaxCandidates).toBe(1);
+    }
+
+    const high = SAPContextSchema.safeParse({
+      action: 'impact',
+      type: 'DDLS',
+      name: 'ZI_SALES',
+      siblingMaxCandidates: 999,
+    });
+    expect(high.success).toBe(true);
+    if (high.success) {
+      expect(high.data.siblingMaxCandidates).toBe(10);
+    }
   });
 
   it('rejects missing name', () => {
@@ -543,6 +810,15 @@ describe('SAPContextSchemaBtp', () => {
   it('accepts BTP types', () => {
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'CLAS' }).success).toBe(true);
     expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS' }).success).toBe(true);
+    expect(SAPContextSchemaBtp.safeParse({ name: 'Z', type: 'DDLS', action: 'impact' }).success).toBe(true);
+    const siblingControls = SAPContextSchemaBtp.safeParse({
+      name: 'Z',
+      type: 'DDLS',
+      action: 'impact',
+      siblingCheck: false,
+      siblingMaxCandidates: 4,
+    });
+    expect(siblingControls.success).toBe(true);
   });
 
   it('does not have group field', () => {
@@ -673,7 +949,7 @@ describe('getToolSchema', () => {
     expect(getToolSchema('UnknownTool', false)).toBeUndefined();
   });
 
-  it('returns schema for all 11 tools + hyperfocused', () => {
+  it('returns schema for all 12 tools + hyperfocused', () => {
     const tools = [
       'SAPRead',
       'SAPSearch',
@@ -684,6 +960,7 @@ describe('getToolSchema', () => {
       'SAPLint',
       'SAPDiagnose',
       'SAPTransport',
+      'SAPGit',
       'SAPContext',
       'SAPManage',
       'SAP',

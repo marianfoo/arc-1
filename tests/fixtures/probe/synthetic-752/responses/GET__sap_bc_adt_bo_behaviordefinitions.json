@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/bo/behaviordefinitions",
+  "method": "GET",
+  "statusCode": 404,
+  "body": "The requested resource does not exist",
+  "durationMs": 18
+}

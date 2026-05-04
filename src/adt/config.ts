@@ -17,6 +17,7 @@ export type FeatureMode = 'auto' | 'on' | 'off';
 export interface FeatureConfig {
   hana: FeatureMode;
   abapGit: FeatureMode;
+  gcts: FeatureMode;
   rap: FeatureMode;
   amdp: FeatureMode;
   ui5: FeatureMode;
@@ -30,6 +31,7 @@ export function defaultFeatureConfig(): FeatureConfig {
   return {
     hana: 'auto',
     abapGit: 'auto',
+    gcts: 'auto',
     rap: 'auto',
     amdp: 'auto',
     ui5: 'auto',
@@ -84,6 +86,8 @@ export interface AdtClientConfig {
    * The function handles token lifecycle (caching, refresh, re-login).
    */
   bearerTokenProvider?: () => Promise<string>;
+  /** Opt-in: disable SAML redirect via X-SAP-SAML2 header + saml2 query param */
+  disableSaml?: boolean;
   /** Maximum concurrent SAP HTTP requests. When set, requests beyond this limit queue. */
   maxConcurrent?: number;
 }

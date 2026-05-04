@@ -5,9 +5,7 @@
  * 1. CLI flags (--url, --user, etc.)
  * 2. Environment variables (SAP_URL, SAP_USER, etc.)
  * 3. .env file
- * 4. Defaults
- *
- * This matches the Go version's configuration precedence.
+ * 4. Defaults (all `allow*` flags false — restrictive by default)
  */
 
 /** MCP transport type */
@@ -15,6 +13,9 @@ export type TransportType = 'stdio' | 'http-streamable';
 
 /** Feature toggle: auto detects from SAP system, on/off forces */
 export type FeatureToggle = 'auto' | 'on' | 'off';
+
+/** Per-field config source (used by resolveConfig + startup log + `config show`). */
+export type ConfigSource = 'default' | { env: string } | { flag: string } | { file: string };
 
 /** Server configuration — all fields needed to start ARC-1 */
 export interface ServerConfig {
@@ -34,17 +35,20 @@ export interface ServerConfig {
   transport: TransportType;
   httpAddr: string;
 
-  // --- Safety (gates all write operations) ---
-  readOnly: boolean;
-  blockFreeSQL: boolean;
-  blockData: boolean;
-  allowedOps: string;
-  disallowedOps: string;
+  // --- Safety (positive opt-ins; defaults restrictive) ---
+  allowWrites: boolean;
+  allowDataPreview: boolean;
+  allowFreeSQL: boolean;
+  allowTransportWrites: boolean;
+  allowGitWrites: boolean;
   allowedPackages: string[];
-  enableTransports: boolean;
+  allowedTransports: string[];
+  /** Resolved deny-action patterns from SAP_DENY_ACTIONS (parsed + validated at startup). */
+  denyActions: string[];
 
   // --- Feature Detection ---
   featureAbapGit: FeatureToggle;
+  featureGcts: FeatureToggle;
   featureRap: FeatureToggle;
   featureAmdp: FeatureToggle;
   featureUi5: FeatureToggle;
@@ -58,8 +62,7 @@ export interface ServerConfig {
   systemType: 'auto' | 'btp' | 'onprem';
 
   // --- Authentication (MCP client → ARC-1) ---
-  apiKey?: string;
-  /** Multiple API keys with per-key profile assignment (key:profile pairs) */
+  /** Multiple API keys with per-key profile assignment (key:profile pairs). Single ARC1_API_KEY was removed in v0.7. */
   apiKeys?: Array<{ key: string; profile: string }>;
   oidcIssuer?: string;
   oidcAudience?: string;
@@ -75,6 +78,12 @@ export interface ServerConfig {
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
   ppStrict: boolean; // If true, PP failure = error (no fallback to shared client)
+  /** Opt-in: allow shared cookie auth to coexist with PP (shared client only) */
+  ppAllowSharedCookies: boolean;
+
+  // --- SAML Behavior ---
+  /** Opt-in: disable SAML redirect for ADT requests (X-SAP-SAML2 + saml2=disabled) */
+  disableSaml2: boolean;
 
   // --- Logging ---
   logFile?: string;
@@ -82,7 +91,7 @@ export interface ServerConfig {
   logFormat: 'text' | 'json';
 
   // --- Tool Mode ---
-  /** Tool mode: 'standard' (11 intent tools) or 'hyperfocused' (1 universal SAP tool, ~200 tokens) */
+  /** Tool mode: 'standard' (12 intent tools, SAPGit feature-gated) or 'hyperfocused' (1 universal SAP tool, ~200 tokens) */
   toolMode: 'standard' | 'hyperfocused';
 
   // --- Lint ---
@@ -90,6 +99,16 @@ export interface ServerConfig {
   abaplintConfig?: string;
   /** Enable pre-write lint validation (default: true) */
   lintBeforeWrite: boolean;
+  /** Enable pre-write server-side syntax check via ADT checkruns with inline content
+   *  (default: false, opt-in). When true, SAPWrite sends the proposed source to SAP's
+   *  compiler BEFORE writing and appends any error/warning messages to the write's
+   *  success response. The write is NOT blocked — errors are informational, deferred to
+   *  the eventual activation for real resolution. This keeps multi-file edits with
+   *  cross-object dependencies from hitting false-positive blocks on intermediate
+   *  writes (a referenced type/class/include is not yet updated). Useful for
+   *  single-file edits where you want early visibility into compile errors without
+   *  having to call SAPDiagnose separately. */
+  checkBeforeWrite: boolean;
 
   // --- Cache ---
   /** Cache mode: 'auto' (memory for stdio, sqlite for http-streamable), 'memory', 'sqlite', 'none' */
@@ -109,7 +128,7 @@ export interface ServerConfig {
   verbose: boolean;
 }
 
-/** Default configuration values */
+/** Default configuration values — restrictive by default. */
 export const DEFAULT_CONFIG: ServerConfig = {
   url: '',
   username: '',
@@ -119,14 +138,16 @@ export const DEFAULT_CONFIG: ServerConfig = {
   insecure: false,
   transport: 'stdio',
   httpAddr: '0.0.0.0:8080',
-  readOnly: true,
-  blockFreeSQL: true,
-  blockData: true,
-  allowedOps: '',
-  disallowedOps: '',
+  allowWrites: false,
+  allowDataPreview: false,
+  allowFreeSQL: false,
+  allowTransportWrites: false,
+  allowGitWrites: false,
   allowedPackages: ['$TMP'],
-  enableTransports: false,
+  allowedTransports: [],
+  denyActions: [],
   featureAbapGit: 'auto',
+  featureGcts: 'auto',
   featureRap: 'auto',
   featureAmdp: 'auto',
   featureUi5: 'auto',
@@ -139,8 +160,11 @@ export const DEFAULT_CONFIG: ServerConfig = {
   btpOAuthCallbackPort: 0,
   ppEnabled: false,
   ppStrict: false,
+  ppAllowSharedCookies: false,
+  disableSaml2: false,
   toolMode: 'standard',
   lintBeforeWrite: true,
+  checkBeforeWrite: false,
   cacheMode: 'auto',
   cacheFile: '.arc1-cache.db',
   cacheWarmup: false,

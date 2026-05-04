@@ -1,5 +1,122 @@
 # Changelog
 
+## [0.7.2](https://github.com/marianfoo/arc-1/compare/v0.7.1...v0.7.2) (2026-04-28)
+
+
+### Features
+
+* ETag-validated source cache + active/inactive SAPRead version parameter ([#186](https://github.com/marianfoo/arc-1/issues/186)) ([70bed22](https://github.com/marianfoo/arc-1/commit/70bed22859663106aba54b0213be57758ad51829))
+
+
+### Bug Fixes
+
+* detect HANA via S4CORE/HDB components ([#182](https://github.com/marianfoo/arc-1/issues/182)) ([87ec553](https://github.com/marianfoo/arc-1/commit/87ec553fa8011a3ffdddf41f12f252f7184c2057))
+
+## [0.7.1](https://github.com/marianfoo/arc-1/compare/v0.7.0...v0.7.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* restore npx package execution ([#189](https://github.com/marianfoo/arc-1/issues/189)) ([da05e01](https://github.com/marianfoo/arc-1/commit/da05e01ea30b0702126a9d12000a2b187fca6c9b))
+
+## [0.7.0](https://github.com/marianfoo/arc-1/compare/v0.6.10...v0.7.0) (2026-04-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* authorization refactor ([#181](https://github.com/marianfoo/arc-1/issues/181))
+
+### Features
+
+* add cds crud dependency guidance for ddls workflows ([#176](https://github.com/marianfoo/arc-1/issues/176)) ([f597486](https://github.com/marianfoo/arc-1/commit/f597486e71948356137e7d0111f5c3956a350c9c))
+* authorization refactor ([#181](https://github.com/marianfoo/arc-1/issues/181)) ([7be4ff0](https://github.com/marianfoo/arc-1/commit/7be4ff0af8029c32a4fc7e8949905922bb7320f4))
+* close RAP on-prem authoring gaps with preflight and handler scaffolding ([#173](https://github.com/marianfoo/arc-1/issues/173)) ([29ee0b5](https://github.com/marianfoo/arc-1/commit/29ee0b58f2224646a22a711cb68af03f70750233))
+* detect sibling DDLS DDLX coverage mismatches in SAPContext impact ([#177](https://github.com/marianfoo/arc-1/issues/177)) ([4f6e822](https://github.com/marianfoo/arc-1/commit/4f6e82242b4e0b439401a4f2daf9398d3638a06f))
+* harden SAPDiagnose dump and gateway diagnostics ([#174](https://github.com/marianfoo/arc-1/issues/174)) ([9383891](https://github.com/marianfoo/arc-1/commit/9383891055c009e9390988e1ff4553ad10917697))
+
+
+### Bug Fixes
+
+* harden SAP data preview diagnostics and SAPManage scope behavior ([#171](https://github.com/marianfoo/arc-1/issues/171)) ([6697d3e](https://github.com/marianfoo/arc-1/commit/6697d3ef17f9b490805dc2ae5bcc435611e15ab4))
+* SAPActivate phantom success + CLI/server alignment gaps (NW 7.50) ([#179](https://github.com/marianfoo/arc-1/issues/179)) ([4f2028e](https://github.com/marianfoo/arc-1/commit/4f2028e048b611b1ba106aeb3042ce99202388f9))
+
+## [Unreleased] — v0.7 — Authorization Refactor (**breaking change**)
+
+Complete rewrite of the authorization model. Introduces a single `ACTION_POLICY` matrix as the source of truth for `(tool, action) → (scope, opType)`; replaces negated safety flags with positive opt-ins; adds per-user `transports` and `git` scopes; makes `admin` imply all scopes; and makes `allowWrites=false` truly block every mutation.
+
+See [`docs_page/updating.md`](https://github.com/marianfoo/arc-1/blob/main/docs_page/updating.md#v07-authorization-refactor-breaking-change) for the full migration guide.
+
+### Breaking — removed
+
+- **Env vars**: `SAP_READ_ONLY`, `SAP_BLOCK_DATA`, `SAP_BLOCK_FREE_SQL`, `SAP_ENABLE_TRANSPORTS`, `SAP_ENABLE_GIT`, `SAP_ALLOWED_OPS`, `SAP_DISALLOWED_OPS`, `ARC1_PROFILE`, `ARC1_API_KEY` (single-key mode).
+- **CLI flags**: `--read-only`, `--block-data`, `--block-free-sql`, `--enable-transports`, `--enable-git`, `--allowed-ops`, `--disallowed-ops`, `--profile`, `--api-key`.
+- **Server config fields**: `readOnly`, `blockData`, `blockFreeSQL`, `enableTransports`, `enableGit`, `allowedOps`, `disallowedOps`, `dryRun`, `transportReadOnly`.
+- Server-side profile system (`PROFILES`, `PROFILE_SCOPES` tables).
+
+Startup aborts with a specific migration error pointing to `docs_page/updating.md` if any of these are set.
+
+### Breaking — added
+
+- **New env vars**: `SAP_ALLOW_WRITES`, `SAP_ALLOW_DATA_PREVIEW`, `SAP_ALLOW_FREE_SQL`, `SAP_ALLOW_TRANSPORT_WRITES`, `SAP_ALLOW_GIT_WRITES`, `SAP_DENY_ACTIONS`. All positive opt-ins; all defaults are restrictive.
+- **New scopes** (xs-security.json + `API_KEY_PROFILES`): `transports`, `git`. `admin` now implies all 7 scopes at extraction time.
+- **New role templates**: `MCPDeveloper` bundles `[read, write, transports, git]`; `MCPAdmin` lists all 7 scopes explicitly.
+- **New API-key profile `admin`** in addition to existing `viewer`/`viewer-data`/`viewer-sql`/`developer`/`developer-data`/`developer-sql`.
+
+### Fixed — six scope/safety classification bugs
+
+1. `SAPLint.set_formatter_settings` — was scope `read` at tool level, but the implementation called `OperationType.Update`. Now correctly classified as `write`.
+2. `SAPManage.flp_list_catalogs` / `flp_list_groups` / `flp_list_tiles` — were scope `write`, but the implementation called `OperationType.Read`. Now correctly classified as `read`.
+3. `SAPTransport.check` — was scope `write`, but is a read operation. Now correctly `read`.
+4. `SAPTransport.history` — was scope `write`, but is a read operation. Now correctly `read`.
+5. `checkTransport` did not consult `readOnly` (silent security gap). Transport mutations now require `allowWrites=true && allowTransportWrites=true`.
+6. `checkGit` did not consult `readOnly`. Git mutations now require `allowWrites=true && allowGitWrites=true`.
+
+### Added — observability
+
+- Startup `effective safety` log line with per-field source attribution (env / flag / file / default).
+- Contradiction warnings for useless combos (e.g., `allowTransportWrites=true` with `allowWrites=false`).
+- New `arc-1 config show` CLI subcommand (`--format=json|table`) that dumps the resolved effective policy without starting the server. Exits non-zero on config error.
+- CI validator (`npm run validate:policy`) asserts `ACTION_POLICY` matches `src/handlers/schemas.ts` action/type enums.
+
+## [0.6.10](https://github.com/marianfoo/arc-1/compare/v0.6.9...v0.6.10) (2026-04-20)
+
+
+### Features
+
+* add SAPGit tool with gCTS and abapGit integration ([#159](https://github.com/marianfoo/arc-1/issues/159)) ([196b8a0](https://github.com/marianfoo/arc-1/commit/196b8a02a20410466d7f8b0d6c640638e800fe9f))
+* diagnostic ADT type-availability probe ([#163](https://github.com/marianfoo/arc-1/issues/163)) ([6bf4365](https://github.com/marianfoo/arc-1/commit/6bf43655370a7e13aeb0234fbf4c9a52b816272c))
+
+
+### Bug Fixes
+
+* DTEL v2→v1 content-type fallback + SICF-aware error hints ([#169](https://github.com/marianfoo/arc-1/issues/169)) ([1b6760f](https://github.com/marianfoo/arc-1/commit/1b6760f173cd106c66c7f2e1d247d5b74917de5b))
+* **e2e:** make E2E suite pass cleanly on NetWeaver 7.50 ([#168](https://github.com/marianfoo/arc-1/issues/168)) ([750be05](https://github.com/marianfoo/arc-1/commit/750be05e583c4feac672da808b82d12af7d66c4d))
+* filter empty SAP_ALLOWED_PACKAGES entries and clarify docker docs ([#156](https://github.com/marianfoo/arc-1/issues/156)) ([81001da](https://github.com/marianfoo/arc-1/commit/81001dac40805bf5d2ac68947c1a6280cd864427))
+* integration suite passes cleanly on NW 7.50 ([#167](https://github.com/marianfoo/arc-1/issues/167)) ([1bc2984](https://github.com/marianfoo/arc-1/commit/1bc298453a1767dd156b41be0f62f4a31e5ac4f1))
+* make extract-sap-cookies work on Windows + Edge (fix [#149](https://github.com/marianfoo/arc-1/issues/149)) ([#154](https://github.com/marianfoo/arc-1/issues/154)) ([8e87600](https://github.com/marianfoo/arc-1/commit/8e876006b233c46681b526a996b93a96cdba6d2e))
+
+## [0.6.9](https://github.com/marianfoo/arc-1/compare/v0.6.8...v0.6.9) (2026-04-17)
+
+
+### Features
+
+* Add CDS-specific impact analysis ([#143](https://github.com/marianfoo/arc-1/issues/143)) ([0dab061](https://github.com/marianfoo/arc-1/commit/0dab061bbb0ef97bf4ae36d622499b48fdd7cd3b))
+* FEAT-43 SAPRead for AUTH, FTG2, ENHO (on-prem) ([#142](https://github.com/marianfoo/arc-1/issues/142)) ([2a827a1](https://github.com/marianfoo/arc-1/commit/2a827a15276e92f1edd35e3094018ca4510aaadf))
+* fix cookie→PP leak, gate saml2=disabled, wire cookies & verbose CLI ([#149](https://github.com/marianfoo/arc-1/issues/149)) ([74111ff](https://github.com/marianfoo/arc-1/commit/74111ff80f783f8212aa1100416ed10d389a397b))
+* SAPLint PrettyPrint (ADT code formatter) ([#145](https://github.com/marianfoo/arc-1/issues/145)) ([af6da11](https://github.com/marianfoo/arc-1/commit/af6da115c709f5da08e6c87da7420e96c5e3539f))
+* SAPTransport history action (object transport reverse lookup) ([#146](https://github.com/marianfoo/arc-1/issues/146)) ([8cae8f2](https://github.com/marianfoo/arc-1/commit/8cae8f26997f647f8bf093361516a0b98f218ea9))
+* Source Version / Revision History (on-prem) ([#144](https://github.com/marianfoo/arc-1/issues/144)) ([92f6ef2](https://github.com/marianfoo/arc-1/commit/92f6ef225433ca219bab9430fad9d43e7914260e))
+
+
+### Bug Fixes
+
+* modificationSupport guard + CSRF HEAD→GET fallback for S/4HANA Public Cloud ([#140](https://github.com/marianfoo/arc-1/issues/140)) ([9fcd4aa](https://github.com/marianfoo/arc-1/commit/9fcd4aae43d3e1268baecd0a73a4f47c6bf2debf))
+
+
+### Tests
+
+* restructure LLM evals by feature bucket + live MCP backend ([#147](https://github.com/marianfoo/arc-1/issues/147)) ([27f4f51](https://github.com/marianfoo/arc-1/commit/27f4f513d44273c22eb6d2a29f72939045746198))
+
 ## [0.6.8](https://github.com/marianfoo/arc-1/compare/v0.6.7...v0.6.8) (2026-04-16)
 
 

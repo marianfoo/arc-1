@@ -5,7 +5,7 @@
  * - SAPTransport create + get (Issues #9, #26, #70)
  * - SAPWrite update in a transportable package without explicit transport (Issue #56)
  *
- * Transport tests require the MCP server to be running with --enable-transports.
+ * Transport tests require the MCP server to be running with --allow-transport-writes.
  * Transportable-package write tests additionally require TEST_TRANSPORT_PACKAGE env var.
  *
  * Run: npm run test:e2e -- tests/e2e/saptransport.e2e.test.ts
@@ -14,7 +14,14 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
-import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
+import {
+  callTool,
+  classifyToolErrorSkip,
+  connectClient,
+  expectToolError,
+  expectToolSuccess,
+  expectToolSuccessOrSkip,
+} from './helpers.js';
 
 describe('E2E SAPTransport Tests', () => {
   let client: Client;
@@ -44,10 +51,17 @@ describe('E2E SAPTransport Tests', () => {
         description: desc,
       });
 
-      // Skip gracefully when transports aren't enabled on the MCP server
-      if (result.isError && result.content?.[0]?.text?.includes('transports not enabled')) {
+      // Skip gracefully when transport writes aren't enabled on the MCP server
+      if (result.isError && result.content?.[0]?.text?.includes('allowTransportWrites=false')) {
         transportsEnabled = false;
-        return ctx.skip('Transports not enabled on MCP server (--enable-transports)');
+        return ctx.skip('Transport writes not enabled on MCP server (--allow-transport-writes)');
+      }
+      // Known NW 7.50 backend gap: transport create returns 400
+      // "user action is not supported". All downstream tests depend on this.
+      const releaseSkip = classifyToolErrorSkip(result);
+      if (releaseSkip !== null) {
+        transportsEnabled = false;
+        return ctx.skip(releaseSkip);
       }
 
       const text = expectToolSuccess(result);
@@ -60,7 +74,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('retrieves the created transport with correct details', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
       requireOrSkip(ctx, createdTransportId, 'No transport was created in previous test');
 
       const result = await callTool(client, 'SAPTransport', {
@@ -78,7 +92,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('returns not-found message for non-existent transport', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
       const result = await callTool(client, 'SAPTransport', {
         action: 'get',
         id: 'ZZZK999999',
@@ -91,7 +105,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('lists transports without errors', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
       const result = await callTool(client, 'SAPTransport', {
         action: 'list',
       });
@@ -140,9 +154,14 @@ describe('E2E SAPTransport Tests', () => {
         action: 'create',
         description: `ARC-1 E2E delete test ${Date.now()}`,
       });
-      if (createResult.isError && createResult.content?.[0]?.text?.includes('transports not enabled')) {
+      if (createResult.isError && createResult.content?.[0]?.text?.includes('allowTransportWrites=false')) {
         transportsEnabled = false;
-        return ctx.skip('Transports not enabled on MCP server');
+        return ctx.skip('Transport writes not enabled on MCP server');
+      }
+      const backendSkip = classifyToolErrorSkip(createResult);
+      if (backendSkip !== null) {
+        transportsEnabled = false;
+        return ctx.skip(backendSkip);
       }
       const createText = expectToolSuccess(createResult);
       const match = createText.match(/([A-Z0-9]+K\d+)/);
@@ -158,7 +177,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('create with type W creates Customizing transport', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
 
       let id = '';
       try {
@@ -167,7 +186,7 @@ describe('E2E SAPTransport Tests', () => {
           description: `ARC-1 E2E type-W ${Date.now()}`,
           type: 'W',
         });
-        const text = expectToolSuccess(result);
+        const text = expectToolSuccessOrSkip(ctx, result);
         const match = text.match(/([A-Z0-9]+\w\d+)/);
         expect(match).toBeTruthy();
         id = match![1];
@@ -183,7 +202,7 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('reassign action changes transport owner', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
 
       let id = '';
       try {
@@ -192,7 +211,7 @@ describe('E2E SAPTransport Tests', () => {
           action: 'create',
           description: `ARC-1 E2E reassign test ${Date.now()}`,
         });
-        const createText = expectToolSuccess(createResult);
+        const createText = expectToolSuccessOrSkip(ctx, createResult);
         const match = createText.match(/([A-Z0-9]+K\d+)/);
         expect(match).toBeTruthy();
         id = match![1];
@@ -221,13 +240,13 @@ describe('E2E SAPTransport Tests', () => {
     });
 
     it('release_recursive releases transport', async (ctx) => {
-      if (!transportsEnabled) return ctx.skip('Transports not enabled on MCP server');
+      if (!transportsEnabled) return ctx.skip('Transport writes not enabled on MCP server');
 
       const createResult = await callTool(client, 'SAPTransport', {
         action: 'create',
         description: `ARC-1 E2E recursive-release ${Date.now()}`,
       });
-      const createText = expectToolSuccess(createResult);
+      const createText = expectToolSuccessOrSkip(ctx, createResult);
       const match = createText.match(/([A-Z0-9]+K\d+)/);
       expect(match).toBeTruthy();
       const id = match![1];
@@ -309,6 +328,50 @@ describe('E2E SAPTransport Tests', () => {
           console.error(`Failed to clean up test program ${testName}`);
         }
       }
+    });
+  });
+
+  // ── SAPTransport history (reverse lookup) ──────────────────────
+
+  describe('SAPTransport history action', () => {
+    it('returns valid JSON for an existing class fixture', async (ctx) => {
+      // By design this is read-only and should work independently from transport write enablement.
+      const result = await callTool(client, 'SAPTransport', {
+        action: 'history',
+        type: 'CLAS',
+        name: 'ZCL_ARC1_TEST',
+      });
+
+      if (result.isError) {
+        const text = result.content?.[0]?.text ?? '';
+        if (text.includes('Unknown tool')) {
+          return ctx.skip('SAPTransport tool not available on MCP server');
+        }
+        if (text.toLowerCase().includes('not found')) {
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.NO_FIXTURE}: ZCL_ARC1_TEST not found — run npm run test:e2e:fixtures first`,
+          );
+        }
+      }
+
+      const payload = JSON.parse(expectToolSuccess(result));
+      expect(payload.object.type).toBe('CLAS');
+      expect(payload.object.name).toBe('ZCL_ARC1_TEST');
+      expect(Array.isArray(payload.relatedTransports)).toBe(true);
+      expect(typeof payload.summary).toBe('string');
+      expect(payload.summary.length).toBeGreaterThan(0);
+    });
+
+    it('returns an error when type or name is missing', async (ctx) => {
+      const result = await callTool(client, 'SAPTransport', { action: 'history' });
+      if (result.isError && (result.content?.[0]?.text ?? '').includes('Unknown tool')) {
+        return ctx.skip('SAPTransport tool not available on MCP server');
+      }
+      expectToolError(result);
+      const text = result.content?.[0]?.text ?? '';
+      expect(text.toLowerCase()).toMatch(/type|name/);
     });
   });
 });

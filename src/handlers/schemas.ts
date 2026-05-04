@@ -1,5 +1,5 @@
 /**
- * Zod v4 input schemas for all 11 MCP tools.
+ * Zod v4 input schemas for all 12 MCP tools.
  *
  * These schemas provide runtime validation via safeParse() in handleToolCall().
  * JSON Schema generation via z.toJSONSchema() is planned for a future PR
@@ -49,6 +49,8 @@ const SAPREAD_TYPES_ONPREM = [
   'AUTH',
   'FTG2',
   'ENHO',
+  'VERSIONS',
+  'VERSION_SOURCE',
 ] as const;
 
 const SAPREAD_TYPES_BTP = [
@@ -81,27 +83,77 @@ const SAPREAD_TYPES_BTP = [
 const SAPREAD_CLAS_INCLUDES = ['main', 'testclasses', 'definitions', 'implementations', 'macros'] as const;
 const SAPREAD_DDLS_INCLUDES = ['elements'] as const;
 
-function validateSapReadInclude(
-  input: { type: string; include?: string },
+function validateSapReadInput(
+  input: { type: string; include?: string; versionUri?: string; sqlFilter?: string },
   ctx: { addIssue: (issue: { code: 'custom'; path: string[]; message: string }) => void },
 ): void {
-  if (!input.include) return;
+  if (input.include) {
+    const include = input.include.toLowerCase();
+    if (
+      (input.type === 'CLAS' || input.type === 'VERSIONS') &&
+      !SAPREAD_CLAS_INCLUDES.includes(include as (typeof SAPREAD_CLAS_INCLUDES)[number])
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['include'],
+        message: `Invalid include value "${input.include}" for type ${input.type}. Valid values: ${SAPREAD_CLAS_INCLUDES.join(', ')}`,
+      });
+    }
 
-  const include = input.include.toLowerCase();
-  if (input.type === 'CLAS' && !SAPREAD_CLAS_INCLUDES.includes(include as (typeof SAPREAD_CLAS_INCLUDES)[number])) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['include'],
-      message: `Invalid include value "${input.include}" for type CLAS. Valid values: ${SAPREAD_CLAS_INCLUDES.join(', ')}`,
-    });
+    if (input.type === 'DDLS' && !SAPREAD_DDLS_INCLUDES.includes(include as (typeof SAPREAD_DDLS_INCLUDES)[number])) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['include'],
+        message: `Invalid include value "${input.include}" for type DDLS. Valid values: ${SAPREAD_DDLS_INCLUDES.join(', ')}`,
+      });
+    }
   }
 
-  if (input.type === 'DDLS' && !SAPREAD_DDLS_INCLUDES.includes(include as (typeof SAPREAD_DDLS_INCLUDES)[number])) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['include'],
-      message: `Invalid include value "${input.include}" for type DDLS. Valid values: ${SAPREAD_DDLS_INCLUDES.join(', ')}`,
-    });
+  if (input.type === 'VERSION_SOURCE') {
+    const versionUri = String(input.versionUri ?? '');
+    if (!versionUri) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['versionUri'],
+        message: 'VERSION_SOURCE requires versionUri.',
+      });
+      return;
+    }
+    if (!versionUri.startsWith('/sap/bc/adt/')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['versionUri'],
+        message: 'VERSION_SOURCE versionUri must start with /sap/bc/adt/.',
+      });
+    }
+  }
+
+  if (input.type === 'TABLE_CONTENTS' && input.sqlFilter) {
+    const sqlFilter = input.sqlFilter.trim();
+    if (/^select\b/i.test(sqlFilter)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must be a condition expression only (no SELECT statement). Example: "MANDT = \'100\'" or "MATNR LIKE \'Z%\'".',
+      });
+    }
+    if (/^where\b/i.test(sqlFilter)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must not start with WHERE. Pass only the condition expression, for example: "MANDT = \'100\'".',
+      });
+    }
+    if (sqlFilter.includes(';')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sqlFilter'],
+        message:
+          'TABLE_CONTENTS sqlFilter must contain exactly one condition expression (no semicolons or multiple statements).',
+      });
+    }
   }
 }
 
@@ -114,11 +166,14 @@ export const SAPReadSchema = z
     method: z.string().optional(),
     expand_includes: z.coerce.boolean().optional(),
     format: z.enum(['text', 'structured']).optional(),
+    version: z.enum(['active', 'inactive', 'auto']).optional().default('active'),
+    force_refresh: z.coerce.boolean().optional(),
     maxRows: z.coerce.number().optional(),
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
+    versionUri: z.string().optional(),
   })
-  .superRefine((input, ctx) => validateSapReadInclude(input, ctx));
+  .superRefine((input, ctx) => validateSapReadInput(input, ctx));
 
 export const SAPReadSchemaBtp = z
   .object({
@@ -128,11 +183,14 @@ export const SAPReadSchemaBtp = z
     group: z.string().optional(),
     method: z.string().optional(),
     format: z.enum(['text', 'structured']).optional(),
+    version: z.enum(['active', 'inactive', 'auto']).optional().default('active'),
+    force_refresh: z.coerce.boolean().optional(),
     maxRows: z.coerce.number().optional(),
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
+    versionUri: z.string().optional(),
   })
-  .superRefine((input, ctx) => validateSapReadInclude(input, ctx));
+  .superRefine((input, ctx) => validateSapReadInput(input, ctx));
 
 // ─── SAPSearch ──────────────────────────────────────────────────────
 
@@ -272,7 +330,7 @@ const batchObjectSchemaBtp = z.object({
 });
 
 export const SAPWriteSchema = z.object({
-  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create']),
+  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create', 'scaffold_rap_handlers']),
   type: z.enum(SAPWRITE_TYPES_ONPREM).optional(),
   name: z.string().optional(),
   source: z.string().optional(),
@@ -308,14 +366,19 @@ export const SAPWriteSchema = z.object({
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
+  preflightBeforeWrite: z.coerce.boolean().optional(),
+  checkBeforeWrite: z.coerce.boolean().optional(),
   refObjectType: z.string().optional(),
   refObjectName: z.string().optional(),
   refObjectDescription: z.string().optional(),
+  bdefName: z.string().optional(),
+  autoApply: z.coerce.boolean().optional(),
+  targetAlias: z.string().optional(),
   objects: z.array(batchObjectSchemaOnprem).optional(),
 });
 
 export const SAPWriteSchemaBtp = z.object({
-  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create']),
+  action: z.enum(['create', 'update', 'delete', 'edit_method', 'batch_create', 'scaffold_rap_handlers']),
   type: z.enum(SAPWRITE_TYPES_BTP).optional(),
   name: z.string().optional(),
   source: z.string().optional(),
@@ -351,9 +414,14 @@ export const SAPWriteSchemaBtp = z.object({
   category: z.enum(['0', '1']).optional(),
   version: z.string().optional(),
   lintBeforeWrite: z.coerce.boolean().optional(),
+  preflightBeforeWrite: z.coerce.boolean().optional(),
+  checkBeforeWrite: z.coerce.boolean().optional(),
   refObjectType: z.string().optional(),
   refObjectName: z.string().optional(),
   refObjectDescription: z.string().optional(),
+  bdefName: z.string().optional(),
+  autoApply: z.coerce.boolean().optional(),
+  targetAlias: z.string().optional(),
   objects: z.array(batchObjectSchemaBtp).optional(),
 });
 
@@ -392,34 +460,53 @@ export const SAPNavigateSchema = z.object({
 // ─── SAPLint ────────────────────────────────────────────────────────
 
 export const SAPLintSchema = z.object({
-  action: z.enum(['lint', 'lint_and_fix', 'list_rules']),
+  action: z.enum(['lint', 'lint_and_fix', 'list_rules', 'format', 'get_formatter_settings', 'set_formatter_settings']),
   source: z.string().optional(),
   name: z.string().optional(),
+  indentation: z.coerce.boolean().optional(),
+  style: z.enum(['keywordUpper', 'keywordLower', 'keywordAuto', 'none']).optional(),
   rules: z.record(z.string(), z.any()).optional(),
 });
 
 // ─── SAPDiagnose ────────────────────────────────────────────────────
 
 export const SAPDiagnoseSchema = z.object({
-  action: z.enum(['syntax', 'unittest', 'atc', 'dumps', 'traces', 'quickfix', 'apply_quickfix']),
+  action: z.enum([
+    'syntax',
+    'unittest',
+    'atc',
+    'dumps',
+    'traces',
+    'system_messages',
+    'gateway_errors',
+    'quickfix',
+    'apply_quickfix',
+  ]),
   name: z.string().optional(),
   type: z.string().optional(),
   source: z.string().optional(),
   line: z.coerce.number().optional(),
   column: z.coerce.number().optional(),
+  version: z.enum(['active', 'inactive']).optional(),
   proposalUri: z.string().optional(),
   proposalUserContent: z.string().optional(),
   variant: z.string().optional(),
   id: z.string().optional(),
+  detailUrl: z.string().optional(),
+  errorType: z.string().optional(),
   user: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
   maxResults: z.coerce.number().optional(),
+  sections: z.array(z.string()).optional(),
+  includeFullText: z.coerce.boolean().optional(),
   analysis: z.enum(['hitlist', 'statements', 'dbAccesses']).optional(),
 });
 
 // ─── SAPTransport ───────────────────────────────────────────────────
 
 export const SAPTransportSchema = z.object({
-  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check']),
+  action: z.enum(['list', 'get', 'create', 'release', 'delete', 'reassign', 'release_recursive', 'check', 'history']),
   id: z.string().optional(),
   description: z.string().optional(),
   name: z.string().optional(),
@@ -431,28 +518,91 @@ export const SAPTransportSchema = z.object({
   recursive: z.boolean().optional(),
 });
 
+// ─── SAPGit ─────────────────────────────────────────────────────────
+
+export const SAPGitSchema = z.object({
+  action: z.enum([
+    'list_repos',
+    'whoami',
+    'config',
+    'branches',
+    'external_info',
+    'history',
+    'objects',
+    'check',
+    'stage',
+    'clone',
+    'pull',
+    'push',
+    'commit',
+    'switch_branch',
+    'create_branch',
+    'unlink',
+  ]),
+  repoId: z.string().optional(),
+  url: z.string().optional(),
+  branch: z.string().optional(),
+  package: z.string().optional(),
+  transport: z.string().optional(),
+  commit: z.string().optional(),
+  message: z.string().optional(),
+  description: z.string().optional(),
+  objects: z
+    .array(
+      z.object({
+        type: z.string(),
+        name: z.string(),
+        package: z.string().optional(),
+        path: z.string().optional(),
+        state: z.string().optional(),
+        operation: z.string().optional(),
+      }),
+    )
+    .optional(),
+  user: z.string().optional(),
+  password: z.string().optional(),
+  token: z.string().optional(),
+  backend: z.enum(['gcts', 'abapgit']).optional(),
+  limit: z.coerce.number().optional(),
+});
+
 // ─── SAPContext ─────────────────────────────────────────────────────
 
 const SAPCONTEXT_TYPES_ONPREM = ['CLAS', 'INTF', 'PROG', 'FUNC', 'DDLS'] as const;
 const SAPCONTEXT_TYPES_BTP = ['CLAS', 'INTF', 'DDLS'] as const;
+const SAPCONTEXT_SIBLING_MAX_CANDIDATES_CAP = 10;
+const siblingMaxCandidatesSchema = z.coerce
+  .number()
+  .int()
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    return Math.min(Math.max(value, 1), SAPCONTEXT_SIBLING_MAX_CANDIDATES_CAP);
+  });
 
 export const SAPContextSchema = z.object({
-  action: z.enum(['deps', 'usages']).optional(),
+  action: z.enum(['deps', 'usages', 'impact']).optional(),
   type: z.enum(SAPCONTEXT_TYPES_ONPREM).optional(),
   name: z.string(),
   source: z.string().optional(),
   group: z.string().optional(),
   maxDeps: z.coerce.number().optional(),
   depth: z.coerce.number().min(1).max(3).optional(),
+  includeIndirect: z.boolean().optional(),
+  siblingCheck: z.boolean().optional(),
+  siblingMaxCandidates: siblingMaxCandidatesSchema,
 });
 
 export const SAPContextSchemaBtp = z.object({
-  action: z.enum(['deps', 'usages']).optional(),
+  action: z.enum(['deps', 'usages', 'impact']).optional(),
   type: z.enum(SAPCONTEXT_TYPES_BTP).optional(),
   name: z.string(),
   source: z.string().optional(),
   maxDeps: z.coerce.number().optional(),
   depth: z.coerce.number().min(1).max(3).optional(),
+  includeIndirect: z.boolean().optional(),
+  siblingCheck: z.boolean().optional(),
+  siblingMaxCandidates: siblingMaxCandidatesSchema,
 });
 
 // ─── SAPManage ──────────────────────────────────────────────────────
@@ -541,6 +691,8 @@ export function getToolSchema(toolName: string, isBtp: boolean, textSearchAvaila
       return SAPDiagnoseSchema;
     case 'SAPTransport':
       return SAPTransportSchema;
+    case 'SAPGit':
+      return SAPGitSchema;
     case 'SAPContext':
       return isBtp ? SAPContextSchemaBtp : SAPContextSchema;
     case 'SAPManage':

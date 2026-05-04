@@ -1,0 +1,451 @@
+# Tool Extension Points — Custom Tools on Top of ARC-1
+
+**Date:** 2026-04-26
+**Status:** Research / Not yet decided — design only, no implementation in this PR
+**Related roadmap:** [FEAT-61: Tool Extension Points (Custom Tools)](../../docs_page/roadmap.md#feat-61)
+**Related (deferred):** FEAT-29g (Embeddable server mode), FEAT-59 (Multi-tenant per-instance config), FEAT-26 (MCP Client Config Snippets)
+
+---
+
+## 1. Goal
+
+Let downstream users add their own tools to an ARC-1 instance and have those tools reuse the same building blocks the built-in tools rely on (ADT client, HTTP transport, safety system, audit, cache), without forking the repository.
+
+The user-stated goals, restated as design constraints:
+
+1. **A defined "what is a tool"** — a single, small, documented contract that declares: name, schema, scope, operation type, optional feature gate, handler.
+2. **Reuse, not duplicate, the backend plumbing** — extension authors call `AdtClient` / `AdtHttpClient` / `SafetyConfig` rather than re-implementing CSRF, auth, cookies, locks, MIME negotiation, or audit.
+3. **Stable, clearly-labelled public API** — what is exported from `arc-1` and considered stable vs. internal must be unambiguous; everything else stays internal so the core can keep evolving.
+4. **Start simple, then grow** — pick the smallest extension surface that solves the 80% case first, so we do not freeze the wrong API and have to break it later. No new transports, no new auth providers, no background daemons in v1.
+
+This document is **research and design only.** It does not propose code changes. The roadmap entry [FEAT-61](../../docs_page/roadmap.md#feat-61) is the implementation tracker.
+
+---
+
+## 2. Why this needs care in ARC-1 specifically
+
+ARC-1 is not a generic MCP shell — it is a centralized, admin-controlled SAP gateway. Six properties of the current design directly shape the extension surface:
+
+| Property | Implication for extensions |
+|----------|---------------------------|
+| **Server safety ceiling** ([src/adt/safety.ts](../../src/adt/safety.ts)) | A custom tool must not be able to bypass `allowWrites`, `allowedPackages`, `allowFreeSQL`, `denyActions`. Every plugin call site must go through `checkOperation()` / `checkPackage()`. |
+| **Per-action scope policy** ([src/authz/policy.ts](../../src/authz/policy.ts)) | Every tool action ships with an `ACTION_POLICY` entry (scope + opType + optional featureGate). Plugins must register one too — the validator at `scripts/validate-action-policy.ts` should accept plugin-contributed entries. |
+| **Per-user identity (Principal Propagation)** ([src/server/server.ts:220](../../src/server/server.ts#L220)) | The handler receives an `AdtClient` that is already wired to the right SAP user. Plugins must not create their own `AdtClient` from raw config — they must accept the one passed in. |
+| **Audit log** ([src/server/audit.ts](../../src/server/audit.ts)) | `tool_call_start`, `tool_call_end`, `safety_blocked` events bracket every call. Plugin handlers should not emit their own audit events; the framework emits them around the call. |
+| **`stdout` is sacred** ([CLAUDE.md](../../CLAUDE.md) — "Security & Architectural Invariants") | One stray `console.log` in a plugin breaks the MCP JSON-RPC channel. Plugins must use the structured `logger` (stderr) or nothing. |
+| **Fast tool-list pruning** ([src/server/server.ts:101](../../src/server/server.ts#L101)) | The `ListTools` response is filtered per user (scopes + denyActions) before the LLM ever sees it. Plugin tool/action enums need to participate in this filter — which means they need a real `ACTION_POLICY` entry, not a side-channel. |
+
+**Conclusion:** the extension contract has to be opinionated. A "free-form, do whatever you want" plugin model would break exactly the properties that make ARC-1 different from every other ABAP MCP server.
+
+---
+
+## 3. What "a tool" actually is in ARC-1 today
+
+A built-in tool such as `SAPRead` is split across six places. Any extension contract has to cover the same surface in one place — otherwise plugin authors will forget pieces and ship broken tools.
+
+| Concern | File | Today | What an extension contract must replace |
+|---------|------|-------|------------------------------------------|
+| MCP tool definition (name, description, JSON schema) | [src/handlers/tools.ts](../../src/handlers/tools.ts) | Hand-written `ToolDefinition` plus BTP/on-prem variants | One `defineTool()` call returns the definition |
+| Runtime input validation | [src/handlers/schemas.ts](../../src/handlers/schemas.ts) | Zod v4 schema, BTP/on-prem variants, `getToolSchema()` lookup | Same Zod schema, exposed by the plugin |
+| Scope + opType + featureGate | [src/authz/policy.ts](../../src/authz/policy.ts) (`ACTION_POLICY`) | Static map, validated by `scripts/validate-action-policy.ts` | One entry per (tool, action) declared by the plugin |
+| Routing | [src/handlers/intent.ts:1104](../../src/handlers/intent.ts#L1104) (`switch (toolName)`) | Hand-written switch | Plugin tools route via the registry, not the switch |
+| Hyperfocused mapping | [src/handlers/hyperfocused.ts](../../src/handlers/hyperfocused.ts) (`ACTION_TO_TOOL`) | Static map | Plugin opts in by exposing a hyperfocused action key |
+| BTP/on-prem variant | tools.ts + schemas.ts BTP arrays | Two enums per tool | Plugin declares `availableOn: ['onprem','btp']` (or `'all'`) |
+| Scope-aware listing pruning | [src/server/server.ts:101](../../src/server/server.ts#L101) | Reads `ACTION_POLICY` | Same code, no change — relies on (3) |
+| Audit logging | [src/handlers/intent.ts:1011](../../src/handlers/intent.ts#L1011) | `tool_call_start` / `tool_call_end` wrapper | Plugin code never logs `tool_call_*` itself; the framework wraps |
+
+The intent surface is intentionally narrow — there are 12 built-in tools, not 200. Extensions must follow the same intent-based shape: small N of well-described tools, each with `action`/`type` enums. A plugin that adds 50 micro-tools defeats the whole point of the design.
+
+---
+
+## 4. The reusable "public surface" — what plugins need to call
+
+These are the building blocks that exist today and would be re-exported (with stable contracts) for plugins. Everything else stays internal.
+
+### 4.1 `AdtClient` (high-level reads)
+
+`src/adt/client.ts` — the facade for all built-in read operations. Methods are domain-grouped (`getProgram`, `getClass`, `searchObject`, `getDomain`, etc.) and already call `checkOperation()`.
+
+For plugins, the recommended pattern is:
+
+```ts
+// Inside a plugin handler
+async ({ client }) => {
+  const source = await client.getProgram('ZMY_REPORT');
+  return { content: [{ type: 'text', text: source }] };
+}
+```
+
+This is the lowest-risk reuse path: the client is already configured for the current user (PP), discovery map is injected, safety is enforced, errors are typed.
+
+### 4.2 `AdtHttpClient` (low-level HTTP)
+
+`src/adt/http.ts` — for endpoints `AdtClient` does not yet expose. Plugins call `client.http.get(path)` / `client.http.post(path, body, contentType)`. The HTTP layer handles CSRF (HEAD-based fetch with GET fallback), cookies, MIME negotiation, 415/406 retry, 401 retry, semaphore, BTP proxy, principal propagation. Plugins must not import `undici` or `fetch` directly.
+
+For lock→modify→unlock sequences, plugins use the existing `withStatefulSession()` helper:
+
+```ts
+await client.http.withStatefulSession(async (session) => {
+  // session shares CSRF/cookies; do lock→write→unlock here
+});
+```
+
+### 4.3 `SafetyConfig` + `checkOperation()` / `checkPackage()` / `checkTransport()`
+
+Every plugin handler that touches SAP must call the appropriate safety check first, identical to built-in handlers. Three rules:
+
+1. The safety config is not mutable from a plugin — `client.safety` is read-only.
+2. Mutating ops require `allowWrites=true` plus the user's scope.
+3. Package allowlist is enforced for *writes only*; reads are never package-gated.
+
+The plugin contract enforces this by passing `safety` into the handler context but not exposing any setter.
+
+### 4.4 `CachingLayer`
+
+`src/cache/caching-layer.ts` — used by built-in `SAPRead` for cached source. Plugins can opt in via `ctx.cache?.getSource(type, name, fetcher)`. Optional; cache may be `undefined` (memory mode disabled, or no cache).
+
+### 4.5 `logger` + structured audit events
+
+`src/server/logger.ts` — stderr-only. Plugins use `logger.info(...)`, `logger.warn(...)`, `logger.error(...)`. Plugins do not call `logger.emitAudit(...)` directly: the framework already brackets every plugin tool call with `tool_call_start` / `tool_call_end`. If a plugin needs domain-specific audit lines, we add a typed event to the AuditEvent union — not free-form audit emission from third-party code.
+
+### 4.6 Typed errors
+
+`src/adt/errors.ts` — `AdtApiError`, `AdtSafetyError`, `AdtNetworkError`, plus the `classifySapDomainError()` helper. Plugins should *throw* these, not catch-and-rewrap into plain `Error`, so the central error formatter (`formatErrorForLLM`) can produce LLM-friendly hints consistently.
+
+### 4.7 XML / JSON parsing helpers
+
+`src/adt/xml-parser.ts` exposes a long list of `parseXxx` functions used by `AdtClient`. These would *not* be public in v1 — they change frequently as SAP releases shift. Plugins that need to parse ADT XML should either use `fast-xml-parser` themselves (it is already a runtime dep) or, better, file an issue to add a high-level method to `AdtClient`.
+
+### 4.8 What must stay internal
+
+The following are deliberately *not* part of the public surface, even if a plugin would find them convenient:
+
+| Internal area | Why off-limits |
+|---------------|----------------|
+| `src/server/server.ts` (`createServer`, `buildAdtConfig`, `createPerUserClient`) | Plugins must not construct their own clients — that bypasses PP and the safety ceiling. |
+| `src/server/http.ts` (auth chain, JWT validation, profiles) | One mistake = auth bypass. Auth code stays in core. |
+| `src/server/config.ts`, `ServerConfig` writes | Config is parsed once at startup; runtime mutation is a footgun. |
+| `src/aff/validator.ts`, `src/lint/lint.ts` | These are internal SAP-domain validators that the core uses opportunistically. Exposing them couples plugins to abaplint version churn. |
+| Cookie/session/CSRF token state on `AdtHttpClient` | Encapsulated for a reason; plugins use `withStatefulSession()` instead. |
+
+---
+
+## 5. Survey: how TypeScript projects expose extension points
+
+These are the seven realistic patterns. The trade-off matrix at the end ranks them against ARC-1's design principles.
+
+### A. In-tree contributions (status quo)
+
+User forks the repo, adds a tool to `tools.ts` / `schemas.ts` / `intent.ts` / `policy.ts`, opens a PR.
+
+* **Pros:** zero new abstraction, full review, clear ownership, atomic with the rest of the codebase.
+* **Cons:** every customer-specific tool either lives in upstream or in a fork; high friction; private/customer-specific tools cannot be merged at all.
+* **Examples:** ESLint pre-plugin era, every npm CLI before plugin systems.
+
+### B. Local config-driven loading (file paths in env)
+
+Admin sets `ARC1_PLUGINS=/etc/arc1/plugins/foo.js,/etc/arc1/plugins/bar.js`. The server `await import()`s each path at startup and registers exported tools.
+
+* **Pros:** trivial to implement (~50 lines); works on stdio and HTTP equally; admin remains in full control of what code runs (admin chose the file path); no npm dependency at runtime; fits the centralized-gateway model.
+* **Cons:** plugin code is fully trusted with same privileges as ARC-1 core; no version pinning unless admin manages it manually.
+* **Examples:** ESLint `--rulesdir`, Vitest custom reporters via path, `--require` Node hooks.
+
+### C. NPM peer-package plugins
+
+Plugin is published as `arc1-plugin-foo` on npm, declares `"peerDependencies": { "arc-1": "^X.Y" }`. The server discovers plugins by scanning `dependencies` for the prefix, or via explicit allowlist `ARC1_PLUGINS=arc1-plugin-foo,arc1-plugin-bar`.
+
+* **Pros:** version pinning via package.json; ecosystem-friendly; `npm audit` works; plugin authors publish independently; users `npm install arc1-plugin-foo` and restart.
+* **Cons:** still arbitrary code execution; encourages a plugin marketplace that ARC-1's design philosophy actively pushes against (centralized vs. fragmented). Also fights with the BTP CF + Docker deployment model — plugins would need to be baked into the container image or staged via `mta.yaml`.
+* **Examples:** ESLint plugins, Babel plugins, `prettier`, `vite`.
+
+### D. Local trusted plugin directory
+
+Admin drops a `.js` or `.ts` file into `~/.arc1/plugins/` (or a path configured via `ARC1_PLUGIN_DIR`). The server scans on startup. Same trust as B, just convention-driven location.
+
+* **Pros:** familiar pattern (Claude Code skills, VS Code extensions, Vim packages); no env-var listing required.
+* **Cons:** less explicit than B — admins may forget what's in the directory; surprising behaviour on shared servers.
+
+### E. Manifest-only plugins (declarative, no JavaScript)
+
+Plugin is a single JSON/YAML file describing a tool that calls a known SAP endpoint with parameters substituted from the schema. The core ships a built-in "manifest interpreter" that maps `{endpoint, method, headers, schema, scope, opType}` → an HTTP call through `AdtHttpClient`.
+
+* **Pros:** safest model — no JS execution; can be shipped via Git; trivially auditable (`git diff` shows exactly the new HTTP surface); fits MCP's "data, not code" ethos.
+* **Cons:** only covers thin wrappers around single ADT/OData endpoints; cannot do parsing, multi-call orchestration, lint, or local computation. Useful subset, but not a general extension model.
+* **Examples:** Postman collections, OpenAPI-driven tools, Terraform providers' YAML schemas.
+
+### F. Out-of-process MCP plugins (sub-MCP servers)
+
+Each "plugin" is itself an MCP server (separate Node process, separate stdio/HTTP). ARC-1 acts as a *meta-server* and proxies tool calls. A plugin declares its name prefix and ARC-1 routes `Custom_FooTool` → plugin process.
+
+* **Pros:** strong isolation — plugin crash does not take down ARC-1; plugins can be in any language; clean trust boundary; plugins do not share memory or auth with core.
+* **Cons:** complex to implement (process supervision, stdio multiplexing, restart semantics); adds operational surface (how does Cloud Foundry deploy multiple processes?); duplicates SAP auth (each sub-process needs its own SAP session unless we relay tokens, which re-introduces the auth coupling we tried to avoid).
+* **Examples:** Language Server Protocol servers, MCP itself.
+
+### G. Sandboxed in-process plugins (worker_threads / vm / WASM)
+
+Plugin runs in a Node `worker_threads` worker or `vm` sandbox or compiled to WASM. Communication via structured-clone messages.
+
+* **Pros:** isolation without a separate process; can limit CPU/memory.
+* **Cons:** complex; Node `vm` is famously not a security boundary; `worker_threads` does not protect against malicious plugins (they can still call `fs`); WASM is a real boundary but limits the plugin to pure compute (no SAP HTTP unless we proxy it back, which is just F with extra steps).
+
+### Trade-off matrix (1 = best fit, 7 = worst)
+
+| Pattern | Simplicity | Trust model | BTP fit | Reuse of core | Versioning | Total |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|
+| **B. Local config-driven** | 1 | 3 | 1 | 1 | 4 | **10** ★ |
+| E. Manifest-only | 2 | 1 | 1 | 5 | 2 | 11 |
+| A. In-tree | 4 | 1 | 1 | 1 | 1 | **8** ★ (status quo) |
+| D. Plugin directory | 2 | 4 | 2 | 1 | 4 | 13 |
+| C. NPM peer | 5 | 5 | 4 | 1 | 1 | 16 |
+| F. Out-of-process MCP | 6 | 2 | 5 | 4 | 3 | 20 |
+| G. Sandboxed in-proc | 7 | 3 | 5 | 4 | 5 | 24 |
+
+A and B win the matrix. They are also the cheapest to ship — A already exists; B is ~50 lines on top.
+
+---
+
+## 6. Recommended phased approach
+
+The advice "start simple before going to complicate to not produce too many breaking changes from the beginning" maps directly onto these phases. Each phase is an opt-in capability — no phase is mandatory and any phase can be the final state if the next is not justified.
+
+### Phase 0: Define the public API boundary (no new feature)
+
+Before adding any plugin loader, freeze what is and is not part of the public API. This is the smallest possible step and the one that prevents the most pain later.
+
+* Add a `src/public/` folder (or use `package.json#exports` subpaths) that re-exports only the symbols plugins are allowed to use: `defineTool`, `AdtClient`, `AdtHttpClient`, `SafetyConfig`, `checkOperation`, `checkPackage`, `checkTransport`, `OperationType`, `Scope`, `ACTION_POLICY` types, `ToolDefinition`, `ToolResult`, `AdtApiError`/`AdtSafetyError`/`AdtNetworkError`, `logger`. Everything else stays accessible by deep import but is documented as internal.
+* Add semver discipline: anything in `src/public/` is on the public API contract; breaking it bumps the major.
+* No runtime behaviour change. All built-in handlers continue to deep-import.
+
+This is the prerequisite for all later phases. It is also valuable on its own — it answers the user-stated requirement *"clearly defined documentation how to use, what is public and ready to use"*.
+
+### Phase 1: In-tree custom-tool registry behind a feature flag
+
+Add a `src/registry/tool-registry.ts` that holds:
+
+* A `Map<toolName, RegisteredTool>` for plugin-contributed tools.
+* An equivalent `Map<toolName.action, ActionPolicy>` extension that overlays `ACTION_POLICY` (or a registry-aware `getActionPolicy()`).
+
+Built-in tools are registered identically (one `register(builtinTool)` call per built-in at startup). The intent.ts switch is replaced with `registry.dispatch(toolName, args, ctx)`, which still routes built-ins to today's `handleSAPRead` / `handleSAPWrite` / etc.
+
+Outcome: zero external behaviour change, but the codebase is now extension-shaped. Adding a tool is "register it in the registry from src/handlers/intent.ts", which is one line per tool. This is what we'd ship first because it makes Phase 2 a small additional change.
+
+### Phase 2: Local trusted plugin loader (admin-explicit)
+
+Add `ARC1_PLUGINS=/path/to/plugin.js[,/path/to/another.js]`. At startup, after Phase 1's registry is populated with built-ins, the loader does:
+
+1. For each path: refuse to load if the file is not absolute, not readable, world-writable, or not owned by the same user as the ARC-1 process. (Mirrors `ssh` `IdentityFile` permission checks.)
+2. `await import(pathToFileURL(path).href)` — uses Node's ESM dynamic import.
+3. Validate the default export is `{ apiVersion: 1, name, tools: Tool[] }`.
+4. For every `tool` in the plugin: assert a corresponding `ACTION_POLICY` entry, assert the tool name is unique, assert the name is in the `Custom_*` or `X_*` namespace (so built-in names cannot be shadowed), register it.
+5. Emit a startup audit event `plugin_loaded { name, version, file, toolNames }` so admins see exactly what was loaded.
+6. If any plugin fails to load: refuse to start with a clear error. (Matching ARC-1's "fail-fast on invalid input" pattern from `SAP_DENY_ACTIONS` and `validateConfig`.)
+
+This is the smallest addition that lets a customer add a tool without forking. The "trust" model is: whoever can write to the path can run code as the ARC-1 service account — same as any binary that admin runs. No claim of sandboxing, no claim of marketplace.
+
+### Phase 3 (optional): Manifest-only plugins for thin endpoint wrappers
+
+Add support for a JSON manifest plugin format that does not contain JS:
+
+```jsonc
+{
+  "apiVersion": 1,
+  "name": "my-team-tools",
+  "tools": [
+    {
+      "name": "Custom_GetMyEndpoint",
+      "description": "Read /sap/zcust/myservice for entity X",
+      "schema": { "type": "object", "properties": { "id": { "type": "string" } }, "required": ["id"] },
+      "scope": "read",
+      "opType": "Read",
+      "request": {
+        "method": "GET",
+        "path": "/sap/zcust/myservice/Entity('{id}')",
+        "accept": "application/json"
+      }
+    }
+  ]
+}
+```
+
+The core ships a "manifest interpreter" that maps each manifest tool to a real `defineTool({ ... handler: () => client.http.get(...) })`. Path templates are substituted from validated schema values; nothing else is allowed. No JS, no eval. This is the safest possible plugin model and covers the long tail of "I just want to wrap this one OData endpoint".
+
+### Phase 4 (only if demand): NPM peer-package plugins
+
+Add a small discovery rule: ARC-1 looks at its own `dependencies`/`peerDependencies` and at an explicit `ARC1_PLUGINS=arc1-plugin-foo` allowlist, and dynamically imports those packages. Same registry contract as Phases 1–2. This is where it would make sense to add a signed plugin convention (npm provenance, or an SHA256 pinning mechanism) if the ecosystem grows.
+
+This phase is **not recommended unless customers ask for it**. The centralized-gateway model already favours admin-controlled deployment; an npm marketplace fights that.
+
+---
+
+## 7. Concrete API sketch (illustrative, not committed)
+
+The contract a plugin author writes against. Names are placeholders; the goal is to show that the public surface is small.
+
+```ts
+// arc-1/public  (re-exported from package; plugin authors import from here)
+import {
+  defineTool,
+  type ToolContext,
+  type ToolResult,
+  type Scope,
+  OperationType,
+  AdtApiError,
+  z,
+} from 'arc-1/public';
+
+export default {
+  apiVersion: 1 as const,
+  name: 'my-team-tools',
+  version: '0.1.0',
+  tools: [
+    defineTool({
+      name: 'Custom_PingProgram',
+      description: 'Read a program and return its first line. Demo plugin.',
+      schema: z.object({ name: z.string() }),
+      // Required: every tool declares its policy
+      policy: { scope: 'read', opType: OperationType.Read },
+      // Optional: BTP/on-prem availability
+      availableOn: 'all',
+      // Optional: hyperfocused mapping
+      hyperfocused: { action: 'custom_ping' },
+      async handler(args, ctx: ToolContext): Promise<ToolResult> {
+        // ctx.client is the per-user AdtClient (PP-aware, safety-wired)
+        const source = await ctx.client.getProgram(args.name);
+        const firstLine = source.split('\n')[0] ?? '';
+        return { content: [{ type: 'text', text: firstLine }] };
+      },
+    }),
+  ],
+};
+```
+
+`ToolContext` contains exactly the things a handler may use:
+
+```ts
+interface ToolContext {
+  readonly client: AdtClient;          // per-user, PP-aware
+  readonly safety: SafetyConfig;       // read-only view of the effective ceiling
+  readonly cache?: CachingLayer;       // optional, may be undefined
+  readonly logger: Logger;             // structured stderr logger
+  readonly config: PublicServerConfig; // narrow read-only subset of ServerConfig
+  readonly authInfo?: AuthInfo;        // userName, scopes, clientId — never the raw token
+  readonly requestId: string;          // for correlation in user-emitted log lines
+}
+```
+
+Things deliberately not on `ToolContext`:
+
+* The raw JWT (so plugins cannot impersonate the user against external services).
+* Any way to mutate `safety` at runtime.
+* The MCP `Server` instance (so plugins cannot register additional handlers behind the framework's back).
+* `process.env` (use `ctx.config` for any allowlisted plugin-relevant config).
+* A way to spawn child processes / open ports — discouraged by API surface, not enforced.
+
+---
+
+## 8. Security model
+
+| Trust tier | Source | Auth needed | Permissions |
+|------------|--------|-------------|-------------|
+| **T0 — In-tree** | `src/handlers/...` | n/a | Full access (today's built-in tools) |
+| **T1 — Admin-local** | File at `ARC1_PLUGINS=...` paths owned by service account | none beyond filesystem | Same as T0 — runs in-process |
+| **T2 — Manifest-only** | JSON manifest in `ARC1_MANIFEST_PLUGINS=...` | none | Limited to declared HTTP endpoints, no JS |
+| **T3 — npm package** (if Phase 4) | `arc1-plugin-*` dependency | npm allowlist (`ARC1_PLUGINS`) | Same as T1; tier still trusted |
+
+**Naming rules (enforced at registration):**
+
+* Built-in tool names start with `SAP*` or are exactly `SAP` (hyperfocused). These are reserved.
+* Plugin tool names must start with `Custom_` (preferred) or `X_` (legacy alias). Anything else is rejected at registration.
+* Action enums are scoped to their tool, so `Custom_PingProgram.action="run"` does not collide with `SAPWrite.create`.
+
+**Mandatory invariants for plugin code:**
+
+1. Every plugin tool must have a corresponding `ACTION_POLICY` entry — if the plugin's `policy` is missing, registration fails. This means tool-listing pruning, `denyActions`, scope check, and audit all keep working unchanged.
+2. Plugins must call SAP only through `ctx.client` / `ctx.client.http`. Direct `undici`/`fetch` calls bypass MIME negotiation, CSRF, PP, and the safety wall — registration cannot enforce this, but the linter/docs can.
+3. Plugins must throw `AdtApiError` / `AdtSafetyError` / `AdtNetworkError` (or sub-classes), or throw a plain `Error` and accept a generic error message in the LLM response. Wrapping in a custom error class blocks the central error formatter from producing actionable hints.
+4. Plugins must not write to `process.stdout`. Use `ctx.logger`. The framework should monkey-patch `console.log` to a warning when a plugin loads (defence in depth — `stdout` is sacred).
+5. Plugins must respect `ctx.safety` — calling `ctx.client.http.post(...)` for a write op without `checkOperation(ctx.safety, OperationType.Update, '<name>')` is a registration-time concern (we should provide a small wrapper that does it automatically when `policy.opType` is mutating).
+
+**What plugins are *not* allowed to do (even if the language permits it):**
+
+* Add or remove auth providers (OIDC, XSUAA, API keys).
+* Add MCP transports.
+* Mutate `ServerConfig` at runtime.
+* Register additional `ListTools` / `CallTool` handlers on the MCP `Server`.
+* Schedule background work (cron, setInterval) that runs outside a tool call. Tool calls are the only authorized request path; anything else complicates audit and PP.
+* Open new outbound network connections to non-SAP hosts unless explicitly via a sanctioned helper. (Not enforced in v1, but called out in the docs.)
+
+---
+
+## 9. Open questions / decisions deferred to implementation
+
+Listed so the next implementer does not rediscover them.
+
+1. **Tool-name collision:** if two plugins both register `Custom_Foo`, fail-fast or last-one-wins? Recommendation: **fail-fast at startup** with a clear error. This matches the existing config behaviour.
+
+2. **Plugin enable/disable per profile:** can the admin restrict an API-key profile to a subset of plugin tools? Today profiles narrow scopes only. Likely yes via existing `denyActions` (e.g., `SAP_DENY_ACTIONS=Custom_Risky.*`) — but we should validate.
+
+3. **Plugin tools in hyperfocused mode:** opt-in via the plugin (`hyperfocused: { action: '...' }`). Open question: is the hyperfocused enum capped at ~12 to keep the schema small? If so, plugins compete for slots — we'd want a per-plugin opt-in flag and an admin gate.
+
+4. **Versioning of the public API:** semver on the `arc-1` package; plugins declare `apiVersion: 1`. When we ship breaking changes, we add `apiVersion: 2` and let v1 plugins keep working under a compat shim for one release.
+
+5. **Plugin-emitted audit events:** typed events only, or a generic `plugin_event` envelope? Recommendation: typed events (require core to add the type to `AuditEvent`) — keeps the audit log queryable.
+
+6. **Where do plugin docs live?** Plugins should ship their own README. The ARC-1 docs site should have a single page that lists *known* trusted plugins, similar to `docs_page/skills.md`. Skills are LLM prompt templates; plugins are server code — same idea, different runtime.
+
+7. **Per-user plugin denial:** is there a use case for "user A can use plugin Custom_Foo but user B cannot"? Today it falls out of `ACTION_POLICY` + scopes + denyActions, so probably no extra mechanism needed.
+
+8. **Cache invalidation hooks:** if a plugin writes to SAP, can it invalidate the source cache? Today `CachingLayer` handles this for built-ins. The plugin context could expose a narrow `cache.invalidate(type, name)` method. Defer to implementation.
+
+9. **Per-user plugin context:** if a plugin needs per-user state (e.g., an API key to a non-SAP system), where does that live? Not in `ctx` in v1 — plugins manage their own state with caveats about PP correctness. Real solution may be a future "plugin secret store" backed by BTP Credential Store.
+
+10. **Test harness for plugin authors:** ship a `arc-1/public/testing` import with mock `AdtClient`, mock `AdtHttpClient`, mock `SafetyConfig` so plugin authors can unit-test their handlers. Should be in scope for Phase 1.
+
+---
+
+## 10. Anti-patterns / explicit non-goals
+
+* **Embedded ARC-1 ("ARC-1 as a library inside another app").** Already deferred as [FEAT-29g](../../docs_page/roadmap.md#feat-29) — embedding contradicts the centralized-gateway model. This research is the *opposite*: tools are added *to* an ARC-1 instance, not the other way around.
+* **Plugin marketplace / registry hosted by upstream.** Out of scope. If an ecosystem emerges, it is community-driven.
+* **Hot-reload of plugins.** Plugins load at startup. A reload requires a restart. Hot-reload tempts plugin authors to rely on it for state, which complicates audit and PP. (And BTP CF restarts are cheap.)
+* **Plugins that change MCP transport.** Transport ownership stays in core (`stdio`, `http-streamable`).
+* **Plugins that bypass `denyActions`.** A plugin tool name *is* `denyActions`-eligible. Admins always retain the kill switch.
+* **Allowing plugins to register their own tool *prefixes*.** Forces a two-level naming and complicates collision detection. Single namespace, `Custom_*`, is enough.
+
+---
+
+## 11. Comparison with related projects
+
+* **`abap-adt-api` (marcellourbani):** a TypeScript ADT client library, no plugin model — extension is "fork it". ARC-1 already reuses concepts from it.
+* **`fr0ster/sap-rfc-lite`:** native RFC client, no plugin model. ARC-1 evaluated and deferred RFC integration in [docs/research/rfc-integration-sap-rfc-lite.md](rfc-integration-sap-rfc-lite.md).
+* **`dassian-adt`:** monolithic, no plugin model — features are added in-tree.
+* **MCP SDK itself (`@modelcontextprotocol/sdk`):** the SDK is unopinionated — `Server` lets you register any handler. The opinionation in ARC-1 (centralized safety, scope policy, audit) is *the value-add*. Plugins must inherit that opinionation.
+* **VS Code extensions / Eclipse plugins:** Tier-based marketplace, sandboxed manifest permissions. Useful reference for *naming* (`publisher.name`), *manifests* (`package.json` plugin field), and *capability declaration*. Not useful as an architecture model for an MCP server.
+* **ESLint plugins:** the closest analogue — config-driven (`extends`, `plugins`), npm-distributed, in-process. Worth re-reading [ESLint's plugin docs](https://eslint.org/docs/latest/extend/plugins) before implementation.
+
+---
+
+## 12. Recommended next step (when implementation begins)
+
+A single, narrow PR that ships **Phase 0 + Phase 1** together:
+
+1. Move public symbols into a stable `src/public/` (or `package.json#exports`) re-export path; document them in `docs_page/extension-api.md`.
+2. Refactor [src/handlers/intent.ts:1104](../../src/handlers/intent.ts#L1104) `switch (toolName)` to dispatch through a `ToolRegistry`, and register all 12 built-ins into it at server start. No external behaviour change.
+3. Add `defineTool` and the `ToolContext` types to the public surface. Convert one built-in tool (suggest `SAPManage` with action `cache_stats` — read-only, simple) to register through `defineTool` end-to-end as a self-test.
+4. Update `scripts/validate-action-policy.ts` to walk the registry instead of (or in addition to) the static map.
+5. Add unit tests covering: registry collision, ACTION_POLICY-required-on-register, name-prefix validation.
+6. Stop here. Do **not** ship Phase 2 in the same PR. Let the public API breathe one minor release before adding the loader.
+
+A subsequent PR adds Phase 2 (`ARC1_PLUGINS` loader). A possible third PR adds Phase 3 (manifest-only plugins). Phase 4 only if customers ask.
+
+---
+
+## 13. Quick sanity checks before any implementation
+
+* [ ] Does the proposed `ToolContext` cover every `client.http.*` call a plugin would make? (Should: yes — `client.http` is the same `AdtHttpClient` built-ins use.)
+* [ ] Does an admin with `SAP_DENY_ACTIONS=Custom_*` lose all plugin tools? (Should: yes — `denyActions` glob already matches tool name prefixes.)
+* [ ] Does PP keep working through the registry path? (Should: yes — `ctx.client` is the per-user client built in `createPerUserClient`.)
+* [ ] Does the `tools/list` response stay deterministic for the LLM? (Should: yes — registry order = built-ins first, then plugins in registration order.)
+* [ ] Does a plugin that throws an unexpected error keep the server up? (Should: yes — same try/catch in `handleToolCall` that already wraps every built-in.)
+* [ ] Does `ARC1_TOOL_MODE=hyperfocused` still work when plugins are loaded? (Open: depends on whether plugins opt into a hyperfocused action.)
+* [ ] Does the test harness work without a live SAP system? (Should: yes — mock `AdtClient` / `AdtHttpClient` provided in `arc-1/public/testing`.)

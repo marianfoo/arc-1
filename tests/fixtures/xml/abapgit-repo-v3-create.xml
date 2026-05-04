@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<abapgitrepo:repository xmlns:abapgitrepo="http://www.sap.com/adt/abapgit/repository">
+  <abapgitrepo:package>$TMP</abapgitrepo:package>
+  <abapgitrepo:url>https://github.com/example/repo.git</abapgitrepo:url>
+  <abapgitrepo:branchName>main</abapgitrepo:branchName>
+  <abapgitrepo:transportRequest>A4HK900123</abapgitrepo:transportRequest>
+  <abapgitrepo:remoteUser>user</abapgitrepo:remoteUser>
+  <abapgitrepo:remotePassword>secret</abapgitrepo:remotePassword>
+</abapgitrepo:repository>

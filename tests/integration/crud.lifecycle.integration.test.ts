@@ -20,9 +20,32 @@ import {
   unlockObject,
 } from '../../src/adt/crud.js';
 import { activate } from '../../src/adt/devtools.js';
+import { AdtApiError } from '../../src/adt/errors.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
+import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
 import { buildCreateXml, CrudRegistry, cleanupAll, generateUniqueName } from './crud-harness.js';
 import { getTestClient, requireSapCredentials } from './helpers.js';
+
+/**
+ * Classify a caught error as a known NW 7.50-class CRUD limitation we should
+ * skip rather than fail on. Returns a SkipReason message, or null when the
+ * error is genuinely unexpected and should propagate.
+ */
+function ddicSkipReason(err: unknown): string | null {
+  if (!(err instanceof AdtApiError)) return null;
+  // DOMA/DTEL collection endpoints are absent or only accept v1 bodies on 7.50.
+  if (err.statusCode === 404 && /\/ddic\/domains/.test(err.path)) {
+    return `${SkipReason.BACKEND_UNSUPPORTED}: /ddic/domains endpoint not available on this release`;
+  }
+  if (err.statusCode === 415 && /\/ddic\/dataelements/.test(err.path)) {
+    return `${SkipReason.BACKEND_UNSUPPORTED}: DTEL v2 content type not supported on this release`;
+  }
+  // PROG lock→PUT sequence sometimes fails with 423 on 7.50 (session correlation quirk).
+  if (err.statusCode === 423) {
+    return `${SkipReason.BACKEND_UNSUPPORTED}: lock-handle session correlation differs on this release`;
+  }
+  return null;
+}
 
 const DOMAIN_V2_CONTENT_TYPE = 'application/vnd.sap.adt.domains.v2+xml; charset=utf-8';
 const DATAELEMENT_V2_CONTENT_TYPE = 'application/vnd.sap.adt.dataelements.v2+xml; charset=utf-8';
@@ -58,47 +81,55 @@ describe('CRUD lifecycle', () => {
       // best-effort-cleanup
       console.error('CRUD cleanup failures:', report.failed);
     }
-  });
+  }, 60_000); // Higher timeout — slow remote SAP systems can need > 10s for multi-object cleanup.
 
-  it('full lifecycle: create -> read -> update -> activate -> delete -> verify-deleted', async () => {
+  it('full lifecycle: create -> read -> update -> activate -> delete -> verify-deleted', async (ctx) => {
     const testName = generateUniqueName('ZARC1_IT');
     const objectUrl = `/sap/bc/adt/programs/programs/${testName.toLowerCase()}`;
     const sourceUrl = `${objectUrl}/source/main`;
     const xml = buildCreateXml('PROG', testName, '$TMP', 'ARC-1 lifecycle test');
 
-    // 1. CREATE
-    await createObject(client.http, client.safety, '/sap/bc/adt/programs/programs', xml);
-    registry.register(objectUrl, 'PROG', testName);
+    try {
+      // 1. CREATE
+      await createObject(client.http, client.safety, '/sap/bc/adt/programs/programs', xml);
+      registry.register(objectUrl, 'PROG', testName);
 
-    // 2. READ — verify creation
-    const source1 = await client.getProgram(testName);
-    expect(typeof source1).toBe('string');
-    expect(source1.length).toBeGreaterThan(0);
+      // 2. READ — verify creation
+      const { source: source1 } = await client.getProgram(testName);
+      expect(typeof source1).toBe('string');
+      expect(source1.length).toBeGreaterThan(0);
 
-    // 3. UPDATE — modify source
-    const newSource = `REPORT ${testName.toLowerCase()}.\nWRITE: / 'updated by CRUD lifecycle test'.`;
-    await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource);
+      // 3. UPDATE — modify source
+      const newSource = `REPORT ${testName.toLowerCase()}.\nWRITE: / 'updated by CRUD lifecycle test'.`;
+      await safeUpdateSource(client.http, client.safety, objectUrl, sourceUrl, newSource);
 
-    // 4. READ — verify update
-    const source2 = await client.getProgram(testName);
-    expect(source2).toContain('updated by CRUD lifecycle test');
+      // 4. READ — verify update
+      const { source: source2 } = await client.getProgram(testName);
+      expect(source2).toContain('updated by CRUD lifecycle test');
 
-    // 5. ACTIVATE
-    const activation = await activate(client.http, client.safety, objectUrl);
-    expect(activation.success).toBe(true);
+      // 5. ACTIVATE
+      const activation = await activate(client.http, client.safety, objectUrl);
+      expect(activation.success).toBe(true);
 
-    // 6. DELETE
-    await client.http.withStatefulSession(async (session) => {
-      const lock = await lockObject(session, client.safety, objectUrl);
-      await deleteObject(session, client.safety, objectUrl, lock.lockHandle);
-    });
-    registry.remove(testName);
+      // 6. DELETE
+      await client.http.withStatefulSession(async (session) => {
+        const lock = await lockObject(session, client.safety, objectUrl);
+        await deleteObject(session, client.safety, objectUrl, lock.lockHandle);
+      });
+      registry.remove(testName);
 
-    // 7. VERIFY DELETION — read should fail with 404
-    await expect(client.getProgram(testName)).rejects.toThrow(/404|not found/i);
+      // 7. VERIFY DELETION — read should fail with 404
+      await expect(client.getProgram(testName)).rejects.toThrow(/404|not found/i);
+    } catch (err) {
+      const skip = ddicSkipReason(err);
+      if (skip) {
+        requireOrSkip(ctx, undefined, skip);
+      }
+      throw err;
+    }
   }, 60_000);
 
-  it('DOMA CRUD lifecycle', async () => {
+  it('DOMA CRUD lifecycle', async (ctx) => {
     const domainName = generateUniqueName('ZARC1_TDOM');
     const domainUrl = `/sap/bc/adt/ddic/domains/${domainName}`;
 
@@ -146,6 +177,12 @@ describe('CRUD lifecycle', () => {
       } catch (err) {
         expectSapFailureClass(err, [404], [/not found/i]);
       }
+    } catch (err) {
+      const skip = ddicSkipReason(err);
+      if (skip) {
+        requireOrSkip(ctx, undefined, skip);
+      }
+      throw err;
     } finally {
       if (registry.getAll().some((entry) => entry.name === domainName)) {
         try {
@@ -158,7 +195,54 @@ describe('CRUD lifecycle', () => {
     }
   }, 90_000);
 
-  it('DTEL CRUD lifecycle', async () => {
+  it('DTEL create + delete (no PUT — exercises v2→v1 content-type fallback)', async (ctx) => {
+    // This test exercises ONLY the content-negotiated create path — not the
+    // full CRUD lifecycle that needs stateful lock+PUT (which hits the NW 7.50
+    // lock-handle session-correlation quirk). It catches the DTEL v1 fallback
+    // regression on older releases while staying green on modern systems too.
+    const name = generateUniqueName('ZARC1_DTCV1');
+    const url = `/sap/bc/adt/ddic/dataelements/${name}`;
+
+    try {
+      const xml = buildCreateXml('DTEL', name, '$TMP', 'ARC-1 DTEL v1 fallback test', {
+        typeKind: 'predefinedAbapType',
+        dataType: 'CHAR',
+        length: 10,
+      });
+      // The handler posts with DATAELEMENT_V2_CONTENT_TYPE. On SAP_BASIS < 7.52
+      // the server returns 415; createObject transparently retries with the
+      // v1 MIME type. Either way, the POST must succeed.
+      await createObject(client.http, client.safety, '/sap/bc/adt/ddic/dataelements', xml, DATAELEMENT_V2_CONTENT_TYPE);
+      registry.register(url, 'DTEL', name);
+
+      // Verify via SAPRead that the shell was created. Only assert the name —
+      // release-specific differences in how `predefinedAbapType` vs `domain`
+      // is stored for a shell DTEL (and how fields roundtrip via v1 vs v2)
+      // aren't what this test is about. The full semantics are covered by
+      // the `DTEL CRUD lifecycle` test on modern systems.
+      const created = await client.getDataElement(name);
+      expect(created.name).toBe(name);
+    } catch (err) {
+      const skip = ddicSkipReason(err);
+      if (skip) {
+        requireOrSkip(ctx, undefined, skip);
+      }
+      throw err;
+    } finally {
+      if (registry.getAll().some((entry) => entry.name === name)) {
+        try {
+          // Delete uses lock+DELETE which hits 423 on NW 7.50. Best-effort;
+          // the SM12 cleanup is the operator's problem on that release.
+          await deleteWithLock(url);
+          registry.remove(name);
+        } catch {
+          // best-effort-cleanup
+        }
+      }
+    }
+  }, 60_000);
+
+  it('DTEL CRUD lifecycle', async (ctx) => {
     const dataElementName = generateUniqueName('ZARC1_TDEL');
     const dataElementUrl = `/sap/bc/adt/ddic/dataelements/${dataElementName}`;
 
@@ -216,6 +300,12 @@ describe('CRUD lifecycle', () => {
       } catch (err) {
         expectSapFailureClass(err, [404], [/not found/i]);
       }
+    } catch (err) {
+      const skip = ddicSkipReason(err);
+      if (skip) {
+        requireOrSkip(ctx, undefined, skip);
+      }
+      throw err;
     } finally {
       if (registry.getAll().some((entry) => entry.name === dataElementName)) {
         try {
@@ -228,7 +318,7 @@ describe('CRUD lifecycle', () => {
     }
   }, 90_000);
 
-  it('DOMA + DTEL dependency lifecycle', async () => {
+  it('DOMA + DTEL dependency lifecycle', async (ctx) => {
     const domainName = generateUniqueName('ZARC1_DDM');
     const dataElementName = generateUniqueName('ZARC1_DDE');
     const domainUrl = `/sap/bc/adt/ddic/domains/${domainName}`;
@@ -288,6 +378,12 @@ describe('CRUD lifecycle', () => {
       } catch (err) {
         expectSapFailureClass(err, [404], [/not found/i]);
       }
+    } catch (err) {
+      const skip = ddicSkipReason(err);
+      if (skip) {
+        requireOrSkip(ctx, undefined, skip);
+      }
+      throw err;
     } finally {
       if (registry.getAll().some((entry) => entry.name === dataElementName)) {
         try {

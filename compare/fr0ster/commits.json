@@ -1,17 +1,418 @@
 {
   "$schema": "Commit tracker for fr0ster/mcp-abap-adt — grouped by release, auto-triaged",
   "repo": "https://github.com/fr0ster/mcp-abap-adt",
-  "lastUpdated": "2026-04-16",
-  "lastCheckedSha": "9969ee7",
+  "lastUpdated": "2026-04-27",
+  "lastCheckedSha": "3a3fa65",
   "stats": {
-    "totalCommits": 834,
+    "totalCommits": 873,
     "trackedFrom": "v2.4.0 (2026-02-15)",
-    "totalTracked": 103,
-    "evaluated": 59,
+    "totalTracked": 142,
+    "evaluated": 65,
     "pending": 0,
-    "skipped": 44
+    "skipped": 77
   },
   "releases": [
+    {
+      "version": "v6.5.1-post (probe)",
+      "date": "2026-04-25",
+      "commits": [
+        {
+          "sha": "3a3fa65",
+          "date": "2026-04-25",
+          "message": "chore(scripts): add probe-update-fm to diagnose FM parameter handling",
+          "type": "chore",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "verify",
+          "relevance": "Diagnostic script for issue #77 (FM update loses parameters). Probes ADT read-modify-write semantics on function modules — same/stripped/bare source variants. ARC-1 verify: SAPWrite(type='FUNC', action='update') is currently broken — objectBasePath('FUNC') returns the group path, not the fmodules path. Either fix or remove FUNC from SAPWRITE_TYPES_ONPREM until upstream lands a parameter-preserving fix.",
+          "evaluationFile": "evaluations/issue-77-fm-update-parameter-loss.md"
+        }
+      ]
+    },
+    {
+      "version": "v6.5.0-v6.5.1",
+      "date": "2026-04-24",
+      "commits": [
+        {
+          "sha": "295149e",
+          "date": "2026-04-24",
+          "message": "Merge pull request #76 from fr0ster/release/6.5.1",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Merge commit"
+        },
+        {
+          "sha": "8f55798",
+          "date": "2026-04-24",
+          "message": "release(6.5.1): README dedup note",
+          "type": "release",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Release tag"
+        },
+        {
+          "sha": "6e93c1f",
+          "date": "2026-04-24",
+          "message": "Merge pull request #75 from fr0ster/docs/readme-dedup-note",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Merge commit"
+        },
+        {
+          "sha": "bdc1b00",
+          "date": "2026-04-24",
+          "message": "docs(readme): mention optional readOnlyDedupStrategy in embeddable example",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Docs only"
+        },
+        {
+          "sha": "6040e1a",
+          "date": "2026-04-24",
+          "message": "Merge pull request #74 from fr0ster/release/6.5.0",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Merge commit"
+        },
+        {
+          "sha": "7569903",
+          "date": "2026-04-24",
+          "message": "release(6.5.0): dedup strategy + FM group validation",
+          "type": "release",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Release tag — see 1246cc2 + 795633a"
+        },
+        {
+          "sha": "f8bcc7d",
+          "date": "2026-04-24",
+          "message": "Merge pull request #73 from fr0ster/feat/dedupe-readonly-vs-high-low",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Merge commit"
+        },
+        {
+          "sha": "795633a",
+          "date": "2026-04-24",
+          "message": "fix(function_module): validate owning group against ADT metadata",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "high",
+          "decision": "consider-future",
+          "relevance": "ADT silently resolves FM by name regardless of group segment in URL — wrong-group request returns right FM's source. Fix: parse <adtcore:containerRef adtcore:type='FUGR/F'/> from metadata, compare with caller-supplied group, error on mismatch. ARC-1 has the same latent bug in getFunction(group, name) — consider hardening when next touching FM code path.",
+          "evaluationFile": "evaluations/795633a-fm-group-validation.md"
+        },
+        {
+          "sha": "1246cc2",
+          "date": "2026-04-24",
+          "message": "feat(handlers): add pluggable dedup strategy for ReadOnly group",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "skip",
+          "decision": "not-applicable",
+          "relevance": "When both readonly and high/low tiers are exposed, Read<X> duplicates Get<X>. Introduces IReadOnlyDedupStrategy with NoDedup (default) + ReadVsGetDedup. ARC-1 doesn't have this architecture (no readonly/high/low tier split — single intent-based SAPRead/SAPWrite); not applicable."
+        },
+        {
+          "sha": "efe8ee7",
+          "date": "2026-04-21",
+          "message": "fix(jest): exclude integration tests from default npm test (#72)",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Test config — ARC-1 already separates unit vs integration via vitest configs"
+        }
+      ]
+    },
+    {
+      "version": "v6.4.0-v6.4.1",
+      "date": "2026-04-21",
+      "commits": [
+        {
+          "sha": "b2ef76d",
+          "date": "2026-04-21",
+          "message": "release(6.4.1): fix Dockerfile for HTTP mode with header-based connections (#71)",
+          "type": "fix",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "no-action",
+          "relevance": "Fixes their Docker image: stdio→http default, launcher path, --allow-destination-header flag, /health→/mcp/health. ARC-1's Dockerfile already uses http-streamable + 0.0.0.0:8080 + dist/index.js. Two minor takeaways: (1) consider HEALTHCHECK directive (currently absent), (2) header-based per-request connection switching is a multi-tenant gateway feature — defer.",
+          "evaluationFile": "evaluations/b2ef76d-dockerfile-http-fix.md"
+        },
+        {
+          "sha": "34a1b3a",
+          "date": "2026-04-20",
+          "message": "docs: clarify plans/specs rule (kept until implemented or cancelled)",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal docs"
+        },
+        {
+          "sha": "4a0178c",
+          "date": "2026-04-20",
+          "message": "docs: add rule to delete implemented plans and specs",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal docs"
+        },
+        {
+          "sha": "dad34c8",
+          "date": "2026-04-20",
+          "message": "chore: track superpowers plans in git",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Plans file management"
+        },
+        {
+          "sha": "c726f70",
+          "date": "2026-04-20",
+          "message": "feat: per-instance systemType option for EmbeddableMcpServer (#69) (#70)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "defer",
+          "relevance": "Adds systemType?:'onprem'|'cloud'|'legacy' constructor option that overrides process.env.SAP_SYSTEM_TYPE for the single server instance — for hosts that proxy to mixed onprem/cloud destinations per request. Resolution: option → env → 'cloud'. Not applicable to ARC-1 today (one process per system); track lesson for any future embed/Node SDK.",
+          "evaluationFile": "evaluations/c726f70-per-instance-systemtype.md"
+        },
+        {
+          "sha": "bbbf5b0",
+          "date": "2026-04-19",
+          "message": "chore: bump version to 6.3.1",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        }
+      ]
+    },
+    {
+      "version": "v6.3.0",
+      "date": "2026-04-17",
+      "commits": [
+        {
+          "sha": "535ab81",
+          "date": "2026-04-17",
+          "message": "chore: bump version to 6.3.0",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "fbdec83",
+          "date": "2026-04-17",
+          "message": "feat: enrich Structure tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "consider-future",
+          "relevance": "Part of issue #66 cluster — RAG-driven cross-references between Create/Update/Read tool descriptions. ARC-1's intent-based design sidesteps the RAG ranking problem; lesson at workflow-ordering granularity in SAPWrite/SAPActivate description.",
+          "evaluationFile": "evaluations/issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "9643db8",
+          "date": "2026-04-17",
+          "message": "feat: enrich ServiceBinding tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "9e4eedb",
+          "date": "2026-04-17",
+          "message": "feat: enrich ServiceDefinition tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "2be6b43",
+          "date": "2026-04-17",
+          "message": "feat: enrich MetadataExtension tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "70f5a37",
+          "date": "2026-04-17",
+          "message": "feat: enrich BehaviorDefinition tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "3bcbb1f",
+          "date": "2026-04-17",
+          "message": "feat: enrich FunctionModule tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "95f7c69",
+          "date": "2026-04-17",
+          "message": "feat: enrich Interface tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "c376a1e",
+          "date": "2026-04-17",
+          "message": "feat: enrich DataElement tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "91411da",
+          "date": "2026-04-17",
+          "message": "feat: enrich Domain tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "46c7822",
+          "date": "2026-04-17",
+          "message": "feat: enrich View tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "87539b7",
+          "date": "2026-04-17",
+          "message": "feat: enrich Table tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "5c55572",
+          "date": "2026-04-17",
+          "message": "feat: enrich Program tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        },
+        {
+          "sha": "556c7c6",
+          "date": "2026-04-17",
+          "message": "feat: enrich Class tool descriptions with operation context (#66)",
+          "type": "feat",
+          "status": "evaluated",
+          "priority": "low",
+          "decision": "covered-by-issue-66",
+          "relevance": "See issue-66-tool-description-enrichment.md"
+        }
+      ]
+    },
+    {
+      "version": "v6.2.1-v6.2.2",
+      "date": "2026-04-17",
+      "commits": [
+        {
+          "sha": "f24a001",
+          "date": "2026-04-17",
+          "message": "chore: bump version to 6.2.2",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "08a8b26",
+          "date": "2026-04-17",
+          "message": "Merge pull request #65 from fr0ster/feat/debug-trace-scripts",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Merge commit"
+        },
+        {
+          "sha": "8bbaa8a",
+          "date": "2026-04-17",
+          "message": "fix: replace hardcoded values with CLI parameters and add --help to debug scripts",
+          "type": "fix",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal dev tooling — no MCP behavior"
+        },
+        {
+          "sha": "dab9963",
+          "date": "2026-04-17",
+          "message": "feat: add scripts for debugging and tracing ABAP classes and dumps",
+          "type": "feat",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Internal debug scripts (scripts/debug-*.ts) for fr0ster maintainer use — not exposed via MCP. ARC-1 has scripts/probe-adt-types.ts for similar diagnostic purposes."
+        },
+        {
+          "sha": "515577a",
+          "date": "2026-04-17",
+          "message": "chore: bump version to 6.2.1",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Version bump"
+        },
+        {
+          "sha": "ed59fa7",
+          "date": "2026-04-17",
+          "message": "docs: add SAP_SYSTEM_TYPE to .env example and documentation",
+          "type": "docs",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Docs only — ARC-1 already documents SAP_SYSTEM_TYPE"
+        }
+      ]
+    },
+    {
+      "version": "v6.2.0",
+      "date": "2026-04-16",
+      "commits": [
+        {
+          "sha": "de1dfff",
+          "date": "2026-04-16",
+          "message": "chore: bump version to 6.2.0, update connection and adt-clients",
+          "type": "chore",
+          "status": "skipped",
+          "priority": "skip",
+          "relevance": "Dependency bump in monorepo packages — no externally visible MCP feature change"
+        }
+      ]
+    },
     {
       "version": "v6.0.0-v6.1.0",
       "date": "2026-04-16",

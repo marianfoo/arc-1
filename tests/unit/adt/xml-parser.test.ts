@@ -18,6 +18,7 @@ import {
   parseInstalledComponents,
   parseMessageClass,
   parsePackageContents,
+  parseRevisionFeed,
   parseSearchResults,
   parseServiceBinding,
   parseSourceSearchResults,
@@ -204,13 +205,31 @@ describe('XML Parser', () => {
       const components = parseInstalledComponents(xml);
 
       expect(components).toHaveLength(3);
-      expect(components[0]).toEqual({
+      expect(components[0]).toMatchObject({
         name: 'SAP_BASIS',
         release: '753',
         description: 'SAP Basis Component',
       });
       expect(components[1]?.name).toBe('SAP_ABA');
       expect(components[2]?.name).toBe('SAP_GWFND');
+    });
+
+    it('exposes SP name and SP level from the title', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:entry>
+    <atom:id>SAP_BASIS</atom:id>
+    <atom:title>758;SAPK-75802INSAPBASIS;0002;SAP Basis Component</atom:title>
+  </atom:entry>
+</atom:feed>`;
+      const components = parseInstalledComponents(xml);
+      expect(components[0]).toEqual({
+        name: 'SAP_BASIS',
+        release: '758',
+        spName: 'SAPK-75802INSAPBASIS',
+        spLevel: '0002',
+        description: 'SAP Basis Component',
+      });
     });
 
     it('handles empty feed', () => {
@@ -232,7 +251,7 @@ describe('XML Parser', () => {
 </atom:feed>`;
       const components = parseInstalledComponents(xml);
       expect(components).toHaveLength(1);
-      expect(components[0]).toEqual({
+      expect(components[0]).toMatchObject({
         name: 'S4CORE',
         release: '108',
         description: 'SAP S/4HANA Core',
@@ -1004,9 +1023,94 @@ describe('XML Parser', () => {
       expect(parseInactiveObjects('  ')).toEqual([]);
     });
 
+    it('parses rich ioc shape with user/deleted/transport metadata', () => {
+      const objects = parseInactiveObjects(loadFixture('inactive-objects-ioc.xml'));
+      expect(objects).toHaveLength(2);
+      expect(objects[0]).toEqual({
+        name: 'ZC_FbClubTP',
+        type: 'BDEF/BDO',
+        uri: '/sap/bc/adt/bo/behaviordefinitions/zc_fbclubtp',
+        user: 'MARIAN',
+        deleted: false,
+        transport: 'A4HK901087',
+        parentTransport: '/sap/bc/adt/cts/transportrequests/A4HK901086',
+      });
+      expect(objects[0]).not.toHaveProperty('description');
+      expect(objects[1]).toEqual({
+        name: 'ZARC1_TEST',
+        type: 'DDLS/DF',
+        uri: '/sap/bc/adt/ddic/ddl/sources/zarc1_test',
+        description: 'Test CDS',
+        user: 'MARIAN',
+        deleted: false,
+      });
+      expect(objects[1]).not.toHaveProperty('transport');
+      expect(objects[1]).not.toHaveProperty('parentTransport');
+    });
+
     it('returns empty array when no objectReference nodes', () => {
       const xml = '<?xml version="1.0"?><root><empty/></root>';
       expect(parseInactiveObjects(xml)).toEqual([]);
+    });
+
+    it('parses real NW 7.50 flat <adtcore:objectReferences> shape (no <entry> wrapper)', () => {
+      // Captured live from npl.marianzeis.de — GET /activation/inactiveobjects on NW 7.50
+      // returns a flat list, NOT the feed-wrapped <ioc:entry><ioc:object> shape.
+      const objects = parseInactiveObjects(loadFixture('inactive-objects-nw750-flat.xml'));
+      expect(objects.length).toBeGreaterThanOrEqual(4);
+      expect(objects[0]).toEqual({
+        name: 'ZARC1_DTCV1_8BGO62',
+        type: 'DTEL/DE',
+        uri: '/sap/bc/adt/ddic/dataelements/zarc1_dtcv1_8bgo62',
+      });
+      // Verify a non-DTEL type to confirm the parser doesn't filter
+      const cls = objects.find((o) => o.type === 'CLAS/OC');
+      expect(cls?.name).toBe('ZCL_ARC1_TEST');
+    });
+
+    it('parses single flat objectReference (covers isArray=true)', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?><adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zonly" adtcore:type="PROG/P" adtcore:name="ZONLY"/></adtcore:objectReferences>`;
+      const objects = parseInactiveObjects(xml);
+      expect(objects).toHaveLength(1);
+      expect(objects[0]).toEqual({ name: 'ZONLY', type: 'PROG/P', uri: '/sap/bc/adt/programs/programs/zonly' });
+    });
+  });
+
+  describe('parseRevisionFeed', () => {
+    it('parses PROG revision feed with two entries', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-prog.xml'));
+      expect(result.object).toEqual({ name: 'ZARC1_TEST_REPORT', type: 'REPS' });
+      expect(result.revisions).toHaveLength(2);
+      expect(result.revisions[0]?.id).toBe('00000');
+      expect(result.revisions[0]?.author).toBe('DEVELOPER');
+      expect(result.revisions[0]?.uri).toContain('/versions/20260410185851/00000/content');
+    });
+
+    it('maps optional transport from the transport relation link', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-prog.xml'));
+      expect(result.revisions[0]?.transport).toBe('A4HK900123');
+      expect(result.revisions[1]?.transport).toBeUndefined();
+    });
+
+    it('parses CLAS main include feed and keeps opaque version URI', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-clas-main.xml'));
+      expect(result.object.name).toBe('ZCL_X');
+      expect(result.object.type).toBe('CINC');
+      expect(result.revisions).toHaveLength(1);
+      expect(result.revisions[0]?.uri).toContain('/oo/classes/ZCL_X/includes/main/versions/');
+    });
+
+    it('returns empty revisions for empty feed while keeping title metadata', () => {
+      const result = parseRevisionFeed(loadFixture('revision-feed-empty.xml'));
+      expect(result.object).toEqual({ name: 'FOO', type: 'REPS' });
+      expect(result.revisions).toEqual([]);
+    });
+
+    it('returns empty result for malformed XML', () => {
+      expect(parseRevisionFeed('<atom:feed><atom:title>broken')).toEqual({
+        object: { name: '', type: '' },
+        revisions: [],
+      });
     });
   });
 

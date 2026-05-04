@@ -1,0 +1,91 @@
+{
+  "baseUrl": "https://npl.marianzeis.de",
+  "client": "001",
+  "abapRelease": "750",
+  "systemType": "onprem",
+  "products": [
+    {
+      "name": "BI_CONT",
+      "release": "757",
+      "spLevel": "0007",
+      "description": "Business Intelligence Content"
+    },
+    {
+      "name": "DMIS",
+      "release": "2011_1_731",
+      "spLevel": "0010",
+      "description": "DMIS 2011_1"
+    },
+    {
+      "name": "SAP_ABA",
+      "release": "750",
+      "spLevel": "0002",
+      "description": "Cross-Application Component"
+    },
+    {
+      "name": "SAP_BASIS",
+      "release": "750",
+      "spLevel": "0002",
+      "description": "SAP Basis Component"
+    },
+    {
+      "name": "SAP_BW",
+      "release": "750",
+      "spLevel": "0002",
+      "description": "SAP Business Warehouse"
+    },
+    {
+      "name": "SAP_GWFND",
+      "release": "750",
+      "spLevel": "0002",
+      "description": "SAP Gateway Foundation"
+    },
+    {
+      "name": "SAP_UI",
+      "release": "750",
+      "spLevel": "0002",
+      "description": "User Interface Technology"
+    },
+    {
+      "name": "ST-PI",
+      "release": "740",
+      "spLevel": "0001",
+      "description": "SAP Solution Tools Plug-In"
+    }
+  ],
+  "discoveryMapKeys": [
+    "/sap/bc/adt/abapsource/abapdoc/exportjobs",
+    "/sap/bc/adt/ato/settings",
+    "/sap/bc/adt/basic/object/properties",
+    "/sap/bc/adt/bopf/businessobjects",
+    "/sap/bc/adt/classifications",
+    "/sap/bc/adt/cmp_code_composer/cmpt",
+    "/sap/bc/adt/cmp_code_composer/cmptare",
+    "/sap/bc/adt/cmp_code_composer/cmptfun",
+    "/sap/bc/adt/ddic/dataelements",
+    "/sap/bc/adt/ddic/ddl/formatter/identifiers",
+    "/sap/bc/adt/ddic/structures",
+    "/sap/bc/adt/ddic/typegroups",
+    "/sap/bc/adt/dlp/locationinfo",
+    "/sap/bc/adt/dlp/logpoints",
+    "/sap/bc/adt/dummygroup/wbttt1a",
+    "/sap/bc/adt/dummygroup/wbttt2a",
+    "/sap/bc/adt/enhancements/enhoxh",
+    "/sap/bc/adt/enhancements/enhsxs",
+    "/sap/bc/adt/functions/groups",
+    "/sap/bc/adt/objtype_admin/sval",
+    "/sap/bc/adt/objtype_admin/wgrp",
+    "/sap/bc/adt/oo/classes",
+    "/sap/bc/adt/oo/interfaces",
+    "/sap/bc/adt/programs/includes",
+    "/sap/bc/adt/programs/programs",
+    "/sap/bc/adt/quickfixes/evaluation",
+    "/sap/bc/adt/wdy/componentcontrollers",
+    "/sap/bc/adt/wdy/components",
+    "/sap/bc/adt/wdy/customcontrollers",
+    "/sap/bc/adt/wdy/views",
+    "/sap/bc/adt/wdy/windows",
+    "/sap/bc/adt/xslt/transformations"
+  ],
+  "probedAt": "2026-04-20T07:17:11.125Z"
+}

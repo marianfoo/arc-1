@@ -1,8 +1,12 @@
 import { Version } from '@abaplint/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureConfig } from '../../../src/adt/config.js';
+import { AdtApiError } from '../../../src/adt/errors.js';
 import {
   classifyAuthProbeError,
+  classifyFeatureProbeStatus,
+  detectHanaFromComponents,
+  detectHanaFromDiscovery,
   detectSystemType,
   mapSapReleaseToAbaplintVersion,
   probeAuthorization,
@@ -18,6 +22,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'on',
         abapGit: 'on',
+        gcts: 'on',
         rap: 'on',
         amdp: 'on',
         ui5: 'on',
@@ -30,6 +35,7 @@ describe('Feature Detection', () => {
       expect(result.hana.available).toBe(true);
       expect(result.hana.mode).toBe('on');
       expect(result.abapGit.available).toBe(true);
+      expect(result.gcts.available).toBe(true);
       expect(result.rap.available).toBe(true);
     });
 
@@ -37,6 +43,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'off',
         abapGit: 'off',
+        gcts: 'off',
         rap: 'off',
         amdp: 'off',
         ui5: 'off',
@@ -49,12 +56,14 @@ describe('Feature Detection', () => {
       expect(result.hana.available).toBe(false);
       expect(result.hana.mode).toBe('off');
       expect(result.abapGit.available).toBe(false);
+      expect(result.gcts.available).toBe(false);
     });
 
     it('auto defaults to unavailable without probing', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -72,6 +81,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'on',
         abapGit: 'off',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'on',
         ui5: 'off',
@@ -83,6 +93,7 @@ describe('Feature Detection', () => {
 
       expect(result.hana.available).toBe(true);
       expect(result.abapGit.available).toBe(false);
+      expect(result.gcts.available).toBe(false);
       expect(result.rap.available).toBe(false);
       expect(result.amdp.available).toBe(true);
       expect(result.ui5.available).toBe(false);
@@ -93,6 +104,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'on',
         abapGit: 'off',
+        gcts: 'on',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -104,6 +116,7 @@ describe('Feature Detection', () => {
 
       expect(result.hana.message).toContain('Forced on');
       expect(result.abapGit.message).toContain('Disabled');
+      expect(result.gcts.message).toContain('Forced on');
       expect(result.rap.message).toContain('not available');
     });
 
@@ -111,6 +124,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -127,6 +141,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -144,6 +159,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -160,6 +176,7 @@ describe('Feature Detection', () => {
       const config: FeatureConfig = {
         hana: 'auto',
         abapGit: 'auto',
+        gcts: 'auto',
         rap: 'auto',
         amdp: 'auto',
         ui5: 'auto',
@@ -252,12 +269,118 @@ describe('Feature Detection', () => {
     });
   });
 
+  // ─── detectHanaFromComponents ──────────────────────────────────────
+
+  describe('detectHanaFromComponents', () => {
+    it('detects HANA when HDB component is present', () => {
+      expect(detectHanaFromComponents([{ name: 'HDB' }])).toBe(true);
+    });
+
+    it('detects HANA when component name contains HANA', () => {
+      expect(detectHanaFromComponents([{ name: 'HANA_XS' }])).toBe(true);
+    });
+
+    it('detects HANA via S4CORE (S/4HANA ≤ 2020)', () => {
+      expect(detectHanaFromComponents([{ name: 'S4CORE' }])).toBe(true);
+    });
+
+    it('detects HANA via S4FND (S/4HANA 2021+)', () => {
+      expect(detectHanaFromComponents([{ name: 'S4FND' }])).toBe(true);
+    });
+
+    it('detects HANA via S4CEXT', () => {
+      expect(detectHanaFromComponents([{ name: 'S4CEXT' }])).toBe(true);
+    });
+
+    it('detects HANA via BW4CORE (BW/4HANA)', () => {
+      expect(detectHanaFromComponents([{ name: 'BW4CORE' }])).toBe(true);
+    });
+
+    it('returns false when no HANA indicators are present', () => {
+      expect(detectHanaFromComponents([{ name: 'SAP_BASIS' }, { name: 'SAP_ABA' }, { name: 'SAP_APPL' }])).toBe(false);
+    });
+
+    it('returns false for empty component list', () => {
+      expect(detectHanaFromComponents([])).toBe(false);
+    });
+
+    it('is case-insensitive for component names', () => {
+      expect(detectHanaFromComponents([{ name: 'hdb' }])).toBe(true);
+      expect(detectHanaFromComponents([{ name: 'Hana_XS' }])).toBe(true);
+      expect(detectHanaFromComponents([{ name: 's4fnd' }])).toBe(true);
+      expect(detectHanaFromComponents([{ name: 'bw4core' }])).toBe(true);
+    });
+
+    it('does not false-positive on non-S/4 components starting with "S4"-adjacent text', () => {
+      // S4 must be followed by an uppercase letter (checked after uppercasing input), so "S4" alone,
+      // "S4" followed by a digit, or "SAP_S4" would not match. Only S/4HANA component naming fits.
+      expect(detectHanaFromComponents([{ name: 'S4' }])).toBe(false);
+      expect(detectHanaFromComponents([{ name: 'S40' }])).toBe(false);
+      expect(detectHanaFromComponents([{ name: 'SAP_S4' }])).toBe(false);
+    });
+
+    it('detects HANA on a real-world S/4HANA 2023 on-prem component list (S4FND + MDG_FND)', () => {
+      // Captured from /sap/bc/adt/system/components on an S/4HANA 2023 on-prem trial.
+      // Notably absent: S4CORE, HDB, anything named HANA — the original heuristic missed this.
+      expect(
+        detectHanaFromComponents([
+          { name: 'DMIS' },
+          { name: 'HOME' },
+          { name: 'LOCAL' },
+          { name: 'MDG_FND' },
+          { name: 'S4FND' },
+          { name: 'SAP_ABA' },
+          { name: 'SAP_BASIS' },
+          { name: 'SAP_BW' },
+          { name: 'SAP_GWFND' },
+          { name: 'SAP_UI' },
+          { name: 'ST-PI' },
+          { name: 'UIBAS001' },
+          { name: 'ZCUSTOM_DEVELOPMENT' },
+          { name: 'ZLOCAL' },
+        ]),
+      ).toBe(true); // S4FND triggers the rule
+    });
+
+    it('returns false on real-world NetWeaver 7.50 SP02 trial (AnyDB / SAP MaxDB, no HANA)', () => {
+      // Captured from the NPL 7.50 SP02 dev-edition trial system
+      // (tests/fixtures/probe/npl-750-sp02-dev-edition/meta.json).
+      // Regression guard: the heuristic must not false-positive on plain NetWeaver +
+      // SAP_BW (BW on AnyDB ≠ BW/4HANA), and BI_CONT must not match HDB|HANA.
+      expect(
+        detectHanaFromComponents([
+          { name: 'BI_CONT' },
+          { name: 'DMIS' },
+          { name: 'SAP_ABA' },
+          { name: 'SAP_BASIS' },
+          { name: 'SAP_BW' },
+          { name: 'SAP_GWFND' },
+          { name: 'SAP_UI' },
+          { name: 'ST-PI' },
+        ]),
+      ).toBe(false);
+    });
+  });
+
+  // ─── detectHanaFromDiscovery ───────────────────────────────────────
+
+  describe('detectHanaFromDiscovery', () => {
+    it('returns true when NHI is present', () => {
+      expect(detectHanaFromDiscovery(true)).toBe(true);
+    });
+
+    it('returns false when NHI is absent', () => {
+      expect(detectHanaFromDiscovery(false)).toBe(false);
+    });
+  });
+
   // ─── probeFeatures (with discovery) ───────────────────────────────
 
   describe('probeFeatures', () => {
     const defaultConfig: FeatureConfig = {
       hana: 'auto',
       abapGit: 'auto',
+      gcts: 'auto',
       rap: 'auto',
       amdp: 'auto',
       ui5: 'auto',
@@ -336,6 +459,277 @@ describe('Feature Detection', () => {
 
       expect(result.discoveryMap).toBeDefined();
       expect(result.discoveryMap?.size).toBe(0);
+    });
+
+    function makeComponentsXml(entries: Array<{ id: string; title: string }>): string {
+      const items = entries
+        .map(
+          (e) =>
+            `  <atom:entry>\n    <atom:id>${e.id}</atom:id>\n    <atom:title>${e.title}</atom:title>\n  </atom:entry>`,
+        )
+        .join('\n');
+      return `<?xml version="1.0" encoding="utf-8"?>\n<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">\n${items}\n</atom:feed>`;
+    }
+
+    function mockProbeClientHanaScenario(options: { componentsXml: string; hanaEndpoint404: boolean }): AdtHttpClient {
+      return {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') {
+            return Promise.resolve({ statusCode: 200, body: discoveryXml });
+          }
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({ statusCode: 200, body: options.componentsXml });
+          }
+          if (url === '/sap/bc/adt/ddic/sysinfo/hanainfo') {
+            if (options.hanaEndpoint404) {
+              return Promise.reject(new AdtApiError('Not Found', 404, url));
+            }
+            return Promise.resolve({ statusCode: 200, body: '' });
+          }
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+    }
+
+    it('detects HANA via S4CORE component when hanainfo endpoint returns 404', async () => {
+      const s4Components = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'S4CORE', title: '108;S4CORE108;0001;S/4HANA Core' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: s4Components, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+    });
+
+    it('detects HANA via S4FND on S/4HANA 2021+ when hanainfo endpoint returns 404', async () => {
+      // S/4HANA 2021+ ships S4FND instead of S4CORE — this was the scenario that originally
+      // produced a false negative on the reporter's test system.
+      const s4Components = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'S4FND', title: '108;S4FND108;0001;S/4HANA Foundation' },
+        { id: 'MDG_FND', title: '808;MDGFND808;0001;S/4HANA MDG Foundation' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: s4Components, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+    });
+
+    it('reports HANA unavailable when hanainfo 404 and no HANA components', async () => {
+      const nonHanaComponents = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'SAP_ABA', title: '758;SAPK-75801INSAPABA;0001;SAP Application Basis' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: nonHanaComponents, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
+    });
+
+    // ─── HTTP status classification (regression for the 401-as-available bug) ──
+
+    function mockProbeClientStatus(hanainfoStatus: number): AdtHttpClient {
+      return {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') return Promise.resolve({ statusCode: 200, body: discoveryXml });
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({
+              statusCode: 200,
+              body: makeComponentsXml([{ id: 'SAP_BASIS', title: '750;SAPKB75002;0002;SAP Basis Component' }]),
+            });
+          }
+          if (url === '/sap/bc/adt/ddic/sysinfo/hanainfo') {
+            if (hanainfoStatus >= 400) {
+              return Promise.reject(new AdtApiError(`HTTP ${hanainfoStatus}`, hanainfoStatus, url));
+            }
+            return Promise.resolve({ statusCode: hanainfoStatus, body: '' });
+          }
+          // Other probes: return success so we can isolate the hana-status assertion.
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+    }
+
+    it('classifies hanainfo 401 as unavailable (regression: was incorrectly true)', async () => {
+      const client = mockProbeClientStatus(401);
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
+      expect(result.hana.message).toMatch(/auth failure \(401\)/);
+    });
+
+    it('classifies hanainfo 403 as unavailable (user lacks authorization)', async () => {
+      const client = mockProbeClientStatus(403);
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
+      expect(result.hana.message).toMatch(/forbidden \(403\)/);
+    });
+
+    it('classifies hanainfo 404 as unavailable (endpoint not registered)', async () => {
+      const client = mockProbeClientStatus(404);
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
+      expect(result.hana.message).toMatch(/endpoint not found \(404\)|not available/);
+    });
+
+    it('classifies hanainfo 400 as available (endpoint exists, request shape rejected)', async () => {
+      const client = mockProbeClientStatus(400);
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+    });
+
+    it('classifies hanainfo 500 as available (endpoint exists, server error)', async () => {
+      const client = mockProbeClientStatus(500);
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+    });
+
+    it('treats network error (no AdtApiError) as unavailable', async () => {
+      const client = {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') return Promise.resolve({ statusCode: 200, body: discoveryXml });
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({
+              statusCode: 200,
+              body: makeComponentsXml([{ id: 'SAP_BASIS', title: '750;SAPKB75002;0002;SAP Basis Component' }]),
+            });
+          }
+          if (url === '/sap/bc/adt/ddic/sysinfo/hanainfo') return Promise.reject(new Error('ECONNRESET'));
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
+      expect(result.hana.message).toMatch(/network error|not available/);
+    });
+
+    it('surfaces inferred-from-components reason when fallback overrides 404', async () => {
+      const s4Components = makeComponentsXml([
+        { id: 'SAP_BASIS', title: '758;SAPKB75801;0001;SAP Basis Component' },
+        { id: 'S4FND', title: '108;S4FND108;0001;S/4HANA Foundation' },
+      ]);
+      const client = mockProbeClientHanaScenario({ componentsXml: s4Components, hanaEndpoint404: true });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+      expect(result.hana.message).toMatch(/inferred from installed components/);
+    });
+
+    // ─── Discovery-based HANA fallback ────────────────────────────────
+
+    const nhiDiscoveryXml = `<?xml version="1.0" encoding="utf-8"?>
+<app:service xmlns:app="http://www.w3.org/2007/app" xmlns:atom="http://www.w3.org/2005/Atom">
+  <app:workspace>
+    <atom:title>HANA-Integration</atom:title>
+    <app:collection href="/sap/bc/adt/nhi/repositories">
+      <atom:title>NHI Repositories</atom:title>
+    </app:collection>
+    <app:collection href="/sap/bc/adt/nhi/configurations">
+      <atom:title>NHI Configurations</atom:title>
+    </app:collection>
+  </app:workspace>
+</app:service>`;
+
+    const emptyComponentsXml = `<?xml version="1.0" encoding="utf-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom"/>`;
+
+    function mockProbeClientDiscoveryScenario(options: {
+      componentsXml: string;
+      discoveryXml: string;
+      hanaEndpoint404: boolean;
+    }): AdtHttpClient {
+      return {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') {
+            return Promise.resolve({ statusCode: 200, body: options.discoveryXml });
+          }
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({ statusCode: 200, body: options.componentsXml });
+          }
+          if (url === '/sap/bc/adt/ddic/sysinfo/hanainfo') {
+            if (options.hanaEndpoint404) {
+              return Promise.reject(new AdtApiError('Not Found', 404, url));
+            }
+            return Promise.resolve({ statusCode: 200, body: '' });
+          }
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+    }
+
+    it('detects HANA via NHI workspace when components feed is empty and hanainfo 404', async () => {
+      // Regression case: systems where /sap/bc/adt/system/components returns an empty feed
+      // AND hanainfo is not activated. Discovery NHI workspace is the last resort.
+      const client = mockProbeClientDiscoveryScenario({
+        componentsXml: emptyComponentsXml,
+        discoveryXml: nhiDiscoveryXml,
+        hanaEndpoint404: true,
+      });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+      expect(result.hana.message).toMatch(/NHI|Native HANA Integration/);
+    });
+
+    it('reports HANA unavailable when all three signals are absent', async () => {
+      const client = mockProbeClientDiscoveryScenario({
+        componentsXml: emptyComponentsXml,
+        discoveryXml: discoveryXml, // standard fixture — no NHI
+        hanaEndpoint404: true,
+      });
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(false);
+    });
+
+    it('promotes hana to available via NHI even when hanainfo returns 401', async () => {
+      // 401 on hanainfo means auth failure on THAT endpoint, not that HANA is absent.
+      // The discovery NHI signal is from a separate, independently-trusted 200 OK response
+      // and should still override the hanainfo auth failure.
+      const client = {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (url === '/sap/bc/adt/discovery') return Promise.resolve({ statusCode: 200, body: nhiDiscoveryXml });
+          if (url === '/sap/bc/adt/system/components') {
+            return Promise.resolve({ statusCode: 200, body: emptyComponentsXml });
+          }
+          if (url === '/sap/bc/adt/ddic/sysinfo/hanainfo') {
+            return Promise.reject(new AdtApiError('Unauthorized', 401, url));
+          }
+          return Promise.resolve({ statusCode: 200, body: '' });
+        }),
+      } as unknown as AdtHttpClient;
+      const result = await probeFeatures(client, defaultConfig);
+      expect(result.hana.available).toBe(true);
+      expect(result.hana.message).toMatch(/NHI|Native HANA Integration/);
+    });
+  });
+
+  // ─── classifyFeatureProbeStatus ────────────────────────────────────
+
+  describe('classifyFeatureProbeStatus', () => {
+    it('returns available=true on 2xx', () => {
+      expect(classifyFeatureProbeStatus('hana', 200)).toEqual({ id: 'hana', available: true });
+      expect(classifyFeatureProbeStatus('rap', 204)).toEqual({ id: 'rap', available: true });
+    });
+
+    it('returns available=false with auth-failure reason on 401', () => {
+      const r = classifyFeatureProbeStatus('hana', 401);
+      expect(r.available).toBe(false);
+      expect(r.reason).toMatch(/auth failure \(401\)/);
+    });
+
+    it('returns available=false with forbidden reason on 403', () => {
+      const r = classifyFeatureProbeStatus('amdp', 403);
+      expect(r.available).toBe(false);
+      expect(r.reason).toMatch(/forbidden \(403\)/);
+    });
+
+    it('returns available=false with not-found reason on 404', () => {
+      const r = classifyFeatureProbeStatus('amdp', 404);
+      expect(r.available).toBe(false);
+      expect(r.reason).toMatch(/endpoint not found \(404\)/);
+    });
+
+    it('returns available=true on 400 / 405 / 500 (endpoint exists, request rejected)', () => {
+      // 400 = e.g. /ddic/ddl/sources without query params; 405 = wrong method;
+      // 500 = backend error from a registered endpoint. All three confirm endpoint presence.
+      expect(classifyFeatureProbeStatus('rap', 400).available).toBe(true);
+      expect(classifyFeatureProbeStatus('hana', 405).available).toBe(true);
+      expect(classifyFeatureProbeStatus('hana', 500).available).toBe(true);
     });
   });
 

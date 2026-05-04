@@ -13,7 +13,7 @@ import {
   normalizeCatalogId,
 } from '../../../src/adt/flp.js';
 import type { AdtHttpClient, AdtResponse } from '../../../src/adt/http.js';
-import { defaultSafetyConfig, unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
+import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
 function mockHttp(responseBody = '', statusCode = 200): AdtHttpClient {
   return {
@@ -148,13 +148,6 @@ describe('FLP OData client', () => {
       expect(result.tiles).toEqual([]);
       expect(result.backendError).toContain('ASSERTION_FAILED');
     });
-
-    it('listCatalogs throws on safety check when Read is blocked', async () => {
-      const safety = { ...defaultSafetyConfig(), disallowedOps: 'R' };
-      const http = mockHttp(odataCollection([]));
-
-      await expect(listCatalogs(http, safety)).rejects.toThrow('blocked by safety');
-    });
   });
 
   describe('write operations', () => {
@@ -178,13 +171,6 @@ describe('FLP OData client', () => {
         'application/json',
         expect.objectContaining({ Accept: 'application/json' }),
       );
-    });
-
-    it('createCatalog uses Workflow operation type', async () => {
-      const safety = { ...defaultSafetyConfig(), disallowedOps: 'W' };
-      const http = mockHttp(odataSingle({}));
-
-      await expect(createCatalog(http, safety, 'ZARC1_TEST', 'Test')).rejects.toThrow('blocked by safety');
     });
 
     it('createTile serializes double-JSON configuration', async () => {

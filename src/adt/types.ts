@@ -42,6 +42,7 @@ export type DiscoveryMap = Map<string, string[]>;
 export interface ResolvedFeatures {
   hana: FeatureStatus;
   abapGit: FeatureStatus;
+  gcts: FeatureStatus;
   rap: FeatureStatus;
   amdp: FeatureStatus;
   ui5: FeatureStatus;
@@ -58,6 +59,162 @@ export interface ResolvedFeatures {
   authProbe?: AuthProbeResult;
   /** ADT discovery MIME map used by HTTP content negotiation */
   discoveryMap?: DiscoveryMap;
+}
+
+// ─── gCTS / abapGit Types ───────────────────────────────────────────
+
+export interface GctsScope {
+  scope: string;
+  level: string;
+}
+
+export interface GctsUserInfo {
+  user: {
+    user: string;
+    scope?: {
+      system?: GctsScope[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+}
+
+export interface GctsSystemStatus {
+  id?: string;
+  name?: string;
+  status?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsSystemInfo {
+  result: {
+    sid?: string;
+    name?: string;
+    sapsid?: string;
+    workstate?: string;
+    config?: unknown;
+    status?: GctsSystemStatus[];
+    client?: string;
+    servername?: string;
+    version?: string;
+    availableVsid?: string[];
+    [key: string]: unknown;
+  };
+}
+
+export interface GctsConfig {
+  ckey: string;
+  ctype?: string;
+  datatype?: string;
+  defaultValue?: string;
+  description?: string;
+  category?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsRepo {
+  rid: string;
+  name?: string;
+  url?: string;
+  branch?: string;
+  package?: string;
+  role?: string;
+  type?: string;
+  vSID?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsBranch {
+  name?: string;
+  branch?: string;
+  isSymbolic?: boolean;
+  isPeeled?: boolean;
+  type?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsCommit {
+  commit?: string;
+  author?: string;
+  email?: string;
+  date?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsObject {
+  type?: string;
+  name?: string;
+  package?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
+export interface GctsCloneResult {
+  rid?: string;
+  result?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface AbapGitLink {
+  rel: string;
+  href: string;
+  type?: string;
+  title?: string;
+}
+
+export interface AbapGitRepo {
+  key: string;
+  package: string;
+  url: string;
+  branchName: string;
+  selectedBranch?: string;
+  deserializedBy?: string;
+  writeProtected?: boolean;
+  createdBy?: string;
+  createdAt?: string;
+  dotAbapGit?: string;
+  links: AbapGitLink[];
+}
+
+export interface AbapGitBranch {
+  name: string;
+  isHead?: boolean;
+  sha1?: string;
+}
+
+export interface AbapGitUser {
+  name?: string;
+  email?: string;
+}
+
+export interface AbapGitExternalInfo {
+  accessMode?: string;
+  defaultBranch?: string;
+  selectedBranch?: string;
+  branches: AbapGitBranch[];
+  user?: AbapGitUser;
+}
+
+export interface AbapGitObject {
+  type?: string;
+  name?: string;
+  package?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
+export interface AbapGitStagingObject extends AbapGitObject {
+  state?: string;
+  operation?: string;
+}
+
+export interface AbapGitStaging {
+  repoKey?: string;
+  branchName?: string;
+  objects: AbapGitStagingObject[];
 }
 
 /** Authorization probe result from startup probing */
@@ -122,6 +279,7 @@ export interface SyntaxMessage {
   text: string;
   line: number;
   column: number;
+  uri?: string;
 }
 
 /** Transport request */
@@ -150,6 +308,19 @@ export interface TransportTask {
   owner: string;
   status: string;
   objects: TransportObject[];
+}
+
+/** Result of looking up transports related to a given ABAP object. */
+export interface ObjectTransportHistory {
+  object: { type: string; name: string; uri: string };
+  /** Transport currently holding a lock on this object (if any). */
+  lockedTransport?: string;
+  /** All transports the object is referenced from (active + queued). Empty when none. */
+  relatedTransports: Array<{ id: string; description: string; owner: string; status: string }>;
+  /** Transports the object could be added to (from transportchecks fallback). */
+  candidateTransports: Array<{ id: string; description: string; owner: string }>;
+  /** Human-readable summary used by SAPTransport response. */
+  summary: string;
 }
 
 /** Source code search result */
@@ -193,6 +364,12 @@ export interface DumpChapter {
   name: string;
   title: string;
   category: string;
+  /** 1-based start line in formatted dump text */
+  line: number;
+  /** Chapter order from ADT metadata */
+  chapterOrder: number;
+  /** Category order from ADT metadata */
+  categoryOrder: number;
 }
 
 /** Full dump detail from /sap/bc/adt/runtime/dump/{id} */
@@ -213,6 +390,8 @@ export interface DumpDetail {
   chapters: DumpChapter[];
   /** Full formatted plain text dump content */
   formattedText: string;
+  /** Chapter-sliced dump text keyed by stable section IDs (chapter names) */
+  sections: Record<string, string>;
   /** ADT URI to the termination source location */
   terminationUri?: string;
 }
@@ -275,6 +454,92 @@ export interface TraceDbAccess {
   bufferedCount: number;
   /** Total access time (microseconds) */
   accessTime: number;
+}
+
+/** SM02 system message entry */
+export interface SystemMessageEntry {
+  id: string;
+  title: string;
+  text: string;
+  severity: string;
+  validFrom: string;
+  validTo: string;
+  createdBy: string;
+  timestamp: string;
+  detailUrl?: string;
+}
+
+/** Gateway error entry from /sap/bc/adt/gw/errorlog feed */
+export interface GatewayErrorEntry {
+  /** Gateway error type (for example "Frontend Error") */
+  type: string;
+  /** Short text from feed title */
+  shortText: string;
+  /** Transaction/error ID */
+  transactionId: string;
+  /** Timestamp */
+  dateTime: string;
+  /** SAP user */
+  username: string;
+  /** ADT detail URL for this error entry */
+  detailUrl: string;
+  package?: string;
+  applicationComponent?: string;
+  client?: string;
+  requestKind?: string;
+}
+
+export interface GatewayServiceInfo {
+  namespace: string;
+  serviceName: string;
+  serviceVersion: string;
+  groupId: string;
+  serviceRepository: string;
+  destination: string;
+}
+
+export interface GatewayExceptionInfo {
+  type: string;
+  text: string;
+  raiseLocation: string;
+}
+
+export interface GatewaySourceLine {
+  number: number;
+  content: string;
+  isError: boolean;
+}
+
+export interface GatewayCallStackEntry {
+  number: number;
+  event: string;
+  program: string;
+  name: string;
+  line: number;
+}
+
+/** Detailed gateway error payload */
+export interface GatewayErrorDetail {
+  type: string;
+  shortText: string;
+  transactionId: string;
+  package: string;
+  applicationComponent: string;
+  dateTime: string;
+  username: string;
+  client: string;
+  requestKind: string;
+  serviceInfo: GatewayServiceInfo;
+  errorContext: {
+    errorInfo: string;
+    resolution: Record<string, string>;
+    exceptions: GatewayExceptionInfo[];
+  };
+  sourceCode: {
+    lines: GatewaySourceLine[];
+    errorLine: number;
+  };
+  callStack: GatewayCallStackEntry[];
 }
 
 // ─── Message Class Types ────────────────────────────────────────────
@@ -453,6 +718,10 @@ export interface InactiveObject {
   type: string;
   uri: string;
   description?: string;
+  user?: string;
+  deleted?: boolean;
+  transport?: string;
+  parentTransport?: string;
 }
 
 // ─── Authorization & Switch Framework Types ────────────────────────
@@ -505,4 +774,25 @@ export interface EnhancementImplementationInfo {
     active: boolean;
     default: boolean;
   }>;
+}
+
+// ─── Source Revision / Version History Types ─────────────────────
+
+/** A single revision entry from the ADT `{sourceUrl}/versions` Atom feed. */
+export interface RevisionInfo {
+  id: string;
+  author: string;
+  timestamp: string;
+  versionTitle?: string;
+  transport?: string;
+  uri: string;
+}
+
+/** Parsed result of a revisions feed read — object metadata plus one entry per revision. */
+export interface RevisionListResult {
+  object: {
+    name: string;
+    type: string;
+  };
+  revisions: RevisionInfo[];
 }

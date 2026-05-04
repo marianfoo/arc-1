@@ -357,6 +357,56 @@ describe('AdtHttpClient', () => {
       await expect(client.get('/sap/bc/adt/core/discovery')).rejects.toThrow(AdtApiError);
     });
 
+    it('throws AdtApiError(401) when ADT path returns HTML login page', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '<html><body>login</body></html>', { 'content-type': 'text/html; charset=UTF-8' }),
+      );
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/sap/bc/adt/core/discovery')).rejects.toMatchObject({
+        statusCode: 401,
+        message: expect.stringContaining('HTML login page'),
+      });
+    });
+
+    it('throws AdtApiError(401) when ADT path returns a DOCTYPE logon document', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '<!DOCTYPE html>\n<html><head><title>System Logon</title></head></html>', {
+          'content-type': 'text/html; charset=UTF-8',
+        }),
+      );
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await expect(client.get('/sap/bc/adt/core/discovery')).rejects.toMatchObject({
+        statusCode: 401,
+        message: expect.stringContaining('HTML login page'),
+      });
+    });
+
+    it('passes through HTML fragment responses (e.g. gateway error log detail)', async () => {
+      // Real /sap/bc/adt/gw/errorlog/{type}/{tx} returns HTML fragments that
+      // start with <h4 id="..."> and have text/html content-type — they must
+      // not trigger the login-page heuristic.
+      const fragment = '<h4 id="OVERVIEW"><u>Content</u></h4><a href="#HEADER">Header Information</a><br>';
+      mockFetch.mockResolvedValueOnce(mockResponse(200, fragment, { 'content-type': 'text/html; charset=utf-8' }));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const response = await client.get('/sap/bc/adt/gw/errorlog/FrontendError/ABC123');
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe(fragment);
+    });
+
+    it('accepts XML response on ADT path', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<adt/>', { 'content-type': 'application/xml' }));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      const response = await client.get('/sap/bc/adt/core/discovery');
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe('<adt/>');
+    });
+
     it('throws AdtApiError on 401 during CSRF fetch with client info', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(401, 'Unauthorized'));
 
@@ -512,6 +562,36 @@ describe('AdtHttpClient', () => {
     });
   });
 
+  describe('SAML disable', () => {
+    it('adds X-SAP-SAML2 header when disableSaml=true', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient({ ...getDefaultConfig(), disableSaml: true });
+      await client.get('/sap/bc/adt/core/discovery');
+
+      expect(fetchHeaders(0)['X-SAP-SAML2']).toBe('disabled');
+    });
+
+    it('adds saml2=disabled query param when disableSaml=true', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient({ ...getDefaultConfig(), disableSaml: true });
+      await client.get('/sap/bc/adt/core/discovery');
+
+      expect(fetchUrl(0)).toContain('saml2=disabled');
+    });
+
+    it('does not add SAML header or query param when disableSaml=false', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      await client.get('/sap/bc/adt/core/discovery');
+
+      expect(fetchHeaders(0)['X-SAP-SAML2']).toBeUndefined();
+      expect(fetchUrl(0)).not.toContain('saml2=disabled');
+    });
+  });
+
   // ─── TLS / Insecure ────────────────────────────────────────────────
 
   describe('insecure mode', () => {
@@ -552,6 +632,30 @@ describe('AdtHttpClient', () => {
 
       expect(fetchHeaders(0).Authorization).toBe('Bearer bearer-token-123');
       expect(fetchHeaders(0).Authorization).not.toContain('Basic');
+    });
+
+    it('does not send Basic Auth when sapConnectivityAuth is configured', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient({
+        ...getDefaultConfig(),
+        sapConnectivityAuth: 'Bearer saml-assertion-for-user',
+      });
+      await client.get('/path');
+
+      expect(fetchHeaders(0).Authorization).toBeUndefined();
+    });
+
+    it('does not send Basic Auth when ppProxyAuth is configured', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(200, 'ok'));
+
+      const client = new AdtHttpClient({
+        ...getDefaultConfig(),
+        ppProxyAuth: 'Bearer exchanged-token',
+      });
+      await client.get('/path');
+
+      expect(fetchHeaders(0).Authorization).toBeUndefined();
     });
 
     it('does not send Authorization when no credentials configured', async () => {

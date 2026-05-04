@@ -14,7 +14,7 @@
 
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { callTool, connectClient, expectToolError, expectToolSuccess } from './helpers.js';
+import { callTool, connectClient, expectToolError, expectToolSuccess, expectToolSuccessOrSkip } from './helpers.js';
 
 /** Check if a custom object exists on the SAP system via SAPSearch */
 async function objectExists(client: Client, name: string): Promise<boolean> {
@@ -65,6 +65,12 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
         name: 'ZIF_ARC1_TEST',
       });
       const text = expectToolSuccess(result);
+      if (/^No references found\./i.test(text)) {
+        ctx.skip(
+          'Where-used index empty on this system (likely freshly-activated fixture, or SAP_BASIS level without usageReferences indexing)',
+        );
+        return;
+      }
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThanOrEqual(1);
       // ZCL_ARC1_TEST implements this interface — must appear in results
@@ -81,6 +87,10 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
         name: 'ZCL_ARC1_TEST',
       });
       const text = expectToolSuccess(result);
+      if (/^No references found\./i.test(text)) {
+        ctx.skip('Where-used index empty for ZCL_ARC1_TEST on this system');
+        return;
+      }
       const refs = JSON.parse(text);
       expect(Array.isArray(refs)).toBe(true);
       if (refs.length > 0) {
@@ -98,6 +108,10 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
         name: 'ZIF_ARC1_TEST',
       });
       const text = expectToolSuccess(result);
+      if (/^No references found\./i.test(text)) {
+        ctx.skip('Where-used index empty for ZIF_ARC1_TEST on this system');
+        return;
+      }
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThanOrEqual(1);
       const first = refs[0];
@@ -178,37 +192,37 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
       console.log(`    BAPIRET2 has ${refs.length} references`);
     });
 
-    it('finds references to BUKRS domain', async () => {
+    it('finds references to BUKRS domain', async (ctx) => {
       const result = await callTool(client, 'SAPNavigate', {
         action: 'references',
         type: 'DOMA',
         name: 'BUKRS',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThan(0);
       console.log(`    BUKRS domain has ${refs.length} references`);
     });
 
-    it('finds references to BUKRS data element', async () => {
+    it('finds references to BUKRS data element', async (ctx) => {
       const result = await callTool(client, 'SAPNavigate', {
         action: 'references',
         type: 'DTEL',
         name: 'BUKRS',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThan(0);
       console.log(`    BUKRS data element has ${refs.length} references`);
     });
 
-    it('finds references to T001 table', async () => {
+    it('finds references to T001 table', async (ctx) => {
       const result = await callTool(client, 'SAPNavigate', {
         action: 'references',
         type: 'TABL',
         name: 'T001',
       });
-      const text = expectToolSuccess(result);
+      const text = expectToolSuccessOrSkip(ctx, result);
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThan(0);
       console.log(`    T001 table has ${refs.length} references`);

@@ -53,21 +53,19 @@ ENV SAP_CLIENT="100"
 ENV SAP_LANGUAGE="EN"
 ENV SAP_INSECURE="false"
 
-# ─── Safety ──────────────────────────────────────────────────────────────────
-ENV SAP_READ_ONLY="true"
-ENV SAP_BLOCK_FREE_SQL="true"
-ENV SAP_BLOCK_DATA="true"
-ENV SAP_ALLOWED_OPS=""
-ENV SAP_DISALLOWED_OPS=""
+# ─── Authorization / Safety (safe defaults) ──────────────────────────────────
+ENV SAP_ALLOW_WRITES="false"
+ENV SAP_ALLOW_DATA_PREVIEW="false"
+ENV SAP_ALLOW_FREE_SQL="false"
 ENV SAP_ALLOWED_PACKAGES="\$TMP"
+ENV SAP_ALLOW_TRANSPORT_WRITES="false"
+ENV SAP_ALLOW_GIT_WRITES="false"
+ENV SAP_DENY_ACTIONS=""
 
 # ─── MCP Transport ──────────────────────────────────────────────────────────
 # http-streamable is the default for Docker (not stdio)
 ENV SAP_TRANSPORT="http-streamable"
 ENV SAP_HTTP_ADDR="0.0.0.0:8080"
-
-# ─── Transport Management ───────────────────────────────────────────────────
-ENV SAP_ENABLE_TRANSPORTS="false"
 
 # ─── System Type ────────────────────────────────────────────────────────────
 # auto = detect from SAP_CLOUD component, btp = BTP ABAP, onprem = on-premise

@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { AdtSafetyError } from '../../../src/adt/errors.js';
+import { AdtApiError, AdtSafetyError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 import {
@@ -8,6 +10,7 @@ import {
   CTS_NAMESPACE_TM,
   createTransport,
   deleteTransport,
+  getObjectTransports,
   getTransport,
   getTransportInfo,
   listTransports,
@@ -15,6 +18,9 @@ import {
   releaseTransport,
   releaseTransportRecursive,
 } from '../../../src/adt/transport.js';
+
+const fixturesDir = join(import.meta.dirname, '../../fixtures/xml');
+const loadFixture = (name: string) => readFileSync(join(fixturesDir, name), 'utf-8');
 
 function mockHttp(responseBody = ''): AdtHttpClient {
   return {
@@ -27,18 +33,12 @@ function mockHttp(responseBody = ''): AdtHttpClient {
   } as unknown as AdtHttpClient;
 }
 
-const enabledSafety = { ...unrestrictedSafetyConfig(), enableTransports: true };
+const enabledSafety = { ...unrestrictedSafetyConfig(), allowTransportWrites: true };
 
 describe('Transport Management', () => {
   // ─── listTransports ────────────────────────────────────────────────
 
   describe('listTransports', () => {
-    it('is blocked when transports not enabled', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
-      await expect(listTransports(http, safety)).rejects.toThrow(AdtSafetyError);
-    });
-
     it('works when transports are enabled', async () => {
       const xml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
         <tm:request tm:number="DEVK900001" tm:owner="DEVELOPER" tm:desc="Test transport" tm:status="D" tm:type="K"/>
@@ -188,12 +188,6 @@ describe('Transport Management', () => {
       const transport = await getTransport(http, enabledSafety, 'NONEXISTENT');
       expect(transport).toBeNull();
     });
-
-    it('is blocked when transports not enabled', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
-      await expect(getTransport(http, safety, 'A4HK900100')).rejects.toThrow(AdtSafetyError);
-    });
   });
 
   // ─── createTransport ───────────────────────────────────────────────
@@ -201,13 +195,7 @@ describe('Transport Management', () => {
   describe('createTransport', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
-      await expect(createTransport(http, safety, 'Test')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport is read-only', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: true, transportReadOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
       await expect(createTransport(http, safety, 'Test')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -248,13 +236,7 @@ describe('Transport Management', () => {
   describe('releaseTransport', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
-      await expect(releaseTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked in transport read-only mode', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: true, transportReadOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
       await expect(releaseTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -278,13 +260,7 @@ describe('Transport Management', () => {
   describe('deleteTransport', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
-      await expect(deleteTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport is read-only', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: true, transportReadOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
       await expect(deleteTransport(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -351,13 +327,7 @@ describe('Transport Management', () => {
   describe('reassignTransport', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
-      await expect(reassignTransport(http, safety, 'DEVK900001', 'NEWUSER')).rejects.toThrow(AdtSafetyError);
-    });
-
-    it('is blocked when transport is read-only', async () => {
-      const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: true, transportReadOnly: true };
+      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
       await expect(reassignTransport(http, safety, 'DEVK900001', 'NEWUSER')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -451,7 +421,7 @@ describe('Transport Management', () => {
   describe('releaseTransportRecursive', () => {
     it('is blocked when transports not enabled', async () => {
       const http = mockHttp();
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
+      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
       await expect(releaseTransportRecursive(http, safety, 'DEVK900001')).rejects.toThrow(AdtSafetyError);
     });
 
@@ -770,14 +740,14 @@ describe('Transport Management', () => {
       expect(info.lockedTransport).toBe('A4HK900999');
     });
 
-    it('does not require enableTransports flag (read-only check)', async () => {
+    it('does not require allowTransportWrites for read-only transport info', async () => {
       const xml = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
         <RECORDING/>
         <DLVUNIT>LOCAL</DLVUNIT>
         <DEVCLASS>$TMP</DEVCLASS>
       </DATA></asx:values></asx:abap>`;
       const http = mockHttp(xml);
-      const safety = { ...unrestrictedSafetyConfig(), enableTransports: false };
+      const safety = { ...unrestrictedSafetyConfig(), allowTransportWrites: false };
       // Should NOT throw — transportInfo is a read operation
       const info = await getTransportInfo(http, safety, '/sap/bc/adt/oo/classes/zcl_test', '$TMP');
       expect(info.isLocal).toBe(true);
@@ -810,6 +780,90 @@ describe('Transport Management', () => {
       );
       expect(info.existingTransports).toEqual([]);
       expect(info.recording).toBe(true);
+    });
+  });
+
+  // ─── getObjectTransports ──────────────────────────────────────────
+
+  describe('getObjectTransports', () => {
+    it('calls /transports endpoint with XML accept header', async () => {
+      const http = mockHttp(loadFixture('object-transports-related.xml'));
+      await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+
+      const call = (http.get as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call?.[0]).toBe('/sap/bc/adt/oo/classes/zcl_test/transports');
+      expect(call?.[1]).toEqual({ Accept: 'application/vnd.sap.as+xml' });
+    });
+
+    it('returns empty arrays for empty response body', async () => {
+      const http = mockHttp(loadFixture('object-transports-empty.xml'));
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+      expect(result).toEqual({ relatedTransports: [], candidateTransports: [] });
+      expect(result.lockedTransport).toBeUndefined();
+    });
+
+    it('extracts locked transport from lock.result2 payload', async () => {
+      const http = mockHttp(loadFixture('object-transports-related.xml'));
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+      expect(result.lockedTransport).toBe('A4HK900123');
+      // /transports only reports the current lock — candidate transports
+      // come from the transportchecks fallback in intent.ts, not here.
+      expect(result.candidateTransports).toEqual([]);
+    });
+
+    it('maps locked transport into relatedTransports with owner and description', async () => {
+      const http = mockHttp(loadFixture('object-transports-related.xml'));
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test');
+      expect(result.relatedTransports).toHaveLength(1);
+      expect(result.relatedTransports[0]).toEqual({
+        id: 'A4HK900123',
+        description: 'Refactor ZCL_ORDER',
+        owner: 'DEVELOPER',
+        status: 'D',
+      });
+    });
+
+    it('returns empty arrays when SAP returns 404 (object type lacks /transports subresource)', async () => {
+      // Non-CLAS object types (TABL, DDLS, BDEF, PROG, INTF, FUGR) do not
+      // expose /transports on NetWeaver. The 404 must be swallowed so the
+      // caller can fall back to transportchecks instead of failing.
+      const http = {
+        get: vi
+          .fn()
+          .mockRejectedValue(new AdtApiError('not found', 404, '/sap/bc/adt/ddic/tables/zfb_club/transports')),
+        post: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
+        fetchCsrfToken: vi.fn(),
+        withStatefulSession: vi.fn(),
+      } as unknown as AdtHttpClient;
+
+      const result = await getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/ddic/tables/zfb_club');
+      expect(result).toEqual({ relatedTransports: [], candidateTransports: [] });
+      expect(result.lockedTransport).toBeUndefined();
+    });
+
+    it('rethrows non-404 API errors', async () => {
+      const http = {
+        get: vi.fn().mockRejectedValue(new AdtApiError('forbidden', 403, '/sap/bc/adt/oo/classes/zcl_test/transports')),
+        post: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
+        fetchCsrfToken: vi.fn(),
+        withStatefulSession: vi.fn(),
+      } as unknown as AdtHttpClient;
+
+      await expect(
+        getObjectTransports(http, unrestrictedSafetyConfig(), '/sap/bc/adt/oo/classes/zcl_test'),
+      ).rejects.toThrow(AdtApiError);
+    });
+
+    it('is read-only safe — works even when allowWrites=false', async () => {
+      const xml = loadFixture('object-transports-related.xml');
+      const readOnlySafety = { ...unrestrictedSafetyConfig(), allowWrites: false };
+      await expect(
+        getObjectTransports(mockHttp(xml), readOnlySafety, '/sap/bc/adt/oo/classes/zcl_test'),
+      ).resolves.toBeDefined();
     });
   });
 });

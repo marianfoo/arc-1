@@ -35,6 +35,7 @@ interface FeatureProbe {
 const PROBES: FeatureProbe[] = [
   { id: 'hana', endpoint: '/sap/bc/adt/ddic/sysinfo/hanainfo', description: 'HANA database' },
   { id: 'abapGit', endpoint: '/sap/bc/adt/abapgit/repos', description: 'abapGit integration' },
+  { id: 'gcts', endpoint: '/sap/bc/cts_abapvcs/system', description: 'gCTS (git-enabled CTS)' },
   { id: 'rap', endpoint: '/sap/bc/adt/ddic/ddl/sources', description: 'RAP/CDS development' },
   { id: 'amdp', endpoint: '/sap/bc/adt/debugger/amdp', description: 'AMDP debugging' },
   { id: 'ui5', endpoint: '/sap/bc/adt/filestore/ui5-bsp', description: 'UI5/Fiori BSP' },
@@ -47,8 +48,15 @@ const PROBES: FeatureProbe[] = [
   },
 ];
 
+/** Per-feature probe outcome — `available` plus an optional human-readable reason. */
+interface ProbeOutcome {
+  available: boolean;
+  /** Free-text diagnostic, surfaced via FeatureStatus.message when present. */
+  reason?: string;
+}
+
 /** Resolve a single feature based on its mode */
-function resolveFeature(mode: FeatureMode, probeResult: boolean, id: string, description: string): FeatureStatus {
+function resolveFeature(mode: FeatureMode, probeOutcome: ProbeOutcome, id: string, description: string): FeatureStatus {
   if (mode === 'on') {
     return { id, available: true, mode: 'on', message: 'Forced on by configuration' };
   }
@@ -56,11 +64,13 @@ function resolveFeature(mode: FeatureMode, probeResult: boolean, id: string, des
     return { id, available: false, mode: 'off', message: 'Disabled by configuration' };
   }
   // auto
+  const baseMessage = probeOutcome.available ? `${description} is available` : `${description} is not available`;
+  const message = probeOutcome.reason ? `${baseMessage} — ${probeOutcome.reason}` : baseMessage;
   return {
     id,
-    available: probeResult,
+    available: probeOutcome.available,
     mode: 'auto',
-    message: probeResult ? `${description} is available` : `${description} is not available`,
+    message,
     probedAt: new Date().toISOString(),
   };
 }
@@ -80,6 +90,7 @@ export async function probeFeatures(
   const modeMap: Record<string, FeatureMode> = {
     hana: config.hana,
     abapGit: config.abapGit,
+    gcts: config.gcts,
     rap: config.rap,
     amdp: config.amdp,
     ui5: config.ui5,
@@ -92,23 +103,18 @@ export async function probeFeatures(
   const probesToRun = PROBES.filter((p) => modeMap[p.id] === 'auto');
 
   // Run feature probes + system detection + text search probe + auth probe + discovery in parallel
-  const [probeResults, systemDetection, textSearchResult, authProbeResult, discoveryMap] = await Promise.all([
+  const [probeResults, systemDetection, textSearchResult, authProbeResult, discoveryResult] = await Promise.all([
     Promise.all(
       probesToRun.map(async (probe) => {
         try {
-          // GET on collection endpoints may return 4xx/5xx when the feature is available
-          // (e.g. /ddic/ddl/sources returns 400 without an object name, transport returns 200).
-          // handleResponse() throws AdtApiError for all status >= 400, so we catch here:
-          // - 404 = ICF service not activated / endpoint doesn't exist → unavailable
-          // - any other HTTP error (400, 403, 405, 500) = endpoint exists → available
-          // - network-level error (no AdtApiError) → unavailable
           await client.get(probe.endpoint);
-          return { id: probe.id, available: true };
+          return classifyFeatureProbeStatus(probe.id, 200);
         } catch (err) {
-          if (err instanceof AdtApiError && err.statusCode !== 404) {
-            return { id: probe.id, available: true };
+          if (err instanceof AdtApiError) {
+            return classifyFeatureProbeStatus(probe.id, err.statusCode);
           }
-          return { id: probe.id, available: false };
+          // Network-level error (no AdtApiError) → cannot reach SAP at all → unavailable.
+          return { id: probe.id, available: false, reason: 'network error' };
         }
       }),
     ),
@@ -118,18 +124,39 @@ export async function probeFeatures(
     fetchDiscoveryDocument(client),
   ]);
 
-  // Build result map
-  const resultMap = new Map<string, boolean>();
+  const { map: discoveryMap, nhiPresent: discoveryNhiPresent } = discoveryResult;
+
+  // Build result map keyed by feature id, carrying both availability and any diagnostic reason.
+  const resultMap = new Map<string, ProbeOutcome>();
   for (const result of probeResults) {
-    resultMap.set(result.id, result.available);
+    resultMap.set(result.id, { available: result.available, reason: result.reason });
+  }
+
+  // Component-based HANA detection overrides the endpoint probe when the hanainfo
+  // endpoint is absent (e.g. some S/4HANA releases). Only applies in auto mode.
+  if (!resultMap.get('hana')?.available && systemDetection.hasHana && modeMap.hana === 'auto') {
+    resultMap.set('hana', {
+      available: true,
+      reason: 'inferred from installed components (hanainfo endpoint absent)',
+    });
+  }
+
+  // Discovery-based HANA detection: NHI (Native HANA Integration) workspaces are only
+  // registered on HANA-based systems. Fires when both the hanainfo probe and the components
+  // feed failed to confirm HANA (e.g. empty components feed + hanainfo 404).
+  if (!resultMap.get('hana')?.available && discoveryNhiPresent && modeMap.hana === 'auto') {
+    resultMap.set('hana', {
+      available: true,
+      reason: 'inferred from ADT discovery document (NHI workspace present — Native HANA Integration)',
+    });
   }
 
   // Resolve all features
   const result: Record<string, FeatureStatus> = {};
   for (const probe of PROBES) {
     const mode = modeMap[probe.id] ?? 'auto';
-    const probeResult = resultMap.get(probe.id) ?? false;
-    result[probe.id] = resolveFeature(mode, probeResult, probe.id, probe.description);
+    const outcome = resultMap.get(probe.id) ?? { available: false };
+    result[probe.id] = resolveFeature(mode, outcome, probe.id, probe.description);
   }
 
   const resolved = result as unknown as ResolvedFeatures;
@@ -185,6 +212,7 @@ export function mapSapReleaseToAbaplintVersion(release: string): Version {
 interface SystemDetection {
   abapRelease?: string;
   systemType?: SystemType;
+  hasHana?: boolean;
 }
 
 /**
@@ -198,7 +226,7 @@ interface SystemDetection {
  */
 async function detectSystemFromComponents(client: AdtHttpClient): Promise<SystemDetection> {
   try {
-    const resp = await client.get('/sap/bc/adt/system/components');
+    const resp = await client.get('/sap/bc/adt/system/components', { Accept: 'application/atom+xml;type=feed' });
     if (resp.statusCode >= 400) return {};
     const components = parseInstalledComponents(resp.body);
     const basis = components.find((c) => c.name.toUpperCase() === 'SAP_BASIS');
@@ -207,10 +235,46 @@ async function detectSystemFromComponents(client: AdtHttpClient): Promise<System
     return {
       abapRelease: basis?.release || undefined,
       systemType,
+      hasHana: detectHanaFromComponents(components),
     };
   } catch {
     return {};
   }
+}
+
+/**
+ * Detect HANA presence from ADT discovery document NHI signal (exported for testing).
+ *
+ * NHI (Native HANA Integration) workspaces at /sap/bc/adt/nhi/* are only registered
+ * on HANA-based SAP systems. This is the last fallback when both the hanainfo endpoint
+ * probe and the software components feed fail to produce a signal.
+ */
+export function detectHanaFromDiscovery(nhiPresent: boolean): boolean {
+  return nhiPresent;
+}
+
+/**
+ * Detect HANA DB presence from installed software components (exported for testing).
+ *
+ * Rules (any match → HANA):
+ * 1. Component name contains `HDB` or `HANA` (e.g. `HDB`, `HANA_XS`) — direct DB indicator,
+ *    typically present on Suite-on-HANA systems.
+ * 2. Component name starts with `S4` (e.g. `S4CORE`, `S4FND`, `S4CEXT`) — S/4HANA is
+ *    HANA-only, and `S4` is SAP's reserved prefix for S/4HANA software components.
+ *    On S/4HANA 2021+ the core component is `S4FND`, not `S4CORE`.
+ * 3. Component name `BW4CORE` — BW/4HANA is also HANA-only.
+ *
+ * DB release info is intentionally not surfaced: only HDB-named components carry a
+ * meaningful release; S4/BW4CORE releases describe the ABAP stack, not the DB.
+ */
+export function detectHanaFromComponents(components: Array<{ name: string }>): boolean {
+  for (const c of components) {
+    const name = c.name.toUpperCase();
+    if (/HDB|HANA/.test(name)) return true;
+    if (/^S4[A-Z]/.test(name)) return true;
+    if (name === 'BW4CORE') return true;
+  }
+  return false;
 }
 
 /**
@@ -317,6 +381,45 @@ async function probeTransportAccess(client: AdtHttpClient): Promise<{ available:
   }
 }
 
+/**
+ * Classify the HTTP status of a single feature-probe request into `{ available, reason? }`.
+ *
+ * Decision table:
+ * - **2xx** → endpoint exists and we got a clean response → available.
+ * - **400, 405, 500, other 4xx/5xx** → endpoint exists; SAP returned a request-shape /
+ *   server error after dispatching to the handler → available. (Some collection endpoints
+ *   intentionally return 400 without query params, e.g. `/ddic/ddl/sources`.)
+ * - **401** → request was rejected by ICM/SICF before authorization could even run.
+ *   This carries NO signal about endpoint existence — could be missing creds, expired
+ *   session, wrong client, etc. Reporting `available: true` here would be a lie on
+ *   any system where auth is misconfigured. Classify as unavailable.
+ * - **403** → endpoint exists, but the user lacks the specific authorization to use it.
+ *   From the caller's perspective the feature is unusable, so report unavailable —
+ *   matches `classifyAuthProbeError` semantics for textSearch / authProbe.
+ * - **404** → ICF service not activated, endpoint not registered → unavailable.
+ *
+ * Exported for testing.
+ */
+export function classifyFeatureProbeStatus(
+  id: string,
+  statusCode: number,
+): { id: string; available: boolean; reason?: string } {
+  if (statusCode >= 200 && statusCode < 300) {
+    return { id, available: true };
+  }
+  if (statusCode === 401) {
+    return { id, available: false, reason: 'auth failure (401) — cannot determine availability' };
+  }
+  if (statusCode === 403) {
+    return { id, available: false, reason: 'forbidden (403) — endpoint exists but user lacks authorization' };
+  }
+  if (statusCode === 404) {
+    return { id, available: false, reason: 'endpoint not found (404) — ICF service not activated' };
+  }
+  // 400 / 405 / 4xx / 5xx other than auth/missing → endpoint exists, request was dispatched.
+  return { id, available: true };
+}
+
 export function classifyAuthProbeError(
   statusCode: number,
   probeType: 'search' | 'transport',
@@ -348,6 +451,7 @@ export function resolveWithoutProbing(config: FeatureConfig): ResolvedFeatures {
   const descriptions: Record<string, string> = {
     hana: 'HANA database',
     abapGit: 'abapGit integration',
+    gcts: 'gCTS (git-enabled CTS)',
     rap: 'RAP/CDS development',
     amdp: 'AMDP debugging',
     ui5: 'UI5/Fiori BSP',
@@ -359,7 +463,8 @@ export function resolveWithoutProbing(config: FeatureConfig): ResolvedFeatures {
   for (const [id, mode] of Object.entries(config)) {
     result[id] = resolveFeature(
       mode as FeatureMode,
-      mode === 'on', // Without probing, "auto" defaults to unavailable
+      // Without probing, "auto" defaults to unavailable. No probe ran, so no reason to surface.
+      { available: mode === 'on' },
       id,
       descriptions[id] ?? id,
     );

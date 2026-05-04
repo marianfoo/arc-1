@@ -1,5 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PROFILE_SCOPES, PROFILES, parseApiKeys, parseArgs, validateConfig } from '../../../src/server/config.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  API_KEY_PROFILES,
+  parseApiKeys,
+  parseArgs,
+  resolveConfig,
+  validateConfig,
+} from '../../../src/server/config.js';
 import { DEFAULT_CONFIG } from '../../../src/server/types.js';
 
 describe('parseArgs', () => {
@@ -25,9 +31,12 @@ describe('parseArgs', () => {
     expect(config.client).toBe('100');
     expect(config.language).toBe('EN');
     expect(config.transport).toBe('stdio');
-    expect(config.readOnly).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.blockData).toBe(true);
+    expect(config.allowWrites).toBe(false);
+    expect(config.allowFreeSQL).toBe(false);
+    expect(config.allowDataPreview).toBe(false);
+    expect(config.allowTransportWrites).toBe(false);
+    expect(config.allowGitWrites).toBe(false);
+    expect(config.denyActions).toEqual([]);
     expect(config.verbose).toBe(false);
   });
 
@@ -61,17 +70,39 @@ describe('parseArgs', () => {
   });
 
   it('parses boolean flags', () => {
-    const config = parseArgs(['--read-only', 'true', '--verbose', 'true']);
-    expect(config.readOnly).toBe(true);
+    const config = parseArgs(['--allow-writes', 'true', '--verbose', 'true']);
+    expect(config.allowWrites).toBe(true);
     expect(config.verbose).toBe(true);
   });
 
   it('parses boolean env vars', () => {
-    process.env.SAP_READ_ONLY = 'true';
-    process.env.SAP_BLOCK_FREE_SQL = '1';
+    process.env.SAP_ALLOW_WRITES = 'true';
+    process.env.SAP_ALLOW_FREE_SQL = '1';
     const config = parseArgs([]);
-    expect(config.readOnly).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
+    expect(config.allowWrites).toBe(true);
+    expect(config.allowFreeSQL).toBe(true);
+  });
+
+  it('parses --allow-git-writes flag', () => {
+    const config = parseArgs(['--allow-git-writes', 'true']);
+    expect(config.allowGitWrites).toBe(true);
+  });
+
+  it('parses SAP_ALLOW_GIT_WRITES env var', () => {
+    process.env.SAP_ALLOW_GIT_WRITES = '1';
+    const config = parseArgs([]);
+    expect(config.allowGitWrites).toBe(true);
+  });
+
+  it('defaults allowGitWrites to false without explicit configuration', () => {
+    const config = parseArgs([]);
+    expect(config.allowGitWrites).toBe(false);
+  });
+
+  it('--allow-git-writes takes precedence over SAP_ALLOW_GIT_WRITES env', () => {
+    process.env.SAP_ALLOW_GIT_WRITES = 'false';
+    const config = parseArgs(['--allow-git-writes', 'true']);
+    expect(config.allowGitWrites).toBe(true);
   });
 
   it('parses transport type', () => {
@@ -87,6 +118,38 @@ describe('parseArgs', () => {
   it('parses --port flag and overrides httpAddr port', () => {
     const config = parseArgs(['--port', '9090']);
     expect(config.httpAddr).toBe('0.0.0.0:9090');
+  });
+
+  it('parses ARC1_HTTP_ADDR env var', () => {
+    process.env.ARC1_HTTP_ADDR = '127.0.0.1:19081';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('127.0.0.1:19081');
+    } finally {
+      delete process.env.ARC1_HTTP_ADDR;
+    }
+  });
+
+  it('parses SAP_HTTP_ADDR env var as legacy-compatible alias', () => {
+    process.env.SAP_HTTP_ADDR = '127.0.0.1:19082';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('127.0.0.1:19082');
+    } finally {
+      delete process.env.SAP_HTTP_ADDR;
+    }
+  });
+
+  it('prefers ARC1_HTTP_ADDR over SAP_HTTP_ADDR when both are set', () => {
+    process.env.ARC1_HTTP_ADDR = '127.0.0.1:19081';
+    process.env.SAP_HTTP_ADDR = '127.0.0.1:19082';
+    try {
+      const config = parseArgs([]);
+      expect(config.httpAddr).toBe('127.0.0.1:19081');
+    } finally {
+      delete process.env.ARC1_HTTP_ADDR;
+      delete process.env.SAP_HTTP_ADDR;
+    }
   });
 
   it('ARC1_PORT env var overrides httpAddr port', () => {
@@ -121,10 +184,26 @@ describe('parseArgs', () => {
   });
 
   it('parses feature toggles', () => {
-    const config = parseArgs(['--feature-abapgit', 'on', '--feature-rap', 'off', '--feature-flp', 'on']);
+    const config = parseArgs([
+      '--feature-abapgit',
+      'on',
+      '--feature-gcts',
+      'off',
+      '--feature-rap',
+      'off',
+      '--feature-flp',
+      'on',
+    ]);
     expect(config.featureAbapGit).toBe('on');
+    expect(config.featureGcts).toBe('off');
     expect(config.featureRap).toBe('off');
     expect(config.featureFlp).toBe('on');
+  });
+
+  it('parses SAP_FEATURE_GCTS env var', () => {
+    process.env.SAP_FEATURE_GCTS = 'on';
+    const config = parseArgs([]);
+    expect(config.featureGcts).toBe('on');
   });
 
   it('defaults unknown feature toggle to auto', () => {
@@ -149,10 +228,97 @@ describe('parseArgs', () => {
     expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
   });
 
+  it('filters out empty entries from SAP_ALLOWED_PACKAGES (e.g. shell-expanded unset $VARs)', () => {
+    // Simulates `SAP_ALLOWED_PACKAGES=$tmp,$locals,$*` with unset shell vars → ",,"
+    process.env.SAP_ALLOWED_PACKAGES = ',,';
+    const config = parseArgs([]);
+    expect(config.allowedPackages).toEqual([]);
+  });
+
+  it('filters empty entries but keeps valid ones', () => {
+    process.env.SAP_ALLOWED_PACKAGES = 'Z*,,$TMP,';
+    const config = parseArgs([]);
+    expect(config.allowedPackages).toEqual(['Z*', '$TMP']);
+  });
+
+  describe('legacy config migration errors', () => {
+    it('throws migration error for SAP_READ_ONLY', () => {
+      process.env.SAP_READ_ONLY = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_READ_ONLY.*Replaced by SAP_ALLOW_WRITES/);
+    });
+
+    it('throws migration error for SAP_BLOCK_DATA', () => {
+      process.env.SAP_BLOCK_DATA = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_BLOCK_DATA.*Replaced by SAP_ALLOW_DATA_PREVIEW/);
+    });
+
+    it('throws migration error for SAP_BLOCK_FREE_SQL', () => {
+      process.env.SAP_BLOCK_FREE_SQL = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_BLOCK_FREE_SQL.*Replaced by SAP_ALLOW_FREE_SQL/);
+    });
+
+    it('throws migration error for SAP_ENABLE_TRANSPORTS', () => {
+      process.env.SAP_ENABLE_TRANSPORTS = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_ENABLE_TRANSPORTS.*Replaced by SAP_ALLOW_TRANSPORT_WRITES/);
+    });
+
+    it('throws migration error for SAP_ENABLE_GIT', () => {
+      process.env.SAP_ENABLE_GIT = 'true';
+      expect(() => parseArgs([])).toThrow(/SAP_ENABLE_GIT.*Replaced by SAP_ALLOW_GIT_WRITES/);
+    });
+
+    it('throws migration error for SAP_ALLOWED_OPS', () => {
+      process.env.SAP_ALLOWED_OPS = 'RSQ';
+      expect(() => parseArgs([])).toThrow(/SAP_ALLOWED_OPS.*Op-code allowlist was removed/);
+    });
+
+    it('throws migration error for SAP_DISALLOWED_OPS', () => {
+      process.env.SAP_DISALLOWED_OPS = 'D';
+      expect(() => parseArgs([])).toThrow(/SAP_DISALLOWED_OPS.*Op-code blocklist was removed/);
+    });
+
+    it('throws migration error for ARC1_PROFILE', () => {
+      process.env.ARC1_PROFILE = 'developer';
+      expect(() => parseArgs([])).toThrow(/ARC1_PROFILE.*Server-side profile presets were removed/);
+    });
+
+    it('throws migration error for ARC1_API_KEY', () => {
+      process.env.ARC1_API_KEY = 'abc';
+      expect(() => parseArgs([])).toThrow(/ARC1_API_KEY.*Single API-key mode was removed/);
+    });
+
+    it('throws migration error for --read-only flag', () => {
+      expect(() => parseArgs(['--read-only', 'true'])).toThrow(/--read-only.*SAP_ALLOW_WRITES/);
+    });
+
+    it('throws migration error for --profile flag', () => {
+      expect(() => parseArgs(['--profile', 'developer'])).toThrow(/--profile.*profile presets were removed/);
+    });
+
+    it('migration error message points to updating.md', () => {
+      process.env.SAP_READ_ONLY = 'true';
+      expect(() => parseArgs([])).toThrow(/docs_page\/updating\.md/);
+    });
+  });
+
   it('parses cookie auth options', () => {
     const config = parseArgs(['--cookie-file', '/path/cookies.txt', '--cookie-string', 'a=b; c=d']);
     expect(config.cookieFile).toBe('/path/cookies.txt');
     expect(config.cookieString).toBe('a=b; c=d');
+  });
+
+  it('parses --disable-saml and --pp-allow-shared-cookies flags', () => {
+    const config = parseArgs(['--disable-saml', 'true', '--pp-allow-shared-cookies', 'true']);
+    expect(config.disableSaml2).toBe(true);
+    expect(config.ppAllowSharedCookies).toBe(true);
+  });
+
+  it('parses SAP_DISABLE_SAML and SAP_PP_ALLOW_SHARED_COOKIES env vars', () => {
+    process.env.SAP_DISABLE_SAML = 'true';
+    process.env.SAP_PP_ALLOW_SHARED_COOKIES = '1';
+    const config = parseArgs([]);
+    expect(config.disableSaml2).toBe(true);
+    expect(config.ppAllowSharedCookies).toBe(true);
   });
 
   it('defaults xsuaaAuth to false', () => {
@@ -247,22 +413,22 @@ describe('parseArgs', () => {
     expect(config.systemType).toBe('btp');
   });
 
-  // --- blockData ---
+  // --- allowDataPreview (replaces blockData) ---
 
-  it('parses --block-data flag', () => {
-    const config = parseArgs(['--block-data', 'true']);
-    expect(config.blockData).toBe(true);
+  it('parses --allow-data-preview flag', () => {
+    const config = parseArgs(['--allow-data-preview', 'true']);
+    expect(config.allowDataPreview).toBe(true);
   });
 
-  it('parses SAP_BLOCK_DATA env var', () => {
-    process.env.SAP_BLOCK_DATA = '1';
+  it('parses SAP_ALLOW_DATA_PREVIEW env var', () => {
+    process.env.SAP_ALLOW_DATA_PREVIEW = '1';
     const config = parseArgs([]);
-    expect(config.blockData).toBe(true);
+    expect(config.allowDataPreview).toBe(true);
   });
 
-  it('defaults blockData to true without profile', () => {
+  it('defaults allowDataPreview to false', () => {
     const config = parseArgs([]);
-    expect(config.blockData).toBe(true);
+    expect(config.allowDataPreview).toBe(false);
   });
 
   // --- maxConcurrent ---
@@ -299,71 +465,11 @@ describe('parseArgs', () => {
     expect(config.maxConcurrent).toBe(3);
   });
 
-  // --- Profile ---
+  // --- API_KEY_PROFILES ---
 
-  it('--profile viewer sets readOnly, blockData, blockFreeSQL', () => {
-    const config = parseArgs(['--profile', 'viewer']);
-    expect(config.readOnly).toBe(true);
-    expect(config.blockData).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.enableTransports).toBe(false);
-  });
-
-  it('--profile developer sets write-enabled defaults', () => {
-    const config = parseArgs(['--profile', 'developer']);
-    expect(config.readOnly).toBe(false);
-    expect(config.blockData).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.enableTransports).toBe(true);
-    expect(config.allowedPackages).toEqual(['$TMP']);
-  });
-
-  it('--profile developer-data allows data but blocks SQL', () => {
-    const config = parseArgs(['--profile', 'developer-data']);
-    expect(config.readOnly).toBe(false);
-    expect(config.blockData).toBe(false);
-    expect(config.blockFreeSQL).toBe(true);
-    expect(config.enableTransports).toBe(true);
-  });
-
-  it('--profile viewer-sql allows both data and SQL but stays read-only', () => {
-    const config = parseArgs(['--profile', 'viewer-sql']);
-    expect(config.readOnly).toBe(true);
-    expect(config.blockData).toBe(false);
-    expect(config.blockFreeSQL).toBe(false);
-  });
-
-  it('--profile developer-sql allows everything', () => {
-    const config = parseArgs(['--profile', 'developer-sql']);
-    expect(config.readOnly).toBe(false);
-    expect(config.blockData).toBe(false);
-    expect(config.blockFreeSQL).toBe(false);
-    expect(config.enableTransports).toBe(true);
-    expect(config.allowedPackages).toEqual(['$TMP']);
-  });
-
-  it('explicit flag overrides profile default', () => {
-    const config = parseArgs(['--profile', 'viewer', '--read-only', 'false']);
-    expect(config.readOnly).toBe(false);
-    // Other profile defaults remain
-    expect(config.blockData).toBe(true);
-    expect(config.blockFreeSQL).toBe(true);
-  });
-
-  it('ARC1_PROFILE env var selects profile', () => {
-    process.env.ARC1_PROFILE = 'developer';
-    const config = parseArgs([]);
-    expect(config.readOnly).toBe(false);
-    expect(config.enableTransports).toBe(true);
-    expect(config.allowedPackages).toEqual(['$TMP']);
-  });
-
-  it('unknown profile name throws error', () => {
-    expect(() => parseArgs(['--profile', 'nonexistent'])).toThrow(/Unknown profile 'nonexistent'/);
-  });
-
-  it('PROFILES constant contains all expected profiles', () => {
-    expect(Object.keys(PROFILES).sort()).toEqual([
+  it('API_KEY_PROFILES contains all 7 expected profiles', () => {
+    expect(Object.keys(API_KEY_PROFILES).sort()).toEqual([
+      'admin',
       'developer',
       'developer-data',
       'developer-sql',
@@ -373,11 +479,41 @@ describe('parseArgs', () => {
     ]);
   });
 
-  it('PROFILE_SCOPES has an entry for every profile', () => {
-    for (const name of Object.keys(PROFILES)) {
-      expect(PROFILE_SCOPES[name]).toBeDefined();
-      expect(PROFILE_SCOPES[name].length).toBeGreaterThan(0);
-    }
+  it('API_KEY_PROFILES.viewer has read-only scopes and restrictive safety', () => {
+    expect(API_KEY_PROFILES.viewer.scopes).toEqual(['read']);
+    expect(API_KEY_PROFILES.viewer.safety.allowWrites).toBe(false);
+    expect(API_KEY_PROFILES.viewer.safety.allowDataPreview).toBe(false);
+    expect(API_KEY_PROFILES.viewer.safety.allowFreeSQL).toBe(false);
+  });
+
+  it('API_KEY_PROFILES.developer includes transports and git scopes', () => {
+    expect(API_KEY_PROFILES.developer.scopes).toContain('read');
+    expect(API_KEY_PROFILES.developer.scopes).toContain('write');
+    expect(API_KEY_PROFILES.developer.scopes).toContain('transports');
+    expect(API_KEY_PROFILES.developer.scopes).toContain('git');
+    expect(API_KEY_PROFILES.developer.safety.allowWrites).toBe(true);
+    expect(API_KEY_PROFILES.developer.safety.allowTransportWrites).toBe(true);
+    expect(API_KEY_PROFILES.developer.safety.allowGitWrites).toBe(true);
+    expect(API_KEY_PROFILES.developer.safety.allowedPackages).toEqual(['$TMP']);
+  });
+
+  it('API_KEY_PROFILES.admin has all 7 scopes', () => {
+    expect(API_KEY_PROFILES.admin.scopes.sort()).toEqual([
+      'admin',
+      'data',
+      'git',
+      'read',
+      'sql',
+      'transports',
+      'write',
+    ]);
+  });
+
+  it('API_KEY_PROFILES.developer-sql allows SQL and data preview', () => {
+    expect(API_KEY_PROFILES['developer-sql'].scopes).toContain('sql');
+    expect(API_KEY_PROFILES['developer-sql'].scopes).toContain('data');
+    expect(API_KEY_PROFILES['developer-sql'].safety.allowFreeSQL).toBe(true);
+    expect(API_KEY_PROFILES['developer-sql'].safety.allowDataPreview).toBe(true);
   });
 
   // --- Multi-key API keys ---
@@ -410,12 +546,29 @@ describe('parseArgs', () => {
     expect(config.apiKeys).toBeUndefined();
   });
 
-  it('both apiKey and apiKeys can coexist', () => {
-    process.env.ARC1_API_KEY = 'legacy-key';
-    process.env.ARC1_API_KEYS = 'new-key:viewer';
-    const config = parseArgs([]);
-    expect(config.apiKey).toBe('legacy-key');
-    expect(config.apiKeys).toEqual([{ key: 'new-key', profile: 'viewer' }]);
+  // --- resolveConfig (per-field source attribution) ---
+
+  it('resolveConfig returns per-field sources (default when unset)', () => {
+    const { sources } = resolveConfig([]);
+    expect(sources.allowWrites).toBe('default');
+    expect(sources.allowedPackages).toBe('default');
+  });
+
+  it('resolveConfig reports env source for env-set fields', () => {
+    process.env.SAP_ALLOW_WRITES = 'true';
+    const { sources } = resolveConfig([]);
+    expect(sources.allowWrites).toEqual({ env: 'SAP_ALLOW_WRITES' });
+  });
+
+  it('resolveConfig reports flag source for CLI-set fields', () => {
+    const { sources } = resolveConfig(['--allow-writes', 'true']);
+    expect(sources.allowWrites).toEqual({ flag: '--allow-writes' });
+  });
+
+  it('resolveConfig returns both config and sources', () => {
+    const result = resolveConfig(['--allow-writes', 'true']);
+    expect(result.config.allowWrites).toBe(true);
+    expect(result.sources.allowWrites).toEqual({ flag: '--allow-writes' });
   });
 });
 
@@ -527,6 +680,75 @@ describe('validateConfig', () => {
         ppEnabled: true,
       }),
     ).not.toThrow();
+  });
+
+  it('throws when ppEnabled is combined with cookieFile without opt-in', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppEnabled: true,
+        cookieFile: '/tmp/cookies.txt',
+      }),
+    ).toThrow('SAP_PP_ENABLED=true is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING');
+  });
+
+  it('throws when ppEnabled is combined with cookieString without opt-in', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppEnabled: true,
+        cookieString: 'SAP_SESSIONID=abc',
+      }),
+    ).toThrow('SAP_PP_ENABLED=true is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING');
+  });
+
+  it('accepts ppEnabled with cookies when SAP_PP_ALLOW_SHARED_COOKIES=true', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        ppEnabled: true,
+        cookieFile: '/tmp/cookies.txt',
+        ppAllowSharedCookies: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it('throws when btpServiceKey is combined with cookies', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        btpServiceKey: '{"uaa":{"url":"https://uaa.example.com"}}',
+        cookieFile: '/tmp/cookies.txt',
+      }),
+    ).toThrow('SAP_BTP_SERVICE_KEY is incompatible with SAP_COOKIE_FILE / SAP_COOKIE_STRING');
+  });
+
+  it('throws when btpServiceKey is combined with ppEnabled', () => {
+    expect(() =>
+      validateConfig({
+        ...DEFAULT_CONFIG,
+        btpServiceKey: '{"uaa":{"url":"https://uaa.example.com"}}',
+        ppEnabled: true,
+      }),
+    ).toThrow('SAP_BTP_SERVICE_KEY (BTP ABAP) is incompatible with SAP_PP_ENABLED=true');
+  });
+
+  it('warns to stderr (without throwing) when disableSaml2=true on btp system', () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        validateConfig({
+          ...DEFAULT_CONFIG,
+          disableSaml2: true,
+          systemType: 'btp',
+        }),
+      ).not.toThrow();
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('SAP_DISABLE_SAML=true on a BTP system usually breaks login'),
+      );
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 
   it('parseArgs fails with oidcIssuer but no oidcAudience', () => {

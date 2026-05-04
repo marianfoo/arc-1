@@ -88,44 +88,6 @@ describe('Audit Logging Integration', () => {
     expect((end as any).resultSize).toBeGreaterThan(0);
   });
 
-  it('emits error details for failed tool calls', async () => {
-    const events: AuditEvent[] = [];
-    const captureSink = { write: (e: AuditEvent) => events.push(e) };
-    const { logger } = await import('../../../src/server/logger.js');
-    logger.addSink(captureSink);
-
-    // Use restricted config that blocks reads
-    const client = new AdtClient({
-      baseUrl: 'http://sap:8000',
-      username: 'admin',
-      password: 'secret',
-      safety: {
-        readOnly: false,
-        blockFreeSQL: false,
-        allowedOps: 'X', // Only allow 'X' operations (nothing real)
-        disallowedOps: '',
-        allowedPackages: [],
-        dryRun: false,
-        enableTransports: false,
-        transportReadOnly: false,
-        allowedTransports: [],
-      },
-    });
-
-    await handleToolCall(client, DEFAULT_CONFIG, 'SAPRead', {
-      type: 'PROG',
-      name: 'ZHELLO',
-    });
-
-    const ends = events.filter((e) => e.event === 'tool_call_end');
-    expect(ends).toHaveLength(1);
-
-    const end = ends[0]!;
-    expect((end as any).status).toBe('error');
-    expect((end as any).errorClass).toBe('AdtSafetyError');
-    expect((end as any).errorMessage).toContain('blocked by safety');
-  });
-
   it('emits auth_scope_denied for insufficient scopes', async () => {
     const events: AuditEvent[] = [];
     const captureSink = { write: (e: AuditEvent) => events.push(e) };
@@ -201,5 +163,45 @@ describe('Audit Logging Integration', () => {
     expect(toolEnd).toBeDefined();
     expect(toolStart.tool).toBe('SAPRead');
     expect(toolEnd.status).toBe('success');
+  });
+
+  it('sanitizes SAPDiagnose dump detail resultPreview in audit events', async () => {
+    const events: AuditEvent[] = [];
+    const captureSink = { write: (e: AuditEvent) => events.push(e) };
+    const { logger } = await import('../../../src/server/logger.js');
+    logger.addSink(captureSink);
+
+    mockFetch.mockReset();
+    const dumpXml = `<?xml version="1.0"?>
+<dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="ERR" author="USR" exception="CX" terminatedProgram="ZPROG" datetime="2026-01-01T00:00:00Z">
+  <dump:chapters>
+    <dump:chapter name="kap0" title="Short Text" category="ABAP Developer View" line="1" chapterOrder="1" categoryOrder="1"/>
+  </dump:chapters>
+</dump:dump>`;
+    mockFetch.mockImplementation((url: string | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/runtime/dump/DUMP_ID/formatted')) {
+        return Promise.resolve(
+          mockResponse(200, 'SECRET_DUMP_CONTENT_SHOULD_NOT_APPEAR_IN_AUDIT_PREVIEW', { 'x-csrf-token': 'T' }),
+        );
+      }
+      if (urlStr.includes('/runtime/dump/DUMP_ID')) {
+        return Promise.resolve(mockResponse(200, dumpXml, { 'x-csrf-token': 'T' }));
+      }
+      return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+    });
+
+    await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+      action: 'dumps',
+      id: 'DUMP_ID',
+      includeFullText: true,
+    });
+
+    const end = events.find((e) => e.event === 'tool_call_end' && (e as any).status === 'success') as
+      | Record<string, unknown>
+      | undefined;
+    const preview = String(end?.resultPreview ?? '');
+    expect(preview).toContain('[omitted');
+    expect(preview).not.toContain('SECRET_DUMP_CONTENT_SHOULD_NOT_APPEAR_IN_AUDIT_PREVIEW');
   });
 });

@@ -6,7 +6,7 @@
 #   manifest-btp.yml     — BTP ABAP Environment (direct OAuth)
 #
 # Credentials are NOT stored here — set them via:
-#   cf set-env arc1-mcp-server ARC1_API_KEY "<api-key>"
+#   cf set-env arc1-mcp-server ARC1_API_KEYS "<api-key>:viewer"
 #
 # See docs/deployment-best-practices.md for architecture guidance.
 # See docs/phase4-btp-deployment.md for step-by-step BTP deployment.
@@ -41,9 +41,12 @@ applications:
       # SAP_PP_STRICT: "true"
       # XSUAA auth for MCP-native clients (Claude Desktop, Cursor, etc.)
       # SAP_XSUAA_AUTH: "true"
-      # Safety: read-only, no SQL
-      SAP_READ_ONLY: "true"
-      SAP_BLOCK_FREE_SQL: "true"
+      # Authorization / safety: safe defaults
+      SAP_ALLOW_WRITES: "false"
+      SAP_ALLOW_DATA_PREVIEW: "false"
+      SAP_ALLOW_FREE_SQL: "false"
+      SAP_ALLOW_TRANSPORT_WRITES: "false"
+      SAP_ALLOW_GIT_WRITES: "false"
       # Logging
       SAP_VERBOSE: "true"
     services:

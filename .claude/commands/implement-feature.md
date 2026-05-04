@@ -6,6 +6,9 @@ Quality-first implementation workflow for ARC-1 features. Guides you through res
 
 The user provides a feature description — either a reference to a gap analysis item (e.g., from `compare/08-dassian-adt-feature-gap.md`), a GitHub issue, or a free-form description.
 
+SAP auth guidance:
+- When touching auth (Layer A or Layer B), read `docs/enterprise-auth.md#coexistence-matrix` first. The `validateConfig` fail-fast rules in `src/server/config.ts` are the authoritative source — extend them if adding a new combination.
+
 Ask the user for:
 - **Feature description** (required) — what to implement
 - **Scope** (optional) — small/medium/large, helps calibrate effort
@@ -36,6 +39,7 @@ Based on the feature description, identify and read all relevant source files. U
 | Add transport feature | `src/adt/transport.ts`, `src/handlers/intent.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add context feature | `src/context/compressor.ts`, `src/context/deps.ts` |
+| Add CDS impact analysis context | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts` (`findWhereUsed`), `src/handlers/intent.ts` (`SAPContext action="impact"`), `tests/unit/adt/cds-impact.test.ts` |
 | Add diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
 
 ### 1c. Read existing tests for the affected area
@@ -161,7 +165,7 @@ Troubleshooting guidance should reuse ARC-1's SAP-domain error intelligence:
 ### 4c. Test with hyperfocused mode (if applicable)
 
 If the feature adds or modifies a tool, verify it works in both:
-- Standard mode (11 tools) — `src/handlers/tools.ts`
+- Standard mode (12 tools) — `src/handlers/tools.ts`
 - Hyperfocused mode (1 tool) — `src/handlers/hyperfocused.ts`
 
 ---

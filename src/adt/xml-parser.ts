@@ -30,6 +30,8 @@ import type {
   FeatureToggleInfo,
   InactiveObject,
   MessageClassInfo,
+  RevisionInfo,
+  RevisionListResult,
   SourceSearchResult,
   TransactionInfo,
 } from './types.js';
@@ -226,7 +228,9 @@ export function parseTableContents(xml: string): { columns: string[]; rows: Reco
  *
  * The title field is semicolon-separated: release;sp_name;sp_level;description
  */
-export function parseInstalledComponents(xml: string): Array<{ name: string; release: string; description: string }> {
+export function parseInstalledComponents(
+  xml: string,
+): Array<{ name: string; release: string; spName: string; spLevel: string; description: string }> {
   const parsed = parseXml(xml);
 
   // After removeNSPrefix: atom:feed → feed, atom:entry → entry
@@ -239,6 +243,8 @@ export function parseInstalledComponents(xml: string): Array<{ name: string; rel
     return {
       name,
       release: parts[0]?.trim() ?? '',
+      spName: parts[1]?.trim() ?? '',
+      spLevel: parts[2]?.trim() ?? '',
       description: parts[3]?.trim() ?? title,
     };
   });
@@ -898,7 +904,7 @@ export function parseBspFolderListing(xml: string, appName: string): BspFileNode
  * fast-xml-parser with processEntities:false + parseAttributeValue:false
  * keeps raw encoded strings — we decode them for human-readable output.
  */
-function decodeXmlEntities(s: string): string {
+export function decodeXmlEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -1026,18 +1032,66 @@ function toStringArray(value: unknown): string[] {
   return [String(value)];
 }
 
-/** Parse inactive objects response from /sap/bc/adt/activation/inactive */
+/** Parse inactive objects response from /sap/bc/adt/activation/inactiveobjects.
+ *  Supports three response shapes (all live-verified):
+ *   - Rich `<ioc:object>` (vendor MIME on every supported release, includes user/transport/deleted metadata):
+ *       <ioc:inactiveObjects><ioc:entry>
+ *         <ioc:object ioc:user="X" ioc:deleted="false">
+ *           <ioc:ref adtcore:uri="..." adtcore:type="BDEF/BDO" adtcore:name="..."/>
+ *         </ioc:object>
+ *         <ioc:transport ...><ioc:ref adtcore:name="A4HK..."/></ioc:transport>
+ *       </ioc:entry>...</ioc:inactiveObjects>
+ *   - Flat with `application/xml` Accept (NW 7.50 + legacy):
+ *       <feed><entry><objectReference .../></entry>...</feed>
+ *   - Flat root-level (very old):
+ *       <adtcore:objectReferences><adtcore:objectReference .../>...</adtcore:objectReferences>
+ *  Detection: rich shape if any <entry><object> has a nested <ref>; otherwise flat.
+ */
 export function parseInactiveObjects(xml: string): InactiveObject[] {
   if (!xml.trim()) return [];
   const parsed = parseXml(xml);
-  // Each inactive object is in its own entry → objectReference is nested per-entry.
-  // findDeepNodes returns early on first match, so we iterate entries instead.
   const entries = findDeepNodes(parsed, 'entry');
-  const results: InactiveObject[] = [];
-  for (const entry of entries) {
-    const refs = findDeepNodes(entry, 'objectReference');
-    for (const ref of refs) {
-      results.push({
+
+  const hasRichObjects = entries.some((entry) =>
+    toRecordArray((entry as Record<string, unknown>).object).some((object) => {
+      const refs = toRecordArray(object.ref);
+      return refs.length > 0;
+    }),
+  );
+
+  if (hasRichObjects) {
+    const results: InactiveObject[] = [];
+    for (const entry of entries) {
+      const entryRecord = entry as Record<string, unknown>;
+      for (const object of toRecordArray(entryRecord.object)) {
+        const ref = toRecordArray(object.ref)[0];
+        if (!ref) continue;
+        const transportRef = toRecordArray(toRecordArray(entryRecord.transport)[0]?.ref)[0];
+        results.push({
+          name: String(ref['@_name'] ?? ''),
+          type: String(ref['@_type'] ?? ''),
+          uri: String(ref['@_uri'] ?? ''),
+          ...(ref['@_description'] ? { description: String(ref['@_description']) } : {}),
+          ...(object['@_user'] ? { user: String(object['@_user']) } : {}),
+          ...(object['@_deleted'] !== undefined
+            ? { deleted: String(object['@_deleted']).toLowerCase() === 'true' }
+            : {}),
+          ...(transportRef?.['@_name'] ? { transport: String(transportRef['@_name']) } : {}),
+          ...(transportRef?.['@_parentUri'] ? { parentTransport: String(transportRef['@_parentUri']) } : {}),
+        });
+      }
+    }
+    return results;
+  }
+
+  // Flat objectReference shape (legacy + NW 7.50 with generic Accept). Each inactive object
+  // is usually in its own entry, but very old responses put objectReference nodes directly
+  // under the root. Use entries when present, else search the full doc.
+  const flatResults: InactiveObject[] = [];
+  const flatContainers = entries.length > 0 ? entries : [parsed];
+  for (const container of flatContainers) {
+    for (const ref of findDeepNodes(container, 'objectReference')) {
+      flatResults.push({
         name: String(ref['@_name'] ?? ''),
         type: String(ref['@_type'] ?? ''),
         uri: String(ref['@_uri'] ?? ''),
@@ -1045,5 +1099,50 @@ export function parseInactiveObjects(xml: string): InactiveObject[] {
       });
     }
   }
-  return results;
+  return flatResults;
+}
+
+/** Parse source revision history feed from /source/main/versions */
+export function parseRevisionFeed(xml: string): RevisionListResult {
+  const empty: RevisionListResult = {
+    object: { name: '', type: '' },
+    revisions: [],
+  };
+  if (!xml.trim()) return empty;
+
+  try {
+    const parsed = parseXml(xml);
+    const feed = (parsed.feed ?? {}) as Record<string, unknown>;
+    const title = String(feed.title ?? '');
+    const match = title.match(/^Version List of (\S+) \(([A-Z]+)\)/);
+    const object = {
+      name: String(match?.[1] ?? ''),
+      type: String(match?.[2] ?? ''),
+    };
+
+    const revisions: RevisionInfo[] = [];
+    const entries = findDeepNodes(parsed, 'entry');
+    for (const entry of entries) {
+      const authorNode = toRecordArray(entry.author)[0] ?? {};
+      const contentNode = toRecordArray(entry.content)[0] ?? {};
+      const links = toRecordArray(entry.link);
+      const transportLink = links.find(
+        (link) => String(link['@_rel'] ?? '') === 'http://www.sap.com/adt/relations/transports',
+      );
+      const transport = String(transportLink?.['@_title'] ?? transportLink?.['@_version'] ?? '');
+      const versionTitle = String(entry.title ?? '');
+
+      revisions.push({
+        id: String(entry.id ?? ''),
+        author: String(authorNode.name ?? ''),
+        timestamp: String(entry.updated ?? ''),
+        ...(versionTitle ? { versionTitle } : {}),
+        ...(transport ? { transport } : {}),
+        uri: String(contentNode['@_src'] ?? ''),
+      });
+    }
+    return { object, revisions };
+  } catch {
+    return empty;
+  }
 }

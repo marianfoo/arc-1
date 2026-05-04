@@ -6,7 +6,7 @@ ARC-1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MC
 
 
 
-**[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
+**[Full Documentation](https://marianfoo.github.io/arc-1/)** | **[Quickstart](https://marianfoo.github.io/arc-1/quickstart/)** | **[Tool Reference](https://marianfoo.github.io/arc-1/tools/)**
 
 ## Why ARC-1?
 
@@ -14,12 +14,13 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 
 ### Security & Admin Controls
 
-- **Safe by default** — read-only, no free SQL, no table preview, no transports out of the box. Use `--profile developer` or explicit flags to enable capabilities
-- **Operation allowlists/denylists** — control exactly which operation types (read, write, search, query, activate, transport) are permitted
+- **Safe by default** — read-only, no free SQL, no table preview, no transport writes, no Git writes. Enable each capability with explicit `SAP_ALLOW_*` flags
+- **Action deny list** — block specific tool actions with `SAP_DENY_ACTIONS` (for example `SAPWrite.delete`), without exposing low-level operation codes to admins
 - **Package restrictions** — limit AI write operations (create, update, delete) to specific packages with wildcards (`--allowed-packages "Z*,$TMP"`). Read operations are not restricted by package — use SAP's native authorization for read-level access control
-- **Data access control** — enable table data preview (`--block-data=false`) or free-form SQL (`--block-free-sql=false`)
-- **Transport safety** — require transport assignments, restrict to specific transports, or make transports read-only. Update/delete operations auto-use the lock correction number when no explicit transport is provided
-- **Safety profiles** — preconfigured roles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`
+- **Data access control** — enable table data preview (`--allow-data-preview=true`) or free-form SQL (`--allow-free-sql=true`) only when needed
+- **Transport safety** — transport reads are available for review, while transport mutations require both `--allow-writes` and `--allow-transport-writes`. Update/delete operations auto-use the lock correction number when no explicit transport is provided
+- **Git workflow safety** — Git operations are disabled by default. Enable explicitly with `--allow-git-writes` / `SAP_ALLOW_GIT_WRITES=true`
+- **API-key profiles** — multi-key HTTP deployments can assign `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`, or `admin` per key
 - **Writes restricted to `$TMP` when enabled** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 
 ### Authentication
@@ -42,16 +43,17 @@ Deploy ARC-1 as a Cloud Foundry app on SAP BTP with full platform integration:
 
 ### Token Efficiency
 
-- **11 intent-based tools** (~5K schema tokens) instead of 200+ individual tools — keeps the LLM's context window small
+- **12 intent-based tools** (~5K schema tokens) instead of 200+ individual tools — keeps the LLM's context window small
 - **Method-level read/edit** — read or update a single class method, not the whole source (up to 20x fewer tokens)
 - **Context compression** — `SAPContext` returns public API contracts of all dependencies in one call (7-30x compression)
 
 ### Built-in Object Caching
 
-- **Automatic source caching** — every SAP object read is cached in memory (stdio) or SQLite (http-streamable). Repeated reads return instantly without calling SAP.
+- **Server-validated source caching** — every SAP object read is cached in memory (stdio) or SQLite (http-streamable). Repeated reads use `If-None-Match`/ETag conditional GET, so unchanged objects return from cache after SAP confirms `304 Not Modified`.
 - **Dependency graph caching** — `SAPContext` dep resolution keyed by source hash; unchanged objects skip all ADT calls on subsequent runs.
-- **Pre-warmer** — start with `ARC1_CACHE_WARMUP=true` to pre-index all custom objects at startup, enabling reverse dependency lookup (`SAPContext(action="usages")`).
-- **Write invalidation** — when `SAPWrite` modifies an object, its cache entry is automatically dropped; next read fetches fresh source.
+- **Pre-warmer** — start with `ARC1_CACHE_WARMUP=true` to pre-index all custom objects at startup, enabling reverse dependency lookup (`SAPContext(action="usages")`) and fast CDS impact workflows (`SAPContext(action="impact", type="DDLS")`).
+- **Active/inactive source views** — `SAPRead` accepts `version="active" | "inactive" | "auto"` and warns when the active source has an unactivated draft.
+- **Write invalidation** — when `SAPWrite` or `SAPActivate` mutates an object, both active and inactive source cache entries are dropped; next read revalidates or fetches fresh source.
 
 See **[docs/caching.md](docs/caching.md)** for full documentation.
 
@@ -66,7 +68,7 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 
 ### Tools Refined for Real-World Usage
 
-The 11 tools are designed from real LLM interaction feedback:
+The 12 tools are designed from real LLM interaction feedback:
 
 | Tool | What it does |
 |------|-------------|
@@ -76,9 +78,10 @@ The 11 tools are designed from real LLM interaction feedback:
 | **SAPActivate** | Activate ABAP objects — single or batch (essential for RAP stacks). Publish/unpublish OData service bindings (SRVB) |
 | **SAPNavigate** | Go-to-definition, find references, code completion |
 | **SAPQuery** | Execute ABAP SQL with table-not-found suggestions |
-| **SAPTransport** | CTS transport management (list, create, release) |
-| **SAPContext** | Compressed dependency context — one call replaces N SAPRead calls |
-| **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) |
+| **SAPTransport** | CTS transport management (list/create/release/delete/reassign), transport requirement checks, and reverse lookup history (`action="history"`) |
+| **SAPGit** | Git-based ABAP workflows across gCTS and abapGit (list/clone/pull/push/commit/branch/unlink) with backend auto-selection and safety gating (`--allow-git-writes`) |
+| **SAPContext** | Compressed dependency context (`action="deps"`), reverse dependency lookup (`action="usages"`), and CDS upstream/downstream impact analysis (`action="impact"` for DDLS) |
+| **SAPLint** | Local ABAP lint (system-aware presets, auto-fix, pre-write validation) + ADT PrettyPrint (server-side formatting) |
 | **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, short dumps, profiler traces |
 | **SAPManage** | Feature probing — detect what the system supports before acting |
 
@@ -88,10 +91,19 @@ Tool definitions automatically adapt to the target system (BTP vs on-premise), r
 
 ARC-1 probes the SAP system at startup and adapts its behavior:
 
-- Detects HANA, abapGit, RAP/CDS, AMDP, UI5, and transport availability
+- Detects HANA, gCTS, abapGit, RAP/CDS, AMDP, UI5, and transport availability
 - Auto-detects BTP vs on-premise systems
 - Maps SAP_BASIS release to the correct ABAP language version
 - Each feature can be forced on/off or left on auto-detect
+- In shared-credential mode (technical user), runs a startup auth preflight once and blocks SAP tool calls with a clear error on 401/403 to avoid repeated failed logins and potential user lockout
+
+## ADT API Status and Strategy
+
+There is still uncertainty around the exact long-term support boundary for ADT-based community and partner tooling. SAP published a new [SAP API Policy](https://www.sap.com/documents/2026/04/dce9aee4-497f-0010-bca6-c68f7e60039b.html) in April 2026, so customers and partners should review the policy, their SAP agreements, and their own security requirements before productive use.
+
+The public signals for ADT are still promising: SAP publishes an [ADT SDK](https://tools.hana.ondemand.com/#abap), a guide for [creating and consuming RESTful APIs in ADT](https://www.sap.com/documents/2013/04/12289ce1-527c-0010-82c7-eda71af511fa.html), and has described the ABAP language server direction as an ["ADT SDK 2.0"](https://community.sap.com/t5/technology-blog-posts-by-sap/abap-development-tools-for-vs-code-everything-you-need-to-know/bc-p/14263439/highlight/true#M186133).
+
+ARC-1's strategy is to stay close to documented and discoverable ADT behavior, probe system capabilities before exposing tools, keep conservative security defaults, and continuously review SAP's guidance as it evolves. This README is not a compliance decision for any specific customer landscape.
 
 ## Quick Start
 
@@ -99,7 +111,9 @@ ARC-1 probes the SAP system at startup and adapts its behavior:
 npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
 ```
 
-For Docker, BTP deployment, client configuration (Claude Desktop, Claude Code, VS Code, Copilot Studio), and all authentication methods, see the **[Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/)**.
+- **Trying it out on your laptop?** → [Quickstart](https://marianfoo.github.io/arc-1/quickstart/)
+- **Full local dev setup (Docker, cookie extractor, client configs)?** → [Local Development](https://marianfoo.github.io/arc-1/local-development/)
+- **Deploying for a team / BTP?** → [Deployment](https://marianfoo.github.io/arc-1/deployment/)
 
 ## Documentation
 
@@ -107,12 +121,14 @@ Full documentation is available at **[marianfoo.github.io/arc-1](https://marianf
 
 | Guide | Description |
 |-------|-------------|
-| [Setup Guide](https://marianfoo.github.io/arc-1/setup-guide/) | Deployment options, auth methods, client configuration |
-| [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 11 tools |
+| [Quickstart](https://marianfoo.github.io/arc-1/quickstart/) | 5-minute npx + Claude Desktop setup |
+| [Local Development](https://marianfoo.github.io/arc-1/local-development/) | Full local dev — all install methods, MCP client configs, SSO cookie extractor |
+| [Deployment](https://marianfoo.github.io/arc-1/deployment/) | Multi-user deployment — Docker, BTP Cloud Foundry, BTP ABAP |
+| [Configuration](https://marianfoo.github.io/arc-1/configuration-reference/) | Every flag and env var, one table |
+| [Updating](https://marianfoo.github.io/arc-1/updating/) | Update procedures per install method |
+| [Enterprise Auth](https://marianfoo.github.io/arc-1/enterprise-auth/) | Layer A / Layer B auth internals, coexistence matrix |
+| [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 12 tools |
 | [Architecture](https://marianfoo.github.io/arc-1/architecture/) | System architecture with diagrams |
-| [Docker Guide](https://marianfoo.github.io/arc-1/docker/) | Docker deployment reference |
-| [Enterprise Auth](https://marianfoo.github.io/arc-1/enterprise-auth/) | All authentication methods |
-| [BTP Deployment](https://marianfoo.github.io/arc-1/phase4-btp-deployment/) | Cloud Foundry deployment on SAP BTP |
 | [AI Usage Patterns](https://marianfoo.github.io/arc-1/mcp-usage/) | Agent workflow patterns and best practices |
 
 ## Development

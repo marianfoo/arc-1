@@ -36,7 +36,7 @@ export interface ToolCallEndEvent extends AuditEventBase {
   errorClass?: string;
   errorMessage?: string;
   resultSize?: number;
-  /** First 500 chars of the response text (for debugging in server logs) */
+  /** Sanitized and truncated response preview (for debugging in server logs). */
   resultPreview?: string;
 }
 
@@ -48,6 +48,14 @@ export interface HttpRequestEvent extends AuditEventBase {
   statusCode: number;
   durationMs: number;
   errorBody?: string;
+  /** Full request body when ARC1_LOG_HTTP_DEBUG=true. Truncated past 65536 chars. */
+  requestBody?: string;
+  /** Request headers with sensitive values redacted when ARC1_LOG_HTTP_DEBUG=true. */
+  requestHeaders?: Record<string, string>;
+  /** Full response body when ARC1_LOG_HTTP_DEBUG=true. Truncated past 65536 chars. */
+  responseBody?: string;
+  /** Response headers with sensitive values redacted when ARC1_LOG_HTTP_DEBUG=true. */
+  responseHeaders?: Record<string, string>;
 }
 
 /** CSRF token fetch */
@@ -85,7 +93,7 @@ export interface ServerStartEvent extends AuditEventBase {
   event: 'server_start';
   version: string;
   transport: string;
-  readOnly: boolean;
+  allowWrites: boolean;
   url: string;
   pid?: number;
 }
@@ -105,6 +113,22 @@ export interface ElicitationResponseEvent extends AuditEventBase {
   action: string;
 }
 
+/** Two-phase activation preaudit handshake completed.
+ *
+ *  ADT's activation endpoint sometimes responds to `preauditRequested=true` with an
+ *  <ioc:inactiveObjects> prompt listing related objects that must be included; the client
+ *  re-POSTs them with `preauditRequested=false` to commit. This event marks that the
+ *  handshake fired (so audit consumers can correlate the two http_request events as one
+ *  logical operation) and records its outcome. */
+export interface ActivationPreauditEvent extends AuditEventBase {
+  event: 'activation_preaudit_completed';
+  objectLabel: string;
+  refCount: number;
+  phase1DurationMs: number;
+  phase2DurationMs: number;
+  outcome: 'success' | 'error';
+}
+
 /** Discriminated union of all audit events */
 export type AuditEvent =
   | ToolCallStartEvent
@@ -116,11 +140,23 @@ export type AuditEvent =
   | SafetyBlockedEvent
   | ServerStartEvent
   | ElicitationSentEvent
-  | ElicitationResponseEvent;
+  | ElicitationResponseEvent
+  | ActivationPreauditEvent;
 
 /** Sanitize tool call arguments — remove values that might contain sensitive data */
 export function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = ['password', 'token', 'secret', 'cookie', 'authorization', 'csrf', 'apikey'];
+  const sensitiveKeys = [
+    'password',
+    'token',
+    'secret',
+    'cookie',
+    'authorization',
+    'csrf',
+    'apikey',
+    'authpwd',
+    'authtoken',
+    'remotepassword',
+  ];
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
     if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {

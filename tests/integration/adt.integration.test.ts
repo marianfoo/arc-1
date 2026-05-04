@@ -8,8 +8,17 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { classifyCdsImpact } from '../../src/adt/cds-impact.js';
 import type { AdtClient } from '../../src/adt/client.js';
-import { getDump, listDumps, listTraces } from '../../src/adt/diagnostics.js';
+import { findWhereUsed } from '../../src/adt/codeintel.js';
+import {
+  getDump,
+  getGatewayErrorDetail,
+  listDumps,
+  listGatewayErrors,
+  listSystemMessages,
+  listTraces,
+} from '../../src/adt/diagnostics.js';
 import { fetchDiscoveryDocument, resolveAcceptType } from '../../src/adt/discovery.js';
 import { AdtApiError } from '../../src/adt/errors.js';
 import {
@@ -20,6 +29,11 @@ import {
   listGroups,
   listTiles,
 } from '../../src/adt/flp.js';
+import {
+  applyRapHandlerSignatures,
+  extractRapHandlerRequirements,
+  findMissingRapHandlerRequirements,
+} from '../../src/adt/rap-handlers.js';
 import { unrestrictedSafetyConfig } from '../../src/adt/safety.js';
 import { expectSapFailureClass } from '../helpers/expected-error.js';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
@@ -27,11 +41,50 @@ import { getTestClient, requireSapCredentials } from './helpers.js';
 
 describe('ADT Integration Tests', () => {
   let client: AdtClient;
+  let hasFlightAmdp = false;
+  let hasDmoDdlx = false;
+  let hasDmoSrvb = false;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     requireSapCredentials();
     client = getTestClient();
+    // Probe SAP demo fixture availability once — /DMO/* and I_ABAPPACKAGE are
+    // shipped on S/4 boxes only; plain NetWeaver systems won't have them.
+    try {
+      await client.getClass('/DMO/CL_FLIGHT_AMDP');
+      hasFlightAmdp = true;
+    } catch {
+      hasFlightAmdp = false;
+    }
+    try {
+      await client.getDdlx('/DMO/C_AGENCYTP');
+      hasDmoDdlx = true;
+    } catch {
+      hasDmoDdlx = false;
+    }
+    try {
+      await client.getSrvb('/DMO/UI_AGENCY_O4');
+      hasDmoSrvb = true;
+    } catch {
+      hasDmoSrvb = false;
+    }
   });
+
+  function requireFlightAmdp(ctx: import('vitest').TaskContext): void {
+    if (!hasFlightAmdp) {
+      requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (/DMO/CL_FLIGHT_AMDP) — S/4 AMDP demo`);
+    }
+  }
+  function requireDmoDdlx(ctx: import('vitest').TaskContext): void {
+    if (!hasDmoDdlx) {
+      requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (/DMO/ DDLX) — S/4 metadata extensions`);
+    }
+  }
+  function requireDmoSrvb(ctx: import('vitest').TaskContext): void {
+    if (!hasDmoSrvb) {
+      requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (/DMO/ SRVB) — S/4 service bindings`);
+    }
+  }
 
   // ─── System Information ─────────────────────────────────────────
 
@@ -69,7 +122,7 @@ describe('ADT Integration Tests', () => {
 
   describe('discovery MIME negotiation', () => {
     it('fetches discovery map with key ADT endpoints and MIME types', async (ctx) => {
-      const discoveryMap = await fetchDiscoveryDocument(client.http);
+      const { map: discoveryMap } = await fetchDiscoveryDocument(client.http);
       const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
       requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
 
@@ -82,7 +135,7 @@ describe('ADT Integration Tests', () => {
     });
 
     it('resolveAcceptType returns sensible MIME type for known endpoints', async (ctx) => {
-      const discoveryMap = await fetchDiscoveryDocument(client.http);
+      const { map: discoveryMap } = await fetchDiscoveryDocument(client.http);
       const nonEmptyMap = discoveryMap.size > 0 ? discoveryMap : undefined;
       requireOrSkip(ctx, nonEmptyMap, SkipReason.BACKEND_UNSUPPORTED);
 
@@ -156,9 +209,20 @@ describe('ADT Integration Tests', () => {
       const catalogs = await listCatalogs(client.http, unrestrictedSafetyConfig());
       const catalogWithPrefix = catalogs.find((c) => c.id.startsWith('X-SAP-UI2-CATALOGPAGE:'));
       requireOrSkip(ctx, catalogWithPrefix, SkipReason.NO_FIXTURE);
-      // Use full ID to verify normalization handles it correctly
-      const result = await listTiles(client.http, unrestrictedSafetyConfig(), catalogWithPrefix.id);
-      expect(Array.isArray(result.tiles)).toBe(true);
+      // Use full ID to verify normalization handles it correctly. On older
+      // releases the PageChipInstances OData service can ABAP-dump (500) for
+      // some catalogs — that's a backend bug, not an ARC-1 bug, skip cleanly.
+      try {
+        const result = await listTiles(client.http, unrestrictedSafetyConfig(), catalogWithPrefix.id);
+        expect(Array.isArray(result.tiles)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [500], [/ASSERT condition/i, /RABAX/i, /Internal Server Error/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: PageChipInstances service unstable on this release`,
+        );
+      }
     }, 60000);
 
     it('CRUD lifecycle — create and delete catalog', async (ctx) => {
@@ -211,11 +275,12 @@ describe('ADT Integration Tests', () => {
       expect(first.uri).toBeTruthy();
     });
 
-    it('finds programs by pattern', async () => {
+    it('finds programs by pattern', async (ctx) => {
       const results = await client.searchObject('RSHOWTIM*', 5);
-      expect(results.length).toBeGreaterThan(0);
-      // Should find RSHOWTIM as a program
+      // RSHOWTIM is not on every SAP release — skip if it isn't indexed here.
       const match = results.find((r) => r.objectName === 'RSHOWTIM');
+      requireOrSkip(ctx, match, `${SkipReason.NO_FIXTURE} (RSHOWTIM) — not on this system`);
+      expect(results.length).toBeGreaterThan(0);
       expect(match).toBeDefined();
     });
   });
@@ -225,20 +290,32 @@ describe('ADT Integration Tests', () => {
   describe('read operations', () => {
     it('reads a standard SAP program', async () => {
       // RSHOWTIM is a standard SAP report available on most systems
-      const source = await client.getProgram('RSHOWTIM');
+      const { source } = await client.getProgram('RSHOWTIM');
       expect(source).toBeTruthy();
       // Standard SAP programs start with a comment header
       expect(source.length).toBeGreaterThan(10);
     });
 
     it('reads a standard SAP class', async () => {
-      const source = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source).toBeTruthy();
       expect(source.length).toBeGreaterThan(0);
     });
 
-    it('reads table contents', async () => {
-      const result = await client.getTableContents('T000', 5);
+    it('reads table contents', async (ctx) => {
+      let result: Awaited<ReturnType<typeof client.getTableContents>>;
+      try {
+        result = await client.getTableContents('T000', 5);
+      } catch (err) {
+        // /datapreview/ddic was not yet active on NW 7.50 (added in a later SP).
+        expectSapFailureClass(err, [404], [/No suitable resource/i, /not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: /datapreview/ddic endpoint not available on this release`,
+        );
+        return;
+      }
       expect(result.columns).toContain('MANDT');
       expect(result.rows.length).toBeGreaterThan(0);
       // Each row should have all columns
@@ -249,8 +326,19 @@ describe('ADT Integration Tests', () => {
       }
     });
 
-    it('reads table contents with row limit', async () => {
-      const result = await client.getTableContents('T000', 1);
+    it('reads table contents with row limit', async (ctx) => {
+      let result: Awaited<ReturnType<typeof client.getTableContents>>;
+      try {
+        result = await client.getTableContents('T000', 1);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/No suitable resource/i, /not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: /datapreview/ddic endpoint not available on this release`,
+        );
+        return;
+      }
       expect(result.rows.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -259,33 +347,142 @@ describe('ADT Integration Tests', () => {
     });
   });
 
+  describe('Version history (VERSIONS / VERSION_SOURCE)', () => {
+    it('lists revisions for PROG ZARC1_TEST_REPORT', async (ctx) => {
+      try {
+        const result = await client.getRevisions('PROG', 'ZARC1_TEST_REPORT');
+        const hasRevisions = result.revisions.length > 0 ? result : undefined;
+        requireOrSkip(ctx, hasRevisions, 'Persistent fixture ZARC1_TEST_REPORT has no revisions on this system');
+        expect(result.object.name).toBe('ZARC1_TEST_REPORT');
+        for (const revision of result.revisions) {
+          expect(revision.uri.startsWith('/sap/bc/adt/')).toBe(true);
+        }
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Persistent fixture ZARC1_TEST_REPORT is missing on this system');
+      }
+    });
+
+    it('lists revisions for CLAS ZCL_ARC1_TEST include=main', async (ctx) => {
+      try {
+        const result = await client.getRevisions('CLAS', 'ZCL_ARC1_TEST', { include: 'main' });
+        const first = result.revisions[0];
+        requireOrSkip(ctx, first, 'No CLAS revisions available for ZCL_ARC1_TEST include=main');
+        // Release-specific URI shape:
+        //   newer: .../includes/main/versions/<id>
+        //   older: .../source/main  (NW 7.50 — no /versions/ segment)
+        // Both are valid ADT paths — assert the anchor that's invariant.
+        expect(first.uri.startsWith('/sap/bc/adt/oo/classes/ZCL_ARC1_TEST')).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Persistent fixture ZCL_ARC1_TEST is missing on this system');
+      }
+    });
+
+    it('lists revisions for CLAS ZCL_ARC1_TEST include=definitions', async (ctx) => {
+      try {
+        const result = await client.getRevisions('CLAS', 'ZCL_ARC1_TEST', { include: 'definitions' });
+        const first = result.revisions[0];
+        requireOrSkip(ctx, first, 'No CLAS definition revisions available for ZCL_ARC1_TEST');
+        // Older releases return just the class-level URI; newer ones drill into /includes/definitions/versions/.
+        expect(first.uri.startsWith('/sap/bc/adt/oo/classes/ZCL_ARC1_TEST')).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: CLAS include=definitions revision endpoint unavailable or fixture has no definitions include`,
+        );
+      }
+    });
+
+    it('lists revisions for INTF ZIF_ARC1_TEST (source/main endpoint)', async (ctx) => {
+      try {
+        const result = await client.getRevisions('INTF', 'ZIF_ARC1_TEST');
+        const first = result.revisions[0];
+        requireOrSkip(ctx, first, 'No INTF revisions available for ZIF_ARC1_TEST');
+        // URI shape varies by release — /source/main (7.50) vs /source/main/versions/<id> (newer).
+        expect(first.uri).toContain('/oo/interfaces/ZIF_ARC1_TEST');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Persistent fixture ZIF_ARC1_TEST is missing on this system');
+      }
+    });
+
+    it('fetches version source for the first PROG revision', async (ctx) => {
+      try {
+        const revisions = await client.getRevisions('PROG', 'ZARC1_TEST_REPORT');
+        const first = revisions.revisions[0];
+        requireOrSkip(ctx, first, 'No PROG revisions available for ZARC1_TEST_REPORT');
+        const source = await client.getRevisionSource(first.uri);
+        expect(source).toMatch(/report/i);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(ctx, undefined, 'Version source endpoint unavailable or fixture missing');
+      }
+    });
+
+    it('rejects non-ADT URIs for VERSION_SOURCE', async () => {
+      await expect(client.getRevisionSource('https://evil.example/foo')).rejects.toThrow(/\/sap\/bc\/adt\//);
+    });
+
+    it('handles DDLS revision endpoint gaps gracefully', async (ctx) => {
+      try {
+        const result = await client.getRevisions('DDLS', 'ZI_TRAVEL');
+        expect(Array.isArray(result.revisions)).toBe(true);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/not found/i, /does not exist/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: DDLS revisions endpoint is not available on this backend`,
+        );
+      }
+    });
+  });
+
   // ─── DDIC Operations (Structures, Domains, Data Elements) ─────
 
   describe('DDIC operations', () => {
     it('reads structure definition (BAPIRET2)', async () => {
-      const source = await client.getStructure('BAPIRET2');
+      const { source } = await client.getStructure('BAPIRET2');
       expect(source).toBeTruthy();
       expect(source).toContain('bapiret2');
       expect(source).toContain('message');
     });
 
     it('reads structure definition (SYST)', async () => {
-      const source = await client.getStructure('SYST');
+      const { source } = await client.getStructure('SYST');
       expect(source).toBeTruthy();
       expect(source).toContain('syst');
       expect(source).toContain('subrc');
     });
 
-    it('reads domain metadata (MANDT)', async () => {
-      const domain = await client.getDomain('MANDT');
+    it('reads domain metadata (MANDT)', async (ctx) => {
+      let domain: Awaited<ReturnType<typeof client.getDomain>>;
+      try {
+        domain = await client.getDomain('MANDT');
+      } catch (err) {
+        // DOMA ADT endpoint doesn't exist on NW 7.50 (added in a later release).
+        expectSapFailureClass(err, [404], [/does not exist/i, /not found/i]);
+        requireOrSkip(ctx, undefined, `${SkipReason.BACKEND_UNSUPPORTED}: DOMA reads not supported on this release`);
+        return;
+      }
       expect(domain.name).toBe('MANDT');
       expect(domain.dataType).toBe('CLNT');
       expect(domain.length).toBe('000003');
       expect(domain.package).toBeTruthy();
     });
 
-    it('reads domain metadata with value table (BUKRS)', async () => {
-      const domain = await client.getDomain('BUKRS');
+    it('reads domain metadata with value table (BUKRS)', async (ctx) => {
+      let domain: Awaited<ReturnType<typeof client.getDomain>>;
+      try {
+        domain = await client.getDomain('BUKRS');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/does not exist/i, /not found/i]);
+        requireOrSkip(ctx, undefined, `${SkipReason.BACKEND_UNSUPPORTED}: DOMA reads not supported on this release`);
+        return;
+      }
       expect(domain.name).toBe('BUKRS');
       expect(domain.dataType).toBe('CHAR');
       expect(domain.length).toBe('000004');
@@ -448,14 +645,14 @@ describe('ADT Integration Tests', () => {
 
   describe('class operations', () => {
     it('reads class main source', async () => {
-      const source = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source).toBeTruthy();
     });
 
     it('reads class with specific include', async () => {
       // Try reading definitions include
       try {
-        const source = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
+        const { source } = await client.getClass('CL_ABAP_CHAR_UTILITIES', 'definitions');
         expect(typeof source).toBe('string');
         expect(source.length).toBeGreaterThan(0);
       } catch (err) {
@@ -468,33 +665,38 @@ describe('ADT Integration Tests', () => {
       await expect(client.getClass('ZCL_NONEXISTENT_999')).rejects.toThrow();
     });
 
-    it('reads class local definitions include', async () => {
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions');
+    it('reads class local definitions include', async (ctx) => {
+      requireFlightAmdp(ctx);
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions');
       expect(typeof source).toBe('string');
       expect(source).toContain('=== definitions ===');
     });
 
-    it('reads class local implementations include', async () => {
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'implementations');
+    it('reads class local implementations include', async (ctx) => {
+      requireFlightAmdp(ctx);
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'implementations');
       expect(typeof source).toBe('string');
       expect(source).toContain('=== implementations ===');
     });
 
-    it('reads class with multiple includes', async () => {
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions,implementations');
+    it('reads class with multiple includes', async (ctx) => {
+      requireFlightAmdp(ctx);
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'definitions,implementations');
       expect(source).toContain('=== definitions ===');
       expect(source).toContain('=== implementations ===');
     });
 
-    it('gracefully handles non-existent testclasses include', async () => {
+    it('gracefully handles non-existent testclasses include', async (ctx) => {
+      requireFlightAmdp(ctx);
       // If the class has no test classes, should return a helpful note rather than throwing
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'testclasses');
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP', 'testclasses');
       expect(typeof source).toBe('string');
       expect(source).toContain('testclasses');
     });
 
-    it('reads full class source without include (default)', async () => {
-      const source = await client.getClass('/DMO/CL_FLIGHT_AMDP');
+    it('reads full class source without include (default)', async (ctx) => {
+      requireFlightAmdp(ctx);
+      const { source } = await client.getClass('/DMO/CL_FLIGHT_AMDP');
       expect(source).toBeTruthy();
       expect(source.length).toBeGreaterThan(0);
     });
@@ -506,7 +708,7 @@ describe('ADT Integration Tests', () => {
     it('reads a standard SAP interface', async () => {
       // IF_SERIALIZABLE_OBJECT exists on all systems
       try {
-        const source = await client.getInterface('IF_SERIALIZABLE_OBJECT');
+        const { source } = await client.getInterface('IF_SERIALIZABLE_OBJECT');
         expect(typeof source).toBe('string');
         expect(source.length).toBeGreaterThan(0);
       } catch (err) {
@@ -538,7 +740,7 @@ describe('ADT Integration Tests', () => {
   // ─── Safety Checks ──────────────────────────────────────────────
 
   describe('safety', () => {
-    it('read-only client can still read', async () => {
+    it('safe-default client can still read', async () => {
       const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
@@ -546,17 +748,7 @@ describe('ADT Integration Tests', () => {
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
         client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
-        safety: {
-          readOnly: true,
-          blockFreeSQL: true,
-          allowedOps: 'RS',
-          disallowedOps: '',
-          allowedPackages: [],
-          dryRun: false,
-          enableTransports: false,
-          transportReadOnly: false,
-          allowedTransports: [],
-        },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false, allowFreeSQL: false },
       });
 
       // Read should work
@@ -564,7 +756,7 @@ describe('ADT Integration Tests', () => {
       expect(source).toBeTruthy();
     });
 
-    it('read-only client can search', async () => {
+    it('safe-default client can search', async () => {
       const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
@@ -572,24 +764,14 @@ describe('ADT Integration Tests', () => {
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
         client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
-        safety: {
-          readOnly: true,
-          blockFreeSQL: true,
-          allowedOps: 'RS',
-          disallowedOps: '',
-          allowedPackages: [],
-          dryRun: false,
-          enableTransports: false,
-          transportReadOnly: false,
-          allowedTransports: [],
-        },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false, allowFreeSQL: false },
       });
 
       const results = await roClient.searchObject('CL_ABAP_*', 3);
       expect(results.length).toBeGreaterThan(0);
     });
 
-    it('read-only client blocks free SQL', async () => {
+    it('safe-default client blocks free SQL', async () => {
       const { AdtClient } = await import('../../src/adt/client.js');
       const roClient = new AdtClient({
         baseUrl: process.env.TEST_SAP_URL || process.env.SAP_URL || '',
@@ -597,17 +779,7 @@ describe('ADT Integration Tests', () => {
         password: process.env.TEST_SAP_PASSWORD || process.env.SAP_PASSWORD || '',
         client: process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100',
         insecure: (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true',
-        safety: {
-          readOnly: true,
-          blockFreeSQL: true,
-          allowedOps: 'RSQ',
-          disallowedOps: '',
-          allowedPackages: [],
-          dryRun: false,
-          enableTransports: false,
-          transportReadOnly: false,
-          allowedTransports: [],
-        },
+        safety: { ...unrestrictedSafetyConfig(), allowWrites: false, allowFreeSQL: false },
       });
 
       await expect(roClient.runQuery('SELECT * FROM T000')).rejects.toThrow();
@@ -620,23 +792,45 @@ describe('ADT Integration Tests', () => {
     it('maintains session cookies across requests', async () => {
       // This test verifies the cookie jar fix — CSRF token + session cookie correlation
       // First request (GET) should establish a session, POST should reuse it
-      const source = await client.getProgram('RSHOWTIM');
+      const { source } = await client.getProgram('RSHOWTIM');
       expect(source).toBeTruthy();
 
       // Second request should work with the same session
-      const source2 = await client.getClass('CL_ABAP_CHAR_UTILITIES');
+      const { source: source2 } = await client.getClass('CL_ABAP_CHAR_UTILITIES');
       expect(source2).toBeTruthy();
     });
 
-    it('POST requests work (CSRF + cookie correlation)', async () => {
+    it('POST requests work (CSRF + cookie correlation)', async (ctx) => {
       // getTableContents uses POST — tests CSRF token + session cookie
-      const result = await client.getTableContents('T000', 2);
+      let result: Awaited<ReturnType<typeof client.getTableContents>>;
+      try {
+        result = await client.getTableContents('T000', 2);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/No suitable resource/i, /not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: /datapreview/ddic endpoint not available on this release`,
+        );
+        return;
+      }
       expect(result.columns).toContain('MANDT');
     });
 
-    it('multiple POST requests work in sequence', async () => {
+    it('multiple POST requests work in sequence', async (ctx) => {
       // Ensure cookies persist across multiple POST calls
-      const r1 = await client.getTableContents('T000', 1);
+      let r1: Awaited<ReturnType<typeof client.getTableContents>>;
+      try {
+        r1 = await client.getTableContents('T000', 1);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/No suitable resource/i, /not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: /datapreview/ddic endpoint not available on this release`,
+        );
+        return;
+      }
       expect(r1.rows.length).toBeGreaterThan(0);
 
       const r2 = await client.getTableContents('T000', 2);
@@ -738,6 +932,62 @@ describe('ADT Integration Tests', () => {
         }
       });
     });
+
+    describe('runtime feeds', () => {
+      it('lists system messages when supported', async (ctx) => {
+        try {
+          const messages = await listSystemMessages(client.http, unrestrictedSafetyConfig(), { maxResults: 5 });
+          expect(Array.isArray(messages)).toBe(true);
+        } catch (err) {
+          expectSapFailureClass(err, [400, 403, 404, 500], [/systemmessages|not found|unsupported|forbidden/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: /runtime/systemmessages endpoint not available on this system`,
+          );
+        }
+      });
+
+      it('lists gateway errors on on-prem systems', async (ctx) => {
+        try {
+          const errors = await listGatewayErrors(client.http, unrestrictedSafetyConfig(), { maxResults: 5 });
+          expect(Array.isArray(errors)).toBe(true);
+        } catch (err) {
+          expectSapFailureClass(err, [400, 403, 404, 500], [/gw\/errorlog|not found|unsupported|forbidden/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: /gw/errorlog endpoint not available on this system`,
+          );
+        }
+      });
+
+      it('reads gateway error detail when entries are available', async (ctx) => {
+        let errors: Awaited<ReturnType<typeof listGatewayErrors>> | undefined;
+        try {
+          errors = await listGatewayErrors(client.http, unrestrictedSafetyConfig(), { maxResults: 5 });
+        } catch (err) {
+          expectSapFailureClass(err, [400, 403, 404, 500], [/gw\/errorlog|not found|unsupported|forbidden/i]);
+          requireOrSkip(
+            ctx,
+            undefined,
+            `${SkipReason.BACKEND_UNSUPPORTED}: /gw/errorlog endpoint not available on this system`,
+          );
+          return;
+        }
+
+        if (!errors || errors.length === 0 || !errors[0]?.detailUrl) {
+          ctx.skip(`${SkipReason.NO_FIXTURE}: no gateway error detail URL available`);
+          return;
+        }
+
+        const detail = await getGatewayErrorDetail(client.http, unrestrictedSafetyConfig(), {
+          detailUrl: errors[0].detailUrl,
+        });
+        expect(detail).toHaveProperty('transactionId');
+        expect(detail).toHaveProperty('shortText');
+      });
+    });
   });
 
   // ─── Structured Class Read (AFF) ─────────────────────────────────
@@ -814,27 +1064,180 @@ describe('ADT Integration Tests', () => {
       createdPrograms.push(prog2);
 
       // Verify both exist by reading them
-      const source1 = await client.getProgram(prog1);
+      const { source: source1 } = await client.getProgram(prog1);
       expect(typeof source1).toBe('string');
 
-      const source2 = await client.getProgram(prog2);
+      const { source: source2 } = await client.getProgram(prog2);
       expect(typeof source2).toBe('string');
+    });
+  });
+
+  // ─── CDS Impact Analysis ──────────────────────────────────────────
+
+  describe('CDS impact analysis', () => {
+    it('classifies downstream consumers for I_ABAPPACKAGE', async (ctx) => {
+      let results: Awaited<ReturnType<typeof findWhereUsed>>;
+      try {
+        results = await findWhereUsed(client.http, client.safety, '/sap/bc/adt/ddic/ddl/sources/i_abappackage');
+      } catch (err) {
+        expectSapFailureClass(err, [403, 404, 500], [/not found/i, /forbidden/i, /usageReferences/i]);
+        requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
+        return;
+      }
+      const downstream = classifyCdsImpact(results);
+      // I_ABAPPACKAGE is an S/4-only CDS view; on systems that don't ship it,
+      // findWhereUsed returns an empty where-used graph. Skip rather than
+      // fabricate expectations.
+      if (downstream.summary.total === 0) {
+        requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (I_ABAPPACKAGE) — S/4 CDS view not on this system`);
+      }
+      expect(downstream.accessControls.length).toBeGreaterThanOrEqual(1);
+      expect(
+        downstream.accessControls.some((entry) => entry.name === 'I_ABAPPACKAGE' && entry.type === 'DCLS/DL'),
+      ).toBe(true);
+      expect(downstream.summary.total).toBeGreaterThanOrEqual(2);
+    });
+
+    it('includeIndirect=true returns at least as many entries as default', async (ctx) => {
+      try {
+        const results = await findWhereUsed(client.http, client.safety, '/sap/bc/adt/ddic/ddl/sources/i_abappackage');
+        const directOnly = classifyCdsImpact(results);
+        const withIndirect = classifyCdsImpact(results, { includeIndirect: true });
+
+        if (directOnly.summary.total === 0) {
+          requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
+        }
+        expect(withIndirect.summary.total).toBeGreaterThanOrEqual(directOnly.summary.total);
+      } catch (err) {
+        expectSapFailureClass(err, [403, 404, 500], [/not found/i, /forbidden/i, /usageReferences/i]);
+        requireOrSkip(ctx, undefined, SkipReason.BACKEND_UNSUPPORTED);
+      }
+    });
+  });
+
+  // ─── RAP Handler Scaffolding Helpers ───────────────────────────────
+
+  describe('RAP handler scaffolding helpers', () => {
+    const bdefFixture = '/DMO/I_CARRIERSLOCKSINGLETON_S';
+
+    async function readRapFixture(ctx: import('vitest').TaskContext): Promise<{
+      bdefSource: string;
+      behaviorPoolClass: string;
+      classStructured: Awaited<ReturnType<AdtClient['getClassStructured']>>;
+    }> {
+      try {
+        const { source: bdefSource } = await client.getBdef(bdefFixture);
+        const behaviorPoolClass = bdefSource.match(/implementation\s+in\s+class\s+([^\s;]+)/i)?.[1];
+        requireOrSkip(ctx, behaviorPoolClass, `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no implementation class`);
+        const classStructured = await client.getClassStructured(behaviorPoolClass);
+        return { bdefSource, behaviorPoolClass, classStructured };
+      } catch (err) {
+        expectSapFailureClass(err, [403, 404], [/not found/i, /forbidden/i]);
+        requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (${bdefFixture}) — RAP demo fixture not available`);
+      }
+    }
+
+    it('extracts handler requirements from live BDEF source', async (ctx) => {
+      const { bdefSource } = await readRapFixture(ctx);
+      const requirements = extractRapHandlerRequirements(bdefSource);
+      const firstRequirement = requirements[0];
+      requireOrSkip(
+        ctx,
+        firstRequirement,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no action/validation/auth requirements in BDEF`,
+      );
+
+      expect(requirements.length).toBeGreaterThan(0);
+      expect(requirements.some((req) => req.kind === 'validation' || req.kind === 'action')).toBe(true);
+    });
+
+    it('matches requirements against live class source across includes', async (ctx) => {
+      const { bdefSource, classStructured } = await readRapFixture(ctx);
+      const requirements = extractRapHandlerRequirements(bdefSource);
+      const firstRequirement = requirements[0];
+      requireOrSkip(
+        ctx,
+        firstRequirement,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no requirements to match against class source`,
+      );
+
+      const combinedClassSource = [
+        classStructured.main,
+        classStructured.definitions ?? '',
+        classStructured.implementations ?? '',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      const missing = findMissingRapHandlerRequirements(requirements, combinedClassSource);
+
+      expect(missing.length).toBeLessThanOrEqual(requirements.length);
+      expect(
+        missing.every((missingReq) =>
+          requirements.some(
+            (requirement) =>
+              requirement.targetHandlerClass === missingReq.targetHandlerClass &&
+              requirement.methodName === missingReq.methodName,
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it('can re-insert a deliberately removed signature in the live implementation include', async (ctx) => {
+      const { bdefSource, classStructured } = await readRapFixture(ctx);
+      const requirements = extractRapHandlerRequirements(bdefSource);
+      const implementationSource = classStructured.implementations;
+      requireOrSkip(
+        ctx,
+        implementationSource,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — no implementations include available`,
+      );
+
+      const requirement = requirements.find(
+        (req) =>
+          req.targetHandlerClass.toLowerCase() === 'lhc_carrier' &&
+          (req.kind === 'validation' || req.kind === 'action'),
+      );
+      requireOrSkip(
+        ctx,
+        requirement,
+        `${SkipReason.NO_FIXTURE} (${bdefFixture}) — expected handler requirement not found`,
+      );
+
+      const declarationRegex = new RegExp(
+        `(^|\\n)\\s*METHODS\\s+${requirement.methodName}\\b[\\s\\S]*?\\.\\s*(?=\\n\\s*(?:METHODS\\b|ENDCLASS\\.))`,
+        'i',
+      );
+      if (!declarationRegex.test(implementationSource)) {
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.NO_FIXTURE} (${bdefFixture}) — method declaration ${requirement.methodName} not present in fixture`,
+        );
+      }
+      const stripped = implementationSource.replace(declarationRegex, '\n');
+
+      const apply = applyRapHandlerSignatures(stripped, [requirement]);
+      expect(apply.changed).toBe(true);
+      expect(apply.inserted).toHaveLength(1);
+      expect(apply.updatedSource.toLowerCase()).toContain(`methods ${requirement.methodName}`);
     });
   });
 
   // ─── DDLX (Metadata Extension) Operations ─────────────────────────
 
   describe('DDLX read operations', () => {
-    it('reads a DDLX metadata extension source', async () => {
+    it('reads a DDLX metadata extension source', async (ctx) => {
+      requireDmoDdlx(ctx);
       // /DMO/C_AGENCYTP is a standard demo DDLX from the Flight Reference Scenario
-      const source = await client.getDdlx('/DMO/C_AGENCYTP');
+      const { source } = await client.getDdlx('/DMO/C_AGENCYTP');
       expect(source).toBeTruthy();
       expect(source).toContain('@Metadata.layer');
       expect(source).toContain('annotate');
     });
 
-    it('reads DDLX with UI annotations', async () => {
-      const source = await client.getDdlx('/DMO/C_TRAVEL_A_D');
+    it('reads DDLX with UI annotations', async (ctx) => {
+      requireDmoDdlx(ctx);
+      const { source } = await client.getDdlx('/DMO/C_TRAVEL_A_D');
       expect(source).toBeTruthy();
       expect(source).toContain('@UI');
     });
@@ -847,10 +1250,11 @@ describe('ADT Integration Tests', () => {
   // ─── SRVB (Service Binding) Operations ─────────────────────────────
 
   describe('SRVB read operations', () => {
-    it('reads a service binding and returns parsed JSON', async () => {
+    it('reads a service binding and returns parsed JSON', async (ctx) => {
+      requireDmoSrvb(ctx);
       // /DMO/UI_AGENCY_O4 is a standard demo SRVB from the Flight Reference Scenario
-      const result = await client.getSrvb('/DMO/UI_AGENCY_O4');
-      const parsed = JSON.parse(result);
+      const { source } = await client.getSrvb('/DMO/UI_AGENCY_O4');
+      const parsed = JSON.parse(source);
       expect(parsed.name).toBe('/DMO/UI_AGENCY_O4');
       expect(parsed.type).toBe('SRVB/SVB');
       expect(parsed.odataVersion).toBe('V4');
@@ -859,9 +1263,10 @@ describe('ADT Integration Tests', () => {
       expect(parsed.serviceDefinition).toBeTruthy();
     });
 
-    it('reads a V2 service binding', async () => {
-      const result = await client.getSrvb('/DMO/UI_TRAVEL_U_V2');
-      const parsed = JSON.parse(result);
+    it('reads a V2 service binding', async (ctx) => {
+      requireDmoSrvb(ctx);
+      const { source } = await client.getSrvb('/DMO/UI_TRAVEL_U_V2');
+      const parsed = JSON.parse(source);
       expect(parsed.name).toBe('/DMO/UI_TRAVEL_U_V2');
       expect(parsed.odataVersion).toBe('V2');
     });

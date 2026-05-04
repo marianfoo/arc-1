@@ -1,7 +1,7 @@
 /**
  * MCP Server for ARC-1.
  *
- * Creates and starts the MCP server with 11 intent-based tools.
+ * Creates and starts the MCP server with 12 intent-based tools.
  * Supports two transports:
  * - stdio (default): for local MCP clients (Claude Desktop, Claude Code, Cursor)
  * - http-streamable: for remote/containerized deployments
@@ -13,7 +13,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { BTPConfig, BTPProxyConfig } from '../adt/btp.js';
 import { AdtClient } from '../adt/client.js';
 import type { AdtClientConfig } from '../adt/config.js';
-import { deriveUserSafety } from '../adt/safety.js';
+import { resolveCookies } from '../adt/cookies.js';
+import { AdtApiError } from '../adt/errors.js';
+import { deriveUserSafety, deriveUserSafetyFromProfile } from '../adt/safety.js';
+import { getActionPolicy, hasRequiredScope } from '../authz/policy.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
 import { MemoryCache } from '../cache/memory.js';
@@ -21,48 +24,186 @@ import {
   getCachedDiscovery,
   getCachedFeatures,
   handleToolCall,
-  hasRequiredScope,
   setCachedDiscovery,
   setCachedFeatures,
-  TOOL_SCOPES,
 } from '../handlers/intent.js';
-import { getToolDefinitions } from '../handlers/tools.js';
+import { getToolDefinitions, type ToolDefinition } from '../handlers/tools.js';
+import { API_KEY_PROFILES } from './config.js';
+import { isActionDenied } from './deny-actions.js';
 import { initLogger, logger } from './logger.js';
 import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
 /** ARC-1 version */
-export const VERSION = '0.6.8'; // x-release-please-version
+export const VERSION = '0.7.2'; // x-release-please-version
+
+/**
+ * Prune a tool's action OR type enum (or both) based on the user's scopes and
+ * the server's denyActions list. Uses ACTION_POLICY as the single source of truth.
+ *
+ * - For action-bearing tools (SAPWrite, SAPManage, SAPLint, SAPTransport, SAPGit, ...):
+ *   filter the `action` enum to entries the user can actually invoke.
+ * - For SAPRead (which uses `type` not `action`): filter the `type` enum. The key one is
+ *   TABLE_CONTENTS, which requires the `data` scope — a read-scoped user sees SAPRead
+ *   without TABLE_CONTENTS in the type enum.
+ */
+function pruneToolByPolicy(tool: ToolDefinition, scopes: string[], denyActions: string[]): ToolDefinition {
+  const schema = tool.inputSchema as Record<string, unknown>;
+  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+
+  // Determine which enum this tool uses: SAPRead uses `type`; others use `action`.
+  const enumField = tool.name === 'SAPRead' ? 'type' : 'action';
+  const enumDef = (properties[enumField] as Record<string, unknown> | undefined) ?? {};
+  const enumValues = Array.isArray(enumDef.enum) ? enumDef.enum.map(String) : null;
+
+  if (!enumValues) return tool; // no pruning needed
+
+  const filtered = enumValues.filter((value) => {
+    const policy = getActionPolicy(tool.name, value);
+    if (!policy) return true; // unknown action/type — let it through and fail at runtime
+    if (!hasRequiredScope(scopes, policy.scope)) return false;
+    if (isActionDenied(tool.name, value, denyActions)) return false;
+    return true;
+  });
+
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...properties,
+        [enumField]: {
+          ...enumDef,
+          enum: filtered,
+        },
+      },
+    },
+  };
+}
+
+function hasNonEmptyActionOrTypeEnum(tool: ToolDefinition): boolean {
+  const schema = tool.inputSchema as Record<string, unknown>;
+  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+  const enumField = tool.name === 'SAPRead' ? 'type' : 'action';
+  const enumDef = (properties[enumField] as Record<string, unknown> | undefined) ?? {};
+  if (!Array.isArray(enumDef.enum)) return true;
+  return enumDef.enum.length > 0;
+}
+
+/**
+ * Filter tools by user scope + server deny list.
+ *
+ * Tools are included when the user has the tool-level scope, OR when any action/type
+ * in the tool has a scope the user satisfies (in which case the enum is pruned to
+ * just those action/types). After pruning, tools with empty action/type enums are
+ * removed entirely.
+ */
+export function filterToolsByAuthScope(
+  tools: ToolDefinition[],
+  scopes: string[],
+  denyActions: string[] = [],
+): ToolDefinition[] {
+  return tools
+    .filter((tool) => {
+      // Tool-level visibility: if the whole tool is tool-level-denied, hide it.
+      if (isActionDenied(tool.name, undefined, denyActions)) return false;
+      // Must have scope for at least the tool-level default — otherwise no chance any action succeeds.
+      const toolPolicy = getActionPolicy(tool.name);
+      if (toolPolicy && !hasRequiredScope(scopes, toolPolicy.scope)) {
+        // Still allow if any specific action has a scope the user HAS (e.g., SAPManage default='write'
+        // but flp_list_* have scope='read' — a read user should see SAPManage with pruned actions).
+        const schema = tool.inputSchema as Record<string, unknown>;
+        const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+        const enumField = tool.name === 'SAPRead' ? 'type' : 'action';
+        const enumDef = (properties[enumField] as Record<string, unknown> | undefined) ?? {};
+        const enumValues = Array.isArray(enumDef.enum) ? enumDef.enum.map(String) : null;
+        if (!enumValues) return false;
+        const anyAllowed = enumValues.some((v) => {
+          const p = getActionPolicy(tool.name, v);
+          return p && hasRequiredScope(scopes, p.scope) && !isActionDenied(tool.name, v, denyActions);
+        });
+        if (!anyAllowed) return false;
+      }
+      return true;
+    })
+    .map((tool) => pruneToolByPolicy(tool, scopes, denyActions))
+    .filter(hasNonEmptyActionOrTypeEnum);
+}
+
+export function logAuthSummary(config: ServerConfig): void {
+  const mcpMethods: string[] = [];
+  if (config.apiKeys?.length) mcpMethods.push('api-keys');
+  if (config.oidcIssuer && config.oidcAudience) mcpMethods.push('oidc');
+  if (config.xsuaaAuth) mcpMethods.push('xsuaa');
+  if (mcpMethods.length === 0) mcpMethods.push('none');
+
+  const hasCookie = !!(config.cookieFile || config.cookieString);
+  const hasBearer = !!(config.btpServiceKey || config.btpServiceKeyFile);
+  const hasDestination = !!process.env.SAP_BTP_DESTINATION;
+  const hasBasic = !!(config.username && config.password);
+
+  let sapMethod = 'none';
+  if (config.ppEnabled) {
+    if (hasDestination) sapMethod = 'destination+pp';
+    else if (hasCookie) sapMethod = 'cookie+pp';
+    else sapMethod = 'pp';
+  } else if (hasBearer) {
+    sapMethod = 'bearer';
+  } else if (hasDestination) {
+    sapMethod = 'destination';
+  } else if (hasBasic && hasCookie) {
+    sapMethod = 'basic+cookie';
+  } else if (hasCookie) {
+    sapMethod = 'cookie';
+  } else if (hasBasic) {
+    sapMethod = 'basic';
+  }
+
+  const scope = config.ppEnabled ? 'per-user' : 'shared';
+  const samlSuffix = config.disableSaml2 ? ' disable-saml=on' : '';
+  logger.info(`auth: MCP=[${mcpMethods.join(',')}] SAP=${sapMethod} (${scope})${samlSuffix}`);
+}
 
 /** Build the base ADT client config (without per-user auth) */
-function buildAdtConfig(
+// When perUser=true, strips shared credentials (username/password/cookies)
+// so per-user PP clients never inherit admin auth.
+export function buildAdtConfig(
   config: ServerConfig,
   btpProxy?: BTPProxyConfig,
   bearerTokenProvider?: () => Promise<string>,
+  opts?: { perUser?: boolean },
 ): Partial<AdtClientConfig> {
-  return {
+  const adtConfig: Partial<AdtClientConfig> = {
     baseUrl: config.url,
-    username: config.username,
-    password: config.password,
     client: config.client,
     language: config.language,
     insecure: config.insecure,
+    disableSaml: config.disableSaml2,
     btpProxy,
     bearerTokenProvider,
     maxConcurrent: config.maxConcurrent,
     safety: {
-      readOnly: config.readOnly,
-      blockFreeSQL: config.blockFreeSQL,
-      blockData: config.blockData,
-      allowedOps: config.allowedOps,
-      disallowedOps: config.disallowedOps,
+      allowWrites: config.allowWrites,
+      allowDataPreview: config.allowDataPreview,
+      allowFreeSQL: config.allowFreeSQL,
+      allowTransportWrites: config.allowTransportWrites,
+      allowGitWrites: config.allowGitWrites,
       allowedPackages: config.allowedPackages,
-      dryRun: false,
-      enableTransports: config.enableTransports,
-      transportReadOnly: false,
-      allowedTransports: [],
+      allowedTransports: config.allowedTransports,
+      denyActions: config.denyActions,
     },
   };
+
+  if (!opts?.perUser) {
+    const cookies = resolveCookies(config.cookieFile, config.cookieString);
+    adtConfig.username = config.username;
+    adtConfig.password = config.password;
+    if (cookies) {
+      adtConfig.cookies = cookies;
+    }
+  }
+
+  return adtConfig;
 }
 
 /**
@@ -104,7 +245,7 @@ async function createPerUserClient(
       ? { ...btpProxy, locationId: destination.CloudConnectorLocationId }
       : btpProxy;
 
-  const adtConfig = buildAdtConfig(config, effectiveProxy);
+  const adtConfig = buildAdtConfig(config, effectiveProxy, undefined, { perUser: true });
   // Override URL from destination (in case it differs from startup-resolved URL)
   adtConfig.baseUrl = destination.URL;
   // Set per-user auth for principal propagation.
@@ -170,6 +311,7 @@ export function runStartupProbe(
       const fc = defaultFeatureConfig();
       fc.hana = config.featureHana as 'auto' | 'on' | 'off';
       fc.abapGit = config.featureAbapGit as 'auto' | 'on' | 'off';
+      fc.gcts = config.featureGcts as 'auto' | 'on' | 'off';
       fc.rap = config.featureRap as 'auto' | 'on' | 'off';
       fc.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
       fc.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
@@ -208,6 +350,107 @@ export function runStartupProbe(
   })();
 }
 
+export interface StartupAuthPreflightResult {
+  status: 'ok' | 'failed' | 'inconclusive' | 'skipped';
+  /** When true, shared-client SAP tool calls must be blocked to prevent repeated auth failures. */
+  blocking: boolean;
+  endpoint: string;
+  checkedAt: string;
+  statusCode?: number;
+  reason: string;
+}
+
+const STARTUP_AUTH_ENDPOINT = '/sap/bc/adt/core/discovery';
+
+function buildStartupAuthFailureReason(statusCode: number): string {
+  if (statusCode === 401) {
+    return (
+      'Authentication failed (401) during startup auth preflight. ' +
+      'Check SAP_USER/SAP_PASSWORD/SAP_CLIENT (or destination/service-key credentials), then restart ARC-1.'
+    );
+  }
+  if (statusCode === 403) {
+    return (
+      'Access forbidden (403) during startup auth preflight. ' +
+      'The configured SAP user lacks ADT authorization (for example S_ADT_RES). ' +
+      'Fix authorizations, then restart ARC-1.'
+    );
+  }
+  return `Startup auth preflight failed with HTTP ${statusCode}.`;
+}
+
+/**
+ * Run a startup auth preflight for shared-credential mode.
+ *
+ * Goal: detect invalid technical/shared credentials once at startup and avoid
+ * repeated failed SAP requests from the first LLM tool call onward.
+ *
+ * Behavior:
+ * - Never throws (server must stay up)
+ * - PP mode and no-URL mode are skipped (non-blocking)
+ * - 401/403 are blocking failures
+ * - Network/other failures are inconclusive (non-blocking)
+ */
+export async function runStartupAuthPreflight(
+  config: ServerConfig,
+  btpProxy?: BTPProxyConfig,
+  bearerTokenProvider?: () => Promise<string>,
+): Promise<StartupAuthPreflightResult> {
+  const checkedAt = new Date().toISOString();
+  const endpoint = STARTUP_AUTH_ENDPOINT;
+
+  if (config.ppEnabled) {
+    const reason = 'Skipped startup auth preflight: principal propagation mode is enabled (per-user auth at runtime).';
+    logger.info(reason);
+    return { status: 'skipped', blocking: false, endpoint, checkedAt, reason };
+  }
+
+  if (!config.url) {
+    const reason = 'Skipped startup auth preflight: SAP_URL is not configured.';
+    logger.info(reason);
+    return { status: 'skipped', blocking: false, endpoint, checkedAt, reason };
+  }
+
+  try {
+    const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+    await client.http.get(endpoint);
+    const reason = 'Startup auth preflight succeeded for shared SAP credentials.';
+    logger.info(reason, { endpoint });
+    return { status: 'ok', blocking: false, endpoint, checkedAt, reason };
+  } catch (err) {
+    if (err instanceof AdtApiError && (err.statusCode === 401 || err.statusCode === 403)) {
+      const reason = buildStartupAuthFailureReason(err.statusCode);
+      logger.warn(reason, { endpoint, statusCode: err.statusCode });
+      return {
+        status: 'failed',
+        blocking: true,
+        endpoint,
+        checkedAt,
+        statusCode: err.statusCode,
+        reason,
+      };
+    }
+
+    const detail = err instanceof Error ? err.message : String(err);
+    const reason =
+      'Startup auth preflight was inconclusive (non-auth failure). ' +
+      'Continuing and letting runtime requests handle connectivity diagnostics.';
+    logger.warn(reason, { endpoint, error: detail });
+    return { status: 'inconclusive', blocking: false, endpoint, checkedAt, reason };
+  }
+}
+
+export function formatStartupAuthPreflightToolError(preflight: StartupAuthPreflightResult): string {
+  const code = preflight.statusCode ? ` (HTTP ${preflight.statusCode})` : '';
+  return (
+    `Startup authentication preflight failed${code}. ` +
+    'ARC-1 is blocking shared SAP tool calls to avoid repeated failed logins and possible user lockout.\n\n' +
+    `${preflight.reason}\n` +
+    `Preflight endpoint: ${preflight.endpoint}\n` +
+    `Checked at: ${preflight.checkedAt}`
+  );
+}
+
 /**
  * Create the MCP server with registered tool handlers.
  * @param config Server configuration
@@ -216,6 +459,7 @@ export function runStartupProbe(
  * @param bearerTokenProvider Optional OAuth bearer token provider (BTP ABAP Environment)
  * @param cachingLayer Optional object cache layer
  * @param startupProbePromise Promise from runStartupProbe() — ListTools waits on this
+ * @param startupAuthPreflightPromise Promise from runStartupAuthPreflight() — CallTool blocks on auth failure in shared mode
  */
 export function createServer(
   config: ServerConfig,
@@ -224,6 +468,7 @@ export function createServer(
   bearerTokenProvider?: () => Promise<string>,
   cachingLayer?: CachingLayer,
   startupProbePromise?: Promise<void>,
+  startupAuthPreflightPromise?: Promise<StartupAuthPreflightResult>,
 ): Server {
   const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
@@ -239,14 +484,11 @@ export function createServer(
       await Promise.race([startupProbePromise, new Promise((resolve) => setTimeout(resolve, 10_000))]);
     }
     const features = getCachedFeatures();
-    let tools = getToolDefinitions(config, features?.textSearch?.available);
+    let tools = getToolDefinitions(config, features?.textSearch?.available, features);
 
     // When authenticated, only show tools the user has scopes for
     if (extra.authInfo) {
-      tools = tools.filter((tool) => {
-        const requiredScope = TOOL_SCOPES[tool.name];
-        return !requiredScope || hasRequiredScope(extra.authInfo!, requiredScope);
-      });
+      tools = filterToolsByAuthScope(tools, extra.authInfo.scopes);
     }
 
     return { tools };
@@ -256,6 +498,21 @@ export function createServer(
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+
+    if (startupAuthPreflightPromise) {
+      const startupAuth = await startupAuthPreflightPromise;
+      if (startupAuth.blocking) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: formatStartupAuthPreflightToolError(startupAuth),
+            },
+          ],
+          isError: true,
+        } as Record<string, unknown>;
+      }
+    }
 
     // Principal propagation: create per-user ADT client if enabled and user JWT available.
     // Only attempt PP when the token is a JWT (3 dot-separated parts), not a plain API key.
@@ -319,10 +576,20 @@ export function createServer(
     // Inject startup discovery MIME map (shared for default and per-user clients).
     client.http.setDiscoveryMap(getCachedDiscovery());
 
-    // Per-request safety: merge server ceiling with JWT scopes.
-    // Scopes can only restrict further, never expand beyond server config.
+    // Per-request safety: merge server ceiling with per-user policy.
+    //   - API-key path: clientId starts with "api-key:<profile>" — intersect server with profile's partial SafetyConfig.
+    //   - XSUAA/OIDC path: derive from scopes only (server ceiling, scopes can only tighten).
+    // API-key intersection is stricter — profile can narrow allowedPackages / feature flags
+    // that scopes alone cannot (scopes don't encode allowedPackages, etc.).
     let effectiveClient = client;
-    if (extra.authInfo?.scopes) {
+    if (extra.authInfo?.clientId?.startsWith('api-key:')) {
+      const profileName = extra.authInfo.clientId.slice('api-key:'.length);
+      const profile = API_KEY_PROFILES[profileName];
+      if (profile) {
+        const effectiveSafety = deriveUserSafetyFromProfile(client.safety, profile.safety);
+        effectiveClient = client.withSafety(effectiveSafety);
+      }
+    } else if (extra.authInfo?.scopes) {
       const effectiveSafety = deriveUserSafety(client.safety, extra.authInfo.scopes);
       effectiveClient = client.withSafety(effectiveSafety);
     }
@@ -381,8 +648,19 @@ async function createCachingLayer(config: ServerConfig): Promise<CachingLayer | 
 /**
  * Create and start the MCP server.
  */
-export async function createAndStartServer(config: ServerConfig): Promise<Server> {
+export async function createAndStartServer(
+  config: ServerConfig,
+  sources?: Record<string, import('./types.js').ConfigSource>,
+): Promise<Server> {
   initLogger(config.logFormat, config.verbose);
+  logAuthSummary(config);
+
+  // Effective-policy log + contradiction warnings (Task 8 observability).
+  // Sources is optional for test callers — defaults to 'default' for all fields.
+  const effectiveSources = sources ?? {};
+  const { logEffectivePolicy, detectContradictions, logContradictions } = await import('./effective-policy-log.js');
+  logEffectivePolicy(config, effectiveSources, logger);
+  logContradictions(detectContradictions(config), logger);
 
   // Add file sink if configured
   if (config.logFile) {
@@ -411,7 +689,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     event: 'server_start',
     version: VERSION,
     transport: config.transport,
-    readOnly: config.readOnly,
+    allowWrites: config.allowWrites,
     url: config.url || '(not configured)',
     pid: process.pid,
   });
@@ -420,7 +698,7 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
     version: VERSION,
     transport: config.transport,
     url: config.url || '(not configured)',
-    readOnly: config.readOnly,
+    allowWrites: config.allowWrites,
   });
 
   // Pre-flight: warn clearly when no SAP connection is configured so users know
@@ -535,10 +813,28 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
   }
 
   // Run feature probe once at startup — shared across all requests (stdio and HTTP).
-  // This must happen before createServer() so the HTTP factory can close over the same promise.
-  const startupProbePromise = runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig);
+  // First run startup auth preflight in shared mode. If it blocks (401/403), skip feature probe
+  // to avoid firing many failing requests with invalid technical credentials.
+  const startupAuthPreflightPromise = runStartupAuthPreflight(config, btpProxy, bearerTokenProvider);
+  const startupProbePromise = (async () => {
+    const authPreflight = await startupAuthPreflightPromise;
+    if (authPreflight.blocking) {
+      setCachedFeatures(undefined);
+      setCachedDiscovery(new Map());
+      return;
+    }
+    await runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig);
+  })();
 
-  const server = createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise);
+  const server = createServer(
+    config,
+    btpProxy,
+    btpConfig,
+    bearerTokenProvider,
+    cachingLayer,
+    startupProbePromise,
+    startupAuthPreflightPromise,
+  );
 
   // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals).
   // IMPORTANT: registering a SIGINT/SIGTERM listener suppresses Node's default exit behavior,
@@ -607,7 +903,16 @@ export async function createAndStartServer(config: ServerConfig): Promise<Server
 
     const { startHttpServer } = await import('./http.js');
     await startHttpServer(
-      () => createServer(config, btpProxy, btpConfig, bearerTokenProvider, cachingLayer, startupProbePromise),
+      () =>
+        createServer(
+          config,
+          btpProxy,
+          btpConfig,
+          bearerTokenProvider,
+          cachingLayer,
+          startupProbePromise,
+          startupAuthPreflightPromise,
+        ),
       config,
       xsuaaCredentials,
     );

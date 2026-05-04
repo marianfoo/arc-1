@@ -34,6 +34,68 @@ import { resolveAcceptType, resolveContentType } from './discovery.js';
 import { AdtApiError, AdtNetworkError } from './errors.js';
 import type { Semaphore } from './semaphore.js';
 
+/**
+ * Opt-in wire-level debug logging.
+ *
+ * When ARC1_LOG_HTTP_DEBUG=true, every completed HTTP call to SAP ADT attaches
+ * its request body, request headers, response body, and response headers to
+ * the audit event. Sensitive headers are redacted; bodies are truncated at
+ * 64KB. Intended for ad-hoc debugging of content negotiation, CSRF, and
+ * activation preaudit responses — not for production.
+ */
+const HTTP_DEBUG_BODY_LIMIT = 65536;
+const HTTP_DEBUG_REDACT_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-csrf-token',
+  'sap-connectivity-authentication',
+  'proxy-authorization',
+]);
+
+function redactDebugHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    out[k] = HTTP_DEBUG_REDACT_HEADERS.has(k.toLowerCase()) ? '[REDACTED]' : v;
+  }
+  return out;
+}
+
+function responseHeadersToObject(h: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  h.forEach((v, k) => {
+    out[k] = HTTP_DEBUG_REDACT_HEADERS.has(k.toLowerCase()) ? '[REDACTED]' : v;
+  });
+  return out;
+}
+
+function truncateBody(body: string | undefined): string | undefined {
+  if (body === undefined) return undefined;
+  if (body.length <= HTTP_DEBUG_BODY_LIMIT) return body;
+  return `${body.slice(0, HTTP_DEBUG_BODY_LIMIT)}\n…[truncated ${body.length - HTTP_DEBUG_BODY_LIMIT} chars]`;
+}
+
+/** Build the optional debug-only audit fields (empty object when not enabled). */
+function buildHttpDebugFields(
+  reqHeaders: Record<string, string>,
+  reqBody: string | undefined,
+  respHeaders: Headers,
+  respBody: string,
+): Partial<{
+  requestBody: string;
+  requestHeaders: Record<string, string>;
+  responseBody: string;
+  responseHeaders: Record<string, string>;
+}> {
+  if (process.env.ARC1_LOG_HTTP_DEBUG !== 'true') return {};
+  return {
+    requestHeaders: redactDebugHeaders(reqHeaders),
+    requestBody: truncateBody(reqBody),
+    responseHeaders: responseHeadersToObject(respHeaders),
+    responseBody: truncateBody(respBody),
+  };
+}
+
 /** Session type for ADT requests */
 export type SessionType = 'stateful' | 'stateless' | undefined;
 
@@ -66,6 +128,8 @@ export interface AdtHttpConfig {
    * Used for direct BTP ABAP connections via service key.
    */
   bearerTokenProvider?: () => Promise<string>;
+  /** Opt-in: disable SAML redirect via X-SAP-SAML2 header + saml2 query param */
+  disableSaml?: boolean;
   /** Optional concurrency limiter shared across requests */
   semaphore?: Semaphore;
 }
@@ -225,6 +289,10 @@ export class AdtHttpClient {
     }
 
     Object.assign(headers, extraHeaders);
+
+    if (this.config.disableSaml) {
+      headers['X-SAP-SAML2'] = 'disabled';
+    }
 
     if (isModifyingMethod(method)) {
       headers['X-CSRF-Token'] = this.csrfToken;
@@ -594,6 +662,7 @@ export class AdtHttpClient {
         path,
         statusCode: response.status,
         durationMs: Date.now() - httpStart,
+        ...buildHttpDebugFields(headers, body, response.headers, responseBody),
       });
 
       return result;
@@ -610,6 +679,13 @@ export class AdtHttpClient {
           statusCode: err.statusCode,
           durationMs,
           errorBody: err.responseBody?.slice(0, 200),
+          ...(process.env.ARC1_LOG_HTTP_DEBUG === 'true'
+            ? {
+                requestHeaders: redactDebugHeaders(headers),
+                requestBody: truncateBody(body),
+                responseBody: truncateBody(err.responseBody),
+              }
+            : {}),
         });
         throw err;
       }
@@ -645,6 +721,21 @@ export class AdtHttpClient {
 
   /** Handle response: throw on error status, return normalized response */
   private handleResponse(status: number, headers: Headers, body: string, path: string): AdtResponse {
+    const contentType = headers.get('content-type')?.toLowerCase();
+    if (
+      status === 200 &&
+      path.startsWith('/sap/bc/adt/') &&
+      contentType?.startsWith('text/html') &&
+      looksLikeLoginPage(body)
+    ) {
+      throw new AdtApiError(
+        'ADT call returned HTML login page — authentication required. If using cookies, they may have expired. If using Basic auth, credentials may be invalid or not authorized for ADT (S_ADT_RES missing). If on an SSO-only system, try SAP_DISABLE_SAML=true or see docs/enterprise-auth.md. Re-run arc-1 after fixing.',
+        401,
+        path,
+        body.slice(0, 500),
+      );
+    }
+
     if (status >= 400) {
       throw new AdtApiError(body.slice(0, 500), status, path, body);
     }
@@ -675,6 +766,10 @@ export class AdtHttpClient {
 
     if (this.config.sessionType === 'stateful') {
       headers['X-sap-adt-sessiontype'] = 'stateful';
+    }
+
+    if (this.config.disableSaml) {
+      headers['X-SAP-SAML2'] = 'disabled';
     }
 
     // Auth: Bearer token (BTP ABAP) or Basic Auth (on-premise)
@@ -822,13 +917,22 @@ export class AdtHttpClient {
     if (this.config.language) {
       url.searchParams.set('sap-language', this.config.language);
     }
+    if (this.config.disableSaml) {
+      url.searchParams.set('saml2', 'disabled');
+    }
 
     return url.toString();
   }
 
   /** Apply Basic Auth header if username/password are configured (and no bearer provider) */
   private applyAuthHeader(headers: Record<string, string>): void {
-    if (this.config.username && this.config.password && !this.config.bearerTokenProvider) {
+    if (
+      this.config.username &&
+      this.config.password &&
+      !this.config.bearerTokenProvider &&
+      !this.config.sapConnectivityAuth &&
+      !this.config.ppProxyAuth
+    ) {
       headers.Authorization = `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`;
     }
   }
@@ -966,4 +1070,25 @@ function isModifyingMethod(method: string): boolean {
 function inferAcceptFromError(body: string): string | undefined {
   const match = body.match(/application\/[\w.+-]+(?:\/[\w.+-]+)?/);
   return match?.[0];
+}
+
+/**
+ * Distinguish a real SAP logon page from a legitimate HTML response payload.
+ *
+ * SAP logon pages are full HTML documents that begin with `<!DOCTYPE` / `<html>`
+ * or embed a recognizable logon form. Several ADT endpoints (e.g. gateway
+ * error log detail at `/sap/bc/adt/gw/errorlog/{type}/{tx}`, dump summaries,
+ * dump formatted output) legitimately return HTML *fragments* that start with
+ * `<h4>`, `<table>`, `<div>`, etc. — those must not be treated as login
+ * redirects.
+ */
+function looksLikeLoginPage(body: string): boolean {
+  if (!body) return false;
+  const trimmed = body.trimStart().slice(0, 2048);
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('<!doctype html') || lower.startsWith('<html')) return true;
+  // Classic SAP logon form markers (SICF logon / Fiori logon).
+  if (/sap-system-login|logonform|sap-ui-bootstrap|sapsystemlogin|sap-logon/i.test(trimmed)) return true;
+  return false;
 }

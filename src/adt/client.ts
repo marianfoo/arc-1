@@ -18,7 +18,7 @@
 
 import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
-import { isNotFoundError } from './errors.js';
+import { AdtApiError, isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import { Semaphore } from './semaphore.js';
@@ -35,6 +35,7 @@ import type {
   FeatureToggleInfo,
   InactiveObject,
   MessageClassInfo,
+  RevisionListResult,
   SourceSearchResult,
   StructuredClassResponse,
   TransactionInfo,
@@ -54,6 +55,7 @@ import {
   parseInstalledComponents,
   parseMessageClass,
   parsePackageContents,
+  parseRevisionFeed,
   parseSearchResults,
   parseServiceBinding,
   parseSourceSearchResults,
@@ -61,6 +63,28 @@ import {
   parseTableContents,
   parseTransactionMetadata,
 } from './xml-parser.js';
+
+export interface SourceReadResult {
+  source: string;
+  etag?: string;
+  notModified: boolean;
+  statusCode: number;
+}
+
+export interface SourceReadOptions {
+  ifNoneMatch?: string;
+  version?: 'active' | 'inactive';
+  accept?: string;
+}
+
+function appendQueryParam(path: string, key: string, value: string): string {
+  const [baseAndQuery, fragment] = path.split('#', 2);
+  const [base, query = ''] = (baseAndQuery ?? path).split('?', 2);
+  const params = new URLSearchParams(query);
+  if (!params.has(key)) params.set(key, value);
+  const queryString = params.toString();
+  return `${base}${queryString ? `?${queryString}` : ''}${fragment ? `#${fragment}` : ''}`;
+}
 
 export class AdtClient {
   readonly http: AdtHttpClient;
@@ -83,7 +107,9 @@ export class AdtClient {
       cookies: config.cookies,
       btpProxy: config.btpProxy,
       sapConnectivityAuth: config.sapConnectivityAuth,
+      ppProxyAuth: config.ppProxyAuth,
       bearerTokenProvider: config.bearerTokenProvider,
+      disableSaml: config.disableSaml,
       semaphore: config.maxConcurrent ? new Semaphore(config.maxConcurrent) : undefined,
     };
 
@@ -105,22 +131,34 @@ export class AdtClient {
 
   // ─── Source Code Read Operations ──────────────────────────────────
 
+  private async fetchSource(path: string, opts: SourceReadOptions = {}): Promise<SourceReadResult> {
+    const url = opts.version ? appendQueryParam(path, 'version', opts.version) : path;
+    const headers: Record<string, string> = {};
+    if (opts.accept) headers.Accept = opts.accept;
+    if (opts.ifNoneMatch) headers['If-None-Match'] = opts.ifNoneMatch;
+    const resp = await this.http.get(url, Object.keys(headers).length > 0 ? headers : undefined);
+    return {
+      source: resp.body,
+      etag: resp.headers.etag ?? undefined,
+      notModified: resp.statusCode === 304,
+      statusCode: resp.statusCode,
+    };
+  }
+
   /** Get program source code */
-  async getProgram(name: string): Promise<string> {
+  async getProgram(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetProgram');
-    const resp = await this.http.get(`/sap/bc/adt/programs/programs/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/programs/programs/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get class source code (main include by default) */
-  async getClass(name: string, include?: string): Promise<string> {
+  async getClass(name: string, include?: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetClass');
     const encodedName = encodeURIComponent(name);
 
     if (!include) {
       // Default: return full combined class source
-      const resp = await this.http.get(`/sap/bc/adt/oo/classes/${encodedName}/source/main`);
-      return resp.body;
+      return this.fetchSource(`/sap/bc/adt/oo/classes/${encodedName}/source/main`, opts);
     }
 
     const validIncludes = new Set(['main', 'definitions', 'implementations', 'macros', 'testclasses']);
@@ -145,8 +183,8 @@ export class AdtClient {
           : `/sap/bc/adt/oo/classes/${encodedName}/includes/${inc}`;
 
       try {
-        const resp = await this.http.get(path);
-        parts.push(`=== ${inc} ===\n${resp.body}`);
+        const result = await this.fetchSource(path, opts);
+        parts.push(`=== ${inc} ===\n${result.source}`);
       } catch (err) {
         if (isNotFoundError(err)) {
           parts.push(
@@ -157,7 +195,7 @@ export class AdtClient {
         }
       }
     }
-    return parts.join('\n\n');
+    return { source: parts.join('\n\n'), notModified: false, statusCode: 200 };
   }
 
   /** Get class metadata (description, language, category, etc.) from the object endpoint */
@@ -202,19 +240,18 @@ export class AdtClient {
   }
 
   /** Get interface source code */
-  async getInterface(name: string): Promise<string> {
+  async getInterface(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetInterface');
-    const resp = await this.http.get(`/sap/bc/adt/oo/interfaces/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/oo/interfaces/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get function module source code */
-  async getFunction(group: string, name: string): Promise<string> {
+  async getFunction(group: string, name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetFunction');
-    const resp = await this.http.get(
+    return this.fetchSource(
       `/sap/bc/adt/functions/groups/${encodeURIComponent(group)}/fmodules/${encodeURIComponent(name)}/source/main`,
+      opts,
     );
-    return resp.body;
   }
 
   /** Resolve function group for a function module via quickSearch */
@@ -237,93 +274,83 @@ export class AdtClient {
   }
 
   /** Get function group source code */
-  async getFunctionGroupSource(name: string): Promise<string> {
+  async getFunctionGroupSource(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetFunctionGroupSource');
-    const resp = await this.http.get(`/sap/bc/adt/functions/groups/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/functions/groups/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get include source code */
-  async getInclude(name: string): Promise<string> {
+  async getInclude(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetInclude');
-    const resp = await this.http.get(`/sap/bc/adt/programs/includes/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/programs/includes/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get CDS view source code (DDLS) */
-  async getDdls(name: string): Promise<string> {
+  async getDdls(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetDDLS');
-    const resp = await this.http.get(`/sap/bc/adt/ddic/ddl/sources/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/ddic/ddl/sources/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get CDS access control source code (DCLS) */
-  async getDcl(name: string): Promise<string> {
+  async getDcl(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetDCL');
-    const resp = await this.http.get(`/sap/bc/adt/acm/dcl/sources/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/acm/dcl/sources/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get behavior definition source code (BDEF) */
-  async getBdef(name: string): Promise<string> {
+  async getBdef(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetBDEF');
-    const resp = await this.http.get(`/sap/bc/adt/bo/behaviordefinitions/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/bo/behaviordefinitions/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get service definition source code (SRVD) */
-  async getSrvd(name: string): Promise<string> {
+  async getSrvd(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetSRVD');
-    const resp = await this.http.get(`/sap/bc/adt/ddic/srvd/sources/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/ddic/srvd/sources/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get Knowledge Transfer Document (SKTD) — Markdown documentation attached to an ABAP object. */
-  async getKtd(name: string): Promise<string> {
+  async getKtd(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetKTD');
     // Eclipse ADT lowercases the name in the URL path; server-side matching is case-sensitive here.
-    const resp = await this.http.get(
-      `/sap/bc/adt/documentation/ktd/documents/${encodeURIComponent(name.toLowerCase())}`,
-      { Accept: 'application/vnd.sap.adt.sktdv2+xml' },
-    );
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/documentation/ktd/documents/${encodeURIComponent(name.toLowerCase())}`, {
+      ...opts,
+      accept: opts?.accept ?? 'application/vnd.sap.adt.sktdv2+xml',
+    });
   }
 
   /** Get metadata extension source code (DDLX) */
-  async getDdlx(name: string): Promise<string> {
+  async getDdlx(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetDDLX');
-    const resp = await this.http.get(`/sap/bc/adt/ddic/ddlx/sources/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/ddic/ddlx/sources/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get service binding metadata (SRVB) — returns structured XML, not source text */
-  async getSrvb(name: string): Promise<string> {
+  async getSrvb(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetSRVB');
-    const resp = await this.http.get(`/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}`, {
-      Accept: 'application/vnd.sap.adt.businessservices.servicebinding.v2+xml',
+    const result = await this.fetchSource(`/sap/bc/adt/businessservices/bindings/${encodeURIComponent(name)}`, {
+      ...opts,
+      accept: opts?.accept ?? 'application/vnd.sap.adt.businessservices.servicebinding.v2+xml',
     });
-    return parseServiceBinding(resp.body);
+    return result.notModified ? result : { ...result, source: parseServiceBinding(result.source) };
   }
 
   /** Get table definition source code */
-  async getTable(name: string): Promise<string> {
+  async getTable(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetTable');
-    const resp = await this.http.get(`/sap/bc/adt/ddic/tables/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/ddic/tables/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get view definition source code */
-  async getView(name: string): Promise<string> {
+  async getView(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetView');
-    const resp = await this.http.get(`/sap/bc/adt/ddic/views/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/ddic/views/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get structure definition source code (CDS-like format) */
-  async getStructure(name: string): Promise<string> {
+  async getStructure(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetStructure');
-    const resp = await this.http.get(`/sap/bc/adt/ddic/structures/${encodeURIComponent(name)}/source/main`);
-    return resp.body;
+    return this.fetchSource(`/sap/bc/adt/ddic/structures/${encodeURIComponent(name)}/source/main`, opts);
   }
 
   /** Get domain metadata (type, length, value table, fixed values) */
@@ -349,6 +376,74 @@ export class AdtClient {
       Accept: 'application/vnd.sap.adt.blues.v1+xml',
     });
     return parseAuthorizationField(resp.body);
+  }
+
+  // ─── Source Revision / Version History ──────────────────────────
+
+  private revisionsUrlFor(type: string, name: string, opts: { include?: string; group?: string }): string {
+    const normalizedType = String(type).trim().toUpperCase();
+    const encodedName = encodeURIComponent(name);
+    const include =
+      String(opts.include ?? 'main')
+        .trim()
+        .toLowerCase() || 'main';
+
+    switch (normalizedType) {
+      case 'PROG':
+        return `/sap/bc/adt/programs/programs/${encodedName}/source/main/versions`;
+      case 'CLAS': {
+        const validIncludes = new Set(['main', 'definitions', 'implementations', 'macros', 'testclasses']);
+        if (!validIncludes.has(include)) {
+          throw new Error(
+            `Invalid include "${opts.include ?? ''}" for CLAS revisions. Valid values: main, definitions, implementations, macros, testclasses.`,
+          );
+        }
+        return `/sap/bc/adt/oo/classes/${encodedName}/includes/${include}/versions`;
+      }
+      case 'INTF':
+        return `/sap/bc/adt/oo/interfaces/${encodedName}/source/main/versions`;
+      case 'FUNC': {
+        const group = String(opts.group ?? '').trim();
+        if (!group) {
+          throw new Error(`Function group is required for FUNC revisions of "${name}".`);
+        }
+        return `/sap/bc/adt/functions/groups/${encodeURIComponent(group)}/fmodules/${encodedName}/source/main/versions`;
+      }
+      case 'INCL':
+        return `/sap/bc/adt/programs/includes/${encodedName}/source/main/versions`;
+      case 'DDLS':
+        return `/sap/bc/adt/ddic/ddl/sources/${encodedName}/source/main/versions`;
+      case 'DCLS':
+        return `/sap/bc/adt/acm/dcl/sources/${encodedName}/source/main/versions`;
+      case 'BDEF':
+        return `/sap/bc/adt/bo/behaviordefinitions/${encodedName}/source/main/versions`;
+      case 'SRVD':
+        return `/sap/bc/adt/ddic/srvd/sources/${encodedName}/source/main/versions`;
+      default:
+        throw new Error(`Unsupported object type "${type}" for revisions.`);
+    }
+  }
+
+  /** List available source revisions for an ABAP object. */
+  async getRevisions(
+    type: string,
+    name: string,
+    opts: { include?: string; group?: string } = {},
+  ): Promise<RevisionListResult> {
+    checkOperation(this.safety, OperationType.Read, 'GetRevisions');
+    const url = this.revisionsUrlFor(type, name, opts);
+    const resp = await this.http.get(url, { Accept: 'application/atom+xml;type=feed' });
+    return parseRevisionFeed(resp.body);
+  }
+
+  /** Read source content for a specific revision URI from the revisions feed. */
+  async getRevisionSource(versionUri: string): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'GetRevisionSource');
+    if (!versionUri.startsWith('/sap/bc/adt/')) {
+      throw new Error('versionUri must be an ADT path starting with /sap/bc/adt/');
+    }
+    const resp = await this.http.get(versionUri, { Accept: 'text/plain' });
+    return resp.body;
   }
 
   /** Get feature toggle states from switch framework */
@@ -385,11 +480,16 @@ export class AdtClient {
     return parseApiReleaseState(resp.body);
   }
 
-  /** List objects pending activation (inactive objects) */
+  /** List objects pending activation (inactive objects).
+   *  Endpoint is `/sap/bc/adt/activation/inactiveobjects` on every supported SAP release
+   *  (verified live on S/4HANA 2023 and NW 7.50 SP02).
+   *  The vendor MIME `application/vnd.sap.adt.inactivectsobjects.v1+xml` returns the rich
+   *  `<ioc:object>` shape (with user/deleted/transport/parentTransport metadata); the
+   *  `application/xml;q=0.5` fallback covers any release that ignores the vendor type. */
   async getInactiveObjects(): Promise<InactiveObject[]> {
     checkOperation(this.safety, OperationType.Read, 'GetInactiveObjects');
-    const resp = await this.http.get('/sap/bc/adt/activation/inactive', {
-      Accept: 'application/xml',
+    const resp = await this.http.get('/sap/bc/adt/activation/inactiveobjects', {
+      Accept: 'application/vnd.sap.adt.inactivectsobjects.v1+xml, application/xml;q=0.5',
     });
     return parseInactiveObjects(resp.body);
   }
@@ -472,8 +572,13 @@ export class AdtClient {
   /** Get installed SAP components */
   async getInstalledComponents(): Promise<Array<{ name: string; release: string; description: string }>> {
     checkOperation(this.safety, OperationType.Read, 'GetInstalledComponents');
-    const resp = await this.http.get('/sap/bc/adt/system/components');
-    return parseInstalledComponents(resp.body);
+    try {
+      const resp = await this.http.get('/sap/bc/adt/system/components', { Accept: 'application/atom+xml;type=feed' });
+      return parseInstalledComponents(resp.body);
+    } catch (err) {
+      if (err instanceof AdtApiError && err.statusCode === 406) return [];
+      throw err;
+    }
   }
 
   /** Get message class messages (legacy endpoint — may fail for some classes) */

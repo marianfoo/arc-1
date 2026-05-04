@@ -9,7 +9,7 @@
  * - Nodes: ABAP objects (class, program, table, etc.) with metadata
  * - Edges: Dependencies between objects (calls, uses, implements)
  * - APIs: Released API objects (for clean core checks)
- * - Sources: Raw source code keyed by (type, name) with content hash
+ * - Sources: Raw source code keyed by (type, name, version) with content hash
  * - Contracts: Compressed dependency contracts keyed by source hash
  */
 
@@ -63,8 +63,10 @@ export interface CacheStats {
 export interface CachedSource {
   objectType: string;
   objectName: string;
+  version: 'active' | 'inactive';
   source: string;
   hash: string;
+  etag?: string;
   cachedAt: string;
 }
 
@@ -111,9 +113,14 @@ export interface Cache {
   getApi(name: string, type: string): CacheApi | null;
 
   // Source code cache
-  putSource(objectType: string, objectName: string, source: string): void;
-  getSource(objectType: string, objectName: string): CachedSource | null;
-  invalidateSource(objectType: string, objectName: string): void;
+  putSource(
+    objectType: string,
+    objectName: string,
+    source: string,
+    opts?: { version?: 'active' | 'inactive'; etag?: string },
+  ): void;
+  getSource(objectType: string, objectName: string, version?: 'active' | 'inactive'): CachedSource | null;
+  invalidateSource(objectType: string, objectName: string, version?: 'active' | 'inactive' | 'all'): void;
 
   // Dependency contract cache (keyed by source hash)
   putDepGraph(graph: CachedDepGraph): void;
@@ -136,7 +143,7 @@ export function hashSource(source: string): string {
   return createHash('sha256').update(source).digest('hex');
 }
 
-/** Build a source cache key from type + name */
-export function sourceKey(objectType: string, objectName: string): string {
-  return `${objectType.toUpperCase()}:${objectName.toUpperCase()}`;
+/** Build a source cache key from type + name + source version */
+export function sourceKey(objectType: string, objectName: string, version: 'active' | 'inactive' = 'active'): string {
+  return `${objectType.toUpperCase()}:${objectName.toUpperCase()}:${version}`;
 }

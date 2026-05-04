@@ -1,0 +1,7 @@
+{
+  "url": "/sap/bc/adt/ddic/tables/T000/source/main",
+  "method": "GET",
+  "statusCode": 200,
+  "body": "@EndUserText.label : 'Clients'\n@AbapCatalog.preserveKey : true\ndefine table t000 { ... }",
+  "durationMs": 61
+}

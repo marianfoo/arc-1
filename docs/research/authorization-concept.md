@@ -42,11 +42,10 @@ Server-level, configured via env vars / CLI flags. Applies globally to ALL users
 |---------|--------|---------|
 | `--read-only` | Blocks all write ops (Create, Update, Delete, Activate, Workflow) | `true` |
 | `--block-free-sql` | Blocks freestyle SQL execution | `true` |
-| `--allowed-ops "RSQTI"` | Whitelist of operation type codes | `RSQTI` |
-| `--disallowed-ops "F"` | Blacklist of operation type codes | `""` |
-| `--allowed-packages "Z*,Y*"` | Package restriction (wildcard support) | `[]` (all) |
+| `--allowed-ops "RSQTI"` | Allowlist of operation type codes | `""` (no allowlist filter) |
+| `--disallowed-ops "F"` | Blocklist of operation type codes (takes precedence over allowlist) | `""` |
+| `--allowed-packages "Z*,Y*"` | Package restriction (wildcard support) | `"$TMP"` |
 | `--enable-transports` | Allow CTS transport operations | `false` |
-| `--allow-transportable-edits` | Allow editing objects in transportable packages | `false` |
 
 **Operation Types:**
 ```
