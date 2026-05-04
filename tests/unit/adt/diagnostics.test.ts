@@ -198,6 +198,69 @@ describe('Runtime Diagnostics', () => {
       // Formatted text request
       expect(calls).toContainEqual(['/sap/bc/adt/runtime/dump/DUMP_123/formatted', { Accept: 'text/plain' }]);
     });
+
+    it('passes already-encoded dump IDs through unchanged', async () => {
+      // The listing endpoint emits IDs like "...paimup_MUP_05%20%20%20ZEISMA%20100%2070".
+      // Re-encoding would double-encode the %20 to %2520 and break the lookup.
+      const encodedId = '20260504092539paimup_MUP_05%20%20%20ZEISMA%20100%2070';
+      const http = mockHttp('');
+      try {
+        await getDump(http, unrestrictedSafetyConfig(), encodedId);
+      } catch {
+        // empty response → parse failure, irrelevant for this assertion
+      }
+      const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encodedId}`);
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encodedId}/formatted`);
+      // Defensive: nothing got double-encoded.
+      expect(urls.some((url) => url.includes('%2520'))).toBe(false);
+    });
+
+    it('encodes raw dump IDs that contain literal whitespace', async () => {
+      // Caller copy/pasted from ST22: literal spaces, no percent encoding yet.
+      const rawId = '20260504092539paimup_MUP_05   ZEISMA 100 70';
+      const http = mockHttp('');
+      try {
+        await getDump(http, unrestrictedSafetyConfig(), rawId);
+      } catch {
+        // empty response → parse failure, irrelevant for this assertion
+      }
+      const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
+      // Spaces must be percent-encoded; underscores stay literal.
+      const encoded = '20260504092539paimup_MUP_05%20%20%20ZEISMA%20100%2070';
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encoded}`);
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encoded}/formatted`);
+      // No literal space leaked into the path.
+      expect(urls.some((url) => url.includes(' '))).toBe(false);
+    });
+
+    it('returns the original dump ID in the parsed detail (round-trip)', async () => {
+      // Even when we re-encode for the HTTP path, the response payload should
+      // surface the ID exactly as the caller passed it — otherwise downstream
+      // round-trips (e.g. saving an ID for follow-up) break.
+      const xmlDetail = readFileSync(join(FIXTURES_DIR, 'dump-detail.xml'), 'utf-8');
+      const formattedText = readFileSync(join(FIXTURES_DIR, 'dump-formatted.txt'), 'utf-8');
+      const http = mockHttpMulti({
+        formatted: formattedText,
+        'runtime/dump/': xmlDetail,
+      });
+      const rawId = 'literal id with spaces';
+      const result = await getDump(http, unrestrictedSafetyConfig(), rawId);
+      expect(result.id).toBe(rawId);
+    });
+
+    it('trims surrounding whitespace before encoding', async () => {
+      const http = mockHttp('');
+      try {
+        await getDump(http, unrestrictedSafetyConfig(), '  DUMP_42  ');
+      } catch {
+        // ignore parse failure
+      }
+      const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
+      // Whitespace would otherwise become %20%20 prefix/suffix and cause a 404.
+      expect(urls).toContain('/sap/bc/adt/runtime/dump/DUMP_42');
+      expect(urls).toContain('/sap/bc/adt/runtime/dump/DUMP_42/formatted');
+    });
   });
 
   // ─── parseDumpList ──────────────────────────────────────────────────

@@ -341,7 +341,11 @@ export function extractLockOwner(text: string): { user?: string; transport?: str
 }
 
 /** Classify SAP ADT errors into actionable domain categories with remediation hints. */
-export function classifySapDomainError(statusCode: number, responseBody?: string): SapErrorClassification | undefined {
+export function classifySapDomainError(
+  statusCode: number,
+  responseBody?: string,
+  path?: string,
+): SapErrorClassification | undefined {
   const bodyRaw = responseBody ?? '';
   const bodyLower = bodyRaw.toLowerCase();
   const typeId = extractExceptionType(bodyRaw);
@@ -413,9 +417,12 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
 
   const authPattern = /\bauthorization\b|not authorized|s_develop|s_adt_res|s_transprt/i.test(bodyRaw);
   if (typeId === 'ExceptionNotAuthorized' || (statusCode === 403 && authPattern)) {
+    const endpointHint = describeAuthEndpoint(path);
     return {
       category: 'authorization',
-      hint: 'The SAP user lacks required authorization. Run transaction SU53 in SAP GUI to inspect the last failed authorization check. Common objects: S_DEVELOP (development), S_ADT_RES (ADT resources), S_TRANSPRT (transports). Contact your basis admin or review PFCG role assignments.',
+      hint: endpointHint
+        ? `${endpointHint} Run transaction SU53 in SAP GUI immediately after the failed call to see the exact missing authorization object.`
+        : 'The SAP user lacks required authorization. Run transaction SU53 in SAP GUI to inspect the last failed authorization check. Common objects: S_DEVELOP (development), S_ADT_RES (ADT resources), S_TRANSPRT (transports). Contact your basis admin or review PFCG role assignments.',
       transaction: 'SU53',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
@@ -459,6 +466,56 @@ export function classifySapDomainError(statusCode: number, responseBody?: string
       hint: 'The ADT endpoint rejected this HTTP method. Verify the operation is supported on this SAP release and retry with the correct tool action.',
       details: typeId ? { exceptionType: typeId } : undefined,
     };
+  }
+
+  return undefined;
+}
+
+/**
+ * Build an endpoint-specific 403 hint for diagnostics endpoints. We've seen
+ * cases (e.g. ZEISMA in MUP) where the dump *list* succeeds but the dump
+ * *detail* is forbidden, and the generic "Authorization error" message hid
+ * which auth object was actually missing. Naming the typical S_ADMI_FCD /
+ * S_ADT_RES values for each path lets the LLM tell the user which role to
+ * request — and which transaction (ST22, /IWFND/ERROR_LOG) it maps to —
+ * without speculating beyond what the tool just tried to read.
+ *
+ * Returns `undefined` for paths that aren't recognized so the generic
+ * authorization hint kicks in for everything else.
+ */
+function describeAuthEndpoint(path?: string): string | undefined {
+  if (!path) return undefined;
+
+  // Dump detail: /sap/bc/adt/runtime/dump/{id}[/formatted]
+  if (/\/sap\/bc\/adt\/runtime\/dump\/[^/?#]+/.test(path)) {
+    return (
+      'Reading the short-dump detail was forbidden, even if listing dumps works. ' +
+      'The forbidden resource is `/sap/bc/adt/runtime/dump/{id}` (transaction ST22). ' +
+      'Typical authorization objects to check: `S_ADMI_FCD` with value `ST22` ' +
+      '(ABAP runtime error analysis) and `S_ADT_RES` (ACTVT 03) on the ' +
+      '`/sap/bc/adt/runtime/dump/*` resource path.'
+    );
+  }
+
+  // Dump list: /sap/bc/adt/runtime/dumps
+  if (/\/sap\/bc\/adt\/runtime\/dumps(\?|$|\/)/.test(path)) {
+    return (
+      'Listing short dumps was forbidden. The forbidden resource is ' +
+      '`/sap/bc/adt/runtime/dumps` (transaction ST22). Typical authorization ' +
+      'objects to check: `S_ADMI_FCD` with value `ST22` and `S_ADT_RES` ' +
+      '(ACTVT 03) on the `/sap/bc/adt/runtime/dumps` resource path.'
+    );
+  }
+
+  // Gateway error log (list or detail)
+  if (/\/sap\/bc\/adt\/gw\/errorlog/.test(path)) {
+    return (
+      'Reading the SAP Gateway error log was forbidden. The forbidden resource is ' +
+      '`/sap/bc/adt/gw/errorlog/*` (transaction `/IWFND/ERROR_LOG`). Typical ' +
+      'authorization objects to check: `S_ADT_RES` (ACTVT 03) on ' +
+      '`/sap/bc/adt/gw/errorlog/*`, plus the OData Gateway role that grants ' +
+      'access to `/IWFND/ERROR_LOG`.'
+    );
   }
 
   return undefined;

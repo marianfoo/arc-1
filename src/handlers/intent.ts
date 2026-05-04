@@ -396,7 +396,7 @@ function buildBaseErrorMessage(err: unknown, message: string, tool: string, args
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
     const argType = String(args.type ?? '').toUpperCase();
-    const classification = classifySapDomainError(err.statusCode, err.responseBody);
+    const classification = classifySapDomainError(err.statusCode, err.responseBody, err.path);
 
     if (classification) {
       const transactionLine = classification.transaction ? `\nSAP Transaction: ${classification.transaction}` : '';
@@ -985,7 +985,7 @@ function getBehaviorPoolSaveFailureHint(err: AdtApiError, args: Record<string, u
 
 function classifyError(err: unknown): string {
   if (err instanceof AdtApiError) {
-    const classification = classifySapDomainError(err.statusCode, err.responseBody);
+    const classification = classifySapDomainError(err.statusCode, err.responseBody, err.path);
     return classification ? `AdtApiError:${classification.category}` : 'AdtApiError';
   }
   if (err instanceof AdtNetworkError) return 'AdtNetworkError';

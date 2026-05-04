@@ -81,22 +81,40 @@ export async function listDumps(
  * 1. XML metadata (chapters, links, attributes)
  * 2. Formatted plain text (full dump content)
  *
- * The dump ID is the URL-encoded path segment from the listing.
+ * The dump ID from `listDumps` already arrives URL-encoded (the SAP feed
+ * encodes spaces in `paimup_MUP_05 ZEISMA 100 70` as `%20`). When a caller
+ * passes a raw ID (e.g. copied from ST22 with literal whitespace), we
+ * encode it ourselves so the path stays valid. The detail payload keeps
+ * the caller's original ID for round-tripping.
  */
 export async function getDump(http: AdtHttpClient, safety: SafetyConfig, dumpId: string): Promise<DumpDetail> {
   checkOperation(safety, OperationType.Read, 'GetDump');
 
+  const safeId = normalizeDumpId(dumpId);
+
   // Fetch XML metadata and formatted text in parallel
   const [xmlResp, textResp] = await Promise.all([
-    http.get(`/sap/bc/adt/runtime/dump/${dumpId}`, {
+    http.get(`/sap/bc/adt/runtime/dump/${safeId}`, {
       Accept: 'application/vnd.sap.adt.runtime.dump.v1+xml',
     }),
-    http.get(`/sap/bc/adt/runtime/dump/${dumpId}/formatted`, {
+    http.get(`/sap/bc/adt/runtime/dump/${safeId}/formatted`, {
       Accept: 'text/plain',
     }),
   ]);
 
   return parseDumpDetail(xmlResp.body, textResp.body, dumpId);
+}
+
+/**
+ * Idempotently URL-encode a dump ID. If the value already contains a `%`
+ * sequence we treat it as already-encoded (the listing endpoint emits
+ * `%20` for spaces); otherwise we encode it once. Trims surrounding
+ * whitespace which would otherwise be encoded as `%20` and break lookup.
+ */
+function normalizeDumpId(dumpId: string): string {
+  const trimmed = String(dumpId ?? '').trim();
+  if (!trimmed) return '';
+  return trimmed.includes('%') ? trimmed : encodeURIComponent(trimmed);
 }
 
 // ─── System Messages + Gateway Errors ──────────────────────────────
