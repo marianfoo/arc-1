@@ -29,11 +29,14 @@ See [Authorization & Roles](authorization.md) for the full model.
 
 **Every flag below defaults to the restrictive setting.** ARC-1 starts read-only: no writes, no free SQL, no named table preview, no transport writes, no git writes, writes confined to `$TMP`.
 
+!!! warning "`SAP_ALLOW_DATA_PREVIEW` and `SAP_ALLOW_FREE_SQL` sit outside the SAP API Policy FAQ #33 envelope"
+    The April 2026 [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) and its accompanying [SAP API Policy FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html) (question #33) endorse ADT-based developer tooling for internal development automation. The same FAQ excludes "programmatic reading of application tables or export of business data" and "SQL execution against SAP backend systems". Both `SAP_ALLOW_DATA_PREVIEW` and `SAP_ALLOW_FREE_SQL` map directly onto these excluded capabilities, which is why they are off by default and gated behind explicit env vars. Keep them off on systems where you want to stay aligned with FAQ #33's endorsed-development-tooling scope. See [authorization.md](authorization.md#sap-api-policy-data-preview-and-free-sql-are-gated-for-a-reason) for the full policy alignment.
+
 | Flag                             | Env Var                       | Default | What it enables                                                                                                              |
 | -------------------------------- | ----------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `--allow-writes`                 | `SAP_ALLOW_WRITES`            | `false` | Object mutations (`SAPWrite`, `SAPActivate`, package CRUD, FLP mutations). Also required for transport/git writes.            |
-| `--allow-data-preview`           | `SAP_ALLOW_DATA_PREVIEW`      | `false` | Named table preview (`SAPRead(type=TABLE_CONTENTS)`).                                                                        |
-| `--allow-free-sql`               | `SAP_ALLOW_FREE_SQL`          | `false` | Freestyle SQL via `SAPQuery`.                                                                                                |
+| `--allow-data-preview`           | `SAP_ALLOW_DATA_PREVIEW`      | `false` | Named table preview (`SAPRead(type=TABLE_CONTENTS)`). **Outside SAP API Policy FAQ #33 endorsed-development-tooling scope** — explicit opt-in required. |
+| `--allow-free-sql`               | `SAP_ALLOW_FREE_SQL`          | `false` | Freestyle SQL via `SAPQuery`. **Outside SAP API Policy FAQ #33 endorsed-development-tooling scope** — explicit opt-in required. |
 | `--allow-transport-writes`       | `SAP_ALLOW_TRANSPORT_WRITES`  | `false` | Transport mutations (`SAPTransport.create`/`release`/`delete`/`reassign`). **Also requires** `allowWrites=true`.              |
 | `--allow-git-writes`             | `SAP_ALLOW_GIT_WRITES`        | `false` | Git mutations (`SAPGit.clone`/`pull`/`push`/`commit`). **Also requires** `allowWrites=true`.                                 |
 | `--allowed-packages`             | `SAP_ALLOWED_PACKAGES`        | `$TMP`  | Package allowlist for writes. Comma-separated. `Z*` prefix wildcard. `*` = unrestricted. **Reads are never package-gated.**   |
