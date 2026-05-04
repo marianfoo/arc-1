@@ -56,7 +56,7 @@ Important details:
 
 ## SAP API Policy: data preview and free SQL are gated for a reason
 
-The April 2026 [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) and the accompanying [SAP API Policy FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html) (question #33) endorse ADT-based developer tooling for "internal development automation such as code checks, build processes, and transport management". The same FAQ excludes "programmatic reading of application tables or export of business data" and "SQL execution against SAP backend systems".
+The April 2026 [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) and the accompanying [SAP API Policy FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html) endorse ADT-based developer tooling for "internal development automation such as code checks, build processes, and transport management". The same FAQ excludes "programmatic reading of application tables or export of business data" and "SQL execution against SAP backend systems".
 
 ARC-1 is designed to stay within the ADT development-tooling scope described in SAP's API Policy FAQ v1.1. It uses documented ADT / Eclipse SDK capabilities for internal development-related use cases and does not expose ADT Data Preview, SQL execution, table reads, or business-data extraction.
 
@@ -64,12 +64,12 @@ When ARC-1 is used with AI assistants or MCP clients, customers should apply add
 
 Two ARC-1 server flags map directly onto the excluded capabilities, and both default to off:
 
-| Flag | Default | What it enables | FAQ #33 alignment |
+| Flag | Default | What it enables | FAQ alignment |
 | ---- | ------- | --------------- | ----------------- |
 | `SAP_ALLOW_DATA_PREVIEW=true` | `false` (off) | `SAPRead(type=TABLE_CONTENTS)` — named table content preview | Outside the endorsed development tooling scope. |
 | `SAP_ALLOW_FREE_SQL=true` | `false` (off) | `SAPQuery` — freestyle ABAP SQL | Outside the endorsed development tooling scope. |
 
-With both flags at their defaults, the data/sql rows in the capability matrix below are unreachable, and ARC-1 stays inside the FAQ #33 envelope for endorsed development tooling. Turning either flag on is a customer decision that must be made against the SAP API Policy, the customer's SAP agreement, and the customer's internal data-protection rules — not a default production posture.
+With both flags at their defaults, the data/sql rows in the capability matrix below are unreachable, and ARC-1 stays inside the FAQ envelope for endorsed development tooling. Turning either flag on is a customer decision that must be made against the SAP API Policy, the customer's SAP agreement, and the customer's internal data-protection rules — not a default production posture.
 
 The `data` and `sql` user scopes (and the `viewer-data`, `viewer-sql`, `developer-data`, `developer-sql` API-key profiles) only become useful after the matching server flag is on. Granting `data` / `sql` to a user does **not** widen the server ceiling.
 
