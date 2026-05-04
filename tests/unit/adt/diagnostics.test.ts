@@ -200,9 +200,9 @@ describe('Runtime Diagnostics', () => {
     });
 
     it('passes already-encoded dump IDs through unchanged', async () => {
-      // The listing endpoint emits IDs like "...paimup_MUP_05%20%20%20ZEISMA%20100%2070".
+      // The listing endpoint emits IDs of the form "{timestamp}{server}%20%20%20{user}%20{client}%20{seq}".
       // Re-encoding would double-encode the %20 to %2520 and break the lookup.
-      const encodedId = '20260504092539paimup_MUP_05%20%20%20ZEISMA%20100%2070';
+      const encodedId = '20260101120000app01_SYS_00%20%20%20DEVUSER%20100%2042';
       const http = mockHttp('');
       try {
         await getDump(http, unrestrictedSafetyConfig(), encodedId);
@@ -218,7 +218,7 @@ describe('Runtime Diagnostics', () => {
 
     it('encodes raw dump IDs that contain literal whitespace', async () => {
       // Caller copy/pasted from ST22: literal spaces, no percent encoding yet.
-      const rawId = '20260504092539paimup_MUP_05   ZEISMA 100 70';
+      const rawId = '20260101120000app01_SYS_00   DEVUSER 100 42';
       const http = mockHttp('');
       try {
         await getDump(http, unrestrictedSafetyConfig(), rawId);
@@ -227,7 +227,7 @@ describe('Runtime Diagnostics', () => {
       }
       const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
       // Spaces must be percent-encoded; underscores stay literal.
-      const encoded = '20260504092539paimup_MUP_05%20%20%20ZEISMA%20100%2070';
+      const encoded = '20260101120000app01_SYS_00%20%20%20DEVUSER%20100%2042';
       expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encoded}`);
       expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encoded}/formatted`);
       // No literal space leaked into the path.

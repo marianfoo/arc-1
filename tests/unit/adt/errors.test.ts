@@ -453,12 +453,12 @@ describe('AdtApiError', () => {
     });
 
     it('emits a dump-detail-specific 403 hint when path is /runtime/dump/{id}', () => {
-      // Real SAP body when ZEISMA in MUP tries to read the dump detail.
+      // Typical SAP body when a user can list dumps but lacks read on the detail resource.
       const body = 'No authorization to access the resource /sap/bc/adt/runtime/dump/...';
       const classification = classifySapDomainError(
         403,
         body,
-        '/sap/bc/adt/runtime/dump/20260504092539paimup_MUP_05%20%20%20ZEISMA%20100%2070',
+        '/sap/bc/adt/runtime/dump/20260101120000app01_SYS_00%20%20%20DEVUSER%20100%2042',
       );
       expect(classification?.category).toBe('authorization');
       expect(classification?.transaction).toBe('SU53');

@@ -472,13 +472,14 @@ export function classifySapDomainError(
 }
 
 /**
- * Build an endpoint-specific 403 hint for diagnostics endpoints. We've seen
- * cases (e.g. ZEISMA in MUP) where the dump *list* succeeds but the dump
- * *detail* is forbidden, and the generic "Authorization error" message hid
- * which auth object was actually missing. Naming the typical S_ADMI_FCD /
- * S_ADT_RES values for each path lets the LLM tell the user which role to
- * request — and which transaction (ST22, /IWFND/ERROR_LOG) it maps to —
- * without speculating beyond what the tool just tried to read.
+ * Build an endpoint-specific 403 hint for diagnostics endpoints. The dump
+ * list and dump detail sit on different SAP authorization objects, so a
+ * user can have access to one but not the other; the generic
+ * "Authorization error" message hides which auth object is missing.
+ * Naming the typical S_ADMI_FCD / S_ADT_RES values for each path lets the
+ * LLM tell the user which role to request — and which transaction (ST22,
+ * /IWFND/ERROR_LOG) it maps to — without speculating beyond what the tool
+ * just tried to read.
  *
  * Returns `undefined` for paths that aren't recognized so the generic
  * authorization hint kicks in for everything else.

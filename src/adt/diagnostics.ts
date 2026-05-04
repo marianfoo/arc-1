@@ -82,10 +82,10 @@ export async function listDumps(
  * 2. Formatted plain text (full dump content)
  *
  * The dump ID from `listDumps` already arrives URL-encoded (the SAP feed
- * encodes spaces in `paimup_MUP_05 ZEISMA 100 70` as `%20`). When a caller
- * passes a raw ID (e.g. copied from ST22 with literal whitespace), we
- * encode it ourselves so the path stays valid. The detail payload keeps
- * the caller's original ID for round-tripping.
+ * encodes spaces in the server/user/client/dump-number suffix as `%20`).
+ * When a caller passes a raw ID (e.g. copied from ST22 with literal
+ * whitespace), we encode it ourselves so the path stays valid. The
+ * detail payload keeps the caller's original ID for round-tripping.
  */
 export async function getDump(http: AdtHttpClient, safety: SafetyConfig, dumpId: string): Promise<DumpDetail> {
   checkOperation(safety, OperationType.Read, 'GetDump');
