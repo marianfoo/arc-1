@@ -1,0 +1,204 @@
+<mxfile host="Electron" agent="drawio-skill" version="28.1.2" pages="1">
+  <diagram name="BTP-Deployment" id="arc1-btp-deploy">
+    <mxGraphModel dx="1654" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title-main" value="ARC-1 on SAP BTP — Cloud Foundry Deployment" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontFamily=Helvetica;fontColor=#002A86;" parent="1" vertex="1">
+          <mxGeometry x="60" y="30" width="1540" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="title-sub" value="OAuth 2.0 via XSUAA · SAP Cloud Identity Services · Principal Propagation · BTP Audit Log" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="60" y="68" width="1540" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="col-client-frame" value="MCP Client" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#475E75;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=16;fontStyle=1;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="60" y="130" width="260" height="720" as="geometry" />
+        </mxCell>
+
+        <mxCell id="user-icon" value="" style="shape=image;labelPosition=right;verticalLabelPosition=middle;labelBackgroundColor=none;verticalAlign=middle;imageAspect=0;aspect=fixed;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9Ii0wLjUgLTAuNSAyOCAyOCIgaGVpZ2h0PSIyOCIgd2lkdGg9IjI4Ij48c3R5bGUgdHlwZT0idGV4dC9jc3MiPi5zdDAgeyBzdG9wLWNvbG9yOiByZ2IoOTEsIDExNSwgMTM5KTsgfSAuc3QxIHsgc3RvcC1jb2xvcjogcmdiKDM0LCA1MywgNzIpOyB9PC9zdHlsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIHkyPSIyNS4zMDkiIHgyPSIyMy40NTQiIHkxPSIzLjQ3NCIgeDE9IjIuMDM5IiBpZD0iQSI+PHN0b3AgY2xhc3M9InN0MCIvPjxzdG9wIGNsYXNzPSJzdDEiIG9mZnNldD0iMSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjQSkiIGQ9Ik0tLjUgMTMuNDcyYzAtMS45My4zNzEtMy43MyAxLjExMy01LjQuNzQyLTEuNzA3IDEuNzQ0LTMuMTkyIDMuMDA2LTQuNDUzUzYuMzY1IDEuMzU2IDguMDczLjYxMyAxMS41OTgtLjUgMTMuNTI4LS41czMuNzMuMzcxIDUuNCAxLjExM2MxLjcwNy43NDIgMy4xOTIgMS43NDQgNC40NTMgMy4wMDZzMi4yNjQgMi43NDYgMy4wMDYgNC40NTNjLjc0MiAxLjY3IDEuMTEzIDMuNDcgMS4xMTMgNS40cy0uMzcxIDMuNzQ4LTEuMTEzIDUuNDU1LTEuNzQ0IDMuMTkyLTMuMDA2IDQuNDUzYTE0LjI4IDE0LjI4IDAgMCAxLTQuNDUzIDMuMDA2Yy0xLjY3Ljc0Mi0zLjQ3IDEuMTEzLTUuNCAxLjExM3MtMy43NDgtLjM3MS01LjQ1NS0xLjExM2ExNC4yOCAxNC4yOCAwIDAgMS00LjQ1My0zLjAwNiAxNC4yOCAxNC4yOCAwIDAgMS0zLjAwNi00LjQ1M0MtLjEyOSAxNy4yMi0uNSAxNS40MDItLjUgMTMuNDcyem0xNi44MTEgNC4yMzFhNi42NSA2LjY1IDAgMCAxIDMuMjg0LjgzNWMxLjAwMi41MiAxLjgxOCAxLjI0MyAyLjQ0OSAyLjE3MWExMC4xNCAxMC4xNCAwIDAgMCAxLjk0OC0zLjI4NGMuNDgyLTEuMjI1LjcyNC0yLjU0Mi43MjQtMy45NTIgMC0xLjU1OS0uMjk3LTMuMDA2LS44OTEtNC4zNDItLjU5NC0xLjM3My0xLjM5Mi0yLjU2MS0yLjM5NC0zLjU2M3MtMi4xOS0xLjgtMy41NjMtMi4zOTRjLTEuMzM2LS41OTQtMi43ODMtLjg5MS00LjM0Mi0uODkxcy0zLjAyNC4yOTctNC4zOTguODkxYy0xLjMzNi41OTQtMi41MjQgMS4zOTItMy41NjMgMi4zOTRBMTEuMzUgMTEuMzUgMCAwIDAgMy4xNzQgOS4xM2MtLjU5NCAxLjMzNi0uODkxIDIuNzgzLS44OTEgNC4zNDIgMCAxLjQxLjIyMyAyLjcyOC42NjggMy45NTIuNDgyIDEuMjI1IDEuMTUgMi4zMTkgMi4wMDQgMy4yODQuNjMxLS45MjggMS40NDctMS42NTEgMi40NDktMi4xNzFhNi42NSA2LjY1IDAgMCAxIDMuMjg0LS44MzV6bTIuNzgzLTcuMDE0YTUuNjggNS42OCAwIDAgMS0uNDQ1IDIuMjI3IDUuODcgNS44NyAwIDAgMS0xLjIyNSAxLjc4MWMtLjQ4Mi40ODItMS4wNTguODcyLTEuNzI2IDEuMTY5cy0xLjM5Mi40NDUtMi4xNzEuNDQ1YTUuNjggNS42OCAwIDAgMS0yLjIyNy0uNDQ1IDYuNDQgNi40NCAwIDAgMS0xLjc4MS0xLjE2OSA2LjQ0IDYuNDQgMCAwIDEtMS4xNjktMS43ODEgNS42OCA1LjY4IDAgMCAxLS40NDUtMi4yMjdjMC0uNzc5LjE0OC0xLjUwMy40NDUtMi4xNzFBNi40NCA2LjQ0IDAgMCAxIDkuNTIgNi43MzdhNS44NyA1Ljg3IDAgMCAxIDEuNzgxLTEuMjI1IDUuNjggNS42OCAwIDAgMSAyLjIyNy0uNDQ1Yy43NzkgMCAxLjUwMy4xNDggMi4xNzEuNDQ1czEuMjQzLjcwNSAxLjcyNiAxLjIyNWE1Ljg3IDUuODcgMCAwIDEgMS4yMjUgMS43ODFjLjI5Ny42NjguNDQ1IDEuMzkyLjQ0NSAyLjE3MXptLTIuNzgzIDBjMC0uNzc5LS4yNzgtMS40MjktLjgzNS0xLjk0OC0uNTU3LS41NTctMS4yMDYtLjgzNS0xLjk0OC0uODM1YTIuNzMgMi43MyAwIDAgMC0yLjAwNC44MzVjLS41NTcuNTItLjgzNSAxLjE2OS0uODM1IDEuOTQ4YTIuNzMgMi43MyAwIDAgMCAuODM1IDIuMDA0Yy41NTcuNTIgMS4yMjUuNzc5IDIuMDA0Ljc3OS43NDIgMCAxLjM5Mi0uMjYgMS45NDgtLjc3OWEyLjczIDIuNzMgMCAwIDAgLjgzNS0yLjAwNHpNNy4wNzEgMjIuNjU3Yy44OTEuNjMxIDEuODc0IDEuMTMyIDIuOTUgMS41MDMgMS4xMTMuMzcxIDIuMjgyLjU1NyAzLjUwNy41NTcgMS4xODggMCAyLjMxOS0uMTg2IDMuMzk2LS41NTcgMS4xMTMtLjM3MSAyLjExNS0uODcyIDMuMDA2LTEuNTAzLS4zNzEtLjY2OC0uODkxLTEuMTg4LTEuNTU5LTEuNTU5LS42MzEtLjQwOC0xLjMxNy0uNjEyLTIuMDYtLjYxMmgtNS42MjJjLS43NDIgMC0xLjQ0Ny4yMDQtMi4xMTUuNjEyLS42MzEuMzcxLTEuMTMyLjg5MS0xLjUwMyAxLjU1OXoiLz48L3N2Zz4=;" parent="1" vertex="1">
+          <mxGeometry x="173" y="220" width="36" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="user-label" value="&lt;b&gt;Developer&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;&quot;&gt;SAP User&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontFamily=Helvetica;fontColor=#00185A;" parent="1" vertex="1">
+          <mxGeometry x="90" y="266" width="200" height="36" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mcp-client" value="&lt;b style=&quot;font-size:14px;&quot;&gt;MCP Clients&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;font-weight:normal;&quot;&gt;Claude Code · Claude Desktop&lt;br/&gt;Copilot Studio · Cursor · VS Code&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#475E75;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontColor=#00185A;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="90" y="410" width="200" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="btp-frame" value="" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070F2;fillColor=#EBF8FF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="360" y="130" width="840" height="720" as="geometry" />
+        </mxCell>
+        <mxCell id="btp-logo" value="BTP" style="image;image=img/lib/sap/SAP_Logo.svg;verticalLabelPosition=middle;labelBackgroundColor=none;verticalAlign=middle;imageAspect=0;labelPosition=right;align=left;fontSize=16;fontStyle=1;spacingLeft=2;fontColor=#002A86;strokeColor=default;fontFamily=Helvetica;fillColor=default;aspect=fixed;" parent="1" vertex="1">
+          <mxGeometry x="378" y="145" width="44.79" height="23" as="geometry" />
+        </mxCell>
+
+        <mxCell id="subaccount-frame" value="Subaccount · Cloud Foundry Space" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#475E75;strokeWidth=1.5;arcSize=24;fillColor=#ffffff;perimeterSpacing=0;absoluteArcSize=1;fontFamily=Helvetica;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=14;fontColor=#475E75;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="380" y="190" width="800" height="640" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ias-card" value="&lt;b style=&quot;font-size:13px;color:#00185A;&quot;&gt;SAP Cloud Identity Services&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;font-weight:normal;&quot;&gt;Identity Authentication (IAS)&lt;br/&gt;User login · SAML&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="410" y="240" width="260" height="84" as="geometry" />
+        </mxCell>
+
+        <mxCell id="xsuaa-card" value="&lt;b style=&quot;font-size:13px;color:#00185A;&quot;&gt;XSUAA&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;font-weight:normal;&quot;&gt;OAuth 2.0 provider · JWT issuer&lt;br/&gt;RFC 7591 DCR · PKCE&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="710" y="240" width="260" height="84" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arc1-card" value="" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#f1ecff;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="410" y="370" width="400" height="320" as="geometry" />
+        </mxCell>
+        <mxCell id="arc1-header" value="&lt;b style=&quot;font-size:16px;color:#00185A;&quot;&gt;ARC-1 MCP Server&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;font-weight:normal;&quot;&gt;Cloud Foundry application · Node.js · HTTP Streamable · /mcp&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="420" y="385" width="380" height="52" as="geometry" />
+        </mxCell>
+
+        <mxCell id="roles-section" value="&lt;b style=&quot;font-size:11px;color:#5d36ff;&quot;&gt;ROLE COLLECTIONS&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="420" y="450" width="380" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="role-viewer" value="ARC-1 Viewer" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#FFFFFF;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;fontColor=#5d36ff;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="432" y="474" width="106" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="role-dev" value="ARC-1 Developer" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#FFFFFF;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;fontColor=#5d36ff;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="548" y="474" width="124" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="role-admin" value="ARC-1 Admin" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#FFFFFF;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;fontColor=#5d36ff;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="682" y="474" width="106" height="24" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gates-section" value="&lt;b style=&quot;font-size:11px;color:#5d36ff;&quot;&gt;ENFORCEMENT&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="420" y="512" width="380" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="tool-gate" value="&lt;b style=&quot;color:#00185A;font-size:12px;&quot;&gt;Tool scope gate&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:10px;color:#556B82;font-weight:normal;&quot;&gt;SAPRead · SAPWrite · SAPQuery · SAPActivate · SAPNavigate · SAPContext · SAPLint · SAPDiagnose · SAPManage · SAPTransport&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#FFFFFF;arcSize=16;absoluteArcSize=1;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="432" y="536" width="356" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="safety-gate" value="&lt;b style=&quot;color:#00185A;font-size:12px;&quot;&gt;Safety gate&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:10px;color:#556B82;font-weight:normal;&quot;&gt;Read-only default · Package allowlist · Op filter · Block free SQL&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#5d36ff;fillColor=#FFFFFF;arcSize=16;absoluteArcSize=1;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="432" y="606" width="356" height="54" as="geometry" />
+        </mxCell>
+
+        <mxCell id="bound-frame" value="Bound BTP Services" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#00185A;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="840" y="370" width="320" height="320" as="geometry" />
+        </mxCell>
+
+        <mxCell id="svc-dest" value="&lt;b style=&quot;color:#00185A;font-size:12px;&quot;&gt;Destination Service&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:10px;color:#556B82;font-weight:normal;&quot;&gt;PrincipalPropagation&lt;br/&gt;SAP-Connectivity-Authentication&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#EBF8FF;arcSize=16;absoluteArcSize=1;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="860" y="410" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-conn" value="&lt;b style=&quot;color:#00185A;font-size:12px;&quot;&gt;Connectivity Service&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:10px;color:#556B82;font-weight:normal;&quot;&gt;Reverse proxy to Cloud Connector&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#EBF8FF;arcSize=16;absoluteArcSize=1;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="860" y="478" width="280" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-audit" value="&lt;b style=&quot;color:#00185A;font-size:12px;&quot;&gt;Audit Log Service&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:10px;color:#556B82;font-weight:normal;&quot;&gt;security · data-access · data-modification · config&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#EBF8FF;arcSize=16;absoluteArcSize=1;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="860" y="540" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-xsuaa-binding" value="&lt;b style=&quot;color:#00185A;font-size:12px;&quot;&gt;XSUAA binding&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:10px;color:#556B82;font-weight:normal;&quot;&gt;JWKS · @sap/xssec · scope check&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0070f2;fillColor=#EBF8FF;arcSize=16;absoluteArcSize=1;strokeWidth=1.2;fontFamily=Helvetica;fontSize=11;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="860" y="608" width="280" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="network-bar" style="endArrow=none;html=1;strokeColor=#475e75;strokeWidth=4;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1240" y="190" as="sourcePoint" />
+            <mxPoint x="1240" y="830" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="network-label" value="Network" style="text;html=1;strokeColor=none;fillColor=#FFFFFF;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontFamily=Helvetica;fontColor=#475E75;rotation=-90;" parent="1" vertex="1">
+          <mxGeometry x="1210" y="500" width="60" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="onprem-frame" value="On-Premise" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#475E75;fillColor=#F5F6F7;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=16;fontStyle=1;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="1280" y="130" width="320" height="720" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cc-card" value="&lt;b style=&quot;font-size:14px;color:#00185A;&quot;&gt;SAP Cloud Connector&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;font-weight:normal;&quot;&gt;Virtual-host mapping&lt;br/&gt;CERTRULE → SAP user&lt;br/&gt;mTLS tunnel to BTP&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#475E75;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="1300" y="300" width="280" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sap-abap-card" value="" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#002A86;fillColor=#FFFFFF;arcSize=24;absoluteArcSize=1;strokeWidth=1.5;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1300" y="500" width="280" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="sap-abap-logo" value="" style="image;image=img/lib/sap/SAP_Logo.svg;verticalLabelPosition=middle;labelBackgroundColor=none;verticalAlign=middle;imageAspect=0;labelPosition=right;align=left;fontSize=14;fontStyle=1;spacingLeft=2;fontColor=#002A86;strokeColor=default;fontFamily=Helvetica;fillColor=default;aspect=fixed;" parent="1" vertex="1">
+          <mxGeometry x="1318" y="516" width="44.79" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="sap-abap-title" value="&lt;b style=&quot;font-size:15px;color:#00185A;&quot;&gt;SAP ABAP System&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#556B82;font-weight:normal;&quot;&gt;S/4HANA (on-prem or Private Cloud)&lt;br/&gt;ADT REST API · /sap/bc/adt/*&lt;br/&gt;Authorization by SAP user&lt;br/&gt;(S_DEVELOP · S_ADT_RES)&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1310" y="550" width="260" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-user-client" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#475e75;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=11;" parent="1" source="user-icon" target="mcp-client" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-client-arc1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;strokeColor=#188918;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="mcp-client" target="arc1-card" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pill-toolcall" value="&lt;b style=&quot;font-size:10px;&quot;&gt;MCP Tool Call&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5fae5;strokeColor=#188918;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=10;fontColor=#266f3a;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="314" y="440" width="82" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="pill-toolcall-cap" value="HTTPS · Bearer JWT" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="304" y="462" width="104" height="14" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-client-ias" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.15;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#188918;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;dashed=0;fontFamily=Helvetica;fontSize=10;" parent="1" source="mcp-client" target="ias-card" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pill-signin" value="&lt;b style=&quot;font-size:10px;&quot;&gt;Sign-in&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5fae5;strokeColor=#188918;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=10;fontColor=#266f3a;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="318" y="265" width="54" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-ias-xsuaa" style="edgeStyle=none;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#188918;strokeWidth=1.5;endArrow=none;startArrow=none;dashed=1;dashPattern=4 4;fontFamily=Helvetica;fontSize=10;" parent="1" source="ias-card" target="xsuaa-card" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pill-trust" value="&lt;b style=&quot;font-size:10px;&quot;&gt;TRUST&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5fae5;strokeColor=#188918;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=10;fontColor=#266f3a;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="660" y="272" width="60" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-xsuaa-arc1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;strokeColor=#475e75;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="xsuaa-card" target="arc1-card" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-xsuaa-arc1-label" value="Verify JWT · scopes" style="text;html=1;strokeColor=none;fillColor=#EBF8FF;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="772" y="336" width="110" height="16" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-arc1-dest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.15;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#475e75;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="arc1-card" target="svc-dest" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-arc1-dest-label" value="X-User-Token" style="text;html=1;strokeColor=none;fillColor=#FFFFFF;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="814" y="410" width="76" height="14" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-arc1-audit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#475e75;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="arc1-card" target="svc-audit" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-arc1-audit-label" value="audit events" style="text;html=1;strokeColor=none;fillColor=#FFFFFF;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="814" y="562" width="74" height="14" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-dest-conn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#475e75;strokeWidth=1.5;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="svc-dest" target="svc-conn" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-conn-cc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#188918;strokeWidth=1.8;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="svc-conn" target="cc-card" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pill-mtls" value="&lt;b style=&quot;font-size:10px;&quot;&gt;mTLS · PP&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5fae5;strokeColor=#188918;arcSize=50;strokeWidth=1.2;fontFamily=Helvetica;fontSize=10;fontColor=#266f3a;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="1162" y="493" width="64" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-cc-sap" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#002A86;strokeWidth=1.8;endArrow=blockThin;endSize=6;endFill=1;fontFamily=Helvetica;fontSize=10;" parent="1" source="cc-card" target="sap-abap-card" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-cc-sap-label" value="SAP-Connectivity-Authentication" style="text;html=1;strokeColor=none;fillColor=#F5F6F7;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Helvetica;fontColor=#002A86;" parent="1" vertex="1">
+          <mxGeometry x="1316" y="448" width="248" height="14" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-frame" value="Legend" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#475E75;fillColor=#FFFFFF;arcSize=16;absoluteArcSize=1;strokeWidth=1;fontFamily=Helvetica;align=left;verticalAlign=top;spacingLeft=10;spacingTop=4;fontSize=11;fontStyle=1;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="60" y="880" width="1540" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-row1" value="&lt;span style=&quot;color:#188918;font-weight:bold;&quot;&gt;━━&lt;/span&gt;&amp;nbsp; Authenticated HTTPS&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;span style=&quot;color:#475E75;font-weight:bold;&quot;&gt;━━&lt;/span&gt;&amp;nbsp; Internal call · header propagation&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;span style=&quot;color:#188918;font-weight:bold;&quot;&gt;- - -&lt;/span&gt;&amp;nbsp; Trust relationship&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;span style=&quot;color:#002A86;font-weight:bold;&quot;&gt;━━&lt;/span&gt;&amp;nbsp; ADT REST API call" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="80" y="908" width="1080" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-row2" value="&lt;span style=&quot;color:#0070f2;font-weight:bold;&quot;&gt;■&lt;/span&gt;&amp;nbsp; SAP BTP service&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;span style=&quot;color:#5d36ff;font-weight:bold;&quot;&gt;■&lt;/span&gt;&amp;nbsp; ARC-1 application · scope + safety gates&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;span style=&quot;color:#475E75;font-weight:bold;&quot;&gt;■&lt;/span&gt;&amp;nbsp; On-premise / neutral&amp;nbsp;&amp;nbsp;&amp;nbsp;&lt;span style=&quot;color:#002A86;font-weight:bold;&quot;&gt;■&lt;/span&gt;&amp;nbsp; SAP ABAP system" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Helvetica;fontColor=#475E75;" parent="1" vertex="1">
+          <mxGeometry x="80" y="930" width="1080" height="20" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
