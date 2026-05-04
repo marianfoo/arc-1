@@ -124,6 +124,10 @@ export interface ServerConfig {
   /** Maximum concurrent SAP HTTP requests (default: 10). Prevents work process exhaustion. */
   maxConcurrent: number;
 
+  // --- CORS (browser-based MCP clients) ---
+  /** Allowed origins for CORS (empty = CORS disabled). */
+  allowedOrigins: string[];
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -170,6 +174,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   cacheWarmup: false,
   cacheWarmupPackages: '',
   maxConcurrent: 10,
+  allowedOrigins: [],
   logLevel: 'info',
   logFormat: 'text',
   verbose: false,

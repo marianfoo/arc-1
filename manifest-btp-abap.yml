@@ -37,6 +37,8 @@ applications:
       SAP_ALLOW_FREE_SQL: "true"
       SAP_ALLOW_TRANSPORT_WRITES: "true"
       SAP_ALLOW_GIT_WRITES: "false"
+      # CORS: allowed origins for browser-based MCP clients (empty = disabled)
+      # ARC1_ALLOWED_ORIGINS: "https://your-ui.example.com"
       # Logging
       SAP_VERBOSE: "true"
     services:
