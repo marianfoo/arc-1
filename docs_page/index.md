@@ -186,6 +186,23 @@ Every capability is a separate positive opt-in flag:
 
 The three-layer model (server flag + user scope + SAP authorization) is described in [authorization.md](authorization.md). Full flag reference: [configuration-reference.md](configuration-reference.md).
 
+## SAP API Policy alignment
+
+The April 2026 [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) is accompanied by an [SAP API Policy FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html). The FAQ explicitly endorses ADT-based developer tooling — including "**custom developer utilities built on the documented Eclipse Java SDK for internal development automation such as code checks, build processes, and transport management**". ARC-1 used for internal development matches that scope.
+
+ARC-1 is designed to stay within the ADT development-tooling scope described in SAP's API Policy FAQ v1.1. It uses documented ADT / Eclipse SDK capabilities for internal development-related use cases and does not expose ADT Data Preview, SQL execution, table reads, or business-data extraction.
+
+When ARC-1 is used with AI assistants or MCP clients, customers should apply additional governance for AI-driven or automated access patterns, including real user identity, authorization checks, audit logging, rate limits, conservative tool exposure, and customer-side review against SAP documentation and agreements.
+
+The same FAQ excludes "**programmatic reading of application tables or export of business data, SQL execution against SAP backend systems, business data integration or runtime orchestration, agentic AI workflows operating on business data, or substitution for business APIs**". Two ARC-1 capabilities fall outside the endorsed development tooling scope and are **off by default** behind explicit opt-in env vars:
+
+| Capability | Env var to enable | Default | Why it is gated |
+| ---------- | ----------------- | ------- | --------------- |
+| Named table content preview (`SAPRead(type=TABLE_CONTENTS)`) | `SAP_ALLOW_DATA_PREVIEW=true` | `false` (off) | Application-table reads / business-data export are excluded by the FAQ. |
+| Freestyle ABAP SQL (`SAPQuery`) | `SAP_ALLOW_FREE_SQL=true` | `false` (off) | SQL against SAP backend systems is excluded by the FAQ. |
+
+With both flags at their defaults, ARC-1 stays inside the FAQ envelope for endorsed development tooling. Turning either flag on is a customer decision against the policy, the SAP agreement, and your data-protection rules — not the recommended productive default.
+
 ## Documentation
 
 | Doc | Description |
