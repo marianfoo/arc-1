@@ -93,6 +93,9 @@ modules:
       SAP_ALLOW_TRANSPORT_WRITES: "false"
       SAP_ALLOW_GIT_WRITES: "false"
       SAP_ALLOWED_PACKAGES: "$TMP"
+      # CORS: allowed origins for browser-based MCP clients (empty = disabled).
+      # Set per landscape via mtaext or cf set-env.
+      ARC1_ALLOWED_ORIGINS: ""
     requires:
       - name: arc1-xsuaa
       - name: arc1-destination

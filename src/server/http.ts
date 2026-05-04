@@ -27,8 +27,10 @@
 
 import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import cors from 'cors';
 import type { Request, Response } from 'express';
 import express from 'express';
+import helmet from 'helmet';
 import { expandScopes } from '../authz/policy.js';
 import { API_KEY_PROFILES } from './config.js';
 import { logger } from './logger.js';
@@ -121,6 +123,41 @@ export async function startHttpServer(
   // Trust first proxy (CF gorouter) — required for express-rate-limit
   // and correct client IP detection behind CF's reverse proxy.
   app.set('trust proxy', 1);
+  // Security headers via helmet. When CORS is enabled (browser-based clients),
+  // relax cross-origin policies so that browser fetch() and OAuth popup flows work.
+  const hasCorsOrigins = config.allowedOrigins.length > 0;
+  app.use(
+    helmet({
+      // Allow cross-origin reads when browser clients are configured
+      crossOriginResourcePolicy: hasCorsOrigins ? { policy: 'cross-origin' as const } : undefined,
+      // Keep OAuth popup/redirect window.opener relationship intact
+      crossOriginOpenerPolicy: hasCorsOrigins ? { policy: 'same-origin-allow-popups' as const } : undefined,
+      // Allow inline styles used by OAuth consent/error pages served by mcpAuthRouter
+      contentSecurityPolicy: hasCorsOrigins
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+            },
+          }
+        : undefined,
+    }),
+  );
+  // CORS — only enabled when admin explicitly configures allowed origins.
+  // Without this, every browser-originated fetch() is silently blocked.
+  if (hasCorsOrigins) {
+    app.use(
+      cors({
+        origin: config.allowedOrigins,
+        methods: ['GET', 'POST', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'mcp-session-id'],
+        exposedHeaders: ['mcp-session-id'],
+        credentials: true,
+      }),
+    );
+    logger.info('CORS enabled', { origins: config.allowedOrigins });
+  }
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
