@@ -268,7 +268,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ## Security headers and CORS on BTP
 
-**Helmet is on by default — no config needed.** Every HTTP response from a CF-deployed ARC-1 carries HSTS, CSP, X-Frame-Options, COOP `same-origin-allow-popups` (so OAuth popups still work), CORP, X-Content-Type-Options, Referrer-Policy, and a handful of legacy hardening headers. Verify on the live deployment:
+**Helmet is on by default — no config needed.** Every HTTP response from a CF-deployed ARC-1 carries HSTS, CSP, X-Frame-Options, CORP, X-Content-Type-Options, Referrer-Policy, and a handful of legacy hardening headers. Cross-Origin-Opener-Policy is intentionally NOT set so popup-based OAuth flows (Microsoft Copilot Studio) keep working — see [Security Guide §11](security-guide.md#http-security-headers-helmet) for the rationale. Verify on the live deployment:
 
 ```bash
 curl -sI https://<your-app>.cfapps.<region>.hana.ondemand.com/health | \

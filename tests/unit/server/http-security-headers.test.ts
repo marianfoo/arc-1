@@ -27,9 +27,17 @@ describe('applySecurityMiddleware — helmet defaults', () => {
     expect(res.headers['referrer-policy']).toBe('no-referrer');
   });
 
-  it('sets COOP same-origin-allow-popups even without CORS (OAuth popup support)', async () => {
-    const res = await request(buildApp([])).get('/health');
-    expect(res.headers['cross-origin-opener-policy']).toBe('same-origin-allow-popups');
+  it('does NOT set COOP — popup-based OAuth flows (Copilot Studio) break otherwise', async () => {
+    // Microsoft Copilot Studio opens /authorize in a popup and uses window.open()
+    // / postMessage to receive the redirect result. Any COOP value on /authorize
+    // (including same-origin-allow-popups) puts the popup in a separate browsing
+    // context group, severing the parent's window reference and surfacing as
+    // "consent pop-up window has been closed unexpectedly". Helmet's stock
+    // same-origin would also break this. We disable COOP entirely.
+    const resHealth = await request(buildApp([])).get('/health');
+    expect(resHealth.headers['cross-origin-opener-policy']).toBeUndefined();
+    const resCors = await request(buildApp(['https://app.example.com'])).get('/health');
+    expect(resCors.headers['cross-origin-opener-policy']).toBeUndefined();
   });
 
   it('sets CORP same-origin when CORS is disabled', async () => {

@@ -76,14 +76,17 @@ let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = nu
  * Apply security headers (helmet) and opt-in CORS to an Express app.
  *
  * helmet runs unconditionally — every response (including /health, /mcp,
- * OAuth endpoints) gets HSTS, CSP, X-Frame-Options, COOP, etc. Native MCP
- * clients ignore these; they exist to harden the server when a browser ever
- * reaches it.
+ * OAuth endpoints) gets HSTS, CSP, X-Frame-Options, etc. Native MCP clients
+ * ignore these; they exist to harden the server when a browser ever reaches
+ * it.
  *
- * COOP is `same-origin-allow-popups` regardless of CORS config because OAuth-
- * capable MCP clients (Claude Desktop, Cursor, MCP Inspector, …) open popup
- * windows pointed at /authorize and rely on `window.opener` to receive the
- * redirect result. Helmet's default `same-origin` would sever that link.
+ * COOP is **disabled** explicitly because Microsoft Copilot Studio (and any
+ * other connector platform that uses popup-based OAuth) breaks when the
+ * /authorize response sets any non-default COOP. The popup completes the
+ * flow server-side, but the parent window's `window.open()` reference is
+ * nulled by COOP isolation — Copilot Studio sees this as "consent pop-up
+ * window has been closed unexpectedly". ARC-1 renders no JS UI that would
+ * benefit from cross-origin isolation, so dropping COOP costs nothing.
  *
  * CORS is OFF by default (empty `allowedOrigins`). When enabled it uses
  * `credentials: true` plus exact-origin reflection — disallowed origins are
@@ -96,7 +99,9 @@ export function applySecurityMiddleware(app: express.Application, allowedOrigins
   const hasCorsOrigins = allowedOrigins.length > 0;
   app.use(
     helmet({
-      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' as const },
+      // COOP is disabled — see function docstring for rationale (Copilot Studio
+      // popup-based OAuth requires no COOP on /authorize).
+      crossOriginOpenerPolicy: false,
       crossOriginResourcePolicy: hasCorsOrigins ? { policy: 'cross-origin' as const } : undefined,
       // useDefaults keeps every other helmet directive intact (frame-ancestors
       // 'self', object-src 'none', base-uri 'self', form-action 'self',
