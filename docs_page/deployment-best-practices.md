@@ -40,6 +40,19 @@ Each ARC-1 instance serves **multiple users** via principal propagation (on-prem
 
 ### Example: enterprise with multiple SAP systems
 
+Use one `mta.yaml` with different `.mtaext` files per landscape:
+
+```bash
+# Build once
+mbt build
+
+# Deploy to dev — writes enabled
+cf deploy mta_archives/arc1-mcp_*.mtar -e mta-ecc-dev.mtaext
+
+# Deploy to prod — read-only
+cf deploy mta_archives/arc1-mcp_*.mtar -e mta-ecc-prod.mtaext
+```
+
 ```
 CF Apps:
 ┌──────────────────────────────────┐
@@ -216,6 +229,8 @@ If you deploy ARC-1 behind a reverse proxy (nginx, Envoy, etc.) outside of Cloud
 
 | File | Purpose | Customize? |
 |------|---------|-----------|
+| `mta.yaml` | MTA build descriptor (services, safe defaults) | Rarely — use `.mtaext` for overrides |
+| `mta-overrides.mtaext` | Per-landscape MTA extension (destinations, safety flags) | Yes — uncomment and set values for your environment |
 | `manifest.yml` | CF deployment manifest (on-premise via Cloud Connector) | Yes — change `SAP_URL`, destination name, safety flags |
 | `manifest-btp-abap.yml` | CF deployment manifest (BTP ABAP direct) | Yes — service key is set via `cf set-env` |
 | `Dockerfile` | Multi-stage Alpine build, all env vars documented | Rarely — use env vars for config |

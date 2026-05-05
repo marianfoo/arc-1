@@ -94,7 +94,6 @@ node_modules/
 
 # MTA build artifacts
 mta_archives/
-mta.yaml
 
 # TypeScript / Node.js
 dist/

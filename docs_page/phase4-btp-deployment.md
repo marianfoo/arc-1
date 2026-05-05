@@ -99,9 +99,37 @@ The `mta.yaml` already configures these properties:
 - `SAP_XSUAA_AUTH: true` — XSUAA OAuth for MCP clients
 - `SAP_ALLOW_WRITES: true` / `SAP_ALLOW_FREE_SQL: true` — safety defaults
 
-### 3. Customize mta.yaml
+### 3. Customize with MTA Extension Descriptor
 
-Edit `mta.yaml` to match your environment:
+Instead of editing `mta.yaml` directly, use the provided `mta-overrides.mtaext` to override environment-specific values. This keeps the base `mta.yaml` generic and your customizations explicit:
+
+```bash
+# Build the archive (same for all landscapes)
+npm run btp:build
+
+# Deploy with per-landscape overrides
+cf deploy mta_archives/arc1-mcp_*.mtar -e mta-overrides.mtaext
+```
+
+The `mta-overrides.mtaext` file contains all overridable properties (commented out by default). Uncomment what you need:
+
+```yaml
+_schema-version: "3.1"
+ID: arc1-mcp-overrides
+extends: arc1-mcp
+
+modules:
+  - name: arc1-mcp-server
+    properties:
+      SAP_BTP_DESTINATION: "my-sap-basic"
+      SAP_BTP_PP_DESTINATION: "my-sap-pp"
+      SAP_ALLOW_WRITES: "true"
+      SAP_ALLOWED_PACKAGES: "Z*,Y*,$TMP"
+```
+
+Any property not specified in the `.mtaext` uses the safe default from `mta.yaml`. See the [authorization guide](authorization.md) for details on safety flags.
+
+Alternatively, edit `mta.yaml` directly to match your environment:
 
 ```yaml
 properties:

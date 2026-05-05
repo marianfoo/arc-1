@@ -118,7 +118,7 @@ Tool schemas are pruned to hide actions that cannot pass ARC-1 gates. Treat sche
 
 | You want to change... | Change this | Do not change this |
 | --------------------- | ----------- | ------------------ |
-| What this ARC-1 instance can ever do | Server env / CLI flags (`SAP_ALLOW_*`, `SAP_ALLOWED_PACKAGES`, `SAP_DENY_ACTIONS`). On BTP, set these with `cf set-env`, `manifest.yml`, or MTA properties. | User JWT scopes |
+| What this ARC-1 instance can ever do | Server env / CLI flags (`SAP_ALLOW_*`, `SAP_ALLOWED_PACKAGES`, `SAP_DENY_ACTIONS`). On BTP, set these with `mta-overrides.mtaext`, `cf set-env`, `manifest.yml`, or MTA properties. | User JWT scopes |
 | What one BTP user can do | XSUAA role collection assignment | Server env vars; they change the whole ARC-1 instance, not one user |
 | What a specific API key can do | `ARC1_API_KEYS="key:profile"` | Server flags only |
 | What an OIDC user can do | `scope` / `scp` claim in the JWT | MCP client JSON |
@@ -130,7 +130,7 @@ Precedence for server config is:
 CLI flag > environment variable > .env file > built-in default
 ```
 
-Why not `.env` for BTP? `.env` is mainly the local/dev way to set the same server config. On BTP, use `cf set-env`, `manifest.yml`, or MTA properties instead. Those values are still the **server ceiling** and affect every user of that ARC-1 instance. To change one BTP user's access, change their XSUAA role collection assignment.
+Why not `.env` for BTP? `.env` is mainly the local/dev way to set the same server config. On BTP, use `mta-overrides.mtaext` (preferred — version-controlled, per-landscape overrides), `cf set-env`, `manifest.yml`, or MTA properties instead. Those values are still the **server ceiling** and affect every user of that ARC-1 instance. To change one BTP user's access, change their XSUAA role collection assignment.
 
 Use `arc1 config show` to see the final resolved server policy and where each field came from.
 
