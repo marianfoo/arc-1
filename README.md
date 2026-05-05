@@ -22,6 +22,8 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Git workflow safety** — Git operations are disabled by default. Enable explicitly with `--allow-git-writes` / `SAP_ALLOW_GIT_WRITES=true`
 - **API-key profiles** — multi-key HTTP deployments can assign `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`, or `admin` per key
 - **Writes restricted to `$TMP` when enabled** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
+- **HTTP security headers (helmet) on by default** — HSTS, CSP, X-Frame-Options, COOP `same-origin-allow-popups` (so OAuth popups still work), CORP, X-Content-Type-Options. No flag to disable.
+- **Opt-in CORS for browser MCP clients** — `ARC1_ALLOWED_ORIGINS` (comma-separated, exact match). Off by default; native MCP clients don't need it
 
 ### Authentication
 

@@ -85,6 +85,7 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
 | `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
 | `ARC1_OAUTH_DCR_TTL_SECONDS` / `--oauth-dcr-ttl-seconds` | Lifetime of an OAuth Dynamic Client Registration `client_id` in seconds. Default: `2592000` (30 days). Min `60`, max `7776000` (90 days). Only consulted when `SAP_XSUAA_AUTH=true`. Lower values bound the blast radius if the signing key leaks; higher reduces re-auth churn. |
+| `ARC1_ALLOWED_ORIGINS` / `--allowed-origins` | Comma-separated CORS allowlist for **browser-based** MCP clients. Empty (default) = CORS disabled. Native MCP clients (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) don't need this — they use native HTTP, not the browser fetch API. Pairs with `credentials: true`, so origins are exact-match only (no wildcards). |
 | `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | BTP ABAP service key JSON (direct connection) |
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |

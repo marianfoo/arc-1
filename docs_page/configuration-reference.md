@@ -200,10 +200,13 @@ Full reference: [xsuaa-setup.md](xsuaa-setup.md).
 | `--transport` | `SAP_TRANSPORT` | `stdio` | `stdio` / `http-streamable` |
 | `--http-addr` | `ARC1_HTTP_ADDR` / `SAP_HTTP_ADDR` | `0.0.0.0:8080` | HTTP bind address |
 | `--port` | `ARC1_PORT` | `8080` | HTTP port (simpler alternative to `--http-addr`) |
+| `--allowed-origins` | `ARC1_ALLOWED_ORIGINS` | (empty) | Comma-separated CORS allowlist for **browser-based** MCP clients. Empty disables CORS entirely. Native clients (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) don't need this. Exact match only (no wildcards) because the response sets `credentials: true`. See [Security headers & CORS](security-guide.md#11-network-security). |
 | `--log-file` | `ARC1_LOG_FILE` | — | File sink path |
 | `--log-level` | `ARC1_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `--log-format` | `ARC1_LOG_FORMAT` | `text` | `text` / `json` |
 | `--verbose` | `SAP_VERBOSE` | `false` | Debug-level logging |
+
+ARC-1 also sets standard browser security headers (HSTS, CSP, X-Frame-Options, COOP, etc.) on every HTTP response via [helmet](https://helmetjs.github.io/). These are always-on; there's no flag to disable them. Full header list and rationale is in the [Security Guide §11](security-guide.md#11-network-security).
 
 ---
 

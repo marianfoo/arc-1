@@ -115,6 +115,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| [SEC-10](#sec-10) | HTTP Security Headers (helmet) + Opt-In CORS for browser MCP clients | 2026-05-05 | Security |
 | FEAT-51 | CDS CRUD Dependency Guidance (`SAPWrite` DDLS delete emits where-used blocker list + suggested delete order; ordered DDIC diagnostics → remediation) (PR #176) | 2026-04-23 | Features |
 | [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
 | [FEAT-55](#feat-55) | System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose (PR #174) | 2026-04-21 | Features |
@@ -2151,6 +2152,52 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 - `src/server/config.ts`, `src/server/types.ts`, `src/server/http.ts` — `oauthDcrTtlSeconds` config
 - `docs_page/xsuaa-setup.md` — Stateless DCR section, service-binding rotation procedure, audit-event reference
 - `docs_page/configuration-reference.md` — A4 XSUAA section: `--oauth-dcr-ttl-seconds`
+
+---
+
+<a id="sec-10"></a>
+### SEC-10: HTTP Security Headers + Opt-In CORS
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Status** | Complete (2026-05-05) |
+
+**Problem:** The `http-streamable` transport sent no browser security headers and rejected every browser-originated `fetch()` because there was no CORS handling. That left two gaps: (1) when a browser ever reached `/health`, `/mcp`, or an OAuth endpoint, none of the standard hardening (HSTS, CSP, X-Frame-Options, COOP, CORP, …) was in place, and (2) any internal browser UI that wanted to call `/mcp` directly was blocked at the protocol level with no opt-in.
+
+The four shipped MCP clients — Claude Desktop, Cursor, VS Code Copilot, Copilot Studio — are all native HTTP and don't trigger CORS, so for the supported deployment shapes the gap was only theoretical. The change closes it for the future browser-UI case while making sure the native-client default path still works (specifically, OAuth popups depend on a `same-origin-allow-popups` COOP, which helmet's default `same-origin` would have broken).
+
+**Implemented:**
+
+- [helmet](https://helmetjs.github.io/) middleware on every HTTP response — HSTS, CSP, X-Frame-Options, COOP, CORP, X-Content-Type-Options, Referrer-Policy, and the legacy hardening set. Always-on, no flag to disable.
+- COOP set to `same-origin-allow-popups` unconditionally so OAuth-capable MCP clients can open `/authorize` in a popup and receive the redirect via `window.opener`. Helmet's stock `same-origin` would sever that link.
+- CSP override (when CORS is enabled) uses `useDefaults: true` and only widens `style-src`. Every other directive — `frame-ancestors 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `upgrade-insecure-requests`, … — is preserved.
+- Opt-in CORS via `--allowed-origins` / `ARC1_ALLOWED_ORIGINS`. Empty (default) disables CORS entirely. With origins set, exact-match reflection + `credentials: true` + `methods: GET/POST/DELETE/OPTIONS` + `Vary: Origin`.
+- New `cors_rejected` audit event fires when a browser request from an unallowed origin reaches the server. Browsers drop the response anyway; this gives a server-side signal for triage.
+- `cors` package pinned to exact `2.8.6` (the 2.8.5 → 2.8.6 release closed a 7-year gap; pinned until it stabilizes).
+- `applySecurityMiddleware()` extracted from `startHttpServer()` so the helmet/CORS contract is unit-testable via `supertest` without binding ports. New file `tests/unit/server/http-security-headers.test.ts` covers 14 cases (CSP defaults preserved with and without CORS, COOP unconditional, exact-origin reflection, credentials, exposed headers, multi-origin allowlist, audit emission for misses).
+
+**Tradeoffs:**
+
+- HSTS (default `max-age=15552000` + `includeSubDomains`) is durable. Once a browser sees it, the host plus its subdomains are HTTPS-locked for 180 days. Deliberate on BTP CF (apps are HTTPS-only at the gorouter); only a concern for hostnames that might need to serve HTTP later.
+- CORS uses `credentials: true`, so wildcards aren't allowed by browser policy. Operators configure exact origins; misconfiguration produces silent browser drops + `cors_rejected` audit events. Documented prominently in the Security Guide.
+- Helmet's CSP `script-src 'self'` blocks inline scripts. The MCP SDK's auth router emits only redirects + JSON, so this isn't an issue today; future server-rendered pages would need to either use external scripts or add a nonce.
+- One new prod dep (`helmet`, zero deps) and one new pinned prod dep (`cors`, zero deps). Both from established Node maintainers (Evan Hahn, expressjs).
+
+**Files:**
+- `src/server/http.ts` — NEW `applySecurityMiddleware()` + middleware wiring
+- `src/server/audit.ts` — NEW `cors_rejected` event type
+- `src/server/config.ts`, `src/server/types.ts` — `allowedOrigins` config
+- `package.json` — `helmet ^8.1.0`, `cors 2.8.6` (pinned), `@types/cors ^2.8.19`
+- `tests/unit/server/http-security-headers.test.ts` — NEW 14-test supertest suite
+- `docs_page/security-guide.md` — §11 extended with HTTP security headers + CORS subsections, `cors_rejected` added to §9 audit table
+- `docs_page/configuration-reference.md` — `--allowed-origins` row in Transport & logging
+- `docs_page/phase4-btp-deployment.md` — NEW "Security headers and CORS on BTP" section after Verify Deployment
+- `docs_page/xsuaa-setup.md` — "Browser-based DCR clients" sub-section in Stateless DCR
+- `README.md`, `CLAUDE.md`, `.env.example`, `manifest.yml`, `manifest-btp-abap.yml`, `mta.yaml` — admin-facing references
+
+**Follow-ups (not in this PR):**
+
+- Per-request rate limiting on `/mcp` (tracked separately in [docs/plans/global-rate-limiting.md](../docs/plans/global-rate-limiting.md)).
 
 ---
 

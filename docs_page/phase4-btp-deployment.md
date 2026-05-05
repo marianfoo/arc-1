@@ -266,6 +266,24 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/mcp
 ```
 
+## Security headers and CORS on BTP
+
+**Helmet is on by default — no config needed.** Every HTTP response from a CF-deployed ARC-1 carries HSTS, CSP, X-Frame-Options, COOP `same-origin-allow-popups` (so OAuth popups still work), CORP, X-Content-Type-Options, Referrer-Policy, and a handful of legacy hardening headers. Verify on the live deployment:
+
+```bash
+curl -sI https://<your-app>.cfapps.<region>.hana.ondemand.com/health | \
+  grep -iE 'strict-transport|content-security|cross-origin|x-content-type|x-frame'
+```
+
+**CORS is off by default.** All four supported MCP clients — Claude Desktop, Cursor, VS Code Copilot, Copilot Studio — use native HTTP, not the browser fetch API, so they don't trigger CORS regardless of how you connect them. Only set `ARC1_ALLOWED_ORIGINS` if you have a browser UI calling `/mcp` directly:
+
+```bash
+cf set-env arc1-mcp-server ARC1_ALLOWED_ORIGINS "https://your-ui.example.com"
+cf restage arc1-mcp-server
+```
+
+Origins are comma-separated and must match exactly (no wildcards), because CORS responses are sent with `credentials: true`. Disallowed origins emit a `cors_rejected` audit event for triage. Full reference: [Security Guide §11](security-guide.md#11-network-security).
+
 ## How BTP Connectivity Works
 
 ARC-1 auto-detects BTP Cloud Foundry via the `VCAP_APPLICATION` environment variable:

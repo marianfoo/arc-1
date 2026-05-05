@@ -242,6 +242,7 @@ ARC-1 emits structured audit events to all registered sinks. Three sink types ar
 | `oauth_client_registered` | XSUAA only: a new DCR `client_id` was minted (`/register`). Includes id length and redirect-URI count. |
 | `oauth_client_lookup_failed` | XSUAA only: a `client_id` failed to resolve. `reason` ∈ {`unknown_prefix`, `malformed`, `bad_signature`, `invalid_payload`, `expired`}. Useful for spotting forgery / probing. |
 | `oauth_redirect_uri_registered` | XSUAA only: a redirect URI was added at `/authorize` time to the pre-registered XSUAA default client. |
+| `cors_rejected` | A browser request was blocked because its `Origin` header is not in `ARC1_ALLOWED_ORIGINS`. Includes origin, method, path. Useful for spotting misconfigured browser clients or probing. |
 
 All events within a single MCP tool call share a `requestId` for correlation. Events include `user` and `clientId` fields when authentication is active.
 
@@ -284,6 +285,64 @@ When ARC-1 runs with `--transport http-streamable`, the default bind address is 
 - Always place ARC-1 behind a TLS-terminating reverse proxy or load balancer.
 - Restrict network access using firewall rules, security groups, or VPN.
 - Without `--api-keys`, `--oidc-issuer`, or `--xsuaa-auth`, the HTTP endpoint is open to anyone who can reach the port.
+
+### HTTP Security Headers (helmet)
+
+When `--transport http-streamable` is active, every HTTP response (including `/health`, `/mcp`, OAuth endpoints) carries a curated set of browser security headers via [helmet](https://helmetjs.github.io/). These are always-on; there's no flag to disable them. Native MCP clients ignore these — they exist to harden the server when a browser ever reaches it.
+
+| Header | Default value | Purpose |
+|---|---|---|
+| `Strict-Transport-Security` | `max-age=15552000; includeSubDomains` | Force HTTPS for the host and its subdomains (180 days). |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' https: 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests; …` | Helmet's standard CSP. When CORS is enabled, only `style-src` is widened to allow inline styles for browser UIs; every other directive is preserved via `useDefaults: true`. |
+| `Cross-Origin-Opener-Policy` | `same-origin-allow-popups` | Set unconditionally so OAuth-capable MCP clients (Claude Desktop, Cursor, MCP Inspector, …) can open popup windows pointed at `/authorize` and receive the redirect via `window.opener`. Helmet's default `same-origin` would sever that link. |
+| `Cross-Origin-Resource-Policy` | `same-origin` (default) / `cross-origin` (when CORS is enabled) | Auto-relaxed when `ARC1_ALLOWED_ORIGINS` is set so browser clients can read responses cross-origin. |
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME-type confusion attacks. |
+| `X-Frame-Options` | `SAMEORIGIN` | Clickjacking guard for older browsers without CSP support. |
+| `Referrer-Policy` | `no-referrer` | Strips Referer on outbound navigations. |
+| `Origin-Agent-Cluster` | `?1` | Asks browsers to isolate this origin's agent cluster. |
+| `X-DNS-Prefetch-Control`, `X-Download-Options`, `X-Permitted-Cross-Domain-Policies`, `X-XSS-Protection` | (helmet defaults) | Legacy / browser-quirk hardening. |
+
+To verify the headers on a running deployment:
+
+```bash
+curl -sI https://<your-app-url>/health | \
+  grep -iE 'strict-transport|content-security|cross-origin|x-content-type|x-frame|referrer'
+```
+
+### CORS for browser-based MCP clients (opt-in)
+
+CORS is **off by default**. The four MCP clients shipped with the project — Claude Desktop, Cursor, VS Code Copilot, Copilot Studio — use native HTTP, not the browser fetch API, and never trigger CORS. Only enable CORS when a browser UI (custom playground, embedded client, internal dashboard) calls `/mcp` directly:
+
+```bash
+cf set-env arc1-mcp-server ARC1_ALLOWED_ORIGINS "https://your-ui.example.com,https://other.example.com"
+cf restage arc1-mcp-server
+```
+
+Configuration rules:
+
+- **Comma-separated, exact match.** No wildcards (`*`, `https://*.example.com`) — they are silently rejected.
+- **Pairs with `credentials: true`.** ARC-1 sends `Access-Control-Allow-Origin: <reflected origin>` (never `*`) and `Access-Control-Allow-Credentials: true`. The wildcard form is incompatible with credentialed requests by browser policy.
+- **Allowed methods:** `GET`, `POST`, `DELETE`, `OPTIONS`. Allowed request headers: `Content-Type`, `Authorization`, `mcp-session-id`. Exposed response headers: `mcp-session-id`.
+- **Disallowed origins are silently dropped** by the browser, but ARC-1 emits a `cors_rejected` audit event server-side so misconfigured browser clients are observable. See [§9 Audit Logging](#what-gets-logged).
+- **Browser-based DCR clients** (rare) hitting `POST /register` or `POST /authorize` from a foreign origin must be in the allowlist for the same reason native browser fetches are. See [Stateless DCR](xsuaa-setup.md#stateless-dcr) for the OAuth flow.
+
+To verify CORS on a running deployment:
+
+```bash
+# Allowed origin → 204 + Allow-Origin reflected
+curl -sI -X OPTIONS \
+  -H "Origin: https://your-ui.example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  https://<your-app-url>/mcp | \
+  grep -i 'access-control\|vary'
+
+# Disallowed origin → no CORS headers (and a cors_rejected audit event)
+curl -sI -X OPTIONS \
+  -H "Origin: https://evil.example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  https://<your-app-url>/mcp | \
+  grep -i 'access-control'   # expect: empty
+```
 
 ### SAP Connection
 
