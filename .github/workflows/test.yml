@@ -13,6 +13,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Smoke check that mta.yaml + the .mtaext.example template are valid MTA
+  # descriptors. Runs on every push/PR (no SAP secrets needed) so a broken
+  # YAML or schema regression is caught before it reaches BTP deploys.
+  mta-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Validate mta.yaml + mta-overrides.mtaext.example
+        run: npm run btp:validate
+
   test:
     runs-on: ubuntu-latest
     strategy:

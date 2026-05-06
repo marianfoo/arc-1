@@ -69,6 +69,7 @@
     "test:e2e:skip-summary": "vitest run --config tests/e2e/vitest.e2e.config.ts --reporter=verbose 2>&1 | node scripts/ci/summarize-skips.mjs",
     "test:reliability-report": "node scripts/ci/collect-test-reliability.mjs",
     "test:assert-execution": "node scripts/ci/assert-required-test-execution.mjs",
+    "btp:validate": "npx mbt validate && npx mbt validate -e mta-overrides.mtaext.example",
     "btp:build": "npx mbt build",
     "btp:deploy": "node -e \"const v=require('./package.json').version;require('child_process').execSync('cf deploy mta_archives/arc1-mcp_'+v+'.mtar',{stdio:'inherit'})\"",
     "btp:deploy-ext": "node -e \"const v=require('./package.json').version;require('child_process').execSync('cf deploy mta_archives/arc1-mcp_'+v+'.mtar -e mta-overrides.mtaext',{stdio:'inherit'})\"",
