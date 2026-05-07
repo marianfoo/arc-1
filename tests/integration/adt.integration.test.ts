@@ -458,6 +458,31 @@ describe('ADT Integration Tests', () => {
       expect(source).toContain('subrc');
     });
 
+    it('reads BAPIRET2 via unified getTabl() — falls back from /tables/ to /structures/', async () => {
+      const { source } = await client.getTabl('BAPIRET2');
+      expect(source).toBeTruthy();
+      expect(source).toContain('bapiret2');
+      expect(source).toContain('message');
+      // After the fallback resolves, the URL is cached so resolveTablObjectUrl() returns the structures URL.
+      const resolvedUrl = await client.resolveTablObjectUrl('BAPIRET2');
+      expect(resolvedUrl).toContain('/sap/bc/adt/ddic/structures/');
+    });
+
+    it('reads T000 via unified getTabl() — transparent table (URL release-dependent)', async () => {
+      // T000 is a transparent table (DD02L-TABCLASS=TRANSP). On modern S/4HANA
+      // releases the source is served from /sap/bc/adt/ddic/tables/T000; on
+      // some 7.5x systems only /sap/bc/adt/ddic/structures/T000 returns 200.
+      // getTabl() handles either path via its 404 fallback, so we assert the
+      // source content rather than the resolved URL prefix.
+      const { source } = await client.getTabl('T000');
+      expect(source).toBeTruthy();
+      expect(source.toLowerCase()).toContain('t000');
+      // Transparent-table marker — appears on both /tables/ and /structures/ readbacks.
+      expect(source).toMatch(/@AbapCatalog\.tableCategory\s*:\s*#TRANSPARENT/i);
+      const resolvedUrl = await client.resolveTablObjectUrl('T000');
+      expect(resolvedUrl).toMatch(/\/sap\/bc\/adt\/ddic\/(tables|structures)\/T000$/);
+    });
+
     it('reads domain metadata (MANDT)', async (ctx) => {
       let domain: Awaited<ReturnType<typeof client.getDomain>>;
       try {
