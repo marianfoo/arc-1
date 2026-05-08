@@ -35,6 +35,16 @@ LABEL io.modelcontextprotocol.server.name="io.github.marianfoo/arc-1"
 # ca-certificates: needed for HTTPS connections to SAP systems
 RUN apk add --no-cache tini ca-certificates
 
+# Drop the bundled npm CLI from the runtime image. We exec `node dist/index.js`
+# directly, so npm/npx are never invoked at runtime — but their transitive
+# bundle (picomatch, brace-expansion, ip-address, …) recurringly raises HIGH
+# CVEs that block the gating Trivy scan in release.yml. Removing them shrinks
+# the image and the CVE surface in one shot.
+RUN rm -rf \
+  /usr/local/lib/node_modules/npm \
+  /usr/local/bin/npm \
+  /usr/local/bin/npx
+
 # Run as non-root user
 RUN addgroup -S arc1 && adduser -S arc1 -G arc1
 WORKDIR /home/arc1
