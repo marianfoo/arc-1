@@ -1,20 +1,58 @@
 # Read/write enum symmetry & `FTG2` rename
 
+**References**
+
+- Issue [#218](https://github.com/marianfoo/arc-1/issues/218) — original audit trigger
+- PR [#219](https://github.com/marianfoo/arc-1/pull/219) — Model B / STRU→TABL collapse (precedent for breaking-rename + deprecation alias)
+- PR [#222](https://github.com/marianfoo/arc-1/pull/222) — Audit (research-only, this plan ships in it)
+- [`research/abap-types/02-master-overview.md`](../../research/abap-types/02-master-overview.md) — synthesis + verdict matrix
+- Per-type evidence: [`msag.md`](../../research/abap-types/types/msag.md), [`messages.md`](../../research/abap-types/types/messages.md), [`ftg2.md`](../../research/abap-types/types/ftg2.md)
+- Companion plan: [`audit-purge-invented-adt-types.md`](./audit-purge-invented-adt-types.md) (Plan A — runs independently of this one)
+- External: [SAP/abap-file-formats](https://github.com/SAP/abap-file-formats) — `msag/` directory; no `ftg2/` directory
+- Cross-reference: `compare/00-feature-matrix.md:97,108` — ARC-1 sole implementer of `FTG2` (smell evidence)
+
+
 ## Overview
 
-Companion plan to `audit-purge-invented-adt-types.md`. The same audit (see
-`research/abap-types/`) found two non-bug structural issues that should be fixed
-together with the invented-alias purge:
+Companion plan to [`audit-purge-invented-adt-types.md`](./audit-purge-invented-adt-types.md).
+The same audit (see [`research/abap-types/`](../../research/abap-types/02-master-overview.md))
+found two non-bug structural issues that should be fixed together with the invented-alias
+purge.
 
-1. **`MSAG` is missing from `SAPREAD_TYPES_*`.** Writes via `SAPWrite(type='MSAG')` work,
-   but reads must go through the `MESSAGES` pseudo-type — a read/write asymmetry that
-   surfaces as inconsistent UX and broken round-trip patterns.
-2. **`FTG2` is an invented short identifier.** The endpoint
-   `/sap/bc/adt/sfw/featuretoggles/{name}/states` is real, but `FTG2` itself appears in
-   zero SAP sources (TADIR, abap-file-formats, Eclipse plugin). It's the same bug class
-   as `STRU` and `FUNC/FM` from issue #218.
+### Issue 1 — read/write enum drift for message classes
 
-This plan resolves both. It is a breaking change for anyone scripting `FTG2` directly.
+**Background**: `MSAG` is the canonical TADIR R3TR type for message classes (table `T100`,
+documented in [abap-file-formats](https://github.com/SAP/abap-file-formats) — `msag/`
+directory exists). Writes via `SAPWrite(type='MSAG')` work today, but reads must go
+through the `MESSAGES` pseudo-type — a read/write asymmetry. Per
+[`research/abap-types/types/msag.md`](../../research/abap-types/types/msag.md):
+- `MSAG` is listed in `SAPWRITE_TYPES_ONPREM` (~line 233 of `src/handlers/schemas.ts`)
+- `MSAG` is **missing** from `SAPREAD_TYPES_ONPREM` (line 17–53)
+- `MESSAGES` is listed in read enum but means "system log read", which conflicts with
+  the obvious user expectation that `MESSAGES` reads message classes
+
+The split is historical accident — when `SAPRead` was first split out, the message-class
+read endpoint was wired through a different code path than write. The fix is to add
+`MSAG` to the read enum, route both `MSAG` and `MESSAGES` to the same handler, and
+deprecate `MESSAGES` for one minor.
+
+### Issue 2 — `FTG2` is an invented short identifier
+
+**Background**: The endpoint `/sap/bc/adt/sfw/featuretoggles/{name}/states` is real and
+returns feature-toggle states. But the short identifier `FTG2` itself appears in **zero**
+SAP sources — not TADIR, not [abap-file-formats](https://github.com/SAP/abap-file-formats)
+(no `ftg2/` directory), not Eclipse `com.sap.adt.core.apidoc-3.58.1`, not other MCP
+servers. Per [`research/abap-types/types/ftg2.md`](../../research/abap-types/types/ftg2.md),
+`compare/00-feature-matrix.md:97,108` confirms ARC-1 is the sole implementer using this
+identifier.
+
+This is the same bug class as `STRU` and `FUNC/FM` from issue
+[#218](https://github.com/marianfoo/arc-1/issues/218): an ARC-1-private name that looks
+like a SAP type but isn't. Fix: rename to `FEATURE_TOGGLE` (descriptive, no false-TADIR
+appearance), keep `FTG2` as deprecated alias for one minor.
+
+This plan resolves both. It is a breaking change for anyone scripting `FTG2` or
+`SAPRead(type='MESSAGES')` directly.
 
 ## Context
 
@@ -124,8 +162,18 @@ This plan resolves both. It is a breaking change for anyone scripting `FTG2` dir
 - Modify: `tests/unit/handlers/intent.test.ts`
 - Modify: `tests/unit/handlers/schemas.test.ts`
 
-The endpoint `/sap/bc/adt/sfw/featuretoggles/{name}/states` is real and supported. Only
-the short identifier changes. See `research/abap-types/types/ftg2.md`.
+**Background**: The endpoint `/sap/bc/adt/sfw/featuretoggles/{name}/states` is real and
+supported. Only the short identifier changes. Per
+[`research/abap-types/types/ftg2.md`](../../research/abap-types/types/ftg2.md), `FTG2`
+is not in TADIR, not in abap-file-formats, and not in Eclipse apidoc — invented in
+ARC-1, evidenced by `compare/00-feature-matrix.md:97,108` showing ARC-1 as sole
+implementer.
+
+The audit briefly considered moving the endpoint to `SAPManage(action='get_feature_toggle')`
+since feature toggles are arguably operational metadata rather than a "read" object. We
+chose rename over move because: (a) the read shape (URL + name input) matches `SAPRead`
+better than `SAPManage`, (b) cheaper migration (one identifier change vs cross-tool
+move), (c) keeps the existing `name` parameter contract.
 
 - [ ] In `SAPREAD_TYPES_ONPREM`, replace `'FTG2'` with `'FEATURE_TOGGLE'`. Keep `'FTG2'`
       in the enum during the deprecation window (so existing callers don't break).

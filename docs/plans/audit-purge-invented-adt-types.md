@@ -1,28 +1,64 @@
 # Purge invented ADT slash aliases (audit follow-up to PR #219)
 
+**References**
+
+- Issue [#218](https://github.com/marianfoo/arc-1/issues/218) — original `STRU/DS` report
+- [Comment 4404553535](https://github.com/marianfoo/arc-1/issues/218#issuecomment-4404553535) — `FUNC/FM` flagged by @oisee
+- PR [#219](https://github.com/marianfoo/arc-1/pull/219) — Model B / STRU→TABL collapse (merged)
+- PR [#222](https://github.com/marianfoo/arc-1/pull/222) — Audit (research-only, this plan ships in it)
+- [`research/abap-types/02-master-overview.md`](../../research/abap-types/02-master-overview.md) — synthesis + verdict matrix
+- [`research/abap-types/00-methodology.md`](../../research/abap-types/00-methodology.md) — research procedure
+- Per-type evidence: [`func.md`](../../research/abap-types/types/func.md), [`fugr.md`](../../research/abap-types/types/fugr.md), [`view.md`](../../research/abap-types/types/view.md), [`clas.md`](../../research/abap-types/types/clas.md), [`ddlx.md`](../../research/abap-types/types/ddlx.md), [`tran.md`](../../research/abap-types/types/tran.md)
+- External: [SAP/abap-file-formats](https://github.com/SAP/abap-file-formats) (TADIR + cloud serialization truth)
+- External: Eclipse ADT plugin source (apidoc 3.58.1) at `/Users/marianzeis/DEV/arc-1-eclipse-adt/com.sap.adt.core.apidoc-3.58.1/`
+- Probe runner docs: [`docs/probe-adt-types.md`](../probe-adt-types.md)
+
+
 ## Overview
 
-Issue #218's `STRU/DS` was not the only invented entry in `SLASH_TYPE_MAP`. A systematic
-audit of all 35 canonical types and 24 slash aliases (see `research/abap-types/`) found
-five additional bugs of the same class — slash codes or canonical short types that were
-authored from cargo-culted patterns rather than verified against ADT, the Eclipse plugin,
-or `abap-file-formats`. This plan purges them and adds the structural guards that would
-have prevented all six bugs (`STRU/DS` + the five new ones) in the first place.
+Issue [#218](https://github.com/marianfoo/arc-1/issues/218)'s `STRU/DS` was not the only
+invented entry in `SLASH_TYPE_MAP`. After PR
+[#219](https://github.com/marianfoo/arc-1/pull/219) (Model B / STRU→TABL collapse) merged,
+@oisee flagged in
+[issue #218 comment 4404553535](https://github.com/marianfoo/arc-1/issues/218#issuecomment-4404553535)
+that `'FUNC/FM': 'FUNC'` is also wrong — function modules don't exist as TADIR R3TR
+objects (they're `LIMU FUNC` under `R3TR FUGR`), and the real ADT slash code is `FUGR/FF`.
 
-The five remaining bugs:
-- `FUNC/FM` is invented — ADT never emits it; remove.
-- `FUGR/FF` is real but mis-routed — currently maps to `FUGR`, but `FF` is a function
-  module (not a function group) and should map to `FUNC`.
-- `CLAS/LI` is invented — real form is `CLAS/I` (class internal include).
-- `VIEW/V` is invented AND `objectBasePath('VIEW')` is missing entirely (silently falls
-  through to `/sap/bc/adt/programs/programs/`). Real form is `VIEW/DV` with URL
-  `/sap/bc/adt/vit/wb/object_type/viewdv/object_name/<NAME>`. Reads of DDIC views are
-  silently broken today.
-- `DDLX/EX` and `TRAN/O` slash codes were not found in Eclipse `com.sap.adt.core.apidoc`
-  — confirm via live fixture or correct to the real form.
+In response, ARC-1 ran a systematic audit of all 35 canonical short types and 24 slash
+aliases. The full evidence is in
+[`research/abap-types/`](../../research/abap-types/02-master-overview.md) — 36 per-type
+docs grounded in TADIR truth, [SAP/abap-file-formats](https://github.com/SAP/abap-file-formats),
+the Eclipse ADT plugin source (`com.sap.adt.core.apidoc-3.58.1` jars under
+`/Users/marianzeis/DEV/arc-1-eclipse-adt/`), live a4h S/4HANA 2023 probes, and SAP
+docs/notes via the `sap-docs` and `sap-notes` MCP servers. The audit found five additional
+bugs of the same class as `STRU/DS`:
 
-This is a breaking change in the same vein as PR #219 (Model B / STRU collapse) — pre-1.0,
-breaking changes are acceptable.
+| Bug | Real form | Currently | Should be | Evidence |
+|---|---|---|---|---|
+| `FUNC/FM` invented | (does not exist) | `FUNC/FM → FUNC` | (remove) | [`func.md`](../../research/abap-types/types/func.md) |
+| `FUGR/FF` mis-routes | `FUGR/FF` (function module) | `→ FUGR` | `→ FUNC` | [`fugr.md`](../../research/abap-types/types/fugr.md) |
+| `VIEW/V` invented | `VIEW/DV` | `VIEW/V → VIEW` | `VIEW/DV → VIEW` | [`view.md`](../../research/abap-types/types/view.md) |
+| `VIEW` URL missing | `/sap/bc/adt/vit/wb/object_type/viewdv/object_name/` | falls through to `/programs/programs/` | add VIT URL | [`view.md`](../../research/abap-types/types/view.md) |
+| `CLAS/LI` invented | `CLAS/I` | `CLAS/LI → CLAS` | `CLAS/I → CLAS` | [`clas.md`](../../research/abap-types/types/clas.md) |
+
+Plus two slash codes the audit could not verify in any source — must be confirmed via
+live fixture or corrected:
+
+- `DDLX/EX` — not present in Eclipse apidoc 3.58.1 grep ([`ddlx.md`](../../research/abap-types/types/ddlx.md))
+- `TRAN/O` — not present in Eclipse apidoc; likely `TRAN/T` ([`tran.md`](../../research/abap-types/types/tran.md))
+
+This is a breaking change in the same vein as PR #219 — pre-1.0, breaking changes are
+acceptable.
+
+### Why the audit found bugs that hid for a release
+
+The cross-cutting methodology finding (see
+[`02-master-overview.md`](../../research/abap-types/02-master-overview.md#cross-cutting-findings-apply-to-future-audits-too)):
+**ADT silently ignores unknown `objectType` filters in
+`/sap/bc/adt/repository/informationsystem/search`.** Request status 200 does NOT mean the
+filter was honored. Manually testing `?objectType=VIEW%2FV` returned a 200 with
+unfiltered results — exactly why nobody noticed `VIEW/V` was invented. Plan A's tests
+must inspect the returned `<adtcore:type>` attribute, never just the request status.
 
 ## Context
 
@@ -91,10 +127,26 @@ breaking changes are acceptable.
 - Modify: `src/handlers/intent.ts`
 - Modify: `tests/unit/handlers/intent.test.ts`
 
-Update `SLASH_TYPE_MAP` (~line 2558) to remove invented aliases and remap real ones.
-The audit research document `research/abap-types/types/func.md` and `fugr.md` cite
-Eclipse apidoc 3.58.1 zero occurrences for `FUNC/FM` and live a4h evidence that
-`FUGR/FF` is the function-module slash code (parent `FUGR/F`).
+**Background**: Update `SLASH_TYPE_MAP` (~line 2558) to remove invented aliases and remap
+real ones. Evidence sources for each change:
+
+- **`FUNC/FM` removal**: [`research/abap-types/types/func.md`](../../research/abap-types/types/func.md)
+  — zero occurrences in Eclipse `com.sap.adt.core.apidoc-3.58.1` jar grep; not in
+  [abap-file-formats](https://github.com/SAP/abap-file-formats) (which places
+  `func-v1.json` *inside* `file-formats/fugr/`, confirming function modules are LIMU
+  sub-objects, not top-level R3TR); live a4h returns `FUGR/FF` for function modules.
+- **`FUGR/FF → FUNC`**: [`research/abap-types/types/fugr.md`](../../research/abap-types/types/fugr.md)
+  — Eclipse apidoc `com/sap/adt/ris/search/IAdtRepositorySearchParameters.html` line 208
+  documents `"FUGR/FF"` literally; live a4h GET
+  `/sap/bc/adt/functions/groups/su_user/fmodules/bapi_user_getlist` returns
+  `<fmodule:abapFunctionModule adtcore:type="FUGR/FF">` with
+  `<adtcore:containerRef adtcore:type="FUGR/F" adtcore:name="SU_USER"/>`.
+- **`CLAS/LI → CLAS/I`**: [`research/abap-types/types/clas.md`](../../research/abap-types/types/clas.md)
+  — `CLAS/LI` not found in any source; `CLAS/I` is the documented form for class child
+  includes.
+- **`VIEW/V → VIEW/DV`**: [`research/abap-types/types/view.md`](../../research/abap-types/types/view.md)
+  — `VIEW/V` not in Eclipse apidoc; live a4h returns `VIEW/DV` for DDIC views via the
+  VIT generic-object endpoint.
 
 - [ ] Remove `'FUNC/FM': 'FUNC'` from `SLASH_TYPE_MAP`
 - [ ] Change `'FUGR/FF': 'FUGR'` to `'FUGR/FF': 'FUNC'` (function module under group)
@@ -119,9 +171,17 @@ Eclipse apidoc 3.58.1 zero occurrences for `FUNC/FM` and live a4h evidence that
 - Modify: `src/handlers/intent.ts`
 - Modify: `tests/unit/handlers/intent.test.ts`
 
-`objectBasePath` (~line 2667) has no `case 'VIEW'`, so VIEW reads currently route to
-`/sap/bc/adt/programs/programs/`. Real ADT URL per `research/abap-types/types/view.md`
-is the VIT generic-object endpoint, same shape as the existing TRAN handler.
+**Background**: `objectBasePath` (~line 2667) has no `case 'VIEW'`, so VIEW reads
+currently route to `/sap/bc/adt/programs/programs/` via the default fallthrough. This is
+why DDIC view reads have been silently broken since the type was added — there's never
+been a working code path. Real ADT URL per
+[`research/abap-types/types/view.md`](../../research/abap-types/types/view.md) is the VIT
+generic-object endpoint, same shape as the existing `case 'TRAN'` at ~line 2706
+(`/sap/bc/adt/vit/wb/object_type/trant/object_name/`).
+
+Reference pattern: `case 'TRAN'` already uses the VIT route — copy that structure for
+VIEW. The VIT endpoint also handles other rarely-touched legacy types and is documented
+in the Eclipse plugin source under `com.sap.adt.tools.viewbase.*`.
 
 - [ ] Add `case 'VIEW': return '/sap/bc/adt/vit/wb/object_type/viewdv/object_name/';`
       to `objectBasePath`
@@ -138,11 +198,20 @@ is the VIT generic-object endpoint, same shape as the existing TRAN handler.
 - Add: `tests/fixtures/probe/ddlx-tran-confirm.json` (capture)
 - Modify: `tests/unit/probe/replay.test.ts`
 
-`research/abap-types/types/ddlx.md` and `tran.md` flag both slash codes as not seen in
-Eclipse apidoc 3.58.1 grep. Capture a live `informationsystem/search` response and a
-real ADT GET against representative fixtures (e.g. a known DDLX `Z*_EXT` and tcode
-`SE38`) to confirm the slash code that ADT actually emits. If it differs (e.g. `TRAN/T`
-instead of `TRAN/O`), update `SLASH_TYPE_MAP`.
+**Background**: [`research/abap-types/types/ddlx.md`](../../research/abap-types/types/ddlx.md)
+and [`tran.md`](../../research/abap-types/types/tran.md) flag both slash codes as not
+seen in Eclipse apidoc 3.58.1 grep. The audit could not definitively classify them as
+correct or invented because:
+- The `DDLX` short type itself is real (released in abap-file-formats, supported on BTP);
+  only the slash form is unverified.
+- The `TRAN` URL prefix in `objectBasePath` (`/sap/bc/adt/vit/wb/object_type/trant/object_name/`)
+  works on a4h, but the `trant` infix suggests `TRAN/T`, not `TRAN/O`.
+
+Capture a live `informationsystem/search` response and a real ADT GET against
+representative fixtures (e.g. a known DDLX `Z*_EXT` and a known transaction like
+`SE38` or `SU01`) to confirm the slash code that ADT actually emits in
+`<adtcore:type>`. The probe infrastructure to use is `npm run probe -- --save-fixtures`
+(see [`docs/probe-adt-types.md`](../probe-adt-types.md)).
 
 - [ ] Run `npm run probe -- --save-fixtures tests/fixtures/probe/ddlx-tran-confirm` against
       a4h
@@ -180,11 +249,18 @@ type from `SAPREAD_TYPES_*` ∪ `SAPWRITE_TYPES_*` MUST have a switch case.
 **Files:**
 - Add: `tests/unit/handlers/slash-type-map.test.ts`
 
-Anti-cargo-cult guard. The audit found that nobody had ever asked "what is your evidence
-that `VIEW/V` exists?" Add a unit test that reads the source of `intent.ts` (or a
-co-located JSON manifest) and asserts every entry in `SLASH_TYPE_MAP` has either an
-inline citation comment matching `// (research/abap-types/|see fixture|Eclipse apidoc)`
-or a registered fixture in `tests/fixtures/probe/`. The shape can be:
+**Background**: Anti-cargo-cult guard. The audit found six bugs (`STRU/DS`, `FUNC/FM`,
+`FUGR/FF` mis-route, `CLAS/LI`, `VIEW/V`, possibly `DDLX/EX` and `TRAN/O`) sharing one
+root cause: nobody had ever asked "what is your evidence that this slash code exists?"
+The pattern `XXXX/<first letter>` does **not** generalize from TADIR R3TR to ADT slash
+subtypes. Real ADT subtypes come from class `CL_WB_OBJECT_TYPE` and table `WBOBJTYPE`,
+documented in Eclipse plugin source under `com.sap.adt.core.apidoc-3.58.1` (apidoc jars
+in `/Users/marianzeis/DEV/arc-1-eclipse-adt/`).
+
+Add a unit test that reads the source of `intent.ts` (or a co-located JSON manifest) and
+asserts every entry in `SLASH_TYPE_MAP` has either an inline citation comment matching
+`// (research/abap-types/|see fixture|Eclipse apidoc)` or a registered fixture in
+`tests/fixtures/probe/`. The shape can be:
 
 ```ts
 const SLASH_TYPE_EVIDENCE: Record<string, string> = {
@@ -248,9 +324,17 @@ a known SAP standard view (e.g. `V_USR_NAME` or `V_T100`).
 **Files:**
 - Modify: `tests/integration/adt.integration.test.ts`
 
-Cross-cutting methodology fix. ADT silently ignores unknown `objectType` filters in
-`informationsystem/search`. Add a test pattern that always inspects the returned
-`<adtcore:type>` for SAPSearch — so that future invented aliases fail loudly.
+**Background**: Cross-cutting methodology fix. The audit's biggest single finding (see
+[`02-master-overview.md` cross-cutting findings](../../research/abap-types/02-master-overview.md#cross-cutting-findings-apply-to-future-audits-too)):
+ADT silently ignores unknown `objectType` filters in `informationsystem/search` and
+returns unfiltered results with status 200. Manually verified on a4h:
+`?objectType=ZZZZ%2FZZ` returns `<adtcore:objectReferences>` with hits whose actual
+`adtcore:type` is `CLAS/OC`, `PROG/P`, etc. — the filter was silently dropped.
+
+This is *the* reason `STRU/DS`, `VIEW/V`, `CLAS/LI`, and `FUNC/FM` all hid for so long.
+Any test that asserts only the request status is structurally unable to catch invented
+aliases. Add a test pattern that always inspects the returned `<adtcore:type>` for
+SAPSearch — so that future invented aliases fail loudly.
 
 - [ ] Add integration test: SAPSearch with `objectType='CLAS/OC'` returns at least one
       result whose `adtcore:type === 'CLAS/OC'` (not just status 200)
