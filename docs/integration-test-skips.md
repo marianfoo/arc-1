@@ -59,10 +59,12 @@ Tests typically suffix these with a specific clause explaining *which* fixture o
 | `BACKEND_UNSUPPORTED: DTEL v2 content type not supported on this release` | `crud.lifecycle.integration.test.ts` DTEL + DOMA+DTEL lifecycle (2 tests) | NW 7.50–7.51 | SAP_BASIS ≥ 7.52 |
 | `BACKEND_UNSUPPORTED: /datapreview/ddic endpoint not available on this release` | `adt.integration.test.ts` table contents, POST/CSRF session (4 tests) | NW 7.50 (depends on SP/activation) | Most modern releases |
 | `BACKEND_UNSUPPORTED: /ddic/domains endpoint not available on this release` | `crud.lifecycle.integration.test.ts` DOMA CRUD variants (2 tests) | NW 7.50–7.51 | SAP_BASIS ≥ 7.52 |
+| `NW 7.5x ADT_TM gap: reassign requires URL-query params on that release; needs release-aware fallback` | `transport.integration.test.ts` reassignTransport (1 test) | NW 7.50–7.51 | S/4HANA any release |
+| `NW 7.5x ADT_TM gap: release endpoint rejects /newreleasejobs path segment; no client-side workaround` | `transport.integration.test.ts` releaseTransportRecursive (1 test) | NW 7.50–7.51 | S/4HANA any release |
 
 **When to investigate:** If `DOMA reads not supported` fires on a ≥ 7.54 system, double-check that the ICF service `/sap/bc/adt/ddic` is active in SICF.
 
-**Note (2026-05-08):** The previous *"transport create not supported on this SAP release"* entry was removed when `SAPTransport.create` switched to the `CreateCorrectionRequest` endpoint (`POST /sap/bc/adt/cts/transports`), which works on NW 7.50 SP02 and S/4HANA alike — verified live on `npl.marianzeis.de` and `a4h.marianzeis.de`.
+**Note (2026-05-08):** The previous *"transport create not supported on this SAP release"* entry was removed when `SAPTransport.create` switched to the `CreateCorrectionRequest` endpoint (`POST /sap/bc/adt/cts/transports`), which works on NW 7.50 SP02 and S/4HANA alike — verified live on `npl.marianzeis.de` and `a4h.marianzeis.de`. **Two related NW 7.5x gaps were uncovered when the create-skip stopped masking them:** (1) reassign — `PUT /transportrequests/{id}` body attributes are silently dropped on NW 7.5x; only URL-query params work, and S/4HANA only accepts the body, so a fix needs release-aware fallback. (2) release — `POST /transportrequests/{id}/newreleasejobs` is rejected with *"user action newreleasejobs is not supported"*; no client-side workaround was found across body / URL-query / PUT-variant probing. Both are pre-existing limitations now visible because create no longer skips the test.
 
 ### Root cause: `/datapreview/ddic` 404 "No suitable resource found"
 

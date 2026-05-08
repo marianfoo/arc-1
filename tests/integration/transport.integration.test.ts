@@ -261,7 +261,16 @@ describe('Transport Integration Tests', () => {
         const updated = await getTransport(client.http, client.safety, id);
         expect(updated!.owner).toBe(currentOwner);
       } catch (err) {
-        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support transport reassign');
+        // NW 7.5x ADT_TM gap: PUT body attributes are silently dropped, so
+        // tm:targetuser arrives empty and SAP responds 400 "User  does not
+        // exist in the system (or locked)" (note the double space — empty
+        // interpolation). NW 7.5x accepts the same operation as URL-query
+        // params, but S/4HANA needs the body — incompatible without
+        // release-aware fallback. Tracked separately from PR #228.
+        if (isUnsupportedBackend(err))
+          return ctx.skip(
+            'NW 7.5x ADT_TM gap: reassign requires URL-query params on that release; needs release-aware fallback',
+          );
         throw err;
       } finally {
         if (id) {
@@ -292,7 +301,16 @@ describe('Transport Integration Tests', () => {
           expect(transport.status).toBe('R');
         }
       } catch (err) {
-        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support recursive release');
+        // NW 7.5x ADT_TM gap: POST /{id}/newreleasejobs is rejected with
+        // 400 "user action newreleasejobs is not supported" — the framework
+        // treats the path segment as a useraction attribute. No client-side
+        // workaround verified (probed: useraction in body, query param,
+        // PUT variant — all rejected). Genuine NW 7.5x release-on-empty
+        // limitation. Tracked separately from PR #228.
+        if (isUnsupportedBackend(err))
+          return ctx.skip(
+            'NW 7.5x ADT_TM gap: release endpoint rejects /newreleasejobs path segment; no client-side workaround',
+          );
         throw err;
       }
     }, 60_000);
