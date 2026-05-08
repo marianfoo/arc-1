@@ -25,11 +25,11 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
-          # License allowlist — derived from `npm ls --all --json` against
-          # current production deps. Excludes copyleft (GPL/AGPL/LGPL)
-          # which would contaminate the MIT-licensed npm package.
-          allow-licenses: >-
-            MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, CC0-1.0,
-            Unlicense, 0BSD, MPL-2.0, BlueOak-1.0.0, CC-BY-4.0
+          # Block copyleft licenses that would contaminate the MIT-
+          # licensed npm package. The action requires choosing EITHER
+          # allow-licenses OR deny-licenses — not both — so we deny the
+          # known-incompatible set rather than maintaining a positive
+          # allowlist that breaks every time a new MIT-compatible
+          # license appears in the ecosystem.
           deny-licenses: >-
             GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0
