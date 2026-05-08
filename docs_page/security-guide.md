@@ -404,11 +404,27 @@ ARC-1 ships as an [npm package](https://www.npmjs.com/package/arc-1) and a [Dock
 | npm provenance | `.github/workflows/release.yml` (`npm publish --provenance`) | every release tarball is Sigstore-attested |
 | `SECURITY.md` policy | repo root | private vulnerability reporting + severity-tiered response SLAs |
 
-GitHub-native repository toggles that should also be on (verified in Settings → Advanced Security):
+### GitHub-native security features (verified enabled)
 
-- Dependabot alerts + security updates + version updates + grouped security updates + malware alerts
-- Secret scanning + push protection
-- Private vulnerability reporting
+These toggles live on the repo's Settings → Code security page and are checked here so a cold reader can confirm what's on without leaving the docs. Last verified: **2026-05-08**.
+
+| Feature | API verification | Status |
+|---|---|---|
+| Dependabot alerts | `gh api repos/marianfoo/arc-1/vulnerability-alerts -i \| head -1` → `HTTP/2.0 204` | ✅ enabled |
+| Dependabot security updates | `gh api repos/marianfoo/arc-1 --jq '.security_and_analysis.dependabot_security_updates.status'` → `"enabled"` | ✅ enabled |
+| Dependabot version updates | reads `.github/dependabot.yml` (in repo root) — toggled on at the same time as security updates; verify activity in [Insights → Dependency graph → Dependabot](https://github.com/marianfoo/arc-1/network/updates) | ✅ enabled |
+| Dependabot grouped security updates | toggled on in Settings → Code security; no public REST field — verify by inspecting any auto-opened security PR (groups multiple advisories per ecosystem into one PR) | ✅ enabled |
+| Dependabot malware alerts | toggled on in Settings → Code security; no public REST field — verify only via the Security tab when an alert fires | ✅ enabled |
+| Secret scanning | `gh api repos/marianfoo/arc-1 --jq '.security_and_analysis.secret_scanning.status'` → `"enabled"` | ✅ enabled |
+| Push protection | `gh api repos/marianfoo/arc-1 --jq '.security_and_analysis.secret_scanning_push_protection.status'` → `"enabled"` | ✅ enabled |
+| Private vulnerability reporting | `gh api repos/marianfoo/arc-1/private-vulnerability-reporting --jq .enabled` → `true` | ✅ enabled |
+
+Optional toggles **not** enabled (deliberate — listed here so the absence is documented, not silent):
+
+- `secret_scanning_non_provider_patterns` — custom regex patterns. Off by default; only worth turning on if we need to scan for project-specific secret formats (we don't).
+- `secret_scanning_validity_checks` — asks the upstream provider whether a leaked token is still valid. Off because the noise/value tradeoff doesn't justify it for a project our size; revisit if the validity API stabilizes and a customer asks.
+
+User-account-level recommendation (cannot be enforced via repo settings): the project maintainer should also enable push protection at [user level](https://github.com/settings/security_analysis), which catches secrets pushed to *any* repo the maintainer commits to (including private forks of `arc-1`).
 
 ### Verifying the chain as an operator
 
