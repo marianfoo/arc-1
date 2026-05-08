@@ -76,6 +76,10 @@ program
       const code = await runToolCall(tool, args, opts.output);
       process.exit(code);
     } catch (err) {
+      // codeql[js/clear-text-logging]: false-positive (alert #9). err.message
+      // comes from runToolCall failures (resolveCliContext config-parse
+      // errors, "Unknown tool", buildArgs validation) — none interpolate
+      // api-key material. Pinned by tests/unit/cli/clear-text-logging-regression.test.ts.
       console.error(err instanceof Error ? err.message : String(err));
       process.exit(2);
     }
@@ -238,6 +242,11 @@ configCmd
           },
           sources,
         };
+        // codeql[js/clear-text-logging]: false-positive (alert #10). `out` is
+        // constructed explicitly with only the `allow*` policy flags and
+        // `sources` (field-source attributions like `'env SAP_URL'`). Neither
+        // `apiKeys` / `apiKeysRaw` nor `oauthDcrTtlSeconds` appear in `out`.
+        // Pinned by tests/unit/cli/clear-text-logging-regression.test.ts.
         console.log(JSON.stringify(out, null, 2));
       } else {
         console.log('ARC-1 effective authorization policy');
@@ -267,6 +276,10 @@ configCmd
       }
       process.exit(0);
     } catch (err) {
+      // codeql[js/clear-text-logging]: false-positive (alert #11). err.message
+      // comes from resolveConfig() parser failures — config-validation errors
+      // like "invalid --api-keys format", not the credential VALUE itself.
+      // Pinned by tests/unit/cli/clear-text-logging-regression.test.ts.
       console.error(`Error: ${(err as Error).message}`);
       process.exit(1);
     }
