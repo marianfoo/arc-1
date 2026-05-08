@@ -51,7 +51,7 @@ TYPE   VERDICT               DISCO COLLECTION             KNOWN          RELEASE
 -------------------------------------------------------------------------------------------
 TABL   AVAILABLE (high)      Y     ok-400-bad-params 400  OK(T000)       758>=700    known-object read of "T000" returned 200; discovery confirms
 BDEF   AVAILABLE (high)      Y     ok-400-bad-params 400  —              758>=754    discovered + collection HTTP 400
-FTG2   AVAILABLE (medium)    N     ok-400-bad-params 400  —              758>=752    collection HTTP 400 but not in discovery map
+FEATURE_TOGGLE  AVAILABLE (medium) N  ok-400-bad-params 400  —              758>=752    collection HTTP 400 but not in discovery map
 ```
 
 | Column | Meaning |

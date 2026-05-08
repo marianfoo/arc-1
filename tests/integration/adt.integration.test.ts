@@ -609,8 +609,10 @@ describe('ADT Integration Tests', () => {
       }
     });
 
-    it('reads feature toggle state (FTG2) when available', async (ctx) => {
-      const toggleName = process.env.TEST_FEATURE_TOGGLE || 'ABC_TOGGLE';
+    it('reads feature toggle state (FEATURE_TOGGLE) when available', async (ctx) => {
+      // Renamed from FTG2 in audit Plan B (research/abap-types/types/ftg2.md). The
+      // endpoint is unchanged: /sap/bc/adt/sfw/featuretoggles/<name>/states.
+      const toggleName = process.env.TEST_FEATURE_TOGGLE || 'SAP_PARA_DCFK_SUPP_GENERAL';
       try {
         const toggle = await client.getFeatureToggle(toggleName);
         expect(toggle.name).toBeTruthy();
@@ -624,6 +626,19 @@ describe('ADT Integration Tests', () => {
           `${SkipReason.BACKEND_UNSUPPORTED}: Feature toggle endpoint unavailable or unauthorized on this system`,
         );
       }
+    });
+
+    it('reads message class via MSAG canonical type (audit Plan B)', async () => {
+      // MSAG was added to SAPREAD_TYPES_* by docs/plans/completed/audit-symmetry-and-ftg2-rename.md.
+      // Endpoint /sap/bc/adt/messageclass/{name} verified live (2026-05-08) on:
+      //   - a4h S/4HANA 2023 (returns adtcore:type="MSAG/N")
+      //   - npl NW 7.50 SP02 (returns adtcore:type="MSAG/N")
+      // SY is a SAP-shipped message class present on every release.
+      const info = await client.getMessageClassInfo('SY');
+      expect(info.name).toBe('SY');
+      expect(typeof info.description).toBe('string');
+      expect(Array.isArray(info.messages)).toBe(true);
+      expect(info.messages.length).toBeGreaterThan(0);
     });
 
     it('reads enhancement implementation metadata (ENHO) when a fixture exists', async (ctx) => {

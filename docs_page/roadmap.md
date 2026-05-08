@@ -115,7 +115,8 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
-| — | Audit-driven purge of invented ADT slash aliases (issue #218 follow-up). Removes `FUNC/FM`, `CLAS/LI`, `VIEW/V`, `TRAN/O` from `SLASH_TYPE_MAP`; repoints `FUGR/FF → FUNC` (was `→ FUGR`); adds real `VIEW/DV → VIEW` and `TRAN/T → TRAN`; adds `objectBasePath('VIEW')` (DDIC view reads were silently broken via fallthrough to `/programs/programs/`); adds `KNOWN_BASE_TYPES` exhaustiveness guard + `SLASH_TYPE_EVIDENCE` citation guard so this bug class can't recur. Verified against a4h S/4HANA 2023 + npl NW 7.50. | 2026-05-08 | Compatibility |
+| — | Audit Plan B: read/write enum symmetry (`MSAG` added to `SAPREAD_TYPES_*`) + `FTG2 → FEATURE_TOGGLE` rename. Issue #218 follow-up; both old aliases (`MESSAGES`, `FTG2`) accepted for one minor with stderr deprecation warning. Verified live on a4h S/4HANA 2023 + npl NW 7.50 SP02. | 2026-05-08 | Features |
+| — | Audit-driven purge of invented ADT slash aliases (issue #218 follow-up, Plan A — PR #223). Removes `FUNC/FM`, `CLAS/LI`, `VIEW/V`, `TRAN/O` from `SLASH_TYPE_MAP`; repoints `FUGR/FF → FUNC` (was `→ FUGR`); adds real `VIEW/DV → VIEW` and `TRAN/T → TRAN`; adds `objectBasePath('VIEW')` (DDIC view reads were silently broken via fallthrough to `/programs/programs/`); adds `KNOWN_BASE_TYPES` exhaustiveness guard + `SLASH_TYPE_EVIDENCE` citation guard so this bug class can't recur. Verified against a4h S/4HANA 2023 + npl NW 7.50. | 2026-05-08 | Compatibility |
 | [SEC-10](#sec-10) | HTTP Security Headers (helmet) + Opt-In CORS for browser MCP clients | 2026-05-05 | Security |
 | FEAT-51 | CDS CRUD Dependency Guidance (`SAPWrite` DDLS delete emits where-used blocker list + suggested delete order; ordered DDIC diagnostics → remediation) (PR #176) | 2026-04-23 | Features |
 | [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
@@ -289,7 +290,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 22. ~~**FEAT-39** Transport Enhancements (S)~~ — **completed 2026-04-13** (K/W/T types; S/R deferred). sapcli has full CTS lifecycle.
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
-23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FTG2`, `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
+23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FEATURE_TOGGLE` (formerly `FTG2`, renamed in audit Plan B / PR #224), `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
 24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
 25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story (SM02 and /IWFND/ERROR_LOG already completed 2026-04-21 via FEAT-55 — SQL trace is the only fr0ster-v5 diagnostic still missing)
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops

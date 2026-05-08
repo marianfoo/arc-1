@@ -5,17 +5,17 @@
 - Issue [#218](https://github.com/marianfoo/arc-1/issues/218) — original audit trigger
 - PR [#219](https://github.com/marianfoo/arc-1/pull/219) — Model B / STRU→TABL collapse (precedent for breaking-rename + deprecation alias)
 - PR [#222](https://github.com/marianfoo/arc-1/pull/222) — Audit (research-only, this plan ships in it)
-- [`research/abap-types/02-master-overview.md`](../../research/abap-types/02-master-overview.md) — synthesis + verdict matrix
-- Per-type evidence: [`msag.md`](../../research/abap-types/types/msag.md), [`messages.md`](../../research/abap-types/types/messages.md), [`ftg2.md`](../../research/abap-types/types/ftg2.md)
-- Companion plan: [`audit-purge-invented-adt-types.md`](./audit-purge-invented-adt-types.md) (Plan A — runs independently of this one)
+- [`research/abap-types/02-master-overview.md`](../../../research/abap-types/02-master-overview.md) — synthesis + verdict matrix
+- Per-type evidence: [`msag.md`](../../../research/abap-types/types/msag.md), [`messages.md`](../../../research/abap-types/types/messages.md), [`ftg2.md`](../../../research/abap-types/types/ftg2.md)
+- Companion plan: [`audit-purge-invented-adt-types.md`](../audit-purge-invented-adt-types.md) (Plan A — runs independently of this one)
 - External: [SAP/abap-file-formats](https://github.com/SAP/abap-file-formats) — `msag/` directory; no `ftg2/` directory
 - Cross-reference: `compare/00-feature-matrix.md:97,108` — ARC-1 sole implementer of `FTG2` (smell evidence)
 
 
 ## Overview
 
-Companion plan to [`audit-purge-invented-adt-types.md`](./audit-purge-invented-adt-types.md).
-The same audit (see [`research/abap-types/`](../../research/abap-types/02-master-overview.md))
+Companion plan to [`audit-purge-invented-adt-types.md`](../audit-purge-invented-adt-types.md).
+The same audit (see [`research/abap-types/`](../../../research/abap-types/02-master-overview.md))
 found two non-bug structural issues that should be fixed together with the invented-alias
 purge.
 
@@ -25,7 +25,7 @@ purge.
 documented in [abap-file-formats](https://github.com/SAP/abap-file-formats) — `msag/`
 directory exists). Writes via `SAPWrite(type='MSAG')` work today, but reads must go
 through the `MESSAGES` pseudo-type — a read/write asymmetry. Per
-[`research/abap-types/types/msag.md`](../../research/abap-types/types/msag.md):
+[`research/abap-types/types/msag.md`](../../../research/abap-types/types/msag.md):
 - `MSAG` is listed in `SAPWRITE_TYPES_ONPREM` (~line 233 of `src/handlers/schemas.ts`)
 - `MSAG` is **missing** from `SAPREAD_TYPES_ONPREM` (line 17–53)
 - `MESSAGES` is listed in read enum but means "system log read", which conflicts with
@@ -42,7 +42,7 @@ deprecate `MESSAGES` for one minor.
 returns feature-toggle states. But the short identifier `FTG2` itself appears in **zero**
 SAP sources — not TADIR, not [abap-file-formats](https://github.com/SAP/abap-file-formats)
 (no `ftg2/` directory), not Eclipse `com.sap.adt.core.apidoc-3.58.1`, not other MCP
-servers. Per [`research/abap-types/types/ftg2.md`](../../research/abap-types/types/ftg2.md),
+servers. Per [`research/abap-types/types/ftg2.md`](../../../research/abap-types/types/ftg2.md),
 `compare/00-feature-matrix.md:97,108` confirms ARC-1 is the sole implementer using this
 identifier.
 
@@ -164,7 +164,7 @@ This plan resolves both. It is a breaking change for anyone scripting `FTG2` or
 
 **Background**: The endpoint `/sap/bc/adt/sfw/featuretoggles/{name}/states` is real and
 supported. Only the short identifier changes. Per
-[`research/abap-types/types/ftg2.md`](../../research/abap-types/types/ftg2.md), `FTG2`
+[`research/abap-types/types/ftg2.md`](../../../research/abap-types/types/ftg2.md), `FTG2`
 is not in TADIR, not in abap-file-formats, and not in Eclipse apidoc — invented in
 ARC-1, evidenced by `compare/00-feature-matrix.md:97,108` showing ARC-1 as sole
 implementer.

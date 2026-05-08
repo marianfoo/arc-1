@@ -218,16 +218,22 @@ describe('E2E SAPNavigate — Where-Used Analysis', () => {
       console.log(`    BUKRS data element has ${refs.length} references`);
     });
 
-    it('finds references to T001 table', async (ctx) => {
+    it('finds references to T000 table', async (ctx) => {
+      // Was 'T001' (company codes) — fails on a4h S/4HANA 2023 trial because the
+      // table is not shipped there, so resolveTablObjectUrl() falls through to
+      // /sap/bc/adt/ddic/structures/T001 → 404 and the test errors instead of
+      // skipping. Switched to T000 (clients table) which is universal on every
+      // SAP system from R/3 onwards. Same point: many references because every
+      // mandt-bearing program uses it.
       const result = await callTool(client, 'SAPNavigate', {
         action: 'references',
         type: 'TABL',
-        name: 'T001',
+        name: 'T000',
       });
       const text = expectToolSuccessOrSkip(ctx, result);
       const refs = JSON.parse(text);
       expect(refs.length).toBeGreaterThan(0);
-      console.log(`    T001 table has ${refs.length} references`);
+      console.log(`    T000 table has ${refs.length} references`);
     });
   });
 

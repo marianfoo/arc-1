@@ -60,7 +60,7 @@ SELECT carrid, COUNT(*) as cnt FROM sflight GROUP BY carrid ORDER BY cnt DESC
 | DEVC (Package) | **Y** | Package contents |
 | SYSTEM | **Y** | System info (SID, release) |
 | COMPONENTS | **Y** | Installed software components |
-| MESSAGES | **Y** | Message class texts |
+| MSAG | **Y** | Message class texts (canonical TADIR R3TR type; deprecated alias: `MESSAGES`) |
 | TEXT_ELEMENTS | **Y** | Program text elements |
 | VARIANTS | **Y** | Program variants |
 
@@ -106,7 +106,7 @@ flowchart TD
 | Read function module | `SAPRead` | `type=FUNC, name=Z_FM, group=ZFUGR` |
 | Read function group | `SAPRead` | `type=FUGR, name=ZFUGR` |
 | Read CDS view | `SAPRead` | `type=DDLS, name=ZDDL_VIEW` |
-| Read message class | `SAPRead` | `type=MESSAGES, name=ZMSG` |
+| Read message class | `SAPRead` | `type=MSAG, name=ZMSG` (deprecated alias: `type=MESSAGES`) |
 | Read table structure | `SAPRead` | `type=TABL, name=MARA` |
 | Read table data | `SAPRead` | `type=TABLE_CONTENTS, name=MARA, maxRows=10, sqlFilter="MANDT = '100'"` |
 | **Read user's draft** | `SAPRead` | `type=CLAS, name=ZCL_TEST, version=inactive` |
@@ -207,8 +207,9 @@ SAPContext(action="impact", type="DDLS", name="ZI_SALESDATA3", siblingCheck=fals
 ### 3. Understand Error Messages
 
 ```
-Step 1: SAPRead(type="MESSAGES", name="ZRAY_00")
+Step 1: SAPRead(type="MSAG", name="ZRAY_00")
         → Returns JSON with all messages
+        (Deprecated alias `type="MESSAGES"` still accepted for one minor.)
 ```
 
 ### 4. Create Objects in Transportable Packages

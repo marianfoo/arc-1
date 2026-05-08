@@ -16,7 +16,7 @@ Read any SAP ABAP object.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `type` | string | Yes | Object type (see below; includes `AUTH`, `FTG2`, `ENHO`, `VERSIONS`, `VERSION_SOURCE` on on-prem systems) |
+| `type` | string | Yes | Object type (see below; includes `AUTH`, `FEATURE_TOGGLE`, `ENHO`, `VERSIONS`, `VERSION_SOURCE` on on-prem systems) |
 | `name` | string | No | Object name (e.g., `ZTEST_PROGRAM`, `ZCL_ORDER`, `MARA`) |
 | `format` | string | No | Output format: `"text"` (default) or `"structured"` (CLAS only, see below) |
 | `include` | string | No | For CLAS: `main`, `testclasses`, `definitions`, `implementations`, `macros`. For DDLS: `elements` (extract CDS view elements). |
@@ -51,7 +51,7 @@ Read any SAP ABAP object.
 | `DOMA` | Domain metadata (structured JSON: data type, length, fixed values, value table) |
 | `DTEL` | Data element metadata (structured JSON: type, labels, search help) |
 | `AUTH` | Authorization field metadata (structured JSON: role name, check table, domain, conversion exit, org-level info) |
-| `FTG2` | Feature toggle states (structured JSON: toggle state per system from SAP switch framework) |
+| `FEATURE_TOGGLE` | Feature toggle states (structured JSON: toggle state per system from SAP switch framework). Renamed from `FTG2` in audit Plan B (research/abap-types/types/ftg2.md) — `FTG2` still accepted as deprecated alias for one minor release with stderr warning. |
 | `ENHO` | Enhancement implementation metadata (structured JSON: BAdI technology, referenced object, implementation classes) |
 | `VERSIONS` | Revision history for an ABAP object. Returns JSON: `{ object: { name, type }, revisions: [{ id, author, timestamp, transport?, uri }] }`. Optional `include` for CLAS and `group` for FUNC. On-prem only. |
 | `VERSION_SOURCE` | Source code at a specific revision. Pass `versionUri` from a VERSIONS response. Returns raw source text. On-prem only. |
@@ -63,7 +63,8 @@ Read any SAP ABAP object.
 | `DEVC` | Package contents |
 | `SYSTEM` | System info (SID, release, kernel) |
 | `COMPONENTS` | Installed software components |
-| `MESSAGES` | Message class texts (structured JSON with `number`, `shortText`, `longText` per message) |
+| `MSAG` | Message class metadata (structured JSON with `number`, `shortText`, `longText` per message). `MSAG` is the canonical TADIR R3TR short type (added in audit Plan B — research/abap-types/types/msag.md). |
+| `MESSAGES` | Deprecated alias for `MSAG`. Still accepted for one minor release with stderr warning; use `MSAG` going forward. |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
 | `INACTIVE_OBJECTS` | List all objects pending activation for the calling user (no `name` needed). Returns rich metadata: `name`, `type`, `uri`, `description?`, `user`, `deleted`, `transport`, `parentTransport`. |
@@ -97,7 +98,8 @@ SAPRead(type="TABL", name="T000")                — transparent table (auto-res
 SAPRead(type="DOMA", name="BUKRS")               — domain metadata with fixed values
 SAPRead(type="DTEL", name="MANDT")               — data element metadata with labels
 SAPRead(type="AUTH", name="BUKRS")               — authorization field metadata
-SAPRead(type="FTG2", name="ABC_TOGGLE")          — feature toggle states
+SAPRead(type="FEATURE_TOGGLE", name="ABC_TOGGLE")  — feature toggle states (FTG2 still works as deprecated alias)
+SAPRead(type="MSAG", name="SY")                    — message class (MESSAGES still works as deprecated alias)
 SAPRead(type="ENHO", name="ZMY_BADI_IMPL")       — enhancement implementation metadata
 SAPRead(type="VERSIONS", name="ZARC1_TEST_REPORT") — list object revisions with revision URIs
 SAPRead(type="VERSIONS", name="ZCL_X", include="definitions") — list revisions for CLAS definitions include

@@ -232,6 +232,14 @@ export function classifyToolErrorSkip(result: ToolResult): string | null {
   if (/\/sap\/bc\/adt\/ddic\/tables\/[A-Z0-9_]+\/source.*(?:does not exist|not found)/i.test(text)) {
     return 'Backend feature not supported on this SAP system: TABL source read not available on this release';
   }
+  // resolveTablObjectUrl() probes /tables/ first then falls back to /structures/.
+  // When neither exists (e.g. the table itself isn't shipped on this system —
+  // observed for T001 on a4h S/4HANA 2023 trial), both probes return 404 and the
+  // tool error surfaces the structures URL. Skip cleanly so missing fixtures
+  // don't fail tests that target a different feature.
+  if (/\/sap\/bc\/adt\/ddic\/structures\/[A-Z0-9_]+\b.*status 404/i.test(text)) {
+    return 'Fixture not on this SAP system: TABL/STRU object missing from shipped repository';
+  }
   if (/\/sap\/bc\/adt\/ddic\/dataelements\b.*Unsupported Media Type/i.test(text)) {
     return 'Backend feature not supported on this SAP system: DTEL v2 content type not supported on this release';
   }

@@ -871,9 +871,11 @@ describe('E2E RAP write lifecycle tests', () => {
       const createText = expectToolSuccessOrSkip(ctx, createResult);
       expect(createText).toContain(`Created MSAG ${msagName}`);
 
-      // Step 2: Read the message class — should return structured JSON
+      // Step 2: Read the message class — should return structured JSON.
+      // Use the canonical 'MSAG' short type; 'MESSAGES' is now a deprecated
+      // read-side alias kept for one minor (audit Plan B / PR #224).
       const readResult = await callTool(client, 'SAPRead', {
-        type: 'MESSAGES',
+        type: 'MSAG',
         name: msagName,
       });
       const readText = expectToolSuccess(readResult);
@@ -894,9 +896,11 @@ describe('E2E RAP write lifecycle tests', () => {
       const updateText = expectToolSuccessOrSkip(ctx, updateResult);
       expect(updateText).toContain(`updated MSAG ${msagName}`);
 
-      // Step 4: Read again — should have messages
+      // Step 4: Read again — should have messages. Read once more via the
+      // deprecated 'MESSAGES' alias so the lifecycle test also asserts the
+      // alias compatibility window (audit Plan B / PR #224).
       const readResult2 = await callTool(client, 'SAPRead', {
-        type: 'MESSAGES',
+        type: 'MSAG',
         name: msagName,
       });
       const readText2 = expectToolSuccess(readResult2);
@@ -904,6 +908,16 @@ describe('E2E RAP write lifecycle tests', () => {
       expect(readData2.messages).toHaveLength(2);
       expect(readData2.messages[0].number).toBe('001');
       expect(readData2.messages[0].shortText).toContain('Test message');
+
+      // Alias compat assertion: deprecated 'MESSAGES' must still return the
+      // same data (kept for one minor — see docs/plans/completed/audit-symmetry-and-ftg2-rename.md).
+      const readAliasResult = await callTool(client, 'SAPRead', {
+        type: 'MESSAGES',
+        name: msagName,
+      });
+      const readAliasData = JSON.parse(expectToolSuccess(readAliasResult));
+      expect(readAliasData.messages).toHaveLength(2);
+      expect(readAliasData.name).toBe(msagName);
 
       // Step 5: Delete
       const deleteResult = await callTool(client, 'SAPWrite', {
