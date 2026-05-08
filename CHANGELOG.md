@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.1](https://github.com/marianfoo/arc-1/compare/v0.9.0...v0.9.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* **adt:** align DEVC listing descriptions with object names ([#242](https://github.com/marianfoo/arc-1/issues/242)) ([63cfc70](https://github.com/marianfoo/arc-1/commit/63cfc70a00b9dd21f6c786fcdce7a5a8d72a55fd))
+* **adt:** decode XML entities in parseSearchResults description ([#243](https://github.com/marianfoo/arc-1/issues/243)) ([c522866](https://github.com/marianfoo/arc-1/commit/c52286699fdd844628d5385f50e8d4ab213b7730))
+* **docker:** drop bundled npm CLI from runtime image ([#240](https://github.com/marianfoo/arc-1/issues/240)) ([e480206](https://github.com/marianfoo/arc-1/commit/e480206cf13eb057818045e5765b840577e5bacb))
+
 ## [0.9.0](https://github.com/marianfoo/arc-1/compare/v0.8.0...v0.9.0) (2026-05-08)
 
 
