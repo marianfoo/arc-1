@@ -483,6 +483,59 @@ describe('ADT Integration Tests', () => {
       expect(resolvedUrl).toMatch(/\/sap\/bc\/adt\/ddic\/(tables|structures)\/T000$/);
     });
 
+    it('reads DDIC view metadata via the VIT URL (V_USR_NAME)', async (ctx) => {
+      // Regression test for the "VIEW silently broken" bug fixed in PR #222
+      // follow-up. Pre-fix: getView used /sap/bc/adt/ddic/views/{name}/source/main
+      // which returns HTTP 404 on a4h S/4HANA 2023 and HTTP 500 on npl 7.50.
+      // Real route is the VIT generic-object endpoint
+      // /sap/bc/adt/vit/wb/object_type/viewdv/object_name/{name}, returning
+      // metadata XML with adtcore:type="VIEW/DV". V_USR_NAME is a SAP-shipped
+      // standard view available on every release (verified on a4h + npl
+      // 2026-05-08).
+      let result: Awaited<ReturnType<typeof client.getView>>;
+      try {
+        result = await client.getView('V_USR_NAME');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/does not exist/i, /not found/i]);
+        requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (V_USR_NAME) — view not on this system`);
+        return;
+      }
+      expect(result.source).toBeTruthy();
+      // Metadata XML — root element is adtcore:mainObject with view attrs.
+      expect(result.source).toMatch(/adtcore:type="VIEW\/DV"/);
+      expect(result.source).toMatch(/adtcore:name="V_USR_NAME"/);
+    });
+
+    it('SAPSearch returns adtcore:type="VIEW/DV" for DDIC views (returned-type assertion)', async () => {
+      // Cross-cutting methodology guard for the "ADT silently ignores unknown
+      // objectType filters" bug class. Earlier audits passed only because they
+      // checked HTTP status, not the returned slash code. This test inspects
+      // adtcore:type on the search result. Pre-fix the test would have passed
+      // with VIEW/V too (silent ignore) — now it must be VIEW/DV.
+      const results = await client.searchObject('V_USR_NAME', 5);
+      const view = results.find((r) => r.objectName === 'V_USR_NAME');
+      expect(view).toBeDefined();
+      expect(view!.objectType).toBe('VIEW/DV');
+    });
+
+    it('SAPSearch returns adtcore:type="TRAN/T" for transactions (returned-type assertion)', async () => {
+      // Same regression guard for TRAN/O → TRAN/T (PR #222 follow-up).
+      const results = await client.searchObject('SE38', 5);
+      const tcode = results.find((r) => r.objectName === 'SE38');
+      expect(tcode).toBeDefined();
+      expect(tcode!.objectType).toBe('TRAN/T');
+    });
+
+    it('SAPSearch returns adtcore:type="FUGR/FF" for function modules (returned-type assertion)', async () => {
+      // Confirms FUGR/FF is the live slash code for function modules. The map
+      // entry FUGR/FF → FUNC routes correctly to client.getFunction at the
+      // handler layer (covered by unit tests).
+      const results = await client.searchObject('BAPI_USER_GETLIST', 5);
+      const fm = results.find((r) => r.objectName === 'BAPI_USER_GETLIST');
+      expect(fm).toBeDefined();
+      expect(fm!.objectType).toBe('FUGR/FF');
+    });
+
     it('reads domain metadata (MANDT)', async (ctx) => {
       let domain: Awaited<ReturnType<typeof client.getDomain>>;
       try {

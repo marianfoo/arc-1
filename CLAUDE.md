@@ -191,6 +191,7 @@ tests/
 | Task | Files |
 |------|-------|
 | Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` (for structured format, also `src/adt/xml-parser.ts`, `src/adt/types.ts`) |
+| Add new ADT slash alias to `SLASH_TYPE_MAP` | `src/handlers/intent.ts` (`SLASH_TYPE_MAP` + `SLASH_TYPE_EVIDENCE` + `KNOWN_BASE_TYPES` if introducing a new canonical type), `tests/unit/handlers/slash-type-map.test.ts` (citation guard auto-checks the new entry against `research/abap-types/types/<short>.md`). Adding an entry without a matching evidence file fails the guard — verify the slash code against Eclipse `com.sap.adt.core.apidoc-3.58.1` AND a live `<adtcore:type>` response from a real SAP system before adding. See PR #222 / #224 (issue #218 audit). |
 | Add AUTH/FTG2/ENHO read (read-only DDIC metadata) | `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add source revision history read (VERSIONS / VERSION_SOURCE) | `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add DCL (access control) read/write | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
