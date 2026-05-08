@@ -2555,40 +2555,118 @@ function escapeXml(s: string): string {
 
 // ─── Object URL Mapping ──────────────────────────────────────────────
 
-const SLASH_TYPE_MAP: Record<string, string> = {
-  'PROG/P': 'PROG',
-  'PROG/I': 'INCL',
-  'CLAS/OC': 'CLAS',
-  'CLAS/LI': 'CLAS',
-  'INTF/OI': 'INTF',
-  'FUNC/FM': 'FUNC',
-  'FUGR/F': 'FUGR',
-  'FUGR/FF': 'FUGR',
-  'DDLS/DF': 'DDLS',
-  'DCLS/DL': 'DCLS',
-  'BDEF/BDO': 'BDEF',
-  'SRVD/SRV': 'SRVD',
-  'SRVB/SVB': 'SRVB',
-  'DDLX/EX': 'DDLX',
-  // DDIC TABL: ADT exposes /DT (transparent table) and /DS (DDIC structure) subtypes.
-  // Both share TADIR R3TR TABL (distinguished by DD02L-TABCLASS = TRANSP vs INTTAB).
+// Every entry verified against either Eclipse ADT apidoc 3.58.1, live a4h S/4HANA
+// 2023 + npl NW 7.50 ADT responses (captured 2026-05-08 — both systems agree), or
+// abap-file-formats schemas. Per-entry evidence in research/abap-types/types/<x>.md.
+// SLASH_TYPE_EVIDENCE below MUST stay key-equal (anti-cargo-cult guard, enforced by
+// tests/unit/handlers/slash-type-map.test.ts — see issue #218 follow-up).
+// Exported for tests only — the citation guard
+// (tests/unit/handlers/slash-type-map.test.ts) needs to assert key-equality
+// against SLASH_TYPE_EVIDENCE so a new entry without evidence fails CI.
+// Production callers should keep using normalizeObjectType().
+export const SLASH_TYPE_MAP: Record<string, string> = {
+  'PROG/P': 'PROG', // research/abap-types/types/prog.md
+  'PROG/I': 'INCL', // research/abap-types/types/incl.md
+  'CLAS/OC': 'CLAS', // research/abap-types/types/clas.md
+  // 'CLAS/LI' removed — invented; absent from Eclipse apidoc; no live ADT response
+  // emits it. Pass-through means schema validation rejects it loudly.
+  'INTF/OI': 'INTF', // research/abap-types/types/intf.md
+  // 'FUNC/FM' removed — invented; ADT emits FUGR/FF for function modules, not
+  // FUNC/FM. Function modules are LIMU FUNC under R3TR FUGR.
+  'FUGR/F': 'FUGR', // function group container — research/abap-types/types/fugr.md
+  // FUGR/FF is a function module (LIMU FUNC under FUGR), not the function group.
+  // Live a4h: GET .../groups/su_user/fmodules/bapi_user_getlist returns
+  // adtcore:type="FUGR/FF" with <adtcore:containerRef adtcore:type="FUGR/F"/>.
+  'FUGR/FF': 'FUNC', // research/abap-types/types/fugr.md + func.md
+  'DDLS/DF': 'DDLS', // research/abap-types/types/ddls.md
+  'DCLS/DL': 'DCLS', // research/abap-types/types/dcls.md
+  'BDEF/BDO': 'BDEF', // research/abap-types/types/bdef.md
+  'SRVD/SRV': 'SRVD', // research/abap-types/types/srvd.md
+  'SRVB/SVB': 'SRVB', // research/abap-types/types/srvb.md
+  'DDLX/EX': 'DDLX', // research/abap-types/types/ddlx.md (live a4h + npl 2026-05-08)
+  // DDIC TABL: ADT exposes /DT (transparent table) and /DS (DDIC structure)
+  // subtypes. Both share TADIR R3TR TABL (DD02L-TABCLASS = TRANSP vs INTTAB).
   // ARC-1 collapses both into the canonical short type 'TABL' (Model B — see
   // docs/plans/completed/collapse-stru-into-tabl.md).
-  'TABL/DT': 'TABL',
-  'TABL/DS': 'TABL',
+  'TABL/DT': 'TABL', // research/abap-types/types/tabl.md
+  'TABL/DS': 'TABL', // research/abap-types/types/tabl.md
   // Legacy slash-form alias — ADT never actually returns this, but pre-Model-B
   // ARC-1 prompts learned it from older docs. Kept so they normalize to TABL
-  // instead of producing a schema error. Bare 'STRU' is intentionally NOT
-  // aliased — it should fail schema validation so the breaking change surfaces.
-  'STRU/DS': 'TABL',
-  'DOMA/DD': 'DOMA',
-  'DTEL/DE': 'DTEL',
-  'MSAG/N': 'MSAG',
-  'DEVC/K': 'DEVC',
-  'TRAN/O': 'TRAN',
-  'VIEW/V': 'VIEW',
-  'SKTD/TYP': 'SKTD',
+  // instead of producing a schema error. Bare 'STRU' is NOT aliased.
+  'STRU/DS': 'TABL', // research/abap-types/types/tabl.md (legacy alias)
+  'DOMA/DD': 'DOMA', // research/abap-types/types/doma.md
+  'DTEL/DE': 'DTEL', // research/abap-types/types/dtel.md
+  'MSAG/N': 'MSAG', // research/abap-types/types/msag.md
+  'DEVC/K': 'DEVC', // research/abap-types/types/devc.md
+  // TRAN/T (was TRAN/O — invented). Live a4h + npl 2026-05-08 both return
+  // adtcore:type="TRAN/T" for SE38, SU01, etc.
+  'TRAN/T': 'TRAN', // research/abap-types/types/tran.md
+  // VIEW/DV (was VIEW/V — invented). Live a4h + npl 2026-05-08 both return
+  // adtcore:type="VIEW/DV" for V_USR_NAME.
+  'VIEW/DV': 'VIEW', // research/abap-types/types/view.md
+  'SKTD/TYP': 'SKTD', // research/abap-types/types/sktd.md
 };
+
+/**
+ * Citation guard companion for SLASH_TYPE_MAP. Keys MUST stay key-equal to
+ * SLASH_TYPE_MAP (enforced by tests/unit/handlers/slash-type-map.test.ts). Each
+ * value points at a research evidence file or a fixture that backs the slash code.
+ * Adding an entry without evidence is the anti-cargo-cult guard.
+ */
+export const SLASH_TYPE_EVIDENCE: Record<string, string> = {
+  'PROG/P': 'research/abap-types/types/prog.md',
+  'PROG/I': 'research/abap-types/types/incl.md',
+  'CLAS/OC': 'research/abap-types/types/clas.md',
+  'INTF/OI': 'research/abap-types/types/intf.md',
+  'FUGR/F': 'research/abap-types/types/fugr.md',
+  'FUGR/FF': 'research/abap-types/types/fugr.md',
+  'DDLS/DF': 'research/abap-types/types/ddls.md',
+  'DCLS/DL': 'research/abap-types/types/dcls.md',
+  'BDEF/BDO': 'research/abap-types/types/bdef.md',
+  'SRVD/SRV': 'research/abap-types/types/srvd.md',
+  'SRVB/SVB': 'research/abap-types/types/srvb.md',
+  'DDLX/EX': 'research/abap-types/types/ddlx.md',
+  'TABL/DT': 'research/abap-types/types/tabl.md',
+  'TABL/DS': 'research/abap-types/types/tabl.md',
+  'STRU/DS': 'research/abap-types/types/tabl.md',
+  'DOMA/DD': 'research/abap-types/types/doma.md',
+  'DTEL/DE': 'research/abap-types/types/dtel.md',
+  'MSAG/N': 'research/abap-types/types/msag.md',
+  'DEVC/K': 'research/abap-types/types/devc.md',
+  'TRAN/T': 'research/abap-types/types/tran.md',
+  'VIEW/DV': 'research/abap-types/types/view.md',
+  'SKTD/TYP': 'research/abap-types/types/sktd.md',
+};
+
+/**
+ * Set of canonical short types that MUST have a working `objectBasePath` case.
+ * Drives the exhaustiveness guard inside `objectBasePath` so a new canonical type
+ * added to SAPRead/SAPWrite enums without an URL builder fails loudly. The VIEW
+ * silent-fallthrough bug (research/abap-types/types/view.md) is exactly what this
+ * guard prevents from reoccurring.
+ */
+export const KNOWN_BASE_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'INCL',
+  'FUGR',
+  'FUNC',
+  'DDLS',
+  'DCLS',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'DDLX',
+  'TABL',
+  'DOMA',
+  'DTEL',
+  'MSAG',
+  'DEVC',
+  'TRAN',
+  'VIEW',
+  'SKTD',
+]);
 
 /** Normalize ADT type codes and aliases to ARC-1 canonical short types. */
 export function normalizeObjectType(type: string): string {
@@ -2658,13 +2736,27 @@ function normalizeTypeArgsForValidation(toolName: string, args: Record<string, u
         ...args,
         type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
       };
+    case 'SAPTransport':
+      // Normalize `type` for SAPTransport actions that route through
+      // objectBasePath (e.g. when a future action accepts a slash-form
+      // workbench type). Codex review of PR #223 flagged this gap: without
+      // normalization, a caller passing `type: 'FUNC/FM'` would slip past the
+      // string-typed schema and hit the slash-form throw inside objectBasePath,
+      // which is correct as a last-resort fence but not as a friendly error.
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+      };
     default:
       return args;
   }
 }
 
-/** Base path for an object type. Returns path prefix without trailing name segment. */
-function objectBasePath(type: string): string {
+/**
+ * Base path for an object type. Returns path prefix without trailing name segment.
+ * Exported for tests (Plan A Task 4 — exhaustiveness guard regression test).
+ */
+export function objectBasePath(type: string): string {
   switch (type) {
     case 'PROG':
       return '/sap/bc/adt/programs/programs/';
@@ -2673,7 +2765,25 @@ function objectBasePath(type: string): string {
     case 'INTF':
       return '/sap/bc/adt/oo/interfaces/';
     case 'FUNC':
-      return '/sap/bc/adt/functions/groups/';
+      // Codex review of PR #223 follow-up: function modules cannot be
+      // addressed with a single base path — they live at
+      // /sap/bc/adt/functions/groups/{group}/fmodules/{fm} and require the
+      // parent function group. Returning the group prefix for FUNC was the
+      // pre-PR behaviour and silently mis-routed a real ADT search result
+      // `{ type: "FUGR/FF", name: "BAPI_USER_GETLIST" }` (which now
+      // canonicalises to FUNC) to /functions/groups/BAPI_USER_GETLIST. Throw
+      // so generic URL builders (SAPActivate / SAPDiagnose / SAPTransport via
+      // objectUrlForType) fail loudly. SAPRead and SAPNavigate handle FUNC
+      // through dedicated `case 'FUNC'` branches that take a `group` arg and
+      // build the correct URL via client.getFunction(group, name) — those
+      // paths do not call objectBasePath and remain unaffected.
+      throw new Error(
+        `objectBasePath: type 'FUNC' (function module) cannot be resolved to a ` +
+          `single base path — it requires the parent function group via ` +
+          `client.getFunction(group, name) or an explicit /sap/bc/adt/functions/` +
+          `groups/{group}/fmodules/{name} URI. Caller must take the FUNC-aware ` +
+          `path or pass 'uri' directly. See PR #223 codex follow-up.`,
+      );
     case 'INCL':
       return '/sap/bc/adt/programs/includes/';
     case 'FUGR':
@@ -2704,10 +2814,49 @@ function objectBasePath(type: string): string {
     case 'DEVC':
       return '/sap/bc/adt/packages/';
     case 'TRAN':
+      // VIT generic-object endpoint. The 'trant' infix is the ADT workbench type
+      // for transactions; live a4h + npl 2026-05-08 confirm GET with this prefix
+      // returns 200 for SE38/SU01.
       return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
+    case 'VIEW':
+      // VIT generic-object endpoint for DDIC views. /sap/bc/adt/ddic/views/
+      // returns HTTP 500 on a4h + npl (verified 2026-05-08); only the VIT URL
+      // works. Without this case, VIEW reads silently fell through to
+      // /programs/programs/ — see research/abap-types/types/view.md.
+      return '/sap/bc/adt/vit/wb/object_type/viewdv/object_name/';
     case 'SKTD':
       return '/sap/bc/adt/documentation/ktd/documents/';
     default:
+      // Exhaustiveness guard: canonical types in KNOWN_BASE_TYPES MUST have a
+      // switch case — that catches the silent-fallthrough bug class (VIEW pre-PR).
+      if (KNOWN_BASE_TYPES.has(type)) {
+        throw new Error(
+          `objectBasePath: canonical type '${type}' is in KNOWN_BASE_TYPES but ` +
+            `has no switch case. Add a case here or remove it from KNOWN_BASE_TYPES. ` +
+            `See docs/plans/completed/audit-purge-invented-adt-types.md.`,
+        );
+      }
+      // Slash-form guard: a normalized slash code (e.g. 'FUNC/FM', 'CLAS/LI',
+      // 'VIEW/V', 'TRAN/O') must NEVER reach here. If it did, normalizeObjectType
+      // failed to map it and we'd silently route the request to the program
+      // endpoint. Tools like SAPNavigate/SAPActivate/SAPDiagnose/SAPTransport
+      // accept `type: string` (no enum), so the schema layer can't catch this
+      // for them — only this guard can. Throw with a hint pointing at the
+      // citation guard so the contributor adds the alias correctly. Codex
+      // review of PR #223 caught that the previous default-fallback could
+      // still silently route removed aliases via these non-enum tools.
+      if (type.includes('/')) {
+        throw new Error(
+          `objectBasePath: refusing to build URL for slash-form type '${type}' — ` +
+            `this normally indicates an invented or unmapped ADT slash code. Add ` +
+            `it to SLASH_TYPE_MAP + SLASH_TYPE_EVIDENCE (with a research entry) ` +
+            `if it is real, or correct the caller. See ` +
+            `docs/plans/completed/audit-purge-invented-adt-types.md and ` +
+            `tests/unit/handlers/slash-type-map.test.ts.`,
+        );
+      }
+      // Unknown raw inputs (no slash, not canonical) fall through to the
+      // program path so legacy callers like inferObjectType keep working.
       return '/sap/bc/adt/programs/programs/';
   }
 }

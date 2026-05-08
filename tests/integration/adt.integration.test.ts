@@ -483,6 +483,66 @@ describe('ADT Integration Tests', () => {
       expect(resolvedUrl).toMatch(/\/sap\/bc\/adt\/ddic\/(tables|structures)\/T000$/);
     });
 
+    it('reads DDIC view metadata via the VIT URL (V_USR_NAME)', async (ctx) => {
+      // Regression test for the "VIEW silently broken" bug fixed in PR #222
+      // follow-up. Pre-fix: getView used /sap/bc/adt/ddic/views/{name}/source/main
+      // which returns HTTP 404 on a4h S/4HANA 2023 and HTTP 500 on npl 7.50.
+      // Real route is the VIT generic-object endpoint
+      // /sap/bc/adt/vit/wb/object_type/viewdv/object_name/{name}, returning
+      // metadata XML with adtcore:type="VIEW/DV". V_USR_NAME is a SAP-shipped
+      // standard view available on every release (verified on a4h + npl
+      // 2026-05-08).
+      let result: Awaited<ReturnType<typeof client.getView>>;
+      try {
+        result = await client.getView('V_USR_NAME');
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/does not exist/i, /not found/i]);
+        requireOrSkip(ctx, undefined, `${SkipReason.NO_FIXTURE} (V_USR_NAME) — view not on this system`);
+        return;
+      }
+      expect(result.source).toBeTruthy();
+      // Metadata XML — root element is adtcore:mainObject with view attrs.
+      expect(result.source).toMatch(/adtcore:type="VIEW\/DV"/);
+      expect(result.source).toMatch(/adtcore:name="V_USR_NAME"/);
+    });
+
+    // Note (codex P2 follow-up, PR #223): these tests assert the slash codes
+    // ADT *emits* in `<adtcore:type>` for known objects — not that ADT
+    // honours an `objectType` filter. `client.searchObject(name, max)`
+    // does not pass `objectType` (the parameter doesn't exist on the
+    // client), and the ADT informationsystem/search endpoint silently
+    // ignores unknown filters anyway. So these are emitted-type
+    // assertions. They still serve as regression guards for the four
+    // SLASH_TYPE_MAP fixes (VIEW/DV, TRAN/T, FUGR/FF — and implicitly
+    // confirm CLAS/LI / FUNC/FM are not what real ADT ever returns).
+    // A future PR can add object-search filtering + a deliberate
+    // bogus-objectType test once `client.searchObject` grows that
+    // parameter.
+
+    it('SAPSearch result for V_USR_NAME emits adtcore:type="VIEW/DV"', async () => {
+      const results = await client.searchObject('V_USR_NAME', 5);
+      const view = results.find((r) => r.objectName === 'V_USR_NAME');
+      expect(view).toBeDefined();
+      expect(view!.objectType).toBe('VIEW/DV');
+    });
+
+    it('SAPSearch result for SE38 emits adtcore:type="TRAN/T"', async () => {
+      const results = await client.searchObject('SE38', 5);
+      const tcode = results.find((r) => r.objectName === 'SE38');
+      expect(tcode).toBeDefined();
+      expect(tcode!.objectType).toBe('TRAN/T');
+    });
+
+    it('SAPSearch result for BAPI_USER_GETLIST emits adtcore:type="FUGR/FF"', async () => {
+      // Confirms FUGR/FF is the live slash code for function modules. The map
+      // entry FUGR/FF → FUNC routes correctly to client.getFunction at the
+      // handler layer (covered by unit tests).
+      const results = await client.searchObject('BAPI_USER_GETLIST', 5);
+      const fm = results.find((r) => r.objectName === 'BAPI_USER_GETLIST');
+      expect(fm).toBeDefined();
+      expect(fm!.objectType).toBe('FUGR/FF');
+    });
+
     it('reads domain metadata (MANDT)', async (ctx) => {
       let domain: Awaited<ReturnType<typeof client.getDomain>>;
       try {

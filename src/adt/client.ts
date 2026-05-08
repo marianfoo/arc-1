@@ -347,10 +347,24 @@ export class AdtClient {
     return this.fetchSource(`/sap/bc/adt/ddic/tables/${encodeURIComponent(name)}/source/main`, opts);
   }
 
-  /** Get view definition source code */
+  /**
+   * Read DDIC view metadata.
+   *
+   * Classic DDIC views are exposed via ADT's VIT generic-object endpoint, NOT
+   * `/sap/bc/adt/ddic/views/`. Live verification 2026-05-08 against a4h
+   * S/4HANA 2023 + npl NW 7.50: `/ddic/views/V_USR_NAME` returns HTTP 500;
+   * `/ddic/views/V_USR_NAME/source/main` returns HTTP 404. Only the VIT URL
+   * `/sap/bc/adt/vit/wb/object_type/viewdv/object_name/{name}` returns 200.
+   * Note: VIEW does NOT expose a `/source/main` sub-resource — the response
+   * body is the metadata XML (root element `adtcore:mainObject` with view
+   * attributes). Returning that XML as `source` is consistent with the
+   * SourceReadResult contract; structured parsing is out of scope here.
+   *
+   * See research/abap-types/types/view.md and PR #222 follow-up.
+   */
   async getView(name: string, opts?: SourceReadOptions): Promise<SourceReadResult> {
     checkOperation(this.safety, OperationType.Read, 'GetView');
-    return this.fetchSource(`/sap/bc/adt/ddic/views/${encodeURIComponent(name)}/source/main`, opts);
+    return this.fetchSource(`/sap/bc/adt/vit/wb/object_type/viewdv/object_name/${encodeURIComponent(name)}`, opts);
   }
 
   /** Get structure definition source code (CDS-like format) */

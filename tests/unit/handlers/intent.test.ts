@@ -7840,15 +7840,16 @@ ENDCLASS.`;
 
   describe('normalizeObjectType', () => {
     it('normalizes all supported slash-type mappings', () => {
+      // Issue #218 audit follow-up: every entry below is verified against either
+      // Eclipse ADT apidoc 3.58.1 or live a4h+npl ADT responses captured
+      // 2026-05-08. See research/abap-types/types/<short>.md.
       const mappings: Array<[string, string]> = [
         ['PROG/P', 'PROG'],
         ['PROG/I', 'INCL'],
         ['CLAS/OC', 'CLAS'],
-        ['CLAS/LI', 'CLAS'],
         ['INTF/OI', 'INTF'],
-        ['FUNC/FM', 'FUNC'],
-        ['FUGR/F', 'FUGR'],
-        ['FUGR/FF', 'FUGR'],
+        ['FUGR/F', 'FUGR'], // function group container
+        ['FUGR/FF', 'FUNC'], // function module — routes to FUNC, not FUGR
         ['DDLS/DF', 'DDLS'],
         ['DCLS/DL', 'DCLS'],
         ['BDEF/BDO', 'BDEF'],
@@ -7866,13 +7867,24 @@ ENDCLASS.`;
         ['DTEL/DE', 'DTEL'],
         ['MSAG/N', 'MSAG'],
         ['DEVC/K', 'DEVC'],
-        ['TRAN/O', 'TRAN'],
-        ['VIEW/V', 'VIEW'],
+        ['TRAN/T', 'TRAN'], // was 'TRAN/O' pre-audit — ADT actually emits TRAN/T
+        ['VIEW/DV', 'VIEW'], // was 'VIEW/V' pre-audit — ADT actually emits VIEW/DV
+        ['SKTD/TYP', 'SKTD'],
       ];
 
       for (const [input, expected] of mappings) {
         expect(normalizeObjectType(input)).toBe(expected);
       }
+    });
+
+    it('passes through invented slash codes removed in PR (regression guard)', () => {
+      // These were aliased pre-audit. The audit (research/abap-types/) verified
+      // they don't exist in ADT or any SAP source. Pass-through means schema
+      // validation rejects them loudly so the breaking change surfaces.
+      expect(normalizeObjectType('FUNC/FM')).toBe('FUNC/FM');
+      expect(normalizeObjectType('CLAS/LI')).toBe('CLAS/LI');
+      expect(normalizeObjectType('VIEW/V')).toBe('VIEW/V');
+      expect(normalizeObjectType('TRAN/O')).toBe('TRAN/O');
     });
 
     it('is case-insensitive for friendly and slash types', () => {

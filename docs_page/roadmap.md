@@ -115,6 +115,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| — | Audit-driven purge of invented ADT slash aliases (issue #218 follow-up). Removes `FUNC/FM`, `CLAS/LI`, `VIEW/V`, `TRAN/O` from `SLASH_TYPE_MAP`; repoints `FUGR/FF → FUNC` (was `→ FUGR`); adds real `VIEW/DV → VIEW` and `TRAN/T → TRAN`; adds `objectBasePath('VIEW')` (DDIC view reads were silently broken via fallthrough to `/programs/programs/`); adds `KNOWN_BASE_TYPES` exhaustiveness guard + `SLASH_TYPE_EVIDENCE` citation guard so this bug class can't recur. Verified against a4h S/4HANA 2023 + npl NW 7.50. | 2026-05-08 | Compatibility |
 | [SEC-10](#sec-10) | HTTP Security Headers (helmet) + Opt-In CORS for browser MCP clients | 2026-05-05 | Security |
 | FEAT-51 | CDS CRUD Dependency Guidance (`SAPWrite` DDLS delete emits where-used blocker list + suggested delete order; ordered DDIC diagnostics → remediation) (PR #176) | 2026-04-23 | Features |
 | [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
@@ -539,7 +540,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 **Why:** Supports **token efficiency** — reduces failed create attempts where the LLM guesses the wrong type code.
 
-**Why not:** The mapping is incomplete and fragile — SAP has multiple variants (`PROG/P` vs `PROG/I`, `CLAS/OC` vs `CLAS/LI`) and defaults may differ by release. Power users who know the correct suffix can't bypass the auto-mapping, creating a false abstraction. Better error messages (extracting ADT's 400 "expected CLAS/OC" response) solve the root cause more cleanly. The mapping also encourages sloppy LLM behavior — if ARC-1 always "fixes" type codes, the LLM stops learning the correct ones, creating problems when users switch to other tools.
+**Why not:** The mapping is incomplete and fragile — SAP has multiple variants (`PROG/P` vs `PROG/I`, `CLAS/OC` vs class-include subtypes) and defaults may differ by release. (Note: `CLAS/LI` was previously listed here as an example but has been removed as invented per issue #218 audit / PR #223 — see `docs/plans/completed/audit-purge-invented-adt-types.md`.) Power users who know the correct suffix can't bypass the auto-mapping, creating a false abstraction. Better error messages (extracting ADT's 400 "expected CLAS/OC" response) solve the root cause more cleanly. The mapping also encourages sloppy LLM behavior — if ARC-1 always "fixes" type codes, the LLM stops learning the correct ones, creating problems when users switch to other tools.
 
 ---
 
