@@ -5632,6 +5632,163 @@ ENDCLASS.`;
     });
   });
 
+  // ─── SAPNavigate references — INTF SEOMETAREL augmentation ──────────
+
+  describe('SAPNavigate references — INTF augmentation via SEOMETAREL', () => {
+    /** dataPreview XML with a single CLSNAME column from SEOMETAREL */
+    function clsnameXml(names: string[]): string {
+      const data = names.map((n) => `<DATA>${n}</DATA>`).join('');
+      return `<dataPreview:tableData xmlns:dataPreview="http://www.sap.com/adt/dataPreview">
+        <dataPreview:totalRows>${names.length}</dataPreview:totalRows>
+        <dataPreview:columns><dataPreview:metadata dataPreview:name="CLSNAME"/><dataPreview:dataSet>${data}</dataPreview:dataSet></dataPreview:columns>
+      </dataPreview:tableData>`;
+    }
+
+    /** usageReferences result with a single Interface Section entry — no implementer surfaced */
+    function intfWhereUsedXmlSparse(): string {
+      return `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="1" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/interfaces/zif_foo" parentUri="/sap/bc/adt/packages/%24tmp" isResult="false" canHaveChildren="false">
+      <usageReferences:adtObject adtcore:name="ZIF_FOO" adtcore:type="INTF/OI" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/interfaces/zif_foo/source/main#start=1,0" isResult="false" canHaveChildren="true">
+      <usageReferences:adtObject adtcore:name="Interface Section" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+    }
+
+    it('augments INTF references with implementing classes from SEOMETAREL when SAP omits them', async () => {
+      mockFetch.mockReset();
+      // 1) CSRF probe (cached for the rest of the session)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // 2) usageReferences POST — SAP returns only the interface + section, no implementer
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      // 3) SEOMETAREL freestyle SQL response — CSRF cached, no fresh token needed
+      mockFetch.mockResolvedValueOnce(mockResponse(200, clsnameXml(['ZCL_IMPL1', 'ZCL_IMPL2'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+      });
+      expect(result.isError).toBeUndefined();
+      const refs = JSON.parse(result.content[0]?.text);
+      // Original 2 entries + 2 augmented implementers
+      expect(refs).toHaveLength(4);
+      const impl1 = refs.find((r: { name: string }) => r.name === 'ZCL_IMPL1');
+      expect(impl1).toBeDefined();
+      expect(impl1.type).toBe('CLAS/OC');
+      expect(impl1.uri).toBe('/sap/bc/adt/oo/classes/zcl_impl1');
+      expect(impl1.objectDescription).toBe('implements ZIF_FOO');
+      expect(impl1.isResult).toBe(true);
+    });
+
+    it('dedupes — does not re-add an implementer SAP already returned', async () => {
+      mockFetch.mockReset();
+      // SAP's where-used DOES include ZCL_IMPL1 this time (e.g. on a system with a healthier index)
+      const xmlWithImpl = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="1" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/classes/zcl_impl1" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZCL_IMPL1" adtcore:type="CLAS/OC" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, xmlWithImpl));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, clsnameXml(['ZCL_IMPL1', 'ZCL_IMPL2'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      // SAP entry (1) + 1 newly added (ZCL_IMPL2) — dedupe drops the duplicate
+      expect(refs).toHaveLength(2);
+      expect(refs.filter((r: { name: string }) => r.name === 'ZCL_IMPL1')).toHaveLength(1);
+      expect(refs.find((r: { name: string }) => r.name === 'ZCL_IMPL2')).toBeDefined();
+    });
+
+    it('skips augmentation silently when SQL/data scope is not allowed', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      // No SEOMETAREL fetch should happen — no further mockFetch responses needed
+
+      const noSqlClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false, allowDataPreview: false },
+      });
+      const result = await handleToolCall(noSqlClient, DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      // Only the 2 entries SAP returned — no augmentation
+      expect(refs).toHaveLength(2);
+      expect(refs.find((r: { name: string }) => r.type === 'CLAS/OC')).toBeUndefined();
+    });
+
+    it('skips augmentation when objectType filter excludes CLAS', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      // No SEOMETAREL fetch — caller asked only for PROG/P references
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+        objectType: 'PROG/P',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      // Only the 2 SAP entries
+      expect(refs).toHaveLength(2);
+    });
+
+    it('does not augment for CLAS references (only INTF)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/classes/zcl_caller" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZCL_CALLER" adtcore:type="CLAS/OC" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`,
+        ),
+      );
+      // No SEOMETAREL fetch should happen — input is a class, not an interface
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TARGET',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      expect(refs).toHaveLength(1);
+      expect(refs[0].name).toBe('ZCL_CALLER');
+    });
+  });
+
   // ─── SAPNavigate hierarchy ──────────────────────────────────────────
 
   describe('SAPNavigate hierarchy', () => {

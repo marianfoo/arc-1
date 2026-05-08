@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   findDefinition,
+  findInterfaceImplementersViaSeoMetaRel,
   findReferences,
   findWhereUsed,
   getCompletion,
@@ -268,6 +269,59 @@ describe('Code Intelligence', () => {
           Accept: 'application/vnd.sap.adt.repository.usagereferences.result.v1+xml',
         }),
       );
+    });
+  });
+
+  // ─── findInterfaceImplementersViaSeoMetaRel ───────────────────────
+
+  describe('findInterfaceImplementersViaSeoMetaRel', () => {
+    it('returns implementing classes mapped to WhereUsedResult shape', async () => {
+      const runQuery = vi.fn().mockResolvedValue({
+        columns: ['CLSNAME'],
+        rows: [{ CLSNAME: 'ZCL_FOO_IMPL' }, { CLSNAME: 'ZCL_BAR_IMPL' }],
+      });
+      const result = await findInterfaceImplementersViaSeoMetaRel(runQuery, 'ZIF_FOO');
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        uri: '/sap/bc/adt/oo/classes/zcl_foo_impl',
+        type: 'CLAS/OC',
+        name: 'ZCL_FOO_IMPL',
+        objectDescription: 'implements ZIF_FOO',
+        isResult: true,
+      });
+      expect(result[1]?.name).toBe('ZCL_BAR_IMPL');
+    });
+
+    it('queries SEOMETAREL with REFCLSNAME and RELTYPE=1 (interface implementation)', async () => {
+      const runQuery = vi.fn().mockResolvedValue({ columns: ['CLSNAME'], rows: [] });
+      await findInterfaceImplementersViaSeoMetaRel(runQuery, 'zif_lower_case');
+      expect(runQuery).toHaveBeenCalledWith(expect.stringContaining("REFCLSNAME = 'ZIF_LOWER_CASE'"), 100);
+      const sql = (runQuery as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(sql).toContain("RELTYPE = '1'");
+      expect(sql).toContain('FROM SEOMETAREL');
+    });
+
+    it('returns empty array when SEOMETAREL has no rows', async () => {
+      const runQuery = vi.fn().mockResolvedValue({ columns: ['CLSNAME'], rows: [] });
+      const result = await findInterfaceImplementersViaSeoMetaRel(runQuery, 'ZIF_NO_IMPL');
+      expect(result).toEqual([]);
+    });
+
+    it('sanitizes interface name to prevent SQL injection', async () => {
+      const runQuery = vi.fn().mockResolvedValue({ columns: ['CLSNAME'], rows: [] });
+      await findInterfaceImplementersViaSeoMetaRel(runQuery, "ZIF'; DROP TABLE TADIR; --");
+      const sql = (runQuery as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      // Sanitization strips everything outside [A-Z0-9_/] (no spaces, no quotes, no semicolons)
+      expect(sql).toContain("REFCLSNAME = 'ZIFDROPTABLETADIR'");
+      // The injected quote / semicolon must never reach the query
+      expect(sql.match(/'/g)?.length).toBe(4); // exactly 4 quotes: 2 around REFCLSNAME, 2 around RELTYPE
+    });
+
+    it('returns empty array when interface name sanitizes to empty', async () => {
+      const runQuery = vi.fn();
+      const result = await findInterfaceImplementersViaSeoMetaRel(runQuery, '!!!');
+      expect(result).toEqual([]);
+      expect(runQuery).not.toHaveBeenCalled();
     });
   });
 

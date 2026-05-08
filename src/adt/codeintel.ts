@@ -237,6 +237,48 @@ export async function findWhereUsed(
   return results;
 }
 
+/**
+ * Augment Where-Used results for an interface URI with implementing classes
+ * looked up from `SEOMETAREL` (RELTYPE='1' = interface implementation).
+ *
+ * SAP's scope-based usageReferences endpoint sometimes does NOT surface
+ * interface→implementing-class links directly — the implementations sit
+ * inside a `canHaveChildren="true"` Interface Section node, and the snippet
+ * expansion endpoint (`/usageReferences/snippets`) returns 404 on every
+ * release we've probed (NW 7.50, S/4HANA 2023). The where-used XML response
+ * shows `numberOfResults="1"` but with no `isResult="true"` entry. Verified
+ * live on `a4h.marianzeis.de` against ZIF_ARC1_TEST → ZCL_ARC1_TEST.
+ *
+ * `SEOMETAREL` is the canonical OO-relation table; the relationship is
+ * recorded there regardless of where-used index state, so this augmentation
+ * is more reliable than the HTTP API for this specific edge case.
+ *
+ * Returns an empty array silently when SQL access isn't available — caller
+ * should merge whatever it can get.
+ */
+export async function findInterfaceImplementersViaSeoMetaRel(
+  runQuery: (sql: string, maxRows: number) => Promise<{ columns: string[]; rows: Record<string, string>[] }>,
+  interfaceName: string,
+): Promise<WhereUsedResult[]> {
+  const safe = interfaceName.toUpperCase().replace(/[^A-Z0-9_/]/g, '');
+  if (!safe) return [];
+  const data = await runQuery(`SELECT CLSNAME FROM SEOMETAREL WHERE REFCLSNAME = '${safe}' AND RELTYPE = '1'`, 100);
+  return data.rows.map((row) => {
+    const className = String(row.CLSNAME ?? '');
+    return {
+      uri: `/sap/bc/adt/oo/classes/${className.toLowerCase()}`,
+      type: 'CLAS/OC',
+      name: className,
+      line: 0,
+      column: 0,
+      packageName: '',
+      snippet: '',
+      objectDescription: `implements ${interfaceName.toUpperCase()}`,
+      isResult: true,
+    };
+  });
+}
+
 function asOptionalString(value: unknown): string | undefined {
   if (value === null || value === undefined) return undefined;
   const str = String(value);

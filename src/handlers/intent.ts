@@ -35,6 +35,7 @@ import {
 import type { AdtClient, SourceReadResult } from '../adt/client.js';
 import {
   findDefinition,
+  findInterfaceImplementersViaSeoMetaRel,
   findReferences,
   findWhereUsed,
   getCompletion,
@@ -4345,6 +4346,48 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
           throw err;
         }
       }
+
+      // Augment interface where-used with implementing classes from SEOMETAREL.
+      // SAP's scope-based usageReferences endpoint sometimes does NOT surface
+      // interface→implementing-class links — the implementations sit inside a
+      // `canHaveChildren="true"` Interface Section node, and the snippet
+      // expansion endpoint returns 404 on every release we've probed (NW 7.50,
+      // S/4HANA 2023). SEOMETAREL is the canonical OO-relation table and is
+      // always populated, so this augmentation makes references reliable for
+      // interfaces. Silently skipped when SQL/data access isn't available.
+      const intfMatch = uri.match(/\/sap\/bc\/adt\/oo\/interfaces\/([^/?]+)/i);
+      if (intfMatch && (!objectType || /^CLAS/i.test(objectType))) {
+        const interfaceName = decodeURIComponent(intfMatch[1]).toUpperCase();
+        const canFreeSQL = isOperationAllowed(client.safety, OperationType.FreeSQL);
+        const canQuery = isOperationAllowed(client.safety, OperationType.Query);
+        try {
+          let implementers: WhereUsedResult[] = [];
+          if (canFreeSQL) {
+            implementers = await findInterfaceImplementersViaSeoMetaRel(
+              (sql, max) => client.runQuery(sql, max),
+              interfaceName,
+            );
+          } else if (canQuery) {
+            implementers = await findInterfaceImplementersViaSeoMetaRel(
+              (_sql, max) =>
+                client.getTableContents('SEOMETAREL', max, `REFCLSNAME = '${interfaceName}' AND RELTYPE = '1'`),
+              interfaceName,
+            );
+          }
+          // Dedupe: don't add an implementer if SAP already returned it
+          const existingNames = new Set(
+            (results as WhereUsedResult[]).map((r) => r.name?.toUpperCase()).filter(Boolean),
+          );
+          const augmented = implementers.filter((r) => !existingNames.has(r.name.toUpperCase()));
+          if (augmented.length > 0) {
+            (results as WhereUsedResult[]).push(...augmented);
+          }
+        } catch {
+          // SEOMETAREL augmentation is best-effort; if SQL fails, fall back to
+          // whatever the where-used HTTP endpoint returned. Don't block the response.
+        }
+      }
+
       if (results.length === 0) {
         return textResult('No references found.');
       }
