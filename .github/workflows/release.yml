@@ -159,6 +159,12 @@ jobs:
       # but non-gating, so iteration isn't blocked.)
       - name: Scan image with Trivy (gating)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        # Pin the scan to the matrix platform. buildx with provenance attestation
+        # wraps each push-by-digest output in an OCI index; without TRIVY_PLATFORM,
+        # Trivy defaults to linux/amd64 and fails on the arm64 runner with
+        # "no child with platform linux/amd64 in index".
+        env:
+          TRIVY_PLATFORM: ${{ matrix.platform }}
         with:
           image-ref: ghcr.io/marianfoo/arc-1@${{ steps.build.outputs.digest }}
           format: sarif
