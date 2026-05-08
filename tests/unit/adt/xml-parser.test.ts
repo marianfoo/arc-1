@@ -118,6 +118,61 @@ describe('XML Parser', () => {
       expect(results[0]?.objectName).toBe('');
       expect(results[0]?.objectType).toBe('');
     });
+
+    // Regression for the "literal &gt; in description" bug. The shared parser
+    // runs with processEntities:false (intentional — see xml-parser.ts header
+    // comment). Free-text fields are decoded at the boundary so consumers see
+    // the human-readable form, not the wire-encoded form.
+    describe('decodes standard XML entities in description', () => {
+      function descOf(rawAttr: string): string | undefined {
+        const xml = `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+          <adtcore:objectReference uri="/u" type="PROG/P" name="ZX" packageName="$TMP" description="${rawAttr}"/>
+        </adtcore:objectReferences>`;
+        return parseSearchResults(xml)[0]?.description;
+      }
+
+      it('decodes &gt; (the original repro)', () => {
+        expect(descOf('Seed data for SEGW-&gt;RAP demo')).toBe('Seed data for SEGW->RAP demo');
+      });
+
+      it('decodes &lt;', () => {
+        expect(descOf('Less &lt; than')).toBe('Less < than');
+      });
+
+      it('decodes &amp;', () => {
+        expect(descOf('Cars &amp; coffee')).toBe('Cars & coffee');
+      });
+
+      it('decodes &quot;', () => {
+        expect(descOf('She said &quot;hi&quot;')).toBe('She said "hi"');
+      });
+
+      it('decodes &apos;', () => {
+        expect(descOf('It&apos;s fine')).toBe("It's fine");
+      });
+
+      it('decodes all five mixed in one description', () => {
+        expect(descOf('a &gt; b &amp; c &lt; d &quot;e&quot; &apos;f&apos;')).toBe('a > b & c < d "e" \'f\'');
+      });
+
+      it('decodes &amp; LAST so &amp;lt; resolves to literal &lt; (CodeQL js/double-escaping)', () => {
+        // If &amp; were decoded first, &amp;lt; → &lt; → < (incorrect).
+        // We decode &amp; last, so &amp;lt; → &lt; (literal text).
+        expect(descOf('a &amp;lt; b')).toBe('a &lt; b');
+      });
+
+      it("leaves names/types/uri/packageName undecoded (they don't carry free text)", () => {
+        // Synthetic — SAP wouldn't produce these — but the contract says we don't touch these fields.
+        const xml = `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+          <adtcore:objectReference uri="/u&amp;r" type="X&amp;Y" name="N&amp;M" packageName="P&amp;Q" description="d"/>
+        </adtcore:objectReferences>`;
+        const r = parseSearchResults(xml)[0];
+        expect(r?.uri).toBe('/u&amp;r');
+        expect(r?.objectType).toBe('X&amp;Y');
+        expect(r?.objectName).toBe('N&amp;M');
+        expect(r?.packageName).toBe('P&amp;Q');
+      });
+    });
   });
 
   // ─── parseTableContents ────────────────────────────────────────────

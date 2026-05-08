@@ -114,6 +114,14 @@ export function parseXml(xml: string): Record<string, unknown> {
  * <adtcore:objectReferences>
  *   <adtcore:objectReference uri="..." type="PROG/P" name="ZTEST" packageName="$TMP" description="..."/>
  * </adtcore:objectReferences>
+ *
+ * The shared parser runs with `processEntities: false` (intentional — dump XML
+ * can exceed fast-xml-parser's `maxTotalExpansions` cap), so XML attribute
+ * values like descriptions arrive with `&gt;` / `&amp;` / `&lt;` / `&quot;` /
+ * `&apos;` un-decoded. We decode the user-visible free-text field
+ * (`description`) at the boundary via `decodeXmlEntities()`. Object names,
+ * types, URIs, and package names don't carry free text — leaving them
+ * undecoded is intentional.
  */
 export function parseSearchResults(xml: string): AdtSearchResult[] {
   const parsed = parseXml(xml);
@@ -121,7 +129,7 @@ export function parseSearchResults(xml: string): AdtSearchResult[] {
   return refs.map((ref: Record<string, unknown>) => ({
     objectType: String(ref['@_type'] ?? ''),
     objectName: String(ref['@_name'] ?? ''),
-    description: String(ref['@_description'] ?? ''),
+    description: decodeXmlEntities(String(ref['@_description'] ?? '')),
     packageName: String(ref['@_packageName'] ?? ''),
     uri: String(ref['@_uri'] ?? ''),
   }));
