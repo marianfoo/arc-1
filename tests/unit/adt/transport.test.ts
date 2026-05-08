@@ -200,32 +200,69 @@ describe('Transport Management', () => {
     });
 
     it('creates transport when fully enabled', async () => {
-      const xml = '<tm:request tm:number="DEVK900002"/>';
-      const http = mockHttp(xml);
+      const http = mockHttp('/com.sap.cts/object_record/DEVK900002');
       const id = await createTransport(http, enabledSafety, 'New transport');
       expect(id).toBe('DEVK900002');
     });
 
-    it('sends correct XML body (Issue #70: wrong content-type)', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+    it('sends correct CreateCorrectionRequest body with explicit package', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
       await createTransport(http, enabledSafety, 'My description', 'ZPACKAGE');
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('tm:desc="My description"');
-      expect(body).toContain('tm:type="K"');
-      expect(body).toContain('tm:target="ZPACKAGE"');
+      expect(body).toContain('xmlns:asx="http://www.sap.com/abapxml"');
+      expect(body).toContain('<DEVCLASS>ZPACKAGE</DEVCLASS>');
+      expect(body).toContain('<REQUEST_TEXT>My description</REQUEST_TEXT>');
+      expect(body).toContain('<REF/>');
+      expect(body).toContain('<OPERATION>I</OPERATION>');
     });
 
-    it('escapes special characters in description', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
-      await createTransport(http, enabledSafety, 'Test with "quotes" & <brackets>');
+    it('defaults DEVCLASS to $TMP when targetPackage is undefined', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
+      await createTransport(http, enabledSafety, 'desc');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<DEVCLASS>$TMP</DEVCLASS>');
+    });
+
+    it('defaults DEVCLASS to $TMP when targetPackage is empty string', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
+      await createTransport(http, enabledSafety, 'desc', '');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<DEVCLASS>$TMP</DEVCLASS>');
+    });
+
+    it('explicit package overrides $TMP default', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
+      await createTransport(http, enabledSafety, 'desc', 'ZTEST');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<DEVCLASS>ZTEST</DEVCLASS>');
+      expect(body).not.toContain('<DEVCLASS>$TMP</DEVCLASS>');
+    });
+
+    it('includes <REF> when objectUrl is provided', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
+      await createTransport(http, enabledSafety, 'desc', 'ZPACKAGE', '/sap/bc/adt/oo/classes/zcl_foo');
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<REF>/sap/bc/adt/oo/classes/zcl_foo</REF>');
+      expect(body).not.toContain('<REF/>');
+    });
+
+    it('escapes special characters in description and package', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
+      await createTransport(http, enabledSafety, 'Test with "quotes" & <brackets>', 'Z&PKG');
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(body).toContain('&amp;');
       expect(body).toContain('&lt;');
       expect(body).toContain('&quot;');
     });
 
-    it('returns empty string when no transport number in response', async () => {
-      const http = mockHttp('<tm:root/>');
+    it('extracts transport ID as the last path segment of the response', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/A4HK900100');
+      const id = await createTransport(http, enabledSafety, 'Test');
+      expect(id).toBe('A4HK900100');
+    });
+
+    it('returns empty string when response body is empty', async () => {
+      const http = mockHttp('');
       const id = await createTransport(http, enabledSafety, 'Test');
       expect(id).toBe('');
     });
@@ -393,28 +430,11 @@ describe('Transport Management', () => {
 
   // ─── createTransport with type ────────────────────────────────────
 
-  describe('createTransport with transport type', () => {
-    it('defaults to type K when not specified', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
-      await createTransport(http, enabledSafety, 'Test');
-      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('tm:type="K"');
-    });
-
-    it('type W included in XML body', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
-      await createTransport(http, enabledSafety, 'Test', undefined, 'W');
-      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('tm:type="W"');
-    });
-
-    it('type T included in XML body', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
-      await createTransport(http, enabledSafety, 'Test', undefined, 'T');
-      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('tm:type="T"');
-    });
-  });
+  // K/W/T transport type is no longer driven by the request body — the
+  // CreateCorrectionRequest endpoint infers the type from the target
+  // package's transport route in TADIR. The legacy `transportType`
+  // parameter has been removed from createTransport's signature, so per-type
+  // body assertions no longer reflect reality.
 
   // ─── releaseTransportRecursive ────────────────────────────────────
 
@@ -547,22 +567,23 @@ describe('Transport Management', () => {
       expect(headers.Accept).toBe(CTS_CONTENT_TYPE_ORGANIZER);
     });
 
-    it('createTransport sends organizer Accept and Content-Type', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+    it('createTransport sends CreateCorrectionRequest Content-Type and text/plain Accept', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
       await createTransport(http, enabledSafety, 'Test');
       const calls = (http.post as ReturnType<typeof vi.fn>).mock.calls[0];
       const contentType = calls?.[2] as string;
       const headers = calls?.[3] as Record<string, string>;
-      expect(contentType).toBe(CTS_CONTENT_TYPE_ORGANIZER);
-      expect(headers.Accept).toBe(CTS_CONTENT_TYPE_ORGANIZER);
+      expect(contentType).toContain('application/vnd.sap.as+xml');
+      expect(contentType).toContain('dataname=com.sap.adt.CreateCorrectionRequest');
+      expect(headers.Accept).toBe('text/plain');
     });
 
-    it('createTransport uses correct TM namespace in payload', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+    it('createTransport uses asx:abap envelope in payload', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
       await createTransport(http, enabledSafety, 'Test');
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain(`xmlns:tm="${CTS_NAMESPACE_TM}"`);
-      expect(body).not.toContain('http://www.sap.com/cts/transports');
+      expect(body).toContain('xmlns:asx="http://www.sap.com/abapxml"');
+      expect(body).not.toContain(CTS_NAMESPACE_TM);
     });
 
     it('releaseTransport sends organizer Accept header', async () => {
@@ -572,11 +593,11 @@ describe('Transport Management', () => {
       expect(headers.Accept).toBe(CTS_CONTENT_TYPE_ORGANIZER);
     });
 
-    it('createTransport endpoint is /sap/bc/adt/cts/transportrequests', async () => {
-      const http = mockHttp('<tm:request tm:number="DEV123"/>');
+    it('createTransport endpoint is /sap/bc/adt/cts/transports (CreateCorrectionRequest)', async () => {
+      const http = mockHttp('/com.sap.cts/object_record/DEV123');
       await createTransport(http, enabledSafety, 'Test');
       const url = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-      expect(url).toBe('/sap/bc/adt/cts/transportrequests');
+      expect(url).toBe('/sap/bc/adt/cts/transports');
     });
 
     it('response parsing handles both old and new namespace attributes', async () => {

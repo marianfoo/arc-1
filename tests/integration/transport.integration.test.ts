@@ -132,35 +132,24 @@ describe('Transport Integration Tests', () => {
       }
     });
 
-    it('creates a transport with corrected namespace and media type', async (ctx) => {
-      const desc = `ARC-1 IT ${Date.now()}`;
-      let id: string;
-      try {
-        id = await createTransport(client.http, client.safety, desc);
-      } catch (err) {
-        // NW 7.50 SP02 rejects transport creation with 400
-        // "user action  is not supported" — a backend limitation of this
-        // release, not an ARC-1 bug. Skip rather than fail.
-        if (err instanceof Error && /user action\s+is not supported/i.test(err.message)) {
-          ctx.skip(`${SkipReason.BACKEND_UNSUPPORTED}: transport create not supported on this SAP release`);
-          return;
-        }
-        throw err;
-      }
+    it('creates a transport without explicit package (defaults to $TMP)', async () => {
+      const desc = `ARC-1 IT default-tmp ${Date.now()}`;
+      const id = await createTransport(client.http, client.safety, desc);
 
       expect(id).toBeTruthy();
       // SAP transport IDs follow pattern: <SID>K<number>
       expect(id).toMatch(/^[A-Z0-9]+K\d+$/);
       createdTransportIds.push(id);
 
-      // Verify the created transport can be retrieved
+      // Verify the created transport can be retrieved and has the right description + owner
       const transport = await getTransport(client.http, client.safety, id);
       expect(transport).not.toBeNull();
       expect(transport!.id).toBe(id);
       expect(transport!.description).toBe(desc);
+      expect(transport!.owner).toBeTruthy();
     });
 
-    it('creates a transport with target package', async (ctx) => {
+    it('creates a transport with explicit target package', async (ctx) => {
       const pkg = process.env.TEST_TRANSPORT_PACKAGE;
       requireOrSkip(ctx, pkg, SkipReason.NO_TRANSPORT_PACKAGE);
 
@@ -232,17 +221,8 @@ describe('Transport Integration Tests', () => {
   // ─── deleteTransport ───────────────────────────────────────────
 
   describe('deleteTransport', () => {
-    it('creates and deletes a transport', async (ctx) => {
-      let id: string;
-      try {
-        id = await createTransport(client.http, client.safety, `ARC-1 IT delete ${Date.now()}`);
-      } catch (err) {
-        if (err instanceof Error && /user action\s+is not supported/i.test(err.message)) {
-          ctx.skip(`${SkipReason.BACKEND_UNSUPPORTED}: transport create not supported on this SAP release`);
-          return;
-        }
-        throw err;
-      }
+    it('creates and deletes a transport', async () => {
+      const id = await createTransport(client.http, client.safety, `ARC-1 IT delete ${Date.now()}`);
       expect(id).toBeTruthy();
 
       await deleteTransport(client.http, client.safety, id);
@@ -257,53 +237,11 @@ describe('Transport Integration Tests', () => {
     }, 30_000);
   });
 
-  // ─── createTransport with type ────────────────────────────────
-
-  describe('createTransport with type', () => {
-    it('creates a Customizing transport (type W)', async (ctx) => {
-      let id = '';
-      try {
-        id = await createTransport(client.http, client.safety, `ARC-1 IT type-W ${Date.now()}`, undefined, 'W');
-        expect(id).toBeTruthy();
-        const transport = await getTransport(client.http, client.safety, id);
-        expect(transport).not.toBeNull();
-        expect(transport!.type).toBe('W');
-      } catch (err) {
-        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support Customizing transports (type W)');
-        throw err;
-      } finally {
-        if (id) {
-          try {
-            await deleteTransport(client.http, client.safety, id, true);
-          } catch {
-            // best-effort-cleanup
-          }
-        }
-      }
-    }, 30_000);
-
-    it('creates a Transport of Copies (type T)', async (ctx) => {
-      let id = '';
-      try {
-        id = await createTransport(client.http, client.safety, `ARC-1 IT type-T ${Date.now()}`, undefined, 'T');
-        expect(id).toBeTruthy();
-        const transport = await getTransport(client.http, client.safety, id);
-        expect(transport).not.toBeNull();
-        expect(transport!.type).toBe('T');
-      } catch (err) {
-        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support Transport of Copies (type T)');
-        throw err;
-      } finally {
-        if (id) {
-          try {
-            await deleteTransport(client.http, client.safety, id, true);
-          } catch {
-            // best-effort-cleanup
-          }
-        }
-      }
-    }, 30_000);
-  });
+  // K/W/T transport type is no longer driven by the request body — the
+  // CreateCorrectionRequest endpoint infers the type from the target
+  // package's transport route in TADIR. Per-type integration tests would
+  // need separate Customizing/Workbench packages and aren't portable, so
+  // they're removed.
 
   // ─── reassignTransport ────────────────────────────────────────
 
@@ -323,7 +261,16 @@ describe('Transport Integration Tests', () => {
         const updated = await getTransport(client.http, client.safety, id);
         expect(updated!.owner).toBe(currentOwner);
       } catch (err) {
-        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support transport reassign');
+        // NW 7.5x ADT_TM gap: PUT body attributes are silently dropped, so
+        // tm:targetuser arrives empty and SAP responds 400 "User  does not
+        // exist in the system (or locked)" (note the double space — empty
+        // interpolation). NW 7.5x accepts the same operation as URL-query
+        // params, but S/4HANA needs the body — incompatible without
+        // release-aware fallback. Tracked separately from PR #228.
+        if (isUnsupportedBackend(err))
+          return ctx.skip(
+            'NW 7.5x ADT_TM gap: reassign requires URL-query params on that release; needs release-aware fallback',
+          );
         throw err;
       } finally {
         if (id) {
@@ -354,7 +301,16 @@ describe('Transport Integration Tests', () => {
           expect(transport.status).toBe('R');
         }
       } catch (err) {
-        if (isUnsupportedBackend(err)) return ctx.skip('Backend does not support recursive release');
+        // NW 7.5x ADT_TM gap: POST /{id}/newreleasejobs is rejected with
+        // 400 "user action newreleasejobs is not supported" — the framework
+        // treats the path segment as a useraction attribute. No client-side
+        // workaround verified (probed: useraction in body, query param,
+        // PUT variant — all rejected). Genuine NW 7.5x release-on-empty
+        // limitation. Tracked separately from PR #228.
+        if (isUnsupportedBackend(err))
+          return ctx.skip(
+            'NW 7.5x ADT_TM gap: release endpoint rejects /newreleasejobs path segment; no client-side workaround',
+          );
         throw err;
       }
     }, 60_000);

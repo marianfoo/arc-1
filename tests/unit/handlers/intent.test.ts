@@ -366,12 +366,29 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
-    it('reads messages (MESSAGES)', async () => {
+    it('reads message classes (MSAG)', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'MSAG',
+        name: 'ZMSGCLASS',
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('reads messages (MESSAGES deprecated alias) — same handler + deprecation warning', async () => {
+      // MSAG is the canonical TADIR R3TR type; 'MESSAGES' was the original ARC-1 name.
+      // Per research/abap-types/types/msag.md it is now a deprecated alias kept for
+      // one minor release.
+      const warnSpy = vi.spyOn(logger, 'warn');
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'MESSAGES',
         name: 'ZMSGCLASS',
       });
       expect(result.isError).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('MESSAGES'),
+        expect.objectContaining({ replacement: 'MSAG' }),
+      );
+      warnSpy.mockRestore();
     });
 
     it('reads text elements (TEXT_ELEMENTS)', async () => {
@@ -574,12 +591,63 @@ describe('Intent Handler', () => {
       }
     });
 
-    it('reads a structure (STRU)', async () => {
+    it('reads a DDIC structure via TABL with /tables/→/structures/ fallback', async () => {
+      // Model B: structures and transparent tables both use type='TABL'.
+      // Internal getTabl() tries /tables/ first, falls back to /structures/ on 404.
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, '<?xml version="1.0"?><error/>'));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '@EndUserText.label : "Return Parameter"\ndefine type bapiret2 { ... }'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'BAPIRET2',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('bapiret2');
+      // Verify both URLs were attempted in order.
+      expect(mockFetch.mock.calls[0]?.[0]).toContain('/sap/bc/adt/ddic/tables/BAPIRET2/source/main');
+      expect(mockFetch.mock.calls[1]?.[0]).toContain('/sap/bc/adt/ddic/structures/BAPIRET2/source/main');
+    });
+
+    it('reads a transparent table via TABL without fallback', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '@AbapCatalog.tableCategory : #TRANSPARENT\ndefine table t000 { ... }'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'T000',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('TRANSPARENT');
+      // Only /tables/ was hit — no fallback needed.
+      expect(mockFetch.mock.calls).toHaveLength(1);
+      expect(mockFetch.mock.calls[0]?.[0]).toContain('/sap/bc/adt/ddic/tables/T000/source/main');
+    });
+
+    it('rejects type=STRU at the schema layer with a hint to use TABL', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'STRU',
         name: 'BAPIRET2',
       });
-      expect(result.isError).toBeUndefined();
+      expect(result.isError).toBe(true);
+      // Zod validation lists valid enum members, which now includes TABL but excludes STRU.
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPRead');
+      expect(result.content[0]?.text).toContain('TABL');
+      expect(result.content[0]?.text).not.toMatch(/'STRU'/);
+    });
+
+    it('returns error when TABL name resolves to neither tables nor structures', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, '<?xml version="1.0"?><error/>'));
+      mockFetch.mockResolvedValueOnce(mockResponse(404, '<?xml version="1.0"?><error/>'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'NONEXISTENT',
+      });
+      expect(result.isError).toBe(true);
+      expect(mockFetch.mock.calls).toHaveLength(2);
     });
 
     it('reads a domain (DOMA)', async () => {
@@ -669,7 +737,7 @@ describe('Intent Handler', () => {
       expect(parsed.orgLevelInfo).toEqual(['true']);
     });
 
-    it('reads feature toggle states (FTG2)', async () => {
+    it('reads feature toggle states (FEATURE_TOGGLE)', async () => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValueOnce(
         mockResponse(
@@ -687,7 +755,7 @@ describe('Intent Handler', () => {
       );
 
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
-        type: 'FTG2',
+        type: 'FEATURE_TOGGLE',
         name: 'ABC_TOGGLE',
       });
       expect(result.isError).toBeUndefined();
@@ -695,6 +763,41 @@ describe('Intent Handler', () => {
       expect(parsed.name).toBe('ABC_TOGGLE');
       expect(parsed.clientState).toBe('on');
       expect(parsed.states).toEqual([{ client: '001', state: 'on', description: 'Dev' }]);
+    });
+
+    it('reads feature toggle states (FTG2 deprecated alias) — same result + deprecation warning', async () => {
+      // FTG2 is an ARC-1-private invented identifier (research/abap-types/types/ftg2.md).
+      // Renamed to FEATURE_TOGGLE in the audit-symmetry plan; FTG2 stays as a deprecated
+      // alias for one minor release with a stderr warning.
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          JSON.stringify({
+            STATES: {
+              NAME: 'ABC_TOGGLE',
+              CLIENT_STATE: 'on',
+              USER_STATE: 'undefined',
+              CLIENT_STATES: [{ CLIENT: '001', DESCRIPTION: 'Dev', STATE: 'on' }],
+              USER_STATES: [],
+            },
+          }),
+        ),
+      );
+      const warnSpy = vi.spyOn(logger, 'warn');
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'FTG2',
+        name: 'ABC_TOGGLE',
+      });
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.name).toBe('ABC_TOGGLE');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('FTG2'),
+        expect.objectContaining({ replacement: 'FEATURE_TOGGLE' }),
+      );
+      warnSpy.mockRestore();
     });
 
     it('reads enhancement implementation metadata (ENHO)', async () => {
@@ -982,7 +1085,7 @@ describe('Intent Handler', () => {
       // Should list supported types from Zod enum validation
       expect(result.content[0]?.text).toContain('PROG');
       expect(result.content[0]?.text).toContain('CLAS');
-      expect(result.content[0]?.text).toContain('STRU');
+      expect(result.content[0]?.text).toContain('TABL');
       expect(result.content[0]?.text).toContain('DOMA');
       expect(result.content[0]?.text).toContain('DTEL');
       expect(result.content[0]?.text).toContain('TRAN');
@@ -3787,14 +3890,49 @@ ENDCLASS.`;
       expect(unpublishUrl).toContain('servicename=ZSB_TRAVEL_O4');
     });
 
-    it('activates DDIC types with correct object URLs in XML body', async () => {
-      // Activate STRU — the object URL should appear in the activation XML body
+    it('activates a DDIC structure via TABL with structure URL in XML body', async () => {
+      // Model B: structures use type='TABL'. The activate handler resolves the
+      // URL via client.resolveTablObjectUrl which probes /tables/ first then
+      // falls back to /structures/. For ZTEST_STRUCT (a DDIC structure):
+      //   call 0: GET /sap/bc/adt/ddic/tables/ZTEST_STRUCT  → 404 (probe)
+      //   call 1: GET /sap/bc/adt/ddic/structures/ZTEST_STRUCT → 200 (probe success)
+      //   call 2: POST .../activation               → 200 (activate)
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, '<?xml version="1.0"?><error/>'));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<?xml version="1.0"?><stru/>'));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          '<?xml version="1.0"?><iac:inactiveCTSObjects xmlns:iac="http://www.sap.com/abapxml/inactiveCtsObjects"/>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
       await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
-        type: 'STRU',
+        type: 'TABL',
         name: 'ZTEST_STRUCT',
       });
       const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
       expect(lastCallOpts.body).toContain('/sap/bc/adt/ddic/structures/ZTEST_STRUCT');
+    });
+
+    it('activates a transparent table via TABL with /tables/ URL (no fallback)', async () => {
+      // For a transparent table, the /tables/ probe succeeds on the first try.
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<?xml version="1.0"?><tabl/>'));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          '<?xml version="1.0"?><iac:inactiveCTSObjects xmlns:iac="http://www.sap.com/abapxml/inactiveCtsObjects"/>',
+          { 'x-csrf-token': 'T' },
+        ),
+      );
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPActivate', {
+        type: 'TABL',
+        name: 'ZTEST_TABLE',
+      });
+      const lastCallOpts = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[1] as RequestInit;
+      expect(lastCallOpts.body).toContain('/sap/bc/adt/ddic/tables/ZTEST_TABLE');
+      expect(lastCallOpts.body).not.toContain('/sap/bc/adt/ddic/structures/ZTEST_TABLE');
     });
 
     it('activates DOMA with correct object URL in XML body', async () => {
@@ -5421,12 +5559,233 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('Provide uri or type+name');
     });
 
+    it('routes TABL type+name through resolveTablObjectUrl (transparent → /tables/)', async () => {
+      // For a transparent table the /tables/ probe succeeds on the first try,
+      // and the where-used POST then targets /sap/bc/adt/ddic/tables/T000.
+      mockFetch.mockReset();
+      // 1) URL probe: /sap/bc/adt/ddic/tables/T000 → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<?xml version="1.0"?><tabl/>'));
+      // 2) CSRF token fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // 3) usageReferences POST
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects/>
+</usageReferences:usageReferenceResult>`,
+        ),
+      );
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'TABL',
+        name: 'T000',
+      });
+      // The where-used POST URL must reference the resolved /tables/ path.
+      const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      expect(String(lastCall?.[0])).toContain(
+        `usageReferences?uri=${encodeURIComponent('/sap/bc/adt/ddic/tables/T000')}`,
+      );
+    });
+
+    it('routes TABL type+name through resolveTablObjectUrl (structure → /structures/)', async () => {
+      // For a DDIC structure on systems where /tables/ 404s, the resolver
+      // falls back to /structures/. Verifies the fix for codex P1: NW 7.50
+      // returns 500 from usageReferences for /tables/ URLs even for transparent
+      // tables, so we must always resolve via the URL probe before posting.
+      mockFetch.mockReset();
+      // 1) URL probe: /sap/bc/adt/ddic/tables/BAPIRET2 → 404
+      mockFetch.mockResolvedValueOnce(mockResponse(404, '<?xml version="1.0"?><error/>'));
+      // 2) URL probe fallback: /sap/bc/adt/ddic/structures/BAPIRET2 → 200
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<?xml version="1.0"?><stru/>'));
+      // 3) CSRF token fetch
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // 4) usageReferences POST
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects/>
+</usageReferences:usageReferenceResult>`,
+        ),
+      );
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'TABL',
+        name: 'BAPIRET2',
+      });
+      // The where-used POST URL must reference /structures/, not /tables/.
+      const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      const lastUrl = String(lastCall?.[0]);
+      expect(lastUrl).toContain(`usageReferences?uri=${encodeURIComponent('/sap/bc/adt/ddic/structures/BAPIRET2')}`);
+      expect(lastUrl).not.toContain(encodeURIComponent('/sap/bc/adt/ddic/tables/BAPIRET2'));
+    });
+
     it('returns error when neither uri nor type+name provided for definition', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
         action: 'definition',
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Provide uri');
+    });
+  });
+
+  // ─── SAPNavigate references — INTF SEOMETAREL augmentation ──────────
+
+  describe('SAPNavigate references — INTF augmentation via SEOMETAREL', () => {
+    /** dataPreview XML with a single CLSNAME column from SEOMETAREL */
+    function clsnameXml(names: string[]): string {
+      const data = names.map((n) => `<DATA>${n}</DATA>`).join('');
+      return `<dataPreview:tableData xmlns:dataPreview="http://www.sap.com/adt/dataPreview">
+        <dataPreview:totalRows>${names.length}</dataPreview:totalRows>
+        <dataPreview:columns><dataPreview:metadata dataPreview:name="CLSNAME"/><dataPreview:dataSet>${data}</dataPreview:dataSet></dataPreview:columns>
+      </dataPreview:tableData>`;
+    }
+
+    /** usageReferences result with a single Interface Section entry — no implementer surfaced */
+    function intfWhereUsedXmlSparse(): string {
+      return `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="1" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/interfaces/zif_foo" parentUri="/sap/bc/adt/packages/%24tmp" isResult="false" canHaveChildren="false">
+      <usageReferences:adtObject adtcore:name="ZIF_FOO" adtcore:type="INTF/OI" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/interfaces/zif_foo/source/main#start=1,0" isResult="false" canHaveChildren="true">
+      <usageReferences:adtObject adtcore:name="Interface Section" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+    }
+
+    it('augments INTF references with implementing classes from SEOMETAREL when SAP omits them', async () => {
+      mockFetch.mockReset();
+      // 1) CSRF probe (cached for the rest of the session)
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      // 2) usageReferences POST — SAP returns only the interface + section, no implementer
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      // 3) SEOMETAREL freestyle SQL response — CSRF cached, no fresh token needed
+      mockFetch.mockResolvedValueOnce(mockResponse(200, clsnameXml(['ZCL_IMPL1', 'ZCL_IMPL2'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+      });
+      expect(result.isError).toBeUndefined();
+      const refs = JSON.parse(result.content[0]?.text);
+      // Original 2 entries + 2 augmented implementers
+      expect(refs).toHaveLength(4);
+      const impl1 = refs.find((r: { name: string }) => r.name === 'ZCL_IMPL1');
+      expect(impl1).toBeDefined();
+      expect(impl1.type).toBe('CLAS/OC');
+      expect(impl1.uri).toBe('/sap/bc/adt/oo/classes/zcl_impl1');
+      expect(impl1.objectDescription).toBe('implements ZIF_FOO');
+      expect(impl1.isResult).toBe(true);
+    });
+
+    it('dedupes — does not re-add an implementer SAP already returned', async () => {
+      mockFetch.mockReset();
+      // SAP's where-used DOES include ZCL_IMPL1 this time (e.g. on a system with a healthier index)
+      const xmlWithImpl = `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult numberOfResults="1" xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/classes/zcl_impl1" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZCL_IMPL1" adtcore:type="CLAS/OC" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, xmlWithImpl));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, clsnameXml(['ZCL_IMPL1', 'ZCL_IMPL2'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      // SAP entry (1) + 1 newly added (ZCL_IMPL2) — dedupe drops the duplicate
+      expect(refs).toHaveLength(2);
+      expect(refs.filter((r: { name: string }) => r.name === 'ZCL_IMPL1')).toHaveLength(1);
+      expect(refs.find((r: { name: string }) => r.name === 'ZCL_IMPL2')).toBeDefined();
+    });
+
+    it('skips augmentation silently when SQL/data scope is not allowed', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      // No SEOMETAREL fetch should happen — no further mockFetch responses needed
+
+      const noSqlClient = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowFreeSQL: false, allowDataPreview: false },
+      });
+      const result = await handleToolCall(noSqlClient, DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      // Only the 2 entries SAP returned — no augmentation
+      expect(refs).toHaveLength(2);
+      expect(refs.find((r: { name: string }) => r.type === 'CLAS/OC')).toBeUndefined();
+    });
+
+    it('skips augmentation when objectType filter excludes CLAS', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      // No SEOMETAREL fetch — caller asked only for PROG/P references
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+        objectType: 'PROG/P',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      // Only the 2 SAP entries
+      expect(refs).toHaveLength(2);
+    });
+
+    it('does not augment for CLAS references (only INTF)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/classes/zcl_caller" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZCL_CALLER" adtcore:type="CLAS/OC" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`,
+        ),
+      );
+      // No SEOMETAREL fetch should happen — input is a class, not an interface
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TARGET',
+      });
+      const refs = JSON.parse(result.content[0]?.text);
+      expect(refs).toHaveLength(1);
+      expect(refs[0].name).toBe('ZCL_CALLER');
     });
   });
 
@@ -5696,13 +6055,29 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('not available on BTP');
     });
 
-    it('allows STRU read on BTP', async () => {
+    it('allows TABL read of a DDIC structure on BTP (via /tables/→/structures/ fallback)', async () => {
+      setBtpMode();
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(404, '<?xml version="1.0"?><error/>'));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, '@EndUserText.label : "Return Parameter"\ndefine type bapiret2 { ... }'),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'TABL',
+        name: 'BAPIRET2',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('bapiret2');
+    });
+
+    it('rejects type=STRU on BTP at the schema layer', async () => {
       setBtpMode();
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'STRU',
         name: 'BAPIRET2',
       });
-      expect(result.isError).toBeUndefined();
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Invalid arguments for SAPRead');
     });
   });
 
@@ -7674,34 +8049,51 @@ ENDCLASS.`;
 
   describe('normalizeObjectType', () => {
     it('normalizes all supported slash-type mappings', () => {
+      // Issue #218 audit follow-up: every entry below is verified against either
+      // Eclipse ADT apidoc 3.58.1 or live a4h+npl ADT responses captured
+      // 2026-05-08. See research/abap-types/types/<short>.md.
       const mappings: Array<[string, string]> = [
         ['PROG/P', 'PROG'],
         ['PROG/I', 'INCL'],
         ['CLAS/OC', 'CLAS'],
-        ['CLAS/LI', 'CLAS'],
         ['INTF/OI', 'INTF'],
-        ['FUNC/FM', 'FUNC'],
-        ['FUGR/F', 'FUGR'],
-        ['FUGR/FF', 'FUGR'],
+        ['FUGR/F', 'FUGR'], // function group container
+        ['FUGR/FF', 'FUNC'], // function module — routes to FUNC, not FUGR
         ['DDLS/DF', 'DDLS'],
         ['DCLS/DL', 'DCLS'],
         ['BDEF/BDO', 'BDEF'],
         ['SRVD/SRV', 'SRVD'],
         ['SRVB/SVB', 'SRVB'],
         ['DDLX/EX', 'DDLX'],
+        // TABL/DT (transparent table) and TABL/DS (DDIC structure) both
+        // collapse to the canonical 'TABL' short type (Model B). STRU/DS is
+        // a legacy slash-form alias that also maps to TABL. Bare 'STRU' is
+        // intentionally NOT aliased so schema validation rejects it.
         ['TABL/DT', 'TABL'],
-        ['STRU/DS', 'STRU'],
+        ['TABL/DS', 'TABL'],
+        ['STRU/DS', 'TABL'],
         ['DOMA/DD', 'DOMA'],
         ['DTEL/DE', 'DTEL'],
         ['MSAG/N', 'MSAG'],
         ['DEVC/K', 'DEVC'],
-        ['TRAN/O', 'TRAN'],
-        ['VIEW/V', 'VIEW'],
+        ['TRAN/T', 'TRAN'], // was 'TRAN/O' pre-audit — ADT actually emits TRAN/T
+        ['VIEW/DV', 'VIEW'], // was 'VIEW/V' pre-audit — ADT actually emits VIEW/DV
+        ['SKTD/TYP', 'SKTD'],
       ];
 
       for (const [input, expected] of mappings) {
         expect(normalizeObjectType(input)).toBe(expected);
       }
+    });
+
+    it('passes through invented slash codes removed in PR (regression guard)', () => {
+      // These were aliased pre-audit. The audit (research/abap-types/) verified
+      // they don't exist in ADT or any SAP source. Pass-through means schema
+      // validation rejects them loudly so the breaking change surfaces.
+      expect(normalizeObjectType('FUNC/FM')).toBe('FUNC/FM');
+      expect(normalizeObjectType('CLAS/LI')).toBe('CLAS/LI');
+      expect(normalizeObjectType('VIEW/V')).toBe('VIEW/V');
+      expect(normalizeObjectType('TRAN/O')).toBe('TRAN/O');
     });
 
     it('is case-insensitive for friendly and slash types', () => {
@@ -8478,35 +8870,36 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('DEVK900001');
     });
 
-    it('create with type W passes type through', async () => {
-      const responseXml = '<tm:request tm:number="DEVK900099"/>';
-      mockFetch.mockResolvedValue(mockResponse(200, responseXml, { 'x-csrf-token': 'T' }));
+    it('create with package passes DEVCLASS through', async () => {
+      // CreateCorrectionRequest endpoint returns a path like /com.sap.cts/object_record/<id>
+      mockFetch.mockResolvedValue(mockResponse(200, '/com.sap.cts/object_record/DEVK900099', { 'x-csrf-token': 'T' }));
       const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
         action: 'create',
-        description: 'Customizing transport',
-        type: 'W',
+        description: 'Workbench transport',
+        package: 'ZTEST',
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('DEVK900099');
-      // Verify the W type was in the request body
+      // Verify the package was sent as DEVCLASS in the asx:abap body
       const fetchBody = mockFetch.mock.calls.find(
-        (c: unknown[]) => typeof c[1]?.body === 'string' && c[1].body.includes('tm:type'),
+        (c: unknown[]) => typeof c[1]?.body === 'string' && c[1].body.includes('DEVCLASS'),
       );
-      expect(fetchBody?.[1]?.body).toContain('tm:type="W"');
+      expect(fetchBody?.[1]?.body).toContain('<DEVCLASS>ZTEST</DEVCLASS>');
+      expect(fetchBody?.[1]?.body).toContain('<OPERATION>I</OPERATION>');
     });
 
-    it('create without type defaults to K', async () => {
-      const responseXml = '<tm:request tm:number="DEVK900099"/>';
-      mockFetch.mockResolvedValue(mockResponse(200, responseXml, { 'x-csrf-token': 'T' }));
+    it('create without package defaults DEVCLASS to $TMP', async () => {
+      mockFetch.mockResolvedValue(mockResponse(200, '/com.sap.cts/object_record/DEVK900099', { 'x-csrf-token': 'T' }));
       const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
         action: 'create',
         description: 'Default transport',
       });
       expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('DEVK900099');
       const fetchBody = mockFetch.mock.calls.find(
-        (c: unknown[]) => typeof c[1]?.body === 'string' && c[1].body.includes('tm:type'),
+        (c: unknown[]) => typeof c[1]?.body === 'string' && c[1].body.includes('DEVCLASS'),
       );
-      expect(fetchBody?.[1]?.body).toContain('tm:type="K"');
+      expect(fetchBody?.[1]?.body).toContain('<DEVCLASS>$TMP</DEVCLASS>');
     });
 
     it('list defaults to current SAP user and modifiable status', async () => {
@@ -9284,6 +9677,198 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('Server syntax check (inactive):');
       expect(result.content[0]?.text).toContain('[line 5] Unknown annotation');
+    });
+  });
+
+  // ─── cookie-aware error hint in formatErrorForLLM ───────────────────
+  describe('cookie-aware error hint in formatErrorForLLM', () => {
+    it('emits cookie refresh hint on 401 when cookieFile is configured', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(401, 'Unauthorized'));
+      const result = await handleToolCall(
+        createClient(),
+        { ...DEFAULT_CONFIG, cookieFile: '/path/to/cookies.txt' },
+        'SAPRead',
+        { type: 'PROG', name: 'ZTEST' },
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('SAP cookies have expired');
+      expect(text).toContain('arc1-cli extract-cookies');
+      expect(text).toContain('no restart needed');
+      expect(text).not.toContain('Check SAP_CLIENT');
+    });
+
+    it('emits cookie refresh hint on 401 when cookieString is configured', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(401, 'Unauthorized'));
+      const result = await handleToolCall(
+        createClient(),
+        { ...DEFAULT_CONFIG, cookieString: 'MYSAPSSO2=xyz' },
+        'SAPRead',
+        { type: 'PROG', name: 'ZTEST' },
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('SAP cookies have expired');
+      expect(text).toContain('arc1-cli extract-cookies');
+    });
+
+    it('falls back to standard auth hint on 401 when no cookie auth is configured', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(401, 'Unauthorized'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('Check SAP_CLIENT');
+      expect(text).not.toContain('SAP cookies have expired');
+    });
+  });
+
+  // ─── Mixed-case object name rejection ──────────────────────────────
+  describe('SAPWrite mixed-case object name rejection', () => {
+    it('rejects create with lowercase characters in object name', async () => {
+      mockFetch.mockReset();
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'Zarc1_Mixed',
+        package: '$TMP',
+        source: 'define view entity Zarc1_Mixed as select from t000 { key mandt }',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('uppercase');
+      expect(text).toContain('ZARC1_MIXED');
+      // No HTTP traffic should have happened — guard fires before locking.
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+
+    it('proceeds past the guard when name is fully uppercase', async () => {
+      mockFetch.mockReset();
+      // CSRF + create + activate-related calls — let them all succeed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'DDLS',
+        name: 'ZARC1_OK',
+        package: '$TMP',
+        source: 'define view entity ZARC1_OK as select from t000 { key mandt }',
+      });
+      // Guard didn't fire → at least one HTTP call was attempted (CSRF or POST).
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('rejects mixed-case names per object inside batch_create', async () => {
+      mockFetch.mockReset();
+      // Stub HTTP minimally — the batch may attempt the first uppercase object before hitting the bad one.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        objects: [
+          {
+            type: 'DDLS',
+            name: 'Zc_Bad',
+            description: 'bad',
+            source: 'define view entity Zc_Bad as select from t000 { key mandt }',
+          },
+          { type: 'CLAS', name: 'ZCL_LATER', description: 'never reached' },
+        ],
+      });
+      const text = result.content[0]?.text ?? '';
+      // First object should be marked failed for the mixed-case reason.
+      expect(text).toContain('Zc_Bad');
+      expect(text).toContain('uppercase');
+      // Second object should NOT have been attempted (batch breaks on first failure).
+      expect(text).not.toContain('ZCL_LATER: success');
+    });
+  });
+
+  // ─── MSAG transport-vs-task guard (PR-γ) ──────────────────────────
+  describe('SAPWrite MSAG transport-vs-task guard', () => {
+    function buildTransportListXml(transportId: string | null): string {
+      // SAP returns 200 with a workbench listing — empty when ID doesn't match a request.
+      if (!transportId) {
+        return (
+          `<?xml version="1.0" encoding="utf-8"?>` +
+          `<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm"><tm:workbench/></tm:root>`
+        );
+      }
+      return (
+        `<?xml version="1.0" encoding="utf-8"?>` +
+        `<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm">` +
+        `<tm:workbench><tm:request tm:number="${transportId}" tm:owner="MARIAN" tm:type="K" tm:status="D" tm:description="x"/>` +
+        `</tm:workbench></tm:root>`
+      );
+    }
+
+    it('rejects MSAG create when transport ID is not a valid request (task number)', async () => {
+      mockFetch.mockReset();
+      // First call: getTransport returns no matching request.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildTransportListXml(null)));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'MSAG',
+        name: 'ZARC1_MSAG_BAD',
+        package: '$TMP',
+        transport: 'TASK001',
+        description: 'test',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('not a valid transport request');
+      expect(text).toContain('TASK001');
+    });
+
+    it('proceeds past the guard when getTransport returns a valid request', async () => {
+      mockFetch.mockReset();
+      // getTransport returns matching request.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildTransportListXml('REQ001')));
+      // Subsequent calls (CSRF + create + activate stubs) — succeed minimally.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'MSAG',
+        name: 'ZARC1_MSAG_OK',
+        package: '$TMP',
+        transport: 'REQ001',
+        description: 'test',
+      });
+
+      // Guard fell through — at least 2 fetches happened (transport check + follow-up).
+      expect(mockFetch.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it('caches getTransport result across MSAG entries inside batch_create', async () => {
+      mockFetch.mockReset();
+      // First call: getTransport returns a matching request.
+      mockFetch.mockResolvedValueOnce(mockResponse(200, buildTransportListXml('REQ001')));
+      // Subsequent calls — minimal stubs to keep the batch loop alive.
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        transport: 'REQ001',
+        objects: [
+          { type: 'MSAG', name: 'ZARC1_MSAG1', description: 'm1' },
+          { type: 'MSAG', name: 'ZARC1_MSAG2', description: 'm2' },
+          { type: 'MSAG', name: 'ZARC1_MSAG3', description: 'm3' },
+        ],
+      });
+
+      // Count transport-listing-endpoint calls. Exactly one should fire for the whole batch
+      // (cache hit on entries 2 and 3).
+      const transportCalls = mockFetch.mock.calls.filter(([url]) =>
+        String(url).includes('/sap/bc/adt/cts/transportrequests/REQ001'),
+      );
+      expect(transportCalls.length).toBe(1);
     });
   });
 });

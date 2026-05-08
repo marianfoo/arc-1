@@ -78,25 +78,28 @@ export const CATALOG: CatalogEntry[] = [
 
   // ─── DDIC (domains/data elements/tables) ────────────────────────────
   {
+    // TABL covers both transparent tables (TABCLASS=TRANSP, served via /tables/)
+    // and DDIC structures (TABCLASS=INTTAB/APPEND, served via /structures/).
+    // The probe still hits /tables/ as the primary collection endpoint; the
+    // structure URL is exercised at runtime via AdtClient.getTabl() fallback.
     type: 'TABL',
     collectionUrl: '/sap/bc/adt/ddic/tables',
     objectUrlTemplate: '/sap/bc/adt/ddic/tables/{name}/source/main',
     knownObjects: ['T000', 'USR01'],
     minRelease: 700,
-    note: 'Source endpoint may require SAP_BASIS >= 7.52 on some systems',
+    note: 'Source endpoint may require SAP_BASIS >= 7.52 on some systems. TABL covers transparent tables AND DDIC structures (the latter served at /sap/bc/adt/ddic/structures/{name}).',
   },
   {
     type: 'VIEW',
-    collectionUrl: '/sap/bc/adt/ddic/views',
-    objectUrlTemplate: '/sap/bc/adt/ddic/views/{name}/source/main',
+    // DDIC views go through the VIT generic-object endpoint, NOT /ddic/views/.
+    // Live a4h S/4HANA 2023 + npl NW 7.50 (2026-05-08): /ddic/views/{name}
+    // returns HTTP 500 and /ddic/views/{name}/source/main returns HTTP 404.
+    // Only /sap/bc/adt/vit/wb/object_type/viewdv/object_name/{name} returns
+    // 200 (with metadata XML — VIEW does not expose a /source/main
+    // sub-resource). See research/abap-types/types/view.md and PR #223.
+    collectionUrl: '/sap/bc/adt/vit/wb/object_type/viewdv',
+    objectUrlTemplate: '/sap/bc/adt/vit/wb/object_type/viewdv/object_name/{name}',
     knownObjects: ['V_USR_NAME'],
-    minRelease: 700,
-  },
-  {
-    type: 'STRU',
-    collectionUrl: '/sap/bc/adt/ddic/structures',
-    objectUrlTemplate: '/sap/bc/adt/ddic/structures/{name}/source/main',
-    knownObjects: ['SYST'],
     minRelease: 700,
   },
   {
@@ -179,7 +182,12 @@ export const CATALOG: CatalogEntry[] = [
     note: 'Authorization field read — may require newer ICF activation',
   },
   {
-    type: 'FTG2',
+    // FEATURE_TOGGLE — was 'FTG2' before audit Plan B (research/abap-types/types/ftg2.md).
+    // FTG2 was an ARC-1-private invented identifier (zero hits in TADIR /
+    // abap-file-formats / Eclipse apidoc 3.58.1). The endpoint is real; only the
+    // short name was renamed. 'FTG2' still routes here at the SAPRead handler with a
+    // deprecation warning for one minor release.
+    type: 'FEATURE_TOGGLE',
     collectionUrl: '/sap/bc/adt/sfw/featuretoggles',
     objectUrlTemplate: '/sap/bc/adt/sfw/featuretoggles/{name}/states',
     knownObjects: [],

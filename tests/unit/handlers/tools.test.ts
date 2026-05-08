@@ -442,6 +442,7 @@ describe('Tool Definitions', () => {
       expect(typeEnum).not.toContain('SOBJ');
       expect(typeEnum).not.toContain('AUTH');
       expect(typeEnum).not.toContain('FTG2');
+      expect(typeEnum).not.toContain('FEATURE_TOGGLE');
       expect(typeEnum).not.toContain('ENHO');
     });
 
@@ -477,8 +478,14 @@ describe('Tool Definitions', () => {
       expect(typeEnum).toContain('DDLX');
       expect(typeEnum).toContain('SRVB');
       expect(typeEnum).toContain('AUTH');
+      expect(typeEnum).toContain('FEATURE_TOGGLE');
+      // FTG2 retained as deprecated alias for one minor — see
+      // research/abap-types/types/ftg2.md and audit-symmetry-and-ftg2-rename.md.
       expect(typeEnum).toContain('FTG2');
       expect(typeEnum).toContain('ENHO');
+      // MSAG canonical + MESSAGES deprecated alias (research/abap-types/types/msag.md)
+      expect(typeEnum).toContain('MSAG');
+      expect(typeEnum).toContain('MESSAGES');
     });
 
     it('includes DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, TABL, DOMA, DTEL in SAPWrite types on both BTP and on-prem', () => {
@@ -638,6 +645,42 @@ describe('Tool Definitions', () => {
           }
         }
       }
+    });
+  });
+
+  // ─── Three-file sync coverage for messages + STRU (PR-β) ──────────
+  describe('three-file sync invariants', () => {
+    function getSAPWriteSchema(btp: boolean): Record<string, any> {
+      const tools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, systemType: btp ? 'btp' : 'onprem' });
+      const sapWrite = tools.find((t) => t.name === 'SAPWrite');
+      if (!sapWrite) throw new Error('SAPWrite tool not found in definitions');
+      return sapWrite.inputSchema as Record<string, any>;
+    }
+
+    it('exposes the messages property at top-level SAPWrite (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const messages = schema.properties.messages;
+      expect(messages).toBeDefined();
+      expect(messages.type).toBe('array');
+      expect(messages.items.required).toEqual(['number', 'shortText']);
+      expect(messages.items.properties.number).toBeDefined();
+      expect(messages.items.properties.shortText).toBeDefined();
+    });
+
+    it('exposes the messages property inside batch_create items (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const batchObjects = schema.properties.objects;
+      expect(batchObjects?.type).toBe('array');
+      const item = batchObjects.items;
+      expect(item.properties.messages).toBeDefined();
+      expect(item.properties.messages.type).toBe('array');
+      expect(item.properties.messages.items.required).toEqual(['number', 'shortText']);
+    });
+
+    it('exposes the messages property at top-level SAPWrite (BTP)', () => {
+      const schema = getSAPWriteSchema(true);
+      expect(schema.properties.messages).toBeDefined();
+      expect(schema.properties.messages.type).toBe('array');
     });
   });
 });

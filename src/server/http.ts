@@ -27,8 +27,10 @@
 
 import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import cors from 'cors';
 import type { Request, Response } from 'express';
 import express from 'express';
+import helmet from 'helmet';
 import { expandScopes } from '../authz/policy.js';
 import { API_KEY_PROFILES } from './config.js';
 import { logger } from './logger.js';
@@ -67,6 +69,94 @@ function matchApiKey(
 
 let joseModule: typeof import('jose') | null = null;
 let jwksClient: ReturnType<typeof import('jose').createRemoteJWKSet> | null = null;
+
+// ─── Security Middleware (helmet + opt-in CORS) ──────────────────────
+
+/**
+ * Apply security headers (helmet) and opt-in CORS to an Express app.
+ *
+ * helmet runs unconditionally — every response (including /health, /mcp,
+ * OAuth endpoints) gets HSTS, CSP, X-Frame-Options, etc. Native MCP clients
+ * ignore these; they exist to harden the server when a browser ever reaches
+ * it.
+ *
+ * COOP is **disabled** explicitly because Microsoft Copilot Studio (and any
+ * other connector platform that uses popup-based OAuth) breaks when the
+ * /authorize response sets any non-default COOP. The popup completes the
+ * flow server-side, but the parent window's `window.open()` reference is
+ * nulled by COOP isolation — Copilot Studio sees this as "consent pop-up
+ * window has been closed unexpectedly". ARC-1 renders no JS UI that would
+ * benefit from cross-origin isolation, so dropping COOP costs nothing.
+ *
+ * CORS is OFF by default (empty `allowedOrigins`). When enabled it uses
+ * `credentials: true` plus exact-origin reflection — disallowed origins are
+ * silently dropped by the browser and surfaced server-side as `cors_rejected`
+ * audit events.
+ *
+ * Exported for unit tests; also called from `startHttpServer` below.
+ */
+export function applySecurityMiddleware(app: express.Application, allowedOrigins: string[]): void {
+  const hasCorsOrigins = allowedOrigins.length > 0;
+  app.use(
+    helmet({
+      // COOP is disabled — see function docstring for rationale (Copilot Studio
+      // popup-based OAuth requires no COOP on /authorize).
+      crossOriginOpenerPolicy: false,
+      crossOriginResourcePolicy: hasCorsOrigins ? { policy: 'cross-origin' as const } : undefined,
+      // useDefaults keeps every other helmet directive intact (frame-ancestors
+      // 'self', object-src 'none', base-uri 'self', form-action 'self',
+      // upgrade-insecure-requests, …); we only relax style-src for any inline
+      // styles that browser-facing UIs may need.
+      contentSecurityPolicy: hasCorsOrigins
+        ? {
+            useDefaults: true,
+            directives: {
+              'style-src': ["'self'", "'unsafe-inline'"],
+            },
+          }
+        : undefined,
+    }),
+  );
+
+  if (hasCorsOrigins) {
+    const allowed = new Set(allowedOrigins);
+    app.use(
+      cors({
+        origin: (origin, callback) => {
+          if (!origin) {
+            // Same-origin requests, server-to-server, curl: no Origin header.
+            // Pass through without echoing CORS headers.
+            callback(null, false);
+            return;
+          }
+          callback(null, allowed.has(origin));
+        },
+        methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'mcp-session-id'],
+        exposedHeaders: ['mcp-session-id'],
+        credentials: true,
+      }),
+    );
+    // Audit hook for blocked origins. Re-checks the origin against the
+    // allowlist and emits cors_rejected when it didn't match. Browsers drop
+    // the response either way; this gives us a server-side signal for triage.
+    app.use((req, _res, next) => {
+      const origin = req.headers.origin;
+      if (typeof origin === 'string' && origin.length > 0 && !allowed.has(origin)) {
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'cors_rejected',
+          origin,
+          method: req.method,
+          path: req.path,
+        });
+      }
+      next();
+    });
+    logger.info('CORS enabled', { origins: allowedOrigins });
+  }
+}
 
 // ─── MCP Request Handler ─────────────────────────────────────────────
 
@@ -121,6 +211,9 @@ export async function startHttpServer(
   // Trust first proxy (CF gorouter) — required for express-rate-limit
   // and correct client IP detection behind CF's reverse proxy.
   app.set('trust proxy', 1);
+
+  applySecurityMiddleware(app, config.allowedOrigins);
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
@@ -160,7 +253,9 @@ export async function startHttpServer(
     const appUrl = getAppUrl() ?? `http://${bindHost}:${port}`;
 
     // Create XSUAA provider + chained verifier
-    const { provider, clientStore } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl);
+    const { provider, clientStore } = createXsuaaOAuthProvider(xsuaaCredentials, appUrl, {
+      dcrTtlSeconds: config.oauthDcrTtlSeconds,
+    });
     const xsuaaVerifier = createXsuaaTokenVerifier(xsuaaCredentials);
     const oidcVerifier = config.oidcIssuer ? await createOidcVerifier(config) : undefined;
     const chainedVerifier = createChainedTokenVerifier(config, xsuaaVerifier, oidcVerifier);
@@ -230,18 +325,78 @@ export async function startHttpServer(
       next();
     });
 
-    // Install MCP SDK auth router at root (OAuth endpoints + DCR)
-    // resourceServerUrl must point to /mcp so that the protected resource
-    // metadata is served at /.well-known/oauth-protected-resource/mcp
-    // (per RFC 9728). Without this, MCP clients can't discover the
-    // resource endpoint and may send JSON-RPC to the wrong path.
+    // ─── Path-prefix-aware OAuth metadata override ────────────────
+    // The MCP SDK's `mcpAuthRouter` builds endpoint URLs with
+    // `new URL("/authorize", baseUrl).href`, which strips any path component
+    // from baseUrl ("https://api/arc1" → "https://api/authorize"). When arc-1
+    // is fronted by SAP API Management with a base path like /arc1, that
+    // produces metadata pointing at the wrong URL — clients then call
+    // `https://api/authorize` directly and bypass (or 404 on) the proxy.
+    //
+    // Override: if appUrl has a non-root path, mount custom GET handlers for
+    // both well-known endpoints BEFORE the SDK router so they win the route
+    // match. The handlers emit prefix-aware absolute URLs. The actual OAuth
+    // endpoints (/authorize, /token, /register, /revoke) stay at the root of
+    // arc-1's Express app — the proxy strips its base path before forwarding,
+    // so they resolve correctly without further changes.
+    const parsedAppUrl = new URL(appUrl);
+    const basePath = parsedAppUrl.pathname.replace(/\/$/, ''); // '' for root, '/arc1' otherwise
+    const fullBase = `${parsedAppUrl.origin}${basePath}`; // 'https://api/arc1' or 'https://api'
+    const scopesSupported = ['read', 'write', 'data', 'sql', 'transports', 'git', 'admin'];
+
+    if (basePath) {
+      const customAuthMetadata = {
+        issuer: `${fullBase}/`,
+        authorization_endpoint: `${fullBase}/authorize`,
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+        token_endpoint: `${fullBase}/token`,
+        token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+        grant_types_supported: ['authorization_code', 'refresh_token'],
+        scopes_supported: scopesSupported,
+        revocation_endpoint: `${fullBase}/revoke`,
+        revocation_endpoint_auth_methods_supported: ['client_secret_post'],
+        registration_endpoint: `${fullBase}/register`,
+      };
+      const customResourceMetadata = {
+        resource: `${fullBase}/mcp`,
+        authorization_servers: [`${fullBase}/`],
+        scopes_supported: scopesSupported,
+        resource_name: 'ARC-1 SAP MCP Server',
+      };
+
+      app.get('/.well-known/oauth-authorization-server', (_req, res) => {
+        res.json(customAuthMetadata);
+      });
+      // Serve PRM at BOTH the root path (where MCP clients look by default after
+      // a strip-prefix proxy hop) and at the prefixed path the SDK would have
+      // used — defensive in case some clients don't strip.
+      app.get('/.well-known/oauth-protected-resource/mcp', (_req, res) => {
+        res.json(customResourceMetadata);
+      });
+      app.get(`/.well-known/oauth-protected-resource${basePath}/mcp`, (_req, res) => {
+        res.json(customResourceMetadata);
+      });
+
+      logger.info('OAuth metadata override active (path-prefix mode)', {
+        publicUrl: fullBase,
+        basePath,
+      });
+    }
+
+    // Install MCP SDK auth router at root (OAuth endpoints + DCR).
+    // For root-path deployments (no basePath) the SDK's metadata is correct
+    // as-is and serves both well-known endpoints. For prefix deployments the
+    // custom handlers above shadow the SDK's metadata routes; the SDK still
+    // serves /authorize, /token, /register, /revoke at root which is what we
+    // want.
     app.use(
       mcpAuthRouter({
         provider,
         issuerUrl: new URL(appUrl),
         baseUrl: new URL(appUrl),
         resourceServerUrl: new URL(`${appUrl}/mcp`),
-        scopesSupported: ['read', 'write', 'data', 'sql', 'transports', 'git', 'admin'],
+        scopesSupported,
         resourceName: 'ARC-1 SAP MCP Server',
       }),
     );

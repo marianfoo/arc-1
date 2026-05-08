@@ -396,6 +396,16 @@ describe('AdtApiError', () => {
       expect(classification?.hint).toContain('DEVELOPER');
     });
 
+    it('classifies ExceptionResourceNoAccess as lock-conflict (PR-γ / ADR-0002)', () => {
+      // CX_ADT_RES_NO_ACCESS surfaces as ExceptionResourceNoAccess in structured XML;
+      // the classifier now treats it the same as ExceptionResourceLockedByAnotherUser.
+      const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
+  <type id="ExceptionResourceNoAccess"/>
+</exc:exception>`;
+      const classification = classifySapDomainError(409, xml);
+      expect(classification?.category).toBe('lock-conflict');
+    });
+
     it('does not misclassify 403 auth error as lock conflict', () => {
       const xml = `<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">
   <type id="ExceptionNotAuthorized"/>
@@ -450,6 +460,76 @@ describe('AdtApiError', () => {
       expect(classification?.hint).toContain('SU53');
       expect(classification?.hint).toContain('S_DEVELOP');
       expect(classification?.transaction).toBe('SU53');
+    });
+
+    it('emits a dump-detail-specific 403 hint when path is /runtime/dump/{id}', () => {
+      // Typical SAP body when a user can list dumps but lacks read on the detail resource.
+      const body = 'No authorization to access the resource /sap/bc/adt/runtime/dump/...';
+      const classification = classifySapDomainError(
+        403,
+        body,
+        '/sap/bc/adt/runtime/dump/20260101120000app01_SYS_00%20%20%20DEVUSER%20100%2042',
+      );
+      expect(classification?.category).toBe('authorization');
+      expect(classification?.transaction).toBe('SU53');
+      // Names the dump-detail resource and the typical SAP authorization objects.
+      expect(classification?.hint).toContain('short-dump detail');
+      expect(classification?.hint).toContain('S_ADMI_FCD');
+      expect(classification?.hint).toContain('ST22');
+      expect(classification?.hint).toContain('S_ADT_RES');
+      expect(classification?.hint).toContain('/sap/bc/adt/runtime/dump/');
+      expect(classification?.hint).toContain('SU53');
+    });
+
+    it('emits a dump-list-specific 403 hint when path is /runtime/dumps', () => {
+      const classification = classifySapDomainError(
+        403,
+        'No authorization to access the resource /sap/bc/adt/runtime/dumps',
+        '/sap/bc/adt/runtime/dumps?$top=50',
+      );
+      expect(classification?.category).toBe('authorization');
+      // Different wording from the detail case: "Listing" not "Reading the ... detail".
+      expect(classification?.hint).toContain('Listing short dumps');
+      expect(classification?.hint).toContain('S_ADMI_FCD');
+      expect(classification?.hint).toContain('ST22');
+      expect(classification?.hint).toContain('S_ADT_RES');
+      expect(classification?.hint).not.toContain('short-dump detail');
+    });
+
+    it('emits a gateway-error-log-specific 403 hint when path is /gw/errorlog', () => {
+      const classification = classifySapDomainError(
+        403,
+        'No authorization to access the resource /sap/bc/adt/gw/errorlog/...',
+        '/sap/bc/adt/gw/errorlog/FrontendError/0050568D-8DF7-1ED0-AABB-CCDDEEFF0011',
+      );
+      expect(classification?.category).toBe('authorization');
+      expect(classification?.hint).toContain('SAP Gateway error log');
+      expect(classification?.hint).toContain('/IWFND/ERROR_LOG');
+      expect(classification?.hint).toContain('S_ADT_RES');
+      expect(classification?.hint).toContain('/sap/bc/adt/gw/errorlog/');
+    });
+
+    it('falls back to the generic authorization hint when the path is unknown', () => {
+      const classification = classifySapDomainError(
+        403,
+        'No authorization for S_DEVELOP',
+        '/sap/bc/adt/programs/programs/ZSOMETHING/source/main',
+      );
+      expect(classification?.category).toBe('authorization');
+      // Generic hint mentions S_DEVELOP / S_ADT_RES / S_TRANSPRT; no endpoint-specific advice.
+      expect(classification?.hint).toContain('S_DEVELOP');
+      expect(classification?.hint).toContain('S_TRANSPRT');
+      expect(classification?.hint).not.toContain('short-dump');
+      expect(classification?.hint).not.toContain('/IWFND/ERROR_LOG');
+    });
+
+    it('falls back to the generic authorization hint when path is not provided', () => {
+      // Backwards compatibility: callers that don't pass `path` still work.
+      const xml = `<exc:exception><type id="ExceptionNotAuthorized"/></exc:exception>`;
+      const classification = classifySapDomainError(403, xml);
+      expect(classification?.category).toBe('authorization');
+      expect(classification?.hint).toContain('S_DEVELOP');
+      expect(classification?.hint).not.toContain('short-dump');
     });
 
     it('classifies object-exists errors', () => {

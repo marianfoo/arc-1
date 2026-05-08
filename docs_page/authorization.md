@@ -54,6 +54,27 @@ Important details:
 
 ---
 
+## SAP API Policy: data preview and free SQL are gated for a reason
+
+The April 2026 [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) and the accompanying [SAP API Policy FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html) endorse ADT-based developer tooling for "internal development automation such as code checks, build processes, and transport management". The same FAQ excludes "programmatic reading of application tables or export of business data" and "SQL execution against SAP backend systems".
+
+ARC-1 is designed to stay within the ADT development-tooling scope described in SAP's API Policy FAQ v1.1. It uses documented ADT / Eclipse SDK capabilities for internal development-related use cases and does not expose ADT Data Preview, SQL execution, table reads, or business-data extraction.
+
+When ARC-1 is used with AI assistants or MCP clients, customers should apply additional governance for AI-driven or automated access patterns, including real user identity, authorization checks, audit logging, rate limits, conservative tool exposure, and customer-side review against SAP documentation and agreements.
+
+Two ARC-1 server flags map directly onto the excluded capabilities, and both default to off:
+
+| Flag | Default | What it enables | FAQ alignment |
+| ---- | ------- | --------------- | ----------------- |
+| `SAP_ALLOW_DATA_PREVIEW=true` | `false` (off) | `SAPRead(type=TABLE_CONTENTS)` — named table content preview | Outside the endorsed development tooling scope. |
+| `SAP_ALLOW_FREE_SQL=true` | `false` (off) | `SAPQuery` — freestyle ABAP SQL | Outside the endorsed development tooling scope. |
+
+With both flags at their defaults, the data/sql rows in the capability matrix below are unreachable, and ARC-1 stays inside the FAQ envelope for endorsed development tooling. Turning either flag on is a customer decision that must be made against the SAP API Policy, the customer's SAP agreement, and the customer's internal data-protection rules — not a default production posture.
+
+The `data` and `sql` user scopes (and the `viewer-data`, `viewer-sql`, `developer-data`, `developer-sql` API-key profiles) only become useful after the matching server flag is on. Granting `data` / `sql` to a user does **not** widen the server ceiling.
+
+---
+
 <a id="capability-matrix"></a>
 
 ## Capability requirements
@@ -97,7 +118,7 @@ Tool schemas are pruned to hide actions that cannot pass ARC-1 gates. Treat sche
 
 | You want to change... | Change this | Do not change this |
 | --------------------- | ----------- | ------------------ |
-| What this ARC-1 instance can ever do | Server env / CLI flags (`SAP_ALLOW_*`, `SAP_ALLOWED_PACKAGES`, `SAP_DENY_ACTIONS`). On BTP, set these with `cf set-env`, `manifest.yml`, or MTA properties. | User JWT scopes |
+| What this ARC-1 instance can ever do | Server env / CLI flags (`SAP_ALLOW_*`, `SAP_ALLOWED_PACKAGES`, `SAP_DENY_ACTIONS`). On BTP, set these with `mta-overrides.mtaext`, `cf set-env`, `manifest.yml`, or MTA properties. | User JWT scopes |
 | What one BTP user can do | XSUAA role collection assignment | Server env vars; they change the whole ARC-1 instance, not one user |
 | What a specific API key can do | `ARC1_API_KEYS="key:profile"` | Server flags only |
 | What an OIDC user can do | `scope` / `scp` claim in the JWT | MCP client JSON |
@@ -109,7 +130,7 @@ Precedence for server config is:
 CLI flag > environment variable > .env file > built-in default
 ```
 
-Why not `.env` for BTP? `.env` is mainly the local/dev way to set the same server config. On BTP, use `cf set-env`, `manifest.yml`, or MTA properties instead. Those values are still the **server ceiling** and affect every user of that ARC-1 instance. To change one BTP user's access, change their XSUAA role collection assignment.
+Why not `.env` for BTP? `.env` is mainly the local/dev way to set the same server config. On BTP, use `mta-overrides.mtaext` (preferred — gitignored per-landscape overrides applied at `cf deploy -e ...`; copy from the tracked `mta-overrides.mtaext.example` template), `cf set-env`, `manifest.yml`, or MTA properties instead. Those values are still the **server ceiling** and affect every user of that ARC-1 instance. To change one BTP user's access, change their XSUAA role collection assignment.
 
 Use `arc1 config show` to see the final resolved server policy and where each field came from.
 

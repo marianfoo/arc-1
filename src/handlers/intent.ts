@@ -35,6 +35,7 @@ import {
 import type { AdtClient, SourceReadResult } from '../adt/client.js';
 import {
   findDefinition,
+  findInterfaceImplementersViaSeoMetaRel,
   findReferences,
   findWhereUsed,
   getCompletion,
@@ -381,8 +382,14 @@ function getWriteInfrastructureHint(err: AdtApiError, tool: string, args: Record
 }
 
 /** Format error messages with LLM-friendly remediation hints */
-function formatErrorForLLM(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
-  const base = buildBaseErrorMessage(err, message, tool, args);
+function formatErrorForLLM(
+  err: unknown,
+  message: string,
+  tool: string,
+  args: Record<string, unknown>,
+  config: ServerConfig,
+): string {
+  const base = buildBaseErrorMessage(err, message, tool, args, config);
   // Handler-attached remediation hints (e.g., CDS delete blocker list) always
   // appear last so the message reads "what happened → diagnostics → how to fix".
   if (err instanceof AdtApiError && err.extraHint && !base.includes(err.extraHint)) {
@@ -391,12 +398,18 @@ function formatErrorForLLM(err: unknown, message: string, tool: string, args: Re
   return base;
 }
 
-function buildBaseErrorMessage(err: unknown, message: string, tool: string, args: Record<string, unknown>): string {
+function buildBaseErrorMessage(
+  err: unknown,
+  message: string,
+  tool: string,
+  args: Record<string, unknown>,
+  config: ServerConfig,
+): string {
   if (err instanceof AdtApiError) {
     // Append additional SAP messages (line numbers, secondary errors) if available
     const enriched = enrichWithSapDetails(err, message);
     const argType = String(args.type ?? '').toUpperCase();
-    const classification = classifySapDomainError(err.statusCode, err.responseBody);
+    const classification = classifySapDomainError(err.statusCode, err.responseBody, err.path);
 
     if (classification) {
       const transactionLine = classification.transaction ? `\nSAP Transaction: ${classification.transaction}` : '';
@@ -413,6 +426,14 @@ function buildBaseErrorMessage(err: unknown, message: string, tool: string, args
       return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
     }
     if (err.isUnauthorized || err.isForbidden) {
+      if (config.cookieFile || config.cookieString) {
+        return (
+          `${enriched}\n\n` +
+          'Hint: SAP cookies have expired. Ask the user to re-extract cookies ' +
+          'with `arc1-cli extract-cookies`. The next SAP call after extraction ' +
+          'will automatically reload the fresh cookies — no restart needed.'
+        );
+      }
       return `${enriched}\n\nHint: Authorization error. Check SAP_CLIENT (default: '100'), SAP_USER, and SAP_PASSWORD. The configured SAP user may lack permissions for this object.`;
     }
     // Transport / corrNr specific hints
@@ -643,6 +664,12 @@ function formatCdsImpactBuckets(downstream: CdsImpactDownstream, maxNames = 4): 
 }
 
 function mainObjectType(type: string): string {
+  // First consult SLASH_TYPE_MAP so collapsed types (TABL/DS → TABL, legacy
+  // STRU/DS → TABL) resolve to ARC-1's canonical short type. Then fall back to
+  // splitting on '/' so unknown slash forms (e.g. BDEF/BO from where-used
+  // results) still produce the parent type rather than the full slash form.
+  const normalized = normalizeObjectType(type);
+  if (normalized && !normalized.includes('/')) return normalized;
   return type.split('/')[0]?.toUpperCase() ?? '';
 }
 
@@ -985,7 +1012,7 @@ function getBehaviorPoolSaveFailureHint(err: AdtApiError, args: Record<string, u
 
 function classifyError(err: unknown): string {
   if (err instanceof AdtApiError) {
-    const classification = classifySapDomainError(err.statusCode, err.responseBody);
+    const classification = classifySapDomainError(err.statusCode, err.responseBody, err.path);
     return classification ? `AdtApiError:${classification.category}` : 'AdtApiError';
   }
   if (err instanceof AdtNetworkError) return 'AdtNetworkError';
@@ -1215,7 +1242,7 @@ export async function handleToolCall(
         errorMessage: message,
       });
 
-      return errorResult(formatErrorForLLM(err, message, toolName, args));
+      return errorResult(formatErrorForLLM(err, message, toolName, args, config));
     }
   });
 }
@@ -1257,7 +1284,6 @@ const VERSIONED_SOURCE_READ_TYPES = new Set([
   'SKTD',
   'TABL',
   'VIEW',
-  'STRU',
 ]);
 
 function inactiveTypeMatches(readType: string, inactiveType: string): boolean {
@@ -1543,20 +1569,17 @@ async function handleSAPRead(
       }
     }
     case 'TABL': {
+      // Unified TABL: covers transparent tables and DDIC structures (Model B).
+      // client.getTabl() handles the /tables/ → /structures/ fallback internally
+      // and caches the resolved URL for subsequent write/activate paths.
       const { source, cacheHit, revalidated } = await cachedGet('TABL', name, effectiveVersion, (ifNoneMatch) =>
-        client.getTable(name, { ifNoneMatch, version: effectiveVersion }),
+        client.getTabl(name, { ifNoneMatch, version: effectiveVersion }),
       );
       return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
     case 'VIEW': {
       const { source, cacheHit, revalidated } = await cachedGet('VIEW', name, effectiveVersion, (ifNoneMatch) =>
         client.getView(name, { ifNoneMatch, version: effectiveVersion }),
-      );
-      return cachedTextResult(source, cacheHit, revalidated, versionWarning);
-    }
-    case 'STRU': {
-      const { source, cacheHit, revalidated } = await cachedGet('STRU', name, effectiveVersion, (ifNoneMatch) =>
-        client.getStructure(name, { ifNoneMatch, version: effectiveVersion }),
       );
       return cachedTextResult(source, cacheHit, revalidated, versionWarning);
     }
@@ -1572,7 +1595,17 @@ async function handleSAPRead(
       const authField = await client.getAuthorizationField(name);
       return textResult(JSON.stringify(authField, null, 2));
     }
-    case 'FTG2': {
+    case 'FTG2':
+    case 'FEATURE_TOGGLE': {
+      // FEATURE_TOGGLE is the canonical short type. 'FTG2' is a deprecated alias —
+      // see research/abap-types/types/ftg2.md (ARC-1-invented; zero hits in TADIR,
+      // abap-file-formats, Eclipse apidoc). Removed in the next minor.
+      if (type === 'FTG2') {
+        logger.warn('SAPRead type "FTG2" is deprecated — use "FEATURE_TOGGLE" instead', {
+          type: 'FTG2',
+          replacement: 'FEATURE_TOGGLE',
+        });
+      }
       const toggle = await client.getFeatureToggle(name);
       return textResult(JSON.stringify(toggle, null, 2));
     }
@@ -1713,7 +1746,17 @@ async function handleSAPRead(
       const components = await client.getInstalledComponents();
       return textResult(JSON.stringify(components, null, 2));
     }
-    case 'MESSAGES': {
+    case 'MESSAGES':
+    case 'MSAG': {
+      // MSAG is the canonical TADIR R3TR type for message classes; 'MESSAGES' is a
+      // deprecated read alias kept for one minor release. See
+      // research/abap-types/types/msag.md.
+      if (type === 'MESSAGES') {
+        logger.warn('SAPRead type "MESSAGES" is deprecated — use "MSAG" instead', {
+          type: 'MESSAGES',
+          replacement: 'MSAG',
+        });
+      }
       try {
         const mcInfo = await client.getMessageClassInfo(name);
         return textResult(JSON.stringify(mcInfo, null, 2));
@@ -1771,7 +1814,7 @@ async function handleSAPRead(
     }
     default:
       return errorResult(
-        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, STRU, DOMA, DTEL, AUTH, FTG2, ENHO, VERSIONS, VERSION_SOURCE, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, MESSAGES, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. ` +
+        `Unknown SAPRead type: "${type}". Supported types: PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, VIEW, DOMA, DTEL, MSAG, AUTH, FEATURE_TOGGLE, ENHO, VERSIONS, VERSION_SOURCE, TRAN, TABLE_CONTENTS, DEVC, SOBJ, SYSTEM, COMPONENTS, TEXT_ELEMENTS, VARIANTS, BSP, BSP_DEPLOY, API_STATE, INACTIVE_OBJECTS. Deprecated aliases: MESSAGES (use MSAG), FTG2 (use FEATURE_TOGGLE). ` +
           'Tip: Type aliases are auto-normalized (e.g., DDLS/DF → DDLS, DCLS/DL → DCLS, CLAS/OC → CLAS, PROG/P → PROG). ' +
           'Do not pass a URI — use the "type" and "name" parameters instead.',
       );
@@ -2553,31 +2596,118 @@ function escapeXml(s: string): string {
 
 // ─── Object URL Mapping ──────────────────────────────────────────────
 
-const SLASH_TYPE_MAP: Record<string, string> = {
-  'PROG/P': 'PROG',
-  'PROG/I': 'INCL',
-  'CLAS/OC': 'CLAS',
-  'CLAS/LI': 'CLAS',
-  'INTF/OI': 'INTF',
-  'FUNC/FM': 'FUNC',
-  'FUGR/F': 'FUGR',
-  'FUGR/FF': 'FUGR',
-  'DDLS/DF': 'DDLS',
-  'DCLS/DL': 'DCLS',
-  'BDEF/BDO': 'BDEF',
-  'SRVD/SRV': 'SRVD',
-  'SRVB/SVB': 'SRVB',
-  'DDLX/EX': 'DDLX',
-  'TABL/DT': 'TABL',
-  'STRU/DS': 'STRU',
-  'DOMA/DD': 'DOMA',
-  'DTEL/DE': 'DTEL',
-  'MSAG/N': 'MSAG',
-  'DEVC/K': 'DEVC',
-  'TRAN/O': 'TRAN',
-  'VIEW/V': 'VIEW',
-  'SKTD/TYP': 'SKTD',
+// Every entry verified against either Eclipse ADT apidoc 3.58.1, live a4h S/4HANA
+// 2023 + npl NW 7.50 ADT responses (captured 2026-05-08 — both systems agree), or
+// abap-file-formats schemas. Per-entry evidence in research/abap-types/types/<x>.md.
+// SLASH_TYPE_EVIDENCE below MUST stay key-equal (anti-cargo-cult guard, enforced by
+// tests/unit/handlers/slash-type-map.test.ts — see issue #218 follow-up).
+// Exported for tests only — the citation guard
+// (tests/unit/handlers/slash-type-map.test.ts) needs to assert key-equality
+// against SLASH_TYPE_EVIDENCE so a new entry without evidence fails CI.
+// Production callers should keep using normalizeObjectType().
+export const SLASH_TYPE_MAP: Record<string, string> = {
+  'PROG/P': 'PROG', // research/abap-types/types/prog.md
+  'PROG/I': 'INCL', // research/abap-types/types/incl.md
+  'CLAS/OC': 'CLAS', // research/abap-types/types/clas.md
+  // 'CLAS/LI' removed — invented; absent from Eclipse apidoc; no live ADT response
+  // emits it. Pass-through means schema validation rejects it loudly.
+  'INTF/OI': 'INTF', // research/abap-types/types/intf.md
+  // 'FUNC/FM' removed — invented; ADT emits FUGR/FF for function modules, not
+  // FUNC/FM. Function modules are LIMU FUNC under R3TR FUGR.
+  'FUGR/F': 'FUGR', // function group container — research/abap-types/types/fugr.md
+  // FUGR/FF is a function module (LIMU FUNC under FUGR), not the function group.
+  // Live a4h: GET .../groups/su_user/fmodules/bapi_user_getlist returns
+  // adtcore:type="FUGR/FF" with <adtcore:containerRef adtcore:type="FUGR/F"/>.
+  'FUGR/FF': 'FUNC', // research/abap-types/types/fugr.md + func.md
+  'DDLS/DF': 'DDLS', // research/abap-types/types/ddls.md
+  'DCLS/DL': 'DCLS', // research/abap-types/types/dcls.md
+  'BDEF/BDO': 'BDEF', // research/abap-types/types/bdef.md
+  'SRVD/SRV': 'SRVD', // research/abap-types/types/srvd.md
+  'SRVB/SVB': 'SRVB', // research/abap-types/types/srvb.md
+  'DDLX/EX': 'DDLX', // research/abap-types/types/ddlx.md (live a4h + npl 2026-05-08)
+  // DDIC TABL: ADT exposes /DT (transparent table) and /DS (DDIC structure)
+  // subtypes. Both share TADIR R3TR TABL (DD02L-TABCLASS = TRANSP vs INTTAB).
+  // ARC-1 collapses both into the canonical short type 'TABL' (Model B — see
+  // docs/plans/completed/collapse-stru-into-tabl.md).
+  'TABL/DT': 'TABL', // research/abap-types/types/tabl.md
+  'TABL/DS': 'TABL', // research/abap-types/types/tabl.md
+  // Legacy slash-form alias — ADT never actually returns this, but pre-Model-B
+  // ARC-1 prompts learned it from older docs. Kept so they normalize to TABL
+  // instead of producing a schema error. Bare 'STRU' is NOT aliased.
+  'STRU/DS': 'TABL', // research/abap-types/types/tabl.md (legacy alias)
+  'DOMA/DD': 'DOMA', // research/abap-types/types/doma.md
+  'DTEL/DE': 'DTEL', // research/abap-types/types/dtel.md
+  'MSAG/N': 'MSAG', // research/abap-types/types/msag.md
+  'DEVC/K': 'DEVC', // research/abap-types/types/devc.md
+  // TRAN/T (was TRAN/O — invented). Live a4h + npl 2026-05-08 both return
+  // adtcore:type="TRAN/T" for SE38, SU01, etc.
+  'TRAN/T': 'TRAN', // research/abap-types/types/tran.md
+  // VIEW/DV (was VIEW/V — invented). Live a4h + npl 2026-05-08 both return
+  // adtcore:type="VIEW/DV" for V_USR_NAME.
+  'VIEW/DV': 'VIEW', // research/abap-types/types/view.md
+  'SKTD/TYP': 'SKTD', // research/abap-types/types/sktd.md
 };
+
+/**
+ * Citation guard companion for SLASH_TYPE_MAP. Keys MUST stay key-equal to
+ * SLASH_TYPE_MAP (enforced by tests/unit/handlers/slash-type-map.test.ts). Each
+ * value points at a research evidence file or a fixture that backs the slash code.
+ * Adding an entry without evidence is the anti-cargo-cult guard.
+ */
+export const SLASH_TYPE_EVIDENCE: Record<string, string> = {
+  'PROG/P': 'research/abap-types/types/prog.md',
+  'PROG/I': 'research/abap-types/types/incl.md',
+  'CLAS/OC': 'research/abap-types/types/clas.md',
+  'INTF/OI': 'research/abap-types/types/intf.md',
+  'FUGR/F': 'research/abap-types/types/fugr.md',
+  'FUGR/FF': 'research/abap-types/types/fugr.md',
+  'DDLS/DF': 'research/abap-types/types/ddls.md',
+  'DCLS/DL': 'research/abap-types/types/dcls.md',
+  'BDEF/BDO': 'research/abap-types/types/bdef.md',
+  'SRVD/SRV': 'research/abap-types/types/srvd.md',
+  'SRVB/SVB': 'research/abap-types/types/srvb.md',
+  'DDLX/EX': 'research/abap-types/types/ddlx.md',
+  'TABL/DT': 'research/abap-types/types/tabl.md',
+  'TABL/DS': 'research/abap-types/types/tabl.md',
+  'STRU/DS': 'research/abap-types/types/tabl.md',
+  'DOMA/DD': 'research/abap-types/types/doma.md',
+  'DTEL/DE': 'research/abap-types/types/dtel.md',
+  'MSAG/N': 'research/abap-types/types/msag.md',
+  'DEVC/K': 'research/abap-types/types/devc.md',
+  'TRAN/T': 'research/abap-types/types/tran.md',
+  'VIEW/DV': 'research/abap-types/types/view.md',
+  'SKTD/TYP': 'research/abap-types/types/sktd.md',
+};
+
+/**
+ * Set of canonical short types that MUST have a working `objectBasePath` case.
+ * Drives the exhaustiveness guard inside `objectBasePath` so a new canonical type
+ * added to SAPRead/SAPWrite enums without an URL builder fails loudly. The VIEW
+ * silent-fallthrough bug (research/abap-types/types/view.md) is exactly what this
+ * guard prevents from reoccurring.
+ */
+export const KNOWN_BASE_TYPES = new Set([
+  'PROG',
+  'CLAS',
+  'INTF',
+  'INCL',
+  'FUGR',
+  'FUNC',
+  'DDLS',
+  'DCLS',
+  'BDEF',
+  'SRVD',
+  'SRVB',
+  'DDLX',
+  'TABL',
+  'DOMA',
+  'DTEL',
+  'MSAG',
+  'DEVC',
+  'TRAN',
+  'VIEW',
+  'SKTD',
+]);
 
 /** Normalize ADT type codes and aliases to ARC-1 canonical short types. */
 export function normalizeObjectType(type: string): string {
@@ -2647,13 +2777,27 @@ function normalizeTypeArgsForValidation(toolName: string, args: Record<string, u
         ...args,
         type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
       };
+    case 'SAPTransport':
+      // Normalize `type` for SAPTransport actions that route through
+      // objectBasePath (e.g. when a future action accepts a slash-form
+      // workbench type). Codex review of PR #223 flagged this gap: without
+      // normalization, a caller passing `type: 'FUNC/FM'` would slip past the
+      // string-typed schema and hit the slash-form throw inside objectBasePath,
+      // which is correct as a last-resort fence but not as a friendly error.
+      return {
+        ...args,
+        type: args.type === undefined ? undefined : normalizeObjectType(String(args.type ?? '')),
+      };
     default:
       return args;
   }
 }
 
-/** Base path for an object type. Returns path prefix without trailing name segment. */
-function objectBasePath(type: string): string {
+/**
+ * Base path for an object type. Returns path prefix without trailing name segment.
+ * Exported for tests (Plan A Task 4 — exhaustiveness guard regression test).
+ */
+export function objectBasePath(type: string): string {
   switch (type) {
     case 'PROG':
       return '/sap/bc/adt/programs/programs/';
@@ -2662,7 +2806,25 @@ function objectBasePath(type: string): string {
     case 'INTF':
       return '/sap/bc/adt/oo/interfaces/';
     case 'FUNC':
-      return '/sap/bc/adt/functions/groups/';
+      // Codex review of PR #223 follow-up: function modules cannot be
+      // addressed with a single base path — they live at
+      // /sap/bc/adt/functions/groups/{group}/fmodules/{fm} and require the
+      // parent function group. Returning the group prefix for FUNC was the
+      // pre-PR behaviour and silently mis-routed a real ADT search result
+      // `{ type: "FUGR/FF", name: "BAPI_USER_GETLIST" }` (which now
+      // canonicalises to FUNC) to /functions/groups/BAPI_USER_GETLIST. Throw
+      // so generic URL builders (SAPActivate / SAPDiagnose / SAPTransport via
+      // objectUrlForType) fail loudly. SAPRead and SAPNavigate handle FUNC
+      // through dedicated `case 'FUNC'` branches that take a `group` arg and
+      // build the correct URL via client.getFunction(group, name) — those
+      // paths do not call objectBasePath and remain unaffected.
+      throw new Error(
+        `objectBasePath: type 'FUNC' (function module) cannot be resolved to a ` +
+          `single base path — it requires the parent function group via ` +
+          `client.getFunction(group, name) or an explicit /sap/bc/adt/functions/` +
+          `groups/{group}/fmodules/{name} URI. Caller must take the FUNC-aware ` +
+          `path or pass 'uri' directly. See PR #223 codex follow-up.`,
+      );
     case 'INCL':
       return '/sap/bc/adt/programs/includes/';
     case 'FUGR':
@@ -2680,9 +2842,10 @@ function objectBasePath(type: string): string {
     case 'SRVB':
       return '/sap/bc/adt/businessservices/bindings/';
     case 'TABL':
+      // Default URL prefix for TABL: /tables/ (transparent tables). DDIC structures
+      // live at /sap/bc/adt/ddic/structures/<name>; for those, callers must use
+      // AdtClient.resolveTablObjectUrl(name) which falls back on 404.
       return '/sap/bc/adt/ddic/tables/';
-    case 'STRU':
-      return '/sap/bc/adt/ddic/structures/';
     case 'DOMA':
       return '/sap/bc/adt/ddic/domains/';
     case 'DTEL':
@@ -2692,10 +2855,49 @@ function objectBasePath(type: string): string {
     case 'DEVC':
       return '/sap/bc/adt/packages/';
     case 'TRAN':
+      // VIT generic-object endpoint. The 'trant' infix is the ADT workbench type
+      // for transactions; live a4h + npl 2026-05-08 confirm GET with this prefix
+      // returns 200 for SE38/SU01.
       return '/sap/bc/adt/vit/wb/object_type/trant/object_name/';
+    case 'VIEW':
+      // VIT generic-object endpoint for DDIC views. /sap/bc/adt/ddic/views/
+      // returns HTTP 500 on a4h + npl (verified 2026-05-08); only the VIT URL
+      // works. Without this case, VIEW reads silently fell through to
+      // /programs/programs/ — see research/abap-types/types/view.md.
+      return '/sap/bc/adt/vit/wb/object_type/viewdv/object_name/';
     case 'SKTD':
       return '/sap/bc/adt/documentation/ktd/documents/';
     default:
+      // Exhaustiveness guard: canonical types in KNOWN_BASE_TYPES MUST have a
+      // switch case — that catches the silent-fallthrough bug class (VIEW pre-PR).
+      if (KNOWN_BASE_TYPES.has(type)) {
+        throw new Error(
+          `objectBasePath: canonical type '${type}' is in KNOWN_BASE_TYPES but ` +
+            `has no switch case. Add a case here or remove it from KNOWN_BASE_TYPES. ` +
+            `See docs/plans/completed/audit-purge-invented-adt-types.md.`,
+        );
+      }
+      // Slash-form guard: a normalized slash code (e.g. 'FUNC/FM', 'CLAS/LI',
+      // 'VIEW/V', 'TRAN/O') must NEVER reach here. If it did, normalizeObjectType
+      // failed to map it and we'd silently route the request to the program
+      // endpoint. Tools like SAPNavigate/SAPActivate/SAPDiagnose/SAPTransport
+      // accept `type: string` (no enum), so the schema layer can't catch this
+      // for them — only this guard can. Throw with a hint pointing at the
+      // citation guard so the contributor adds the alias correctly. Codex
+      // review of PR #223 caught that the previous default-fallback could
+      // still silently route removed aliases via these non-enum tools.
+      if (type.includes('/')) {
+        throw new Error(
+          `objectBasePath: refusing to build URL for slash-form type '${type}' — ` +
+            `this normally indicates an invented or unmapped ADT slash code. Add ` +
+            `it to SLASH_TYPE_MAP + SLASH_TYPE_EVIDENCE (with a research entry) ` +
+            `if it is real, or correct the caller. See ` +
+            `docs/plans/completed/audit-purge-invented-adt-types.md and ` +
+            `tests/unit/handlers/slash-type-map.test.ts.`,
+        );
+      }
+      // Unknown raw inputs (no slash, not canonical) fall through to the
+      // program path so legacy callers like inferObjectType keep working.
       return '/sap/bc/adt/programs/programs/';
   }
 }
@@ -2757,8 +2959,33 @@ async function handleSAPWrite(
     return errorResult('"type" and "name" are required for this action.');
   }
 
-  const objectUrl = objectUrlForType(type, name);
-  const srcUrl = sourceUrlForType(type, name);
+  // SAP TADIR stores object names uppercase. Mixed-case names cause silent corruption
+  // (e.g. DDLS created as "Zc_MyView" registers as "ZC_MYVIEW" in TADIR but the source body
+  // still contains "Zc_MyView", confusing every downstream tool). Reject pre-flight on create —
+  // applies on every SAP release; this is universal SAP convention, not a 7.50 quirk.
+  // Note: source code INSIDE the object can use mixed case (e.g. for DDLS: name="ZC_MYVIEW"
+  // but `define view entity Zc_MyView` is fine inside the source body).
+  if (action === 'create' && name && name !== name.toUpperCase()) {
+    return errorResult(
+      `Object name "${name}" contains lowercase characters. SAP object names must be uppercase (e.g. "${name.toUpperCase()}").\n\n` +
+        `Note: the object NAME in TADIR must be uppercase, but the source code inside the object can use mixed case ` +
+        `(e.g. for DDLS: name="${name.toUpperCase()}" but source can contain "define view entity ${name}").`,
+    );
+  }
+
+  // For TABL update/delete/edit_method, the existing object may live at /tables/
+  // (transparent) or /structures/ (DDIC structure). Resolve once via the client's
+  // cached URL probe. For 'create' the default /tables/ URL is correct (we only
+  // create transparent tables today; structure creation is out of scope).
+  let objectUrl: string;
+  let srcUrl: string;
+  if (type === 'TABL' && action !== 'create' && action !== 'batch_create') {
+    objectUrl = await client.resolveTablObjectUrl(name);
+    srcUrl = `${objectUrl}/source/main`;
+  } else {
+    objectUrl = objectUrlForType(type, name);
+    srcUrl = sourceUrlForType(type, name);
+  }
 
   const invalidateWrittenObject = (objType = type, objName = name): void => {
     cachingLayer?.invalidate(objType, objName, 'all');
@@ -2787,8 +3014,16 @@ async function handleSAPWrite(
         // responsible/masterLanguage/packageRef/refObject metadata.
         const { source: currentEnvelope } = await client.getKtd(name);
         const body = rewriteKtdText(currentEnvelope, source);
-        await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, transport);
-        invalidateWrittenObject();
+        await safeUpdateObject(
+          client.http,
+          client.safety,
+          objectUrl,
+          body,
+          SKTD_V2_CONTENT_TYPE,
+          transport,
+          cachedFeatures?.abapRelease,
+        );
+        invalidateWrittenObject(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
       }
 
@@ -2801,8 +3036,16 @@ async function handleSAPWrite(
         const description = String(args.description ?? mergedProps._description ?? name);
         const pkg = String(args.package ?? existingPackage ?? mergedProps._package ?? '$TMP');
         const body = buildCreateXml(type, name, pkg, description, mergedProps);
-        await safeUpdateObject(client.http, client.safety, objectUrl, body, vendorContentTypeForType(type), transport);
-        invalidateWrittenObject();
+        await safeUpdateObject(
+          client.http,
+          client.safety,
+          objectUrl,
+          body,
+          vendorContentTypeForType(type),
+          transport,
+          cachedFeatures?.abapRelease,
+        );
+        invalidateWrittenObject(type, name);
         return textResult(`Successfully updated ${type} ${name}.`);
       }
 
@@ -2830,8 +3073,16 @@ async function handleSAPWrite(
 
       // If safeUpdateSource throws (lock conflict, network error, etc.), checkNotes
       // is intentionally discarded — pre-check warnings only matter when the write succeeded.
-      await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, transport);
-      invalidateWrittenObject();
+      await safeUpdateSource(
+        client.http,
+        client.safety,
+        objectUrl,
+        srcUrl,
+        source,
+        transport,
+        cachedFeatures?.abapRelease,
+      );
+      invalidateWrittenObject(type, name);
       const msg = `Successfully updated ${type} ${name}.`;
       const cdsUpdateHint = type === 'DDLS' ? await buildCdsUpdateCrudHint(client, name, objectUrl) : undefined;
       const warnings = mergePreWriteWarnings(
@@ -2880,6 +3131,23 @@ async function handleSAPWrite(
         } catch {
           // If transportInfo check fails (older system, permissions, etc.), proceed without it.
           // SAP will return its own error if a transport is actually needed.
+        }
+      }
+
+      // MSAG transport-vs-task guard. Some SAP releases silently drop message inserts when
+      // given a task number as corrNr — CL_ADT_MESSAGE_CLASS_API=>create() passes corrNr to
+      // CTS_WBO_API_INSERT_OBJECTS which only accepts request numbers. The TADIR entry is
+      // created but T100/T100A are never written, leaving a phantom MSAG. Confirmed on NW 7.50;
+      // unclear whether later releases fixed it, so validate everywhere.
+      // Cost: one extra HTTP roundtrip per MSAG create (negligible vs. the data loss risk).
+      if (type === 'MSAG' && effectiveTransport) {
+        const tr = await getTransport(client.http, client.safety, effectiveTransport);
+        if (!tr) {
+          return errorResult(
+            `Transport "${effectiveTransport}" is not a valid transport request. ` +
+              `MSAG creation requires a transport request number, not a task number. ` +
+              `Use SAPTransport(action="get", id="<request>") to verify, or SAPTransport(action="list") to find modifiable requests.`,
+          );
         }
       }
 
@@ -2943,6 +3211,8 @@ async function handleSAPWrite(
           ktdBody,
           SKTD_V2_CONTENT_TYPE,
           effectiveTransport,
+          undefined,
+          cachedFeatures?.abapRelease,
         );
 
         // If initial Markdown was provided, follow up with an update PUT to write it.
@@ -2952,8 +3222,16 @@ async function handleSAPWrite(
         if (source) {
           const { source: currentEnvelope } = await client.getKtd(name);
           const body = rewriteKtdText(currentEnvelope, source);
-          await safeUpdateObject(client.http, client.safety, objectUrl, body, SKTD_V2_CONTENT_TYPE, effectiveTransport);
-          invalidateWrittenObject();
+          await safeUpdateObject(
+            client.http,
+            client.safety,
+            objectUrl,
+            body,
+            SKTD_V2_CONTENT_TYPE,
+            effectiveTransport,
+            cachedFeatures?.abapRelease,
+          );
+          invalidateWrittenObject(type, name);
           return textResult(
             `Created SKTD ${name} in package ${pkg} and wrote Markdown content.\nNext step: SAPActivate(type="SKTD", name="${name}").\n${ktdResult}`,
           );
@@ -2987,6 +3265,7 @@ async function handleSAPWrite(
           contentType,
           effectiveTransport,
           needsPackageParam ? pkg : undefined,
+          cachedFeatures?.abapRelease,
         );
       } catch (createErr) {
         if (createErr instanceof AdtApiError && (createErr.statusCode === 400 || createErr.statusCode === 409)) {
@@ -3005,7 +3284,7 @@ async function handleSAPWrite(
         if (type === 'DTEL' && dtelNeedsPostCreateUpdate(metadataProperties)) {
           const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
-            const lock = await lockObject(session, client.safety, objectUrl);
+            const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
             const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
             try {
               await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
@@ -3018,7 +3297,7 @@ async function handleSAPWrite(
         if (type === 'MSAG' && Array.isArray(metadataProperties.messages) && metadataProperties.messages.length > 0) {
           const ct = vendorContentTypeForType(type);
           await client.http.withStatefulSession(async (session) => {
-            const lock = await lockObject(session, client.safety, objectUrl);
+            const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
             const lockTransport = effectiveTransport ?? (lock.corrNr || undefined);
             try {
               await updateObject(session, client.safety, objectUrl, body, lock.lockHandle, ct, lockTransport);
@@ -3045,8 +3324,16 @@ async function handleSAPWrite(
           );
         }
 
-        await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, source, effectiveTransport);
-        invalidateWrittenObject();
+        await safeUpdateSource(
+          client.http,
+          client.safety,
+          objectUrl,
+          srcUrl,
+          source,
+          effectiveTransport,
+          cachedFeatures?.abapRelease,
+        );
+        invalidateWrittenObject(type, name);
         const msg = `Created ${type} ${name} in package ${pkg} and wrote source code.`;
         const warnings = mergePreWriteWarnings(preflightWarnings.warnings, lintWarnings.warnings);
         return warnings ? textResult(`${msg}\n\n${warnings}`) : textResult(msg);
@@ -3096,8 +3383,16 @@ async function handleSAPWrite(
       );
 
       // Write the full source back (existing lock/modify/unlock flow)
-      await safeUpdateSource(client.http, client.safety, objectUrl, srcUrl, spliced.newSource, transport);
-      invalidateWrittenObject();
+      await safeUpdateSource(
+        client.http,
+        client.safety,
+        objectUrl,
+        srcUrl,
+        spliced.newSource,
+        transport,
+        cachedFeatures?.abapRelease,
+      );
+      invalidateWrittenObject(type, name);
       const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
       const extras = [lintWarnings.warnings, checkNotes].filter(Boolean).join('\n\n');
       return extras ? textResult(`${msg}\n\n${extras}`) : textResult(msg);
@@ -3262,7 +3557,7 @@ async function handleSAPWrite(
       // at the class object URL, and every include PUT carries the same lockHandle.
       // This mirrors how ADT-in-Eclipse saves a multi-include class in one commit.
       await client.http.withStatefulSession(async (session) => {
-        const lock = await lockObject(session, client.safety, objectUrl);
+        const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
         const effectiveTransport = transport ?? (lock.corrNr || undefined);
         try {
           if (changed.main) {
@@ -3332,7 +3627,7 @@ async function handleSAPWrite(
       // Lock, delete, unlock pattern (works for all types including SKTD) — auto-propagate lock corrNr if no explicit transport
       try {
         await client.http.withStatefulSession(async (session) => {
-          const lock = await lockObject(session, client.safety, objectUrl);
+          const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', cachedFeatures?.abapRelease);
           const effectiveTransport = transport ?? (lock.corrNr || undefined);
           try {
             await deleteObject(session, client.safety, objectUrl, lock.lockHandle, effectiveTransport);
@@ -3406,6 +3701,10 @@ async function handleSAPWrite(
 
       const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
       const batchWarnings: string[] = [];
+      // Per-batch cache for the MSAG transport-vs-task guard. The bug is universal so the
+      // guard fires for every MSAG entry, but a batch typically shares one transport — cache
+      // the lookup result to avoid one HTTP roundtrip per object.
+      const transportLookupCache = new Map<string, Awaited<ReturnType<typeof getTransport>>>();
 
       for (const obj of objects) {
         const objType = normalizeObjectType(String(obj.type ?? ''));
@@ -3413,6 +3712,37 @@ async function handleSAPWrite(
         const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
+
+        // Mixed-case object name rejection (matches the create-path check above).
+        // Universal SAP convention — TADIR is uppercase on every release.
+        // Cheap check first: no HTTP call, fail fast on bad names.
+        if (objName && objName !== objName.toUpperCase()) {
+          results.push({
+            type: objType,
+            name: objName,
+            status: 'failed',
+            error: `Object name "${objName}" contains lowercase characters. SAP object names must be uppercase (e.g. "${objName.toUpperCase()}"). Source code inside the object can use mixed case.`,
+          });
+          break;
+        }
+
+        // MSAG transport-vs-task guard (per-batch cache to avoid per-object roundtrip).
+        if (objType === 'MSAG' && batchTransport) {
+          let tr = transportLookupCache.get(batchTransport);
+          if (tr === undefined) {
+            tr = await getTransport(client.http, client.safety, batchTransport);
+            transportLookupCache.set(batchTransport, tr);
+          }
+          if (!tr) {
+            results.push({
+              type: objType,
+              name: objName,
+              status: 'failed',
+              error: `Transport "${batchTransport}" is not a valid transport request. MSAG creation requires a transport request number, not a task number.`,
+            });
+            break;
+          }
+        }
 
         // AFF header validation per object (if schema available)
         const affResult = validateAffHeader(objType, { description: objDescription, originalLanguage: 'en' });
@@ -3479,6 +3809,7 @@ async function handleSAPWrite(
               contentType,
               batchTransport,
               needsPackageParam ? pkg : undefined,
+              cachedFeatures?.abapRelease,
             );
           } catch (createErr) {
             if (createErr instanceof AdtApiError && (createErr.statusCode === 400 || createErr.statusCode === 409)) {
@@ -3493,7 +3824,7 @@ async function handleSAPWrite(
           // Step 1b: DTEL POST ignores labels — follow up with PUT on main session
           if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objMetadataProps)) {
             await client.http.withStatefulSession(async (session) => {
-              const lock = await lockObject(session, client.safety, objUrl);
+              const lock = await lockObject(session, client.safety, objUrl, 'MODIFY', cachedFeatures?.abapRelease);
               const lockTransport = batchTransport ?? (lock.corrNr || undefined);
               try {
                 await updateObject(session, client.safety, objUrl, body, lock.lockHandle, contentType, lockTransport);
@@ -3506,7 +3837,15 @@ async function handleSAPWrite(
           // Step 2: Write source if provided
           if (!metadataObject && objSource) {
             const srcUrl = sourceUrlForType(objType, objName);
-            await safeUpdateSource(client.http, client.safety, objUrl, srcUrl, objSource, batchTransport);
+            await safeUpdateSource(
+              client.http,
+              client.safety,
+              objUrl,
+              srcUrl,
+              objSource,
+              batchTransport,
+              cachedFeatures?.abapRelease,
+            );
           }
 
           // Step 3: Activate the object
@@ -3720,7 +4059,7 @@ function runPreWriteLint(
 }
 
 /** Types that carry source code that SAP's /checkruns endpoint can meaningfully compile.
- *  Metadata-write types (DOMA/DTEL/TABL/STRU/MSAG/DEVC/SKTD) have no /source/main artifact. */
+ *  Metadata-write types (DOMA/DTEL/TABL/MSAG/DEVC/SKTD) have no /source/main artifact. */
 const SYNTAX_CHECKABLE_TYPES = new Set([
   'PROG',
   'CLAS',
@@ -3895,11 +4234,18 @@ async function handleSAPActivate(
 
   if (args.objects && Array.isArray(args.objects)) {
     const rawObjects = args.objects as Array<Record<string, unknown>>;
-    const objects = rawObjects.map((o) => {
-      const objType = normalizeObjectType(String(o.type ?? type));
-      const objName = String(o.name ?? '');
-      return { type: objType, name: objName, url: objectUrlForType(objType, objName) };
-    });
+    // Resolve URLs sequentially. For TABL we await the URL resolver so DDIC
+    // structures (which live at /sap/bc/adt/ddic/structures/) are addressed
+    // correctly; the resolver short-circuits on its in-memory cache.
+    const objects = await Promise.all(
+      rawObjects.map(async (o) => {
+        const objType = normalizeObjectType(String(o.type ?? type));
+        const objName = String(o.name ?? '');
+        const url =
+          objType === 'TABL' ? await client.resolveTablObjectUrl(objName) : objectUrlForType(objType, objName);
+        return { type: objType, name: objName, url };
+      }),
+    );
 
     const result = await activateBatch(client.http, client.safety, objects, activateOpts);
     const names = objects.map((o) => o.name).join(', ');
@@ -3928,8 +4274,10 @@ async function handleSAPActivate(
     );
   }
 
-  // Single activation (existing behavior)
-  const objectUrl = objectUrlForType(type, name);
+  // Single activation (existing behavior). For TABL we resolve the URL because
+  // the existing object may live at /tables/ (transparent) or /structures/
+  // (DDIC structure); using the wrong one would produce a confusing 404.
+  const objectUrl = type === 'TABL' ? await client.resolveTablObjectUrl(name) : objectUrlForType(type, name);
 
   const result = await activate(client.http, client.safety, objectUrl, { ...activateOpts, name });
 
@@ -4085,6 +4433,14 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
           `Cannot resolve function group for "${symName}". Provide the full uri parameter, or use SAPSearch("${symName}") to find the ADT URI.`,
         );
       }
+    } else if (symType === 'TABL') {
+      // DDIC TABL: where-used and other navigate paths must use the canonical
+      // object URL — `/sap/bc/adt/ddic/tables/{name}` for transparent tables,
+      // `/sap/bc/adt/ddic/structures/{name}` for DDIC structures. NW 7.50
+      // returns 500 from usageReferences for /tables/ URLs even for transparent
+      // tables, so we always resolve before building. resolveTablObjectUrl
+      // caches on the AdtClient, so this is one HTTP probe per cold name.
+      uri = await client.resolveTablObjectUrl(symName);
     } else {
       uri = objectUrlForType(symType, symName);
     }
@@ -4136,6 +4492,48 @@ async function handleSAPNavigate(client: AdtClient, args: Record<string, unknown
           throw err;
         }
       }
+
+      // Augment interface where-used with implementing classes from SEOMETAREL.
+      // SAP's scope-based usageReferences endpoint sometimes does NOT surface
+      // interface→implementing-class links — the implementations sit inside a
+      // `canHaveChildren="true"` Interface Section node, and the snippet
+      // expansion endpoint returns 404 on every release we've probed (NW 7.50,
+      // S/4HANA 2023). SEOMETAREL is the canonical OO-relation table and is
+      // always populated, so this augmentation makes references reliable for
+      // interfaces. Silently skipped when SQL/data access isn't available.
+      const intfMatch = uri.match(/\/sap\/bc\/adt\/oo\/interfaces\/([^/?]+)/i);
+      if (intfMatch && (!objectType || /^CLAS/i.test(objectType))) {
+        const interfaceName = decodeURIComponent(intfMatch[1]).toUpperCase();
+        const canFreeSQL = isOperationAllowed(client.safety, OperationType.FreeSQL);
+        const canQuery = isOperationAllowed(client.safety, OperationType.Query);
+        try {
+          let implementers: WhereUsedResult[] = [];
+          if (canFreeSQL) {
+            implementers = await findInterfaceImplementersViaSeoMetaRel(
+              (sql, max) => client.runQuery(sql, max),
+              interfaceName,
+            );
+          } else if (canQuery) {
+            implementers = await findInterfaceImplementersViaSeoMetaRel(
+              (_sql, max) =>
+                client.getTableContents('SEOMETAREL', max, `REFCLSNAME = '${interfaceName}' AND RELTYPE = '1'`),
+              interfaceName,
+            );
+          }
+          // Dedupe: don't add an implementer if SAP already returned it
+          const existingNames = new Set(
+            (results as WhereUsedResult[]).map((r) => r.name?.toUpperCase()).filter(Boolean),
+          );
+          const augmented = implementers.filter((r) => !existingNames.has(r.name.toUpperCase()));
+          if (augmented.length > 0) {
+            (results as WhereUsedResult[]).push(...augmented);
+          }
+        } catch {
+          // SEOMETAREL augmentation is best-effort; if SQL fails, fall back to
+          // whatever the where-used HTTP endpoint returned. Don't block the response.
+        }
+      }
+
       if (results.length === 0) {
         return textResult('No references found.');
       }
@@ -4712,8 +5110,8 @@ async function handleSAPTransport(client: AdtClient, args: Record<string, unknow
     case 'create': {
       const description = String(args.description ?? '');
       if (!description) return errorResult('Description is required for "create" action.');
-      const transportType = String(args.type ?? 'K');
-      const id = await createTransport(client.http, client.safety, description, undefined, transportType);
+      const targetPackage = args.package ? String(args.package) : undefined;
+      const id = await createTransport(client.http, client.safety, description, targetPackage);
       if (!id)
         return errorResult(
           'Transport creation succeeded but no transport ID was returned. Check the SAP system manually.',
@@ -5331,7 +5729,16 @@ async function handleSAPManage(
         packageType,
       });
 
-      await createObject(client.http, client.safety, '/sap/bc/adt/packages', xml, 'application/*', effectiveTransport);
+      await createObject(
+        client.http,
+        client.safety,
+        '/sap/bc/adt/packages',
+        xml,
+        'application/*',
+        effectiveTransport,
+        undefined,
+        cachedFeatures?.abapRelease,
+      );
       return textResult(`Created package ${name}.`);
     }
 
@@ -5344,7 +5751,7 @@ async function handleSAPManage(
 
       const packageUrl = `/sap/bc/adt/packages/${encodeURIComponent(name)}`;
       await client.http.withStatefulSession(async (session) => {
-        const lock = await lockObject(session, client.safety, packageUrl);
+        const lock = await lockObject(session, client.safety, packageUrl, 'MODIFY', cachedFeatures?.abapRelease);
         const effectiveTransport = transport || lock.corrNr || undefined;
         try {
           await deleteObject(session, client.safety, packageUrl, lock.lockHandle, effectiveTransport);

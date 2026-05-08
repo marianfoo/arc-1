@@ -96,6 +96,25 @@ For full setup instructions, see [API Key Setup](api-key-setup.md).
 
 All safety flags are **positive opt-ins** (default: `false` / restrictive). Enable only what you need.
 
+### SAP API Policy alignment
+
+The April 2026 [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) is accompanied by an [SAP API Policy FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html). The FAQ section *"How does the policy apply to ADT-based access and developer tooling?"* explicitly endorses ADT-based developer tooling — including "**custom developer utilities built on the documented Eclipse Java SDK for internal development automation such as code checks, build processes, and transport management**". ARC-1 used for internal development is aligned with that endorsement.
+
+ARC-1 is designed to stay within the ADT development-tooling scope described in SAP's API Policy FAQ v1.1. It uses documented ADT / Eclipse SDK capabilities for internal development-related use cases and does not expose ADT Data Preview, SQL execution, table reads, or business-data extraction.
+
+When ARC-1 is used with AI assistants or MCP clients, customers should apply additional governance for AI-driven or automated access patterns, including real user identity, authorization checks, audit logging, rate limits, conservative tool exposure, and customer-side review against SAP documentation and agreements.
+
+The same FAQ also lists what ADT APIs are **not** intended for: "**programmatic reading of application tables or export of business data, SQL execution against SAP backend systems, business data integration or runtime orchestration, agentic AI workflows operating on business data, or substitution for business APIs**".
+
+Two ARC-1 capabilities sit outside the endorsed-development-tooling scope and require explicit env vars before they are reachable:
+
+| Capability | Env var | Default | Policy note |
+| ---------- | ------- | ------- | ----------- |
+| Named table content preview (`SAPRead(type=TABLE_CONTENTS)`) | `SAP_ALLOW_DATA_PREVIEW=true` | `false` (off) | Reading application tables / exporting business data is excluded by the FAQ. Keep off for the policy-aligned development use case. |
+| Freestyle ABAP SQL (`SAPQuery`) | `SAP_ALLOW_FREE_SQL=true` | `false` (off) | SQL execution against SAP backend systems is excluded by the FAQ. Keep off for the policy-aligned development use case. |
+
+**Recommendation for productive systems:** keep both flags at their defaults. ARC-1 still covers the full developer-tooling surface — read source/metadata, search, navigate, lint, write/activate ABAP objects, manage transports, drive Git workflows. Turning either flag on is a customer decision against the SAP API Policy, the customer's SAP agreement, and the customer's internal data-protection rules.
+
 ### Recommended production defaults
 
 | Setting                            | Recommended | Rationale                                                                                      |
@@ -220,6 +239,10 @@ ARC-1 emits structured audit events to all registered sinks. Three sink types ar
 | `http_csrf_fetch` | CSRF token fetch success/duration |
 | `scope_denied` | Scope check failure (tool, required scope, user scopes) |
 | `elicitation` | User confirmation prompts and responses |
+| `oauth_client_registered` | XSUAA only: a new DCR `client_id` was minted (`/register`). Includes id length and redirect-URI count. |
+| `oauth_client_lookup_failed` | XSUAA only: a `client_id` failed to resolve. `reason` ∈ {`unknown_prefix`, `malformed`, `bad_signature`, `invalid_payload`, `expired`}. Useful for spotting forgery / probing. |
+| `oauth_redirect_uri_registered` | XSUAA only: a redirect URI was added at `/authorize` time to the pre-registered XSUAA default client. |
+| `cors_rejected` | A browser request was blocked because its `Origin` header is not in `ARC1_ALLOWED_ORIGINS`. Includes origin, method, path. Useful for spotting misconfigured browser clients or probing. |
 
 All events within a single MCP tool call share a `requestId` for correlation. Events include `user` and `clientId` fields when authentication is active.
 
@@ -263,6 +286,64 @@ When ARC-1 runs with `--transport http-streamable`, the default bind address is 
 - Restrict network access using firewall rules, security groups, or VPN.
 - Without `--api-keys`, `--oidc-issuer`, or `--xsuaa-auth`, the HTTP endpoint is open to anyone who can reach the port.
 
+### HTTP Security Headers (helmet)
+
+When `--transport http-streamable` is active, every HTTP response (including `/health`, `/mcp`, OAuth endpoints) carries a curated set of browser security headers via [helmet](https://helmetjs.github.io/). These are always-on; there's no flag to disable them. Native MCP clients ignore these — they exist to harden the server when a browser ever reaches it.
+
+| Header | Default value | Purpose |
+|---|---|---|
+| `Strict-Transport-Security` | `max-age=15552000; includeSubDomains` | Force HTTPS for the host and its subdomains (180 days). |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' https: 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests; …` | Helmet's standard CSP. When CORS is enabled, only `style-src` is widened to allow inline styles for browser UIs; every other directive is preserved via `useDefaults: true`. |
+| `Cross-Origin-Opener-Policy` | (not set) | **Disabled.** Microsoft Copilot Studio uses popup-based OAuth and relies on `window.open()` / `postMessage` to receive the redirect result. Any non-default COOP on `/authorize` (including `same-origin-allow-popups`) puts the popup in a separate browsing context group, severs the parent's window reference, and surfaces as "consent pop-up window has been closed unexpectedly". Helmet's stock `same-origin` has the same effect. ARC-1 renders no JS UI that would benefit from cross-origin isolation, so dropping COOP costs nothing. |
+| `Cross-Origin-Resource-Policy` | `same-origin` (default) / `cross-origin` (when CORS is enabled) | Auto-relaxed when `ARC1_ALLOWED_ORIGINS` is set so browser clients can read responses cross-origin. |
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME-type confusion attacks. |
+| `X-Frame-Options` | `SAMEORIGIN` | Clickjacking guard for older browsers without CSP support. |
+| `Referrer-Policy` | `no-referrer` | Strips Referer on outbound navigations. |
+| `Origin-Agent-Cluster` | `?1` | Asks browsers to isolate this origin's agent cluster. |
+| `X-DNS-Prefetch-Control`, `X-Download-Options`, `X-Permitted-Cross-Domain-Policies`, `X-XSS-Protection` | (helmet defaults) | Legacy / browser-quirk hardening. |
+
+To verify the headers on a running deployment:
+
+```bash
+curl -sI https://<your-app-url>/health | \
+  grep -iE 'strict-transport|content-security|cross-origin|x-content-type|x-frame|referrer'
+```
+
+### CORS for browser-based MCP clients (opt-in)
+
+CORS is **off by default**. The four MCP clients shipped with the project — Claude Desktop, Cursor, VS Code Copilot, Copilot Studio — use native HTTP, not the browser fetch API, and never trigger CORS. Only enable CORS when a browser UI (custom playground, embedded client, internal dashboard) calls `/mcp` directly:
+
+```bash
+cf set-env arc1-mcp-server ARC1_ALLOWED_ORIGINS "https://your-ui.example.com,https://other.example.com"
+cf restage arc1-mcp-server
+```
+
+Configuration rules:
+
+- **Comma-separated, exact match.** No wildcards (`*`, `https://*.example.com`) — they are silently rejected.
+- **Pairs with `credentials: true`.** ARC-1 sends `Access-Control-Allow-Origin: <reflected origin>` (never `*`) and `Access-Control-Allow-Credentials: true`. The wildcard form is incompatible with credentialed requests by browser policy.
+- **Allowed methods:** `GET`, `POST`, `DELETE`, `OPTIONS`. Allowed request headers: `Content-Type`, `Authorization`, `mcp-session-id`. Exposed response headers: `mcp-session-id`.
+- **Disallowed origins are silently dropped** by the browser, but ARC-1 emits a `cors_rejected` audit event server-side so misconfigured browser clients are observable. See [§9 Audit Logging](#what-gets-logged).
+- **Browser-based DCR clients** (rare) hitting `POST /register` or `POST /authorize` from a foreign origin must be in the allowlist for the same reason native browser fetches are. See [Stateless DCR](xsuaa-setup.md#stateless-dcr) for the OAuth flow.
+
+To verify CORS on a running deployment:
+
+```bash
+# Allowed origin → 204 + Allow-Origin reflected
+curl -sI -X OPTIONS \
+  -H "Origin: https://your-ui.example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  https://<your-app-url>/mcp | \
+  grep -i 'access-control\|vary'
+
+# Disallowed origin → no CORS headers (and a cors_rejected audit event)
+curl -sI -X OPTIONS \
+  -H "Origin: https://evil.example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  https://<your-app-url>/mcp | \
+  grep -i 'access-control'   # expect: empty
+```
+
 ### SAP Connection
 
 - Use HTTPS for the SAP connection (`SAP_URL=https://...`) whenever possible.
@@ -301,3 +382,79 @@ This is the most critical compromise scenario -- the CA key can mint certificate
 2. **Generate a new CA**: Create a new key pair and import the new certificate into STRUST.
 3. **Update ARC-1**: Deploy the new CA key and certificate.
 4. **Audit all SAP activity**: Review SM20 for all users during the compromise window.
+
+---
+
+## 13. Dependency & Supply-Chain Security
+
+ARC-1 ships as an [npm package](https://www.npmjs.com/package/arc-1) and a [Docker image](https://github.com/marianfoo/arc-1/pkgs/container/arc-1) consumed by enterprise customers running on regulated landscapes (banks, government, defense, pharma). Customers will run their own image scanners (Aqua, Prisma Cloud, Microsoft Defender) against the published image and reject vulnerable artifacts. ARC-1 layers its own supply-chain controls on top of GitHub-native primitives so issues are caught upstream of those scanners.
+
+### What runs in CI
+
+| Control | Workflow | Severity gate |
+|---|---|---|
+| Dependabot — npm + GitHub Actions + Docker | `.github/dependabot.yml` | weekly + same-day security advisories |
+| `npm audit` PR gate | `.github/workflows/test.yml` (`Security audit (npm audit)` step) | fails on `high` / `critical` |
+| GitHub Dependency Review (PR diff) | `.github/workflows/dependency-review.yml` | fails on `high`; license allow/deny lists |
+| CodeQL SAST (JavaScript/TypeScript) | GitHub Default Setup | findings on Security tab; PR check fails on `High or higher` |
+| Trivy container scan — dev push | `.github/workflows/docker.yml` | non-gating; SARIF uploaded to Security tab |
+| Trivy container scan — release | `.github/workflows/release.yml` | **gating**: fails the release on `HIGH` / `CRITICAL` |
+| Workflow-level `permissions: contents: read` | all workflows | minimum `GITHUB_TOKEN` scope |
+| Third-party action SHA pinning | `googleapis/release-please-action`, `docker/*`, `aquasecurity/trivy-action` | mitigates the `tj-actions/changed-files` 2024 supply-chain compromise class |
+| npm provenance | `.github/workflows/release.yml` (`npm publish --provenance`) | every release tarball is Sigstore-attested |
+| `SECURITY.md` policy | repo root | private vulnerability reporting + severity-tiered response SLAs |
+
+### GitHub-native security features (verified enabled)
+
+These toggles live on the repo's Settings → Code security page and are checked here so a cold reader can confirm what's on without leaving the docs. Last verified: **2026-05-08**.
+
+| Feature | API verification | Status |
+|---|---|---|
+| Dependabot alerts | `gh api repos/marianfoo/arc-1/vulnerability-alerts -i \| head -1` → `HTTP/2.0 204` | ✅ enabled |
+| Dependabot security updates | `gh api repos/marianfoo/arc-1 --jq '.security_and_analysis.dependabot_security_updates.status'` → `"enabled"` | ✅ enabled |
+| Dependabot version updates | reads `.github/dependabot.yml` (in repo root) — toggled on at the same time as security updates; verify activity in [Insights → Dependency graph → Dependabot](https://github.com/marianfoo/arc-1/network/updates) | ✅ enabled |
+| Dependabot grouped security updates | toggled on in Settings → Code security; no public REST field — verify by inspecting any auto-opened security PR (groups multiple advisories per ecosystem into one PR) | ✅ enabled |
+| Dependabot malware alerts | toggled on in Settings → Code security; no public REST field — verify only via the Security tab when an alert fires | ✅ enabled |
+| Secret scanning | `gh api repos/marianfoo/arc-1 --jq '.security_and_analysis.secret_scanning.status'` → `"enabled"` | ✅ enabled |
+| Push protection | `gh api repos/marianfoo/arc-1 --jq '.security_and_analysis.secret_scanning_push_protection.status'` → `"enabled"` | ✅ enabled |
+| Private vulnerability reporting | `gh api repos/marianfoo/arc-1/private-vulnerability-reporting --jq .enabled` → `true` | ✅ enabled |
+
+Optional toggles **not** enabled (deliberate — listed here so the absence is documented, not silent):
+
+- `secret_scanning_non_provider_patterns` — custom regex patterns. Off by default; only worth turning on if we need to scan for project-specific secret formats (we don't).
+- `secret_scanning_validity_checks` — asks the upstream provider whether a leaked token is still valid. Off because the noise/value tradeoff doesn't justify it for a project our size; revisit if the validity API stabilizes and a customer asks.
+
+User-account-level recommendation (cannot be enforced via repo settings): the project maintainer should also enable push protection at [user level](https://github.com/settings/security_analysis), which catches secrets pushed to *any* repo the maintainer commits to (including private forks of `arc-1`).
+
+### Verifying the chain as an operator
+
+```bash
+# 1. npm package — verify the published tarball was built from this repo
+npm install arc-1
+npm audit signatures arc-1
+# Expected: "audited <N> packages — verified <N> packages with Sigstore"
+
+# 2. npm package — confirm no known vulnerabilities at install time
+npm audit --audit-level=high
+# Expected: "found 0 vulnerabilities"
+
+# 3. Docker image — scan locally with the same scanner CI uses
+trivy image ghcr.io/marianfoo/arc-1:<version> \
+  --severity HIGH,CRITICAL \
+  --exit-code 1
+# Expected: exit 0, "No vulnerabilities found"
+
+# 4. View the full advisory history for the project
+open https://github.com/marianfoo/arc-1/security/advisories
+```
+
+### Reporting a vulnerability
+
+See [`SECURITY.md`](https://github.com/marianfoo/arc-1/blob/main/SECURITY.md). Preferred channel is GitHub [Private Vulnerability Reporting](https://github.com/marianfoo/arc-1/security/advisories/new); fallback is email. Do **not** open a public issue or post on the SAP Community before the maintainers acknowledge the report — that bypasses coordinated disclosure and can put deployed instances at risk.
+
+### Roadmap
+
+This section corresponds to roadmap entry **SEC-11 (Tier 1: Foundation)**. Future tiers extend the chain:
+
+- **Tier 2 (Attestation)** — CycloneDX SBOM (npm + image), Cosign keyless image signing, OpenSSF Scorecard. Plan in [`docs/plans/dependency-security-tier2-attestation.md`](https://github.com/marianfoo/arc-1/blob/main/docs/plans/dependency-security-tier2-attestation.md).
+- **Tier 3 (Active Defense)** — Socket.dev PR review, vulnerability triage runbook, formal non-adoption decisions for Renovate / Snyk / SLSA L3. Plan in [`docs/plans/dependency-security-tier3-defense.md`](https://github.com/marianfoo/arc-1/blob/main/docs/plans/dependency-security-tier3-defense.md).

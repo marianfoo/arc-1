@@ -66,6 +66,7 @@ export function getTestClient(): AdtClient {
   const client = process.env.TEST_SAP_CLIENT || process.env.SAP_CLIENT || '100';
   const language = process.env.TEST_SAP_LANGUAGE || process.env.SAP_LANGUAGE || 'EN';
   const insecure = (process.env.TEST_SAP_INSECURE || process.env.SAP_INSECURE) === 'true';
+  const disableSaml = (process.env.TEST_SAP_DISABLE_SAML || process.env.SAP_DISABLE_SAML) === 'true';
 
   return new AdtClient({
     baseUrl: url,
@@ -74,6 +75,7 @@ export function getTestClient(): AdtClient {
     client,
     language,
     insecure,
+    disableSaml,
     safety: unrestrictedSafetyConfig(),
   });
 }

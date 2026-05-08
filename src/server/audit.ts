@@ -129,6 +129,50 @@ export interface ActivationPreauditEvent extends AuditEventBase {
   outcome: 'success' | 'error';
 }
 
+/** OAuth Dynamic Client Registration: a new client_id was minted via /register. */
+export interface OAuthClientRegisteredEvent extends AuditEventBase {
+  event: 'oauth_client_registered';
+  /** Issued client_id (the full signed token). */
+  registeredClientId: string;
+  clientName?: string;
+  redirectUriCount: number;
+  /** Length of the issued client_id, for tracking URL-budget regressions. */
+  idBytes: number;
+}
+
+/** OAuth DCR: getClient was called with an unrecognised, malformed, or
+ *  forged-signature client_id. Useful for detecting probing/replay attempts. */
+export interface OAuthClientLookupFailedEvent extends AuditEventBase {
+  event: 'oauth_client_lookup_failed';
+  /** The client_id that failed lookup. May be attacker-controlled — treat as untrusted. */
+  registeredClientId: string;
+  reason: 'unknown_prefix' | 'malformed' | 'bad_signature' | 'invalid_payload' | 'expired';
+}
+
+/** OAuth DCR: a redirect_uri was dynamically appended to the pre-registered XSUAA
+ *  default client at /authorize time. XSUAA itself is the authoritative validator
+ *  via xs-security.json wildcards; this event records that ARC-1's local SDK-side
+ *  list was widened so the change is auditable. */
+export interface OAuthRedirectUriRegisteredEvent extends AuditEventBase {
+  event: 'oauth_redirect_uri_registered';
+  registeredClientId: string;
+  redirectUri: string;
+}
+
+/** A browser request was rejected by CORS because its `Origin` header is not in
+ *  `ARC1_ALLOWED_ORIGINS`. Emitted at most once per request — preflight rejections
+ *  also fire this. The browser itself drops the response, so this event is the
+ *  only server-side signal that something tried to call /mcp from a foreign origin. */
+export interface CorsRejectedEvent extends AuditEventBase {
+  event: 'cors_rejected';
+  /** Origin header sent by the browser. May be attacker-controlled — treat as untrusted. */
+  origin: string;
+  /** HTTP method on the rejected request (OPTIONS for preflight, POST/GET/DELETE for actual). */
+  method: string;
+  /** Request path, e.g. `/mcp`, `/register`, `/authorize`. */
+  path: string;
+}
+
 /** Discriminated union of all audit events */
 export type AuditEvent =
   | ToolCallStartEvent
@@ -141,7 +185,11 @@ export type AuditEvent =
   | ServerStartEvent
   | ElicitationSentEvent
   | ElicitationResponseEvent
-  | ActivationPreauditEvent;
+  | ActivationPreauditEvent
+  | OAuthClientRegisteredEvent
+  | OAuthClientLookupFailedEvent
+  | OAuthRedirectUriRegisteredEvent
+  | CorsRejectedEvent;
 
 /** Sanitize tool call arguments — remove values that might contain sensitive data */
 export function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {

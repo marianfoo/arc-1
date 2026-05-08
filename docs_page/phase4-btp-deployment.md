@@ -56,21 +56,51 @@ Deploy ARC-1 on SAP BTP Cloud Foundry, connecting to an on-premise SAP system vi
 
 MTA (Multi-Target Application) deployment bundles ARC-1 with its BTP service dependencies (XSUAA, Destination, Connectivity) into a single deployable archive. Services are created automatically.
 
-### 1. Build and Deploy
+### 1. Configure your landscape via `mta-overrides.mtaext`
+
+`mta.yaml` ships with placeholder destinations (`your-basic-destination` / `your-pp-destination`) and conservative safety defaults (writes off, free SQL off, package allowlist `$TMP`). Every landscape must override at least the two destination names — deploying `mta.yaml` as-is will fail with a "destination not found" error from BTP, which is the intended fail-fast signal.
 
 ```bash
 # Clone the repo
 git clone https://github.com/marianfoo/arc-1.git
 cd arc-1
 
-# Build the MTA archive (runs npm ci + npm run build internally)
+# One-time per landscape — copy the template (it's tracked) to a real
+# overrides file (gitignored), and fill in your destinations + flags.
+cp mta-overrides.mtaext.example mta-overrides.mtaext
+$EDITOR mta-overrides.mtaext
+```
+
+A minimal `mta-overrides.mtaext` looks like:
+
+```yaml
+_schema-version: "3.1"
+ID: arc1-mcp-overrides
+extends: arc1-mcp
+
+modules:
+  - name: arc1-mcp-server
+    properties:
+      SAP_BTP_DESTINATION: "my-sap-basic"
+      SAP_BTP_PP_DESTINATION: "my-sap-pp"
+      # widen safety flags only when the landscape needs it
+      SAP_ALLOW_WRITES: "true"
+      SAP_ALLOWED_PACKAGES: "Z*,Y*,$TMP"
+```
+
+The full set of overridable properties is documented in [`mta-overrides.mtaext.example`](https://github.com/marianfoo/arc-1/blob/main/mta-overrides.mtaext.example): destinations, all `SAP_ALLOW_*` safety flags, `SAP_DENY_ACTIONS`, `SAP_PP_STRICT`, `ARC1_PUBLIC_URL` (for reverse-proxy deployments), `ARC1_ALLOWED_ORIGINS` (CORS), `ARC1_TOOL_MODE`, cache warmup, and `ARC1_LOG_HTTP_DEBUG`. Any property left out of the override falls back to the `mta.yaml` value.
+
+See the [BTP Destination Setup Guide](btp-destination-setup.md) for creating the destinations themselves.
+
+### 2. Build and Deploy
+
+```bash
+# Build once, deploy with the extension applied:
+npm run btp:build-deploy-ext
+
+# Or in two steps:
 npm run btp:build
-
-# Deploy to BTP CF (creates services + pushes the app)
-npm run btp:deploy
-
-# Or combined:
-npm run btp:build-deploy
+cf deploy mta_archives/arc1-mcp_*.mtar -e mta-overrides.mtaext
 ```
 
 The `mta.yaml` defines three BTP services that are created automatically:
@@ -81,7 +111,12 @@ The `mta.yaml` defines three BTP services that are created automatically:
 | Destination | `arc1-destination` | `lite` | SAP system lookup |
 | Connectivity | `arc1-connectivity` | `lite` | Cloud Connector proxy |
 
-### 2. Post-Deploy Configuration
+> **Multiple landscapes from one repo.** The gitignore matches any
+> `mta-*.mtaext`, so you can keep `mta-ecc-dev.mtaext`,
+> `mta-ecc-prod.mtaext`, etc. side by side and pick one per deploy with
+> `-e mta-ecc-prod.mtaext`. None of those files are committed.
+
+### 3. Post-Deploy Configuration
 
 When using `SAP_BTP_DESTINATION`, the URL and credentials come from the BTP Destination — no `cf set-env` for `SAP_URL` or `SAP_CLIENT` is needed. Only set them if you're not using the Destination Service:
 
@@ -92,25 +127,12 @@ cf set-env arc1-mcp-server SAP_CLIENT "001"
 cf restage arc1-mcp-server
 ```
 
-The `mta.yaml` already configures these properties:
+The base `mta.yaml` already configures these properties (override any of them via `mta-overrides.mtaext`):
 - `SAP_TRANSPORT: http-streamable` — HTTP transport for MCP
-- `SAP_BTP_DESTINATION` / `SAP_BTP_PP_DESTINATION` — dual-destination pattern
-- `SAP_PP_ENABLED: true` — per-user principal propagation
-- `SAP_XSUAA_AUTH: true` — XSUAA OAuth for MCP clients
-- `SAP_ALLOW_WRITES: true` / `SAP_ALLOW_FREE_SQL: true` — safety defaults
-
-### 3. Customize mta.yaml
-
-Edit `mta.yaml` to match your environment:
-
-```yaml
-properties:
-  # Change these to your BTP Destination names
-  SAP_BTP_DESTINATION: my-sap-basic       # BasicAuth destination (startup)
-  SAP_BTP_PP_DESTINATION: my-sap-pp       # PrincipalPropagation destination (per-user)
-```
-
-See the [BTP Destination Setup Guide](btp-destination-setup.md) for creating these destinations.
+- `SAP_BTP_DESTINATION` / `SAP_BTP_PP_DESTINATION` — placeholders, MUST be overridden
+- `SAP_PP_ENABLED: "true"` — per-user principal propagation
+- `SAP_XSUAA_AUTH: "true"` — XSUAA OAuth for MCP clients
+- `SAP_ALLOW_*: "false"` and `SAP_ALLOWED_PACKAGES: "$TMP"` — safe defaults; widen only as needed
 
 ---
 
@@ -266,11 +288,29 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   https://arc1-mcp-server.cfapps.us10-001.hana.ondemand.com/mcp
 ```
 
+## Security headers and CORS on BTP
+
+**Helmet is on by default — no config needed.** Every HTTP response from a CF-deployed ARC-1 carries HSTS, CSP, X-Frame-Options, CORP, X-Content-Type-Options, Referrer-Policy, and a handful of legacy hardening headers. Cross-Origin-Opener-Policy is intentionally NOT set so popup-based OAuth flows (Microsoft Copilot Studio) keep working — see [Security Guide §11](security-guide.md#http-security-headers-helmet) for the rationale. Verify on the live deployment:
+
+```bash
+curl -sI https://<your-app>.cfapps.<region>.hana.ondemand.com/health | \
+  grep -iE 'strict-transport|content-security|cross-origin|x-content-type|x-frame'
+```
+
+**CORS is off by default.** All four supported MCP clients — Claude Desktop, Cursor, VS Code Copilot, Copilot Studio — use native HTTP, not the browser fetch API, so they don't trigger CORS regardless of how you connect them. Only set `ARC1_ALLOWED_ORIGINS` if you have a browser UI calling `/mcp` directly:
+
+```bash
+cf set-env arc1-mcp-server ARC1_ALLOWED_ORIGINS "https://your-ui.example.com"
+cf restage arc1-mcp-server
+```
+
+Origins are comma-separated and must match exactly (no wildcards), because CORS responses are sent with `credentials: true`. Disallowed origins emit a `cors_rejected` audit event for triage. Full reference: [Security Guide §11](security-guide.md#11-network-security).
+
 ## How BTP Connectivity Works
 
 ARC-1 auto-detects BTP Cloud Foundry via the `VCAP_APPLICATION` environment variable:
 
-1. **Public URL auto-detection:** ARC-1 reads `application_uris` from `VCAP_APPLICATION` to construct the externally reachable URL (used for RFC 9728 metadata). Override with `SAP_PUBLIC_URL` if needed.
+1. **Public URL auto-detection:** ARC-1 reads `application_uris` from `VCAP_APPLICATION` to construct the externally reachable URL (used for RFC 8414/9728 OAuth metadata). Override with `ARC1_PUBLIC_URL` when ARC-1 is reached through a reverse proxy on a different hostname or under a base-path prefix — e.g. `cf set-env arc1-mcp-server ARC1_PUBLIC_URL "https://gateway.example.com/arc1"`. Without the override, OAuth metadata points at the CF route and clients bypass the proxy.
 
 2. **Destination Service (startup):** When `SAP_BTP_DESTINATION` is set, ARC-1 calls the Destination Service REST API directly at startup to read SAP credentials (user, password, URL). This works with BasicAuth destinations without a user JWT.
 

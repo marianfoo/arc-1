@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  decodeHtmlEntities,
   getDump,
   getGatewayErrorDetail,
   getTraceDbAccesses,
@@ -20,6 +21,7 @@ import {
   parseTraceHitlist,
   parseTraceList,
   parseTraceStatements,
+  stripHtmlTags,
 } from '../../../src/adt/diagnostics.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
@@ -197,6 +199,69 @@ describe('Runtime Diagnostics', () => {
       ]);
       // Formatted text request
       expect(calls).toContainEqual(['/sap/bc/adt/runtime/dump/DUMP_123/formatted', { Accept: 'text/plain' }]);
+    });
+
+    it('passes already-encoded dump IDs through unchanged', async () => {
+      // The listing endpoint emits IDs of the form "{timestamp}{server}%20%20%20{user}%20{client}%20{seq}".
+      // Re-encoding would double-encode the %20 to %2520 and break the lookup.
+      const encodedId = '20260101120000app01_SYS_00%20%20%20DEVUSER%20100%2042';
+      const http = mockHttp('');
+      try {
+        await getDump(http, unrestrictedSafetyConfig(), encodedId);
+      } catch {
+        // empty response → parse failure, irrelevant for this assertion
+      }
+      const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encodedId}`);
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encodedId}/formatted`);
+      // Defensive: nothing got double-encoded.
+      expect(urls.some((url) => url.includes('%2520'))).toBe(false);
+    });
+
+    it('encodes raw dump IDs that contain literal whitespace', async () => {
+      // Caller copy/pasted from ST22: literal spaces, no percent encoding yet.
+      const rawId = '20260101120000app01_SYS_00   DEVUSER 100 42';
+      const http = mockHttp('');
+      try {
+        await getDump(http, unrestrictedSafetyConfig(), rawId);
+      } catch {
+        // empty response → parse failure, irrelevant for this assertion
+      }
+      const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
+      // Spaces must be percent-encoded; underscores stay literal.
+      const encoded = '20260101120000app01_SYS_00%20%20%20DEVUSER%20100%2042';
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encoded}`);
+      expect(urls).toContain(`/sap/bc/adt/runtime/dump/${encoded}/formatted`);
+      // No literal space leaked into the path.
+      expect(urls.some((url) => url.includes(' '))).toBe(false);
+    });
+
+    it('returns the original dump ID in the parsed detail (round-trip)', async () => {
+      // Even when we re-encode for the HTTP path, the response payload should
+      // surface the ID exactly as the caller passed it — otherwise downstream
+      // round-trips (e.g. saving an ID for follow-up) break.
+      const xmlDetail = readFileSync(join(FIXTURES_DIR, 'dump-detail.xml'), 'utf-8');
+      const formattedText = readFileSync(join(FIXTURES_DIR, 'dump-formatted.txt'), 'utf-8');
+      const http = mockHttpMulti({
+        formatted: formattedText,
+        'runtime/dump/': xmlDetail,
+      });
+      const rawId = 'literal id with spaces';
+      const result = await getDump(http, unrestrictedSafetyConfig(), rawId);
+      expect(result.id).toBe(rawId);
+    });
+
+    it('trims surrounding whitespace before encoding', async () => {
+      const http = mockHttp('');
+      try {
+        await getDump(http, unrestrictedSafetyConfig(), '  DUMP_42  ');
+      } catch {
+        // ignore parse failure
+      }
+      const urls = (http.get as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as string);
+      // Whitespace would otherwise become %20%20 prefix/suffix and cause a 404.
+      expect(urls).toContain('/sap/bc/adt/runtime/dump/DUMP_42');
+      expect(urls).toContain('/sap/bc/adt/runtime/dump/DUMP_42/formatted');
     });
   });
 
@@ -800,6 +865,78 @@ describe('Runtime Diagnostics', () => {
       expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/runtime/traces/abaptraces/TRACE_003/dbAccesses', {
         Accept: 'application/xml',
       });
+    });
+  });
+
+  // Regression tests for CodeQL alerts #6, #7 — see
+  // docs/plans/codeql-alerts-html-hygiene.md
+  describe('stripHtmlTags (CodeQL alert #6 — js/incomplete-multi-character-sanitization)', () => {
+    it('strips simple tags', () => {
+      expect(stripHtmlTags('<p>hello</p>')).toBe('hello');
+    });
+
+    it('strips nested tags', () => {
+      expect(stripHtmlTags('<div><span>x</span></div>')).toBe('x');
+    });
+
+    it('handles adversarial nested input — output never contains `<script`', () => {
+      // CodeQL flags the single-pass `<[^>]*>` regex pattern conservatively.
+      // For THIS specific regex (greedy `[^>]*` matches across `<`), single-
+      // pass already handles nesting — loop is defense-in-depth against a
+      // future change to a more restrictive regex like `<\w+>`. Either way,
+      // no `<script` substring survives the strip.
+      expect(stripHtmlTags('<<script>script>alert(1)</script>')).toBe('script>alert(1)');
+      expect(stripHtmlTags('<<script>script>alert(1)</script>')).not.toContain('<script');
+      expect(stripHtmlTags('<scr<script>ipt>alert(1)</script>')).toBe('ipt>alert(1)');
+      expect(stripHtmlTags('<scr<script>ipt>alert(1)</script>')).not.toContain('<script');
+    });
+
+    it('returns empty string for nullish input', () => {
+      expect(stripHtmlTags(null as unknown as string)).toBe('');
+      expect(stripHtmlTags(undefined as unknown as string)).toBe('');
+      expect(stripHtmlTags('')).toBe('');
+    });
+
+    it('passes through plain text unchanged', () => {
+      expect(stripHtmlTags('plain text without tags')).toBe('plain text without tags');
+    });
+  });
+
+  describe('decodeHtmlEntities (CodeQL alert #7 — js/double-escaping)', () => {
+    it('decodes named entities', () => {
+      expect(decodeHtmlEntities('&lt;p&gt;')).toBe('<p>');
+      expect(decodeHtmlEntities('&quot;hello&quot;')).toBe('"hello"');
+      expect(decodeHtmlEntities('&nbsp;')).toBe(' ');
+      expect(decodeHtmlEntities('&amp;')).toBe('&');
+    });
+
+    it('decodes chained entity without double-unescape', () => {
+      // The CodeQL-flagged case: with `&amp;` decoded last, `&amp;lt;`
+      // resolves to the literal `&lt;`, not `<`.
+      expect(decodeHtmlEntities('&amp;lt;')).toBe('&lt;');
+      expect(decodeHtmlEntities('&amp;amp;')).toBe('&amp;');
+    });
+
+    it('decodes mixed input with chained and direct entities', () => {
+      // `&gt;` resolves first, `&amp;` resolves last, so `&amp;lt;p&gt;` →
+      // `&lt;p>` (the `<` from `&lt;` stays escaped because `&amp;` produced
+      // it on the very last pass).
+      expect(decodeHtmlEntities('&amp;lt;p&gt;')).toBe('&lt;p>');
+    });
+
+    it('decodes numeric entities (decimal and hex)', () => {
+      expect(decodeHtmlEntities('&#65;&#66;&#67;')).toBe('ABC');
+      expect(decodeHtmlEntities('&#x41;&#x42;&#x43;')).toBe('ABC');
+    });
+
+    it('decodes typographic dashes', () => {
+      expect(decodeHtmlEntities('a&ndash;b&mdash;c')).toBe('a–b—c');
+    });
+
+    it('returns empty string for nullish input', () => {
+      expect(decodeHtmlEntities(null as unknown as string)).toBe('');
+      expect(decodeHtmlEntities(undefined as unknown as string)).toBe('');
+      expect(decodeHtmlEntities('')).toBe('');
     });
   });
 });

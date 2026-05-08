@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-04-28
+**Last Updated:** 2026-05-08 (added ARCH-01 + PR-ε architecture entries)
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -51,6 +51,8 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 | ID | Feature | Priority | Effort | Category |
 |-----|---------|----------|--------|----------|
 | [BUG-01](#bug-01) | SAPActivate phantom success + CLI/server alignment (NW 7.50) — PR [#179](https://github.com/marianfoo/arc-1/pull/179) open | P0 | S | Bugs |
+| [ARCH-01](#arch-01) | Discovery-driven endpoint routing — replaces hard-coded per-type URLs with ordered candidate-list against `/sap/bc/adt/discovery` (TABL already does this via `resolveTablObjectUrl`; extend to DOMA, DDLX, BDEF, SRVD, SRVB, ENHO). Plan: [docs/plans/discovery-driven-endpoint-routing.md](../docs/plans/discovery-driven-endpoint-routing.md) | P1 | M | Architecture |
+| [PR-ε](#pr-epsilon) | Remove static SAP_BASIS release gates and `isRelease750()` helper after ARCH-01 lands; consume `resolveSourceUrl` + `filterByDiscovery` at the call sites that are still hard-coded | P1 | S | Architecture |
 | [FEAT-18](#feat-18) | Function Group Bulk Fetch | P1 | S | Features |
 | [FEAT-24](#feat-24) | CompareSource (Diff) | P1 ↑ (from P2, 2026-04-23 — last piece of code-review workflow trio with FEAT-20 + FEAT-49) | S | Features |
 | [DOC-01](#doc-01) | Copilot Studio Setup Guide | P1 | S | Docs |
@@ -115,6 +117,12 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| — | PR-β three-file sync (MSAG `messages` schema property exposure) + universal write guards (mixed-case object name rejection on create + batch_create). Splits PR [#196](https://github.com/marianfoo/arc-1/pull/196). Plan: `docs/plans/pr-beta-three-file-sync-and-universal-guards.md` (now in `docs/plans/completed/` after merge). PR [#201](https://github.com/marianfoo/arc-1/pull/201). | 2026-05-08 | Features |
+| — | PR-α cookie hot-reload on stale 401 (`SAP_COOKIE_FILE` re-read on persistent 401, no restart needed; non-blocking startup auth-preflight in cookie-auth mode; cookie-aware LLM error hint). Splits PR [#196](https://github.com/marianfoo/arc-1/pull/196). PR [#200](https://github.com/marianfoo/arc-1/pull/200). | 2026-05-08 | Features |
+| [SEC-11](#sec-11) | Dependency & Supply-Chain Security — Tier 1 Foundation (cleared 9 npm audit advisories; Dependabot for npm/actions/docker with grouping + ignore rules; `npm audit` PR gate; GitHub Dependency Review; Trivy container scanning gating on release + advisory on dev; third-party action SHA pinning; workflow-level `permissions: contents: read`; SECURITY.md policy) | 2026-05-08 | Security |
+| — | Audit Plan B: read/write enum symmetry (`MSAG` added to `SAPREAD_TYPES_*`) + `FTG2 → FEATURE_TOGGLE` rename. Issue #218 follow-up; both old aliases (`MESSAGES`, `FTG2`) accepted for one minor with stderr deprecation warning. Verified live on a4h S/4HANA 2023 + npl NW 7.50 SP02. | 2026-05-08 | Features |
+| — | Audit-driven purge of invented ADT slash aliases (issue #218 follow-up, Plan A — PR #223). Removes `FUNC/FM`, `CLAS/LI`, `VIEW/V`, `TRAN/O` from `SLASH_TYPE_MAP`; repoints `FUGR/FF → FUNC` (was `→ FUGR`); adds real `VIEW/DV → VIEW` and `TRAN/T → TRAN`; adds `objectBasePath('VIEW')` (DDIC view reads were silently broken via fallthrough to `/programs/programs/`); adds `KNOWN_BASE_TYPES` exhaustiveness guard + `SLASH_TYPE_EVIDENCE` citation guard so this bug class can't recur. Verified against a4h S/4HANA 2023 + npl NW 7.50. | 2026-05-08 | Compatibility |
+| [SEC-10](#sec-10) | HTTP Security Headers (helmet) + Opt-In CORS for browser MCP clients | 2026-05-05 | Security |
 | FEAT-51 | CDS CRUD Dependency Guidance (`SAPWrite` DDLS delete emits where-used blocker list + suggested delete order; ordered DDIC diagnostics → remediation) (PR #176) | 2026-04-23 | Features |
 | [FEAT-57](#feat-57) | SAPContext Impact — Sibling DDLS/DDLX Consistency Check (PR #177) | 2026-04-22 | Features |
 | [FEAT-55](#feat-55) | System Messages (SM02) + Gateway Error Log (IWFND) in SAPDiagnose (PR #174) | 2026-04-21 | Features |
@@ -287,7 +295,7 @@ These bugs affect real-world deployments and were confirmed by cross-project com
 22. ~~**FEAT-39** Transport Enhancements (S)~~ — **completed 2026-04-13** (K/W/T types; S/R deferred). sapcli has full CTS lifecycle.
 21. **FEAT-41** ABAP Unit Test Coverage (S) — statement-level coverage via `/runtime/traces/coverage/measurements/{id}` with paginated follow-up. sapcli + AWS Accelerator have this.
 22. **FEAT-42** ATC Output Formats (XS) — JUnit4, checkstyle, codeclimate formatters for CI/CD integration. sapcli has these.
-23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FTG2`, `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
+23. ~~**FEAT-43** DDIC Auth & Misc Read (S)~~ — **completed 2026-04-17** (SAPRead types `AUTH`, `FEATURE_TOGGLE` (formerly `FTG2`, renamed in audit Plan B / PR #224), `ENHO`; Authorization Fields endpoint: `/sap/bc/adt/aps/iam/auth/{name}`, namespace `http://www.sap.com/iam/auth`)
 24. ~~**FEAT-48** SKTD (Knowledge Transfer Documents) Read/Write (S)~~ — **✅ Completed 2026-04-16** (PR #134 merged). Unique to ARC-1. LLM-generated documentation for ABAP objects.
 25. **FEAT-09** SQL Trace Monitoring (S) — completes diagnostics story (SM02 and /IWFND/ERROR_LOG already completed 2026-04-21 via FEAT-55 — SQL trace is the only fr0ster-v5 diagnostic still missing)
 26. **SEC-05** Rate Limiting (S) — prevent runaway AI loops
@@ -538,7 +546,7 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 
 **Why:** Supports **token efficiency** — reduces failed create attempts where the LLM guesses the wrong type code.
 
-**Why not:** The mapping is incomplete and fragile — SAP has multiple variants (`PROG/P` vs `PROG/I`, `CLAS/OC` vs `CLAS/LI`) and defaults may differ by release. Power users who know the correct suffix can't bypass the auto-mapping, creating a false abstraction. Better error messages (extracting ADT's 400 "expected CLAS/OC" response) solve the root cause more cleanly. The mapping also encourages sloppy LLM behavior — if ARC-1 always "fixes" type codes, the LLM stops learning the correct ones, creating problems when users switch to other tools.
+**Why not:** The mapping is incomplete and fragile — SAP has multiple variants (`PROG/P` vs `PROG/I`, `CLAS/OC` vs class-include subtypes) and defaults may differ by release. (Note: `CLAS/LI` was previously listed here as an example but has been removed as invented per issue #218 audit / PR #223 — see `docs/plans/completed/audit-purge-invented-adt-types.md`.) Power users who know the correct suffix can't bypass the auto-mapping, creating a false abstraction. Better error messages (extracting ADT's 400 "expected CLAS/OC" response) solve the root cause more cleanly. The mapping also encourages sloppy LLM behavior — if ARC-1 always "fixes" type codes, the LLM stops learning the correct ones, creating problems when users switch to other tools.
 
 ---
 
@@ -568,25 +576,30 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 | **Priority** | P2 |
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
-| **Usefulness** | Medium — prevents runaway AI loops from overwhelming SAP |
-| **Status** | Not started |
+| **Usefulness** | Medium — prevents runaway AI loops from overwhelming SAP; closes CodeQL alert `js/missing-rate-limiting` on `/authorize` |
+| **Status** | Not started — CodeQL alert #12 dismissed in Security UI with rationale "tracked in SEC-05" (2026-05-08) |
 
-**What:** Token bucket rate limiter per MCP session, configurable via env var. Prevents an AI agent in a retry loop from generating thousands of SAP API calls per minute.
+**What:** Token-bucket rate limiter at two layers: (a) per MCP session for SAP-call throttling, configurable via env var; (b) per source IP / per `client_id` on the OAuth auth-relevant endpoints (`/authorize`, `/register`, `/token`) and on `/mcp` to mitigate brute-force / probing. Prevents an AI agent in a retry loop from generating thousands of SAP API calls per minute, AND prevents unauthenticated callers from hammering the OAuth surface.
 
-**Why:** Prevents LLM retry loops from overloading SAP. Enterprise deployments need predictable load.
+**Why:** Prevents LLM retry loops from overloading SAP. Enterprise deployments need predictable load. Closes CodeQL HIGH alert `js/missing-rate-limiting` flagged on the `/authorize` route handler in [src/server/http.ts:279](https://github.com/marianfoo/arc-1/blob/main/src/server/http.ts) — auth endpoints with no brute-force gate are an unconditional finding for any OWASP / SAST scanner.
 
-**Why not:** Rate limiting at the MCP session level doesn't prevent SAP overload — a single aggressive query can exhaust a bucket in milliseconds while a slow query stays under limits. SAP's own throttling (RFC connection pools, dialog process limits) and reverse proxies (API Gateway rate limits) are more effective at the right layer. For multi-instance deployments, rate limiting requires distributed state (Redis), adding a significant dependency. Better handled by infrastructure (API Gateway, BTP rate limiting, SAP ICM settings) than by the application.
+**Why not:** Rate limiting at the MCP session level doesn't prevent SAP overload — a single aggressive query can exhaust a bucket in milliseconds while a slow query stays under limits. SAP's own throttling (RFC connection pools, dialog process limits) and reverse proxies (API Gateway rate limits) are more effective at the right layer. For multi-instance deployments, session-keyed rate limiting requires distributed state (Redis), adding a significant dependency. The OAuth-surface limiter is a different shape — IP-keyed in-memory is fine for single-instance and "good enough" for BTP CF (the gorouter is the real perimeter).
 
 **Configuration:**
 ```bash
-SAP_RATE_LIMIT=60        # requests per minute per session (0 = unlimited)
-SAP_RATE_LIMIT_BURST=10  # burst allowance
+ARC1_RATE_LIMIT=60            # MCP requests per minute per session (0 = unlimited)
+ARC1_RATE_LIMIT_BURST=10      # MCP burst allowance
+ARC1_AUTH_RATE_LIMIT=20       # OAuth /authorize|/register|/token requests per minute per IP (0 = unlimited)
+ARC1_AUTH_RATE_LIMIT_BURST=5  # OAuth surface burst allowance
 ```
 
 **Implementation:**
-- Use `rate-limiter-flexible` npm package or simple in-memory token bucket
-- Per-session limiter (keyed by MCP session ID or OIDC user)
-- Return MCP error with retry-after hint when rate limited
+- Use `rate-limiter-flexible` npm package or simple in-memory token bucket. The `express-rate-limit` package (already in the dep tree as a transitive of helmet) is the simpler option for the OAuth-surface limiter.
+- MCP-layer limiter: per-session (keyed by MCP session ID or OIDC user). Return MCP error with `retry-after` hint when rate limited.
+- OAuth-surface limiter: per IP (or per `cf-connecting-ip` / `x-real-ip` when behind a proxy). Return HTTP 429 with `Retry-After` header. Audit-log each rejected request as `auth_rate_limited`.
+- New audit event types: `mcp_rate_limited`, `auth_rate_limited`. Both go through `src/server/audit.ts` like the existing `cors_rejected`.
+
+**CodeQL alert linkage:** Alert #12 (`js/missing-rate-limiting`) on `/authorize` is dismissed in the Security UI with rationale "tracked in SEC-05". When SEC-05 lands, re-enable the alert (or it will auto-close on the next scan since rate limiting will be present).
 
 ---
 
@@ -1776,6 +1789,43 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 ---
 
+<a id="arch-01"></a>
+### ARCH-01: Discovery-driven Endpoint Routing
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | M (3-5 days) |
+| **Risk** | Medium — touches discovery, intent, tools layers |
+| **Usefulness** | High — replaces brittle hard-coded URLs with self-correcting routing |
+| **Status** | **Plan ready** — [docs/plans/discovery-driven-endpoint-routing.md](../docs/plans/discovery-driven-endpoint-routing.md); decision recorded in [docs/adr/0001-discovery-driven-endpoint-routing.md](../docs/adr/0001-discovery-driven-endpoint-routing.md) |
+| **Blocks** | PR-ε (release-gate cleanup, if any release literals are reintroduced before ARCH-01 lands) |
+
+**What:** Generalize the discovery-driven URL pattern (`resolveTablObjectUrl` already does this for TABL — falls back from `/ddic/tables` to `/ddic/structures` based on what the SAP system publishes in `/sap/bc/adt/discovery`). Extend the same approach to other types where the URL varies across releases or where systems differ in which collections they expose: DOMA, DDLX, BDEF, SRVD, SRVB, ENHO. Adds one helper (`discoveryHasCollection(uri)`) plus a `RESOLVE_RULES` table mapping each type to an ordered candidate-URL list. Eliminates per-version branching in the handler hot path.
+
+**Why P1:** Foundation for replacing brittle release-version literals (`isRelease750()` and similar) anywhere they exist. Also makes the codebase self-correcting across SAP support packs — when SAP back-ports a collection, ARC-1 picks it up automatically. The pattern is already proven in `resolveTablObjectUrl`; this generalizes it.
+
+**Live evidence (captured 2026-04-28 against A4H 758 SP02 + NPL 750 SP02):** A4H discovery publishes `/ddic/{tables, structures, domains, ddlx/sources}, /bo/behaviordefinitions, /businessservices/bindings, /enhancements/{enhoxh, enhoxhb}`. NPL 750 publishes only `/ddic/{structures, dataelements, ddl/sources}, /enhancements/enhoxh, /messageclass, /businesslogicextensions/badis`. Discovery is the precise, machine-readable answer to "is this collection available."
+
+**Empirical input:** [docs/nw750-discovery-gap-analysis.md](../docs/nw750-discovery-gap-analysis.md) — endpoint-by-endpoint inventory contributed by PR [#196](https://github.com/marianfoo/arc-1/pull/196) author.
+
+---
+
+<a id="pr-epsilon"></a>
+### PR-ε: Remove Static Release Gates (consumes ARCH-01)
+
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Effort** | S (1-2 days) |
+| **Risk** | Low — purely deletion + swap-in if release literals are reintroduced |
+| **Usefulness** | Maintenance — keeps the codebase free of `release < 751` literals once ARCH-01 lands |
+| **Status** | **Blocked on ARCH-01.** Currently a placeholder — the static release maps proposed in PR [#196](https://github.com/marianfoo/arc-1/pull/196) were not merged, so there is currently nothing to remove. If any future PR reintroduces release-version branching for endpoint routing, PR-ε replaces it with `resolveSourceUrl` / `filterByDiscovery`. |
+
+**Verification:** Each removal must be paired with a regression test against the NPL-7.50 probe fixture and a 758-class fixture, confirming the routing decision is identical to or better than what the literal would produce.
+
+---
+
 <a id="feat-59"></a>
 ### FEAT-59: Embeddable Multi-Tenant Server (per-instance `systemType`)
 
@@ -1848,10 +1898,12 @@ For FUGR (function groups), the same pattern applies with `objecttype=FUGR/P` an
 
 **Why not (yet):** ARC-1's value comes from the opinionated central safety/scope/audit pipeline. A poorly-designed plugin API could let a third-party tool bypass `allowWrites`, `allowedPackages`, scope policy, or PP. The research doc lists eight invariants that any plugin API must enforce; getting them right takes time. Deferred to P3 until either (a) a concrete customer asks for it, or (b) the in-tree tool count starts to feel like a marketplace candidate.
 
+**Motivating example (2026-04-26):** the [samibouge NW 7.50 fork](https://github.com/marianfoo/arc-1/compare/main...samibouge:arc-1:feat/nw750-version-fix) is the first concrete case for this feature. 17 of its 18 commits are vanilla upstream candidates (and several are already merged via #179). The 18th — [`8dedcb0`, NW 7.50 dump detail via custom ICF endpoint](https://github.com/marianfoo/arc-1/commit/8dedcb0) — requires installing `ZCL_ARC1_DUMP_HANDLER` on the SAP system, which contradicts ARC-1's "no SAP-side install" principle and would bind upstream to maintaining customer-side ABAP. This is exactly the shape the extension model is meant to absorb: customer keeps the ABAP class in their own repo, ships a small TS plugin that calls `/sap/rest/arc1/dumps` via `client.http.get(...)`, admins opt in via `ARC1_PLUGINS=...`. Full bucketing of the 18 commits and a worked plugin sketch are in [§14 of the research doc](../docs/research/tool-extension-points.md#14-worked-example-samibouge-nw-750-fork--what-fits-what-doesnt).
+
 **Out of scope:** Embedding ARC-1 *into* another app (already deferred as [FEAT-29g](#feat-29) — contradicts the centralized-gateway model). This item is the *opposite* — adding tools *to* an ARC-1 instance.
 
 **Related research:**
-- [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) — full design with public-surface map, seven extension-pattern survey, security model, anti-patterns, open questions, and a sketch of `defineTool()` + `ToolContext`.
+- [docs/research/tool-extension-points.md](../docs/research/tool-extension-points.md) — full design with public-surface map, seven extension-pattern survey, security model, anti-patterns, open questions, a sketch of `defineTool()` + `ToolContext`, and the §14 case study against the samibouge NW 7.50 fork.
 
 ---
 
@@ -2109,7 +2161,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 - **F-10 (Medium):** HTML-escaped `error_description` in callback + added `Content-Security-Policy: default-src 'none'` headers
 - **F-07 (Medium):** Replaced `exec()` with `execFile()` in browser opener — eliminates shell injection surface
 - **F-05 (Medium):** Added `revokeToken` override to `XsuaaProxyOAuthProvider` — uses correct XSUAA credentials
-- **F-06 (Medium):** Added redirect URI policy, 100-client cap, and 24h TTL to DCR `InMemoryClientStore`
+- **F-06 (Medium):** Added redirect URI policy, 100-client cap, and 24h TTL to DCR client store. Superseded by stateless DCR (see SEC-09 below) — the cap was removed (no shared memory state to exhaust) and the TTL default raised to 30 days with `--oauth-dcr-ttl-seconds` configuration.
 - **F-08 (Low):** Added `requiredClaims: ['exp']` and configurable `SAP_OIDC_CLOCK_TOLERANCE` for JWT validation
 - **Config validation:** `ppStrict=true` without `ppEnabled=true` now fails at startup
 
@@ -2119,6 +2171,135 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 - `src/server/xsuaa.ts` — revokeToken, DCR validation
 - `src/server/config.ts` — startup validation (OIDC audience, PP strict)
 - `docs/security-guide.md` — NEW consolidated security guide for operators
+
+---
+
+<a id="sec-09"></a>
+### SEC-09: Stateless OAuth DCR (Restart-Resilient `client_id`s)
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Status** | Complete (2026-05-05, PR #212) |
+
+**Problem:** OAuth Dynamic Client Registration state was held in an in-memory `Map`. Every container restart wiped the registry, and the next request from a cached `client_id` returned `400 invalid_client`. On BTP CF Diego this triggered routinely (`cf restart`, `cf push`, `cf restage`, cell evacuation, OOM auto-recovery, lazy 24h TTL eviction). Affected users had to manually clear their MCP client's local OAuth cache.
+
+**Implemented:**
+
+- Replaced `InMemoryClientStore` with `StatelessDcrClientStore`. Each issued `client_id` is an HMAC-signed token carrying its own registration payload — `getClient()` re-derives state from the signature with no backing store.
+- HMAC key is derived (HKDF-style with a `arc1-dcr/v1` domain-separation label) from the existing XSUAA `clientsecret` so any process with the same service binding can validate any `client_id` ever issued. Multi-instance scale-out works for free.
+- Default TTL raised from 24h → 30d (matches typical OAuth refresh-token lifetime; eliminates the daily "re-authenticate" UX pain for Copilot users). Configurable via `--oauth-dcr-ttl-seconds` / `ARC1_OAUTH_DCR_TTL_SECONDS`, clamped to `[60s, 90d]`.
+- DCR lifecycle now flows through the audit pipeline: `oauth_client_registered`, `oauth_client_lookup_failed` (with `unknown_prefix` / `malformed` / `bad_signature` / `invalid_payload` / `expired` reasons), `oauth_redirect_uri_registered`. Forgery / probing is observable.
+
+**Tradeoffs:**
+
+- Per-client revocation is impossible (only TTL or full key rotation via `cf bind-service`).
+- Loose-match for redirect_uri encoding variants (BAS/Cline `?` ↔ `%3F`) is gone — affected clients re-register on encoding mismatch.
+- Service-binding rotation invalidates every outstanding DCR `client_id` at once, including in-flight refresh tokens.
+
+**Files:**
+- `src/server/stateless-client-store.ts` — NEW signed-token store
+- `src/server/xsuaa.ts` — wire-up, removed `InMemoryClientStore`
+- `src/server/audit.ts` — three new event types
+- `src/server/config.ts`, `src/server/types.ts`, `src/server/http.ts` — `oauthDcrTtlSeconds` config
+- `docs_page/xsuaa-setup.md` — Stateless DCR section, service-binding rotation procedure, audit-event reference
+- `docs_page/configuration-reference.md` — A4 XSUAA section: `--oauth-dcr-ttl-seconds`
+
+---
+
+<a id="sec-10"></a>
+### SEC-10: HTTP Security Headers + Opt-In CORS
+| Field | Value |
+|-------|-------|
+| **Priority** | P2 |
+| **Status** | Complete (2026-05-05) |
+
+**Problem:** The `http-streamable` transport sent no browser security headers and rejected every browser-originated `fetch()` because there was no CORS handling. That left two gaps: (1) when a browser ever reached `/health`, `/mcp`, or an OAuth endpoint, none of the standard hardening (HSTS, CSP, X-Frame-Options, COOP, CORP, …) was in place, and (2) any internal browser UI that wanted to call `/mcp` directly was blocked at the protocol level with no opt-in.
+
+The four shipped MCP clients — Claude Desktop, Cursor, VS Code Copilot, Copilot Studio — are all native HTTP and don't trigger CORS, so for the supported deployment shapes the gap was only theoretical. The change closes it for the future browser-UI case while making sure the native-client default path still works (specifically, OAuth popups depend on a `same-origin-allow-popups` COOP, which helmet's default `same-origin` would have broken).
+
+**Implemented:**
+
+- [helmet](https://helmetjs.github.io/) middleware on every HTTP response — HSTS, CSP, X-Frame-Options, COOP, CORP, X-Content-Type-Options, Referrer-Policy, and the legacy hardening set. Always-on, no flag to disable.
+- COOP **disabled** unconditionally (`crossOriginOpenerPolicy: false`). The first attempt set it to `same-origin-allow-popups` thinking that helped OAuth popups, but Microsoft Copilot Studio's connector flow opens `/authorize` in a popup and uses `window.open()` / `postMessage` to receive the redirect — any non-default COOP on `/authorize` (including the lenient `same-origin-allow-popups`) puts the popup in a separate browsing context group, severs the parent's window reference, and surfaces as "consent pop-up window has been closed unexpectedly". Verified live with the BTP test deployment: claude.ai (redirect-flow OAuth) and Cursor (native client) both worked with COOP set; Copilot Studio failed reproducibly. Disabling COOP fixed Copilot Studio without regressing the others. ARC-1 renders no JS UI that would benefit from cross-origin isolation, so the security cost is zero.
+- CSP override (when CORS is enabled) uses `useDefaults: true` and only widens `style-src`. Every other directive — `frame-ancestors 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `upgrade-insecure-requests`, … — is preserved.
+- Opt-in CORS via `--allowed-origins` / `ARC1_ALLOWED_ORIGINS`. Empty (default) disables CORS entirely. With origins set, exact-match reflection + `credentials: true` + `methods: GET/POST/DELETE/OPTIONS` + `Vary: Origin`.
+- New `cors_rejected` audit event fires when a browser request from an unallowed origin reaches the server. Browsers drop the response anyway; this gives a server-side signal for triage.
+- `cors` package pinned to exact `2.8.6` (the 2.8.5 → 2.8.6 release closed a 7-year gap; pinned until it stabilizes).
+- `applySecurityMiddleware()` extracted from `startHttpServer()` so the helmet/CORS contract is unit-testable via `supertest` without binding ports. New file `tests/unit/server/http-security-headers.test.ts` covers 14 cases (CSP defaults preserved with and without CORS, COOP unconditional, exact-origin reflection, credentials, exposed headers, multi-origin allowlist, audit emission for misses).
+
+**Tradeoffs:**
+
+- HSTS (default `max-age=15552000` + `includeSubDomains`) is durable. Once a browser sees it, the host plus its subdomains are HTTPS-locked for 180 days. Deliberate on BTP CF (apps are HTTPS-only at the gorouter); only a concern for hostnames that might need to serve HTTP later.
+- CORS uses `credentials: true`, so wildcards aren't allowed by browser policy. Operators configure exact origins; misconfiguration produces silent browser drops + `cors_rejected` audit events. Documented prominently in the Security Guide.
+- Helmet's CSP `script-src 'self'` blocks inline scripts. The MCP SDK's auth router emits only redirects + JSON, so this isn't an issue today; future server-rendered pages would need to either use external scripts or add a nonce.
+- One new prod dep (`helmet`, zero deps) and one new pinned prod dep (`cors`, zero deps). Both from established Node maintainers (Evan Hahn, expressjs).
+
+**Files:**
+- `src/server/http.ts` — NEW `applySecurityMiddleware()` + middleware wiring
+- `src/server/audit.ts` — NEW `cors_rejected` event type
+- `src/server/config.ts`, `src/server/types.ts` — `allowedOrigins` config
+- `package.json` — `helmet ^8.1.0`, `cors 2.8.6` (pinned), `@types/cors ^2.8.19`
+- `tests/unit/server/http-security-headers.test.ts` — NEW 14-test supertest suite
+- `docs_page/security-guide.md` — §11 extended with HTTP security headers + CORS subsections, `cors_rejected` added to §9 audit table
+- `docs_page/configuration-reference.md` — `--allowed-origins` row in Transport & logging
+- `docs_page/phase4-btp-deployment.md` — NEW "Security headers and CORS on BTP" section after Verify Deployment
+- `docs_page/xsuaa-setup.md` — "Browser-based DCR clients" sub-section in Stateless DCR
+- `README.md`, `CLAUDE.md`, `.env.example`, `manifest.yml`, `manifest-btp-abap.yml`, `mta.yaml` — admin-facing references
+
+**Follow-ups (not in this PR):**
+
+- Per-request rate limiting on `/mcp` (tracked separately in [docs/plans/global-rate-limiting.md](../docs/plans/global-rate-limiting.md)).
+
+---
+
+<a id="sec-11"></a>
+### SEC-11: Dependency & Supply-Chain Security — Tier 1 Foundation
+| Field | Value |
+|-------|-------|
+| **Priority** | P1 |
+| **Status** | Complete (2026-05-08) |
+
+**Problem:** Before this work, the repository had no Dependabot, no `npm audit` gate, no GitHub Dependency Review, no SAST in CI for the project itself, no container scanning, and no `SECURITY.md` policy. `npm audit` reported 9 open advisories (2 HIGH, 7 MODERATE) across `path-to-regexp`, `axios` (transitive), `hono`, `@hono/node-server`, `ip-address`, `express-rate-limit`, `fast-xml-parser`, `follow-redirects`, `postcss`. Customers running ARC-1 on regulated landscapes (banks, government, defense) run their own image scanners (Aqua, Prisma Cloud, Microsoft Defender) — vulnerable artifacts get rejected at procurement.
+
+**Implemented (across PRs #227, #229, #234, #235, this PR):**
+
+- **Dependency baseline cleared.** `npm audit fix` + `npm update` resolved all 9 advisories; lockfile rebuilt with 13 in-range packages bumped to latest. `npm audit --audit-level=high` exits 0 today. (PR [#227](https://github.com/marianfoo/arc-1/pull/227))
+- **Dependabot config.** `.github/dependabot.yml` — three ecosystems (npm, github-actions, docker), weekly Mondays 06:00 Europe/Berlin, grouping rules (`dev-dependencies`, `types`, `sap-sdk`, `mcp-sdk`, `linting`), ignore rules for `@types/node` major (must match `engines.node`) and Docker `node` major (LTS-only cadence). (PRs [#229](https://github.com/marianfoo/arc-1/pull/229) + [#235](https://github.com/marianfoo/arc-1/pull/235))
+- **`npm audit` PR gate.** New step in `.github/workflows/test.yml` runs `npm audit --audit-level=high --omit=optional` after `npm ci`, before `npm run lint`. Audits production AND dev deps — a compromised dev dep can poison the published artifact.
+- **GitHub Dependency Review.** New `.github/workflows/dependency-review.yml` runs on every PR, fails on `high`-severity introductions or denied licenses (GPL/AGPL/LGPL deny-list to protect the MIT-licensed npm package).
+- **CodeQL SAST.** GitHub Default Setup running JS/TS analysis on every push/PR; findings on the Security tab; `Check runs failure threshold: High or higher` blocks merges with HIGH security alerts.
+- **Trivy container scanning.** `.github/workflows/docker.yml` (dev push) runs Trivy non-gating (`exit-code: 0`) and uploads SARIF to the Security tab. `.github/workflows/release.yml` runs Trivy **gating** (`exit-code: 1`) so customers pulling `:vX.Y.Z` get a CVE-clean image.
+- **Workflow permissions.** Top-level `permissions: contents: read` on `test.yml`, plus per-job `security-events: write` for SARIF upload paths. Closed 5 of the 12 then-open CodeQL `actions/missing-workflow-permissions` MEDIUM alerts. (PR [#229](https://github.com/marianfoo/arc-1/pull/229))
+- **Third-party action SHA pinning.** `googleapis/release-please-action`, `docker/setup-buildx-action`, `docker/login-action`, `docker/metadata-action`, `docker/build-push-action`, `aquasecurity/trivy-action` — all pinned to commit SHAs with trailing `# vN` comments so Dependabot bumps SHA + tag together. Mitigates the [`tj-actions/changed-files` 2024 supply-chain compromise](https://blog.gitguardian.com/tj-actions-changed-files-action-was-compromised/) attack class. GitHub-owned `actions/*` and `github/*` are deliberately tag-pinned.
+- **`SECURITY.md` policy.** Vulnerability reporting (GitHub Private Vulnerability Reporting + email fallback), severity-tiered response SLAs (3 days ack / 7 days triage / 14 days critical / 30 days high / 60 days moderate), CVE handling (GHSA + CVE via GitHub's CNA), out-of-scope (SAP system bugs route to SAP, upstream-only deps route upstream), Safe Harbor for good-faith research. (PR [#229](https://github.com/marianfoo/arc-1/pull/229))
+- **Repo-level GitHub security toggles enabled.** Dependabot alerts + security updates + grouped security updates + version updates + malware alerts; secret scanning + push protection (already on by default for public repos); Private Vulnerability Reporting.
+
+**Tradeoffs:**
+
+- Audit threshold = `high` (not `moderate`). `moderate` produces too much noise from transitive deps for any team that's not monitoring full-time. Critical/HIGH gate; moderate/low surface as warnings on the Security tab.
+- Trivy non-gating on dev pushes, gating on releases. Dev iteration shouldn't be blocked by a HIGH CVE in a Node base image that we can't fix until upstream rebuilds; releases need to be CVE-clean before customers pull them.
+- Third-party SHA pinning only — `actions/*` and `github/*` stay tag-pinned. They publish from a trusted GitHub-owned org with signed releases; pinning them too generates churn without commensurate security gain.
+- CodeQL stays on Default Setup, not Advanced. Default Setup auto-manages the workflow file and bumps queries; Advanced gives more control (`security-extended,security-and-quality` query suite, path-ignore for tests/dist) but has more upkeep. Re-evaluate if the false-positive rate on Default proves untenable.
+
+**Files:**
+- `.github/dependabot.yml` — three ecosystems + grouping + ignore rules (PRs [#229](https://github.com/marianfoo/arc-1/pull/229), [#235](https://github.com/marianfoo/arc-1/pull/235))
+- `.github/workflows/test.yml` — `Security audit (npm audit)` step + top-level `permissions:`
+- `.github/workflows/dependency-review.yml` — NEW PR-time dependency review
+- `.github/workflows/docker.yml` — Trivy non-gating + SHA-pinned `docker/*` + `aquasecurity/trivy-action`
+- `.github/workflows/release.yml` — Trivy gating + SHA-pinned `googleapis/release-please-action` + `docker/*` + `aquasecurity/trivy-action`
+- `SECURITY.md` — NEW vulnerability reporting policy (PR [#229](https://github.com/marianfoo/arc-1/pull/229))
+- `package-lock.json` — 9 advisories cleared + 13 in-range bumps (PR [#227](https://github.com/marianfoo/arc-1/pull/227))
+- `biome.json` — `$schema` URL bumped to match `@biomejs/biome` 2.4.14 (PR [#227](https://github.com/marianfoo/arc-1/pull/227))
+- `docs_page/security-guide.md` — NEW §13 "Dependency & Supply-Chain Security"
+- `compare/00-feature-matrix.md` — NEW §4.1 "Supply-Chain Security" comparison
+- `README.md` — CodeQL + Test + Dependency Review badges; supply-chain security bullet
+- `CLAUDE.md` — Key Files rows for Dependabot config / audit & SAST gates / container scanning / action pinning / `SECURITY.md`
+
+**Follow-ups (not in this PR):**
+
+- Tier 2: CycloneDX SBOM (npm + image), Cosign keyless image signing, OpenSSF Scorecard. Plan in [docs/plans/dependency-security-tier2-attestation.md](../docs/plans/dependency-security-tier2-attestation.md).
+- Tier 3: Socket.dev PR review, internal vulnerability triage runbook, formal non-adoption decisions for Renovate / Snyk / SLSA L3. Plan in [docs/plans/dependency-security-tier3-defense.md](../docs/plans/dependency-security-tier3-defense.md).
+- 7 remaining HIGH CodeQL alerts (clear-text logging FPs in `src/cli.ts`, double-escaping in `src/adt/diagnostics.ts` + `src/adt/xml-parser.ts`, incomplete sanitization in `src/adt/diagnostics.ts`, missing rate-limiting on `/authorize` — the last maps to roadmap [SEC-05](#sec-05)). Triage in separate PRs.
 
 ---
 
@@ -2141,7 +2322,9 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 |-------|-------|
 | **Status** | Complete (2026-04-01) |
 
-**Implemented:** Read support for domains (DOMA), data elements (DTEL), structures (STRU), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite (plus DOMA/DTEL metadata writes completed under FEAT-13).
+**Implemented:** Read support for domains (DOMA), data elements (DTEL), DDIC structures (TABL — covers transparent tables AND structures, mirroring TADIR R3TR TABL and abapGit conventions), CDS metadata extensions (DDLX), and transactions (TRAN) in SAPRead. Structured metadata output with type info, labels, value tables, search help. Write support for DDLS, DDLX, BDEF, SRVD via SAPWrite (plus DOMA/DTEL metadata writes completed under FEAT-13).
+
+**STRU/TABL collapse (Model B, 2026-05-07):** The previously separate `STRU` short type was collapsed into `TABL` to match SAP file-format conventions. ARC-1 auto-resolves the URL via fallback (`/tables/{name}` → `/structures/{name}` on 404). See [docs/plans/completed/collapse-stru-into-tabl.md](https://github.com/marianfoo/arc-1/blob/main/docs/plans/completed/collapse-stru-into-tabl.md).
 
 ---
 
@@ -2279,7 +2462,7 @@ Based on independent security review against RFC 9700 (reports/2026-04-08-001-oa
 | Hyperfocused Mode | Single `SAP` tool (~200 tokens) — competitive parity with VSP | Complete (2026-04-01) |
 | Method-Level Surgery | `edit_method`, `list_methods`, `get_method` — 95% token reduction | Complete (2026-04-01) |
 | Runtime Diagnostics | SAPDiagnose — short dumps (ST22), ABAP profiler traces | Complete (2026-04-01) |
-| DDIC Completeness | FEAT-04: DOMA, DTEL, STRU, DDLX, TRAN, BOR, T100, variants | Complete (2026-04-01) |
+| DDIC Completeness | FEAT-04: DOMA, DTEL, DDLX, TRAN, BOR, T100, variants (TABL covers transparent tables and DDIC structures since Model B) | Complete (2026-04-01) |
 | DDIC Domain/Data Element Write | FEAT-13: DOMA/DTEL create, update, delete, batch_create in SAPWrite | Complete (2026-04-12) |
 | RAP CRUD | DDLS/DDLX/BDEF/SRVD/SRVB write, batch activation | Complete (2026-04-14) |
 | Context Compression | SAPContext with AST-based dependency extraction (7-30x reduction) | Complete (2026-04-01) |

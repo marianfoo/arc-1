@@ -414,6 +414,24 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   }
   config.xsuaaAuth = resolveBool('xsuaa-auth', 'SAP_XSUAA_AUTH', false, 'xsuaaAuth');
 
+  // OAuth DCR client_id lifetime. 30 days default (matches typical refresh-token
+  // lifetime). Hard-capped at 90 days — registrations longer than that should
+  // use the pre-registered XSUAA client instead of DCR. Floor of 60 seconds to
+  // keep the TTL meaningful (and prevent typos like "0" wiping every connect).
+  const dcrTtlRaw = getFlag('oauth-dcr-ttl-seconds') ?? process.env.ARC1_OAUTH_DCR_TTL_SECONDS;
+  if (dcrTtlRaw) {
+    const parsed = Number.parseInt(dcrTtlRaw, 10);
+    if (!Number.isNaN(parsed)) {
+      const MIN = 60;
+      const MAX = 90 * 24 * 60 * 60;
+      config.oauthDcrTtlSeconds = Math.max(MIN, Math.min(MAX, parsed));
+      sources.oauthDcrTtlSeconds =
+        getFlag('oauth-dcr-ttl-seconds') !== undefined
+          ? { flag: '--oauth-dcr-ttl-seconds' }
+          : { env: 'ARC1_OAUTH_DCR_TTL_SECONDS' };
+    }
+  }
+
   // ── BTP ABAP Environment ───────────────────────────────────────────
   config.btpServiceKey = resolveOptionalStr('btp-service-key', 'SAP_BTP_SERVICE_KEY', 'btpServiceKey');
   config.btpServiceKeyFile = resolveOptionalStr(
@@ -465,6 +483,21 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   if (maxConcurrent) {
     const parsed = Number.parseInt(maxConcurrent, 10);
     config.maxConcurrent = Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
+  }
+
+  // ── CORS (browser-based MCP clients only) ──────────────────────────
+  // Empty allowlist (the default) disables CORS. Native MCP clients don't need
+  // this — only set when a browser UI calls /mcp directly.
+  const originsRaw = getFlag('allowed-origins') ?? process.env.ARC1_ALLOWED_ORIGINS;
+  if (originsRaw !== undefined) {
+    config.allowedOrigins = originsRaw
+      .split(',')
+      .map((o) => o.trim())
+      .filter((o) => o.length > 0);
+    sources.allowedOrigins =
+      getFlag('allowed-origins') !== undefined ? { flag: '--allowed-origins' } : { env: 'ARC1_ALLOWED_ORIGINS' };
+  } else {
+    sources.allowedOrigins = 'default';
   }
 
   // ── Logging ────────────────────────────────────────────────────────

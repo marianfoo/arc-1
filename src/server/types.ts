@@ -70,6 +70,14 @@ export interface ServerConfig {
   oidcClockTolerance?: number;
   xsuaaAuth: boolean;
 
+  /**
+   * Lifetime of an OAuth DCR registration (`client_id`) in seconds. Default:
+   * 30 days. Lower values bound the blast radius if the signing key leaks;
+   * higher values reduce re-auth churn. Hard-capped at 90 days — longer-lived
+   * credentials should use the pre-registered XSUAA client instead of DCR.
+   * Only consulted when XSUAA OAuth proxy mode is active. */
+  oauthDcrTtlSeconds: number;
+
   // --- BTP ABAP Environment (direct connection via service key) ---
   btpServiceKey?: string; // Inline service key JSON
   btpServiceKeyFile?: string; // Path to service key file
@@ -124,6 +132,13 @@ export interface ServerConfig {
   /** Maximum concurrent SAP HTTP requests (default: 10). Prevents work process exhaustion. */
   maxConcurrent: number;
 
+  // --- Browser-based MCP clients (CORS) ---
+  /** Exact-match CORS allowlist. Empty array (the default) disables CORS entirely so that
+   *  browser-originated cross-origin requests are blocked. Native MCP clients
+   *  (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) do not need this — they
+   *  use native HTTP, not the browser fetch API, and never trigger CORS. */
+  allowedOrigins: string[];
+
   // --- Misc ---
   verbose: boolean;
 }
@@ -157,6 +172,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   featureFlp: 'auto',
   systemType: 'auto',
   xsuaaAuth: false,
+  oauthDcrTtlSeconds: 30 * 24 * 60 * 60, // 30 days
   btpOAuthCallbackPort: 0,
   ppEnabled: false,
   ppStrict: false,
@@ -170,6 +186,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   cacheWarmup: false,
   cacheWarmupPackages: '',
   maxConcurrent: 10,
+  allowedOrigins: [],
   logLevel: 'info',
   logFormat: 'text',
   verbose: false,

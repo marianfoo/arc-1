@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.0](https://github.com/marianfoo/arc-1/compare/v0.7.2...v0.8.0) (2026-05-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* make OAuth DCR registrations survive container restarts ([#212](https://github.com/marianfoo/arc-1/issues/212))
+
+### Features
+
+* ARC1_PUBLIC_URL env var for reverse-proxy / different-hostname deployments ([#216](https://github.com/marianfoo/arc-1/issues/216)) ([6e219dd](https://github.com/marianfoo/arc-1/commit/6e219dd463c72aac9caa50cd86ab8b824e4b2a95))
+* HTTP security headers (helmet) + opt-in CORS for browser MCP clients ([#215](https://github.com/marianfoo/arc-1/issues/215)) ([8929d21](https://github.com/marianfoo/arc-1/commit/8929d21deae26b1fb242d1cbcddecbb5d878a0e8))
+* make OAuth DCR registrations survive container restarts ([#212](https://github.com/marianfoo/arc-1/issues/212)) ([0d78a6b](https://github.com/marianfoo/arc-1/commit/0d78a6b0dc3c8857154ee154c41b7ef4a0f2f48a))
+
+
+### Bug Fixes
+
+* defensive dumpId encoding + endpoint-aware 403 hints ([#206](https://github.com/marianfoo/arc-1/issues/206)) ([9046fa7](https://github.com/marianfoo/arc-1/commit/9046fa7170f7b4f2bd347406e1524da9df57f0dd))
+
 ## [0.7.2](https://github.com/marianfoo/arc-1/compare/v0.7.1...v0.7.2) (2026-04-28)
 
 

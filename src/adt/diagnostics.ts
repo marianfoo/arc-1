@@ -81,22 +81,40 @@ export async function listDumps(
  * 1. XML metadata (chapters, links, attributes)
  * 2. Formatted plain text (full dump content)
  *
- * The dump ID is the URL-encoded path segment from the listing.
+ * The dump ID from `listDumps` already arrives URL-encoded (the SAP feed
+ * encodes spaces in the server/user/client/dump-number suffix as `%20`).
+ * When a caller passes a raw ID (e.g. copied from ST22 with literal
+ * whitespace), we encode it ourselves so the path stays valid. The
+ * detail payload keeps the caller's original ID for round-tripping.
  */
 export async function getDump(http: AdtHttpClient, safety: SafetyConfig, dumpId: string): Promise<DumpDetail> {
   checkOperation(safety, OperationType.Read, 'GetDump');
 
+  const safeId = normalizeDumpId(dumpId);
+
   // Fetch XML metadata and formatted text in parallel
   const [xmlResp, textResp] = await Promise.all([
-    http.get(`/sap/bc/adt/runtime/dump/${dumpId}`, {
+    http.get(`/sap/bc/adt/runtime/dump/${safeId}`, {
       Accept: 'application/vnd.sap.adt.runtime.dump.v1+xml',
     }),
-    http.get(`/sap/bc/adt/runtime/dump/${dumpId}/formatted`, {
+    http.get(`/sap/bc/adt/runtime/dump/${safeId}/formatted`, {
       Accept: 'text/plain',
     }),
   ]);
 
   return parseDumpDetail(xmlResp.body, textResp.body, dumpId);
+}
+
+/**
+ * Idempotently URL-encode a dump ID. If the value already contains a `%`
+ * sequence we treat it as already-encoded (the listing endpoint emits
+ * `%20` for spaces); otherwise we encode it once. Trims surrounding
+ * whitespace which would otherwise be encoded as `%20` and break lookup.
+ */
+function normalizeDumpId(dumpId: string): string {
+  const trimmed = String(dumpId ?? '').trim();
+  if (!trimmed) return '';
+  return trimmed.includes('%') ? trimmed : encodeURIComponent(trimmed);
 }
 
 // ─── System Messages + Gateway Errors ──────────────────────────────
@@ -1090,14 +1108,25 @@ function sanitizeHtmlCellValue(raw: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function stripHtmlTags(html: string): string {
-  return String(html ?? '').replace(/<[^>]*>/g, '');
+// Loop until stable so adversarial nested input (e.g. `<<script>script>`) is fully
+// stripped — single-pass regex would leave `<script>` behind. Closes CodeQL alert
+// `js/incomplete-multi-character-sanitization` (alert #6).
+export function stripHtmlTags(html: string): string {
+  let result = String(html ?? '');
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(/<[^>]*>/g, '');
+  } while (result !== prev);
+  return result;
 }
 
-function decodeHtmlEntities(text: string): string {
+// `&amp;` is decoded LAST so chained entities like `&amp;lt;` resolve to `&lt;`
+// (the literal four-char text) rather than `<`. Closes CodeQL alert
+// `js/double-escaping` (alert #7).
+export function decodeHtmlEntities(text: string): string {
   return String(text ?? '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
@@ -1105,7 +1134,8 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&ndash;/gi, '–')
     .replace(/&mdash;/gi, '—')
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)));
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&amp;/gi, '&');
 }
 
 function decodeUriComponentSafe(value: string): string {

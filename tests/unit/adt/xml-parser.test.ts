@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  decodeXmlEntities,
   escapeXmlAttr,
   findDeepNodes,
   parseApiReleaseState,
@@ -1179,6 +1180,40 @@ describe('XML Parser', () => {
 
     it('handles empty string', () => {
       expect(escapeXmlAttr('')).toBe('');
+    });
+  });
+
+  // Regression tests for CodeQL alert #8 — see
+  // docs/plans/codeql-alerts-html-hygiene.md
+  describe('decodeXmlEntities (CodeQL alert #8 — js/double-escaping)', () => {
+    it('decodes the five standard XML entities', () => {
+      expect(decodeXmlEntities('&lt;tag/&gt;')).toBe('<tag/>');
+      expect(decodeXmlEntities('&quot;hello&quot;')).toBe('"hello"');
+      expect(decodeXmlEntities('&apos;world&apos;')).toBe("'world'");
+      expect(decodeXmlEntities('&amp;')).toBe('&');
+    });
+
+    it('decodes chained entity without double-unescape', () => {
+      // The CodeQL-flagged case: with `&amp;` decoded last, `&amp;lt;`
+      // resolves to the literal `&lt;`, not `<`.
+      expect(decodeXmlEntities('&amp;lt;')).toBe('&lt;');
+      expect(decodeXmlEntities('&amp;amp;')).toBe('&amp;');
+    });
+
+    it('decodes mixed chained and direct entities', () => {
+      // `&quot;` resolves first, `&amp;` last.
+      expect(decodeXmlEntities('&amp;quot;hello&quot;')).toBe('&quot;hello"');
+    });
+
+    it('passes through input without entities unchanged', () => {
+      expect(decodeXmlEntities('plain text')).toBe('plain text');
+      expect(decodeXmlEntities('')).toBe('');
+    });
+
+    it('decodes a realistic SAP attribute value', () => {
+      // Real-world shape: ADT URLs sometimes encode `&` as `&amp;` and `<`
+      // appears via `&lt;` in error messages.
+      expect(decodeXmlEntities('/foo?a=1&amp;b=2')).toBe('/foo?a=1&b=2');
     });
   });
 });

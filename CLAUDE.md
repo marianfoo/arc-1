@@ -84,6 +84,9 @@ Copy `.env.example` to `.env` for local development. All config options are defi
 | `ARC1_API_KEYS` / `--api-keys` | Multiple API keys with profiles (`key1:viewer,key2:developer`). Valid profiles: `viewer`, `viewer-data`, `viewer-sql`, `developer`, `developer-data`, `developer-sql`, `admin`. Each profile maps to a scope set AND a partial SafetyConfig intersected with the server ceiling. Single `ARC1_API_KEY` was removed in v0.7. |
 | `SAP_OIDC_ISSUER` / `--oidc-issuer` | OIDC issuer URL for JWT validation |
 | `SAP_OIDC_AUDIENCE` / `--oidc-audience` | OIDC audience for JWT validation |
+| `ARC1_OAUTH_DCR_TTL_SECONDS` / `--oauth-dcr-ttl-seconds` | Lifetime of an OAuth Dynamic Client Registration `client_id` in seconds. Default: `2592000` (30 days). Min `60`, max `7776000` (90 days). Only consulted when `SAP_XSUAA_AUTH=true`. Lower values bound the blast radius if the signing key leaks; higher reduces re-auth churn. |
+| `ARC1_ALLOWED_ORIGINS` / `--allowed-origins` | Comma-separated CORS allowlist for **browser-based** MCP clients. Empty (default) = CORS disabled. Native MCP clients (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) don't need this — they use native HTTP, not the browser fetch API. Pairs with `credentials: true`, so origins are exact-match only (no wildcards). |
+| `ARC1_PUBLIC_URL` | Public URL ARC-1 advertises in OAuth metadata (issuer, authorize / token / register / revoke endpoints, protected-resource metadata, and `WWW-Authenticate` `resource_metadata` URL). Set this when ARC-1 is reached through a reverse proxy on a different hostname or under a base-path prefix than the bound CF route — without it, MCP clients receive metadata pointing at `VCAP_APPLICATION.application_uris[0]` and bypass the proxy. Optional path prefix is supported (e.g. `https://gateway.example.com/arc1`); leave the path off for a root-mounted proxy. Trailing slash is stripped. Defaults to the CF route from `VCAP_APPLICATION`, then to `http://<bind-host>:<port>`. |
 | `SAP_BTP_SERVICE_KEY` / `--btp-service-key` | BTP ABAP service key JSON (direct connection) |
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
@@ -122,6 +125,7 @@ src/
 │   ├── audit.ts                # Audit logging (tool calls, elicitation events)
 │   ├── context.ts, elicit.ts   # MCP context helpers, elicitation
 │   ├── xsuaa.ts                # XSUAA JWT validation for BTP
+│   ├── stateless-client-store.ts # OAuth DCR store (HMAC-signed client_ids, restart-resilient)
 │   └── sinks/                  # Audit sinks: stderr, file, btp-auditlog
 ├── handlers/
 │   ├── intent.ts               # 12 intent-based tool router (handleToolCall)
@@ -187,7 +191,9 @@ tests/
 | Task | Files |
 |------|-------|
 | Add new read operation | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts` (for structured format, also `src/adt/xml-parser.ts`, `src/adt/types.ts`) |
-| Add AUTH/FTG2/ENHO read (read-only DDIC metadata) | `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
+| Add new ADT slash alias to `SLASH_TYPE_MAP` | `src/handlers/intent.ts` (`SLASH_TYPE_MAP` + `SLASH_TYPE_EVIDENCE` + `KNOWN_BASE_TYPES` if introducing a new canonical type), `tests/unit/handlers/slash-type-map.test.ts` (citation guard asserts the two map keysets are equal AND every cited path exists). Adding a `SLASH_TYPE_MAP` entry without a matching `SLASH_TYPE_EVIDENCE` entry pointing at an existing `research/abap-types/types/<short>.md` file fails the guard. Verify the slash code against Eclipse `com.sap.adt.core.apidoc-3.58.1` AND a live `<adtcore:type>` response from a real SAP system before adding. `objectBasePath` throws for any slash-form input that reaches it (last-resort fence for non-enum-typed tools like `SAPNavigate`/`SAPActivate`/`SAPDiagnose`/`SAPTransport`). See PR #222 (audit research) and PR #223 (Plan A implementation, issue #218). |
+| Add AUTH/FEATURE_TOGGLE/ENHO read (read-only DDIC metadata; deprecated alias `FTG2` accepted with warning) | `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
+| Read message classes via `MSAG` (canonical short type added in audit Plan B; `MESSAGES` deprecated alias) | `src/handlers/intent.ts` (case 'MSAG'/'MESSAGES'), `src/handlers/schemas.ts`, `src/handlers/tools.ts`, `src/adt/client.ts` (`getMessageClassInfo`) |
 | Add source revision history read (VERSIONS / VERSION_SOURCE) | `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add DCL (access control) read/write | `src/adt/client.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add fix proposal / quickfix operation | `src/adt/devtools.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/devtools.test.ts` |
@@ -195,6 +201,7 @@ tests/
 | Add FLP operation | `src/adt/flp.ts`, `src/handlers/intent.ts`, `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add package create/delete/move (DEVC) | `src/handlers/intent.ts` (`handleSAPManage`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/adt/ddic-xml.ts`, `src/adt/refactoring.ts` |
 | Add object transport history (reverse lookup) | `src/adt/transport.ts` (`getObjectTransports`), `src/adt/types.ts` (`ObjectTransportHistory`), `src/handlers/intent.ts` (`handleSAPTransport` case `history`), `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
+| Modify SAPTransport.create endpoint or DEVCLASS default | `src/adt/transport.ts` (`createTransport` — POSTs `/sap/bc/adt/cts/transports` with `asx:abap` `CreateCorrectionRequest`; defaults DEVCLASS to `$TMP` when caller omits `targetPackage`), `src/handlers/intent.ts` (`handleSAPTransport` case `create`), `src/handlers/tools.ts` (tool description for `package`/`type`), `tests/unit/adt/transport.test.ts`, `tests/integration/transport.integration.test.ts` |
 | Add gCTS / abapGit operation | `src/adt/gcts.ts` or `src/adt/abapgit.ts`, `src/handlers/intent.ts` (`handleSAPGit`), `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add RAP deterministic preflight checks | `src/adt/rap-preflight.ts`, `src/handlers/intent.ts` (`runRapPreflightValidation`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-preflight.test.ts` |
 | Add RAP behavior handler scaffolding logic | `src/adt/rap-handlers.ts`, `src/handlers/intent.ts` (`SAPWrite action=scaffold_rap_handlers`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-handlers.test.ts` |
@@ -222,10 +229,16 @@ tests/
 | Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
 | Add audit event type | `src/server/audit.ts` (typed `*Event` interface + `AuditEvent` union); emit via `logger.emitAudit({...})` from the call site (e.g. `confirmPreaudit` in `src/adt/devtools.ts`) |
+| Add/modify Dependabot config | `.github/dependabot.yml` (three ecosystems: npm + github-actions + docker; weekly Mondays 06:00 Europe/Berlin; grouping rules for dev-deps / @types / SAP SDK / MCP SDK / Biome; ignore rules for `@types/node` major and Docker `node` major — manually bumped on the LTS cadence) |
+| Add/modify npm audit / SAST / dep review CI gate | `.github/workflows/test.yml` (`Security audit (npm audit)` step, `--audit-level=high`); `.github/workflows/dependency-review.yml` (PR-time `actions/dependency-review-action@v4` with license allow/deny lists) |
+| Add/modify container scanning | `.github/workflows/docker.yml` (Trivy non-gating, `exit-code: 0`); `.github/workflows/release.yml` (Trivy gating, `exit-code: 1`); both upload SARIF to GitHub Security tab via `github/codeql-action/upload-sarif@v4` |
+| Pin a third-party GitHub Action | Replace `uses: <owner>/<action>@<tag>` with `uses: <owner>/<action>@<40-char-sha>  # <tag>` (trailing comment lets Dependabot bump SHA + tag together). GitHub-owned `actions/*` and `github/*` are tag-pinned by design — only third-party actions (currently `googleapis/release-please-action`, `docker/*`, `aquasecurity/trivy-action`) get SHA pinning. |
+| Update vulnerability reporting policy | `SECURITY.md` (Supported Versions, Reporting channels, Response SLAs, CVE handling, Out of Scope, Safe Harbor) |
 | Add CLI sub-command (`call`, `tools`, shortcuts) | `src/cli.ts` (Commander wiring), `src/cli-args.ts` (pure arg parsing helpers + tests in `tests/unit/cli/cli-args.test.ts`) — never duplicate Zod validation; `handleToolCall` does it |
-| Add SAP version-quirk workaround (NW 7.50 / S/4 gating) | Prefer body-marker self-gating (e.g. `"Logon Error Message"` in `src/adt/crud.ts` `lockObject` and `src/adt/devtools.ts` `rethrowOrLockHint`) when the marker is unique to the affected release. Always inline-comment WHY the heuristic self-scopes so future readers don't hunt for a `detectSystemCapabilities()` call. |
+| Add SAP version-quirk workaround (NW 7.50 / S/4 gating) | Prefer structured-exception detection (`extractExceptionType` in `src/adt/errors.ts`) when SAP emits an XML error body. Fall back to body-marker heuristics only when wrapped in a release-scoped guard — see `convertHtmlConflictToProperError` in `src/adt/crud.ts` for the canonical pattern (Layer 1 = structured exception type, Layer 2 = HTML body marker scoped to `cachedFeatures.abapRelease < 751`). Inline-comment WHY the heuristic self-scopes. The full ADR (ADR-0002) lives in [PR #199](https://github.com/marianfoo/arc-1/pull/199) and lands when that PR merges. |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
+| Modify OAuth DCR client store / signed-token format | `src/server/stateless-client-store.ts` (HMAC sign/verify, payload schema, TTL); `src/server/xsuaa.ts` (`createXsuaaOAuthProvider` wires `dcrTtlSeconds`); `src/server/http.ts` (passes `config.oauthDcrTtlSeconds`); `tests/unit/server/stateless-client-store.test.ts`. Bumping `KDF_LABEL` (`arc1-dcr/v1` → `v2`) is the in-code revocation knob; `cf bind-service` rotates the upstream secret. Emits audit events `oauth_client_registered` / `oauth_client_lookup_failed` / `oauth_redirect_uri_registered`. |
 | Modify scope enforcement | `src/authz/policy.ts` (`ACTION_POLICY`), `src/handlers/intent.ts` (runtime check), `src/server/server.ts` (tool listing filter) |
 | Modify OIDC token handling | `src/server/http.ts` (validateOidcToken, ~line 274) |
 | Add/modify auth scopes | `xs-security.json`, `src/server/xsuaa.ts`, `src/server/http.ts`, `src/handlers/intent.ts` |
@@ -298,7 +311,7 @@ HTTP Request (adt/http.ts)
   ├─ ETag / If-None-Match conditional GET for cached source reads
   ├─ CSRF token management (auto-fetch via HEAD, refresh on 403)
   ├─ Content negotiation fallback (one-retry on 406/415 with header mutation)
-  ├─ Cookie/session management
+  ├─ Cookie/session management (hot-reload from file on stale 401)
   ├─ Stateful sessions for lock→modify→unlock sequences
   │
   ▼
@@ -365,8 +378,10 @@ async getProgram(name: string, opts: SourceReadOptions = {}): Promise<SourceRead
 ```typescript
 case 'PROG':
   return textResult((await client.getProgram(name)).source);
-case 'STRU':
-  return textResult((await client.getStructure(name)).source);
+case 'TABL':
+  // Unified TABL: covers transparent tables AND DDIC structures.
+  // client.getTabl() tries /tables/ first, falls back to /structures/ on 404.
+  return textResult((await client.getTabl(name)).source);
 case 'DOMA': {
   const domain = await client.getDomain(name);
   return textResult(JSON.stringify(domain, null, 2));
@@ -493,14 +508,16 @@ Automated via [release-please](https://github.com/googleapis/release-please). No
 
 - **stdout is sacred**: All logging goes to stderr. stdout is exclusively for MCP JSON-RPC protocol messages. Any `console.log` breaks the protocol.
 - Never commit `.env`, `cookies.txt`, or `.arc1.json` (all in `.gitignore`)
-- **`mta.yaml` is gitignored** — it contains personal/environment-specific values (BTP destination names, safety config). Only modify it locally; never `git add mta.yaml` unless explicitly force-added (`git add -f mta.yaml`).
+- **`mta.yaml` is committed; `mta-overrides.mtaext` is gitignored** — The base `mta.yaml` is tracked and ships with placeholder destinations (`your-basic-destination` / `your-pp-destination`) plus safe defaults (writes off, free SQL off, `$TMP` only). Per-landscape values live in `mta-overrides.mtaext` (gitignored — copy from `mta-overrides.mtaext.example`) or any `mta-*.mtaext` file. Deploy with `cf deploy ... -e mta-overrides.mtaext` (or `npm run btp:build-deploy-ext`). The `mta-overrides.mtaext.example` template is tracked so deployers always have a reference.
 - Sensitive fields (password, token, cookie) are redacted in logs
 - CSRF tokens are auto-managed by `src/adt/http.ts` (fetch via HEAD, refresh on 403)
 - **Safety config is the server ceiling** — per-user scopes (JWT) can only restrict further, never expand beyond server config
-- **Per-user auth never inherits shared credentials.** `buildAdtConfig(config, btpProxy?, bearerTokenProvider?, { perUser: true })` strips `username`/`password`/`cookies`. Any new Layer B field must respect this flag. Never add auth fields directly to `createPerUserClient`'s `adtConfig` without going through `buildAdtConfig`.
+- **Per-user auth never inherits shared credentials.** `buildAdtConfig(config, btpProxy?, bearerTokenProvider?, { perUser: true })` strips `username`/`password`/`cookies`/`cookieFile`/`cookieString`. Any new Layer B field must respect this flag. Never add auth fields directly to `createPerUserClient`'s `adtConfig` without going through `buildAdtConfig`.
+- **Cookie auth hot-reload.** When `SAP_COOKIE_FILE` is set, expired cookies do not require a restart. On persistent 401 the HTTP client clears stale cookies (`cookiesCleared` flag in `src/adt/http.ts`) and re-reads the file lazily on the next request. Startup auth-preflight is non-blocking in cookie-auth mode (downgrades 401 to `inconclusive`) so deployments don't deadlock when cookies are about to be re-extracted out-of-band. `SAP_COOKIE_STRING` cannot hot-reload (logged warning).
 - **All ADT endpoints have safety guards** — every `http.get/post/put/delete` call is preceded by `checkOperation()`. No unguarded HTTP calls.
 - **Error types matter**: `AdtApiError` (SAP HTTP error), `AdtSafetyError` (blocked by config), `AdtNetworkError` (connectivity). `intent.ts` formats these with LLM-friendly hints.
 - **Stateful sessions**: Lock→modify→unlock sequences must use `http.withStatefulSession()` to share cookies/CSRF tokens across requests
+- **Tool schema three-file sync.** Every tool property must exist in all three files: `tools.ts` (JSON Schema for LLMs), `schemas.ts` (Zod validation), `intent.ts` (handler logic). A property that exists in handler+Zod but is missing from `tools.ts` is invisible to LLMs — they cannot discover or use it. When adding a new property, update all three files. Batch object schemas (e.g., `batch_create` items) are defined separately from the top-level schema — check both.
 
 ## History
 

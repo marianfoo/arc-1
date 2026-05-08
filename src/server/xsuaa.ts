@@ -15,9 +15,10 @@
  *    - Offline validation with automatic JWKS caching
  *    - checkLocalScope() for scope enforcement
  *
- * 2. In-memory client store for dynamic registration:
+ * 2. Stateless DCR client store (StatelessDcrClientStore):
  *    - MCP clients (Claude Desktop, Cursor) register dynamically via RFC 7591
- *    - Registrations are lost on restart — clients re-register on reconnect
+ *    - client_ids are HMAC-signed by the XSUAA clientsecret, so they
+ *      survive restarts / pushes / cell moves without any backing store
  *    - XSUAA clientId is pre-registered as the default client
  *
  * 3. Chained token verifier:
@@ -25,7 +26,6 @@
  *    - All three auth modes coexist on the same /mcp endpoint
  */
 
-import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/providers/proxyProvider.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
@@ -34,6 +34,7 @@ import { XsuaaService } from '@sap/xssec';
 import { expandScopes } from '../authz/policy.js';
 import { API_KEY_PROFILES } from './config.js';
 import { logger } from './logger.js';
+import { StatelessDcrClientStore } from './stateless-client-store.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -54,189 +55,6 @@ export interface XsuaaCredentials {
   xsappname: string;
   uaadomain: string;
   verificationkey?: string;
-}
-
-// ─── In-Memory Client Store ──────────────────────────────────────────
-
-/**
- * Canonicalize a redirect URI for semantic comparison.
- *
- * Compares scheme + host + port + decoded path + sorted decoded query.
- * Fragments are dropped (servers never see them). Returns undefined if
- * the URI doesn't parse.
- */
-function normalizeRedirectUri(uri: string): string | undefined {
-  try {
-    const url = new URL(uri);
-    const pathname = decodeURIComponent(url.pathname);
-    const entries = [...url.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b));
-    const query = entries.map(([k, v]) => `${k}=${v}`).join('&');
-    return `${url.protocol}//${url.host}${pathname}${query ? `?${query}` : ''}`;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * In-memory store for OAuth client registrations.
- *
- * MCP clients dynamically register via RFC 7591. The XSUAA service binding
- * clientId is pre-registered as the default client so that clients can
- * use it directly without registration.
- */
-export class InMemoryClientStore implements OAuthRegisteredClientsStore {
-  private clients = new Map<string, OAuthClientInformationFull>();
-
-  constructor(xsuaaClientId: string, xsuaaClientSecret: string) {
-    // Pre-register the XSUAA client so MCP clients that use it directly work.
-    // The redirect_uris MUST include all URIs that MCP clients will use,
-    // because the MCP SDK validates redirect_uri against this list BEFORE
-    // calling our authorize override. These must also be registered in xs-security.json.
-    this.clients.set(xsuaaClientId, {
-      client_id: xsuaaClientId,
-      client_secret: xsuaaClientSecret,
-      redirect_uris: [
-        'http://localhost:6274/oauth/callback', // MCP Inspector
-        'http://localhost:3000/oauth/callback', // Local dev servers
-        'https://claude.ai/api/mcp/auth_callback', // Claude Desktop
-        'cursor://anysphere.cursor-retrieval/oauth/callback', // Cursor
-        'vscode://vscode.microsoft-authentication/callback', // VS Code
-      ],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'client_secret_post',
-      client_name: 'ARC-1 XSUAA Default Client',
-    });
-  }
-
-  /**
-   * Dynamically add a redirect URI to a client's allow list.
-   *
-   * The MCP SDK validates redirect_uri with byte-exact matching for
-   * non-loopback HTTPS URIs, but two classes of clients need relaxation:
-   *
-   * 1. Pre-registered XSUAA client: XSUAA itself is the authoritative
-   *    redirect-URI validator (via xs-security.json wildcard patterns),
-   *    so any URI is accepted here and forwarded.
-   *
-   * 2. DCR clients (arc1-*): only accept URIs that are semantically
-   *    equivalent to one the client registered. This handles clients that
-   *    use different percent-encoding at /register vs /authorize — notably
-   *    BAS/Cline via Theia's OAuth proxy, which registers `/callback?x=1`
-   *    but requests with `/callback%3Fx=1`. Security: hostname, port, and
-   *    decoded path/query must all match a previously-registered URI.
-   */
-  ensureRedirectUri(clientId: string, uri: string): void {
-    const client = this.clients.get(clientId);
-    if (!client) return;
-    if (client.redirect_uris.includes(uri)) return;
-
-    if (!client.client_id.startsWith('arc1-')) {
-      client.redirect_uris.push(uri);
-      logger.debug('Dynamic redirect_uri registered for XSUAA client', { clientId, uri });
-      return;
-    }
-
-    const normalizedRequested = normalizeRedirectUri(uri);
-    if (!normalizedRequested) return;
-    const match = client.redirect_uris.find((reg) => normalizeRedirectUri(reg) === normalizedRequested);
-    if (match) {
-      client.redirect_uris.push(uri);
-      logger.debug('OAuth redirect_uri loose-match: registered encoding variant', {
-        clientId,
-        registered: match,
-        requested: uri,
-      });
-    }
-  }
-
-  async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    const client = this.clients.get(clientId);
-    // Lazy TTL eviction: expire dynamically registered clients after 24 hours
-    if (client?.client_id_issued_at) {
-      const ageSeconds = Math.floor(Date.now() / 1000) - client.client_id_issued_at;
-      if (ageSeconds > 86400 && client.client_id.startsWith('arc1-')) {
-        this.clients.delete(clientId);
-        logger.debug('OAuth client expired (24h TTL)', { clientId });
-        return undefined;
-      }
-    }
-    logger.debug('OAuth client lookup', {
-      clientId,
-      found: !!client,
-      clientName: client?.client_name,
-      registeredClients: [...this.clients.keys()],
-    });
-    return client;
-  }
-
-  async registerClient(
-    client: Omit<OAuthClientInformationFull, 'client_id' | 'client_id_issued_at'>,
-  ): Promise<OAuthClientInformationFull> {
-    // Registration cap: prevent memory exhaustion from unbounded DCR
-    const dynamicClients = [...this.clients.keys()].filter((k) => k.startsWith('arc1-'));
-    if (dynamicClients.length >= 100) {
-      throw new Error('Client registration limit reached (100). Restart the server to clear expired registrations.');
-    }
-
-    // Validate redirect URIs against allowlist policy
-    if (client.redirect_uris) {
-      for (const uri of client.redirect_uris) {
-        this.validateRedirectUri(uri);
-      }
-    }
-
-    const clientId = `arc1-${crypto.randomUUID().slice(0, 8)}`;
-    const clientSecret = crypto.randomUUID();
-
-    const fullClient: OAuthClientInformationFull = {
-      ...client,
-      client_id: clientId,
-      client_secret: clientSecret,
-      client_id_issued_at: Math.floor(Date.now() / 1000),
-    };
-    this.clients.set(clientId, fullClient);
-    logger.debug('OAuth client registered', { clientId, clientName: client.client_name });
-    return fullClient;
-  }
-
-  /**
-   * Validate a redirect URI against allowed scheme/host policy.
-   * Allowed: https://* , http://localhost or 127.0.0.1 or [::1], custom MCP client schemes.
-   * Rejected: javascript:, data:, file:, ftp:, and any http:// to non-loopback hosts.
-   */
-  private validateRedirectUri(uri: string): void {
-    const ALLOWED_CUSTOM_SCHEMES = ['claude:', 'cursor:', 'vscode:', 'vscode-insiders:'];
-    const BLOCKED_SCHEMES = ['javascript:', 'data:', 'file:', 'ftp:'];
-
-    for (const scheme of BLOCKED_SCHEMES) {
-      if (uri.toLowerCase().startsWith(scheme)) {
-        throw new Error(
-          `Redirect URI rejected: '${scheme}' scheme is not allowed. Use https:// or a registered custom scheme.`,
-        );
-      }
-    }
-
-    // Allow known custom MCP client schemes
-    for (const scheme of ALLOWED_CUSTOM_SCHEMES) {
-      if (uri.toLowerCase().startsWith(scheme)) return;
-    }
-
-    try {
-      const parsed = new URL(uri);
-      if (parsed.protocol === 'https:') return;
-      if (parsed.protocol === 'http:') {
-        const host = parsed.hostname.toLowerCase();
-        if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1') return;
-        throw new Error(`Redirect URI rejected: http:// is only allowed for localhost/127.0.0.1. Got: '${uri}'`);
-      }
-      // Unknown protocol — allow if it looks like a custom scheme (no dots in protocol)
-      return;
-    } catch (err) {
-      if (err instanceof Error && err.message.startsWith('Redirect URI rejected')) throw err;
-      // URL parsing failed — likely a custom scheme; allow it
-    }
-  }
 }
 
 // ─── XSUAA Token Verifier ────────────────────────────────────────────
@@ -416,12 +234,12 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
   private xsuaaTokenUrl: string;
   private xsuaaAuthUrl: string;
   private xsuaaXsappname: string;
-  private _localClientStore: InMemoryClientStore;
+  private _localClientStore: StatelessDcrClientStore;
 
   constructor(
     credentials: XsuaaCredentials,
     verifier: (token: string) => Promise<AuthInfo>,
-    localClientStore: InMemoryClientStore,
+    localClientStore: StatelessDcrClientStore,
   ) {
     const authUrl = `${credentials.url}/oauth/authorize`;
     const tokenUrl = `${credentials.url}/oauth/token`;
@@ -631,19 +449,36 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
   };
 }
 
+export interface CreateXsuaaOAuthProviderOptions {
+  /** Lifetime of issued DCR client_ids in seconds. Falls back to the store's
+   *  built-in default (30 days) when omitted. */
+  dcrTtlSeconds?: number;
+}
+
 export function createXsuaaOAuthProvider(
   credentials: XsuaaCredentials,
   appUrl: string,
-): { provider: ProxyOAuthServerProvider; clientStore: InMemoryClientStore } {
-  const clientStore = new InMemoryClientStore(credentials.clientid, credentials.clientsecret);
+  options: CreateXsuaaOAuthProviderOptions = {},
+): { provider: ProxyOAuthServerProvider; clientStore: StatelessDcrClientStore } {
+  // The XSUAA `clientsecret` doubles as the DCR signing secret. It's
+  // stable across the lifetime of the service binding (only `cf bind-service`
+  // rotates it) and is already a closely-guarded shared secret — exactly
+  // the trust boundary we want for "this server can mint client_ids".
+  const clientStore = new StatelessDcrClientStore(
+    credentials.clientid,
+    credentials.clientsecret,
+    credentials.clientsecret,
+    { ttlSeconds: options.dcrTtlSeconds },
+  );
   const verifier = createXsuaaTokenVerifier(credentials);
 
   const provider = new XsuaaProxyOAuthProvider(credentials, verifier, clientStore);
 
-  logger.info('XSUAA OAuth provider created', {
+  logger.info('XSUAA OAuth provider created (stateless DCR)', {
     xsappname: credentials.xsappname,
     authorizationUrl: `${credentials.url}/oauth/authorize`,
     appUrl,
+    dcrTtlSeconds: options.dcrTtlSeconds,
   });
 
   return { provider, clientStore };

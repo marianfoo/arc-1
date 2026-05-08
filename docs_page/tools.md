@@ -16,7 +16,7 @@ Read any SAP ABAP object.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `type` | string | Yes | Object type (see below; includes `AUTH`, `FTG2`, `ENHO`, `VERSIONS`, `VERSION_SOURCE` on on-prem systems) |
+| `type` | string | Yes | Object type (see below; includes `AUTH`, `FEATURE_TOGGLE`, `ENHO`, `VERSIONS`, `VERSION_SOURCE` on on-prem systems) |
 | `name` | string | No | Object name (e.g., `ZTEST_PROGRAM`, `ZCL_ORDER`, `MARA`) |
 | `format` | string | No | Output format: `"text"` (default) or `"structured"` (CLAS only, see below) |
 | `include` | string | No | For CLAS: `main`, `testclasses`, `definitions`, `implementations`, `macros`. For DDLS: `elements` (extract CDS view elements). |
@@ -27,7 +27,7 @@ Read any SAP ABAP object.
 | `maxRows` | number | No | For TABLE_CONTENTS: max rows (default 100) |
 | `sqlFilter` | string | No | For TABLE_CONTENTS: condition expression only (no `WHERE`, no `SELECT`), e.g. `MANDT = '100'` |
 | `objectType` | string | No | For API_STATE: SAP object type (CLAS, INTF, PROG, FUGR, etc.) — auto-detected from name if omitted |
-| `version` | string | No | Source version: `active` (default), `inactive`, or `auto`. Applies to source-bearing types (PROG, CLAS, INTF, FUNC, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, FUGR, SRVB, SKTD, TABL, VIEW, STRU). See [Active vs Inactive Source](#active-vs-inactive-source) below. |
+| `version` | string | No | Source version: `active` (default), `inactive`, or `auto`. Applies to source-bearing types (PROG, CLAS, INTF, FUNC, INCL, DDLS, DCLS, DDLX, BDEF, SRVD, FUGR, SRVB, SKTD, TABL, VIEW). See [Active vs Inactive Source](#active-vs-inactive-source) below. |
 | `force_refresh` | boolean | No | For source reads: bypass the cached source AND the inactive-list cache before reading. Use when you know the object changed outside ARC-1 in a way conditional GET can't catch. |
 
 **Supported types:**
@@ -46,13 +46,12 @@ Read any SAP ABAP object.
 | `BDEF` | Behavior definition |
 | `SRVD` | Service definition |
 | `SRVB` | Service binding (structured JSON: OData version, binding type, publish status) |
-| `TABL` | Table definition (structure) |
+| `TABL` | DDIC TABL — covers both transparent tables (T000-style) and DDIC structures (BAPIRET2-style). Returns CDS-like source. ARC-1 auto-resolves the URL: tries `/sap/bc/adt/ddic/tables/{name}` first, falls back to `/sap/bc/adt/ddic/structures/{name}` on 404. There is no separate `STRU` type — `TABL` is the canonical short type for both, mirroring TADIR `R3TR TABL` and abapGit conventions. |
 | `VIEW` | DDIC view |
-| `STRU` | Structure definition (DDIC structure source) |
 | `DOMA` | Domain metadata (structured JSON: data type, length, fixed values, value table) |
 | `DTEL` | Data element metadata (structured JSON: type, labels, search help) |
 | `AUTH` | Authorization field metadata (structured JSON: role name, check table, domain, conversion exit, org-level info) |
-| `FTG2` | Feature toggle states (structured JSON: toggle state per system from SAP switch framework) |
+| `FEATURE_TOGGLE` | Feature toggle states (structured JSON: toggle state per system from SAP switch framework). Renamed from `FTG2` in audit Plan B (research/abap-types/types/ftg2.md) — `FTG2` still accepted as deprecated alias for one minor release with stderr warning. |
 | `ENHO` | Enhancement implementation metadata (structured JSON: BAdI technology, referenced object, implementation classes) |
 | `VERSIONS` | Revision history for an ABAP object. Returns JSON: `{ object: { name, type }, revisions: [{ id, author, timestamp, transport?, uri }] }`. Optional `include` for CLAS and `group` for FUNC. On-prem only. |
 | `VERSION_SOURCE` | Source code at a specific revision. Pass `versionUri` from a VERSIONS response. Returns raw source text. On-prem only. |
@@ -64,7 +63,8 @@ Read any SAP ABAP object.
 | `DEVC` | Package contents |
 | `SYSTEM` | System info (SID, release, kernel) |
 | `COMPONENTS` | Installed software components |
-| `MESSAGES` | Message class texts (structured JSON with `number`, `shortText`, `longText` per message) |
+| `MSAG` | Message class metadata (structured JSON with `number`, `shortText`, `longText` per message). `MSAG` is the canonical TADIR R3TR short type (added in audit Plan B — research/abap-types/types/msag.md). |
+| `MESSAGES` | Deprecated alias for `MSAG`. Still accepted for one minor release with stderr warning; use `MSAG` going forward. |
 | `TEXT_ELEMENTS` | Program text elements |
 | `VARIANTS` | Program variants |
 | `INACTIVE_OBJECTS` | List all objects pending activation for the calling user (no `name` needed). Returns rich metadata: `name`, `type`, `uri`, `description?`, `user`, `deleted`, `transport`, `parentTransport`. |
@@ -93,11 +93,13 @@ SAPRead(type="DCLS", name="ZI_TRAVEL_DCL")       — CDS access control source
 SAPRead(type="DDLX", name="ZC_TRAVEL")          — metadata extension with UI annotations
 SAPRead(type="SRVB", name="ZUI_TRAVEL_O4")       — service binding metadata as JSON
 SAPRead(type="FUGR", name="ZUTILS", expand_includes=true)    — function group with all includes expanded
-SAPRead(type="STRU", name="BAPIRET2")            — structure definition
+SAPRead(type="TABL", name="BAPIRET2")            — DDIC structure (auto-resolved to /structures/)
+SAPRead(type="TABL", name="T000")                — transparent table (auto-resolved to /tables/)
 SAPRead(type="DOMA", name="BUKRS")               — domain metadata with fixed values
 SAPRead(type="DTEL", name="MANDT")               — data element metadata with labels
 SAPRead(type="AUTH", name="BUKRS")               — authorization field metadata
-SAPRead(type="FTG2", name="ABC_TOGGLE")          — feature toggle states
+SAPRead(type="FEATURE_TOGGLE", name="ABC_TOGGLE")  — feature toggle states (FTG2 still works as deprecated alias)
+SAPRead(type="MSAG", name="SY")                    — message class (MESSAGES still works as deprecated alias)
 SAPRead(type="ENHO", name="ZMY_BADI_IMPL")       — enhancement implementation metadata
 SAPRead(type="VERSIONS", name="ZARC1_TEST_REPORT") — list object revisions with revision URIs
 SAPRead(type="VERSIONS", name="ZCL_X", include="definitions") — list revisions for CLAS definitions include
@@ -231,7 +233,9 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 **DDIC metadata writes:** `DOMA`, `DTEL`, `MSAG`, and `SRVB` use structured XML payloads and do **not** use `/source/main`. `MSAG` writes use the `/sap/bc/adt/messageclass/` endpoint and accept a `messages` array of `{number, shortText, longText?}` entries. `SRVB` create uses wildcard content type (`application/*`) and SRVB update uses vendor type (`application/vnd.sap.adt.businessservices.servicebinding.v2+xml`).
 
-**Source-based DDIC writes:** `TABL`, `DDLS`, `DCLS`, `BDEF`, and `SRVD` are source-based and write source via `/source/main`.
+**Source-based DDIC writes:** `TABL`, `DDLS`, `DCLS`, `BDEF`, and `SRVD` are source-based and write source via `/source/main`. `TABL` covers both transparent tables (`TABL/DT`) and DDIC structures (`TABL/DS`); ARC-1 auto-resolves between `/ddic/tables/` and `/ddic/structures/` for read/update.
+
+**Mixed-case object names rejected on create.** SAP TADIR is uppercase on every release; mixed-case names cause silent corruption (e.g., a DDLS named `Zc_MyView` registers as `ZC_MYVIEW` in TADIR but the source body keeps mixed case, confusing every downstream tool). `SAPWrite(action="create"\|"batch_create")` rejects mixed-case names pre-flight with an actionable error. The source code *inside* the object can still use mixed case (e.g., `define view entity Zc_MyView`); only the TADIR object name needs to be uppercase.
 
 **BDEF creation:** Uses SAP's `blue:blueSource` XML format with content-type `application/vnd.sap.adt.blues.v1+xml`. BDEF objects are created with `type="BDEF"` and require a `source` parameter containing the behavior definition.
 
@@ -361,7 +365,7 @@ Navigate code: find definitions, references (where-used), code completion, and c
 | `uri` | string | No | Source URI of the object. Optional for `references` if `type`+`name` are provided. |
 | `type` | string | No | Object type (PROG, CLAS, INTF, FUNC, etc.) — alternative to `uri` for `references`. |
 | `name` | string | No | Object name — alternative to `uri` for `references`. |
-| `objectType` | string | No | For `references`: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note. |
+| `objectType` | string | No | For `references`: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUGR/FF, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note. |
 | `line` | number | No | Line number (1-based) |
 | `column` | number | No | Column number (1-based) |
 | `source` | string | No | Current source code |
@@ -415,7 +419,7 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, check transport requirements, and object transport history (reverse lookup).
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create, release, delete, reassign owner, recursive release, check transport requirements, and object transport history (reverse lookup). `create` uses the ADT `CreateCorrectionRequest` endpoint, which works on both NetWeaver 7.50+ and S/4HANA.
 
 **Parameters:**
 
@@ -425,10 +429,10 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 | `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Transport description text (required for create) |
 | `name` | string | No | Object name (for check/history actions, e.g. `ZCL_ORDER`) |
-| `package` | string | No | Package name (for check action, e.g. `ZDEV`) |
+| `package` | string | No | Package name. For `create`: optional — defaults to `$TMP`, pass an explicit package to influence the transport route. For `check`: required. |
 | `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
 | `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
-| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check/history: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
+| `type` | string | No | Object type for `check`/`history` actions (`PROG`, `CLAS`, `DDLS`, etc.). Not used by `create` — the SAP backend infers transport type (K/W/T) from the package's TADIR route on the `CreateCorrectionRequest` endpoint. |
 | `owner` | string | No | New owner SAP username (required for reassign) |
 | `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
 
@@ -436,7 +440,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 - **`list`** — List transport requests. Defaults to current user, modifiable (status D), all types (Workbench, Customizing, Transport of Copies).
 - **`get`** — Get transport details including tasks and objects.
-- **`create`** — Create a new transport request. Requires `description`. Optional `type` (K/W/T).
+- **`create`** — Create a new transport request. Requires `description`. Optional `package` (defaults to `$TMP` — pass an explicit package to influence the transport route, which determines K/W/T type). Uses the ADT `CreateCorrectionRequest` endpoint (`POST /sap/bc/adt/cts/transports`); legacy NW 7.50 systems are supported.
 - **`release`** — Release a single transport or task.
 - **`delete`** — Delete a transport. Use `recursive=true` to delete tasks first.
 - **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.
