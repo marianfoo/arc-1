@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.9.0](https://github.com/marianfoo/arc-1/compare/v0.8.0...v0.9.0) (2026-05-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* MSAG read enum + FTG2→FEATURE_TOGGLE rename (audit Plan B) ([#224](https://github.com/marianfoo/arc-1/issues/224))
+* callers that passed type='FUNC/FM', 'CLAS/LI', 'VIEW/V', or 'TRAN/O' will now fail Zod schema validation. Migrate to FUGR/FF, CLAS/I (if needed — currently absent), VIEW/DV, TRAN/T respectively, or use the canonical short forms FUNC/CLAS/VIEW/TRAN.
+* SAPRead/SAPWrite/SAPActivate no longer accept type='STRU'. Callers must use type='TABL' for both transparent tables and DDIC structures. ARC-1 ships pre-1.0; the slash form 'STRU/DS' is preserved as a back-compat alias inside SLASH_TYPE_MAP only.
+
+### Features
+
+* cookie hot-reload on stale 401 ([#200](https://github.com/marianfoo/arc-1/issues/200)) ([23d4bfe](https://github.com/marianfoo/arc-1/commit/23d4bfe180d1e012926c86f5e547389420ba1139))
+* layered lock-conflict detection + MSAG transport guard ([#202](https://github.com/marianfoo/arc-1/issues/202)) ([cf0a126](https://github.com/marianfoo/arc-1/commit/cf0a12605b584be527ee71f17dfd6b8775ff3db8))
+* MSAG read enum + FTG2→FEATURE_TOGGLE rename (audit Plan B) ([#224](https://github.com/marianfoo/arc-1/issues/224)) ([d4c0fd3](https://github.com/marianfoo/arc-1/commit/d4c0fd3416944f193b8ed3dad8b578d576954840))
+* purge invented ADT slash aliases (issue [#218](https://github.com/marianfoo/arc-1/issues/218) audit, Plan A) ([#223](https://github.com/marianfoo/arc-1/issues/223)) ([e130b87](https://github.com/marianfoo/arc-1/commit/e130b8789408ab8883669d015a8ba8868190d3a2))
+* three-file sync (messages + STRU) + universal write guards ([#201](https://github.com/marianfoo/arc-1/issues/201)) ([2afedf1](https://github.com/marianfoo/arc-1/commit/2afedf17534a7e00c31d850310d485339cdd6064))
+
+
+### Bug Fixes
+
+* **adt:** tighten HTML entity decoder + tag stripper (CodeQL alerts 6, 7, 8) ([#238](https://github.com/marianfoo/arc-1/issues/238)) ([3bd7dac](https://github.com/marianfoo/arc-1/commit/3bd7dac8468dd4653b297b395a1e14a8c9398678))
+* collapse STRU type into TABL ([#219](https://github.com/marianfoo/arc-1/issues/219)) ([1a310e9](https://github.com/marianfoo/arc-1/commit/1a310e91e93ddaf30d8acfd297cff2f8f121f679))
+* SAPTransport.create works on NW 7.50 (non-breaking, defaults DEVCLASS=$TMP) ([#228](https://github.com/marianfoo/arc-1/issues/228)) ([fc29c41](https://github.com/marianfoo/arc-1/commit/fc29c415bc3cd86a2f2783bdabd7df171972d6d7))
+
+
+### Tests
+
+* add SAPLint PrettyPrint and revision eval scenarios ([#151](https://github.com/marianfoo/arc-1/issues/151)) ([283b744](https://github.com/marianfoo/arc-1/commit/283b74482ed14461d918d4d660e81eec597667f9))
+
 ## [0.8.0](https://github.com/marianfoo/arc-1/compare/v0.7.2...v0.8.0) (2026-05-06)
 
 
