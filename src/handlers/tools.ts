@@ -496,6 +496,11 @@ export function getToolDefinitions(
               'For source reads: bypass cached source and inactive-list state before reading. Use when you know the object changed outside ARC-1.',
           },
           maxRows: { type: 'number', description: 'For TABLE_CONTENTS: max rows to return (default 100)' },
+          maxResults: {
+            type: 'number',
+            description:
+              'For DEVC: max number of objects to list (default 200, clamped to [1, 1000]). Larger packages may be silently truncated by SAP at this limit; raise it if needed.',
+          },
           sqlFilter: {
             type: 'string',
             description:

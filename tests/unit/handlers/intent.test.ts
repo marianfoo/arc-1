@@ -359,6 +359,47 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('reads package contents (DEVC) via the search endpoint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zhello" adtcore:type="PROG/P" adtcore:name="ZHELLO" adtcore:packageName="ZPKG" adtcore:description="Hello"/>
+</adtcore:objectReferences>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DEVC',
+        name: 'ZPKG',
+      });
+      expect(result.isError).toBeUndefined();
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('/sap/bc/adt/repository/informationsystem/search');
+      expect(url).toContain('packageName=ZPKG');
+      expect(url).not.toContain('/nodestructure');
+    });
+
+    it('forwards maxResults from SAPRead args to getPackageContents URL', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"/>`,
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+        type: 'DEVC',
+        name: 'ZPKG',
+        maxResults: 750,
+      });
+      expect(result.isError).toBeUndefined();
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('maxResults=750');
+    });
+
     it('reads installed components (COMPONENTS)', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
         type: 'COMPONENTS',

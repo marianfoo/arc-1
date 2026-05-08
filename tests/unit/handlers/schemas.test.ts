@@ -67,6 +67,37 @@ describe('SAPReadSchema', () => {
     }
   });
 
+  it('accepts optional DEVC maxResults within [1, 1000]', () => {
+    const ok = SAPReadSchema.safeParse({ type: 'DEVC', name: 'ZPKG', maxResults: 500 });
+    expect(ok.success).toBe(true);
+    if (ok.success) {
+      expect(ok.data.maxResults).toBe(500);
+    }
+  });
+
+  it('coerces numeric maxResults from string for DEVC', () => {
+    const result = SAPReadSchema.safeParse({ type: 'DEVC', name: 'ZPKG', maxResults: '300' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.maxResults).toBe(300);
+    }
+  });
+
+  it('rejects DEVC maxResults out of range (0, 1001, negative)', () => {
+    expect(SAPReadSchema.safeParse({ type: 'DEVC', name: 'ZPKG', maxResults: 0 }).success).toBe(false);
+    expect(SAPReadSchema.safeParse({ type: 'DEVC', name: 'ZPKG', maxResults: 1001 }).success).toBe(false);
+    expect(SAPReadSchema.safeParse({ type: 'DEVC', name: 'ZPKG', maxResults: -1 }).success).toBe(false);
+  });
+
+  it('accepts SAPRead without maxResults (it is optional)', () => {
+    // Sanity: maxResults is optional even on DEVC; client uses default 200.
+    const result = SAPReadSchema.safeParse({ type: 'DEVC', name: 'ZPKG' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.maxResults).toBeUndefined();
+    }
+  });
+
   it('accepts TABLE_CONTENTS sqlFilter as condition expression', () => {
     const result = SAPReadSchema.safeParse({
       type: 'TABLE_CONTENTS',

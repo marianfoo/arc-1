@@ -1737,7 +1737,8 @@ async function handleSAPRead(
       return textResult(JSON.stringify(methods, null, 2));
     }
     case 'DEVC': {
-      const contents = await client.getPackageContents(name);
+      const maxResults = args.maxResults != null ? Number(args.maxResults) : undefined;
+      const contents = await client.getPackageContents(name, maxResults);
       return textResult(JSON.stringify(contents, null, 2));
     }
     case 'SYSTEM':

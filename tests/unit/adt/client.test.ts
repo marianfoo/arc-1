@@ -673,6 +673,121 @@ describe('AdtClient', () => {
     });
   });
 
+  describe('getPackageContents (search-endpoint based)', () => {
+    /**
+     * Hand-crafted minimal `adtcore:objectReferences` XML covering the case
+     * the legacy `nodestructure` endpoint got wrong: a sub-package whose own
+     * description was attributed to a contained class. Each reference here
+     * has its description correctly attached to its own name.
+     */
+    const SEARCH_RESPONSE = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/packages/zsubpkg" adtcore:type="DEVC/K" adtcore:name="ZSUBPKG" adtcore:packageName="ZSUBPKG" adtcore:description="Sub-package own description"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_one" adtcore:type="CLAS/OC" adtcore:name="ZCL_ONE" adtcore:packageName="ZPARENT" adtcore:description="First class"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zreport" adtcore:type="PROG/P" adtcore:name="ZREPORT" adtcore:packageName="ZPARENT" adtcore:description="A report"/>
+</adtcore:objectReferences>`;
+
+    it('hits the search endpoint, NOT nodestructure', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      await client.getPackageContents('ZPARENT');
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('/sap/bc/adt/repository/informationsystem/search');
+      expect(url).toContain('packageName=ZPARENT');
+      expect(url).toContain('operation=quickSearch');
+      expect(url).toContain('query=*');
+      expect(url).not.toContain('/nodestructure');
+      // GET, not POST — no CSRF round-trip needed
+      const method = (mockFetch.mock.calls[0]?.[1] as RequestInit)?.method ?? 'GET';
+      expect(method).toBe('GET');
+    });
+
+    it('returns objects with descriptions correctly aligned to names', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      const contents = await client.getPackageContents('ZPARENT');
+      expect(contents).toHaveLength(3);
+      const sub = contents.find((c) => c.name === 'ZSUBPKG');
+      const clas = contents.find((c) => c.name === 'ZCL_ONE');
+      const prog = contents.find((c) => c.name === 'ZREPORT');
+      // The bug we are fixing: each row's description must be its OWN, not a sibling's.
+      expect(sub?.description).toBe('Sub-package own description');
+      expect(clas?.description).toBe('First class');
+      expect(prog?.description).toBe('A report');
+    });
+
+    it('maps search field names to DEVC contract (objectType→type, objectName→name)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      const contents = await client.getPackageContents('ZPARENT');
+      // Public contract is { type, name, description, uri } — verify the rename happened
+      // and that no `objectType`/`objectName`/`packageName` leak through.
+      for (const c of contents) {
+        expect(c).toHaveProperty('type');
+        expect(c).toHaveProperty('name');
+        expect(c).toHaveProperty('description');
+        expect(c).toHaveProperty('uri');
+        expect(c).not.toHaveProperty('objectType');
+        expect(c).not.toHaveProperty('objectName');
+        expect(c).not.toHaveProperty('packageName');
+      }
+      const clas = contents.find((c) => c.name === 'ZCL_ONE');
+      expect(clas?.type).toBe('CLAS/OC');
+      expect(clas?.uri).toBe('/sap/bc/adt/oo/classes/zcl_one');
+    });
+
+    it('honors maxResults parameter (passed through to query string)', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      await client.getPackageContents('ZPARENT', 50);
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('maxResults=50');
+    });
+
+    it('clamps maxResults to [1, 1000]', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      await client.getPackageContents('ZPARENT', 5000);
+      let url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('maxResults=1000');
+
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      await client.getPackageContents('ZPARENT', 0);
+      url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('maxResults=1');
+
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      await client.getPackageContents('ZPARENT', -1);
+      url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('maxResults=1');
+    });
+
+    it('uses default maxResults=200 when not specified', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      await client.getPackageContents('ZPARENT');
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('maxResults=200');
+    });
+
+    it('encodes special characters in package names', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SEARCH_RESPONSE));
+      const client = createClient();
+      await client.getPackageContents('/NAMESPACE/PKG');
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('packageName=%2FNAMESPACE%2FPKG');
+    });
+  });
+
   describe('withSafety', () => {
     it('returns a new client with the given safety config', () => {
       const client = createClient();

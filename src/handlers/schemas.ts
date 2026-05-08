@@ -177,6 +177,8 @@ export const SAPReadSchema = z
     version: z.enum(['active', 'inactive', 'auto']).optional().default('active'),
     force_refresh: z.coerce.boolean().optional(),
     maxRows: z.coerce.number().optional(),
+    /** For type=DEVC: max number of objects to list. Default 200, clamped to [1, 1000]. */
+    maxResults: z.coerce.number().int().min(1).max(1000).optional(),
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
     versionUri: z.string().optional(),
@@ -194,6 +196,8 @@ export const SAPReadSchemaBtp = z
     version: z.enum(['active', 'inactive', 'auto']).optional().default('active'),
     force_refresh: z.coerce.boolean().optional(),
     maxRows: z.coerce.number().optional(),
+    /** For type=DEVC: max number of objects to list. Default 200, clamped to [1, 1000]. */
+    maxResults: z.coerce.number().int().min(1).max(1000).optional(),
     sqlFilter: z.string().optional(),
     objectType: z.string().optional(),
     versionUri: z.string().optional(),

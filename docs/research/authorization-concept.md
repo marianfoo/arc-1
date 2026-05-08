@@ -127,7 +127,7 @@ Every HTTP call ARC-1 makes to SAP, with the exact SAP authorization objects che
 |----------------|-------------|-------------|------------------|-------|
 | `searchObject()` | `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query={q}` | GET | S_ADT_RES (ACTVT=01) | Quick search |
 | `searchSource()` | `/sap/bc/adt/repository/informationsystem/textSearch?searchString={q}` | GET | S_ADT_RES (ACTVT=01) | Source code search |
-| `getPackageContents()` | `/sap/bc/adt/repository/nodestructure` | **POST** | S_ADT_RES (ACTVT=01,02) | **POST needed for read!** |
+| `getPackageContents()` | `/sap/bc/adt/repository/informationsystem/search?packageName={pkg}` | GET | S_ADT_RES (ACTVT=01) | Switched from `nodestructure` POST in 2026-05 — that endpoint returned object descriptions misaligned with names. Search endpoint returns reliable descriptions and avoids the CSRF round-trip. |
 | `getSystemInfo()` | `/sap/bc/adt/core/discovery` | GET | S_ADT_RES (ACTVT=01) | Atom service document |
 | `getInstalledComponents()` | `/sap/bc/adt/system/components` | GET | S_ADT_RES (ACTVT=01) | |
 
@@ -193,9 +193,8 @@ These endpoints access **live SAP table data**, not source code. They are separa
 
 ### 3.3 Critical Insight: POST Needed for Read-Only Users
 
-**7 out of 36 "read" endpoints use HTTP POST.** This is a common pitfall when setting up SAP roles:
+**6 out of 36 "read" endpoints use HTTP POST.** This is a common pitfall when setting up SAP roles:
 
-- `getPackageContents()` — POST
 - `findDefinition()` — POST
 - `findWhereUsed()` — POST
 - `getWhereUsedScope()` — POST

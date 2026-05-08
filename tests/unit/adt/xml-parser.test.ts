@@ -329,6 +329,68 @@ describe('XML Parser', () => {
     });
   });
 
+  // ─── parseSearchResults — package contents alignment regression ───
+  //
+  // Background: getPackageContents() used to call the `nodestructure` ADT
+  // endpoint, which returns object descriptions misaligned with their names
+  // on real systems (SAP-side data-quality issue). The fix routes
+  // getPackageContents through the `informationsystem/search` endpoint
+  // instead — which uses the parseSearchResults parser. The fixture
+  // `package-contents-search.xml` is the **real captured response** from
+  // a live S/4HANA 2023 system for the package ZDEMO_MIG (5 demo objects
+  // plus SEGW-generated artifacts). If parseSearchResults ever regresses to
+  // misaligning descriptions, this test fails on the four anchor rows below.
+  describe('parseSearchResults — package contents alignment', () => {
+    it('attaches each description to its OWN object name (regression for #devc-listing-bug)', () => {
+      const xml = loadFixture('package-contents-search.xml');
+      const refs = parseSearchResults(xml);
+
+      // The four anchor rows. If any shifts, the bug is back.
+      const sub = refs.find((r) => r.objectName === 'ZDEMO_MIG_RAP');
+      const dpc = refs.find((r) => r.objectName === 'ZCL_ZDEMO_MIG_PROJECTS_DPC');
+      const proj = refs.find((r) => r.objectName === 'ZDM_PROJECT');
+      const seed = refs.find((r) => r.objectName === 'ZDM_SEED_DATA');
+
+      expect(sub?.description).toBe('Demo: RAP migration outputs from migrate-segw-to-rap skill');
+      expect(dpc?.description).toBe('Data Provider Base Class');
+      expect(proj?.description).toBe('Demo: Project (legacy SEGW era)');
+      expect(seed?.description).toBe('Seed data for SEGW->RAP demo');
+
+      // And types/uris track too — fields are not shuffled at the parser level.
+      expect(sub?.objectType).toBe('DEVC/K');
+      expect(sub?.uri).toBe('/sap/bc/adt/packages/zdemo_mig_rap');
+      expect(proj?.objectType).toBe('TABL/DT');
+    });
+
+    it('returns an empty array when the response has no objectReference children', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"/>`;
+      expect(parseSearchResults(xml)).toEqual([]);
+    });
+
+    it('handles a single objectReference (fast-xml-parser non-array shape)', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zonly" adtcore:type="PROG/P" adtcore:name="ZONLY" adtcore:packageName="ZTEST" adtcore:description="The lonely report"/>
+</adtcore:objectReferences>`;
+      const refs = parseSearchResults(xml);
+      expect(refs).toHaveLength(1);
+      expect(refs[0]?.objectName).toBe('ZONLY');
+      expect(refs[0]?.description).toBe('The lonely report');
+    });
+
+    it('returns an empty string (not undefined) when description attribute is missing', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/x" adtcore:type="X/Y" adtcore:name="ZNOMORE" adtcore:packageName="P"/>
+</adtcore:objectReferences>`;
+      const refs = parseSearchResults(xml);
+      expect(refs).toHaveLength(1);
+      expect(refs[0]?.description).toBe('');
+      expect(typeof refs[0]?.description).toBe('string');
+    });
+  });
+
   // ─── parseSystemInfo ──────────────────────────────────────────────
 
   describe('parseSystemInfo', () => {

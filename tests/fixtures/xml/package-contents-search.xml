@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/aps/iam/sush/0ff6162820a84ab896da3df309cb1cht" adtcore:type="SUSH" adtcore:name="0FF6162820A84AB896DA3DF309CB1CHT" adtcore:packageName="ZDEMO_MIG" adtcore:description="ZDEMO_MIG_PROJECTS_SRV             0001"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/aps/iam/sush/7d82ec110c7563d2edb5cf46249783ht" adtcore:type="SUSH" adtcore:name="7D82EC110C7563D2EDB5CF46249783HT" adtcore:packageName="ZDEMO_MIG" adtcore:description="ZDEMO_MIG_PROJECTS_SRV_0001"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/vit/wb/object_type/sicftyp/object_name/A4H00100000001100O2TMQPDL0AXGC2ZZH2Y8XW1" adtcore:type="SICF/TYP" adtcore:name="A4H00100000001100O2TMQPDL0AXGC2ZZH2Y8XW1" adtcore:packageName="ZDEMO_MIG"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_zdemo_mig_projects_dpc" adtcore:type="CLAS/OC" adtcore:name="ZCL_ZDEMO_MIG_PROJECTS_DPC" adtcore:packageName="ZDEMO_MIG" adtcore:description="Data Provider Base Class"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_zdemo_mig_projects_dpc_ext" adtcore:type="CLAS/OC" adtcore:name="ZCL_ZDEMO_MIG_PROJECTS_DPC_EXT" adtcore:packageName="ZDEMO_MIG" adtcore:description="Data Provider Secondary Class"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_zdemo_mig_projects_mpc" adtcore:type="CLAS/OC" adtcore:name="ZCL_ZDEMO_MIG_PROJECTS_MPC" adtcore:packageName="ZDEMO_MIG" adtcore:description="ZCL_ZDEMO_MIG_PROJECTS_MPC"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_zdemo_mig_projects_mpc_ext" adtcore:type="CLAS/OC" adtcore:name="ZCL_ZDEMO_MIG_PROJECTS_MPC_EXT" adtcore:packageName="ZDEMO_MIG" adtcore:description="ZCL_ZDEMO_MIG_PROJECTS_MPC_EXT"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/packages/zdemo_mig" adtcore:type="DEVC/K" adtcore:name="ZDEMO_MIG" adtcore:packageName="ZDEMO_MIG" adtcore:description="ARC-1 SEGW to RAP demo: legacy baseline"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/vit/gw/sb/project/ZDEMO_MIG_PROJECTS" adtcore:type="IWPR" adtcore:name="ZDEMO_MIG_PROJECTS" adtcore:packageName="ZDEMO_MIG"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/vit/wb/object_type/iwmo/object_name/ZDEMO_MIG_PROJECTS_MDL%20%20%20%20%20%20%20%20%20%200001" adtcore:type="IWMO" adtcore:name="ZDEMO_MIG_PROJECTS_MDL          0001" adtcore:packageName="ZDEMO_MIG"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/vit/wb/object_type/iwom/object_name/ZDEMO_MIG_PROJECTS_MDL_0001_BE" adtcore:type="IWOM" adtcore:name="ZDEMO_MIG_PROJECTS_MDL_0001_BE" adtcore:packageName="ZDEMO_MIG"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/vit/wb/object_type/iwsg/object_name/ZDEMO_MIG_PROJECTS_SRV_0001" adtcore:type="IWSG" adtcore:name="ZDEMO_MIG_PROJECTS_SRV_0001" adtcore:packageName="ZDEMO_MIG"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/packages/zdemo_mig_rap" adtcore:type="DEVC/K" adtcore:name="ZDEMO_MIG_RAP" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Demo: RAP migration outputs from migrate-segw-to-rap skill"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT" adtcore:packageName="ZDEMO_MIG" adtcore:description="Demo: Project (legacy SEGW era)"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zdm_seed_data" adtcore:type="PROG/P" adtcore:name="ZDM_SEED_DATA" adtcore:packageName="ZDEMO_MIG" adtcore:description="Seed data for SEGW->RAP demo"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_task" adtcore:type="TABL/DT" adtcore:name="ZDM_TASK" adtcore:packageName="ZDEMO_MIG" adtcore:description="Demo: Task (child of Project)"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_timeentry" adtcore:type="TABL/DT" adtcore:name="ZDM_TIMEENTRY" adtcore:packageName="ZDEMO_MIG" adtcore:description="Demo: TimeEntry (child of Task)"/>
+</adtcore:objectReferences>

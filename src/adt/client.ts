@@ -54,7 +54,6 @@ import {
   parseInactiveObjects,
   parseInstalledComponents,
   parseMessageClass,
-  parsePackageContents,
   parseRevisionFeed,
   parseSearchResults,
   parseServiceBinding,
@@ -591,17 +590,47 @@ export class AdtClient {
 
   // ─── Package Operations ────────────────────────────────────────────
 
-  /** Get package contents (objects and subpackages) */
+  /**
+   * Get package contents (objects and subpackages).
+   *
+   * Uses the ADT **search** endpoint
+   * (`/sap/bc/adt/repository/informationsystem/search?packageName=...`)
+   * rather than the older `nodestructure` endpoint, because nodestructure
+   * returns object descriptions that are misaligned with `OBJECT_NAME` on
+   * real systems — a server-side data-quality issue, not a parser bug.
+   * The search endpoint returns `adtcore:objectReferences` with descriptions
+   * correctly attached to each object reference.
+   *
+   * Trade-off: object coverage differs slightly between the two endpoints.
+   * Notably, legacy SEGW `IWSV` (service version) objects appear in
+   * nodestructure but not in search results — search returns `IWMO` (model
+   * version) objects instead. If you specifically need `IWSV` objects, use
+   * `searchObject()` with a name pattern instead. For typical "list what's
+   * in this package" use cases (the dominant consumer), this is acceptable.
+   *
+   * @param packageName — DEVC name to inspect
+   * @param maxResults — soft cap on number of returned entries (default 200,
+   *                     clamped to [1, 1000]). Larger packages may be silently
+   *                     truncated by SAP at this limit; raise it if needed.
+   * @returns array of `{ type, name, description, uri }` (URIs may be empty
+   *          for objects that the workbench does not expose via ADT, e.g.
+   *          some `IWMO`/`IWPR`/`SICF/TYP` entries).
+   */
   async getPackageContents(
     packageName: string,
+    maxResults = 200,
   ): Promise<Array<{ type: string; name: string; description: string; uri: string }>> {
     checkOperation(this.safety, OperationType.Read, 'GetPackage');
-    const resp = await this.http.post(
-      `/sap/bc/adt/repository/nodestructure?parent_type=DEVC/K&parent_name=${encodeURIComponent(packageName)}&withShortDescriptions=true`,
-      undefined,
-      'application/xml',
+    const limit = Math.max(1, Math.min(maxResults, 1000));
+    const resp = await this.http.get(
+      `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=*&packageName=${encodeURIComponent(packageName)}&maxResults=${limit}`,
     );
-    return parsePackageContents(resp.body);
+    return parseSearchResults(resp.body).map((ref) => ({
+      type: ref.objectType,
+      name: ref.objectName,
+      description: ref.description,
+      uri: ref.uri,
+    }));
   }
 
   // ─── Table Data Operations ─────────────────────────────────────────
