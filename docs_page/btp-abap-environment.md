@@ -357,7 +357,7 @@ When `SAP_SYSTEM_TYPE=btp` is set (or auto-detected), tool definitions and behav
 
 | Tool | BTP Behavior |
 |---|---|
-| `SAPRead` | Types CLAS, INTF, DDLS, BDEF, SRVD, TABL, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MESSAGES. PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS, SOBJ are removed — returns helpful error if the LLM tries them. |
+| `SAPRead` | Types CLAS, INTF, DDLS, BDEF, SRVD, TABL, TABLE_CONTENTS, DEVC, SYSTEM, COMPONENTS, MSAG (deprecated alias: MESSAGES). PROG, INCL, VIEW, TEXT_ELEMENTS, VARIANTS, SOBJ are removed — returns helpful error if the LLM tries them. |
 | `SAPSearch` | Works — returns released SAP objects and custom Z/Y objects. Classic programs and includes not searchable. |
 | `SAPWrite` | Only CLAS, INTF. Must use ABAP Cloud language version. Z/Y namespace only. |
 | `SAPActivate` | Works — no changes. |

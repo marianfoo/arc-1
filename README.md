@@ -74,7 +74,7 @@ The 12 tools are designed from real LLM interaction feedback:
 
 | Tool | What it does |
 |------|-------------|
-| **SAPRead** | Read ABAP source, table data, CDS views, metadata extensions (DDLX), service bindings (SRVB), message classes, BOR objects, deployed UI5/Fiori apps (BSP, BSP_DEPLOY), plus on-prem metadata reads for authorization fields (`AUTH`), feature toggles (`FTG2`), and enhancement implementations (`ENHO`). Structured format for classes returns metadata + decomposed includes as JSON |
+| **SAPRead** | Read ABAP source, table data, CDS views, metadata extensions (DDLX), service bindings (SRVB), message classes (`MSAG`), BOR objects, deployed UI5/Fiori apps (BSP, BSP_DEPLOY), plus on-prem metadata reads for authorization fields (`AUTH`), feature toggles (`FEATURE_TOGGLE`), and enhancement implementations (`ENHO`). Structured format for classes returns metadata + decomposed includes as JSON. (Deprecated aliases `MESSAGES`/`FTG2` accepted for one minor.) |
 | **SAPSearch** | Object search + full-text source code search across the system |
 | **SAPWrite** | Create/update/delete ABAP source and DDIC metadata with automatic lock/unlock (PROG, CLAS, INTF, FUNC, INCL, DDLS, DDLX, BDEF, SRVD, DOMA, DTEL). Batch creation for multi-object workflows (e.g., RAP stack or domain+data element in one call) |
 | **SAPActivate** | Activate ABAP objects — single or batch (essential for RAP stacks). Publish/unpublish OData service bindings (SRVB) |

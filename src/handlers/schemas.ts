@@ -224,7 +224,9 @@ export const SAPQuerySchema = z.object({
 
 // ─── SAPWrite ───────────────────────────────────────────────────────
 
-const SAPWRITE_TYPES_ONPREM = [
+// Exported so tests/unit/handlers/schemas.test.ts can derive its read/write
+// symmetry guard from a single source of truth (audit Plan B / PR #224).
+export const SAPWRITE_TYPES_ONPREM = [
   'PROG',
   'CLAS',
   'INTF',
@@ -242,7 +244,7 @@ const SAPWRITE_TYPES_ONPREM = [
   'DTEL',
   'MSAG',
 ] as const;
-const SAPWRITE_TYPES_BTP = [
+export const SAPWRITE_TYPES_BTP = [
   'CLAS',
   'INTF',
   'DDLS',

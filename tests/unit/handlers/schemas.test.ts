@@ -16,6 +16,8 @@ import {
   SAPSearchSchema,
   SAPSearchSchemaNoSource,
   SAPTransportSchema,
+  SAPWRITE_TYPES_BTP,
+  SAPWRITE_TYPES_ONPREM,
   SAPWriteSchema,
   SAPWriteSchemaBtp,
 } from '../../../src/handlers/schemas.js';
@@ -156,31 +158,19 @@ describe('SAPReadSchema', () => {
   });
 
   it('write enum has MSAG (canonical) — read/write symmetry guard', () => {
-    // Anti-cargo-cult guard from docs/plans/audit-symmetry-and-ftg2-rename.md:
+    // Anti-cargo-cult guard from docs/plans/completed/audit-symmetry-and-ftg2-rename.md:
     // every type that supports both verbs in ADT MUST be in both enums under the
     // same canonical short form. The audit found MSAG missing from the read enum.
     // This test asserts the symmetry; new types that violate it will fail loudly.
-    const SAPWRITE_TYPES_ONPREM_BACKING = [
-      'PROG',
-      'CLAS',
-      'INTF',
-      'FUNC',
-      'INCL',
-      'DDLS',
-      'DCLS',
-      'DDLX',
-      'BDEF',
-      'SRVD',
-      'SRVB',
-      'SKTD',
-      'TABL',
-      'DOMA',
-      'DTEL',
-      'MSAG',
-    ] as const;
-    for (const t of SAPWRITE_TYPES_ONPREM_BACKING) {
+    // Source of truth: SAPWRITE_TYPES_ONPREM/_BTP exported from schemas.ts so the
+    // guard can never drift from the runtime enum (codex review on PR #224).
+    for (const t of SAPWRITE_TYPES_ONPREM) {
       const result = SAPReadSchema.safeParse({ type: t, name: 'X' });
-      expect(result.success, `read enum missing canonical write type ${t}`).toBe(true);
+      expect(result.success, `on-prem read enum missing canonical write type ${t}`).toBe(true);
+    }
+    for (const t of SAPWRITE_TYPES_BTP) {
+      const result = SAPReadSchemaBtp.safeParse({ type: t, name: 'X' });
+      expect(result.success, `BTP read enum missing canonical write type ${t}`).toBe(true);
     }
   });
 

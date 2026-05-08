@@ -84,7 +84,7 @@ All source-bearing types that go through the cache:
 - Service binding: SRVB
 - Knowledge transfer: SKTD
 
-Other read types (DOMA, DTEL, AUTH, FTG2, ENHO, MESSAGES, etc.) are not cached because they don't go through `/source/main`.
+Other read types (DOMA, DTEL, AUTH, FEATURE_TOGGLE, ENHO, MSAG, etc. — deprecated aliases `FTG2`/`MESSAGES` route to the same handlers) are not cached because they don't go through `/source/main`.
 
 ## Active vs Inactive Source
 
