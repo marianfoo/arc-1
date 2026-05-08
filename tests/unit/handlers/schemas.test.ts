@@ -141,7 +141,7 @@ describe('SAPReadSchema', () => {
   });
 
   it('still accepts deprecated FTG2 alias for one minor release', () => {
-    // Per docs/plans/audit-symmetry-and-ftg2-rename.md: FTG2 was an ARC-1-invented
+    // Per docs/plans/completed/audit-symmetry-and-ftg2-rename.md: FTG2 was an ARC-1-invented
     // identifier (research/abap-types/types/ftg2.md). FEATURE_TOGGLE is the new
     // canonical short type, FTG2 stays as a deprecated alias for one minor.
     expect(SAPReadSchema.safeParse({ type: 'FTG2', name: 'ABC_TOGGLE' }).success).toBe(true);

@@ -629,7 +629,7 @@ describe('ADT Integration Tests', () => {
     });
 
     it('reads message class via MSAG canonical type (audit Plan B)', async () => {
-      // MSAG was added to SAPREAD_TYPES_* by docs/plans/audit-symmetry-and-ftg2-rename.md.
+      // MSAG was added to SAPREAD_TYPES_* by docs/plans/completed/audit-symmetry-and-ftg2-rename.md.
       // Endpoint /sap/bc/adt/messageclass/{name} verified live (2026-05-08) on:
       //   - a4h S/4HANA 2023 (returns adtcore:type="MSAG/N")
       //   - npl NW 7.50 SP02 (returns adtcore:type="MSAG/N")

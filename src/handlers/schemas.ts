@@ -41,7 +41,7 @@ const SAPREAD_TYPES_ONPREM = [
   // MSAG is the canonical TADIR R3TR type for message classes (table T100).
   // 'MESSAGES' is kept as a deprecated alias for one minor release; both
   // resolve to the same handler. See research/abap-types/types/msag.md and
-  // docs/plans/audit-symmetry-and-ftg2-rename.md.
+  // docs/plans/completed/audit-symmetry-and-ftg2-rename.md.
   'MSAG',
   'MESSAGES',
   'TEXT_ELEMENTS',

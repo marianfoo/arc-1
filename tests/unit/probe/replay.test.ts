@@ -158,7 +158,7 @@ describe('probe replay — npl-750-sp02-dev-edition fixture (recorded from real 
     }
 
     // 'FEATURE_TOGGLE' was renamed from 'FTG2' (see research/abap-types/types/ftg2.md
-    // and docs/plans/audit-symmetry-and-ftg2-rename.md). The probe-catalog entry now
+    // and docs/plans/completed/audit-symmetry-and-ftg2-rename.md). The probe-catalog entry now
     // uses the canonical short name; the SAPRead handler still accepts FTG2 as a
     // deprecated alias for one minor release.
     for (const type of ['BDEF', 'SRVD', 'SRVB', 'AUTH', 'FEATURE_TOGGLE']) {
