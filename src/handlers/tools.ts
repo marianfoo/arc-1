@@ -812,7 +812,7 @@ export function getToolDefinitions(
         objectType: {
           type: 'string',
           description:
-            'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUNC/FM, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
+            'For references action: filter where-used results by ADT object type in slash format (e.g., PROG/P, CLAS/OC, FUGR/FF, INTF/OI). On systems supporting the scope endpoint, only returns references from objects of the specified type. On older systems, the filter is ignored and all references are returned with a note.',
         },
         line: { type: 'number', description: 'Line number (1-based)' },
         column: { type: 'number', description: 'Column number (1-based)' },
