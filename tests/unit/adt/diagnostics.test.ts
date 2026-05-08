@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  decodeHtmlEntities,
   getDump,
   getGatewayErrorDetail,
   getTraceDbAccesses,
@@ -20,6 +21,7 @@ import {
   parseTraceHitlist,
   parseTraceList,
   parseTraceStatements,
+  stripHtmlTags,
 } from '../../../src/adt/diagnostics.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
@@ -863,6 +865,78 @@ describe('Runtime Diagnostics', () => {
       expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/runtime/traces/abaptraces/TRACE_003/dbAccesses', {
         Accept: 'application/xml',
       });
+    });
+  });
+
+  // Regression tests for CodeQL alerts #6, #7 — see
+  // docs/plans/codeql-alerts-html-hygiene.md
+  describe('stripHtmlTags (CodeQL alert #6 — js/incomplete-multi-character-sanitization)', () => {
+    it('strips simple tags', () => {
+      expect(stripHtmlTags('<p>hello</p>')).toBe('hello');
+    });
+
+    it('strips nested tags', () => {
+      expect(stripHtmlTags('<div><span>x</span></div>')).toBe('x');
+    });
+
+    it('handles adversarial nested input — output never contains `<script`', () => {
+      // CodeQL flags the single-pass `<[^>]*>` regex pattern conservatively.
+      // For THIS specific regex (greedy `[^>]*` matches across `<`), single-
+      // pass already handles nesting — loop is defense-in-depth against a
+      // future change to a more restrictive regex like `<\w+>`. Either way,
+      // no `<script` substring survives the strip.
+      expect(stripHtmlTags('<<script>script>alert(1)</script>')).toBe('script>alert(1)');
+      expect(stripHtmlTags('<<script>script>alert(1)</script>')).not.toContain('<script');
+      expect(stripHtmlTags('<scr<script>ipt>alert(1)</script>')).toBe('ipt>alert(1)');
+      expect(stripHtmlTags('<scr<script>ipt>alert(1)</script>')).not.toContain('<script');
+    });
+
+    it('returns empty string for nullish input', () => {
+      expect(stripHtmlTags(null as unknown as string)).toBe('');
+      expect(stripHtmlTags(undefined as unknown as string)).toBe('');
+      expect(stripHtmlTags('')).toBe('');
+    });
+
+    it('passes through plain text unchanged', () => {
+      expect(stripHtmlTags('plain text without tags')).toBe('plain text without tags');
+    });
+  });
+
+  describe('decodeHtmlEntities (CodeQL alert #7 — js/double-escaping)', () => {
+    it('decodes named entities', () => {
+      expect(decodeHtmlEntities('&lt;p&gt;')).toBe('<p>');
+      expect(decodeHtmlEntities('&quot;hello&quot;')).toBe('"hello"');
+      expect(decodeHtmlEntities('&nbsp;')).toBe(' ');
+      expect(decodeHtmlEntities('&amp;')).toBe('&');
+    });
+
+    it('decodes chained entity without double-unescape', () => {
+      // The CodeQL-flagged case: with `&amp;` decoded last, `&amp;lt;`
+      // resolves to the literal `&lt;`, not `<`.
+      expect(decodeHtmlEntities('&amp;lt;')).toBe('&lt;');
+      expect(decodeHtmlEntities('&amp;amp;')).toBe('&amp;');
+    });
+
+    it('decodes mixed input with chained and direct entities', () => {
+      // `&gt;` resolves first, `&amp;` resolves last, so `&amp;lt;p&gt;` →
+      // `&lt;p>` (the `<` from `&lt;` stays escaped because `&amp;` produced
+      // it on the very last pass).
+      expect(decodeHtmlEntities('&amp;lt;p&gt;')).toBe('&lt;p>');
+    });
+
+    it('decodes numeric entities (decimal and hex)', () => {
+      expect(decodeHtmlEntities('&#65;&#66;&#67;')).toBe('ABC');
+      expect(decodeHtmlEntities('&#x41;&#x42;&#x43;')).toBe('ABC');
+    });
+
+    it('decodes typographic dashes', () => {
+      expect(decodeHtmlEntities('a&ndash;b&mdash;c')).toBe('a–b—c');
+    });
+
+    it('returns empty string for nullish input', () => {
+      expect(decodeHtmlEntities(null as unknown as string)).toBe('');
+      expect(decodeHtmlEntities(undefined as unknown as string)).toBe('');
+      expect(decodeHtmlEntities('')).toBe('');
     });
   });
 });

@@ -903,14 +903,18 @@ export function parseBspFolderListing(xml: string, appName: string): BspFileNode
  * Decode standard XML entities in attribute values.
  * fast-xml-parser with processEntities:false + parseAttributeValue:false
  * keeps raw encoded strings — we decode them for human-readable output.
+ *
+ * `&amp;` is decoded LAST so chained entities like `&amp;lt;` resolve to the
+ * literal `&lt;` rather than `<`. Closes CodeQL alert `js/double-escaping`
+ * (alert #8).
  */
 export function decodeXmlEntities(s: string): string {
   return s
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'");
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
 }
 
 /** Safely get a nested array from parsed XML */

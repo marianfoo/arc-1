@@ -1108,14 +1108,25 @@ function sanitizeHtmlCellValue(raw: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function stripHtmlTags(html: string): string {
-  return String(html ?? '').replace(/<[^>]*>/g, '');
+// Loop until stable so adversarial nested input (e.g. `<<script>script>`) is fully
+// stripped — single-pass regex would leave `<script>` behind. Closes CodeQL alert
+// `js/incomplete-multi-character-sanitization` (alert #6).
+export function stripHtmlTags(html: string): string {
+  let result = String(html ?? '');
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(/<[^>]*>/g, '');
+  } while (result !== prev);
+  return result;
 }
 
-function decodeHtmlEntities(text: string): string {
+// `&amp;` is decoded LAST so chained entities like `&amp;lt;` resolve to `&lt;`
+// (the literal four-char text) rather than `<`. Closes CodeQL alert
+// `js/double-escaping` (alert #7).
+export function decodeHtmlEntities(text: string): string {
   return String(text ?? '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
@@ -1123,7 +1134,8 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&ndash;/gi, '–')
     .replace(/&mdash;/gi, '—')
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)));
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&amp;/gi, '&');
 }
 
 function decodeUriComponentSafe(value: string): string {
