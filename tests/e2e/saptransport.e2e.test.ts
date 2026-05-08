@@ -14,14 +14,7 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { requireOrSkip, SkipReason } from '../helpers/skip-policy.js';
-import {
-  callTool,
-  classifyToolErrorSkip,
-  connectClient,
-  expectToolError,
-  expectToolSuccess,
-  expectToolSuccessOrSkip,
-} from './helpers.js';
+import { callTool, connectClient, expectToolError, expectToolSuccess, expectToolSuccessOrSkip } from './helpers.js';
 
 describe('E2E SAPTransport Tests', () => {
   let client: Client;
@@ -55,13 +48,6 @@ describe('E2E SAPTransport Tests', () => {
       if (result.isError && result.content?.[0]?.text?.includes('allowTransportWrites=false')) {
         transportsEnabled = false;
         return ctx.skip('Transport writes not enabled on MCP server (--allow-transport-writes)');
-      }
-      // Known NW 7.50 backend gap: transport create returns 400
-      // "user action is not supported". All downstream tests depend on this.
-      const releaseSkip = classifyToolErrorSkip(result);
-      if (releaseSkip !== null) {
-        transportsEnabled = false;
-        return ctx.skip(releaseSkip);
       }
 
       const text = expectToolSuccess(result);
@@ -157,11 +143,6 @@ describe('E2E SAPTransport Tests', () => {
       if (createResult.isError && createResult.content?.[0]?.text?.includes('allowTransportWrites=false')) {
         transportsEnabled = false;
         return ctx.skip('Transport writes not enabled on MCP server');
-      }
-      const backendSkip = classifyToolErrorSkip(createResult);
-      if (backendSkip !== null) {
-        transportsEnabled = false;
-        return ctx.skip(backendSkip);
       }
       const createText = expectToolSuccess(createResult);
       const match = createText.match(/([A-Z0-9]+K\d+)/);

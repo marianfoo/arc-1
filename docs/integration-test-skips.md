@@ -59,9 +59,10 @@ Tests typically suffix these with a specific clause explaining *which* fixture o
 | `BACKEND_UNSUPPORTED: DTEL v2 content type not supported on this release` | `crud.lifecycle.integration.test.ts` DTEL + DOMA+DTEL lifecycle (2 tests) | NW 7.50–7.51 | SAP_BASIS ≥ 7.52 |
 | `BACKEND_UNSUPPORTED: /datapreview/ddic endpoint not available on this release` | `adt.integration.test.ts` table contents, POST/CSRF session (4 tests) | NW 7.50 (depends on SP/activation) | Most modern releases |
 | `BACKEND_UNSUPPORTED: /ddic/domains endpoint not available on this release` | `crud.lifecycle.integration.test.ts` DOMA CRUD variants (2 tests) | NW 7.50–7.51 | SAP_BASIS ≥ 7.52 |
-| `BACKEND_UNSUPPORTED: transport create not supported on this SAP release` | `transport.integration.test.ts` createTransport, deleteTransport (2 tests) | NW 7.50 trial | S/4 any release, most production NW |
 
-**When to investigate:** If `DOMA reads not supported` fires on a ≥ 7.54 system, double-check that the ICF service `/sap/bc/adt/ddic` is active in SICF. If `transport create not supported` fires on a production NW system, this is worth a bug report — our backend-compat probing may need tightening.
+**When to investigate:** If `DOMA reads not supported` fires on a ≥ 7.54 system, double-check that the ICF service `/sap/bc/adt/ddic` is active in SICF.
+
+**Note (2026-05-08):** The previous *"transport create not supported on this SAP release"* entry was removed when `SAPTransport.create` switched to the `CreateCorrectionRequest` endpoint (`POST /sap/bc/adt/cts/transports`), which works on NW 7.50 SP02 and S/4HANA alike — verified live on `npl.marianzeis.de` and `a4h.marianzeis.de`.
 
 ### Root cause: `/datapreview/ddic` 404 "No suitable resource found"
 

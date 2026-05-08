@@ -417,7 +417,7 @@ SAPQuery(sql="SELECT * FROM mara WHERE matnr LIKE 'Z%'", maxRows=50)
 
 ## SAPTransport
 
-Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create (K/W/T types), release, delete, reassign owner, recursive release, check transport requirements, and object transport history (reverse lookup).
+Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create, release, delete, reassign owner, recursive release, check transport requirements, and object transport history (reverse lookup). `create` uses the ADT `CreateCorrectionRequest` endpoint, which works on both NetWeaver 7.50+ and S/4HANA.
 
 **Parameters:**
 
@@ -427,10 +427,10 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 | `id` | string | No | Transport request ID, e.g. `A4HK900123` (for get/release/delete/reassign/release_recursive) |
 | `description` | string | No | Transport description text (required for create) |
 | `name` | string | No | Object name (for check/history actions, e.g. `ZCL_ORDER`) |
-| `package` | string | No | Package name (for check action, e.g. `ZDEV`) |
+| `package` | string | No | Package name. For `create`: optional — defaults to `$TMP`, pass an explicit package to influence the transport route. For `check`: required. |
 | `user` | string | No | SAP username to filter by (for list). Defaults to the current SAP user. Use `*` to list all users. |
 | `status` | string | No | Transport status filter (for list). `D`=modifiable (default), `R`=released, `*`=all statuses. |
-| `type` | string | No | For create: transport type `K` (Workbench, default), `W` (Customizing), `T` (Transport of Copies). For check/history: object type (`PROG`, `CLAS`, `DDLS`, etc.) |
+| `type` | string | No | Object type for `check`/`history` actions (`PROG`, `CLAS`, `DDLS`, etc.). Not used by `create` — the SAP backend infers transport type (K/W/T) from the package's TADIR route on the `CreateCorrectionRequest` endpoint. |
 | `owner` | string | No | New owner SAP username (required for reassign) |
 | `recursive` | boolean | No | Apply recursively to child tasks (for delete/reassign). `release_recursive` always recurses. |
 
@@ -438,7 +438,7 @@ Manage CTS transport requests (SE09/SE10 equivalent): list, get details, create 
 
 - **`list`** — List transport requests. Defaults to current user, modifiable (status D), all types (Workbench, Customizing, Transport of Copies).
 - **`get`** — Get transport details including tasks and objects.
-- **`create`** — Create a new transport request. Requires `description`. Optional `type` (K/W/T).
+- **`create`** — Create a new transport request. Requires `description`. Optional `package` (defaults to `$TMP` — pass an explicit package to influence the transport route, which determines K/W/T type). Uses the ADT `CreateCorrectionRequest` endpoint (`POST /sap/bc/adt/cts/transports`); legacy NW 7.50 systems are supported.
 - **`release`** — Release a single transport or task.
 - **`delete`** — Delete a transport. Use `recursive=true` to delete tasks first.
 - **`reassign`** — Change transport owner. Requires `owner`. Use `recursive=true` for tasks too.

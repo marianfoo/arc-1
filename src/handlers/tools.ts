@@ -1203,7 +1203,7 @@ export function getToolDefinitions(
             description:
               'list: show transports (defaults to current user, modifiable only). ' +
               'get: fetch transport details including tasks and objects. ' +
-              'create: create a new transport request. ' +
+              'create: create a new transport request (description required; package optional, defaults to $TMP — pass an explicit package to influence the transport route/type). ' +
               'release: release a single transport or task. ' +
               'delete: delete a transport (use recursive=true to delete tasks first). ' +
               'reassign: change transport owner (use recursive=true for tasks too). ' +
@@ -1218,7 +1218,11 @@ export function getToolDefinitions(
           },
           description: { type: 'string', description: 'Transport description text (required for create)' },
           name: { type: 'string', description: 'Object name (for check or history actions)' },
-          package: { type: 'string', description: 'Package name (for check action)' },
+          package: {
+            type: 'string',
+            description:
+              "Package name. For create: optional — defaults to $TMP, pass an explicit package to influence the transport route (SAP infers K/W/T from the package's TADIR route). For check: required.",
+          },
           user: {
             type: 'string',
             description:
@@ -1231,7 +1235,7 @@ export function getToolDefinitions(
           type: {
             type: 'string',
             description:
-              'For create: transport type K=Workbench (default), W=Customizing, T=Transport of Copies. For check/history: object type (PROG, CLAS, DDLS, etc.)',
+              "Object type for check/history actions (PROG, CLAS, DDLS, etc.). Not used by create — the SAP backend infers transport type (K/W/T) from the package's TADIR route on the CreateCorrectionRequest endpoint.",
           },
           owner: { type: 'string', description: 'New owner SAP username (required for reassign)' },
           recursive: {
