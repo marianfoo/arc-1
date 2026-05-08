@@ -7,7 +7,7 @@
 # =============================================================================
 
 # --- Build Stage -------------------------------------------------------------
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 
 # better-sqlite3 requires build tools for native addon compilation
 RUN apk add --no-cache python3 make g++
@@ -27,7 +27,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # --- Runtime Stage -----------------------------------------------------------
-FROM node:22-alpine
+FROM node:26-alpine
 
 LABEL io.modelcontextprotocol.server.name="io.github.marianfoo/arc-1"
 
