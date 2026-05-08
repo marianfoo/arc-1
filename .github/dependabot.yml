@@ -47,6 +47,14 @@ updates:
         patterns:
           - "@biomejs/*"
           - "biome"
+    ignore:
+      # @types/node major must match `engines.node` minimum (currently
+      # `>=22.0.0`), not Node's latest release line. Bumping to a newer
+      # major surfaces APIs that don't exist on the minimum supported
+      # runtime, allowing accidental use of APIs that crash at runtime.
+      # Bump @types/node major in the same PR that bumps engines.node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # ─── GitHub Actions ──────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
@@ -83,3 +91,10 @@ updates:
       - "dependencies"
     reviewers:
       - "marianfoo"
+    ignore:
+      # Stay on Node LTS for the published image. Node 22 is in active
+      # LTS until Apr 2027; next planned bump is to `node:24-alpine`
+      # (LTS from Oct 2026). Dependabot doesn't know the LTS schedule —
+      # block major bumps and bump manually on the LTS cadence.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
