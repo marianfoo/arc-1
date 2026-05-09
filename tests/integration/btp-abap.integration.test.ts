@@ -17,10 +17,10 @@
  * - User has completed browser OAuth login at least once (token cached)
  *
  * Run:
- *   TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:extended
+ *   TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
  *
  * Or with env file:
- *   Set TEST_BTP_SERVICE_KEY_FILE in .env, then: npm run test:integration:btp:extended
+ *   Set TEST_BTP_SERVICE_KEY_FILE in .env, then: npm run test:integration:btp
  */
 
 import { config } from 'dotenv';

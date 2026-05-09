@@ -39,7 +39,6 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:btp": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.integration.test.ts",
     "test:integration:btp:smoke": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.smoke.integration.test.ts",
-    "test:integration:btp:extended": "vitest run --config vitest.integration.config.ts tests/integration/btp-abap.integration.test.ts",
     "test:integration:crud": "vitest run --config vitest.integration.config.ts tests/integration/crud.lifecycle.integration.test.ts",
     "test:authz:http": "node scripts/check-authz-http-profiles.mjs",
     "test:npx-smoke": "npm run build && node scripts/ci/assert-npx-bin-smoke.mjs",
