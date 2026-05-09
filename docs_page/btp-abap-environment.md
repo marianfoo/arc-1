@@ -410,7 +410,7 @@ Extended tests cover interactive scenarios that require browser-based OAuth logi
 
 **How to run:**
 ```bash
-TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp:extended
+TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp
 ```
 
 **Why local only:**
