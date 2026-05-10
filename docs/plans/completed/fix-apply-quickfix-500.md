@@ -16,7 +16,7 @@ Research inputs for this PR include the saved chat transcript, `/Users/marianzei
 
 ### Target State
 
-`apply_quickfix` accepts the exact proposal payload returned by `quickfix`, including empty `userContent`, optional affected object references, and an optional exact `sourceUri` for class includes such as `/includes/definitions`. ARC-1 serializes proposal application as valid ADT quickfix XML, posts with `application/xml`, and parses both existing delta fixtures and XSD-native unit deltas. Existing clients that pass `proposalUri` and `proposalUserContent` continue to work.
+`apply_quickfix` accepts the exact proposal payload returned by `quickfix`, including empty `userContent`, optional affected object references, and an optional exact `sourceUri` for class includes such as `/includes/definitions`. ARC-1 serializes proposal application as valid ADT quickfix XML, posts with `application/xml`, and parses both existing delta fixtures and XSD-native unit deltas. The XML body follows `quickfixes.xsd` with a namespaced `quickfixes:proposalRequest` root and unqualified quickfix child elements such as `input`, `content`, `affectedObjects`, `unit`, and `userContent`. Existing clients that pass `proposalUri` and `proposalUserContent` continue to work.
 
 The RAP `create_class_implementation` quickfix may still require a higher-level non-UI wrapper in a later PR because Eclipse's BDEF UI handler opens a wizard before apply. This PR should still eliminate avoidable ARC-1-side 500s and make backend-applicable quickfixes work predictably on S/4HANA 2023 and NW 7.50-compatible systems.
 
@@ -38,7 +38,7 @@ The RAP `create_class_implementation` quickfix may still require a higher-level 
 
 ### Design Principles
 
-1. Follow Eclipse ADT's XML model where observed: `proposalRequest` contains `input` as a quickfix `unit`, optional `affectedObjects`, and optional `userContent`; apply posts as `application/xml`.
+1. Follow Eclipse ADT's XML model where observed: `proposalRequest` contains `input` as a quickfix `unit`, optional `affectedObjects`, and optional `userContent`; apply posts as `application/xml`. Per `quickfixes.xsd` `elementFormDefault="unqualified"`, child elements inside the quickfix namespace are serialized without the `quickfixes:` prefix.
 2. Preserve backwards compatibility: existing `proposalUri` plus `proposalUserContent` calls should keep working, including non-empty legacy user content and the default type/name main-source URI.
 3. Treat empty `proposalUserContent` as valid data, not as a missing required field.
 4. Do not invent a RAP-specific behavior implementation generator in this PR; document that as follow-up because Eclipse's RAP quickfix path has UI-specific pre-apply behavior.

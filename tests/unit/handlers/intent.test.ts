@@ -2010,7 +2010,7 @@ ENDCLASS.`;
                 200,
                 `<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes">
                   <quickfixes:delta uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main" startLine="3" startColumn="1" endLine="3" endColumn="4">
-                    <quickfixes:content>DATA</quickfixes:content>
+                    <content>DATA</content>
                   </quickfixes:delta>
                 </quickfixes:applicationResult>`,
                 { 'x-csrf-token': 'T' },
@@ -2045,7 +2045,7 @@ ENDCLASS.`;
 
       const applyCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/quickfixes/1'));
       expect(applyCall).toBeDefined();
-      expect(applyCall?.body).toContain('<quickfixes:userContent>opaque-state</quickfixes:userContent>');
+      expect(applyCall?.body).toContain('<userContent>opaque-state</userContent>');
     });
 
     it('apply_quickfix action accepts empty userContent and forwards affected objects', async () => {
@@ -2092,13 +2092,11 @@ ENDCLASS.`;
 
       expect(result.isError).toBeUndefined();
       const applyCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/quickfixes/1'));
-      expect(applyCall?.body).toContain('<quickfixes:userContent></quickfixes:userContent>');
+      expect(applyCall?.body).toContain('<userContent></userContent>');
       expect(applyCall?.body).toContain('/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions#start=3,1');
-      expect(applyCall?.body).toContain('<quickfixes:affectedObjects>');
+      expect(applyCall?.body).toContain('<affectedObjects>');
       expect(applyCall?.body).toContain('adtcore:uri="/sap/bc/adt/oo/classes/ZCL_HELPER/source/main"');
-      expect(applyCall?.body).toContain(
-        '<quickfixes:content>CLASS zcl_helper DEFINITION. ENDCLASS.</quickfixes:content>',
-      );
+      expect(applyCall?.body).toContain('<content>CLASS zcl_helper DEFINITION. ENDCLASS.</content>');
     });
 
     it('apply_quickfix action returns error when proposalUri is missing', async () => {

@@ -1218,7 +1218,7 @@ describe('DevTools', () => {
       const xml = `<?xml version="1.0" encoding="utf-8"?>
 <quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes">
   <quickfixes:delta uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main" startLine="7" startColumn="3" endLine="7" endColumn="8">
-    <quickfixes:content>DATA(lv_count)</quickfixes:content>
+    <content>DATA(lv_count)</content>
   </quickfixes:delta>
 </quickfixes:applicationResult>`;
       const http = mockHttp(xml);
@@ -1251,12 +1251,12 @@ describe('DevTools', () => {
     it('applyFixProposal parses ADT proposalResult unit deltas', async () => {
       const xml = `<?xml version="1.0" encoding="utf-8"?>
 <quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
-  <quickfixes:deltas>
-    <quickfixes:unit>
-      <quickfixes:content>METHODS approve_project FOR MODIFY.</quickfixes:content>
+  <deltas>
+    <unit>
+      <content>METHODS approve_project FOR MODIFY.</content>
       <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions#start=4,2;end=4,2"/>
-    </quickfixes:unit>
-  </quickfixes:deltas>
+    </unit>
+  </deltas>
 </quickfixes:proposalResult>`;
       const http = mockHttp(xml);
 
@@ -1328,7 +1328,7 @@ describe('DevTools', () => {
       );
 
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('<quickfixes:userContent>opaque-state</quickfixes:userContent>');
+      expect(body).toContain('<userContent>opaque-state</userContent>');
     });
 
     it('applyFixProposal preserves empty userContent in request XML', async () => {
@@ -1350,7 +1350,7 @@ describe('DevTools', () => {
       );
 
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('<quickfixes:userContent></quickfixes:userContent>');
+      expect(body).toContain('<userContent></userContent>');
     });
 
     it('applyFixProposal serializes affected object units with content', async () => {
@@ -1381,9 +1381,9 @@ describe('DevTools', () => {
       );
 
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('<quickfixes:affectedObjects>');
-      expect(body).toContain('<quickfixes:unit>');
-      expect(body).toContain('<quickfixes:content>CLASS zcl_helper DEFINITION. ENDCLASS.</quickfixes:content>');
+      expect(body).toContain('<affectedObjects>');
+      expect(body).toContain('<unit>');
+      expect(body).toContain('<content>CLASS zcl_helper DEFINITION. ENDCLASS.</content>');
       expect(body).toContain('adtcore:uri="/sap/bc/adt/oo/classes/ZCL_HELPER/source/main"');
       expect(body).toContain('adtcore:type="CLAS/OC"');
       expect(body).toContain('adtcore:name="ZCL_HELPER"');

@@ -541,14 +541,16 @@ export async function applyFixProposal(
     proposal.userContent === undefined
       ? ''
       : `
-  <quickfixes:userContent>${escapeXmlText(proposal.userContent)}</quickfixes:userContent>`;
+  <userContent>${escapeXmlText(proposal.userContent)}</userContent>`;
   const affectedObjects = serializeAffectedObjects(proposal.affectedObjects);
+  // quickfixes.xsd uses elementFormDefault="unqualified"; only the root and imported adtcore
+  // elements are prefixed.
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <quickfixes:proposalRequest xmlns:quickfixes="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
-  <quickfixes:input>
-    <quickfixes:content>${escapeXmlText(source)}</quickfixes:content>
+  <input>
+    <content>${escapeXmlText(source)}</content>
     <adtcore:objectReference adtcore:uri="${escapeXmlAttr(uriWithStart)}"/>
-  </quickfixes:input>${affectedObjects}${userContent}
+  </input>${affectedObjects}${userContent}
 </quickfixes:proposalRequest>`;
 
   const resp = await http.post(proposal.uri, body, 'application/xml', {
@@ -887,17 +889,17 @@ function serializeAffectedObjects(affectedObjects: FixAffectedObject[] | undefin
   const units = (affectedObjects ?? [])
     .filter((affected) => affected.uri && affected.content !== undefined)
     .map(
-      (affected) => `    <quickfixes:unit>
-      <quickfixes:content>${escapeXmlText(affected.content ?? '')}</quickfixes:content>
+      (affected) => `    <unit>
+      <content>${escapeXmlText(affected.content ?? '')}</content>
       <adtcore:objectReference ${serializeObjectReferenceAttrs(affected)}/>
-    </quickfixes:unit>`,
+    </unit>`,
     );
 
   if (units.length === 0) return '';
   return `
-  <quickfixes:affectedObjects>
+  <affectedObjects>
 ${units.join('\n')}
-  </quickfixes:affectedObjects>`;
+  </affectedObjects>`;
 }
 
 function parseFixProposals(xml: string): FixProposal[] {

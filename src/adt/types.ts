@@ -266,7 +266,7 @@ export interface FixProposal {
   name: string;
   /** Human-readable description (may contain HTML entities) */
   description: string;
-  /** Opaque SAP quickfix state blob, pass through unchanged. Can be an empty string. */
+  /** Opaque SAP quickfix state blob, pass through unchanged. May be an empty string or omitted by SAP. */
   userContent: string;
   /** Additional source units that ADT needs to evaluate/apply this proposal. */
   affectedObjects?: FixAffectedObject[];
