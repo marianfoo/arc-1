@@ -1,57 +1,71 @@
-# Convert modern UI5 TS app ➜ Fiori Elements V4 with extensions
+# Convert modern UI5 TS app ➜ Fiori Elements V4 (annotation-first)
 
-Replace a freestyle UI5 TypeScript app with a Fiori Elements V4 list-report + object-page
-configuration, driven by `@UI.*` annotations on the underlying RAP CDS projection. Custom
-behavior from the freestyle app that FE templates can't render is wired via the extension API
-(extension points and extension controllers). Runs side-by-side: the freestyle TS app stays
-untouched at `<modern_app>/`; the FE app lands in `<fe_app>/`.
+Replace a freestyle UI5 app with a Fiori Elements V4 list-report + object-page configuration,
+driven by `@UI.*` annotations on the RAP CDS projection. Backend annotations are derived from
+the **legacy** UI5 app's actual features (columns, search, sort, formatters, action buttons,
+tab structure) so the FE app reproduces the user-visible contract. Custom behavior FE templates
+can't render is wired via the extension API.
 
-This skill is the **last step** in the UI5con talk demo chain. It depends on:
+This skill is the **last step** in a SEGW → RAP → modern UI chain. It depends on:
 
 - `migrate-segw-to-rap.md` having produced an active V4 RAP service (CDS roots + projections,
-  BDEF, SRVD, SRVB published, V4 routing group registered).
+  BDEF, SRVD, SRVB published, V4 routing group registered in `/n/IWFND/MAINT_SERVICE`).
 - `modernize-ui5-app.md` having produced a TS baseline so we have something concrete to
-  identify as "lost" / "extension-needed" features.
+  compare against (used to identify the "lost" / extension-needed features).
+- The legacy app (`<source_app>/`) still being readable — Phase 1 mines its features even
+  though the legacy app itself is not modified.
 
-> **Domain example.** Annotation templates in this skill use an illustrative `Project → Tasks
-> → TimeEntries` domain. Substitute the user's entities throughout — the LLM running this
-> skill should rewrite every projection/entity/field identifier to match the V4 service.
+> **Domain example.** Annotation templates use an illustrative `Project → Tasks → TimeEntries`
+> domain. Substitute the user's entities throughout — the LLM rewrites every projection /
+> entity / field identifier to match the V4 service.
 
 ## Why this is its own skill
 
-Fiori Elements isn't a code transformation — it's a **deletion**. Most of the freestyle app
-is replaced by FE templates that interpret CDS annotations. The skill's real job is:
+Fiori Elements isn't a code transformation — it's a **deletion + relocation**. Most of the
+freestyle app is replaced by FE templates that interpret CDS annotations. The skill's three
+real jobs:
 
-1. Adding `@UI.*` annotations to the RAP CDS projection so FE knows what to render.
-2. Generating an FE list-report + object-page project that consumes the V4 service.
-3. Identifying the few places where the freestyle app did something FE templates can't, and
-   wiring them via extension API (controller extensions + extension points).
+1. **Derive** the right `@UI.*` annotations from the legacy app's user-visible features so the
+   FE renders an equivalent UX.
+2. **Apply** those annotations to the RAP CDS projection (the service the SRVB exposes).
+3. **Generate** the FE list-report + object-page project via the **SAP Fiori MCP server**
+   (`@sap-ux/fiori-mcp-server`), and wire **extensions** for anything FE templates can't express.
 
 ## Smart defaults (apply silently — do NOT ask before research)
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Source TS app | `<modern_app>/` | The freestyle TS app from `modernize-ui5-app.md` |
-| Target FE app | `<fe_app>/` | Reserved folder for this skill's output |
-| FE floorplan | List Report + Object Page (LROP V4) when the BO has a clear root + child facets | Maps cleanly to the typical RAP composition root + children |
-| Template | `lropv4` (or `feopv4` if user wants OP-only) | Default LROP unless explicitly told otherwise |
-| App namespace | `<source_namespace>.fe` | Keeps the three apps distinguishable |
+| Source TS app | `<modern_app>/` | The TS baseline from `modernize-ui5-app.md` — used for feature classification and as the reference for what extensions need to preserve |
+| Legacy reference app | `<source_app>/` | The original freestyle JS app — read-only; mined in Phase 1 for feature inventory. Authoritative source of the "lost feature" list. |
+| Target FE app | `<fe_app>/` | Reserved folder; Fiori MCP generates here |
+| FE floorplan | List Report + Object Page (LROP V4) when the BO has a clear root + child facets | Maps cleanly to the typical RAP composition root + children. OVP only if the user explicitly asks. |
+| Template | `lropv4` | Default unless the user asks otherwise |
+| Generator | **SAP Fiori MCP server (`@sap-ux/fiori-mcp-server`)** via the `list_functionalities` → `get_functionality_details` → `execute_functionality` sequence | First-party SAP tool; understands FE V4 patterns natively |
+| App namespace | `<source_namespace>.fe` | Keeps the three apps (legacy / modern / FE) distinguishable |
 | UI5 version | Match `<modern_app>/`'s UI5 version | Same FE tooling release across the chain |
 | Language | TypeScript | Match the modern app; extension files are TS |
-| OData V4 service URL | User-provided. Default: derive from the SRVB name produced by `migrate-segw-to-rap` (typical shape `/sap/opu/odata4/sap/<service>_o4/srvd_a2x/sap/<service>/0001`). | The FE generator needs the exact endpoint to bind `$metadata` |
-| Main entity | The root entity exposed by the SRVB (the alias on the root projection's `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
-| Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file | The annotations belong to the service; FE app reads them via `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
-| Extension language | TypeScript | Match the rest of the chain |
-| Acceptance | FE app runs end-to-end against the V4 service: list-report shows the root entity; OP shows child facets; row navigation works; any RAP `action` annotation renders as a header button | Concrete deliverable; verifiable by browser smoke test |
+| OData V4 service URL | User-provided. Default: derive from the SRVB name produced by `migrate-segw-to-rap` (shape `/sap/opu/odata4/sap/<service>_o4/srvd_a2x/sap/<service>/0001`). | The Fiori MCP generator needs the exact endpoint to fetch `$metadata` |
+| Main entity | Root entity alias exposed by the SRVB (e.g. the alias on `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
+| Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
+| Extension language | TypeScript (controller extensions) | Match the rest of the chain |
+| Validation | `mcp__SAPUI5_MCP_Server__run_ui5_linter` + `run_manifest_validation` + `tsc --noEmit` all green | The hard acceptance criteria |
+| Acceptance | FE app runs end-to-end against the V4 service. Browser smoke covers every feature inventoried in Phase 1 — reproduced through annotations or extension hooks. | Concrete deliverable |
 
 ## Input
 
-- A path to the modern TS app (default: `<modern_app>/`).
-- A path/name for the FE app (default: `<fe_app>/`).
-- Optional: a `featureMap` describing which freestyle features must survive as extensions.
-  If omitted, the skill discovers them by reading the modern app.
+The user provides:
 
-If the user provides nothing, default to `<modern_app>/` ➜ `<fe_app>/`.
+- **Path** to the modern TS app (default: `<modern_app>/`).
+- **Path** to the legacy app for feature mining (default: `<source_app>/`). Read-only.
+- **Path / name** for the FE app (default: `<fe_app>/`).
+- **OData V4 service URL** — derived from `migrate-segw-to-rap`'s SRVB output. Required.
+- **Root entity alias** (e.g. `Project`). Default: infer from the SRVB's `$metadata`.
+- **App namespace** (default: `<source_namespace>.fe`).
+- **Transport** for the CDS annotation writes (default: same transport used by
+  `migrate-segw-to-rap`, or auto-create via `SAPTransport(action="create")`).
+
+If only the legacy app path and V4 URL are provided, apply smart defaults and surface the plan
+in Phase 3 for user `ok` before any writes.
 
 ---
 
@@ -66,172 +80,317 @@ SAPManage(action="probe")
 Assert `rap.available == true`.
 
 ```text
-SAPRead(type="SRVB", name="ZUI_DM_PROJECTS_O4")
+SAPRead(type="SRVB", name="<V4_SRVB>")
 ```
 
-Assert the SRVB exists and is active. If not, stop with *"V4 service binding
-`ZUI_DM_PROJECTS_O4` is missing or inactive — run `migrate-segw-to-rap.md` first."*
+Assert the SRVB exists and is active. If not, stop with *"V4 service binding `<V4_SRVB>` is
+missing or inactive — run `migrate-segw-to-rap.md` first."*
 
 ```text
-Bash: curl -s "<base>/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001/$metadata" | head -5
+Bash: curl -s -o /tmp/svc_metadata.xml -w "%{http_code}\n" "<base>/<V4_service_URL>/$metadata"
 ```
 
-Assert 200 OK and valid XML. If 403, the V4 service group registration is missing — surface
-the well-known `/n/IWFND/MAINT_SERVICE` manual step.
+Assert 200 OK. If 403, the V4 service group registration is missing — surface the manual step
+`/n/IWFND/MAINT_SERVICE` and stop.
 
 ### 0b. CDS projection is readable + writable
 
 ```text
-SAPRead(type="DDLS", name="ZC_DM_PROJECT")
+SAPRead(type="DDLS", name="<root_projection>")
 ```
 
-Assert active version returns. If not, stop with *"Projection `ZC_DM_PROJECT` is missing —
-re-run `migrate-segw-to-rap.md` Phase 6 Step 3."*
+Assert active version returns. If not, stop with *"Root projection is missing — re-run
+`migrate-segw-to-rap.md` Phase 6 Step 3."*
 
-### 0c. Modern TS app exists
+### 0c. Modern + legacy apps exist
 
 ```text
-Bash: cat <modern>/webapp/manifest.json | head -20
-Bash: ls <modern>/webapp/controller/
+Bash: ls <modern_app>/webapp/controller/ <source_app>/webapp/controller/ <source_app>/webapp/view/
 ```
 
-Assert manifest parses and controllers exist. Stop with the explicit reason otherwise.
+Assert both webapp folders are populated. Stop with explicit reason if either is missing —
+the legacy app drives the annotation plan; the modern app drives the extension list.
 
-### 0d. UI5 MCP reachable
+### 0d. SAP Fiori MCP server reachable
 
 ```text
-mcp__SAPUI5_MCP_Server__get_version_info
+mcp__fiori-mcp__list_functionalities
 ```
 
-Assert version is recent enough to template FE V4 (>= 1.130).
+If this call fails, the Fiori MCP server isn't configured in this chat. Surface the
+configuration block and stop:
+
+```jsonc
+// .cursor/mcp.json (or equivalent)
+{
+  "mcpServers": {
+    "fiori-mcp": {
+      "type": "stdio",
+      "timeout": 600,
+      "command": "npx",
+      "args": ["--yes", "@sap-ux/fiori-mcp-server@latest", "fiori-mcp"]
+    }
+  }
+}
+```
+
+(Source: [@sap-ux/fiori-mcp-server README on
+github.com/SAP/open-ux-tools](https://github.com/SAP/open-ux-tools/tree/main/packages/fiori-mcp-server).)
+
+Optional companion: `mcp__SAPUI5_MCP_Server__*` for post-generation lint + manifest validation
+(already used by `modernize-ui5-app.md`).
+
+### 0e. Connection Manager (optional)
+
+For scenarios that use a saved BTP / on-prem system connection rather than a direct service
+URL, the Fiori MCP server depends on the **Connection Manager for SAP Systems** VS Code
+extension. For the direct-URL flow this skill uses, the extension is **not** required — the
+service URL is passed straight through to `execute_functionality`.
 
 ---
 
-## Phase 1 — Discover what FE templates can vs. cannot handle
+## Phase 1 — Inventory the legacy app's user-visible features
 
-Read the modern TS app and classify each user-facing feature as:
+This is the heart of the annotation plan. The FE app must reproduce every user-visible
+behavior of the legacy app. Read **every** relevant legacy file and produce a feature
+inventory.
 
-- **standard** — FE templates render this natively (list, sort, filter, group, paginate, edit,
-  create, delete, draft, value help on FK fields).
-- **annotation-driven** — Achievable by adding the right `@UI.*` annotation (column order,
-  visible facets, header info, identification group, line-item arrangement).
-- **extension** — Genuinely custom behavior that needs an extension controller or extension
-  point hook in the FE app.
-
-### 1a. Read every controller in the modern app
+### 1a. Read the legacy manifest
 
 ```text
-Bash: ls <modern>/webapp/controller/
-Read: <modern>/webapp/controller/<each>.controller.ts
+Read: <source_app>/webapp/manifest.json
 ```
 
-For each controller, enumerate every public method. Classify per the rules above. Typical
-findings from a freestyle migration:
+Pull: `sap.ui5.routing.routes` (what URLs the user can reach), `sap.ui5.rootView`,
+`sap.app.dataSources`, `i18n`. The routes tell you the navigation tree; the data sources tell
+you what service shape the legacy app expects.
 
-| Feature | Class | Notes |
-|---|---|---|
-| Project list + paging | standard | FE list-report default |
-| Project sort by Status / EndDate | annotation-driven | `@UI.selectionFields` |
-| Open project on row click | standard | FE row navigation default |
-| Tasks list under each project | annotation-driven | `@UI.facet` referencing `_Tasks` association |
-| Time entries under each task | annotation-driven | nested facet |
-| ApproveProject button | annotation-driven | BDEF `action` annotation auto-renders header button |
-| Custom validation before approve | extension | `onBeforeAction` extension hook |
-| Side-effect badge in the list | annotation-driven | `@UI.dataPoint` |
-| Open external URL on a field click | extension | `routeMatched` extension or custom `Press` event |
-
-### 1b. Read the legacy view files for context
+### 1b. Read every legacy view
 
 ```text
-Bash: ls <modern>/webapp/view/
-Read: <modern>/webapp/view/<each>.view.xml
+Bash: ls <source_app>/webapp/view/
+Read: <source_app>/webapp/view/<each>.view.xml
 ```
 
-Confirm column lists / form sections. The annotation plan in Phase 2 needs to know which
-fields are "headline" vs. "detail" vs. "hidden".
+For each view, inventory:
 
-### 1c. Build the feature classification report
+- **Page title** (from `<Page title=...>`).
+- **Header content** — buttons, with their conditions (e.g. `enabled="{= ${Status} === 'D'}"`).
+- **List/table columns** — every `<Column>` with its bound field, sort direction, alignment.
+- **Search fields** — `<SearchField>` with `liveChange` + `placeholder`.
+- **Sort defaults** — `sorter` clause on list bindings (path + ascending/descending).
+- **Item structure** — `ObjectListItem`/`ColumnListItem`/`ObjectHeader` with their attributes,
+  status fields, formatter calls.
+- **Tab structure** — `IconTabBar` + `IconTabFilter` entries (which entities are tabbed,
+  whether each tab has a counter).
+- **Navigation handlers** — `press`/`selectionChange` callbacks (rows clickable → navigation).
+- **Counters, footers** — informational widgets (item counts, totals).
+
+### 1c. Read every legacy controller
 
 ```text
-Feature classification — <modern>:
-
-Standard (handled by FE templates out of the box):
-  - <n features>
-
-Annotation-driven (need @UI.* in ZC_DM_PROJECT or related projections):
-  - @UI.lineItem on ProjectId, Title, Status, StartDate, EndDate
-  - @UI.selectionFields on Status, ProjectId
-  - @UI.headerInfo on Title (title) + ProjectId (description)
-  - @UI.facet for Tasks (via _Tasks association)
-  - @UI.facet for TimeEntries (via _Tasks._TimeEntries)
-  - BDEF action annotation: approve_project ➜ object-page header button
-  - <list more as discovered>
-
-Extension hooks needed:
-  - Custom validation on ApproveProject ➜ ListReportExt / ObjectPageExt
-  - <list more as discovered>
+Bash: ls <source_app>/webapp/controller/
+Read: <source_app>/webapp/controller/<each>.controller.js
 ```
+
+For each controller, inventory:
+
+- **Action handlers** — what does each `on<Action>` method do? (Call OData function import?
+  Filter? Re-bind? Show MessageBox?)
+- **Filtering / search logic** — what fields, what `FilterOperator`, what bind path?
+- **Function-import calls** — `oModel.callFunction(...)` calls and their parameter shapes.
+- **Custom validation** — pre-call checks before function imports / submits.
+- **Custom navigation** — anything that bypasses the manifest router.
+- **Custom client-side state** — JSONModels created for UI-only state (e.g. tab counters fed
+  from non-OData sources).
+
+### 1d. Read every legacy formatter
+
+```text
+Read: <source_app>/webapp/model/formatter.js
+```
+
+For each formatter function, inventory:
+
+- **What it formats** — status code → text, status code → semantic state (Success/Warning/Error),
+  date → short format, hours → decimal, etc.
+- **The code→text mapping** — capture the exact values (e.g. `D → "Draft"`, `A → "Active"`,
+  `C → "Closed"`).
+
+These map directly to CDS annotation patterns — `@Common.Text` + `@UI.TextArrangement`,
+`@UI.Criticality`, value-help collections, etc.
+
+### 1e. Build the feature inventory
+
+Print the structured inventory to the user:
+
+```text
+Feature inventory — <source_app>:
+
+ROOT ENTITY (Project):
+  Display name (header):    Title
+  Description (sub):        ProjectId
+  Status (criticality):     Status field — values D=Draft (Warning) / A=Active (Success) / C=Closed (Neutral)
+  Sort default:             StartDate descending
+  Search (master):          ProjectId, Title (Contains, OR-joined)
+  Audit fields:             Erdat (Created), Ernam (Created by), Aedat (Changed), Aenam (Changed by)
+  Header button:            Approve — enabled when Status == 'D', calls /ApproveProject(ProjectId)
+  Count footer:             "<n> projects" displayed below the list
+
+CHILD ENTITY (Task):
+  Tab in detail:            "Tasks"
+  Counter:                  from binding length
+  Columns:                  TaskId, Title+Description, Status, Priority, DueDate, AssignedTo, EstimatedHours
+  Status criticality:       Status: D/IP/D/C (Draft/InProgress/Done/Cancelled) — see formatter
+  Priority criticality:     L/M/H (Low/Medium/High) — see formatter
+  Click behavior:           Selecting a task populates the TimeEntries tab
+
+CHILD-OF-CHILD ENTITY (TimeEntry):
+  Tab in detail:            "Time Entries"
+  Counter:                  from selected task's TimeEntries length
+  Columns:                  EntryId, TaskId, WorkDate, WorkHours, Description, Username
+
+FORMATTERS:
+  statusText:       D → "Draft", A → "Active", C → "Closed"
+  statusState:      D → Warning, A → Success, C → Neutral
+  taskStatusText:   D → "Draft", IP → "In Progress", DN → "Done", CN → "Cancelled"
+  taskStatusState:  same scheme
+  priorityText:     L → "Low", M → "Medium", H → "High"
+  priorityState:    L → Neutral, M → Warning, H → Error
+  dateShort:        custom YYYY-MM-DD
+  hoursDecimal:     two decimal places
+
+FUNCTION IMPORT (V2):
+  ApproveProject(ProjectId) → translates to RAP action approve_project (already in BDEF)
+```
+
+This inventory is the contract for Phase 2.
 
 ---
 
-## Phase 2 — Annotation plan + user approval
+## Phase 2 — Map features to annotations + extensions
+
+Classify each inventory item as one of:
+
+- **STANDARD** — FE templates render this natively (pagination, row click navigation,
+  search-by-key, basic edit, basic create, basic delete, draft support).
+- **ANNOTATION** — needs a specific `@UI.*` / `@Common.*` / `@ObjectModel.*` annotation on
+  the CDS projection. Most legacy features land here.
+- **EXTENSION** — genuinely custom behavior FE templates can't express; needs a controller
+  extension on the FE app side.
+
+### 2a. Annotation map (typical for the Project/Task/TimeEntry domain)
+
+| Legacy feature | Annotation in `<root_projection>` (CDS) |
+|---|---|
+| Header title = `Title` | `@UI.HeaderInfo.title.value: 'Title'` |
+| Header description = `ProjectId` | `@UI.HeaderInfo.description.value: 'ProjectId'` |
+| Header type label "Project" | `@UI.HeaderInfo.typeName: 'Project'`, `typeNamePlural: 'Projects'` |
+| List columns (master): ProjectId, Title, Status, StartDate, EndDate | `@UI.LineItem: [{ value: 'ProjectId', position: 10 }, { value: 'Title', position: 20 }, { value: 'Status', position: 30, criticality: 'StatusCriticality' }, { value: 'StartDate', position: 40 }, { value: 'EndDate', position: 50 }]` |
+| Status code → text + color | `@Common.Text: { value: 'StatusText', element: 'StatusText' }` + `@UI.TextArrangement: #TEXT_FIRST`, plus a **virtual field** `StatusCriticality` on the projection that returns the FE numeric criticality (0=Neutral, 1=Negative, 2=Critical, 3=Positive) |
+| Sort default StartDate desc | `@UI.PresentationVariant.SortOrder: [{ Property: 'StartDate', Descending: true }]` |
+| Search by ProjectId + Title | `@Search.searchable: true` at view level + `@Search.defaultSearchElement: true` on ProjectId and Title; `@UI.SelectionFields: ['ProjectId', 'Title', 'Status']` for the filter bar |
+| Audit-field display | `@UI.Identification`: Erdat, Ernam, Aedat, Aenam grouped as `@UI.FieldGroup.Audit` with `@UI.Facet` referencing the group |
+| Approve button (header) | RAP action `approve_project` is already annotated by the BDEF; FE renders it as a header button automatically. Add `@UI.LineItem` `dataAction` reference if you want it as a row action too. |
+| Project count footer | FE's list-report shows the count natively; no annotation needed |
+| Tasks tab in OP | `@UI.Facet` of type `#LINEITEM_REFERENCE` targeting `_Tasks` association |
+| Tasks columns | `@UI.LineItem` on `<child_projection_task>` (similar shape to the root LineItem) |
+| Priority field with color | `@Common.Text` + virtual `PriorityCriticality` field, same pattern as Status |
+| TimeEntries tab in OP (nested) | `@UI.Facet` referencing `_Tasks._TimeEntries`. **Note**: FE V4 supports nested LineItem facets via the `_Tasks._TimeEntries` path — verify on your release |
+| TimeEntries columns | `@UI.LineItem` on `<child_projection_timeentry>` |
+
+### 2b. Extension map (typical)
+
+| Legacy feature | Extension hook |
+|---|---|
+| Status === 'D' guard on Approve | FE's BDEF action button is enabled per the BDEF's `precheck`. If the legacy app's enable rule differs from the BDEF, **add the precheck on the BDEF** (Step 2c) rather than overriding in JS. |
+| Custom validation before Approve (e.g. require Description) | `editFlow.onBeforeAction` controller extension on the ObjectPage |
+| Custom client-side count footer phrasing | Skipped — FE list-report shows native count |
+| Custom navigation patterns | Almost never needed; FE's row → OP nav is default |
+| MessageBox on approve failure | Native FE error toast already handles this |
+
+### 2c. BDEF-side preparation (run AFTER 2b, BEFORE Phase 4)
+
+If the inventory surfaced a guard like "Approve button only when Status === 'D'", that's a
+**precondition**, not a UI concern. Encode it on the BDEF side via the action's `precheck`
+clause, then re-activate. (This step belongs in `migrate-segw-to-rap.md` Step 5 but call it
+out explicitly here when the legacy guard wasn't already lifted.) Example:
+
+```abap
+action approve_project precheck result [1] $self;
+```
+
+with a `precheck` method in the behavior pool that fills `%cid` / `%key` and asserts
+`Status == 'D'`. Skill defers the actual `precheck` body to `edit_method` if needed.
+
+---
+
+## Phase 3 — Plan + user approval
 
 Print the plan in this exact format and STOP for `ok` / `edit` / question:
 
 ```text
-Plan — generate FE app at <target>:
+Plan — generate FE app at <fe_app>:
 
-Floorplan:        List Report + Object Page (LROP V4)
-Namespace:        <source_namespace>.fe
-UI5 version:      1.147.2 TS
-OData V4 source:  <base>/sap/opu/odata4/.../zui_dm_projects/0001
+Floorplan:           List Report + Object Page (LROP V4)
+Namespace:           <source_namespace>.fe
+UI5 version:         <modern_app>'s UI5 version
+V4 service:          <V4_service_URL>
+Main entity:         <root_alias> (alias on the root projection)
+Generator:           SAP Fiori MCP server (@sap-ux/fiori-mcp-server)
 
-Annotations to add (via SAPWrite update DDLS on the projection):
-  ZC_DM_PROJECT:
-    @UI.lineItem        (list-report columns): ProjectId, Title, Status, StartDate, EndDate
-    @UI.headerInfo      (object-page header): title=Title, description=ProjectId
-    @UI.selectionFields (filter bar): Status, ProjectId
-    @UI.facet           Tasks (via _Tasks), TimeEntries (via _Tasks._TimeEntries)
-    @UI.identification  (form section): Description, StartDate, EndDate, Status
+Backend annotation writes (via SAPWrite update DDLS on the projection):
+  <root_projection>:
+    @UI.HeaderInfo, @UI.SelectionFields, @UI.LineItem (root columns),
+    @UI.Identification, @UI.PresentationVariant.SortOrder,
+    @UI.FieldGroup.Audit, @UI.Facet (Identification + Tasks)
+    @Common.Text + virtual <field>Criticality (Status)
 
-  ZC_DM_TASK:
-    @UI.lineItem        in Tasks facet: TaskId, Title, Status, Priority, DueDate
-    @UI.headerInfo      title=Title, description=TaskId
+  <child_projection_task>:
+    @UI.LineItem (Task columns), @UI.HeaderInfo,
+    @UI.Facet (Task identification + TimeEntries),
+    @Common.Text + virtual fields for Status, Priority
 
-  ZC_DM_TIMEENTRY:
-    @UI.lineItem        in TimeEntries facet: EntryId, WorkDate, WorkHours, Description
+  <child_projection_timeentry>:
+    @UI.LineItem (TimeEntry columns), @UI.HeaderInfo
 
-  ZI_DM_PROJECT_BEH (BDEF):
-    action approve_project gets @UI.headerInfo button rendering (already from BDEF action;
-    no extra annotation needed)
+BDEF-side adjustments (via SAPWrite update BDEF / edit_method):
+  <list precheck additions, if any>
 
-Extension hooks (TS files to scaffold in <target>):
-  - controller/ListReportExt.ts        — onBeforeRendering, page-level helpers
-  - controller/ObjectPageExt.ts        — onBeforeAction("approve_project") validation
-  - <list per feature classification>
+FE app generation (via Fiori MCP):
+  Step 1: list_functionalities      → enumerate supported FE app creations
+  Step 2: get_functionality_details → "create FE V4 list-report+OP for external OData service"
+  Step 3: execute_functionality     → pass service URL, root entity, namespace, target folder
 
-Plain-text strings the FE templates need (label, headerInfo title text, etc) come from the
-existing `@EndUserText.label` already on the CDS field aliases.
+Extension scaffold (post-generation):
+  - <controller-extension list per Phase 2b>
+
+Validation:
+  - ui5-linter clean
+  - manifest validation clean
+  - tsc --noEmit clean
+  - browser smoke against every Phase 1 inventory item
 
 Type `ok` to proceed, `edit` to revise, or ask any question.
 ```
 
-Wait for `ok` before mutating anything.
+Wait for `ok` before mutating anything in the SAP system or generating the FE app.
 
 ---
 
-## Phase 3 — Add `@UI.*` annotations to the CDS projections
+## Phase 4 — Write `@UI.*` annotations to CDS projections (backend preparation)
 
-For each projection, read the current source, splice the annotations onto the right
-declarations, and `update` via ARC-1.
+This is the "prepare the annotations in the backend" step. Do **all** the CDS writes here
+BEFORE invoking the Fiori MCP generator — the generator reads the annotated `$metadata`, so
+the annotations must be active and the SRVB republished before the generator runs.
 
-### 3a. Annotate `ZC_DM_PROJECT` (root projection)
+### 4a. Annotate the root projection
 
 ```text
-SAPRead(type="DDLS", name="ZC_DM_PROJECT")
+SAPRead(type="DDLS", name="<root_projection>")
 ```
 
-Splice annotation blocks per the plan:
+Splice in the planned annotations. Concrete shape (substitute your entities):
 
 ```cds
 @Metadata.allowExtensions: true
@@ -242,25 +401,38 @@ Splice annotation blocks per the plan:
   title:          { value: 'Title' },
   description:    { value: 'ProjectId' }
 }
-@UI.selectionFields: [ 'Status', 'ProjectId' ]
+@UI.selectionFields: [ 'ProjectId', 'Title', 'Status' ]
+@UI.presentationVariant: [{
+  qualifier: 'DefaultSort',
+  sortOrder: [{ by: 'StartDate', direction: #DESC }]
+}]
 @UI.facet: [
-  { id: 'GeneralInfo', purpose: #STANDARD,    type: #IDENTIFICATION_REFERENCE, label: 'General' },
-  { id: 'Tasks',       purpose: #STANDARD,    type: #LINEITEM_REFERENCE,        label: 'Tasks',      targetElement: '_Tasks' }
+  { id: 'GeneralInfo',  purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE, label: 'General' },
+  { id: 'AuditInfo',    purpose: #STANDARD, type: #FIELDGROUP_REFERENCE, label: 'Audit',
+    targetQualifier: 'Audit' },
+  { id: 'Tasks',        purpose: #STANDARD, type: #LINEITEM_REFERENCE, label: 'Tasks',
+    targetElement: '_Tasks' }
 ]
-define root view entity ZC_DM_PROJECT
+@Search.searchable: true
+define root view entity <root_projection>
   provider contract transactional_query
-  as projection on ZR_DM_PROJECT
+  as projection on <root_view>
 {
-  key   @UI.lineItem:       [{ position: 10 }]
+  key   @UI.lineItem:       [{ position: 10, importance: #HIGH }]
         @UI.identification: [{ position: 10 }]
+        @UI.selectionField: [{ position: 10 }]
+        @Search.defaultSearchElement: true
         ProjectId,
 
-        @UI.lineItem:       [{ position: 20 }]
+        @UI.lineItem:       [{ position: 20, importance: #HIGH }]
         @UI.identification: [{ position: 20 }]
+        @UI.selectionField: [{ position: 20 }]
+        @Search.defaultSearchElement: true
         Title,
 
-        @UI.lineItem:       [{ position: 30, criticality: #STATUS_CRITICALITY }]
+        @UI.lineItem:       [{ position: 30, criticality: 'StatusCriticality' }]
         @UI.identification: [{ position: 30 }]
+        @UI.selectionField: [{ position: 30 }]
         Status,
 
         @UI.lineItem:       [{ position: 40 }]
@@ -271,131 +443,194 @@ define root view entity ZC_DM_PROJECT
         @UI.identification: [{ position: 50 }]
         EndDate,
 
+        @UI.identification: [{ position: 60 }]
         Description,
-        Erdat, Erzet, Ernam, Aedat, Aezet, Aenam,
-        CreationTimeStamp, LastChangedStamp,
 
-  /* associations */
-  _Tasks
+        @UI.fieldGroup: [{ qualifier: 'Audit', position: 10, label: 'Created at' }]
+        Erdat,
+        @UI.fieldGroup: [{ qualifier: 'Audit', position: 20, label: 'Created by' }]
+        Ernam,
+        @UI.fieldGroup: [{ qualifier: 'Audit', position: 30, label: 'Changed at' }]
+        Aedat,
+        @UI.fieldGroup: [{ qualifier: 'Audit', position: 40, label: 'Changed by' }]
+        Aenam,
+
+        // virtual criticality field (computed from Status code)
+        @ObjectModel.virtualElementCalculatedBy: 'ABAP:<root_class>'  // OR via case-when below
+        virtual StatusCriticality : abap.int1,
+
+        /* associations */
+        _Tasks
 }
 ```
 
-```text
-SAPWrite(action="update", type="DDLS", name="<root_projection>", source="<spliced source>",
-         transport="<transport>")
-SAPActivate(type="DDLS", name="ZC_DM_PROJECT")
-```
-
-### 3b. Annotate `ZC_DM_TASK`
-
-Repeat with `@UI.lineItem` per Task field + a `@UI.facet` for `_TimeEntries`:
+For the virtual criticality, simplest cross-7.58-compatible option is a `case-when` directly
+in the projection:
 
 ```cds
-@UI.headerInfo: { title: { value: 'Title' }, description: { value: 'TaskId' } }
-@UI.facet: [
-  { id: 'TaskInfo',    purpose: #STANDARD, type: #IDENTIFICATION_REFERENCE, label: 'Task' },
-  { id: 'TimeEntries', purpose: #STANDARD, type: #LINEITEM_REFERENCE, label: 'Time Entries', targetElement: '_TimeEntries' }
-]
-define view entity ZC_DM_TASK as projection on ZR_DM_TASK { ... }
+case Status
+  when 'D' then 2    // Critical (Warning)
+  when 'A' then 3    // Positive (Success)
+  when 'C' then 0    // Neutral
+  else          0
+end as StatusCriticality,
 ```
 
-### 3c. Annotate `ZC_DM_TIMEENTRY`
-
-`@UI.lineItem` per TimeEntry field. No further facets — TimeEntry is a leaf.
-
-### 3d. Verify $metadata reflects the annotations
+Write the spliced source:
 
 ```text
-Bash: curl -s "<base>/sap/opu/odata4/.../zui_dm_projects/0001/$metadata" | grep -E "UI.LineItem|UI.HeaderInfo|UI.Facets" | head -10
+SAPWrite(action="update", type="DDLS", name="<root_projection>",
+         source="<spliced source>", transport="<transport>")
+SAPActivate(type="DDLS", name="<root_projection>")
 ```
 
-Should show inline annotations in the V4 metadata. If empty, the SRVD/SRVB hasn't picked up
-the CDS changes — re-publish:
+### 4b. Annotate every child projection
+
+Repeat the pattern for each `<child_projection_X>`. Each child gets:
+
+- `@UI.headerInfo` (title/description)
+- `@UI.lineItem` for every column the legacy view showed
+- `@UI.facet` if the child has further children (e.g. `_TimeEntries` under Task)
+- Virtual criticality fields for any code-with-color field surfaced in the inventory
+
+### 4c. Publish the SRVB
+
+The SRVB needs republishing for the new annotations to surface in `$metadata`:
 
 ```text
-SAPWrite(action="publish_srvb", name="ZUI_DM_PROJECTS_O4")
+SAPWrite(action="publish_srvb", name="<V4_SRVB>")
 ```
+
+### 4d. Verify annotations land in `$metadata`
+
+```text
+Bash: curl -s "<base>/<V4_service_URL>/$metadata" | grep -oE 'UI\.(LineItem|HeaderInfo|Facets|SelectionFields|PresentationVariant|FieldGroup|Identification)' | sort -u
+```
+
+Expected output: every annotation kind you wrote shows up in the listing. If empty, the SRVB
+didn't pick up the changes — re-run `publish_srvb`. If only some show, the projection wasn't
+re-activated cleanly — `SAPDiagnose(action="object_state", type="DDLS", name="<root_projection>")`
+to inspect.
 
 ---
 
-## Phase 4 — Generate the FE app
+## Phase 5 — Generate the FE app via the SAP Fiori MCP server
+
+This is the "use Fiori MCP to create the app" step. The Fiori MCP server exposes a
+three-tool dance — `list_functionalities` → `get_functionality_details` → `execute_functionality`.
+Each step narrows scope. Do not skip steps even if you think you know the params.
+
+References:
+- [SAP/open-ux-tools — fiori-mcp-server README](https://github.com/SAP/open-ux-tools/tree/main/packages/fiori-mcp-server)
+- [npm: @sap-ux/fiori-mcp-server](https://www.npmjs.com/package/@sap-ux/fiori-mcp-server)
+- [SAP Community: First Release of the SAP Fiori MCP Server](https://community.sap.com/t5/technology-blog-posts-by-sap/sap-fiori-tools-update-first-release-of-the-sap-fiori-mcp-server-for/ba-p/14204694)
+
+> The Fiori MCP server is **experimental** at the time of this skill's writing. Tool
+> signatures may change. If `list_functionalities` returns a different shape than expected,
+> follow the live response — the README above is the source of truth.
+
+### 5a. Discover what the server can do
 
 ```text
-mcp__SAPUI5_MCP_Server__create_ui5_app(
-  appName    = "<target-folder-basename>",
-  namespace  = "<source_namespace>.fe",
-  version    = "1.147.2",
-  framework  = "OpenUI5",
-  language   = "TypeScript",
-  template   = "lropv4",
-  serviceUrl = "<base>/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001",
-  mainEntity = "Project"
+mcp__fiori-mcp__list_functionalities
+```
+
+Inspect the response for a functionality that matches "create a new Fiori elements application
+for an external OData V4 service". The exact name in the response depends on the server version
+— look for keywords like `create`, `fiori-elements`, `list-report`, `lropv4`, `external-service`.
+
+If the server doesn't have a matching functionality:
+
+- It might require a CAP project. In that case, generate via the legacy fallback
+  (`@sap/generator-fiori` CLI — see 5d) and document the gap as a Run capture for next iteration.
+- Or the user's Fiori MCP version is older than expected. Re-check by running:
+  ```text
+  Bash: npx --yes @sap-ux/fiori-mcp-server@latest --version
+  ```
+  and instructing the user to update the MCP config to pin the latest.
+
+### 5b. Get parameter requirements for the chosen functionality
+
+```text
+mcp__fiori-mcp__get_functionality_details(name="<the-functionality-name-from-5a>")
+```
+
+The response lists required + optional parameters. For the LROP-for-external-service flow,
+typical required parameters include:
+
+- `serviceUrl` — `<V4_service_URL>` (the `$metadata`-backed endpoint from Phase 0a)
+- `mainEntity` or `entitySet` — the root entity alias from the SRVB (e.g. `Project`)
+- `targetPath` — `<fe_app>/` (the folder to generate into)
+- `namespace` — `<source_namespace>.fe`
+- `appId` / `appName` — the application identifier
+- `ui5Version` — match `<modern_app>`'s UI5 version
+- `language` — `typescript`
+
+Map the user-supplied inputs onto the required parameters. If a required parameter has no
+mapping, **stop and ask the user**. Do not invent values.
+
+### 5c. Execute the generator
+
+```text
+mcp__fiori-mcp__execute_functionality(
+  name="<the-functionality-name-from-5a>",
+  parameters={
+    serviceUrl: "<V4_service_URL>",
+    mainEntity: "<root_alias>",
+    targetPath: "<fe_app>",
+    namespace:  "<source_namespace>.fe",
+    appName:    "<short-app-id>",
+    ui5Version: "<ui5-version>",
+    language:   "typescript"
+  }
 )
 ```
 
-If `create_ui5_app` doesn't expose `template=lropv4`, fall back to the Yeoman generator that
-ships with `@sap/generator-fiori`:
+Wait for the generator to finish. Verify the structure:
 
 ```text
-Bash: cd <workspace> && npx --yes @sap/generator-fiori --no-deploy --template "fiori-elements:lrop"
-```
-
-Then patch the generated `package.json` to use TS (`ui5-tooling-transpile`) if needed.
-
-### 4a. Verify the generated structure
-
-```text
-Bash: ls <target>/webapp/ && cat <target>/webapp/manifest.json | head -40
+Bash: ls <fe_app>/webapp/ && cat <fe_app>/webapp/manifest.json | head -40
 ```
 
 Expected:
 
 - `webapp/Component.ts`
-- `webapp/manifest.json` with `sap.ui.generic.app` config (LRO + OP pages)
+- `webapp/manifest.json` with `sap.ui.generic.app` / `sap.fe.templates` config
 - `webapp/i18n/i18n.properties`
-- `webapp/ext/` (folder for extensions, may be empty at first)
+- `webapp/ext/` (extension folder — may be empty)
 - `package.json` / `ui5.yaml` / `tsconfig.json`
 
-### 4b. Wire `sap.app.dataSources.mainService` to the V4 service explicitly
+### 5d. Fallback if the MCP server can't do it
 
-The generator may have used a placeholder URL. Replace it with the real V4 endpoint and confirm
-`odataVersion: "4.0"`.
-
-### 4c. Smoke-test the empty FE app
+If `list_functionalities` doesn't expose an external-service path, fall back to the
+`@sap/generator-fiori` CLI:
 
 ```text
-Bash: cd <target> && npm install && (npm start &)
+Bash: cd <workspace> && npx --yes @sap/generator-fiori --no-deploy
 ```
 
-Wait ~5 seconds, then:
+Walk through the prompts (or pass `--skip-install` with explicit args). This is the same
+generator the MCP server wraps — slower because it's interactive, but always works.
 
-```text
-Bash: curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/index.html
-```
-
-(Use a different port from `<modern_app>/`'s `8080`.)
-
-Open in a browser. The list-report should render with the columns dictated by `@UI.lineItem`.
-If it's empty, check the console for `400` / `404` from the metadata fetch — usually the V4
-URL is wrong or the service group isn't registered.
+Capture the gap in `RUN-NOTES.md` so the next iteration can fix the prompt for the MCP path.
 
 ---
 
-## Phase 5 — Implement extension hooks
+## Phase 6 — Configure extensions for the EXTENSION list from Phase 2b
 
-For each "extension" feature from Phase 1's classification, scaffold a TS extension. FE
+For each row in the Phase 2b extension map, scaffold a TS controller extension. FE V4
 extensions come in two flavors:
 
-- **Controller extensions** — extend a specific page controller. Used for `onBeforeAction`,
-  `onBeforeSave`, `routeMatched`, custom field validation.
-- **Extension points** — slot custom XML/Fragment into a specific spot in a page (header,
-  footer, before/after a section).
+- **Controller extensions** — extend the LR or OP controller via the `editFlow` /
+  `routing` / `appComponent` API.
+- **Extension points** — slot custom XML/Fragment into a specific spot (header, footer,
+  before/after a section).
 
-For the talk demo, the typical extension is the **ApproveProject pre-condition** — block the
-action if Description is empty:
+For the talk demo's typical extension (a precheck on approve that the BDEF doesn't already
+encode):
 
 ```text
-Write: <target>/webapp/ext/ObjectPageExt.ts
+Write: <fe_app>/webapp/ext/ObjectPageExt.ts
 ```
 
 ```typescript
@@ -407,15 +642,12 @@ import MessageBox from "sap/m/MessageBox";
  */
 export default class ObjectPageExt extends ControllerExtension {
   public static overrides = {
-    /**
-     * Block ApproveProject if Description is empty.
-     */
     editFlow: {
-      onBeforeAction: async function (this: ObjectPageExt, mParameters: {
-        actionName: string;
-        context: any;
-      }) {
-        if (mParameters.actionName !== "ZUI_DM_PROJECTS.approve_project") return;
+      onBeforeAction: async function (
+        this: ObjectPageExt,
+        mParameters: { actionName: string; context: any }
+      ) {
+        if (!mParameters.actionName.endsWith(".approve_project")) return;
         const description = mParameters.context.getProperty("Description");
         if (!description) {
           MessageBox.error("Cannot approve a project without a description.");
@@ -427,7 +659,7 @@ export default class ObjectPageExt extends ControllerExtension {
 }
 ```
 
-Register the extension in the FE manifest:
+Register the extension in `<fe_app>/webapp/manifest.json`:
 
 ```json
 "sap.ui5": {
@@ -446,83 +678,121 @@ Register the extension in the FE manifest:
 Run the linter after each extension scaffold:
 
 ```text
-mcp__SAPUI5_MCP_Server__run_ui5_linter(files=["<target>/webapp/ext/ObjectPageExt.ts"])
+mcp__SAPUI5_MCP_Server__run_ui5_linter(files=["<fe_app>/webapp/ext/ObjectPageExt.ts"])
 ```
 
-Repeat for every extension from Phase 1. Keep them small — one concern per extension class.
+Repeat for every entry in the extension map. Keep extensions small — one concern per class.
+
+If a feature classification is ambiguous (annotation? extension?), use the Fiori MCP's docs
+search to resolve:
+
+```text
+mcp__fiori-mcp__search_docs(query="custom validation before action Fiori elements V4")
+```
+
+This pulls the authoritative SAP guidance and prevents speculation.
 
 ---
 
-## Phase 6 — Validation + smoke test
+## Phase 7 — Validation + smoke test
 
-### 6a. Linter + manifest validation
+### 7a. Static checks
 
 ```text
 mcp__SAPUI5_MCP_Server__run_ui5_linter
 mcp__SAPUI5_MCP_Server__run_manifest_validation
-Bash: cd <target> && npx tsc --noEmit
+Bash: cd <fe_app> && npx tsc --noEmit
 ```
 
-All three must return clean before declaring done.
+All three must return clean.
 
-### 6b. End-to-end browser smoke
+### 7b. Dev server
 
-Restart the dev server (kill the previous `npm start` first to free port 8081):
+Restart the dev server on a different port from `<modern_app>`'s:
 
 ```text
-Bash: cd <target> && pkill -f "ui5 serve" ; (npm start &)
+Bash: cd <fe_app> && pkill -f "ui5 serve" ; (npm start -- --port 8082 &)
 ```
 
-Open `http://localhost:8081` in a browser. Validate (in order):
-
-1. **List-report renders** with at least 4 columns (ProjectId, Title, Status, StartDate, EndDate).
-2. **Filter bar** has Status + ProjectId filters from `@UI.selectionFields`.
-3. **Row click** opens the object page.
-4. **Object page header** shows Title + ProjectId (from `@UI.headerInfo`).
-5. **Identification section** shows the form fields.
-6. **Tasks facet** shows the related tasks (from the `_Tasks` association annotation).
-7. **Click a task** → TimeEntries facet shows that task's entries.
-8. **ApproveProject button** renders in the OP header (from BDEF action annotation).
-9. **Click Approve without a Description** → extension blocks with the message box.
-10. **Add a description, click Approve again** → success, Status flips to `A`.
-
-If any step fails, capture the symptom + console output + network log + ARC-1 / UI5 MCP calls
-into `RUN-NOTES.md` Run X.
-
-### 6c. Final report
+Wait ~5 seconds for the server to come up. Probe the entry point:
 
 ```text
-Fiori Elements conversion complete — <target>
+Bash: curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8082/index.html
+```
 
-Floorplan:    List Report + Object Page (LROP V4)
-UI5:          1.147.2 TS
-V4 service:   <URL>
-Annotations:  <count> @UI.* annotations added across <count> projections (ZC_DM_*)
-Extensions:   <count> controller extensions (<list>)
-Linter:       clean
-Manifest:     clean
-TypeCheck:    clean
-Browser:      all 10 smoke steps pass
+### 7c. Browser smoke against the Phase 1 inventory
 
-What just happened in 3 sentences:
-  - Started with the freestyle TS app (<modern_app>/) targeting V4.
-  - Annotated the CDS projections in the SAP system so FE knows how to render Project +
-    Tasks + TimeEntries.
-  - Generated the FE app (<fe_app>/) on top of the now-annotated $metadata, with custom
-    behavior surfacing through controller extensions.
+Open `http://localhost:8082` in a browser and validate **every** Phase 1 inventory item. The
+acceptance criterion is: the FE app reproduces every user-visible feature of the legacy app,
+either through annotations or extensions.
+
+Reference checklist (adapt to the user's inventory):
+
+1. **List-report renders** with the columns from `@UI.LineItem` in the right order.
+2. **Filter bar** shows the fields from `@UI.SelectionFields`.
+3. **Search** works on the fields marked `@Search.defaultSearchElement`.
+4. **Default sort** matches `@UI.PresentationVariant.SortOrder`.
+5. **Row click** opens the OP.
+6. **OP header** shows the right title/description from `@UI.HeaderInfo`.
+7. **Status field** in the row has the right color (criticality).
+8. **Tabs/facets** render each `@UI.Facet`-referenced association.
+9. **Nested facets** drill into grandchild entities (e.g. TimeEntries under Tasks).
+10. **Action button** renders for the BDEF action; clicking opens the action dialog or executes
+    directly.
+11. **Extension hook** fires for the cases inventoried in Phase 2b (validation, custom prompts).
+12. **Audit fields** show in the Audit facet on the OP.
+13. **Native FE count** in the list-report header matches the legacy footer phrasing
+    (allowing for "X projects" vs "Showing X of Y" UX differences).
+
+If any step fails:
+
+- For an annotation issue, return to Phase 4 and adjust the CDS, re-activate, `publish_srvb`,
+  rerun the smoke step.
+- For an extension issue, debug the controller extension in browser DevTools.
+- For an FE rendering issue that looks like a tool bug, run
+  `mcp__fiori-mcp__search_docs(query="<exact symptom>")` to find the authoritative reference.
+
+### 7d. Final report
+
+```text
+Fiori Elements conversion complete — <fe_app>
+
+Floorplan:        LROP V4 (TS)
+UI5:              <version>
+V4 service:       <V4_service_URL>
+Annotations:      <n> @UI.* annotations written across <m> projections
+Extensions:       <n> controller extensions
+Linter:           clean
+Manifest:         clean
+TypeCheck:        clean
+Browser smoke:    <12+/12+> inventory items reproduced
+
+What just happened (3 sentences):
+  - Mined the legacy app's user-visible feature set (columns, sort, search, actions,
+    tab structure, formatters).
+  - Wrote the equivalent @UI.* / @Common.* / @Search.* annotations onto the RAP CDS
+    projections via ARC-1.
+  - Generated the FE app on top of the now-annotated $metadata via the SAP Fiori MCP
+    server, with extension hooks for the few cases FE templates can't express natively.
 
 ARC-1 calls used:
-  - SAPManage(action=probe)                          → <durationms>
-  - SAPRead(type=DDLS, name=ZC_DM_PROJECT)           → <ms>
-  - SAPWrite(action=update, type=DDLS, ...)          → <ms> × <projections>
-  - SAPActivate(type=DDLS, ...)                      → <ms>
-  - SAPWrite(action=publish_srvb, name=...)          → <ms> (if re-publish needed)
-  - SAPRead(type=SRVB, name=ZUI_DM_PROJECTS_O4)      → <ms>
+  - SAPManage(action=probe)
+  - SAPRead(type=DDLS, name=<root_projection>)
+  - SAPRead(type=SRVB, name=<V4_SRVB>)
+  - SAPWrite(action=update, type=DDLS, ...) × <m> projections
+  - SAPActivate(type=DDLS, ...)
+  - SAPWrite(action=publish_srvb, name=<V4_SRVB>)
+  - (Optional) SAPWrite(action=update, type=BDEF, ...) + SAPActivate for BDEF precheck
+
+Fiori MCP calls used:
+  - mcp__fiori-mcp__list_functionalities
+  - mcp__fiori-mcp__get_functionality_details(name=<chosen>)
+  - mcp__fiori-mcp__execute_functionality(...)
+  - mcp__fiori-mcp__search_docs(...) × <n> (during extension scaffolding)
+
 UI5 MCP calls used:
-  - get_version_info
-  - create_ui5_app (template=lropv4)
-  - run_ui5_linter × <n>
-  - run_manifest_validation
+  - mcp__SAPUI5_MCP_Server__run_ui5_linter × <n>
+  - mcp__SAPUI5_MCP_Server__run_manifest_validation
 ```
 
 ---
@@ -531,16 +801,18 @@ UI5 MCP calls used:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `$metadata` reflects no annotations after `SAPWrite update DDLS` | DDLS reactivated but SRVB wasn't republished | `SAPWrite(action="publish_srvb", name="ZUI_DM_PROJECTS_O4")` |
-| `create_ui5_app` succeeds but FE app shows a blank shell | mainEntity passed without an annotated CDS view | Re-check Phase 3 — every entity in the `@UI.facet` chain needs at least `@UI.lineItem` and (for OP root) `@UI.headerInfo` |
-| `400 Bad Request` on metadata fetch from FE app | Wrong V4 URL — generator used a placeholder | Patch `sap.app.dataSources.mainService.uri` in `<target>/webapp/manifest.json` to the real ZUI_DM_PROJECTS_O4 endpoint |
-| FE list-report shows no columns | `@UI.lineItem` annotation is on the root view, not the projection | Move annotations to the projection (`ZC_DM_*`), not the root (`ZR_DM_*`). FE reads them from the service the SRVB exposes, which is the projection. |
-| ApproveProject button not visible | Action wasn't exposed on the projection BDEF, or `use action approve_project` is missing | Check the projection BDEF (`define behavior for ZC_DM_PROJECT { ... use action approve_project; }`) and re-publish |
-| Filter bar empty | `@UI.selectionFields` annotation missing or pointing at field that's not @Search.searchable | Add `@UI.selectionFields: [ '...', ... ]` at the root-projection level |
-| Controller extension throws "Override target not found" | Wrong controller name in the manifest extension config | Check the FE doc for the exact controller path; LRO is `sap.fe.templates.ListReport.ListReportController`, OP is `sap.fe.templates.ObjectPage.ObjectPageController` |
-| Lint flags the extension as unused | Extension isn't registered in `sap.ui5.extends.extensions` | Wire the extension in the manifest; the linter traces from there |
-| `npm start` works but the OP shows "Object Not Found" | `mainEntity` in `sap.ui.generic.app` differs from the BDEF root entity | Align — for our domain it's `Project` (the alias from `ZC_DM_PROJECT alias Project`) |
-| `403 Forbidden` opening the FE app | V4 service group not registered in `/n/IWFND/MAINT_SERVICE` | Manual step at end of Phase 6 in `migrate-segw-to-rap.md` — do it first |
+| `$metadata` reflects no annotations after `SAPWrite update DDLS` | DDLS reactivated but SRVB wasn't republished | `SAPWrite(action="publish_srvb", name="<V4_SRVB>")` |
+| `mcp__fiori-mcp__list_functionalities` returns empty / fails | Server not registered, or `npx` cache stale | Verify `.cursor/mcp.json`; in a fresh shell, `npx --yes @sap-ux/fiori-mcp-server@latest fiori-mcp` should print server-ready logs |
+| Generator fails with "service unreachable" | The `<V4_service_URL>` is gated by 403 because of the V4 routing group | Surface the `/n/IWFND/MAINT_SERVICE` manual step from `migrate-segw-to-rap.md` Phase 6 |
+| Generator succeeds but FE app shows a blank shell | `mainEntity` passed without annotated CDS | Re-check Phase 4 — every entity in the `@UI.Facet` chain needs at least `@UI.LineItem` and (for OP root) `@UI.HeaderInfo` |
+| List-report shows no columns | `@UI.LineItem` annotation is on the root view, not the projection | Move annotations to the projection; FE reads them from the SRVB-exposed projection |
+| Action button not visible | Action wasn't exposed on the projection BDEF, or projection BDEF missing `use action approve_project` | Check projection BDEF (`define behavior for <root_projection> { ... use action approve_project; }`) and re-publish |
+| Filter bar empty | `@UI.SelectionFields` annotation missing or pointing at field that's not marked `@Search.searchable` at view level | Add `@Search.searchable: true` at the view level and `@Search.defaultSearchElement: true` on the right fields |
+| Status field uncolored | No criticality binding | Add the `criticality: '<field>Criticality'` reference on the `@UI.LineItem` entry, AND a virtual `<field>Criticality` projection field that maps the code to FE criticality (0=Neutral, 1=Negative, 2=Critical, 3=Positive) |
+| Nested facet (TimeEntries under Tasks) doesn't render | Some 7.5x releases don't honor `_Tasks._TimeEntries` LineItem facet paths | Render TimeEntries as a separate OP if you must — drill from the Task LineItem; verify on user's release |
+| Controller extension throws "Override target not found" | Wrong controller path in manifest | LR: `sap.fe.templates.ListReport.ListReportController`; OP: `sap.fe.templates.ObjectPage.ObjectPageController` |
+| `MCP server timed out` | Long-running execute_functionality blocked by slow `$metadata` fetch | Increase the MCP `timeout` in `.cursor/mcp.json` (currently 600s); the default is usually enough for the talk-demo's service size |
+| Generator hangs on a confirmation prompt | The MCP server tried to interactively confirm an overwrite | Pre-delete `<fe_app>/` before re-running, or pass `overwrite: true` if the functionality details list it |
 
 ---
 
@@ -550,31 +822,47 @@ UI5 MCP calls used:
   demo's scope. Composition is a follow-up.
 - **Heavy custom rendering** that genuinely can't fit into FE building blocks. If the user
   needs that, they should keep `<modern_app>/` instead of converting.
-- **Custom OData V4 services** beyond the BDEF-bound projection. The FE app reads exactly
-  what the SRVB exposes — no additional service config.
-- **Localization beyond what the CDS `@EndUserText.label` provides.** FE picks labels from the
-  service metadata. Additional translations live in i18n files in `<target>`.
+- **Mock/local-service mode.** The skill targets the live V4 RAP service. The Fiori MCP can
+  generate apps for CAP projects, but that's a different flow.
 - **Authorization policy.** FE renders what the service authorizes. PFCG / S_DEVELOP changes
   happen on the SAP side, not in this skill.
+- **Translation/localization beyond what the CDS `@EndUserText.label` provides.** FE picks
+  labels from the service metadata; additional i18n lives in the FE app's i18n files.
+- **CAP-side generation.** This skill assumes a RAP backend; for CAP-only flows use the
+  Fiori MCP server's CAP-targeted prompts directly.
 
 ---
 
 ## Notes for the LLM running this skill
 
-- ARC-1 calls in this skill are limited to: read/update DDLS for annotations, activate, and
-  publish_srvb. No CLAS writes, no BDEF mutations — those happen in `migrate-segw-to-rap.md`.
-  If the user wants to *also* change the BDEF here (e.g. add an annotation that needs a new
-  action), stop and refer them back to the migration skill.
-- Annotations belong on the **projection**, not the root view. The SRVB exposes the projection.
+- The **annotation-first** discipline is the whole point. Never let the FE generator run
+  against an un-annotated `$metadata` — the result is a useless shell.
+- The Fiori MCP server is **experimental**. Tool names and parameter shapes may have shifted
+  since this skill was written. Always start with `list_functionalities` and adapt.
+- Annotations belong on the **projection**, not the root view. The SRVB exposes the projection;
   FE reads from there.
-- Republish the SRVB after every CDS change that affects exposed annotations. ADT will not
+- **Republish the SRVB** after every CDS change that affects exposed annotations. ADT does not
   do this automatically.
 - The "facets reference associations" pattern is the trickiest part: a facet of type
   `#LINEITEM_REFERENCE` with `targetElement: '_Tasks'` only works if `_Tasks` is an exposed
-  association on the projection. Check the projection's `use association _Tasks { ... }`
-  block.
-- Controller extensions are the escape hatch — when in doubt about whether something needs
-  one, ask the user. The FE template can express more than people expect; only escalate when
-  truly necessary.
-- Reach for `mcp__sap-docs__search` with topic="fiori-elements" for the authoritative annotation
-  reference before guessing.
+  association on the projection. Check the projection's `use association _Tasks { ... }` block.
+- Controller extensions are the escape hatch — when in doubt about whether something needs one,
+  ask the user. The FE template can express more than people expect; only escalate when truly
+  necessary.
+- Reach for `mcp__fiori-mcp__search_docs` (or `mcp__sap-docs__search` with `topic="fiori-elements"`)
+  before guessing annotation syntax. SAP's annotation reference is the authoritative source.
+- If `mcp__fiori-mcp__list_functionalities` returns capabilities you didn't expect (e.g.
+  "add page to existing app", "modify manifest"), surface them in the plan — they may simplify
+  Phase 6 extension work.
+- **Do not** edit `manifest.json` by hand to add pages or change routing if the Fiori MCP can
+  do it via `execute_functionality`. The MCP's edits are schema-aware and survive re-generation;
+  hand edits can be overwritten.
+
+## Sources
+
+- [SAP/open-ux-tools — fiori-mcp-server README](https://github.com/SAP/open-ux-tools/tree/main/packages/fiori-mcp-server)
+- [npm: @sap-ux/fiori-mcp-server](https://www.npmjs.com/package/@sap-ux/fiori-mcp-server)
+- [SAP Community: First Release of the SAP Fiori MCP Server](https://community.sap.com/t5/technology-blog-posts-by-sap/sap-fiori-tools-update-first-release-of-the-sap-fiori-mcp-server-for/ba-p/14204694)
+- [SAP-samples/ui5con-2026-fiori-mcp-server (hands-on exercises)](https://github.com/sap-samples/ui5con-2026-fiori-mcp-server)
+- [SAP-samples/fiori-mcp-server-hands-on](https://github.com/SAP-samples/fiori-mcp-server-hands-on)
+- [sapdev.eu: Using Fiori MCP Server in VSCode with Cline or GitHub Copilot](https://www.sapdev.eu/using-fiori-mcp-server-in-vscode-with-cline-or-github-copilot/)
