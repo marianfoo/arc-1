@@ -298,11 +298,7 @@ ${refLines}
 
 function isEd064Text(text: string): boolean {
   const normalized = text.toLowerCase();
-  return (
-    /\bed0?64\b/i.test(text) ||
-    (normalized.includes('no next') && normalized.includes('previous object')) ||
-    normalized.includes('no next/previous object found')
-  );
+  return /\bed0?64\b/.test(normalized) || (normalized.includes('no next') && normalized.includes('previous object'));
 }
 
 function isRecoverableEd064BatchQuirk(result: ActivationResult): boolean {
@@ -334,12 +330,11 @@ async function retryBatchActivationIndividuallyAfterEd064(
     objects: objects.map((o) => ({ name: o.name, uri: o.url })),
   });
 
-  const retryResults = await Promise.all(
-    objects.map(async (object) => ({
-      object,
-      result: await activate(http, safety, object.url, { name: object.name, preaudit: options?.preaudit }),
-    })),
-  );
+  const retryResults: Array<{ object: { url: string; name: string }; result: ActivationResult }> = [];
+  for (const object of objects) {
+    const result = await activate(http, safety, object.url, { name: object.name, preaudit: options?.preaudit });
+    retryResults.push({ object, result });
+  }
 
   const note =
     `Batch activation returned ED064 "no next/previous object found"; ` +
@@ -360,7 +355,9 @@ async function retryBatchActivationIndividuallyAfterEd064(
       messages: [note, ...retryMessages],
       details: [
         { severity: 'warning', text: note },
-        ...original.details.map((detail) => ({ ...detail, severity: 'warning' as const })),
+        ...original.details.map((detail) =>
+          detail.severity === 'error' ? { ...detail, severity: 'warning' as const } : detail,
+        ),
         ...retryDetails,
       ],
     };

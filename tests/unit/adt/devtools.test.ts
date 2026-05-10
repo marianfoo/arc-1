@@ -45,6 +45,14 @@ function mockHttpSequence(...responses: string[]): AdtHttpClient {
   } as unknown as AdtHttpClient;
 }
 
+function defer<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 describe('DevTools', () => {
   // ─── syntaxCheck ───────────────────────────────────────────────────
 
@@ -566,6 +574,41 @@ describe('DevTools', () => {
       expect((http.post as any).mock.calls[2][1]).toContain('adtcore:name="ZDM_TASK_D"');
     });
 
+    it('runs individual ED064 retries sequentially', async () => {
+      const ed064 = '<messages><msg type="E" shortText="ED064 no next/previous object found"/></messages>';
+      const firstRetry = defer<{ statusCode: number; headers: Record<string, string>; body: string }>();
+      const post = vi
+        .fn()
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: ed064 })
+        .mockReturnValueOnce(firstRetry.promise)
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' });
+      const http = {
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+        post,
+        put: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+        delete: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+        fetchCsrfToken: vi.fn(),
+        withStatefulSession: vi.fn(),
+      } as unknown as AdtHttpClient;
+
+      const resultPromise = activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/tables/zdm_project_d', name: 'ZDM_PROJECT_D' },
+        { url: '/sap/bc/adt/ddic/tables/zdm_task_d', name: 'ZDM_TASK_D' },
+      ]);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(post).toHaveBeenCalledTimes(2);
+      expect(post.mock.calls[1][1]).toContain('adtcore:name="ZDM_PROJECT_D"');
+
+      firstRetry.resolve({ statusCode: 200, headers: {}, body: '' });
+      const result = await resultPromise;
+
+      expect(result.success).toBe(true);
+      expect(post).toHaveBeenCalledTimes(3);
+      expect(post.mock.calls[2][1]).toContain('adtcore:name="ZDM_TASK_D"');
+    });
+
     it('does not retry ED064 when the batch response contains a real activation error', async () => {
       const mixed = `<messages>
         <msg type="E" shortText="ZDM_PROJECT_D (ED064) no next/previous object found"/>
@@ -823,6 +866,7 @@ describe('DevTools', () => {
         expect(result.messages.join(' ')).toContain('retried 1 object individually');
         expect(http.post).toHaveBeenCalledTimes(3);
         expect((http.post as any).mock.calls[1][0]).toContain('preauditRequested=false');
+        expect((http.post as any).mock.calls[2][0]).toContain('preauditRequested=true');
         expect((http.post as any).mock.calls[2][1]).toContain('adtcore:name="ZCL_TEST"');
       });
     });
