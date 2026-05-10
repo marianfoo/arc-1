@@ -1457,6 +1457,22 @@ describe('Intent Handler', () => {
       expect(payload.missing).toEqual(['ZDOES_NOT_EXIST']);
     });
 
+    it('warns when exact TADIR lookup names contain wildcards', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        names: ['ZDM_PROJECT*'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.missing).toEqual(['ZDM_PROJECT*']);
+      expect(payload.warnings[0]).toContain('exact-name lookup');
+      expect(payload.warnings[0]).toContain('ZDM_PROJECT*');
+    });
+
     it('passes objectTypes as typed TADIR lookup filters', async () => {
       mockFetch.mockReset();
       mockFetch
@@ -8543,6 +8559,62 @@ ENDCLASS.`;
       expect(createUrl).not.toContain('TOP900001');
     });
 
+    it('includes effective packages in mixed-package batch_create summaries', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        transport: 'A4HK900123',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', source: 'REPORT zprog2.', package: 'ZOBJPKG' },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('across packages [$TMP, ZOBJPKG]');
+      expect(text).toContain('ZPROG1 (PROG) ✓ [$TMP]');
+      expect(text).toContain('ZPROG2 (PROG) ✓ [ZOBJPKG]');
+    });
+
+    it('treats empty package and transport overrides as absent in batch_create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'ZTOPPKG',
+        transport: 'A4HK900123',
+        objects: [
+          {
+            type: 'PROG',
+            name: 'ZPROG1',
+            source: 'REPORT zprog1.',
+            package: '',
+            transport: '',
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = mockFetch.mock.calls.find(
+        (call) =>
+          String(call[0]).includes('/sap/bc/adt/programs/programs?') &&
+          (call[1] as Record<string, unknown> | undefined)?.method === 'POST',
+      );
+      const body = String((createCall?.[1] as Record<string, unknown> | undefined)?.body ?? '');
+      const createUrl = String(createCall?.[0] ?? '');
+      expect(body).toContain('<adtcore:packageRef adtcore:name="ZTOPPKG"/>');
+      expect(body).not.toContain('$TMP');
+      expect(createUrl).toContain('corrNr=A4HK900123');
+      expect(result.content[0]?.text).toContain('in package ZTOPPKG');
+    });
+
     it('activates each object after creation', async () => {
       const fetchCalls: string[] = [];
       mockFetch.mockImplementation((_url: string | URL, options?: { method?: string }) => {
@@ -9379,6 +9451,13 @@ ENDCLASS.`;
         ${transports.length > 0 ? `<TRANSPORTS>${transportEntries}</TRANSPORTS>` : ''}
       </DATA></asx:values></asx:abap>`;
     };
+    const lockedTransportInfoResponse = (transport: string, packageName: string) =>
+      `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING>X</RECORDING>
+        <DLVUNIT>SAP</DLVUNIT>
+        <DEVCLASS>${packageName}</DEVCLASS>
+        <LOCKS><HEADER><TRKORR>${transport}</TRKORR></HEADER></LOCKS>
+      </DATA></asx:values></asx:abap>`;
 
     it('returns guidance error when creating in transportable package without transport', async () => {
       const calls: Array<{ url: string; method: string }> = [];
@@ -9498,6 +9577,38 @@ ENDCLASS.`;
       expect(result.content[0]?.text).not.toContain('requires a transport number');
     });
 
+    it('logs and proceeds if batch_create transportInfo check fails', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      try {
+        mockFetch.mockImplementation((url: string) => {
+          if (String(url).includes('/cts/transportchecks')) {
+            return Promise.resolve(mockResponse(500, 'Internal Error', { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+        });
+
+        const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+        const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+          action: 'batch_create',
+          package: 'Z_MY_PKG',
+          objects: [{ type: 'PROG', name: 'ZTEST', source: 'REPORT ztest.' }],
+        });
+
+        expect(result.content[0]?.text).not.toContain('requires a transport number');
+        expect(warnSpy).toHaveBeenCalledWith(
+          'SAPWrite batch_create transport preflight failed; continuing without auto transport',
+          expect.objectContaining({
+            package: 'Z_MY_PKG',
+            type: 'PROG',
+            name: 'ZTEST',
+            error: expect.stringContaining('ADT API error'),
+          }),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
     it('returns guidance error for batch_create in transportable package without transport', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (String(url).includes('/cts/transportchecks')) {
@@ -9545,6 +9656,50 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('requires a transport number');
       expect(calls.some((url) => url.includes('/cts/transportchecks'))).toBe(true);
       expect(calls.some((url) => url.includes('/sap/bc/adt/programs/programs?corrNr=A4HK900501'))).toBe(false);
+    });
+
+    it('auto-uses locked transports separately for each batch_create package', async () => {
+      let transportCheckCount = 0;
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        const urlStr = String(url);
+        const method = opts?.method ?? 'GET';
+        calls.push({ url: urlStr, method });
+
+        if (urlStr.includes('/cts/transportchecks')) {
+          transportCheckCount++;
+          const transport = transportCheckCount === 1 ? 'A4HK900111' : 'A4HK900222';
+          const packageName = transportCheckCount === 1 ? 'ZPKG1' : 'ZPKG2';
+          return Promise.resolve(
+            mockResponse(200, lockedTransportInfoResponse(transport, packageName), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', package: 'ZPKG1', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', package: 'ZPKG2', source: 'REPORT zprog2.' },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(calls.filter((c) => c.url.includes('/cts/transportchecks'))).toHaveLength(2);
+      const createUrls = calls
+        .filter(
+          (c) =>
+            c.method === 'POST' &&
+            c.url.includes('/sap/bc/adt/programs/programs') &&
+            !c.url.includes('_action=') &&
+            !c.url.includes('/activation'),
+        )
+        .map((c) => c.url);
+      expect(createUrls.some((url) => url.includes('corrNr=A4HK900111'))).toBe(true);
+      expect(createUrls.some((url) => url.includes('corrNr=A4HK900222'))).toBe(true);
+      expect(result.content[0]?.text).toContain('across packages [ZPKG1, ZPKG2]');
     });
 
     it('proceeds for local package response even if DLVUNIT is not LOCAL', async () => {

@@ -1837,7 +1837,16 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
     const lookups = await client.lookupObjects(names, { maxResults, objectTypes });
     const missing = lookups.filter((l) => !l.found).map((l) => l.name);
     const matchCount = lookups.reduce((count, lookup) => count + lookup.matches.length, 0);
-    return textResult(JSON.stringify({ count: matchCount, lookups, missing }, null, 2));
+    const wildcardNames = names.filter((name) => name.includes('*'));
+    const warnings =
+      wildcardNames.length > 0
+        ? [
+            `tadir_lookup performs exact-name lookup; wildcard characters are treated literally for: ${wildcardNames.join(', ')}`,
+          ]
+        : undefined;
+    return textResult(
+      JSON.stringify({ count: matchCount, lookups, missing, ...(warnings ? { warnings } : {}) }, null, 2),
+    );
   }
 
   if (searchType === 'source_code') {
@@ -3938,12 +3947,24 @@ async function handleSAPWrite(
                 existingList,
             );
           }
-        } catch {
+        } catch (err) {
+          logger.warn('SAPWrite batch_create transport preflight failed; continuing without auto transport', {
+            package: pkg,
+            type: plan.type,
+            name: plan.name,
+            error: err instanceof Error ? err.message : String(err),
+          });
           // If transportInfo check fails, proceed — SAP will return its own error if needed.
         }
       }
 
-      const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
+      const results: Array<{
+        type: string;
+        name: string;
+        packageName: string;
+        status: 'success' | 'failed';
+        error?: string;
+      }> = [];
       const batchWarnings: string[] = [];
       // Per-batch cache for the MSAG transport-vs-task guard. The bug is universal so the
       // guard fires for every MSAG entry, but a batch typically shares one transport — cache
@@ -3964,6 +3985,7 @@ async function handleSAPWrite(
           results.push({
             type: objType,
             name: objName,
+            packageName: objPackage,
             status: 'failed',
             error: `Object name "${objName}" contains lowercase characters. SAP object names must be uppercase (e.g. "${objName.toUpperCase()}"). Source code inside the object can use mixed case.`,
           });
@@ -3981,6 +4003,7 @@ async function handleSAPWrite(
             results.push({
               type: objType,
               name: objName,
+              packageName: objPackage,
               status: 'failed',
               error: `Transport "${objTransport}" is not a valid transport request. MSAG creation requires a transport request number, not a task number.`,
             });
@@ -3994,6 +4017,7 @@ async function handleSAPWrite(
           results.push({
             type: objType,
             name: objName,
+            packageName: objPackage,
             status: 'failed',
             error: `AFF metadata validation failed:\n- ${(affResult.errors ?? []).join('\n- ')}`,
           });
@@ -4016,6 +4040,7 @@ async function handleSAPWrite(
               results.push({
                 type: objType,
                 name: objName,
+                packageName: objPackage,
                 status: 'failed',
                 error: preflightWarnings.result!.content[0].text,
               });
@@ -4030,6 +4055,7 @@ async function handleSAPWrite(
               results.push({
                 type: objType,
                 name: objName,
+                packageName: objPackage,
                 status: 'failed',
                 error: `source rejected by lint: ${lintWarnings.result!.content[0].text}`,
               });
@@ -4098,6 +4124,7 @@ async function handleSAPWrite(
             results.push({
               type: objType,
               name: objName,
+              packageName: objPackage,
               status: 'failed',
               error: `activation failed: ${activationResult.messages.join('; ')}`,
             });
@@ -4105,11 +4132,12 @@ async function handleSAPWrite(
           }
 
           invalidateWrittenObject(objType, objName);
-          results.push({ type: objType, name: objName, status: 'success' });
+          results.push({ type: objType, name: objName, packageName: objPackage, status: 'success' });
         } catch (err) {
           results.push({
             type: objType,
             name: objName,
+            packageName: objPackage,
             status: 'failed',
             error: err instanceof Error ? err.message : String(err),
           });
@@ -4119,17 +4147,23 @@ async function handleSAPWrite(
 
       // Add 'skipped' entries for objects that were never attempted due to early break
       for (let i = results.length; i < objects.length; i++) {
-        const skipped = objects[i];
+        const skippedPlan = batchPlan[i];
+        const skipped = skippedPlan?.obj ?? objects[i];
         results.push({
-          type: normalizeObjectType(String(skipped?.type ?? '')),
-          name: String(skipped.name ?? ''),
+          type: skippedPlan?.type ?? normalizeObjectType(String(skipped?.type ?? '')),
+          name: skippedPlan?.name ?? String(skipped?.name ?? ''),
+          packageName: skippedPlan?.packageName ?? normalizePackageOverride(skipped?.package, defaultPackage),
           status: 'failed',
           error: 'skipped — stopped after previous failure',
         });
       }
 
       const summary = results
-        .map((r) => `${r.name} (${r.type}) ${r.status === 'success' ? '✓' : `✗ — ${r.error}`}`)
+        .map((r) =>
+          r.status === 'success'
+            ? `${r.name} (${r.type}) ✓ [${r.packageName}]`
+            : `${r.name} (${r.type}) ✗ [${r.packageName}] — ${r.error}`,
+        )
         .join(', ');
       const successCount = results.filter((r) => r.status === 'success').length;
       const hasFailure = results.some((r) => r.status === 'failed');
@@ -4137,7 +4171,11 @@ async function handleSAPWrite(
         batchWarnings.length > 0 ? `\n\nRAP preflight warnings:\n- ${batchWarnings.join('\n- ')}` : '';
       const packageNames = [...new Set(batchPlan.map((item) => item.packageName))];
       const packageSummary =
-        packageNames.length === 1 ? `in package ${packageNames[0]}` : `across ${packageNames.length} packages`;
+        packageNames.length === 1
+          ? `in package ${packageNames[0]}`
+          : packageNames.length <= 3
+            ? `across packages [${packageNames.join(', ')}]`
+            : `across ${packageNames.length} packages`;
 
       if (hasFailure) {
         const cleanupHint =
