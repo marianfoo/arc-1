@@ -2,40 +2,54 @@
 
 Reverse-engineer a classic SEGW-built OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT) into a modern
 RAP service (CDS root + projection + BDEF + SRVD + SRVB + behavior pool) on the same SAP system.
-Runs side-by-side: the legacy service stays live; the new RAP service goes into a separate,
+Runs side-by-side: the legacy service stays live; the new RAP service lands in a separate,
 resettable package.
 
+> **Domain example.** Templates in this skill use an illustrative `Project → Tasks → TimeEntries`
+> domain (entity names like `ZR_DM_PROJECT`, `ZBP_DM_PROJECT`, `ZDM_PROJECT_D`) so the shape is
+> concrete. Substitute the user's entities throughout — the LLM running this skill should
+> rewrite every entity identifier to match the source service.
 
 ## Smart defaults (apply silently — do NOT ask before research)
 
 | Setting | Default | Rationale |
 |---|---|---|
 | Discovery strategy | MPC class source (Tier 1) | ARC-1 reads it natively; richer than `$metadata` |
-| Target package | `ZDEMO_MIG_RAP` (parent `ZDEMO_MIG`) | Pre-created; transportable; safe to wipe |
-| Target transport | `A4HK903875` | Pre-created, dedicated to migration outputs |
+| Target package | User-provided. If absent, create a child of the source package via `SAPManage(action="create_package")`; default name `<source_package>_RAP`. Only fall back to `$TMP` if the user explicitly asks. | Keeps the migration output isolated and resettable. |
+| Target transport | User-provided existing, or auto-created via `SAPTransport(action="create", description="RAP migration of <legacy_service>", package="<target_package>")`. | Required for non-`$TMP` packages. |
 | OData version on target | V4 | Current SAP standard; FE-ready |
 | RAP scenario | Managed with internal numbering | Simplest read-mostly; matches legacy SEGW behaviour |
-| Draft | Off for read-mostly entities | Legacy SEGW had no draft — match contract |
+| Draft | Off for read-mostly entities. ON when the legacy service exposed CUD (function imports, deep inserts, or sap:updatable=true on entity sets) and the user wants Fiori Elements compatibility. | Match the legacy service's behavior contract; FE list+OP work best with draft on. |
 | Strict mode | `strict ( 2 )` | Current best practice |
-| Projection layer | **Mandatory — always create `ZC_DM_*` projection alongside `ZR_DM_*` root**. Service binding exposes the projection, never the root. | Run 1 of the skill skipped projections after a misread CDS error; spell out so the LLM never drops them. |
-| `provider contract transactional_interface` | **On the *root* projection only** (`ZC_DM_PROJECT`). NOT on `ZR_DM_*` root view, NOT on child projections (`ZC_DM_TASK`, `ZC_DM_TIMEENTRY`). The contract sits at exactly one level. | Putting it on root view → *"only valid on projection views"*. Putting it on child projections → *"inappropriate provider contract on …"*. Children are exposed via `redirected to parent` and inherit the BO contract from the root projection. |
+| Projection layer | **Mandatory — always create a `ZC_*` projection alongside every `ZR_*` root view**. Service binding exposes the projection, never the root. | Run 1 of the skill skipped projections after a misread CDS error; spell out so the LLM never drops them. |
+| `provider contract` on projections | **On the root projection only**, not on the root view, not on child projections. The contract sits at exactly one level. Use `transactional_query` when combining projection BDEF + `use draft` on 7.58; `transactional_interface` for read-mostly without draft. | Putting it on a root view → *"only valid on projection views"*. Putting it on child projections → *"inappropriate provider contract on …"*. Children are exposed via `redirected to parent` and inherit the BO contract from the root projection. Run 3 confirmed `_query` is needed for draft on 7.58. |
 | CDS composition syntax (managed) | `composition [0..*] of <child> as <name>` — **no `on` clause**. Key linking is implicit via matching key fields / `with foreign key` in the child | 7.58 rejects `on` on managed compositions. The recovery is dropping `on`, not switching to `association to`. |
 | `@Semantics.*` on 7.58 | Use only `@Semantics.systemDateTime.createdAt : true` and `@Semantics.systemDateTime.lastChangedAt : true`. Do NOT use `localInstanceLastChangedAt`, `businessDate.*`, or other newer annotations. | Run 2 hit *"Annotation `Semantics.systemDateTime.localInstanceLastChangedAt` is unknown"* on 7.58. Those came in 7.59+. Same for `@Semantics.businessDate.*`. |
-| Draft table field names (when draft=ON) | Use BO-alias casing **without underscores** — e.g. `projectid`, `startdate`, `enddate`, NOT `project_id`, `start_date`, `end_date`. ABAP normalizes the BDEF aliases (`ProjectId`, `StartDate`) to `PROJECTID`, `STARTDATE` — the draft table lookup is by that normalized name, not by the active table's snake_case. | Run 2: BDEF activation failed with *"key field PROJECTID expected at position 2, found PROJECT_ID"*. The active table can keep snake_case (BDEF mapping handles it); the draft table cannot — it has no mapping clause. |
-| Naming | `ZR_DM_<entity>` (root), `ZC_DM_<entity>` (projection), `ZI_DM_<entity>_BEH` (BDEF), `ZUI_DM_<service>_O4` (SRVB) | SAP-standard prefixes; `_DM` keeps demo objects greppable |
-| Pre-write lint | On | `SAP_ABAP_RELEASE=758` (PR #255 added the override). Remove the older `SAP_LINT_BEFORE_WRITE=false` workaround once the env var is set. |
+| Draft table field names (when draft=ON) | Use BO-alias casing **without underscores** — e.g. `projectid`, `startdate`, NOT `project_id`, `start_date`. ABAP normalizes BDEF aliases (`ProjectId`, `StartDate`) to `PROJECTID`, `STARTDATE` — the draft table lookup is by that normalized name, not by the active table's snake_case. | Run 2: BDEF activation failed with *"key field PROJECTID expected at position 2, found PROJECT_ID"*. The active table can keep snake_case (BDEF mapping handles it); the draft table cannot — it has no mapping clause. |
+| Naming | SAP-standard `Z<prefix>_<entity>`: `ZR_` root, `ZC_` projection, `ZI_<entity>_BEH` BDEF, `ZBP_` behavior pool, `ZUI_<service>_O4` V4 SRVB | Aligns with SAP-internal conventions; the leading `Z` is the customer namespace |
+| Pre-write lint | On | Set `SAP_ABAP_RELEASE=<your_release>` in ARC-1 config (PR #255) so the lint preset matches the system release. The older `SAP_LINT_BEFORE_WRITE=false` workaround is no longer needed. |
 | Pre-write SAP check | On for activation-blockers only | We rely on activation feedback, not `--check-before-write` |
 
 ## Input
 
-The user provides **one of**:
+The user must provide **at minimum**:
 
-- A SEGW service technical name, e.g. `ZDEMO_MIG_PROJECTS_SRV`
-- A package containing the legacy classes, e.g. `ZDEMO_MIG`
-- An MPC class name directly, e.g. `ZCL_ZDEMO_MIG_PROJECTS_MPC`
+- **One of**: a SEGW service technical name (e.g. `Z<SOMETHING>_SRV`), a package containing
+  the SEGW-generated classes, or an MPC class name directly. Ask if not given.
+- **Target package** for the new RAP objects. Skill will create one (`<source_package>_RAP`)
+  if not given and the source package is known; otherwise asks. Only defaults to `$TMP` if
+  the user explicitly asks.
+- **Transport** for non-`$TMP` writes — existing or auto-created (see Smart Defaults).
 
-If the user provides nothing, ask: **"Which legacy SEGW service should I migrate? Give me a
-service name, a package, or an MPC class."**
+Optional:
+
+- **RAP scenario** (default: managed with internal numbering).
+- **Draft on/off** (skill infers from legacy CUD surface).
+- **OData version** (default: V4).
+- **Naming overrides** (default: SAP standard `Z<prefix>_<entity>`).
+
+If only the legacy identifier is given, skill applies smart defaults and surfaces the resolved
+plan in Phase 5 for user `ok` before any writes.
 
 ---
 
@@ -73,7 +87,7 @@ DEVCLASS=`<source-pkg>` P_GROUP=`<auth-group>`. Run SU53 in SAP GUI to see the m
 ### 0c. Confirm write on target package
 
 ```text
-SAPTransport(action="check", objectType="DDLS", objectName="ZX_PRECHECK", package="ZDEMO_MIG_RAP")
+SAPTransport(action="check", objectType="DDLS", objectName="ZX_PRECHECK", package="<target_package>")
 ```
 
 Then dry-run a write+delete on a throwaway DDLS:
@@ -82,13 +96,13 @@ Then dry-run a write+delete on a throwaway DDLS:
 SAPWrite(action="create", type="DDLS", name="ZR_DM_PRECHECK",
          source="@AccessControl.authorizationCheck: #NOT_REQUIRED\ndefine root view entity ZR_DM_PRECHECK as select from t000 { client }",
          description="ARC-1 preflight",
-         package="ZDEMO_MIG_RAP",
-         transport="A4HK903875")
+         package="<target_package>",
+         transport="<transport>")
 SAPWrite(action="delete", type="DDLS", name="ZR_DM_PRECHECK")
 ```
 
-On 403 from create: stop with *"Cannot write to `ZDEMO_MIG_RAP` — need `S_DEVELOP` ACTVT=01,02,07
-OBJTYPE=DDLS DEVCLASS=`ZDEMO_MIG_RAP`."*
+On 403 from create: stop with *"Cannot write to `<target_package>` — need `S_DEVELOP` ACTVT=01,02,07
+OBJTYPE=DDLS DEVCLASS=`<target_package>`."*
 
 If all three pass, print **"Phase 0 ✓ Authorizations OK — proceeding to discovery."** and continue.
 
@@ -99,8 +113,8 @@ If all three pass, print **"Phase 0 ✓ Authorizations OK — proceeding to disc
 
 ### 1a. Resolve the MPC class name
 
-If user gave a service name (e.g. `ZDEMO_MIG_PROJECTS_SRV`):
-- Try convention: trim `_SRV` → append `_MPC` → `ZCL_ZDEMO_MIG_PROJECTS_MPC`. Verify with
+If user gave a service name (e.g. `<legacy_service>`):
+- Try convention: trim `_SRV` → append `_MPC` → `<MPC_class>`. Verify with
   `SAPRead`.
 - If not found:
   ```text
@@ -110,7 +124,7 @@ If user gave a service name (e.g. `ZDEMO_MIG_PROJECTS_SRV`):
   ```
   and ask the user to pick.
 
-If user gave a package (e.g. `ZDEMO_MIG`):
+If user gave a package (e.g. `<source_package>`):
 - ```text
   SAPRead(type="DEVC", name="<package>")
   ```
@@ -130,12 +144,12 @@ Expected: 4 hits. Record `objectName` + `packageName` for each.
 
 Print to user:
 ```
-Legacy service: ZDEMO_MIG_PROJECTS_SRV
-  Package:      ZDEMO_MIG
-  MPC class:    ZCL_ZDEMO_MIG_PROJECTS_MPC      (model)
-  MPC_EXT:      ZCL_ZDEMO_MIG_PROJECTS_MPC_EXT  (model overrides — usually empty)
-  DPC class:    ZCL_ZDEMO_MIG_PROJECTS_DPC      (data provider — generated)
-  DPC_EXT:      ZCL_ZDEMO_MIG_PROJECTS_DPC_EXT  (data provider — your custom code)
+Legacy service: <legacy_service>
+  Package:      <source_package>
+  MPC class:    <MPC_class>      (model)
+  MPC_EXT:      <MPC_EXT_class>  (model overrides — usually empty)
+  DPC class:    <DPC_class>      (data provider — generated)
+  DPC_EXT:      <DPC_EXT_class>  (data provider — your custom code)
 ```
 
 
@@ -359,7 +373,7 @@ via the framework's MODIFY ENTITIES interface (no manual UPDATE + COMMIT).
 ### 5d. Service binding URL
 
 ```
-Old (SEGW V2):  /sap/opu/odata/sap/ZDEMO_MIG_PROJECTS_SRV
+Old (SEGW V2):  /sap/opu/odata/sap/<legacy_service>
 New (RAP V4):   /sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001
 ```
 
@@ -403,20 +417,20 @@ Phase 6 done until every box is `✓` or explicitly waived by the user.
 
 ### 6a. Reset existing artifacts (idempotent re-runs)
 
-If `ZDEMO_MIG_RAP` package contains objects from a previous run, delete them first:
+If `<target_package>` package contains objects from a previous run, delete them first:
 
 ```text
-SAPRead(type="DEVC", name="ZDEMO_MIG_RAP")
+SAPRead(type="DEVC", name="<target_package>")
 ```
 
 For each object in **reverse dependency order** (SRVB → SRVD → BDEF → DDLS_C → DDLS → CLAS → TABL):
 
 ```text
-SAPWrite(action="delete", type="<type>", name="<name>", transport="A4HK903875")
+SAPWrite(action="delete", type="<type>", name="<name>", transport="<transport>")
 ```
 
 (SAP recommends releasing the transport before re-running, but for resettable demos we just
-reuse `A4HK903875` — it's fine.)
+reuse `<transport>` — it's fine.)
 
 **Plus a TADIR cross-check** (Run 1 found a stub draft table sitting in a different transport
 that the package scan missed). Preferred path uses the dedicated TADIR lookup action — no
@@ -437,10 +451,10 @@ filtering has always worked:
 
 ```text
 SAPQuery(action="sql", sql="SELECT obj_name, object, devclass, korrnum FROM tadir
-  WHERE devclass = 'ZDEMO_MIG_RAP' AND obj_name LIKE 'Z%'")
+  WHERE devclass = '<target_package>' AND obj_name LIKE 'Z%'")
 ```
 
-If TADIR shows objects in `ZDEMO_MIG_RAP` that the package read missed (description
+If TADIR shows objects in `<target_package>` that the package read missed (description
 misalignment is a known ARC-1 cosmetic bug), they're orphans — delete each by its
 `object` type and `obj_name`. If any planned name (`ZDM_*_D`, `ZR_DM_*`, `ZC_DM_*`,
 `ZBP_DM_PROJECT`, `ZUI_DM_PROJECTS*`) appears in a *different* package, it's a leftover
@@ -455,9 +469,9 @@ prevents a specific failure mode in the next.
 
 ```text
 SAPWrite(action="batch_create", objects=[
-  { type: "TABL", name: "ZDM_PROJECT_D",   source: "<draft table source — see template below>", package: "ZDEMO_MIG_RAP", transport: "A4HK903875" },
-  { type: "TABL", name: "ZDM_TASK_D",      source: "<...>", package: "ZDEMO_MIG_RAP", transport: "A4HK903875" },
-  { type: "TABL", name: "ZDM_TIMEENTRY_D", source: "<...>", package: "ZDEMO_MIG_RAP", transport: "A4HK903875" }
+  { type: "TABL", name: "ZDM_PROJECT_D",   source: "<draft table source — see template below>", package: "<target_package>", transport: "<transport>" },
+  { type: "TABL", name: "ZDM_TASK_D",      source: "<...>", package: "<target_package>", transport: "<transport>" },
+  { type: "TABL", name: "ZDM_TIMEENTRY_D", source: "<...>", package: "<target_package>", transport: "<transport>" }
 ])
 SAPActivate(action="activate", objects=[ {type:"TABL", name:"ZDM_PROJECT_D"}, ... ])
 ```
@@ -617,7 +631,7 @@ SAPWrite(action="create", type="CLAS", name="ZBP_DM_PROJECT",
                  CLASS zbp_dm_project IMPLEMENTATION.
                  ENDCLASS.",
          description="Behavior pool for ZR_DM_PROJECT BO",
-         package="ZDEMO_MIG_RAP", transport="A4HK903875")
+         package="<target_package>", transport="<transport>")
 SAPActivate(type="CLAS", name="ZBP_DM_PROJECT")
 ```
 
@@ -788,7 +802,7 @@ SAPWrite(action="edit_method", type="CLAS", name="ZBP_DM_PROJECT",
 
     result = VALUE #( FOR u IN updated ( %tky = u-%tky %param = u ) ).
   ENDMETHOD.",
-         transport="A4HK903875")
+         transport="<transport>")
 ```
 
 (No `COMMIT WORK` — the framework saves automatically on action commit.)
@@ -799,11 +813,11 @@ SAPWrite(action="edit_method", type="CLAS", name="ZBP_DM_PROJECT",
 SAPWrite(action="batch_create", objects=[
   { type: "SRVD", name: "ZUI_DM_PROJECTS",
     source: "@EndUserText.label : 'Demo Project Manager (V4)'\ndefine service ZUI_DM_PROJECTS {\n  expose ZC_DM_PROJECT as Project;\n  expose ZC_DM_TASK as Task;\n  expose ZC_DM_TIMEENTRY as TimeEntry;\n}",
-    package: "ZDEMO_MIG_RAP", transport: "A4HK903875" },
+    package: "<target_package>", transport: "<transport>" },
   { type: "SRVB", name: "ZUI_DM_PROJECTS_O4",
     bindingType: "ODataV4-UI",
     serviceDefinition: "ZUI_DM_PROJECTS",
-    package: "ZDEMO_MIG_RAP", transport: "A4HK903875" }
+    package: "<target_package>", transport: "<transport>" }
 ])
 ```
 
@@ -846,7 +860,7 @@ Tell the user to do (in SAP GUI):
 ```text
 /n/IWFND/MAINT_SERVICE
   Add Service → System Alias = LOCAL → Filter "ZUI_DM_PROJECTS*" → Get Services
-  Select ZUI_DM_PROJECTS_O4 → Add Selected Services → Package ZDEMO_MIG_RAP → Transport A4HK903875
+  Select ZUI_DM_PROJECTS_O4 → Add Selected Services → Package <target_package> → Transport <transport>
 
   (Or, on systems with the V4-specific transaction:)
 
@@ -891,9 +905,9 @@ Verify the new V4 service returns the same data as the legacy V2.
 ### 7a. Legacy V2 baseline
 
 ```bash
-curl -u "$USER:$PASS" "<base>/sap/opu/odata/sap/ZDEMO_MIG_PROJECTS_SRV/ProjectSet/\$count"
+curl -u "$USER:$PASS" "<base>/sap/opu/odata/sap/<legacy_service>/ProjectSet/\$count"
 # expect: 5
-curl -u "$USER:$PASS" "<base>/sap/opu/odata/sap/ZDEMO_MIG_PROJECTS_SRV/ProjectSet('PRJ-0001')/Tasks/\$count"
+curl -u "$USER:$PASS" "<base>/sap/opu/odata/sap/<legacy_service>/ProjectSet('PRJ-0001')/Tasks/\$count"
 # expect: 3
 ```
 
@@ -919,12 +933,12 @@ methods for filters you missed.
 
 ## Reset / re-run
 
-Re-run this skill — Phase 6a deletes everything in `ZDEMO_MIG_RAP` first, so multiple runs
-are safe. Transport `A4HK903875` stays in `D` (modifiable) state until you explicitly release
+Re-run this skill — Phase 6a deletes everything in `<target_package>` first, so multiple runs
+are safe. Transport `<transport>` stays in `D` (modifiable) state until you explicitly release
 it. To clear the transport too:
 
 ```text
-SAPTransport(action="release_recursive", number="A4HK903875")
+SAPTransport(action="release_recursive", number="<transport>")
 SAPTransport(action="create", description="ARC-1 RAP migration outputs (resettable)", transportType="K")
 ```
 
@@ -968,8 +982,9 @@ SAPTransport(action="create", description="ARC-1 RAP migration outputs (resettab
 
 ## Notes
 
-- This skill **never touches** the legacy `ZDEMO_MIG` package, the legacy SEGW project, or the
-  legacy `A4HK903801` transport. The migration runs side-by-side.
+- This skill **never touches** the legacy source package, the legacy SEGW project, or its
+  transport. The migration runs side-by-side; legacy stays live until the user explicitly
+  retires it.
 - Use `mcp__sap-docs__search` whenever the legacy DPC_EXT body contains an unfamiliar API call —
   it'll tell you the released-cloud equivalent.
 - Use `mcp__sap-docs__abap_feature_matrix` to check which RAP features are available on the

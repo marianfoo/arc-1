@@ -4,7 +4,7 @@ Replace a freestyle UI5 TypeScript app with a Fiori Elements V4 list-report + ob
 configuration, driven by `@UI.*` annotations on the underlying RAP CDS projection. Custom
 behavior from the freestyle app that FE templates can't render is wired via the extension API
 (extension points and extension controllers). Runs side-by-side: the freestyle TS app stays
-untouched at `modern-ui5-app/`; the FE app lands in `fe-ui5-app/`.
+untouched at `<modern_app>/`; the FE app lands in `<fe_app>/`.
 
 This skill is the **last step** in the UI5con talk demo chain. It depends on:
 
@@ -12,6 +12,10 @@ This skill is the **last step** in the UI5con talk demo chain. It depends on:
   BDEF, SRVD, SRVB published, V4 routing group registered).
 - `modernize-ui5-app.md` having produced a TS baseline so we have something concrete to
   identify as "lost" / "extension-needed" features.
+
+> **Domain example.** Annotation templates in this skill use an illustrative `Project → Tasks
+> → TimeEntries` domain. Substitute the user's entities throughout — the LLM running this
+> skill should rewrite every projection/entity/field identifier to match the V4 service.
 
 ## Why this is its own skill
 
@@ -27,27 +31,27 @@ is replaced by FE templates that interpret CDS annotations. The skill's real job
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Source TS app | `modern-ui5-app/` | The freestyle TS app from `modernize-ui5-app.md` |
-| Target FE app | `fe-ui5-app/` | Reserved folder for this skill's output |
-| FE floorplan | List Report + Object Page (LROP V4) | Maps cleanly to the Project root + nested Tasks/TimeEntries facets |
+| Source TS app | `<modern_app>/` | The freestyle TS app from `modernize-ui5-app.md` |
+| Target FE app | `<fe_app>/` | Reserved folder for this skill's output |
+| FE floorplan | List Report + Object Page (LROP V4) when the BO has a clear root + child facets | Maps cleanly to the typical RAP composition root + children |
 | Template | `lropv4` (or `feopv4` if user wants OP-only) | Default LROP unless explicitly told otherwise |
-| App namespace | `<legacy-ns>.fe` (e.g. `com.demo.migration.projects.fe`) | Keeps the three apps distinguishable |
-| UI5 version | Match `modern-ui5-app/`'s version (`1.147.2`) | Same FE tooling release |
+| App namespace | `<source_namespace>.fe` | Keeps the three apps distinguishable |
+| UI5 version | Match `<modern_app>/`'s UI5 version | Same FE tooling release across the chain |
 | Language | TypeScript | Match the modern app; extension files are TS |
-| OData V4 service URL | `/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001` | From `migrate-segw-to-rap.md` Phase 6 |
-| Main entity | `Project` (root) — list-report shows projects, object-page expands tasks + time entries | Domain-specific, but baked in for the talk demo |
+| OData V4 service URL | User-provided. Default: derive from the SRVB name produced by `migrate-segw-to-rap` (typical shape `/sap/opu/odata4/sap/<service>_o4/srvd_a2x/sap/<service>/0001`). | The FE generator needs the exact endpoint to bind `$metadata` |
+| Main entity | The root entity exposed by the SRVB (the alias on the root projection's `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
 | Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file | The annotations belong to the service; FE app reads them via `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
 | Extension language | TypeScript | Match the rest of the chain |
-| Acceptance | FE app runs end-to-end against the V4 service: list-report shows projects, OP shows tasks facet, deep nav to TimeEntries facet, ApproveProject button renders from BDEF action | Concrete deliverable; verifiable by browser smoke test |
+| Acceptance | FE app runs end-to-end against the V4 service: list-report shows the root entity; OP shows child facets; row navigation works; any RAP `action` annotation renders as a header button | Concrete deliverable; verifiable by browser smoke test |
 
 ## Input
 
-- A path to the modern TS app (default: `modern-ui5-app/`).
-- A path/name for the FE app (default: `fe-ui5-app/`).
+- A path to the modern TS app (default: `<modern_app>/`).
+- A path/name for the FE app (default: `<fe_app>/`).
 - Optional: a `featureMap` describing which freestyle features must survive as extensions.
   If omitted, the skill discovers them by reading the modern app.
 
-If the user provides nothing, default to `modern-ui5-app/` ➜ `fe-ui5-app/`.
+If the user provides nothing, default to `<modern_app>/` ➜ `<fe_app>/`.
 
 ---
 
@@ -178,7 +182,7 @@ Print the plan in this exact format and STOP for `ok` / `edit` / question:
 Plan — generate FE app at <target>:
 
 Floorplan:        List Report + Object Page (LROP V4)
-Namespace:        <legacy-ns>.fe
+Namespace:        <source_namespace>.fe
 UI5 version:      1.147.2 TS
 OData V4 source:  <base>/sap/opu/odata4/.../zui_dm_projects/0001
 
@@ -277,8 +281,8 @@ define root view entity ZC_DM_PROJECT
 ```
 
 ```text
-SAPWrite(action="update", type="DDLS", name="ZC_DM_PROJECT", source="<spliced source>",
-         transport="A4HK903875")
+SAPWrite(action="update", type="DDLS", name="<root_projection>", source="<spliced source>",
+         transport="<transport>")
 SAPActivate(type="DDLS", name="ZC_DM_PROJECT")
 ```
 
@@ -319,7 +323,7 @@ SAPWrite(action="publish_srvb", name="ZUI_DM_PROJECTS_O4")
 ```text
 mcp__SAPUI5_MCP_Server__create_ui5_app(
   appName    = "<target-folder-basename>",
-  namespace  = "<legacy-ns>.fe",
+  namespace  = "<source_namespace>.fe",
   version    = "1.147.2",
   framework  = "OpenUI5",
   language   = "TypeScript",
@@ -369,7 +373,7 @@ Wait ~5 seconds, then:
 Bash: curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/index.html
 ```
 
-(Use a different port from `modern-ui5-app/`'s `8080`.)
+(Use a different port from `<modern_app>/`'s `8080`.)
 
 Open in a browser. The list-report should render with the columns dictated by `@UI.lineItem`.
 If it's empty, check the console for `400` / `404` from the metadata fetch — usually the V4
@@ -399,7 +403,7 @@ import ControllerExtension from "sap/ui/core/mvc/ControllerExtension";
 import MessageBox from "sap/m/MessageBox";
 
 /**
- * @namespace <legacy-ns>.fe.ext
+ * @namespace <source_namespace>.fe.ext
  */
 export default class ObjectPageExt extends ControllerExtension {
   public static overrides = {
@@ -431,7 +435,7 @@ Register the extension in the FE manifest:
     "extensions": {
       "sap.ui.controllerExtensions": {
         "sap.fe.templates.ObjectPage.ObjectPageController": {
-          "controllerName": "<legacy-ns>.fe.ext.ObjectPageExt"
+          "controllerName": "<source_namespace>.fe.ext.ObjectPageExt"
         }
       }
     }
@@ -501,10 +505,10 @@ TypeCheck:    clean
 Browser:      all 10 smoke steps pass
 
 What just happened in 3 sentences:
-  - Started with the freestyle TS app (modern-ui5-app/) targeting V4.
+  - Started with the freestyle TS app (<modern_app>/) targeting V4.
   - Annotated the CDS projections in the SAP system so FE knows how to render Project +
     Tasks + TimeEntries.
-  - Generated the FE app (fe-ui5-app/) on top of the now-annotated $metadata, with custom
+  - Generated the FE app (<fe_app>/) on top of the now-annotated $metadata, with custom
     behavior surfacing through controller extensions.
 
 ARC-1 calls used:
@@ -545,7 +549,7 @@ UI5 MCP calls used:
 - **Multi-floorplan composition** (Overview Page + LRO + ALP). Single LRO+OP is the talk
   demo's scope. Composition is a follow-up.
 - **Heavy custom rendering** that genuinely can't fit into FE building blocks. If the user
-  needs that, they should keep `modern-ui5-app/` instead of converting.
+  needs that, they should keep `<modern_app>/` instead of converting.
 - **Custom OData V4 services** beyond the BDEF-bound projection. The FE app reads exactly
   what the SRVB exposes — no additional service config.
 - **Localization beyond what the CDS `@EndUserText.label` provides.** FE picks labels from the

@@ -4,21 +4,26 @@ Convert a legacy UI5 freestyle JavaScript app (typical 2018–2021 era — sync 
 controllers, `jQuery.sap.*`, ES5 patterns, no tests, `sap_belize`) into a modern UI5
 TypeScript app on a recent 1.x release with async loading, manifest-driven configuration, a
 proper `BaseController`, sap_horizon theme, and clean `ui5-linter` output. Runs side-by-side:
-the legacy app stays untouched at `legacy-ui5-app/`; the modern app lands in `modern-ui5-app/`.
+the legacy app stays untouched at `<source_app>/`; the modern app lands in `<modern_app>/`.
 
-This skill is the **frontend half** of the UI5con talk demo. It follows `migrate-segw-to-rap`
-(which produces the V4 RAP service the modern app will target) and precedes
-`convert-ui5-to-fiori-elements` (which deletes most of the modern app in favor of FE templates).
+This skill is the **frontend half** of a SEGW → RAP → modern UI chain. It follows
+`migrate-segw-to-rap` (which produces the V4 RAP service the modern app will target) and
+precedes `convert-ui5-to-fiori-elements` (which deletes most of the modern app in favor of
+FE templates).
+
+> **Path/namespace placeholders.** `<source_app>/`, `<modern_app>/`, `<source_namespace>`,
+> `<modern_namespace>` are user-provided. Defaults: source is `legacy-*-app/` (sibling of the
+> target); modern app namespace is derived from source by appending `.modern`.
 
 ## Smart defaults (apply silently — do NOT ask before research)
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Source app | `legacy-ui5-app/` | The freestyle JS app under the workspace |
-| Target app | `modern-ui5-app/` | Empty folder reserved for this skill's output |
+| Source app | `<source_app>/` | The freestyle JS app under the workspace |
+| Target app | `<modern_app>/` | Empty folder reserved for this skill's output |
 | Target UI5 version | `1.147.2` | Latest 1.x at writing; 2.0-API-compatible; LTS-track |
 | Language | TypeScript | Async-by-default; type-safe binding paths via `sap-ui5-types` |
-| App namespace | Reuse source namespace, swap `.legacy` → `.modern` (e.g. `com.demo.migration.projects.modern`) | Keeps grep/i18n key continuity; distinguishes from legacy in routing |
+| App namespace | Reuse source namespace, swap `.legacy` → `.modern` (e.g. `<modern_namespace>`) | Keeps grep/i18n key continuity; distinguishes from legacy in routing |
 | Theme | `sap_horizon` | Default; legacy `sap_belize` is deprecated for new builds |
 | Layout | Translate `sap.m.SplitApp` ➜ `sap.f.FlexibleColumnLayout` (FCL) | FE-ready; required by the next skill |
 | Bootstrap | `data-sap-ui-async="true"` + `data-sap-ui-onInit="module:sap/ui/core/ComponentSupport"` | Sync bootstrap is deprecated and breaks UI5 2.x |
@@ -34,9 +39,9 @@ This skill is the **frontend half** of the UI5con talk demo. It follows `migrate
 
 The user provides **one of**:
 
-- A relative path to the legacy app, e.g. `legacy-ui5-app/`
-- A target folder name, e.g. `modern-ui5-app/` (skill infers source as the sibling `legacy-*`)
-- Nothing — assume defaults (`legacy-ui5-app/` ➜ `modern-ui5-app/`)
+- A relative path to the legacy app, e.g. `<source_app>/`
+- A target folder name, e.g. `<modern_app>/` (skill infers source as the sibling `legacy-*`)
+- Nothing — assume defaults (`<source_app>/` ➜ `<modern_app>/`)
 
 If both folders exist and the target is non-empty, ask: **"`<target>/` already has content.
 Wipe it and start over, or migrate into the existing structure?"** Default to wipe-and-rewrite
@@ -186,7 +191,7 @@ Plan — modernize <legacy> ➜ <target>:
 
 UI5 version:       1.147.2 (latest 1.x)
 Language:          TypeScript
-Namespace:         <legacy-ns>.modern (e.g. com.demo.migration.projects.modern)
+Namespace:         <source_namespace>.modern (e.g. <modern_namespace>)
 Theme:             sap_horizon
 Layout:            sap.f.FlexibleColumnLayout (translated from SplitApp)
 OData model:       <V4 if migrate-segw-to-rap ran, else V2 via proxy>
@@ -230,7 +235,7 @@ Wait for `ok` before mutating anything in `<target>/`.
 ```text
 mcp__SAPUI5_MCP_Server__create_ui5_app(
   appName = "<target-folder-basename>",
-  namespace = "<legacy-ns>.modern",
+  namespace = "<source_namespace>.modern",
   version = "1.147.2",
   framework = "OpenUI5",
   language = "TypeScript",
@@ -262,7 +267,7 @@ Then add `ui5-tooling-transpile` and TS deps to `package.json` manually.
 Read the freshly-generated `<target>/webapp/manifest.json` from the template, then **merge in**
 the legacy specifics:
 
-1. Set `sap.app.id` = `<legacy-ns>.modern`.
+1. Set `sap.app.id` = `<source_namespace>.modern`.
 2. Set `sap.app.title` / `sap.app.description` from `i18n` keys (already templated).
 3. Copy `sap.app.icons` from legacy if non-empty.
 4. Add `sap.app.dataSources` with the chosen OData service:
@@ -330,7 +335,7 @@ import ResourceModel from "sap/ui/model/resource/ResourceModel";
 import ResourceBundle from "sap/base/i18n/ResourceBundle";
 
 /**
- * @namespace <legacy-ns>.modern.controller
+ * @namespace <source_namespace>.modern.controller
  */
 export default class BaseController extends Controller {
   public getRouter(): Router {
@@ -378,7 +383,7 @@ export default class Component extends UIComponent {
 <mvc:View
     xmlns:mvc="sap.ui.core.mvc"
     xmlns="sap.f"
-    controllerName="<legacy-ns>.modern.controller.App"
+    controllerName="<source_namespace>.modern.controller.App"
     displayBlock="true"
     height="100%">
     <FlexibleColumnLayout id="flexibleColumnLayout"
@@ -403,7 +408,7 @@ translation is the part to focus on.
 
 - Replace `<SplitApp>` / `<Page>` root with FCL column XML — Master goes into `beginColumnPages`,
   Detail into `midColumnPages`, etc. Each view's content (toolbar, list, form) stays.
-- Replace `controllerName="<legacy-ns>.<X>"` with `controllerName="<legacy-ns>.modern.controller.<X>"`.
+- Replace `controllerName="<source_namespace>.<X>"` with `controllerName="<source_namespace>.modern.controller.<X>"`.
 - Drop sap.ui.commons references.
 - Convert deprecated controls to sap.m / sap.f equivalents (e.g. `sap.ui.table.Table` → keep,
   but `sap.ui.commons.Table` → replace with `sap.m.Table`).
@@ -512,7 +517,7 @@ Bash: curl -s "http://localhost:8080/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_
 If targeting V2 (legacy compat path):
 
 ```text
-Bash: curl -s "http://localhost:8080/sap/opu/odata/sap/ZDEMO_MIG_PROJECTS_SRV/$metadata" | head -5
+Bash: curl -s "http://localhost:8080/sap/opu/odata/sap/<legacy_service>/$metadata" | head -5
 ```
 
 Expected: valid XML metadata response. If 401, the proxy isn't authenticating; if 404, the
