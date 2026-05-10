@@ -1,19 +1,35 @@
-# Convert modern UI5 TS app ➜ Fiori Elements V4 (annotation-first)
+# Convert legacy UI5 JS app ➜ Fiori Elements V4 (annotation-first)
 
-Replace a freestyle UI5 app with a Fiori Elements V4 list-report + object-page configuration,
-driven by `@UI.*` annotations on the RAP CDS projection. Backend annotations are derived from
-the **legacy** UI5 app's actual features (columns, search, sort, formatters, action buttons,
-tab structure) so the FE app reproduces the user-visible contract. Custom behavior FE templates
-can't render is wired via the extension API.
+Generate a Fiori Elements V4 list-report + object-page app driven by `@UI.*` annotations on
+the RAP CDS projection. Backend annotations are derived from the **legacy** UI5 app's actual
+features (columns, search, sort, formatters, action buttons, tab structure) so the FE app
+reproduces the user-visible contract. Custom behavior FE templates can't express is wired via
+the extension API.
 
-This skill is the **last step** in a SEGW → RAP → modern UI chain. It depends on:
+This skill is **one of two parallel UI paths** after the RAP backend lands. Pick this one if
+the target architecture is **Fiori Elements V4** (annotation-driven; minimal custom code). Pick
+`modernize-ui5-app.md` instead if the target is **freestyle TypeScript** (custom controllers,
+manual binding). Both start from the same legacy JS app + the same V4 RAP service.
+
+```
+                  migrate-segw-to-rap.md  (backend: SEGW V2 → RAP V4)
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+    modernize-ui5-app.md      convert-ui5-to-fiori-elements.md
+        (freestyle TS)               (Fiori Elements V4)
+```
+
+This skill depends on:
 
 - `migrate-segw-to-rap.md` having produced an active V4 RAP service (CDS roots + projections,
   BDEF, SRVD, SRVB published, V4 routing group registered in `/n/IWFND/MAINT_SERVICE`).
-- `modernize-ui5-app.md` having produced a TS baseline so we have something concrete to
-  compare against (used to identify the "lost" / extension-needed features).
 - The legacy app (`<source_app>/`) still being readable — Phase 1 mines its features even
   though the legacy app itself is not modified.
+
+> **Independent of `modernize-ui5-app.md`.** This skill does not require the modern TS app to
+> exist. The legacy app is the single source of truth for user-visible features; the FE app
+> reproduces them through annotations + extensions directly.
 
 > **Domain example.** Annotation templates use an illustrative `Project → Tasks → TimeEntries`
 > domain. Substitute the user's entities throughout — the LLM rewrites every projection /
@@ -35,15 +51,14 @@ real jobs:
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Source TS app | `<modern_app>/` | The TS baseline from `modernize-ui5-app.md` — used for feature classification and as the reference for what extensions need to preserve |
-| Legacy reference app | `<source_app>/` | The original freestyle JS app — read-only; mined in Phase 1 for feature inventory. Authoritative source of the "lost feature" list. |
+| Legacy app | `<source_app>/` | The freestyle JS app — read-only; mined in Phase 1 for the feature inventory. Authoritative source of every user-visible behavior the FE app must reproduce. |
 | Target FE app | `<fe_app>/` | Reserved folder; Fiori MCP generates here |
 | FE floorplan | List Report + Object Page (LROP V4) when the BO has a clear root + child facets | Maps cleanly to the typical RAP composition root + children. OVP only if the user explicitly asks. |
 | Template | `lropv4` | Default unless the user asks otherwise |
 | Generator | **SAP Fiori MCP server (`@sap-ux/fiori-mcp-server`)** via the `list_functionalities` → `get_functionality_details` → `execute_functionality` sequence | First-party SAP tool; understands FE V4 patterns natively |
-| App namespace | `<source_namespace>.fe` | Keeps the three apps (legacy / modern / FE) distinguishable |
-| UI5 version | Match `<modern_app>/`'s UI5 version | Same FE tooling release across the chain |
-| Language | TypeScript | Match the modern app; extension files are TS |
+| App namespace | `<source_namespace>.fe` | Keeps the legacy and FE apps distinguishable (and the modern TS app too, if `modernize-ui5-app` was also run as the alternate path) |
+| UI5 version | Latest 1.x release (e.g. `1.147.2`) unless user specifies | LTS-track; latest FE V4 features available |
+| Language | TypeScript | Modern default; extension files use type-safe APIs |
 | OData V4 service URL | User-provided. Default: derive from the SRVB name produced by `migrate-segw-to-rap` (shape `/sap/opu/odata4/sap/<service>_o4/srvd_a2x/sap/<service>/0001`). | The Fiori MCP generator needs the exact endpoint to fetch `$metadata` |
 | Main entity | Root entity alias exposed by the SRVB (e.g. the alias on `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
 | Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
@@ -55,7 +70,6 @@ real jobs:
 
 The user provides:
 
-- **Path** to the modern TS app (default: `<modern_app>/`).
 - **Path** to the legacy app for feature mining (default: `<source_app>/`). Read-only.
 - **Path / name** for the FE app (default: `<fe_app>/`).
 - **OData V4 service URL** — derived from `migrate-segw-to-rap`'s SRVB output. Required.
@@ -63,6 +77,7 @@ The user provides:
 - **App namespace** (default: `<source_namespace>.fe`).
 - **Transport** for the CDS annotation writes (default: same transport used by
   `migrate-segw-to-rap`, or auto-create via `SAPTransport(action="create")`).
+- **UI5 version** (default: latest 1.x).
 
 If only the legacy app path and V4 URL are provided, apply smart defaults and surface the plan
 in Phase 3 for user `ok` before any writes.
@@ -102,14 +117,15 @@ SAPRead(type="DDLS", name="<root_projection>")
 Assert active version returns. If not, stop with *"Root projection is missing — re-run
 `migrate-segw-to-rap.md` Phase 6 Step 3."*
 
-### 0c. Modern + legacy apps exist
+### 0c. Legacy app exists and is readable
 
 ```text
-Bash: ls <modern_app>/webapp/controller/ <source_app>/webapp/controller/ <source_app>/webapp/view/
+Bash: ls <source_app>/webapp/controller/ <source_app>/webapp/view/
 ```
 
-Assert both webapp folders are populated. Stop with explicit reason if either is missing —
-the legacy app drives the annotation plan; the modern app drives the extension list.
+Assert both folders are populated. Stop with explicit reason if either is missing — the
+legacy app is the single source of truth for both the annotation plan (Phase 1+2) and the
+extension list (Phase 2b).
 
 ### 0d. SAP Fiori MCP server reachable
 
@@ -137,8 +153,7 @@ configuration block and stop:
 (Source: [@sap-ux/fiori-mcp-server README on
 github.com/SAP/open-ux-tools](https://github.com/SAP/open-ux-tools/tree/main/packages/fiori-mcp-server).)
 
-Optional companion: `mcp__SAPUI5_MCP_Server__*` for post-generation lint + manifest validation
-(already used by `modernize-ui5-app.md`).
+Optional companion: `mcp__SAPUI5_MCP_Server__*` for post-generation lint + manifest validation.
 
 ### 0e. Connection Manager (optional)
 
@@ -334,7 +349,7 @@ Plan — generate FE app at <fe_app>:
 
 Floorplan:           List Report + Object Page (LROP V4)
 Namespace:           <source_namespace>.fe
-UI5 version:         <modern_app>'s UI5 version
+UI5 version:         <user-provided, default latest 1.x>
 V4 service:          <V4_service_URL>
 Main entity:         <root_alias> (alias on the root projection)
 Generator:           SAP Fiori MCP server (@sap-ux/fiori-mcp-server)
@@ -563,7 +578,7 @@ typical required parameters include:
 - `targetPath` — `<fe_app>/` (the folder to generate into)
 - `namespace` — `<source_namespace>.fe`
 - `appId` / `appName` — the application identifier
-- `ui5Version` — match `<modern_app>`'s UI5 version
+- `ui5Version` — user-provided (default: latest 1.x)
 - `language` — `typescript`
 
 Map the user-supplied inputs onto the required parameters. If a required parameter has no
@@ -708,7 +723,8 @@ All three must return clean.
 
 ### 7b. Dev server
 
-Restart the dev server on a different port from `<modern_app>`'s:
+Restart the dev server on a free port (default `8082` — pick a different port if the legacy
+app's dev server or another running tool already uses it):
 
 ```text
 Bash: cd <fe_app> && pkill -f "ui5 serve" ; (npm start -- --port 8082 &)
@@ -821,7 +837,7 @@ UI5 MCP calls used:
 - **Multi-floorplan composition** (Overview Page + LRO + ALP). Single LRO+OP is the talk
   demo's scope. Composition is a follow-up.
 - **Heavy custom rendering** that genuinely can't fit into FE building blocks. If the user
-  needs that, they should keep `<modern_app>/` instead of converting.
+  needs that, they should pick the freestyle path (`modernize-ui5-app.md`) instead.
 - **Mock/local-service mode.** The skill targets the live V4 RAP service. The Fiori MCP can
   generate apps for CAP projects, but that's a different flow.
 - **Authorization policy.** FE renders what the service authorizes. PFCG / S_DEVELOP changes

@@ -6,10 +6,20 @@ TypeScript app on a recent 1.x release with async loading, manifest-driven confi
 proper `BaseController`, sap_horizon theme, and clean `ui5-linter` output. Runs side-by-side:
 the legacy app stays untouched at `<source_app>/`; the modern app lands in `<modern_app>/`.
 
-This skill is the **frontend half** of a SEGW → RAP → modern UI chain. It follows
-`migrate-segw-to-rap` (which produces the V4 RAP service the modern app will target) and
-precedes `convert-ui5-to-fiori-elements` (which deletes most of the modern app in favor of
-FE templates).
+This skill is **one of two parallel UI paths** after the RAP backend lands. Pick this one if
+the target architecture is a **freestyle TypeScript** app (custom controllers, manual binding,
+explicit i18n). Pick `convert-ui5-to-fiori-elements.md` instead if the target is a
+**Fiori Elements V4** app (annotation-driven; minimal custom code). Both start from the same
+legacy JS app + the same V4 RAP service produced by `migrate-segw-to-rap`.
+
+```
+                  migrate-segw-to-rap.md  (backend: SEGW V2 → RAP V4)
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+    modernize-ui5-app.md      convert-ui5-to-fiori-elements.md
+        (freestyle TS)               (Fiori Elements V4)
+```
 
 > **Path/namespace placeholders.** `<source_app>/`, `<modern_app>/`, `<source_namespace>`,
 > `<modern_namespace>` are user-provided. Defaults: source is `legacy-*-app/` (sibling of the
@@ -25,7 +35,7 @@ FE templates).
 | Language | TypeScript | Async-by-default; type-safe binding paths via `sap-ui5-types` |
 | App namespace | Reuse source namespace, swap `.legacy` → `.modern` (e.g. `<modern_namespace>`) | Keeps grep/i18n key continuity; distinguishes from legacy in routing |
 | Theme | `sap_horizon` | Default; legacy `sap_belize` is deprecated for new builds |
-| Layout | Translate `sap.m.SplitApp` ➜ `sap.f.FlexibleColumnLayout` (FCL) | FE-ready; required by the next skill |
+| Layout | Translate `sap.m.SplitApp` ➜ `sap.f.FlexibleColumnLayout` (FCL) | FCL is the modern responsive default for master-detail freestyle apps |
 | Bootstrap | `data-sap-ui-async="true"` + `data-sap-ui-onInit="module:sap/ui/core/ComponentSupport"` | Sync bootstrap is deprecated and breaks UI5 2.x |
 | Manifest version | `_version: 1.60.0` or later | Required for `sap.app.dataSources` + declarative models |
 | OData model in modern app | The new V4 service from `migrate-segw-to-rap` if it exists (`/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001`), otherwise the legacy V2 service via dev-server proxy | Lets the modern app demonstrate V4 features without forcing the V4 dependency for early iteration |
