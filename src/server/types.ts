@@ -60,6 +60,8 @@ export interface ServerConfig {
   // --- System Type Detection ---
   /** System type: 'auto' (detect from components), 'btp', or 'onprem' */
   systemType: 'auto' | 'btp' | 'onprem';
+  /** Optional SAP_BASIS release override for local tooling such as abaplint (e.g., "758"). */
+  abapRelease?: string;
 
   // --- Authentication (MCP client → ARC-1) ---
   /** Multiple API keys with per-key profile assignment (key:profile pairs). Single ARC1_API_KEY was removed in v0.7. */

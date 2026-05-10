@@ -1976,11 +1976,14 @@ async function handleSAPLint(
       const rules = listRulesFromConfig(lintConfig);
       const enabled = rules.filter((r) => r.enabled);
       const disabled = rules.filter((r) => !r.enabled);
+      const effectiveAbapRelease = configOptions.abapRelease ?? 'unknown';
+      const syntax = lintConfig.get().syntax as { version?: string } | undefined;
       return textResult(
         JSON.stringify(
           {
             preset: configOptions.systemType === 'btp' ? 'cloud' : 'onprem',
-            abapVersion: cachedFeatures?.abapRelease ?? 'unknown',
+            abapVersion: effectiveAbapRelease,
+            syntaxVersion: syntax?.version ?? 'unknown',
             enabledRules: enabled.length,
             disabledRules: disabled.length,
             rules: enabled,
@@ -2035,7 +2038,7 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
   const systemType = cachedFeatures?.systemType ?? (config.systemType !== 'auto' ? config.systemType : undefined);
   return {
     systemType,
-    abapRelease: cachedFeatures?.abapRelease,
+    abapRelease: cachedFeatures?.abapRelease ?? config.abapRelease,
     configFile: config.abaplintConfig,
     ruleOverrides,
   };
@@ -4157,7 +4160,7 @@ function runPreWriteLint(
     const systemType = cachedFeatures?.systemType ?? (config.systemType !== 'auto' ? config.systemType : undefined);
     const configOptions: LintConfigOptions = {
       systemType,
-      abapRelease: cachedFeatures?.abapRelease,
+      abapRelease: cachedFeatures?.abapRelease ?? config.abapRelease,
       configFile: config.abaplintConfig,
     };
     const result = validateBeforeWrite(source, filename, configOptions);

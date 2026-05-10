@@ -216,10 +216,15 @@ ${refs}
 
     const outcome = parseActivationOutcome(resp.body);
     if (outcome.kind !== 'preaudit' || !preaudit) {
-      return outcomeToResult(outcome);
+      const result = outcomeToResult(outcome);
+      return retryBatchActivationIndividuallyAfterEd064(http, safety, objects, result, options);
     }
 
-    return confirmPreaudit(http, outcome.refs, objects.map((o) => o.name).join(', '), phase1DurationMs);
+    return confirmPreaudit(http, outcome.refs, objects.map((o) => o.name).join(', '), phase1DurationMs, {
+      ed064RetryObjects: objects,
+      preaudit: options?.preaudit,
+      safety,
+    });
   } catch (err) {
     return rethrowOrLockHint(err, objects.map((o) => o.name).join(', '));
   }
@@ -235,6 +240,11 @@ async function confirmPreaudit(
   refs: Array<{ uri: string; name: string }>,
   objectLabel: string,
   phase1DurationMs: number,
+  options?: {
+    ed064RetryObjects?: Array<{ url: string; name: string }>;
+    preaudit?: boolean;
+    safety: SafetyConfig;
+  },
 ): Promise<ActivationResult> {
   logger.debug('Activation preaudit: SAP returned inactive objects, confirming with preauditRequested=false', {
     count: refs.length,
@@ -262,6 +272,15 @@ ${refLines}
       { Accept: 'application/xml' },
     );
     result = outcomeToResult(parseActivationOutcome(resp.body));
+    if (options?.ed064RetryObjects) {
+      result = await retryBatchActivationIndividuallyAfterEd064(
+        http,
+        options.safety,
+        options.ed064RetryObjects,
+        result,
+        { preaudit: options.preaudit },
+      );
+    }
     return result;
   } finally {
     logger.emitAudit({
@@ -275,6 +294,83 @@ ${refLines}
       outcome: result?.success ? 'success' : 'error',
     });
   }
+}
+
+function isEd064Text(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    /\bed0?64\b/i.test(text) ||
+    (normalized.includes('no next') && normalized.includes('previous object')) ||
+    normalized.includes('no next/previous object found')
+  );
+}
+
+function isRecoverableEd064BatchQuirk(result: ActivationResult): boolean {
+  if (result.success) return false;
+  const errorTexts = result.details
+    .filter((d) => d.severity === 'error')
+    .map((d) => d.text)
+    .filter(Boolean);
+
+  if (errorTexts.length === 0) {
+    const messages = result.messages.filter(Boolean);
+    return messages.length > 0 && messages.every(isEd064Text);
+  }
+
+  return errorTexts.every(isEd064Text);
+}
+
+async function retryBatchActivationIndividuallyAfterEd064(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objects: Array<{ url: string; name: string }>,
+  original: ActivationResult,
+  options?: { preaudit?: boolean },
+): Promise<ActivationResult> {
+  if (!isRecoverableEd064BatchQuirk(original) || objects.length === 0) return original;
+
+  logger.debug('Batch activation returned ED064 only; retrying original objects individually', {
+    count: objects.length,
+    objects: objects.map((o) => ({ name: o.name, uri: o.url })),
+  });
+
+  const retryResults = await Promise.all(
+    objects.map(async (object) => ({
+      object,
+      result: await activate(http, safety, object.url, { name: object.name, preaudit: options?.preaudit }),
+    })),
+  );
+
+  const note =
+    `Batch activation returned ED064 "no next/previous object found"; ` +
+    `retried ${objects.length} object${objects.length === 1 ? '' : 's'} individually.`;
+  const retryMessages = retryResults.flatMap(({ object, result }) =>
+    result.messages.map((message) => `${object.name}: ${message}`),
+  );
+  const retryDetails = retryResults.flatMap(({ object, result }) =>
+    result.details.map((detail) => ({
+      ...detail,
+      text: `${object.name}: ${detail.text}`,
+    })),
+  );
+
+  if (retryResults.every(({ result }) => result.success)) {
+    return {
+      success: true,
+      messages: [note, ...retryMessages],
+      details: [
+        { severity: 'warning', text: note },
+        ...original.details.map((detail) => ({ ...detail, severity: 'warning' as const })),
+        ...retryDetails,
+      ],
+    };
+  }
+
+  return {
+    success: false,
+    messages: [...original.messages, note, ...retryMessages],
+    details: [...original.details, { severity: 'info', text: note }, ...retryDetails],
+  };
 }
 
 // NW 7.50 lock-conflict-as-auth-error quirk:

@@ -83,6 +83,7 @@ Copy `.env.example` to `.env`. All options live in `src/server/config.ts` (parse
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
 | `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
+| `SAP_ABAP_RELEASE` / `--abap-release` | Optional SAP_BASIS release override for local tooling such as abaplint (for example `758` for S/4HANA 2023). Probe-detected release still wins when available. |
 | `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (12 tools, `SAPGit` feature-gated) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
 | `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
 | `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
@@ -230,6 +231,7 @@ tests/
 | Update vulnerability reporting policy | `SECURITY.md` (Supported Versions, Reporting channels, Response SLAs, CVE handling, Out of Scope, Safe Harbor) |
 | Add CLI sub-command (`call`, `tools`, shortcuts) | `src/cli.ts` (Commander wiring), `src/cli-args.ts` (pure arg parsing helpers + tests in `tests/unit/cli/cli-args.test.ts`) — never duplicate Zod validation; `handleToolCall` does it |
 | Add SAP version-quirk workaround (NW 7.50 / S/4 gating) | Prefer `extractExceptionType` in `src/adt/errors.ts` (structured XML error). Body-marker heuristics only with a release-scoped guard — see `convertHtmlConflictToProperError` in `src/adt/crud.ts` (Layer 1 exception type → Layer 2 body marker scoped to `cachedFeatures.abapRelease < 751`). Inline-comment WHY the heuristic self-scopes. ADR-0002 in [PR #199](https://github.com/marianfoo/arc-1/pull/199). |
+| Add activation batch quirk recovery | `src/adt/devtools.ts` (`activateBatch`, ED064 retry helper), `tests/unit/adt/devtools.test.ts`. Pure ED064 / "no next/previous object found" batch failures are retried once as individual activations; mixed real errors must not retry. |
 | Add elicitation prompt | `src/server/elicit.ts` |
 | Add XSUAA/JWT auth | `src/server/xsuaa.ts` |
 | Modify OAuth DCR client store / signed-token format | `src/server/stateless-client-store.ts` (HMAC sign/verify, payload schema, TTL); `src/server/xsuaa.ts`, `src/server/http.ts`; `tests/unit/server/stateless-client-store.test.ts`. Bumping `KDF_LABEL` is the in-code revocation knob; `cf bind-service` rotates upstream secrets. Audit events: `oauth_client_registered` / `oauth_client_lookup_failed` / `oauth_redirect_uri_registered`. |

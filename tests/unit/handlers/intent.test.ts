@@ -1711,6 +1711,33 @@ ENDCLASS.`;
       expect(parsed.preset).toBe('cloud');
     });
 
+    it('list_rules uses config.abapRelease when cached features are absent', async () => {
+      resetCachedFeatures();
+      const s4Config = { ...DEFAULT_CONFIG, systemType: 'onprem' as const, abapRelease: '758' };
+      const result = await handleToolCall(createClient(), s4Config, 'SAPLint', {
+        action: 'list_rules',
+      });
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed.preset).toBe('onprem');
+      expect(parsed.abapVersion).toBe('758');
+      expect(parsed.syntaxVersion).toBe('v758');
+    });
+
+    it('list_rules prefers cached feature release over config.abapRelease', async () => {
+      setCachedFeatures({ abapRelease: '750', systemType: 'onprem' } as ResolvedFeatures);
+      try {
+        const s4Config = { ...DEFAULT_CONFIG, systemType: 'onprem' as const, abapRelease: '758' };
+        const result = await handleToolCall(createClient(), s4Config, 'SAPLint', {
+          action: 'list_rules',
+        });
+        const parsed = JSON.parse(result.content[0]?.text);
+        expect(parsed.abapVersion).toBe('750');
+        expect(parsed.syntaxVersion).toBe('v750');
+      } finally {
+        resetCachedFeatures();
+      }
+    });
+
     it('lint accepts custom rule overrides', async () => {
       const source = `CLASS zcl_test DEFINITION PUBLIC.
   PUBLIC SECTION.
@@ -2650,6 +2677,23 @@ CLASS zcl_test IMPLEMENTATION.
 ENDCLASS.`,
       });
       // Should not be a lint error
+      if (result.content[0]?.text) {
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
+
+    it('uses config.abapRelease for pre-write lint when cached features are absent', async () => {
+      resetCachedFeatures();
+      const config = { ...DEFAULT_CONFIG, systemType: 'onprem' as const, abapRelease: '758', lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'PROG',
+        name: 'ZTEST',
+        source: `REPORT ztest.
+DATA lv TYPE string.
+lv = CONV string( 1 ).`,
+      });
+
       if (result.content[0]?.text) {
         expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
       }

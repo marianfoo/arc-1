@@ -20,6 +20,11 @@ describe('Config Builder', () => {
       expect(config.get().syntax.version).toBe('v757');
     });
 
+    it('uses v758 for S/4HANA 2023 release override', () => {
+      const config = buildLintConfig({ systemType: 'onprem', abapRelease: '758' });
+      expect(config.get().syntax.version).toBe('v758');
+    });
+
     it('falls back to v702 for on-prem without release', () => {
       const config = buildLintConfig({ systemType: 'onprem' });
       expect(config.get().syntax.version).toBe('v702');
@@ -154,6 +159,11 @@ describe('Config Builder', () => {
         expect(rules.cds_parser_error).toBeTruthy();
         expect((rules.cds_parser_error as Record<string, unknown>).severity).toBe('Error');
       }
+    });
+
+    it('uses v758 for S/4HANA 2023 release override', () => {
+      const config = buildPreWriteConfig({ systemType: 'onprem', abapRelease: '758' });
+      expect(config.get().syntax.version).toBe('v758');
     });
   });
 
