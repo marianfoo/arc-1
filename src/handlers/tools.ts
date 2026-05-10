@@ -944,8 +944,8 @@ export function getToolDefinitions(
         '- "syntax": Syntax check an ABAP object. Requires name + type. Optional: version ("active" or "inactive", defaults to active). Optional: source — when supplied, SAP compiles the given content as if it lived at the object\'s URI (pre-write dry-run, nothing is written). Omit source to check what is stored.\n' +
         '- "unittest": Run ABAP unit tests. Requires name + type.\n' +
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
-        '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
-        '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column.\n' +
+        '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column, sourceUri for exact ADT include/source targets.\n' +
+        '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column, sourceUri, proposalAffectedObjects. proposalUserContent may be an empty string; pass it through exactly from quickfix.\n' +
         '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns focused chapter sections by default; set includeFullText=true to include the full formatted dump blob. Optional sections=[kap0,kap3,...] to request specific chapter IDs.\n' +
         '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).\n\n' +
         '- "system_messages": List SM02 system messages via ADT feed (filter by user, maxResults, from, to).\n' +
@@ -975,6 +975,11 @@ export function getToolDefinitions(
             type: 'string',
             description: 'Current source code (required for quickfix/apply_quickfix).',
           },
+          sourceUri: {
+            type: 'string',
+            description:
+              'Exact ADT source URI for quickfix/apply_quickfix. Defaults to the type/name main source; use this for class includes such as /includes/definitions.',
+          },
           line: {
             type: 'number',
             description: 'Source line number for quickfix evaluation (required for quickfix/apply_quickfix).',
@@ -995,7 +1000,24 @@ export function getToolDefinitions(
           },
           proposalUserContent: {
             type: 'string',
-            description: 'Opaque userContent from quickfix action (required for apply_quickfix).',
+            description:
+              'Opaque userContent from quickfix action (required for apply_quickfix). May be an empty string; pass through exactly.',
+          },
+          proposalAffectedObjects: {
+            type: 'array',
+            description:
+              'Optional affectedObjects array from quickfix action. Include content for each affected source unit when applying multi-object quickfixes.',
+            items: {
+              type: 'object',
+              required: ['uri'],
+              properties: {
+                uri: { type: 'string', description: 'Affected ADT source URI, optionally with #start/#end range.' },
+                type: { type: 'string', description: 'Optional ADT object type metadata.' },
+                name: { type: 'string', description: 'Optional ADT object name metadata.' },
+                description: { type: 'string', description: 'Optional affected object description.' },
+                content: { type: 'string', description: 'Current source content for this affected unit.' },
+              },
+            },
           },
           variant: { type: 'string', description: 'ATC check variant (for atc action)' },
           id: {

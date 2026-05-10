@@ -1948,6 +1948,47 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('"line" is required for "quickfix" action.');
     });
 
+    it('quickfix action uses sourceUri override for include targets', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; body?: string | Buffer | null; headers?: Record<string, string> },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          calls.push({
+            method,
+            url: String(url),
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
+          if (method === 'POST' && String(url).includes('/sap/bc/adt/quickfixes/evaluation')) {
+            return Promise.resolve(
+              mockResponse(200, '<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>', {
+                'x-csrf-token': 'T',
+              }),
+            );
+          }
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'quickfix',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
+        source: 'CLASS lhc_test DEFINITION. ENDCLASS.',
+        line: 1,
+        column: 45,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const evalCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/quickfixes/evaluation'));
+      expect(evalCall?.url).toContain('%2Fsap%2Fbc%2Fadt%2Foo%2Fclasses%2FZCL_TEST%2Fincludes%2Fdefinitions');
+      expect(evalCall?.url).toContain('%23start%3D1%2C45');
+    });
+
     it('apply_quickfix action posts to proposal URI and returns deltas JSON', async () => {
       mockFetch.mockReset();
       const calls: Array<{ method: string; url: string; body?: string }> = [];
@@ -1969,7 +2010,7 @@ ENDCLASS.`;
                 200,
                 `<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes">
                   <quickfixes:delta uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main" startLine="3" startColumn="1" endLine="3" endColumn="4">
-                    <quickfixes:content>DATA</quickfixes:content>
+                    <content>DATA</content>
                   </quickfixes:delta>
                 </quickfixes:applicationResult>`,
                 { 'x-csrf-token': 'T' },
@@ -1984,6 +2025,7 @@ ENDCLASS.`;
         action: 'apply_quickfix',
         type: 'CLAS',
         name: 'ZCL_TEST',
+        sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
         source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
         line: 3,
         column: 1,
@@ -2006,6 +2048,57 @@ ENDCLASS.`;
       expect(applyCall?.body).toContain('<userContent>opaque-state</userContent>');
     });
 
+    it('apply_quickfix action accepts empty userContent and forwards affected objects', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; body?: string | Buffer | null; headers?: Record<string, string> },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          calls.push({
+            method,
+            url: String(url),
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
+          return Promise.resolve(
+            mockResponse(200, '<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'apply_quickfix',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
+        source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+        line: 3,
+        column: 1,
+        proposalUri: '/sap/bc/adt/quickfixes/1',
+        proposalUserContent: '',
+        proposalAffectedObjects: [
+          {
+            uri: '/sap/bc/adt/oo/classes/ZCL_HELPER/source/main',
+            type: 'CLAS/OC',
+            name: 'ZCL_HELPER',
+            content: 'CLASS zcl_helper DEFINITION. ENDCLASS.',
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const applyCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/quickfixes/1'));
+      expect(applyCall?.body).toContain('<userContent></userContent>');
+      expect(applyCall?.body).toContain('/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions#start=3,1');
+      expect(applyCall?.body).toContain('<affectedObjects>');
+      expect(applyCall?.body).toContain('adtcore:uri="/sap/bc/adt/oo/classes/ZCL_HELPER/source/main"');
+      expect(applyCall?.body).toContain('<content>CLASS zcl_helper DEFINITION. ENDCLASS.</content>');
+    });
+
     it('apply_quickfix action returns error when proposalUri is missing', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
         action: 'apply_quickfix',
@@ -2017,6 +2110,19 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('"proposalUri" is required for "apply_quickfix" action.');
+    });
+
+    it('apply_quickfix action returns error when proposalUserContent is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'apply_quickfix',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+        line: 3,
+        proposalUri: '/sap/bc/adt/quickfixes/1',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"proposalUserContent" is required for "apply_quickfix" action.');
     });
 
     it('schema validation rejects unknown SAPDiagnose actions', async () => {

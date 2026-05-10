@@ -150,6 +150,7 @@ import {
 import type {
   ClassHierarchy,
   DumpDetail,
+  FixAffectedObject,
   InactiveObject,
   ObjectTransportHistory,
   ResolvedFeatures,
@@ -4874,6 +4875,7 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
     }
     case 'quickfix': {
       const source = args.source as string | undefined;
+      const sourceUri = args.sourceUri as string | undefined;
       if (!name || !type) return errorResult('"name" and "type" are required for "quickfix" action.');
       if (!source) return errorResult('"source" is required for "quickfix" action.');
       if (args.line == null) return errorResult('"line" is required for "quickfix" action.');
@@ -4886,7 +4888,7 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
       const proposals = await getFixProposals(
         client.http,
         client.safety,
-        sourceUrlForType(type, name),
+        sourceUri ?? sourceUrlForType(type, name),
         source,
         line,
         column,
@@ -4895,13 +4897,16 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
     }
     case 'apply_quickfix': {
       const source = args.source as string | undefined;
+      const sourceUri = args.sourceUri as string | undefined;
       const proposalUri = args.proposalUri as string | undefined;
       const proposalUserContent = args.proposalUserContent as string | undefined;
+      const proposalAffectedObjects = args.proposalAffectedObjects as FixAffectedObject[] | undefined;
       if (!name || !type) return errorResult('"name" and "type" are required for "apply_quickfix" action.');
       if (!source) return errorResult('"source" is required for "apply_quickfix" action.');
       if (args.line == null) return errorResult('"line" is required for "apply_quickfix" action.');
       if (!proposalUri) return errorResult('"proposalUri" is required for "apply_quickfix" action.');
-      if (!proposalUserContent) return errorResult('"proposalUserContent" is required for "apply_quickfix" action.');
+      if (proposalUserContent === undefined)
+        return errorResult('"proposalUserContent" is required for "apply_quickfix" action.');
 
       const line = Number(args.line);
       const column = Number(args.column ?? 0);
@@ -4917,8 +4922,9 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
           name: '',
           description: '',
           userContent: proposalUserContent,
+          ...(proposalAffectedObjects ? { affectedObjects: proposalAffectedObjects } : {}),
         },
-        sourceUrlForType(type, name),
+        sourceUri ?? sourceUrlForType(type, name),
         source,
         line,
         column,
