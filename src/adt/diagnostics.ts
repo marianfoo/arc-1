@@ -8,6 +8,8 @@
  * Follows the same pure-function pattern as devtools.ts.
  */
 
+import { createHash } from 'node:crypto';
+import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import type {
@@ -20,6 +22,9 @@ import type {
   GatewayExceptionInfo,
   GatewayServiceInfo,
   GatewaySourceLine,
+  ObjectStateResult,
+  ObjectStateSection,
+  ObjectStateSourceVersion,
   SystemMessageEntry,
   TraceDbAccess,
   TraceEntry,
@@ -52,6 +57,104 @@ interface FeedQueryOptions {
 export interface ListSystemMessagesOptions extends FeedQueryOptions {}
 
 export interface ListGatewayErrorsOptions extends FeedQueryOptions {}
+
+export interface ObjectStateSectionInput {
+  section: string;
+  uri: string;
+  /** Treat missing endpoints as unavailable instead of failing the whole diagnostic */
+  optional?: boolean;
+}
+
+export interface GetObjectStateOptions {
+  type: string;
+  name: string;
+  sections: ObjectStateSectionInput[];
+}
+
+/**
+ * Compare active and inactive source versions for one ADT object.
+ *
+ * ARC-1 uses this as a compact diagnostic for activation mysteries where
+ * SAPRead "looks right" but the activator still sees stale or divergent
+ * source includes. The result intentionally returns hashes and byte counts,
+ * not full source, so the diagnostic stays cheap and safe to paste into chat.
+ */
+export async function getObjectState(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  options: GetObjectStateOptions,
+): Promise<ObjectStateResult> {
+  checkOperation(safety, OperationType.Read, 'GetObjectState');
+
+  const sections = await Promise.all(
+    options.sections.map(async (input): Promise<ObjectStateSection> => {
+      const [active, inactive] = await Promise.all([
+        readObjectStateVersion(http, input.uri, 'active', input.optional),
+        readObjectStateVersion(http, input.uri, 'inactive', input.optional),
+      ]);
+
+      return {
+        section: input.section,
+        uri: input.uri,
+        active,
+        inactive,
+        divergent: sourceVersionsDiverge(active, inactive),
+      };
+    }),
+  );
+
+  return {
+    type: options.type,
+    name: options.name,
+    checkedAt: new Date().toISOString(),
+    hasInactiveDivergence: sections.some((section) => section.divergent),
+    sections,
+  };
+}
+
+async function readObjectStateVersion(
+  http: AdtHttpClient,
+  uri: string,
+  version: 'active' | 'inactive',
+  optional = false,
+): Promise<ObjectStateSourceVersion> {
+  const versionedUri = appendQueryParam(uri, 'version', version);
+  try {
+    const resp = await http.get(versionedUri, {
+      Accept: 'text/plain, */*;q=0.8',
+    });
+    return {
+      available: true,
+      statusCode: resp.statusCode,
+      etag: resp.headers.etag,
+      byteLength: Buffer.byteLength(resp.body, 'utf8'),
+      sha256: createHash('sha256').update(resp.body, 'utf8').digest('hex'),
+    };
+  } catch (err) {
+    if (optional && err instanceof AdtApiError && err.statusCode === 404) {
+      return {
+        available: false,
+        statusCode: 404,
+      };
+    }
+    throw err;
+  }
+}
+
+function sourceVersionsDiverge(active: ObjectStateSourceVersion, inactive: ObjectStateSourceVersion): boolean {
+  if (active.available !== inactive.available) return true;
+  if (!active.available || !inactive.available) return false;
+  return active.sha256 !== inactive.sha256;
+}
+
+function appendQueryParam(path: string, key: string, value: string): string {
+  const [baseAndQuery, fragment] = path.split('#', 2);
+  const [base, query = ''] = (baseAndQuery ?? path).split('?', 2);
+  const params = new URLSearchParams(query);
+  params.set(key, value);
+  const queryString = params.toString();
+  return `${base}${queryString ? `?${queryString}` : ''}${fragment ? `#${fragment}` : ''}`;
+}
 
 /**
  * List ABAP short dumps (ST22 equivalent).

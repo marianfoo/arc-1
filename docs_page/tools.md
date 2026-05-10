@@ -425,7 +425,7 @@ Execute ABAP SQL queries against SAP tables.
 - `GROUP BY`, `COUNT(*)`, `WHERE` all work
 - ABAP SQL aggregate rule applies: non-aggregated selected fields must be listed in `GROUP BY`
 
-ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint parser can still reject valid-looking statements on some backend versions (for example grammar errors or single-SELECT enforcement). If parsing fails, simplify to one SELECT and split complex logic into staged queries.
+ABAP SQL as a language supports JOINs and subqueries, but the freestyle endpoint parser can still reject valid-looking statements on some backend versions (for example grammar errors or single-SELECT enforcement). ARC-1 automatically chunks simple long literal `IN (...)` lists into smaller freestyle calls. If parsing still fails, simplify to one SELECT and split complex logic into staged queries.
 
 See: [SAPQuery Freestyle Capability Matrix](https://github.com/marianfoo/arc-1/blob/main/docs/research/sapquery-freestyle-capability-matrix.md)
 
@@ -807,15 +807,15 @@ SAPLint(action="lint", source="...", rules={"line_length": {"severity": "Error",
 
 ## SAPDiagnose
 
-Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dumps (ST22), and ABAP profiler traces.
+Server-side code analysis: syntax check, ABAP unit tests, ATC checks, active/inactive object state, short dumps (ST22), and ABAP profiler traces.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `syntax`, `unittest`, `atc`, `quickfix`, `apply_quickfix`, `dumps`, or `traces` |
-| `name` | string | No | Object name (required for syntax/unittest/atc/quickfix/apply_quickfix) |
-| `type` | string | No | Object type: `PROG`, `CLAS`, `INTF`, `FUNC` (required for syntax/unittest/atc/quickfix/apply_quickfix) |
+| `action` | string | Yes | `syntax`, `unittest`, `atc`, `object_state`, `quickfix`, `apply_quickfix`, `dumps`, or `traces` |
+| `name` | string | No | Object name (required for syntax/unittest/atc/object_state/quickfix/apply_quickfix) |
+| `type` | string | No | Object type: `PROG`, `CLAS`, `INTF`, `FUNC` (required for syntax/unittest/atc/object_state/quickfix/apply_quickfix) |
 | `source` | string | No | Current source code (required for `quickfix` and `apply_quickfix`) |
 | `line` | number | No | Source line number (required for `quickfix` and `apply_quickfix`) |
 | `column` | number | No | Source column number (optional for `quickfix` and `apply_quickfix`, default `0`) |
@@ -832,6 +832,7 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 - **`syntax`** — Run SAP syntax check on an object. Returns errors/warnings with line, column, and message. **Important:** Syntax check runs against the *active* (on-system) source, not proposed new source. After writing/updating an object, activate it first, then run syntax check.
 - **`unittest`** — Run ABAP unit tests. Returns results per test class/method with status, alert messages, and execution time.
 - **`atc`** — Run ATC (ABAP Test Cockpit) checks. Returns findings with priority, check title, message, URI, line number, plus quickfix metadata (`quickfixInfo`, `hasQuickfix`). Optional `variant` parameter for custom check variants.
+- **`object_state`** — Compare active and inactive source versions for one object. For `CLAS`, ARC-1 checks main, definitions, implementations, macros, and testclasses includes (up to 10 parallel reads per class; sequence calls when sweeping many classes). Returns ETags, byte lengths, SHA-256 hashes, and divergence flags without returning full source. Useful for diagnosing activation failures where active and inactive class includes disagree.
 - **`quickfix`** — Get SAP quickfix proposals for a specific source position (`name`, `type`, `source`, `line`, optional `column`). Returns proposal entries with `uri`, `type`, `name`, `description`, `userContent`.
 - **`apply_quickfix`** — Apply one proposal (`proposalUri` + `proposalUserContent`) and return text deltas (range + replacement content). This does not write source; use `SAPWrite` to persist.
 - **`dumps`** — List short dumps (ST22). Without `id`: returns recent dumps (filterable by `user`, `maxResults`). With `id`: returns full dump detail including error type, exception, program, stack trace, and formatted output.
@@ -842,6 +843,7 @@ Server-side code analysis: syntax check, ABAP unit tests, ATC checks, short dump
 SAPDiagnose(action="syntax", type="CLAS", name="ZCL_ORDER")
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_ORDER")
 SAPDiagnose(action="atc", type="PROG", name="ZTEST_REPORT", variant="DEFAULT")
+SAPDiagnose(action="object_state", type="CLAS", name="ZBP_DM_PROJECT")
 SAPDiagnose(action="quickfix", type="CLAS", name="ZCL_ORDER", source="<current_source>", line=42, column=1)
 SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_ORDER", source="<current_source>", line=42, column=1, proposalUri="/sap/bc/adt/quickfixes/...", proposalUserContent="<opaque_state>")
 SAPDiagnose(action="dumps")

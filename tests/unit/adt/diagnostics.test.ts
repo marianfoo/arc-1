@@ -5,6 +5,7 @@ import {
   decodeHtmlEntities,
   getDump,
   getGatewayErrorDetail,
+  getObjectState,
   getTraceDbAccesses,
   getTraceHitlist,
   getTraceStatements,
@@ -23,6 +24,7 @@ import {
   parseTraceStatements,
   stripHtmlTags,
 } from '../../../src/adt/diagnostics.js';
+import { AdtApiError } from '../../../src/adt/errors.js';
 import type { AdtHttpClient } from '../../../src/adt/http.js';
 import { unrestrictedSafetyConfig } from '../../../src/adt/safety.js';
 
@@ -57,7 +59,160 @@ function mockHttpMulti(responses: Record<string, string>): AdtHttpClient {
   } as unknown as AdtHttpClient;
 }
 
+function mockHttpSequence(
+  responses: Array<{ statusCode?: number; headers?: Record<string, string>; body: string } | Error>,
+): AdtHttpClient {
+  const queue = [...responses];
+  return {
+    get: vi.fn().mockImplementation(() => {
+      const next = queue.shift();
+      if (next instanceof Error) return Promise.reject(next);
+      return Promise.resolve({
+        statusCode: next?.statusCode ?? 200,
+        headers: next?.headers ?? {},
+        body: next?.body ?? '',
+      });
+    }),
+    post: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+    put: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+    delete: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+    fetchCsrfToken: vi.fn(),
+    withStatefulSession: vi.fn(),
+  } as unknown as AdtHttpClient;
+}
+
 describe('Runtime Diagnostics', () => {
+  // ─── getObjectState ────────────────────────────────────────────────
+
+  describe('getObjectState', () => {
+    it('reports matching active and inactive source versions', async () => {
+      const http = mockHttpSequence([
+        {
+          body: 'CLASS zbp_demo DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zr_demo.\nENDCLASS.',
+          headers: { etag: 'a1' },
+        },
+        {
+          body: 'CLASS zbp_demo DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zr_demo.\nENDCLASS.',
+          headers: { etag: 'i1' },
+        },
+      ]);
+
+      const result = await getObjectState(http, unrestrictedSafetyConfig(), {
+        type: 'CLAS',
+        name: 'ZBP_DEMO',
+        sections: [{ section: 'main', uri: '/sap/bc/adt/oo/classes/ZBP_DEMO/source/main' }],
+      });
+
+      expect(result.hasInactiveDivergence).toBe(false);
+      expect(result.sections[0]?.active.available).toBe(true);
+      expect(result.sections[0]?.active.byteLength).toBeGreaterThan(0);
+      expect(result.sections[0]?.active.sha256).toBe(result.sections[0]?.inactive.sha256);
+      expect(result.sections[0]?.active.etag).toBe('a1');
+      expect(result.sections[0]?.inactive.etag).toBe('i1');
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/oo/classes/ZBP_DEMO/source/main?version=active', {
+        Accept: 'text/plain, */*;q=0.8',
+      });
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/oo/classes/ZBP_DEMO/source/main?version=inactive', {
+        Accept: 'text/plain, */*;q=0.8',
+      });
+    });
+
+    it('flags active and inactive source divergence by hash', async () => {
+      const http = mockHttpSequence([{ body: 'active source' }, { body: 'inactive source' }]);
+
+      const result = await getObjectState(http, unrestrictedSafetyConfig(), {
+        type: 'PROG',
+        name: 'ZDEMO',
+        sections: [{ section: 'main', uri: '/sap/bc/adt/programs/programs/ZDEMO/source/main' }],
+      });
+
+      expect(result.hasInactiveDivergence).toBe(true);
+      expect(result.sections[0]?.divergent).toBe(true);
+      expect(result.sections[0]?.active.sha256).not.toBe(result.sections[0]?.inactive.sha256);
+    });
+
+    it('overwrites an existing version query parameter for each requested source version', async () => {
+      const http = mockHttpSequence([{ body: 'active source' }, { body: 'inactive source' }]);
+
+      await getObjectState(http, unrestrictedSafetyConfig(), {
+        type: 'PROG',
+        name: 'ZDEMO',
+        sections: [{ section: 'main', uri: '/sap/bc/adt/programs/programs/ZDEMO/source/main?version=active&foo=bar' }],
+      });
+
+      expect(http.get).toHaveBeenCalledWith('/sap/bc/adt/programs/programs/ZDEMO/source/main?version=active&foo=bar', {
+        Accept: 'text/plain, */*;q=0.8',
+      });
+      expect(http.get).toHaveBeenCalledWith(
+        '/sap/bc/adt/programs/programs/ZDEMO/source/main?version=inactive&foo=bar',
+        {
+          Accept: 'text/plain, */*;q=0.8',
+        },
+      );
+    });
+
+    it('reports optional missing include endpoints as unavailable', async () => {
+      const notFound = new AdtApiError('Not found', 404, '/sap/bc/adt/oo/classes/ZBP_DEMO/includes/macros');
+      const http = mockHttpSequence([notFound, notFound]);
+
+      const result = await getObjectState(http, unrestrictedSafetyConfig(), {
+        type: 'CLAS',
+        name: 'ZBP_DEMO',
+        sections: [{ section: 'macros', uri: '/sap/bc/adt/oo/classes/ZBP_DEMO/includes/macros', optional: true }],
+      });
+
+      expect(result.hasInactiveDivergence).toBe(false);
+      expect(result.sections[0]?.active).toEqual({ available: false, statusCode: 404 });
+      expect(result.sections[0]?.inactive).toEqual({ available: false, statusCode: 404 });
+    });
+
+    it('flags divergence when only one optional source version exists', async () => {
+      const notFound = new AdtApiError('Not found', 404, '/sap/bc/adt/oo/classes/ZBP_DEMO/includes/testclasses');
+      const http = mockHttpSequence([notFound, { body: 'CLASS ltcl_test DEFINITION.' }]);
+
+      const result = await getObjectState(http, unrestrictedSafetyConfig(), {
+        type: 'CLAS',
+        name: 'ZBP_DEMO',
+        sections: [
+          { section: 'testclasses', uri: '/sap/bc/adt/oo/classes/ZBP_DEMO/includes/testclasses', optional: true },
+        ],
+      });
+
+      expect(result.hasInactiveDivergence).toBe(true);
+      expect(result.sections[0]?.divergent).toBe(true);
+      expect(result.sections[0]?.active.available).toBe(false);
+      expect(result.sections[0]?.inactive.available).toBe(true);
+    });
+
+    it('rethrows non-404 errors for optional sections', async () => {
+      const serverError = new AdtApiError('Server error', 500, '/sap/bc/adt/oo/classes/ZBP_DEMO/includes/definitions');
+      const http = mockHttpSequence([serverError, { body: '' }]);
+
+      await expect(
+        getObjectState(http, unrestrictedSafetyConfig(), {
+          type: 'CLAS',
+          name: 'ZBP_DEMO',
+          sections: [
+            { section: 'definitions', uri: '/sap/bc/adt/oo/classes/ZBP_DEMO/includes/definitions', optional: true },
+          ],
+        }),
+      ).rejects.toThrow(AdtApiError);
+    });
+
+    it('is allowed in read-only safety mode', async () => {
+      const http = mockHttpSequence([{ body: 'active source' }, { body: 'active source' }]);
+      const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
+
+      await expect(
+        getObjectState(http, safety, {
+          type: 'PROG',
+          name: 'ZDEMO',
+          sections: [{ section: 'main', uri: '/sap/bc/adt/programs/programs/ZDEMO/source/main' }],
+        }),
+      ).resolves.toMatchObject({ hasInactiveDivergence: false });
+    });
+  });
+
   // ─── listDumps ──────────────────────────────────────────────────────
 
   describe('listDumps', () => {
