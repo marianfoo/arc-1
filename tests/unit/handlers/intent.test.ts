@@ -8828,6 +8828,11 @@ ENDCLASS.`;
       // the handler — assert on the Zod-formatted enum description instead.
       expect(result.content[0]?.text.toLowerCase()).toContain('generate_behavior_implementation');
     });
+
+    // P1 result-code mapping (Codex review on PR #260) is covered by direct
+    // unit tests of the exported `isRapGenerateResultSuccess` helper — see
+    // tests/unit/adt/rap-generate.test.ts. The handler simply delegates to it;
+    // putting the truth table next to the helper keeps the contract local.
   });
 
   describe('hyperfocused mode (SAP tool)', () => {

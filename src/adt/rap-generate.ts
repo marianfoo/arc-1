@@ -106,6 +106,24 @@ export interface RapGenerateResult {
 }
 
 /**
+ * Classify a `generate_behavior_implementation` outcome as MCP success vs error.
+ *
+ * The orchestrator never throws on activation failure — it returns a structured
+ * result so the caller can see what was scaffolded. The handler then decides
+ * which MCP result code to surface. See Codex review on PR #260 (P1):
+ *   - activation absent (dryRun / activate=false / no scaffold change + no activation) → success
+ *   - activation.success === true → success
+ *   - activation.success === false WITH hint (e.g. stale-active CCDEF coupling) → success
+ *     (the source is correct; the user follows the recovery path)
+ *   - activation.success === false WITHOUT hint → error (real compile failure)
+ */
+export function isRapGenerateResultSuccess(result: RapGenerateResult): boolean {
+  if (!result.activation) return true;
+  if (result.activation.success) return true;
+  return Boolean(result.activation.hint);
+}
+
+/**
  * Recovery hint for the well-known "stale active CCDEF/CCIMP placeholder + new
  * inactive handlers" activation rejection. Surfaced verbatim when SAP returns
  * `Local classes of "CL_ABAP_BEHAVIOR_HANDLER" can only be derived in the
@@ -118,7 +136,7 @@ const STALE_ACTIVE_HINT =
   'This typically means the active CCDEF/CCIMP for this class are still SAP placeholder comments ' +
   'while the inactive copies now contain real handlers, and RAP refuses the inactive→active transition. ' +
   'Recovery options: (a) activate the class once via Eclipse "Generate Behavior Implementation" wizard ' +
-  '(it bypasses this coupling), or (b) delete and recreate the class via SAPManage(action="delete", type="CLAS") ' +
+  '(it bypasses this coupling), or (b) delete and recreate the class via SAPWrite(action="delete", type="CLAS") ' +
   'followed by SAPWrite(action="create", type="CLAS", …) and rerun generate_behavior_implementation against ' +
   'the freshly created class. The just-written CCDEF/CCIMP source is correct and reusable in both recovery paths.';
 
@@ -163,7 +181,7 @@ export async function generateBehaviorImplementation(
   const targetAlias = (options.targetAlias ?? '').trim().toLowerCase();
   const transport = options.transport;
 
-  if (!className || !className.trim()) {
+  if (!className?.trim()) {
     throw new AdtSafetyError('generate_behavior_implementation: className is required.');
   }
   const cleanClassName = className.trim();
@@ -272,54 +290,62 @@ export async function generateBehaviorImplementation(
     dryRun,
   };
 
-  // ── Phase 4: write (when not dry-run and there's something to write) ──
-  if (dryRun || !result.scaffoldChanged) {
+  // Dry-run short-circuits before any side effects.
+  if (dryRun) {
     return result;
   }
 
   const objectUrl = classObjectUrl(cleanClassName);
-  await client.http.withStatefulSession(async (session) => {
-    const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY');
-    const effectiveTransport = transport ?? (lock.corrNr || undefined);
-    try {
-      if (scaffoldPlan.changed.main && scaffoldPlan.sections.main !== mainSource) {
-        await updateSource(
-          session,
-          client.safety,
-          classMainSourceUrl(cleanClassName),
-          scaffoldPlan.sections.main,
-          lock.lockHandle,
-          effectiveTransport,
-        );
-      }
-      if (scaffoldPlan.changed.definitions && scaffoldPlan.sections.definitions) {
-        await updateSource(
-          session,
-          client.safety,
-          classIncludeUrlFor(cleanClassName, 'definitions'),
-          scaffoldPlan.sections.definitions,
-          lock.lockHandle,
-          effectiveTransport,
-        );
-      }
-      if (scaffoldPlan.changed.implementations && scaffoldPlan.sections.implementations) {
-        await updateSource(
-          session,
-          client.safety,
-          classIncludeUrlFor(cleanClassName, 'implementations'),
-          scaffoldPlan.sections.implementations,
-          lock.lockHandle,
-          effectiveTransport,
-        );
-      }
-    } finally {
+
+  // ── Phase 4: write (only when scaffold has changes) ───────────────────
+  // When scaffoldChanged=false, all handlers are already in place — skip the
+  // lock+write cycle entirely. Activation still runs below if requested, because
+  // a populated-but-inactive class is a realistic rerun/recovery state after
+  // earlier manual include writes (Codex review note on PR #260).
+  if (result.scaffoldChanged) {
+    await client.http.withStatefulSession(async (session) => {
+      const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY');
+      const effectiveTransport = transport ?? (lock.corrNr || undefined);
       try {
-        await unlockObject(session, objectUrl, lock.lockHandle);
-      } catch {
-        // best-effort-cleanup: surface the original error, not an unlock failure
+        if (scaffoldPlan.changed.main && scaffoldPlan.sections.main !== mainSource) {
+          await updateSource(
+            session,
+            client.safety,
+            classMainSourceUrl(cleanClassName),
+            scaffoldPlan.sections.main,
+            lock.lockHandle,
+            effectiveTransport,
+          );
+        }
+        if (scaffoldPlan.changed.definitions && scaffoldPlan.sections.definitions) {
+          await updateSource(
+            session,
+            client.safety,
+            classIncludeUrlFor(cleanClassName, 'definitions'),
+            scaffoldPlan.sections.definitions,
+            lock.lockHandle,
+            effectiveTransport,
+          );
+        }
+        if (scaffoldPlan.changed.implementations && scaffoldPlan.sections.implementations) {
+          await updateSource(
+            session,
+            client.safety,
+            classIncludeUrlFor(cleanClassName, 'implementations'),
+            scaffoldPlan.sections.implementations,
+            lock.lockHandle,
+            effectiveTransport,
+          );
+        }
+      } finally {
+        try {
+          await unlockObject(session, objectUrl, lock.lockHandle);
+        } catch {
+          // best-effort-cleanup: surface the original error, not an unlock failure
+        }
       }
-    }
-  });
+    });
+  }
 
   // ── Phase 5: optional activation ──────────────────────────────────────
   if (activateRequested) {

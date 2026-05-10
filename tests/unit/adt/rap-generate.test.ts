@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdtSafetyError } from '../../../src/adt/errors.js';
-import { generateBehaviorImplementation } from '../../../src/adt/rap-generate.js';
+import {
+  generateBehaviorImplementation,
+  isRapGenerateResultSuccess,
+  type RapGenerateResult,
+} from '../../../src/adt/rap-generate.js';
 
 // Minimal in-memory fixtures used across the suite.
 const BDEF_SOURCE = `managed implementation in class ZBP_DM_PROJECT unique;
@@ -337,9 +341,12 @@ define behavior for ZR_DM_TASK alias Task
     await expect(generateBehaviorImplementation(client, '')).rejects.toBeInstanceOf(AdtSafetyError);
   });
 
-  it('skips writing when scaffold reports no changes (idempotent re-run)', async () => {
+  it('skips writes when scaffold reports no changes but still runs activation (idempotent rerun) — Codex P2a', async () => {
+    // A populated-but-inactive class is a realistic rerun/recovery state after
+    // earlier manual include writes (Codex review on PR #260). The default
+    // contract is "generate + activate" — when activate=true, activation runs
+    // even if scaffold has nothing to write.
     const state = defaultState({ activationMode: 'success' });
-    // Pre-populated definitions + implementations: simulate a class that already has handlers
     state.structuredResponse.definitions = `CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
     METHODS approve_project FOR MODIFY
@@ -359,8 +366,84 @@ ENDCLASS.`;
     const result = await generateBehaviorImplementation(client, 'ZBP_DM_PROJECT');
 
     expect(result.scaffoldChanged).toBe(false);
+    expect(state.writes.length).toBe(0); // No write
+    expect(result.activation?.success).toBe(true); // BUT activation ran
+  });
+
+  it('skips writes AND skips activation when activate=false and scaffold reports no changes', async () => {
+    const state = defaultState();
+    state.structuredResponse.definitions = `CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS approve_project FOR MODIFY
+      IMPORTING keys FOR ACTION Project~approve_project RESULT result.
+
+    METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION
+      IMPORTING keys REQUEST requested_authorizations FOR Project RESULT result.
+ENDCLASS.`;
+    state.structuredResponse.implementations = `CLASS lhc_project IMPLEMENTATION.
+  METHOD approve_project.
+  ENDMETHOD.
+  METHOD get_instance_authorizations.
+  ENDMETHOD.
+ENDCLASS.`;
+    const { client } = makeClient(state);
+
+    const result = await generateBehaviorImplementation(client, 'ZBP_DM_PROJECT', { activate: false });
+
+    expect(result.scaffoldChanged).toBe(false);
     expect(state.writes.length).toBe(0);
-    // No write means activation was skipped
     expect(result.activation).toBeUndefined();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// isRapGenerateResultSuccess truth table (Codex review on PR #260, P1).
+// The handler in src/handlers/intent.ts delegates to this helper to decide
+// whether to surface the orchestrator outcome via textResult or errorResult.
+// ──────────────────────────────────────────────────────────────────────
+
+function baseResult(activation?: RapGenerateResult['activation']): RapGenerateResult {
+  return {
+    discovery: {
+      className: 'ZBP_X',
+      bdefName: 'ZR_X',
+      source: 'rootEntityRef',
+      classCategory: 'behaviorPool',
+    },
+    validation: { mainHasForBehaviorOf: true, bdefBindsClass: true },
+    scaffoldChanged: false,
+    changedSections: [],
+    inserted: { signatures: 0, stubs: 0, autoCreatedSkeletons: 0 },
+    required: [],
+    dryRun: false,
+    ...(activation ? { activation } : {}),
+  };
+}
+
+describe('isRapGenerateResultSuccess (Codex P1 result-code mapping)', () => {
+  it('returns true when no activation block is present (dry-run / activate=false)', () => {
+    expect(isRapGenerateResultSuccess(baseResult())).toBe(true);
+  });
+
+  it('returns true when activation succeeded', () => {
+    expect(isRapGenerateResultSuccess(baseResult({ success: true, messages: [] }))).toBe(true);
+  });
+
+  it('returns true when activation failed BUT a recovery hint was attached (soft success)', () => {
+    expect(
+      isRapGenerateResultSuccess(
+        baseResult({ success: false, hint: 'stale-active recovery instructions…', messages: ['…'] }),
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false when activation failed without any hint (real compile error → hard failure)', () => {
+    expect(isRapGenerateResultSuccess(baseResult({ success: false, messages: ['Type ZIF_MISSING is unknown.'] }))).toBe(
+      false,
+    );
+  });
+
+  it('returns false when activation failed and hint is empty string (treat empty as "no hint")', () => {
+    expect(isRapGenerateResultSuccess(baseResult({ success: false, hint: '', messages: ['…'] }))).toBe(false);
   });
 });

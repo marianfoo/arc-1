@@ -129,7 +129,7 @@ import {
   pullRepo as gctsPullRepo,
   switchBranch as gctsSwitchBranch,
 } from '../adt/gcts.js';
-import { generateBehaviorImplementation } from '../adt/rap-generate.js';
+import { generateBehaviorImplementation, isRapGenerateResultSuccess } from '../adt/rap-generate.js';
 import {
   applyRapHandlerScaffold,
   extractRapHandlerRequirements,
@@ -4118,7 +4118,12 @@ async function handleSAPWrite(
         transport,
       });
       invalidateWrittenObject();
-      return textResult(JSON.stringify(result, null, 2));
+      // MCP result-code mapping via the exported helper — see
+      // `isRapGenerateResultSuccess` for the success/error contract (Codex review on PR #260, P1).
+      // The structured JSON is preserved in both branches so the caller can still see what
+      // was discovered, written, and what activation reported.
+      const json = JSON.stringify(result, null, 2);
+      return isRapGenerateResultSuccess(result) ? textResult(json) : errorResult(json);
     }
     case 'delete': {
       await enforcePackageForExistingObject();
