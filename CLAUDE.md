@@ -147,6 +147,7 @@ src/
 │   ├── cds-impact.ts           # CDS downstream impact classifier (RAP-oriented buckets)
 │   ├── rap-preflight.ts        # Deterministic RAP static-rule validator (TABL/BDEF/DDLX/DDLS)
 │   ├── rap-handlers.ts         # RAP handler signature/stub extraction, matching, and injection helpers
+│   ├── rap-generate.ts         # RAP behavior pool one-shot orchestrator (discover BDEF + scaffold + activate)
 │   ├── ui5-repository.ts       # UI5 ABAP Repository OData client
 │   ├── flp.ts                  # FLP PAGE_BUILDER_CUST OData client
 │   └── transport.ts            # CTS transport management
@@ -202,6 +203,7 @@ tests/
 | Add gCTS / abapGit operation | `src/adt/gcts.ts` or `src/adt/abapgit.ts`, `src/handlers/intent.ts` (`handleSAPGit`), `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add RAP deterministic preflight checks | `src/adt/rap-preflight.ts`, `src/handlers/intent.ts` (`runRapPreflightValidation`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-preflight.test.ts` |
 | Add RAP behavior handler scaffolding logic | `src/adt/rap-handlers.ts`, `src/handlers/intent.ts` (`SAPWrite action=scaffold_rap_handlers`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-handlers.test.ts` |
+| Add high-level RAP behavior implementation orchestration (`SAPWrite action=generate_behavior_implementation`) | `src/adt/rap-generate.ts`, `src/adt/xml-parser.ts` (`parseClassMetadata` rootEntityRef), `src/adt/types.ts` (`ClassRootEntityRef`), `src/handlers/intent.ts` (`case 'generate_behavior_implementation'`), `src/handlers/schemas.ts`, `src/handlers/tools.ts`, `src/authz/policy.ts`, `tests/unit/adt/rap-generate.test.ts`. Composes scaffold + include-write + activate; auto-discovers BDEF via class metadata's `<class:rootEntityRef>` element. Avoids the broken `/sap/bc/adt/quickfixes/proposals/.../create_class_implementation` server endpoint (HTTP 500 on a4h, verified live PR-C research 2026-05-10). |
 | Add new tool type | `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `src/handlers/intent.ts` |
 | Add/modify tool input schema | `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/intent.ts` |
