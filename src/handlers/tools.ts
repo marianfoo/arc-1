@@ -229,7 +229,7 @@ const SAPQUERY_DESC_ONPREM =
   'Powerful for reverse-engineering: query metadata tables like DD02L (table catalog), DD03L (field catalog), ' +
   'SWOTLV (BOR method implementations), TADIR (object directory), TFDIR (function modules). ' +
   'If a table is not found, similar table names will be suggested automatically. ' +
-  'Note: Uses the ADT freestyle SQL endpoint (same family as ADT SQL Console in Eclipse). ABAP SQL language supports JOINs and subqueries, but this endpoint parser can reject valid-looking statements on some backend versions (for example grammar errors, single-SELECT enforcement). If parsing fails, simplify to one SELECT and split multi-table logic into staged single-table queries (SAP Note 3605050).\n\n' +
+  'Note: Uses the ADT freestyle SQL endpoint (same family as ADT SQL Console in Eclipse). ABAP SQL language supports JOINs and subqueries, but this endpoint parser can reject valid-looking statements on some backend versions (for example grammar errors, single-SELECT enforcement). ARC-1 automatically chunks simple long literal IN lists; if parsing still fails, simplify to one SELECT and split multi-table logic into staged single-table queries (SAP Note 3605050).\n\n' +
   'CDS impact analysis: DO NOT query DDDDLSRC, ACMDCLSRC, DDLXSRC_SRC, or SRVDSRC_SRC to find CDS consumers — those text scans produce noise (substring matches, package group nodes, generated patterns). Use SAPContext(action="impact", type="DDLS", name="...") instead — it uses SAP\'s where-used index and returns bucketed, filtered results (projection views, BDEFs, SRVDs, access controls, documentation, ABAP consumers).';
 
 const SAPQUERY_DESC_BTP =
@@ -937,6 +937,7 @@ export function getToolDefinitions(
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
         '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
         '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column.\n' +
+        '- "object_state": Compare active and inactive source versions. Requires name + type. For CLAS, also compares main, definitions, implementations, macros, and testclasses includes. Returns ETags, byte lengths, hashes, and divergence flags.\n' +
         '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns focused chapter sections by default; set includeFullText=true to include the full formatted dump blob. Optional sections=[kap0,kap3,...] to request specific chapter IDs.\n' +
         '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).\n\n' +
         '- "system_messages": List SM02 system messages via ADT feed (filter by user, maxResults, from, to).\n' +
@@ -955,13 +956,17 @@ export function getToolDefinitions(
               'traces',
               'system_messages',
               'gateway_errors',
+              'object_state',
               'quickfix',
               'apply_quickfix',
             ],
             description: 'Diagnostic action',
           },
-          name: { type: 'string', description: 'Object name (for syntax/unittest/atc)' },
-          type: { type: 'string', description: 'Object type (PROG, CLAS, etc.) (for syntax/unittest/atc)' },
+          name: { type: 'string', description: 'Object name (for syntax/unittest/atc/object_state)' },
+          type: {
+            type: 'string',
+            description: 'Object type (PROG, CLAS, etc.) (for syntax/unittest/atc/object_state)',
+          },
           source: {
             type: 'string',
             description: 'Current source code (required for quickfix/apply_quickfix).',

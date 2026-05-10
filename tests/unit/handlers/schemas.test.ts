@@ -738,6 +738,16 @@ describe('SAPDiagnoseSchema', () => {
     }
   });
 
+  it('accepts object_state with object identity fields', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'object_state',
+      name: 'ZBP_DM_PROJECT',
+      type: 'CLAS',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('accepts apply_quickfix with proposal data', () => {
     const result = SAPDiagnoseSchema.safeParse({
       action: 'apply_quickfix',

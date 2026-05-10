@@ -499,6 +499,7 @@ export const SAPDiagnoseSchema = z.object({
     'traces',
     'system_messages',
     'gateway_errors',
+    'object_state',
     'quickfix',
     'apply_quickfix',
   ]),

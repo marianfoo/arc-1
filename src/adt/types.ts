@@ -345,6 +345,38 @@ export interface TableField {
 
 // ─── Runtime Diagnostics Types ──────────────────────────────────────
 
+/** Source version metadata captured by object_state diagnostics */
+export interface ObjectStateSourceVersion {
+  /** Whether this source version was available at the ADT endpoint */
+  available: boolean;
+  /** HTTP status code returned by ADT, if known */
+  statusCode?: number;
+  /** Source ETag, when ADT returns one */
+  etag?: string;
+  /** UTF-8 byte length of the source body */
+  byteLength?: number;
+  /** SHA-256 hash of the source body for compact active/inactive comparison */
+  sha256?: string;
+}
+
+/** One checked source section, usually main source or a class include */
+export interface ObjectStateSection {
+  section: string;
+  uri: string;
+  active: ObjectStateSourceVersion;
+  inactive: ObjectStateSourceVersion;
+  divergent: boolean;
+}
+
+/** Active/inactive source state for one repository object */
+export interface ObjectStateResult {
+  type: string;
+  name: string;
+  checkedAt: string;
+  hasInactiveDivergence: boolean;
+  sections: ObjectStateSection[];
+}
+
 /** Short dump entry from /sap/bc/adt/runtime/dumps listing */
 export interface DumpEntry {
   /** Encoded dump ID (URL path segment) */

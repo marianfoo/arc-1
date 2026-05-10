@@ -40,6 +40,18 @@ function createClient(): AdtClient {
   });
 }
 
+function dataPreviewXml(column: string, values: string[]): string {
+  return `<abap><values><COLUMNS><COLUMN><METADATA name="${column}"/><DATASET>${values
+    .map((value) => `<DATA>${value}</DATA>`)
+    .join('')}</DATASET></COLUMN></COLUMNS></values></abap>`;
+}
+
+function freestylePostCalls(): Array<[unknown, Record<string, unknown>]> {
+  return mockFetch.mock.calls.filter(
+    (call) => String(call[0]).includes('/sap/bc/adt/datapreview/freestyle') && call[1]?.method === 'POST',
+  ) as Array<[unknown, Record<string, unknown>]>;
+}
+
 describe('Intent Handler', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -1567,6 +1579,120 @@ describe('Intent Handler', () => {
       expect(result.content[0]?.text).not.toContain('SAP Note 3605050');
     });
 
+    it('chunks simple long literal IN lists and merges the rows', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08'])),
+      );
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z09', 'Z10'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09', 'Z10')",
+        maxRows: 100,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const data = JSON.parse(result.content[0]?.text);
+      expect(data.columns).toEqual(['OBJ_NAME']);
+      expect(data.rows.map((row: Record<string, string>) => row.OBJ_NAME)).toEqual([
+        'Z01',
+        'Z02',
+        'Z03',
+        'Z04',
+        'Z05',
+        'Z06',
+        'Z07',
+        'Z08',
+        'Z09',
+        'Z10',
+      ]);
+
+      const postCalls = freestylePostCalls();
+      expect(postCalls).toHaveLength(2);
+      const firstBody = String(postCalls[0]?.[1].body);
+      const secondBody = String(postCalls[1]?.[1].body);
+      expect(firstBody).toContain("'Z08'");
+      expect(firstBody).not.toContain("'Z09'");
+      expect(secondBody).toContain("'Z09'");
+      expect(secondBody).toContain("'Z10'");
+    });
+
+    it('stops chunked IN-list execution once maxRows is filled', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z01', 'Z02', 'Z03', 'Z04'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09')",
+        maxRows: 3,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const data = JSON.parse(result.content[0]?.text);
+      expect(data.rows.map((row: Record<string, string>) => row.OBJ_NAME)).toEqual(['Z01', 'Z02', 'Z03']);
+      const postCalls = freestylePostCalls();
+      expect(postCalls).toHaveLength(1);
+      expect(String(postCalls[0]?.[0])).toContain('rowNumber=3');
+    });
+
+    it('does not rewrite short IN lists', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z01', 'Z02'])));
+      const sql = "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02')";
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      expect(result.isError).toBeUndefined();
+      const postCalls = freestylePostCalls();
+      expect(postCalls).toHaveLength(1);
+      expect(String(postCalls[0]?.[1].body)).toBe(sql);
+    });
+
+    it('does not rewrite IN subqueries', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z01'])));
+      const sql = 'SELECT object_name FROM tadir WHERE object_name IN ( SELECT obj_name FROM zallowed_objects )';
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      expect(result.isError).toBeUndefined();
+      const postCalls = freestylePostCalls();
+      expect(postCalls).toHaveLength(1);
+      expect(String(postCalls[0]?.[1].body)).toBe(sql);
+    });
+
+    it('does not rewrite NOT IN lists', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z99'])));
+      const sql =
+        "SELECT object_name FROM tadir WHERE object_name NOT IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09')";
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      expect(result.isError).toBeUndefined();
+      const postCalls = freestylePostCalls();
+      expect(postCalls).toHaveLength(1);
+      expect(String(postCalls[0]?.[1].body)).toBe(sql);
+    });
+
+    it('mentions automatic IN-list chunking when a chunk still hits the ADT parser error', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Invalid query string. Only one SELECT statement is allowed'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09')",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
+      expect(result.content[0]?.text).toContain('already split this simple long IN list');
+    });
+
     it('is blocked when free SQL is disallowed', async () => {
       const client = new AdtClient({
         baseUrl: 'http://sap:8000',
@@ -1858,6 +1984,91 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('source');
+    });
+  });
+
+  // ─── SAPDiagnose object_state ─────────────────────────────────────
+
+  describe('SAPDiagnose object_state', () => {
+    it('compares CLAS main and include active/inactive versions', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/includes/macros')) return Promise.resolve(mockResponse(404, 'Not found'));
+        const body = urlStr.includes('version=inactive') ? 'inactive source' : 'active source';
+        return Promise.resolve(mockResponse(200, body, { etag: urlStr.includes('version=inactive') ? 'i1' : 'a1' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'object_state',
+        type: 'CLAS',
+        name: 'ZBP_DM_PROJECT',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]?.text);
+      expect(payload.type).toBe('CLAS');
+      expect(payload.name).toBe('ZBP_DM_PROJECT');
+      expect(payload.hasInactiveDivergence).toBe(true);
+      expect(payload.sections.map((section: { section: string }) => section.section)).toEqual([
+        'main',
+        'definitions',
+        'implementations',
+        'macros',
+        'testclasses',
+      ]);
+
+      const urls = mockFetch.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes('/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/source/main?version=active'))).toBe(
+        true,
+      );
+      expect(
+        urls.some((url) => url.includes('/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/source/main?version=inactive')),
+      ).toBe(true);
+      expect(
+        urls.some((url) => url.includes('/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions?version=active')),
+      ).toBe(true);
+      expect(
+        urls.some((url) =>
+          url.includes('/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/implementations?version=inactive'),
+        ),
+      ).toBe(true);
+
+      const macros = payload.sections.find((section: { section: string }) => section.section === 'macros');
+      expect(macros.active).toEqual({ available: false, statusCode: 404 });
+      expect(macros.inactive).toEqual({ available: false, statusCode: 404 });
+    });
+
+    it('compares only main source for non-class objects', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, 'REPORT zdemo.', { etag: 'e1' }));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'object_state',
+        type: 'PROG',
+        name: 'ZDEMO',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]?.text);
+      expect(payload.sections.map((section: { section: string }) => section.section)).toEqual(['main']);
+      const urls = mockFetch.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes('/sap/bc/adt/programs/programs/ZDEMO/source/main?version=active'))).toBe(
+        true,
+      );
+      expect(urls.some((url) => url.includes('/sap/bc/adt/programs/programs/ZDEMO/source/main?version=inactive'))).toBe(
+        true,
+      );
+    });
+
+    it('returns a focused error when name or type is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'object_state',
+        type: 'CLAS',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"name" and "type" are required for "object_state" action.');
     });
   });
 

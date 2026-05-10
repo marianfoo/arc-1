@@ -90,6 +90,7 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAPDiagnose.traces': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.system_messages': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.gateway_errors': { scope: 'read', opType: OperationType.Read },
+  'SAPDiagnose.object_state': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.quickfix': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.apply_quickfix': { scope: 'read', opType: OperationType.Read },
 

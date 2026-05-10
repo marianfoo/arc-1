@@ -221,6 +221,7 @@ tests/
 | Add contract extraction for new type | `src/context/contract.ts` |
 | Modify context output format | `src/context/compressor.ts` |
 | Add runtime diagnostic | `src/adt/diagnostics.ts`, `src/handlers/intent.ts` |
+| Add source state diagnostic | `src/adt/diagnostics.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
 | Add audit event type | `src/server/audit.ts` (typed `*Event` interface + `AuditEvent` union); emit via `logger.emitAudit({...})` from the call site (e.g. `confirmPreaudit` in `src/adt/devtools.ts`) |
 | Add/modify Dependabot config | `.github/dependabot.yml` — npm + github-actions + docker, weekly. Grouping + ignore rules in-file. |

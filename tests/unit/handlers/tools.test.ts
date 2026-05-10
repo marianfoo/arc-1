@@ -326,10 +326,12 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('atc');
     expect(actionEnum).toContain('quickfix');
     expect(actionEnum).toContain('apply_quickfix');
+    expect(actionEnum).toContain('object_state');
     expect(actionEnum).toContain('dumps');
     expect(actionEnum).toContain('traces');
     expect(actionEnum).toContain('system_messages');
     expect(actionEnum).toContain('gateway_errors');
+    expect(sapDiagnose.description).toContain('active and inactive source versions');
     expect(schema.properties.source).toBeDefined();
     expect(schema.properties.line).toBeDefined();
     expect(schema.properties.column).toBeDefined();
@@ -592,6 +594,7 @@ describe('Tool Definitions', () => {
       expect(sapQuery.description).toContain('DD02L');
       expect(sapQuery.description).toContain('TADIR');
       expect(sapQuery.description).toContain('reverse-engineering');
+      expect(sapQuery.description).toContain('automatically chunks simple long literal IN lists');
     });
 
     it('BTP SAPTransport description mentions gCTS', () => {
