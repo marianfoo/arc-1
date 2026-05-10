@@ -698,5 +698,17 @@ describe('Tool Definitions', () => {
       expect(schema.properties.messages).toBeDefined();
       expect(schema.properties.messages.type).toBe('array');
     });
+
+    it('exposes the CLAS include update property at top-level SAPWrite', () => {
+      for (const btp of [false, true]) {
+        const schema = getSAPWriteSchema(btp);
+        const include = schema.properties.include;
+        expect(include).toBeDefined();
+        expect(include.type).toBe('string');
+        expect(include.enum).toEqual(['definitions', 'implementations', 'macros', 'testclasses']);
+        expect(include.description).toContain('update type=CLAS');
+        expect(include.description).toContain('source/main');
+      }
+    });
   });
 });

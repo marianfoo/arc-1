@@ -150,10 +150,12 @@ const SAPWRITE_TYPES_BTP = [
   'DTEL',
   'MSAG',
 ];
+const SAPWRITE_CLAS_INCLUDES = ['definitions', 'implementations', 'macros', 'testclasses'];
 
 const SAPWRITE_DESC_ONPREM =
   'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
+  'For CLAS update, pass include="definitions"|"implementations"|"macros"|"testclasses" to update that local include natively; omit include to update source/main. ' +
   'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
@@ -165,11 +167,12 @@ const SAPWRITE_DESC_ONPREM =
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). Pass "objects" array with dependency order. ' +
-  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
+  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally create missing lhc_* skeletons plus inject declarations and empty implementation stubs into an existing behavior pool class.';
 
 const SAPWRITE_DESC_BTP =
   'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
+  'For CLAS update, pass include="definitions"|"implementations"|"macros"|"testclasses" to update that local include natively; omit include to update source/main. ' +
   'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
@@ -179,7 +182,7 @@ const SAPWRITE_DESC_BTP =
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). ' +
-  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
+  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally create missing lhc_* skeletons plus inject declarations and empty implementation stubs into an existing behavior pool class.';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -555,6 +558,12 @@ export function getToolDefinitions(
           },
           name: { type: 'string', description: 'Object name (for create/update/delete/edit_method)' },
           source: { type: 'string', description: 'ABAP source code (for create/update/edit_method)' },
+          include: {
+            type: 'string',
+            enum: SAPWRITE_CLAS_INCLUDES,
+            description:
+              'For update type=CLAS only: write a class-local include instead of source/main. Valid values: definitions (CCDEF), implementations (CCIMP), macros, testclasses. Omit include to update source/main.',
+          },
           method: {
             type: 'string',
             description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',

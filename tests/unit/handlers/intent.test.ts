@@ -2377,6 +2377,63 @@ ENDCLASS.`;
       // unrestricted config has empty allowedPackages → skip resolveObjectPackage
       expect(result.content[0]?.text).not.toContain('blocked by safety');
     });
+
+    it('updates a CLAS local include without touching source/main', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer | null }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr, body: typeof opts?.body === 'string' ? opts.body : undefined });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR>A4HK900001</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const source = 'CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.\nENDCLASS.';
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZBP_I_TRAVELREQ',
+        include: 'definitions',
+        source,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully updated CLAS ZBP_I_TRAVELREQ include definitions');
+      const putCalls = calls.filter((call) => call.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      expect(putCalls[0]?.url).toContain('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions');
+      expect(putCalls[0]?.url).toContain('lockHandle=LH1');
+      expect(putCalls[0]?.url).toContain('corrNr=A4HK900001');
+      expect(putCalls[0]?.body).toBe(source);
+      expect(putCalls.some((call) => call.url.includes('/source/main'))).toBe(false);
+      const lockCall = calls.find((call) => call.method === 'POST' && call.url.includes('_action=LOCK'));
+      expect(lockCall?.url).toContain('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ');
+    });
+
+    it('rejects CLAS include update without source before HTTP writes', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZBP_I_TRAVELREQ',
+        include: 'implementations',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('source');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   // ─── SAPWrite FUGR / FUNC (issue #250) ───────────────────────────
@@ -7711,13 +7768,13 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('Available aliases in ZI_TRAVELREQ: Travel');
     });
 
-    it('autoApply reports unresolved handler skeletons with a recovery hint', async () => {
+    it('autoApply creates missing handler skeletons and scaffolds methods', async () => {
       mockFetch.mockReset();
-      const calls: Array<{ method: string; url: string }> = [];
-      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer | null }) => {
         const method = opts?.method ?? 'GET';
         const urlStr = String(url);
-        calls.push({ method, url: urlStr });
+        calls.push({ method, url: urlStr, body: typeof opts?.body === 'string' ? opts.body : undefined });
 
         if (method === 'GET' && urlStr.endsWith('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ')) {
           return Promise.resolve(mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' }));
@@ -7737,6 +7794,15 @@ ENDCLASS.`;
         if (method === 'GET' && urlStr.includes('/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVELREQ/source/main')) {
           return Promise.resolve(mockResponse(200, bdefSource, { 'x-csrf-token': 'T' }));
         }
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
         return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
       });
 
@@ -7750,12 +7816,26 @@ ENDCLASS.`;
       });
 
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
-      expect(parsed.applied).toBe(false);
-      expect(parsed.applyResult.unresolved.length).toBeGreaterThan(0);
-      expect(parsed.hint).toContain('lhc_travel');
-      expect(parsed.hint).toContain('Create local handler class');
-      expect(calls.some((call) => call.method === 'PUT' || call.url.includes('_action=LOCK'))).toBe(false);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('Auto-created 2 handler skeleton section(s)');
+      const parsed = JSON.parse(text.slice(text.indexOf('{')));
+      expect(parsed.applied).toBe(true);
+      expect(parsed.hint).toBeUndefined();
+      expect(parsed.applyResult.skeletons.createdDefinitions).toEqual(['lhc_travel']);
+      expect(parsed.applyResult.skeletons.createdImplementations).toEqual(['lhc_travel']);
+      expect(parsed.applyResult.unresolved).toEqual([]);
+      const definitionPut = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions'),
+      );
+      const implementationPut = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations'),
+      );
+      expect(definitionPut?.body).toContain('CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.');
+      expect(definitionPut?.body).toContain('METHODS submitforapproval FOR MODIFY');
+      expect(implementationPut?.body).toContain('CLASS lhc_travel IMPLEMENTATION.');
+      expect(implementationPut?.body).toContain('METHOD submitforapproval.');
     });
 
     it('autoApply injects signatures and writes class source', async () => {

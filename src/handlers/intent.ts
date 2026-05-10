@@ -3000,9 +3000,18 @@ function sourceUrlForType(type: string, name: string): string {
   return `${objectUrlForType(type, name)}/source/main`;
 }
 
+type ClassWriteInclude = 'definitions' | 'implementations' | 'macros' | 'testclasses';
+const CLASS_WRITE_INCLUDES: readonly ClassWriteInclude[] = ['definitions', 'implementations', 'macros', 'testclasses'];
+
 /** Get a CLAS include URL (definitions/implementations/macros/testclasses) */
-function classIncludeUrl(name: string, include: 'definitions' | 'implementations' | 'macros' | 'testclasses'): string {
+function classIncludeUrl(name: string, include: ClassWriteInclude): string {
   return `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${include}`;
+}
+
+function normalizeClassWriteInclude(include: unknown): ClassWriteInclude | undefined {
+  if (typeof include !== 'string') return undefined;
+  const normalized = include.toLowerCase() as ClassWriteInclude;
+  return CLASS_WRITE_INCLUDES.includes(normalized) ? normalized : undefined;
 }
 
 // ─── SAPWrite Handler ────────────────────────────────────────────────
@@ -3017,6 +3026,8 @@ async function handleSAPWrite(
   const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
   const source = String(args.source ?? '');
+  const hasSource = typeof args.source === 'string';
+  const include = normalizeClassWriteInclude(args.include);
   const transport = args.transport as string | undefined;
   const lintOverride = args.lintBeforeWrite as boolean | undefined;
   const preflightOverride = args.preflightBeforeWrite as boolean | undefined;
@@ -3105,6 +3116,32 @@ async function handleSAPWrite(
   switch (action) {
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
+
+      if (args.include !== undefined) {
+        if (!include) {
+          return errorResult(
+            `Invalid CLAS include "${String(args.include)}". Valid values: ${CLASS_WRITE_INCLUDES.join(', ')}.`,
+          );
+        }
+        if (type !== 'CLAS') {
+          return errorResult('SAPWrite include is only supported for action="update" with type="CLAS".');
+        }
+        if (!hasSource) {
+          return errorResult('"source" is required when updating a CLAS include.');
+        }
+
+        await safeUpdateSource(
+          client.http,
+          client.safety,
+          objectUrl,
+          classIncludeUrl(name, include),
+          source,
+          transport,
+          cachedFeatures?.abapRelease,
+        );
+        invalidateWrittenObject(type, name);
+        return textResult(`Successfully updated ${type} ${name} include ${include}.`);
+      }
 
       if (type === 'SKTD') {
         // KTD update requires the full <sktd:docu> XML envelope with the Markdown
@@ -3647,6 +3684,7 @@ async function handleSAPWrite(
               applied: false,
               hint: unresolvedHint,
               applyResult: {
+                skeletons: scaffoldPlan.skeletons,
                 main: scaffoldPlan.signatures.main,
                 definitions: scaffoldPlan.signatures.definitions,
                 implementations: scaffoldPlan.signatures.implementations,
@@ -3728,6 +3766,7 @@ async function handleSAPWrite(
 
       const msg =
         `Scaffolded ${scaffoldPlan.insertedSignatureCount} RAP handler signature(s) and ${scaffoldPlan.insertedImplementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
+        `Auto-created ${scaffoldPlan.skeletons.createdDefinitions.length + scaffoldPlan.skeletons.createdImplementations.length} handler skeleton section(s). ` +
         `Updated section(s): ${scaffoldPlan.changedSections.join(', ')}.`;
       const warnings = mergePreWriteWarnings(
         lintWarningsMain?.warnings,
@@ -3739,6 +3778,7 @@ async function handleSAPWrite(
           ...summary,
           applied: true,
           applyResult: {
+            skeletons: scaffoldPlan.skeletons,
             main: scaffoldPlan.signatures.main,
             definitions: scaffoldPlan.signatures.definitions,
             implementations: scaffoldPlan.signatures.implementations,
