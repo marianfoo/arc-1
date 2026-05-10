@@ -331,10 +331,13 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('system_messages');
     expect(actionEnum).toContain('gateway_errors');
     expect(schema.properties.source).toBeDefined();
+    expect(schema.properties.sourceUri).toBeDefined();
     expect(schema.properties.line).toBeDefined();
     expect(schema.properties.column).toBeDefined();
     expect(schema.properties.proposalUri).toBeDefined();
     expect(schema.properties.proposalUserContent).toBeDefined();
+    expect(schema.properties.proposalAffectedObjects).toBeDefined();
+    expect(schema.properties.proposalAffectedObjects.items.required).toContain('uri');
     expect(schema.properties.sections).toBeDefined();
     expect(schema.properties.includeFullText).toBeDefined();
     expect(schema.properties.detailUrl).toBeDefined();

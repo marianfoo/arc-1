@@ -490,6 +490,14 @@ export const SAPLintSchema = z.object({
 
 // ─── SAPDiagnose ────────────────────────────────────────────────────
 
+const QuickfixAffectedObjectSchema = z.object({
+  uri: z.string(),
+  type: z.string().optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  content: z.string().optional(),
+});
+
 export const SAPDiagnoseSchema = z.object({
   action: z.enum([
     'syntax',
@@ -505,11 +513,13 @@ export const SAPDiagnoseSchema = z.object({
   name: z.string().optional(),
   type: z.string().optional(),
   source: z.string().optional(),
+  sourceUri: z.string().optional(),
   line: z.coerce.number().optional(),
   column: z.coerce.number().optional(),
   version: z.enum(['active', 'inactive']).optional(),
   proposalUri: z.string().optional(),
   proposalUserContent: z.string().optional(),
+  proposalAffectedObjects: z.array(QuickfixAffectedObjectSchema).optional(),
   variant: z.string().optional(),
   id: z.string().optional(),
   detailUrl: z.string().optional(),

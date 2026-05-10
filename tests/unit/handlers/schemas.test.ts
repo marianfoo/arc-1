@@ -744,11 +744,40 @@ describe('SAPDiagnoseSchema', () => {
       name: 'ZCL_TEST',
       type: 'CLAS',
       source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+      sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
       line: 12,
       proposalUri: '/sap/bc/adt/quickfixes/1',
       proposalUserContent: 'opaque-state',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('accepts apply_quickfix with empty userContent and affected objects', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'apply_quickfix',
+      name: 'ZCL_TEST',
+      type: 'CLAS',
+      source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+      sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
+      line: 12,
+      proposalUri: '/sap/bc/adt/quickfixes/1',
+      proposalUserContent: '',
+      proposalAffectedObjects: [
+        {
+          uri: '/sap/bc/adt/oo/classes/ZCL_HELPER/source/main',
+          type: 'CLAS/OC',
+          name: 'ZCL_HELPER',
+          description: 'Helper class',
+          content: 'CLASS zcl_helper DEFINITION. ENDCLASS.',
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.proposalUserContent).toBe('');
+      expect(result.data.sourceUri).toBe('/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions');
+      expect(result.data.proposalAffectedObjects?.[0]?.uri).toBe('/sap/bc/adt/oo/classes/ZCL_HELPER/source/main');
+    }
   });
 });
 

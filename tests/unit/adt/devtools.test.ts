@@ -1098,6 +1098,43 @@ describe('DevTools', () => {
       expect(proposals[1]?.name).toBe('Inline DATA');
     });
 
+    it('getFixProposals preserves affected object units from evaluation response', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <qf:evaluationResult>
+    <adtcore:objectReference adtcore:uri="/sap/bc/adt/quickfixes/1" adtcore:type="quickfix/proposal" adtcore:name="Apply multi-object fix" adtcore:description="Updates helper include"/>
+    <qf:affectedObjects>
+      <qf:unit>
+        <qf:content>CLASS helper DEFINITION. ENDCLASS.</qf:content>
+        <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=1,0;end=1,5" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Main class"/>
+      </qf:unit>
+    </qf:affectedObjects>
+    <qf:userContent></qf:userContent>
+  </qf:evaluationResult>
+</qf:evaluationResults>`;
+      const http = mockHttp(xml);
+
+      const proposals = await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+        'CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+        1,
+        0,
+      );
+
+      expect(proposals[0]?.userContent).toBe('');
+      expect(proposals[0]?.affectedObjects).toEqual([
+        {
+          uri: '/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=1,0;end=1,5',
+          type: 'CLAS/OC',
+          name: 'ZCL_TEST',
+          description: 'Main class',
+          content: 'CLASS helper DEFINITION. ENDCLASS.',
+        },
+      ]);
+    });
+
     it('getFixProposals returns empty array for empty evaluation response', async () => {
       const http = mockHttp('<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>');
       const proposals = await getFixProposals(
@@ -1211,6 +1248,43 @@ describe('DevTools', () => {
       ]);
     });
 
+    it('applyFixProposal parses ADT proposalResult unit deltas', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <quickfixes:deltas>
+    <quickfixes:unit>
+      <quickfixes:content>METHODS approve_project FOR MODIFY.</quickfixes:content>
+      <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions#start=4,2;end=4,2"/>
+    </quickfixes:unit>
+  </quickfixes:deltas>
+</quickfixes:proposalResult>`;
+      const http = mockHttp(xml);
+
+      const deltas = await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/1',
+          type: 'quickfix/proposal',
+          name: 'Create implementation',
+          description: 'Creates handler methods',
+          userContent: '',
+        },
+        '/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions',
+        'CLASS lhc_project DEFINITION. ENDCLASS.',
+        4,
+        2,
+      );
+
+      expect(deltas).toEqual([
+        {
+          uri: '/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions#start=4,2;end=4,2',
+          range: { start: { line: 4, column: 2 }, end: { line: 4, column: 2 } },
+          content: 'METHODS approve_project FOR MODIFY.',
+        },
+      ]);
+    });
+
     it('applyFixProposal posts to proposal URI', async () => {
       const http = mockHttp('<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
       await applyFixProposal(
@@ -1231,6 +1305,8 @@ describe('DevTools', () => {
 
       const target = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
       expect(target).toBe('/sap/bc/adt/quickfixes/123');
+      expect((http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[2]).toBe('application/xml');
+      expect((http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[3]).toEqual({ Accept: 'application/xml' });
     });
 
     it('applyFixProposal includes userContent in request XML', async () => {
@@ -1252,7 +1328,65 @@ describe('DevTools', () => {
       );
 
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(body).toContain('<userContent>opaque-state</userContent>');
+      expect(body).toContain('<quickfixes:userContent>opaque-state</quickfixes:userContent>');
+    });
+
+    it('applyFixProposal preserves empty userContent in request XML', async () => {
+      const http = mockHttp('<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: '',
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<quickfixes:userContent></quickfixes:userContent>');
+    });
+
+    it('applyFixProposal serializes affected object units with content', async () => {
+      const http = mockHttp('<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: 'opaque-state',
+          affectedObjects: [
+            {
+              uri: '/sap/bc/adt/oo/classes/ZCL_HELPER/source/main',
+              type: 'CLAS/OC',
+              name: 'ZCL_HELPER',
+              description: 'Helper class',
+              content: 'CLASS zcl_helper DEFINITION. ENDCLASS.',
+            },
+          ],
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<quickfixes:affectedObjects>');
+      expect(body).toContain('<quickfixes:unit>');
+      expect(body).toContain('<quickfixes:content>CLASS zcl_helper DEFINITION. ENDCLASS.</quickfixes:content>');
+      expect(body).toContain('adtcore:uri="/sap/bc/adt/oo/classes/ZCL_HELPER/source/main"');
+      expect(body).toContain('adtcore:type="CLAS/OC"');
+      expect(body).toContain('adtcore:name="ZCL_HELPER"');
     });
 
     it('applyFixProposal XML-escapes source and userContent', async () => {
