@@ -3117,6 +3117,9 @@ async function handleSAPWrite(
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
 
+      // Keep CLAS local include writes ahead of the generic /source/main fallthrough.
+      // If CLAS ever gains separate metadata-update handling, this branch must still
+      // win whenever callers pass include=definitions|implementations|macros|testclasses.
       if (args.include !== undefined) {
         if (!include) {
           return errorResult(
@@ -3140,7 +3143,9 @@ async function handleSAPWrite(
           cachedFeatures?.abapRelease,
         );
         invalidateWrittenObject(type, name);
-        return textResult(`Successfully updated ${type} ${name} include ${include}.`);
+        return textResult(
+          `Successfully updated ${type} ${name} include ${include}. Active version remains unchanged until activation; read with SAPRead(version="inactive") to verify the draft.`,
+        );
       }
 
       if (type === 'SKTD') {

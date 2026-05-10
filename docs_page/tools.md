@@ -196,7 +196,7 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 | `group` | string | No | For `FUNC`: parent function-group name. **Required for FUNC create** (the FUGR must already exist — create it first via `SAPWrite type=FUGR`). Auto-resolved via search for FUNC update/delete if omitted. Ignored for other types. |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
-| `include` | string | No | For `update type="CLAS"` only: write a class-local include (`definitions`, `implementations`, `macros`, or `testclasses`) instead of `/source/main`. Omit this parameter for main class source updates. |
+| `include` | string | No | For `update type="CLAS"` only: write a class-local include (`definitions`, `implementations`, `macros`, or `testclasses`) instead of `/source/main`. Omit this parameter for main class source updates. Include writes create an inactive draft; verify with `SAPRead(version="inactive")` until activation. |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
 | `bdefName` | string | No | For `scaffold_rap_handlers`: interface BDEF name used to derive required handler signatures |
 | `autoApply` | boolean | No | For `scaffold_rap_handlers`: when `true`, create missing `lhc_*` skeletons, inject missing signatures plus empty method stubs into the behavior pool, and write back |

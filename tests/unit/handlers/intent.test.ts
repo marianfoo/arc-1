@@ -2408,6 +2408,7 @@ ENDCLASS.`;
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0]?.text).toContain('Successfully updated CLAS ZBP_I_TRAVELREQ include definitions');
+      expect(result.content[0]?.text).toContain('SAPRead(version="inactive")');
       const putCalls = calls.filter((call) => call.method === 'PUT');
       expect(putCalls).toHaveLength(1);
       expect(putCalls[0]?.url).toContain('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions');

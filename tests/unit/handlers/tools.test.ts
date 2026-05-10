@@ -708,6 +708,7 @@ describe('Tool Definitions', () => {
         expect(include.enum).toEqual(['definitions', 'implementations', 'macros', 'testclasses']);
         expect(include.description).toContain('update type=CLAS');
         expect(include.description).toContain('source/main');
+        expect(include.description).toContain('version="inactive"');
       }
     });
   });

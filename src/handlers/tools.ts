@@ -562,7 +562,7 @@ export function getToolDefinitions(
             type: 'string',
             enum: SAPWRITE_CLAS_INCLUDES,
             description:
-              'For update type=CLAS only: write a class-local include instead of source/main. Valid values: definitions (CCDEF), implementations (CCIMP), macros, testclasses. Omit include to update source/main.',
+              'For update type=CLAS only: write a class-local include instead of source/main. Valid values: definitions (CCDEF), implementations (CCIMP), macros, testclasses. Omit include to update source/main. Include writes create an inactive draft; read with SAPRead version="inactive" before activation.',
           },
           method: {
             type: 'string',
