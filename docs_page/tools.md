@@ -198,16 +198,18 @@ Create or update ABAP source code. Handles lock/modify/unlock automatically.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, `batch_create`, or `scaffold_rap_handlers` |
+| `action` | string | Yes | `create`, `update`, `delete`, `edit_method`, `batch_create`, `scaffold_rap_handlers`, or `generate_behavior_implementation` |
 | `type` | string | No | `PROG`, `CLAS`, `INTF`, `FUNC`, `FUGR`, `INCL`, `DDLS`, `DCLS`, `DDLX`, `BDEF`, `SRVD`, `SRVB`, `TABL`, `DOMA`, `DTEL`, `MSAG` (for single object actions). Slash/case aliases are auto-normalized (e.g., `CLAS/OC` or `clas` → `CLAS`). |
 | `group` | string | No | For `FUNC`: parent function-group name. **Required for FUNC create** (the FUGR must already exist — create it first via `SAPWrite type=FUGR`). Auto-resolved via search for FUNC update/delete if omitted. Ignored for other types. |
 | `name` | string | No | Object name (for single object actions) |
 | `source` | string | No | ABAP source code (for create/update/edit_method) |
 | `include` | string | No | For `update type="CLAS"` only: write a class-local include (`definitions`, `implementations`, `macros`, or `testclasses`) instead of `/source/main`. Omit this parameter for main class source updates. Include writes create an inactive draft; verify with `SAPRead(version="inactive")` until activation. |
 | `method` | string | No | For `edit_method`: method name to replace (e.g., `"get_name"`) |
-| `bdefName` | string | No | For `scaffold_rap_handlers`: interface BDEF name used to derive required handler signatures |
-| `autoApply` | boolean | No | For `scaffold_rap_handlers`: when `true`, create missing `lhc_*` skeletons, inject missing signatures plus empty method stubs into the behavior pool, and write back |
-| `targetAlias` | string | No | For `scaffold_rap_handlers`: optional RAP entity alias filter (scaffold only one alias/handler class) |
+| `bdefName` | string | No | For `scaffold_rap_handlers`: interface BDEF name used to derive required handler signatures. For `generate_behavior_implementation`: optional override; default discovery reads the class metadata's `<class:rootEntityRef>` to locate the BDEF automatically. |
+| `autoApply` | boolean | No | For `scaffold_rap_handlers`: when `true`, create missing `lhc_*` skeletons, inject missing signatures plus empty method stubs into the behavior pool, and write back. Not used by `generate_behavior_implementation` (which always applies; use `dryRun=true` there to preview). |
+| `targetAlias` | string | No | For `scaffold_rap_handlers` and `generate_behavior_implementation`: optional RAP entity alias filter (scaffold only one alias/handler class) |
+| `activate` | boolean | No | For `generate_behavior_implementation`: when `true` (default), runs `SAPActivate` on the class after writing. When `false`, only the source is written. Activation failures matching the well-known `Local classes of CL_ABAP_BEHAVIOR_HANDLER…` stale-active coupling do **not** throw — they return `activation.success=false` with a guided recovery hint so the just-written CCDEF/CCIMP source remains useful. |
+| `dryRun` | boolean | No | For `generate_behavior_implementation`: when `true`, runs discovery + cross-validation + scaffold planning and returns the report **without** writing or activating. Use this to preview what would change. |
 | `description` | string | No | Object description for `create` (defaults to name if omitted, max 60 chars) |
 | `package` | string | No | Package for new objects (default `$TMP`) |
 | `transport` | string | No | Transport request number. For `update` and `delete`, if omitted ARC-1 auto-uses the correction number returned by the SAP lock (if any). Explicit value takes precedence. |
@@ -387,7 +389,17 @@ SAPWrite(action="update", type="CLAS", name="ZBP_I_TRAVELREQ",
 
 SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="ZBP_I_TRAVELREQ",
   bdefName="ZI_TRAVELREQ", autoApply=true)
+
+# One-shot RAP behavior pool: discover BDEF + scaffold + activate in one call
+SAPWrite(action="generate_behavior_implementation", type="CLAS", name="ZBP_DM_PROJECT")
+
+# Same, with preview-only mode (returns the plan, does not write)
+SAPWrite(action="generate_behavior_implementation", type="CLAS", name="ZBP_DM_PROJECT",
+  dryRun=true, activate=false)
 ```
+
+`generate_behavior_implementation` is the reliable equivalent of Eclipse ADT's "Generate Behavior Implementation" Cmd+1 quickfix. Auto-discovers the BDEF via the class metadata's `<class:rootEntityRef>` element, cross-validates that MAIN's `FOR BEHAVIOR OF <bdef>` and the BDEF's `managed implementation in class <class>` agree, scaffolds every required handler (creating missing `lhc_<alias>` skeletons), writes CCDEF + CCIMP under one stateful lock, and (by default) activates the class. Avoids the broken `/sap/bc/adt/quickfixes/proposals/.../create_class_implementation` server endpoint (HTTP 500 on a4h regardless of payload, verified live during PR-C research 2026-05-10).
+
 
 **Transport behavior:**
 
