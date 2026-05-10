@@ -210,6 +210,8 @@ SAPWrite(action="batch_create", objects=[
 
 Objects are created and activated in array order — put dependencies first (table before CDS views, DCLS after DDLS, CDS views before BDEFs, behavior pool before interface BDEF). The batch stops on the first failure and reports which objects succeeded and which failed.
 
+Set `package` and `transport` at the top level when every artifact shares them. If a batch item needs to override either value, put `package` and/or `transport` on that object; item-level values win.
+
 If batch creation fails, fall back to the sequential approach below (Steps 4-13).
 
 ## Step 4: Create Database Table (Sequential Fallback)

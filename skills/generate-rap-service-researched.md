@@ -648,6 +648,15 @@ After approval, create the artifacts. Use batch creation when possible.
 SAPWrite(action="batch_create", objects=[...], package="<package>", transport="<transport>")
 ```
 
+If some generated objects need explicit per-item routing, put `package` and `transport` on the individual objects. Item-level values override the top-level batch values and are required when a recovered plan mixes packages:
+
+```
+SAPWrite(action="batch_create", objects=[
+  {type: "TABL", name: "<table>", package: "<package>", transport: "<transport>", source: "<ddl>"},
+  {type: "DDLS", name: "ZI_<entity>", package: "<package>", transport: "<transport>", source: "<ddl>"}
+])
+```
+
 Only fall back to sequential creation (Phase 4b) if `batch_create` returns an error. If batch fails: read the error, fix the SPECIFIC failing object's source, and retry `batch_create`. Do NOT switch to sequential mode after one batch failure.
 
 ### 4-pre. Pre-Implementation Check
@@ -661,6 +670,16 @@ SAPRead(type="INACTIVE_OBJECTS")
 **Note:** This may return 404 on some systems where the `/sap/bc/adt/activation/inactive` endpoint is not available. If so, skip this check and proceed — it's a convenience check, not a requirement.
 
 If inactive objects with conflicting names exist, resolve them first (activate or delete).
+
+For reset/create preflights that need to know whether target names exist anywhere in the repository, use exact object-directory lookup instead of a long `SAPQuery` against TADIR:
+
+```
+SAPSearch(searchType="tadir_lookup",
+  names=["<table>","ZI_<entity>","ZC_<entity>","ZSB_<entity>_V4"],
+  objectTypes=["TABL","DDLS","BDEF","SRVD","SRVB","CLAS"])
+```
+
+The lookup groups exact matches by requested name and returns `missing`; do not build large `WHERE OBJ_NAME IN (...)` SQL lists for this check.
 
 ### 4-doma. Create Domains and Data Elements (if approved in Phase 2)
 

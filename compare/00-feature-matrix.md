@@ -122,6 +122,7 @@ Tier 2 (CycloneDX SBOM, Cosign image signing, OpenSSF Scorecard) and Tier 3 (Soc
 | Source version history | ✅ (`VERSIONS` list + `VERSION_SOURCE` fetch via `GET {sourceUrl}/versions` Atom feed) | ✅ (3 tools: list/compare/get) | ✅ (`revisions()` + `getObjectSource(url, {version})`) | ❌ | ❌ | ❌ | N/A | ✅ (`abap_get_revisions` list-only) | ❌ |
 | Transactions | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | N/A | ❌ | ❌ |
 | Free SQL | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ |
+| Exact object-directory lookup | ✅ (`SAPSearch searchType=tadir_lookup`; ADT quick search, grouped by requested name) | ❌ | ✅ (quickSearch primitive) | ✅ (search) | ❌ | ✅ | N/A | ✅ | ✅ |
 | System info / components | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
 | BOR business objects | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Messages (T100, `MSAG`; deprecated alias `MESSAGES`) | ✅ (read+write; canonical short type `MSAG` from audit Plan B) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
@@ -148,7 +149,7 @@ Tier 2 (CycloneDX SBOM, Cosign image signing, OpenSSF Scorecard) and Tier 3 (Soc
 | RAP CRUD (BDEF, SRVD, DDLX, SRVB) | ✅ (DDLS, DDLX, DCLS, BDEF, SRVD, SRVB write) | ⚠️ (some) | ❌ | ❌ | ✅ (BDEF, SRVD, SRVB) | ✅ (all incl. DDLX) | N/A | ⚠️ (BDEF create, SRVB publish) | ⚠️ (DDLS, DCL, BDEF write; SRVB publish) |
 | Domain write (DOMA) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ (PR #149 merged) |
 | Data element write (DTEL) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |
-| Multi-object batch creation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
+| Multi-object batch creation | ✅ (item-level package/transport overrides) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Deterministic RAP preflight (TABL/BDEF/DDLX/DDLS static checks) | ⚠️ (in-flight PR [#173](https://github.com/marianfoo/arc-1/pull/173) — `preflightBeforeWrite` toggle) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | RAP behavior-pool handler scaffolding | ✅ (`SAPWrite action=scaffold_rap_handlers` dry-run/autoApply, native CLAS include writes, auto-creates missing `lhc_*` CCDEF/CCIMP skeletons) | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | AFF schema validation (pre-create) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |

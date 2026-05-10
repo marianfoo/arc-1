@@ -309,13 +309,29 @@ describe('SAPSearchSchema', () => {
       maxResults: 50,
       searchType: 'source_code',
       objectType: 'CLAS',
+      objectTypes: ['CLAS', 'DDLS'],
       packageName: 'ZTEST',
+      names: ['ZCL_TEST'],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts TADIR lookup with names and no query', () => {
+    const result = SAPSearchSchema.safeParse({
+      searchType: 'tadir_lookup',
+      names: ['ZDM_PROJECT_D', 'ZR_DM_PROJECT'],
+      objectTypes: ['TABL', 'BDEF'],
     });
     expect(result.success).toBe(true);
   });
 
   it('rejects missing query', () => {
     const result = SAPSearchSchema.safeParse({ maxResults: 10 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects TADIR lookup without names or query', () => {
+    const result = SAPSearchSchema.safeParse({ searchType: 'tadir_lookup', maxResults: 10 });
     expect(result.success).toBe(false);
   });
 
@@ -331,12 +347,18 @@ describe('SAPSearchSchemaNoSource', () => {
     expect(result.success).toBe(true);
   });
 
-  it('ignores searchType (not in schema)', () => {
+  it('rejects source_code searchType when source search is unavailable', () => {
     const result = SAPSearchSchemaNoSource.safeParse({ query: 'test', searchType: 'source_code' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts TADIR lookup when source search is unavailable', () => {
+    const result = SAPSearchSchemaNoSource.safeParse({
+      searchType: 'tadir_lookup',
+      names: ['ZDM_PROJECT_D'],
+      objectTypes: ['TABL'],
+    });
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect('searchType' in result.data).toBe(false);
-    }
   });
 });
 
@@ -544,11 +566,20 @@ describe('SAPWriteSchema', () => {
       action: 'batch_create',
       package: '$TMP',
       objects: [
-        { type: 'DDLS', name: 'ZI_TRAVEL', source: 'define view entity ZI_TRAVEL {}' },
-        { type: 'BDEF', name: 'ZI_TRAVEL' },
+        {
+          type: 'DDLS',
+          name: 'ZI_TRAVEL',
+          source: 'define view entity ZI_TRAVEL {}',
+          package: 'ZDEV',
+          transport: 'A4HK900123',
+        },
+        { type: 'BDEF', name: 'ZI_TRAVEL', package: 'ZDEV' },
       ],
     });
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.objects?.[0]).toMatchObject({ package: 'ZDEV', transport: 'A4HK900123' });
+    }
   });
 
   it('accepts scaffold_rap_handlers action fields', () => {

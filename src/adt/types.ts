@@ -15,6 +15,13 @@ export interface AdtSearchResult {
   uri: string;
 }
 
+/** Exact object-directory lookup grouped by requested object name */
+export interface AdtObjectLookupResult {
+  name: string;
+  found: boolean;
+  matches: AdtSearchResult[];
+}
+
 /** Object structure node */
 export interface AdtObjectNode {
   type: string;

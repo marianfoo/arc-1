@@ -353,6 +353,9 @@ describe('Tool Definitions', () => {
       const schema = sapSearch.inputSchema as Record<string, any>;
       expect(schema.properties.searchType).toBeDefined();
       expect(schema.properties.searchType.enum).toContain('source_code');
+      expect(schema.properties.searchType.enum).toContain('tadir_lookup');
+      expect(schema.properties.names).toBeDefined();
+      expect(schema.properties.objectTypes).toBeDefined();
       expect(schema.properties.objectType).toBeDefined();
       expect(schema.properties.packageName).toBeDefined();
     });
@@ -361,8 +364,12 @@ describe('Tool Definitions', () => {
       const tools = getToolDefinitions(DEFAULT_CONFIG, false);
       const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
       const schema = sapSearch.inputSchema as Record<string, any>;
-      expect(schema.properties.searchType).toBeUndefined();
-      expect(schema.properties.objectType).toBeUndefined();
+      expect(schema.properties.searchType).toBeDefined();
+      expect(schema.properties.searchType.enum).not.toContain('source_code');
+      expect(schema.properties.searchType.enum).toContain('tadir_lookup');
+      expect(schema.properties.objectType).toBeDefined();
+      expect(schema.properties.names).toBeDefined();
+      expect(schema.properties.objectTypes).toBeDefined();
       expect(schema.properties.packageName).toBeUndefined();
     });
 
@@ -372,6 +379,7 @@ describe('Tool Definitions', () => {
       const schema = sapSearch.inputSchema as Record<string, any>;
       expect(schema.properties.searchType).toBeDefined();
       expect(schema.properties.searchType.enum).toContain('source_code');
+      expect(schema.properties.searchType.enum).toContain('tadir_lookup');
     });
 
     it('SAPSearch description omits source_code mode when unavailable', () => {
@@ -694,6 +702,15 @@ describe('Tool Definitions', () => {
       expect(item.properties.messages).toBeDefined();
       expect(item.properties.messages.type).toBe('array');
       expect(item.properties.messages.items.required).toEqual(['number', 'shortText']);
+    });
+
+    it('exposes package and transport inside batch_create items (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const item = schema.properties.objects.items;
+      expect(item.properties.package).toBeDefined();
+      expect(item.properties.package.type).toBe('string');
+      expect(item.properties.transport).toBeDefined();
+      expect(item.properties.transport.type).toBe('string');
     });
 
     it('exposes the messages property at top-level SAPWrite (BTP)', () => {

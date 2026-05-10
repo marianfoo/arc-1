@@ -1398,6 +1398,90 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('runs exact TADIR lookup from names array', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project_d" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT_D" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Draft table"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project_extra" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT_EXTRA" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Substring hit"/>
+</adtcore:objectReferences>`,
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        names: ['zdm_project_d'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('/sap/bc/adt/repository/informationsystem/search');
+      expect(url).toContain('operation=quickSearch');
+      expect(url).toContain('query=ZDM_PROJECT_D');
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.count).toBe(1);
+      expect(payload.lookups[0]).toMatchObject({
+        name: 'ZDM_PROJECT_D',
+        found: true,
+      });
+      expect(payload.lookups[0].matches[0]).toMatchObject({
+        objectType: 'TABL/DT',
+        objectName: 'ZDM_PROJECT_D',
+        packageName: 'ZDEMO_MIG_RAP',
+      });
+      expect(payload.missing).toEqual([]);
+    });
+
+    it('runs exact TADIR lookup from query and reports missing names', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<objectReferences><objectReference uri="/sap/bc/adt/bo/behaviordefinitions/zr_dm_project" type="BDEF/BDO" name="ZR_DM_PROJECT" packageName="ZDEMO_MIG_RAP" description="Behavior"/></objectReferences>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        query: 'ZR_DM_PROJECT, ZDOES_NOT_EXIST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.count).toBe(1);
+      expect(payload.missing).toEqual(['ZDOES_NOT_EXIST']);
+    });
+
+    it('passes objectTypes as typed TADIR lookup filters', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<objectReferences><objectReference uri="/sap/bc/adt/ddic/tables/zdm_project_d" type="TABL/DT" name="ZDM_PROJECT_D" packageName="ZDEMO_MIG_RAP" description="Draft table"/></objectReferences>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        names: ['ZDM_PROJECT_D'],
+        objectTypes: ['TABL', 'BDEF'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const urls = mockFetch.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes('objectType=TABL'))).toBe(true);
+      expect(urls.some((url) => url.includes('objectType=BDEF'))).toBe(true);
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.count).toBe(1);
+    });
+
     // ─── Transliteration ──────────────────────────────────────────────
 
     describe('transliterateQuery', () => {
@@ -8384,6 +8468,81 @@ ENDCLASS.`;
       expect(text).toContain('blocked');
     });
 
+    it('applies package filter to object-specific batch_create packages before mutation', async () => {
+      mockFetch.mockReset();
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['ZALLOWED*'] },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [{ type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.', package: 'ZBLOCKED' }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked');
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+
+    it('uses object-specific package in batch_create when top-level package is omitted', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          {
+            type: 'PROG',
+            name: 'ZPROG1',
+            source: 'REPORT zprog1.',
+            package: 'ZOBJPKG',
+            transport: 'A4HK900123',
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = mockFetch.mock.calls.find(
+        (call) =>
+          String(call[0]).includes('/sap/bc/adt/programs/programs?') &&
+          (call[1] as Record<string, unknown> | undefined)?.method === 'POST',
+      );
+      const body = (createCall?.[1] as Record<string, unknown> | undefined)?.body;
+      expect(body).toContain('<adtcore:packageRef adtcore:name="ZOBJPKG"/>');
+      expect(body).not.toContain('$TMP');
+      expect(result.content[0]?.text).toContain('in package ZOBJPKG');
+    });
+
+    it('uses object-specific transport in batch_create when top-level transport differs', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        transport: 'TOP900001',
+        objects: [
+          {
+            type: 'PROG',
+            name: 'ZPROG1',
+            source: 'REPORT zprog1.',
+            transport: 'OBJ900001',
+          },
+        ],
+      });
+
+      const createUrl = mockFetch.mock.calls
+        .map((call) => String(call[0]))
+        .find((url) => url.includes('/sap/bc/adt/programs/programs?corrNr='));
+      expect(createUrl).toContain('corrNr=OBJ900001');
+      expect(createUrl).not.toContain('TOP900001');
+    });
+
     it('activates each object after creation', async () => {
       const fetchCalls: string[] = [];
       mockFetch.mockImplementation((_url: string | URL, options?: { method?: string }) => {
@@ -9362,6 +9521,32 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('SAPTransport');
     });
 
+    it('still preflights batch_create package when only some objects provide object transport', async () => {
+      const calls: string[] = [];
+      mockFetch.mockImplementation((url: string) => {
+        calls.push(String(url));
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(
+            mockResponse(200, transportInfoResponse(true, false, ['A4HK900502']), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', package: 'Z_MY_PKG', transport: 'A4HK900501', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', package: 'Z_MY_PKG', source: 'REPORT zprog2.' },
+        ],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('requires a transport number');
+      expect(calls.some((url) => url.includes('/cts/transportchecks'))).toBe(true);
+      expect(calls.some((url) => url.includes('/sap/bc/adt/programs/programs?corrNr=A4HK900501'))).toBe(false);
+    });
+
     it('proceeds for local package response even if DLVUNIT is not LOCAL', async () => {
       // Some packages might not require recording even if not strictly "LOCAL"
       mockFetch.mockImplementation((url: string) => {
@@ -10194,6 +10379,39 @@ ENDCLASS.`;
           (c[1] as Record<string, unknown>).method === 'POST',
       );
       expect(createCall).toBeDefined();
+    });
+
+    it('passes object-specific _package query parameter for TABL in batch_create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          {
+            type: 'TABL',
+            name: 'ZTABL_TEST',
+            package: 'ZOBJPKG',
+            transport: 'A4HK900123',
+            source:
+              "@EndUserText.label : 'T'\n@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE\n@AbapCatalog.tableCategory : #TRANSPARENT\n@AbapCatalog.deliveryClass : #A\n@AbapCatalog.dataMaintenance : #RESTRICTED\ndefine table ZTABL_TEST { key client : abap.clnt not null; }",
+          },
+        ],
+      });
+
+      const createCall = mockFetch.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/ddic/tables') &&
+          c[0].includes('_package=ZOBJPKG') &&
+          !c[0].includes('_package=%24TMP') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      expect(createCall).toBeDefined();
+      expect((createCall?.[1] as Record<string, unknown> | undefined)?.body).toContain(
+        '<adtcore:packageRef adtcore:name="ZOBJPKG"/>',
+      );
     });
 
     it('passes _package query parameter for BDEF in batch_create', async () => {

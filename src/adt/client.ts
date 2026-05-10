@@ -23,6 +23,7 @@ import { AdtHttpClient, type AdtHttpConfig } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import { Semaphore } from './semaphore.js';
 import type {
+  AdtObjectLookupResult,
   AdtSearchResult,
   ApiReleaseStateInfo,
   AuthorizationFieldInfo,
@@ -573,6 +574,73 @@ export class AdtClient {
       `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=${encodeURIComponent(query)}&maxResults=${maxResults}`,
     );
     return parseSearchResults(resp.body);
+  }
+
+  /**
+   * Exact object-directory lookup for one or more names.
+   *
+   * Uses ADT repository quick search instead of freestyle SQL against TADIR. This
+   * keeps the lookup available in read/search-only configurations and avoids ADT
+   * SQL parser limits on long IN-lists.
+   */
+  async lookupObjects(
+    names: string[],
+    options: { maxResults?: number; objectTypes?: string[] } = {},
+  ): Promise<AdtObjectLookupResult[]> {
+    checkOperation(this.safety, OperationType.Search, 'LookupObjects');
+
+    const cleanedNames = [
+      ...new Set(
+        names
+          .map((n) => n.trim())
+          .filter(Boolean)
+          .map((n) => n.toUpperCase()),
+      ),
+    ];
+    const objectTypes = [
+      ...new Set(
+        (options.objectTypes ?? [])
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .map((t) => t.toUpperCase()),
+      ),
+    ];
+    const limit = Math.max(1, Math.min(options.maxResults ?? 100, 1000));
+
+    const searchOnce = async (name: string, objectType?: string): Promise<AdtSearchResult[]> => {
+      const params = new URLSearchParams({
+        operation: 'quickSearch',
+        query: name,
+        maxResults: String(limit),
+      });
+      if (objectType) {
+        params.set('objectType', objectType);
+      }
+      const resp = await this.http.get(`/sap/bc/adt/repository/informationsystem/search?${params.toString()}`);
+      return parseSearchResults(resp.body);
+    };
+
+    const results: AdtObjectLookupResult[] = [];
+    for (const name of cleanedNames) {
+      const rawMatches =
+        objectTypes.length > 0
+          ? (await Promise.all(objectTypes.map((objectType) => searchOnce(name, objectType)))).flat()
+          : await searchOnce(name);
+
+      const seen = new Set<string>();
+      const matches = rawMatches
+        .filter((r) => r.objectName.toUpperCase() === name)
+        .filter((r) => {
+          const key = `${r.objectType}\u0000${r.objectName}\u0000${r.packageName}\u0000${r.uri}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+      results.push({ name, found: matches.length > 0, matches });
+    }
+
+    return results;
   }
 
   /** Search within ABAP source code (full-text search) */

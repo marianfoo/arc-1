@@ -153,24 +153,28 @@ The full caching architecture (per-version cache keys, conditional GET, dependen
 
 ## SAPSearch
 
-Search for ABAP objects by name pattern with wildcards.
+Search for ABAP objects by name pattern, exact object-directory names, or ABAP source text.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | Yes | Search pattern (e.g., `ZCL_ORDER*`, `Z*TEST*`) or text to search in source code |
+| `query` | string | No | Search pattern (e.g., `ZCL_ORDER*`, `Z*TEST*`), source text, or comma/whitespace-separated names for `tadir_lookup` |
 | `maxResults` | number | No | Maximum results (default 100) |
-| `searchType` | string | No | `object` (default, name search) or `source_code` (text search within ABAP source) |
-| `objectType` | string | No | For `source_code` search: filter by object type |
+| `searchType` | string | No | `object` (default, name search), `tadir_lookup` (exact cross-package object lookup), or `source_code` (text search within ABAP source) |
+| `names` | array | No | For `tadir_lookup`: exact object names to resolve across packages |
+| `objectTypes` | array | No | For `tadir_lookup`: optional ADT/TADIR type filters such as `TABL`, `DDLS`, `BDEF`, `SRVB`, `CLAS/OC` |
+| `objectType` | string | No | For `source_code`: filter by object type. For `tadir_lookup`: single type filter |
 | `packageName` | string | No | For `source_code` search: filter by package |
 
-**Returns:** Object type, name, package, and description for each match. Source code search also returns line numbers and code snippets.
+**Returns:** Object type, name, package, and description for each match. `tadir_lookup` groups exact matches by requested name and includes a `missing` list. Source code search also returns line numbers and code snippets.
 
 **Examples:**
 ```
 SAPSearch(query="ZCL_ORDER*")
 SAPSearch(query="Z*INVOICE*", maxResults=20)
+SAPSearch(searchType="tadir_lookup", names=["ZDM_PROJECT_D","ZR_DM_PROJECT"], objectTypes=["TABL","BDEF"])
+SAPSearch(searchType="tadir_lookup", query="ZDM_PROJECT_D ZUI_DM_PROJECTS_O4")
 SAPSearch(query="SY-SUBRC", searchType="source_code")
 SAPSearch(query="SELECT * FROM mara", searchType="source_code", objectType="CLAS", packageName="ZDEV")
 ```
@@ -178,6 +182,8 @@ SAPSearch(query="SELECT * FROM mara", searchType="source_code", objectType="CLAS
 **Umlaut handling:** Object name queries containing non-ASCII characters (ä, ö, ü, ß) are automatically transliterated to ASCII equivalents (AE, OE, UE, SS). SAP object names are ASCII-only. Source code search preserves non-ASCII characters.
 
 **Field names:** If searching for a field/column name (e.g., MATNR, BUKRS), use SAPQuery against DD03L instead — SAPSearch only searches object names.
+
+**TADIR lookup:** Use `searchType="tadir_lookup"` for reset/create preflights that need to know whether objects exist anywhere, regardless of package. It uses ADT repository quick search instead of freestyle SQL against TADIR, so it avoids long `IN (...)` parser limits and works in read/search-only configurations.
 
 **Source code search availability:** Not available on all SAP systems. Requires SICF service activation. If unavailable, falls back with an error suggesting SAPQuery as an alternative.
 
@@ -278,7 +284,7 @@ This helps pinpoint the exact failing field/annotation instead of retrying blind
 
 **Batch creation:**
 
-`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, DCLS after DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), plus optional DOMA/DTEL metadata fields.
+`batch_create` creates and activates multiple objects in sequence via a single tool call. Objects are processed in array order — put dependencies first (e.g., domain before data element, TABL before DDLS, DCLS after DDLS, BDEF after CDS views). Each object in the array has: `type` (string, required), `name` (string, required), `source` (string, optional), `description` (string, optional), optional `package` and `transport` overrides, plus optional DOMA/DTEL metadata fields. Item-level `package` and `transport` override the top-level values for that object.
 
 If any object fails, processing stops and the response reports which objects succeeded and which failed. AFF metadata validation runs automatically for supported types (CLAS, INTF, PROG, DDLS, BDEF, SRVD, SRVB) — invalid metadata is rejected before hitting SAP.
 
@@ -300,6 +306,11 @@ SAPWrite(action="batch_create", package="ZDEV", transport="K900123", objects=[
   {type:"SRVD", name:"ZSD_TRAVEL", source:"define service..."},
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"CLASS zbp_i_travel..."},
   {type:"SRVB", name:"ZSB_TRAVEL_O4", serviceDefinition:"ZSD_TRAVEL", category:"0"}
+])
+
+SAPWrite(action="batch_create", objects=[
+  {type:"TABL", name:"ZTRAVEL", package:"ZDEV", transport:"K900123", source:"define table ztravel {...}"},
+  {type:"DDLS", name:"ZI_TRAVEL", package:"ZDEV", transport:"K900123", source:"define root view..."}
 ])
 
 SAPWrite(action="create", type="TABL", name="ZTRAVEL", package="$TMP",

@@ -207,18 +207,70 @@ export const SAPReadSchemaBtp = z
 
 // ─── SAPSearch ──────────────────────────────────────────────────────
 
-export const SAPSearchSchema = z.object({
-  query: z.string(),
-  maxResults: z.coerce.number().optional(),
-  searchType: z.enum(['object', 'source_code']).optional(),
-  objectType: z.string().optional(),
-  packageName: z.string().optional(),
-});
+export const SAPSearchSchema = z
+  .object({
+    query: z.string().optional(),
+    maxResults: z.coerce.number().optional(),
+    searchType: z.enum(['object', 'source_code', 'tadir_lookup']).optional(),
+    objectType: z.string().optional(),
+    objectTypes: z.array(z.string()).optional(),
+    packageName: z.string().optional(),
+    names: z.array(z.string()).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const searchType = input.searchType ?? 'object';
+    if (searchType === 'tadir_lookup') {
+      const hasNames = Array.isArray(input.names) && input.names.some((n) => n.trim());
+      const hasQuery = typeof input.query === 'string' && input.query.trim().length > 0;
+      if (!hasNames && !hasQuery) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['names'],
+          message: 'tadir_lookup requires either names[] or query.',
+        });
+      }
+      return;
+    }
+    if (!input.query || input.query.trim().length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['query'],
+        message: `${searchType} search requires query.`,
+      });
+    }
+  });
 
-export const SAPSearchSchemaNoSource = z.object({
-  query: z.string(),
-  maxResults: z.coerce.number().optional(),
-});
+export const SAPSearchSchemaNoSource = z
+  .object({
+    query: z.string().optional(),
+    maxResults: z.coerce.number().optional(),
+    searchType: z.enum(['object', 'tadir_lookup']).optional(),
+    objectType: z.string().optional(),
+    objectTypes: z.array(z.string()).optional(),
+    names: z.array(z.string()).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const searchType = input.searchType ?? 'object';
+    if (searchType === 'tadir_lookup') {
+      const hasNames = Array.isArray(input.names) && input.names.some((n) => n.trim());
+      const hasQuery = typeof input.query === 'string' && input.query.trim().length > 0;
+      if (!hasNames && !hasQuery) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['names'],
+          message: 'tadir_lookup requires either names[] or query.',
+        });
+      }
+      return;
+    }
+    if (!input.query || input.query.trim().length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['query'],
+        message: 'object search requires query.',
+      });
+    }
+  });
 
 // ─── SAPQuery ───────────────────────────────────────────────────────
 
@@ -305,6 +357,8 @@ const batchObjectSchemaOnprem = z.object({
   name: z.string(),
   source: z.string().optional(),
   description: z.string().optional(),
+  package: z.string().optional(),
+  transport: z.string().optional(),
   dataType: z.string().optional(),
   length: z.coerce.number().optional(),
   decimals: z.coerce.number().optional(),
@@ -339,6 +393,8 @@ const batchObjectSchemaBtp = z.object({
   name: z.string(),
   source: z.string().optional(),
   description: z.string().optional(),
+  package: z.string().optional(),
+  transport: z.string().optional(),
   dataType: z.string().optional(),
   length: z.coerce.number().optional(),
   decimals: z.coerce.number().optional(),

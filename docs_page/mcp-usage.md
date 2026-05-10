@@ -232,7 +232,7 @@ Step 3: SAPWrite(action="create", type="CLAS", name="ZCL_ORDER", source="...", p
 
 **Shortcut:** If you skip the check step, ARC-1's pre-flight check will detect the missing transport and return an actionable error with existing transports listed — you can then pick one and retry.
 
-**Batch creation:** The same flow applies to `batch_create`. Provide the `transport` parameter at the top level — all objects in the batch use the same transport.
+**Batch creation:** The same flow applies to `batch_create`. Provide `package` and `transport` at the top level when all objects share them, or set `package`/`transport` per object when a mixed batch needs item-level overrides.
 
 ```
 SAPWrite(action="batch_create", package="ZDEV", transport="A4HK900123", objects=[
@@ -240,6 +240,14 @@ SAPWrite(action="batch_create", package="ZDEV", transport="A4HK900123", objects=
   {type:"BDEF", name:"ZI_TRAVEL", source:"..."},
   {type:"CLAS", name:"ZBP_I_TRAVEL", source:"..."}
 ])
+```
+
+Before reset/create workflows that need to detect existing objects across packages, prefer exact object-directory lookup over long freestyle TADIR SQL:
+
+```
+SAPSearch(searchType="tadir_lookup",
+  names=["ZDM_PROJECT_D","ZR_DM_PROJECT","ZUI_DM_PROJECTS_O4"],
+  objectTypes=["TABL","BDEF","SRVB"])
 ```
 
 ### 5. Investigate Runtime Errors

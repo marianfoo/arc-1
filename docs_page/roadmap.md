@@ -1,6 +1,6 @@
 # ARC-1 Roadmap
 
-**Last Updated:** 2026-05-10 (PR-A CLAS include writes + RAP handler auto-skeletons)
+**Last Updated:** 2026-05-10 (PR-E TADIR lookup + batch_create item-level package/transport)
 **Project:** ARC-1 (ABAP Relay Connector) — MCP Server for SAP ABAP Systems
 **Repository:** https://github.com/marianfoo/arc-1
 
@@ -117,6 +117,7 @@ SORT RULES for this table — DO NOT BREAK when adding rows:
 
 | ID | Feature | Completed | Category |
 |----|---------|-----------|----------|
+| — | PR-E TADIR lookup + batch_create package fix — `SAPSearch(searchType="tadir_lookup")` adds exact cross-package object-directory lookup via ADT quick search, avoiding brittle long TADIR `IN (...)` SQL preflights. `SAPWrite(action="batch_create")` now honors item-level `package` and `transport` overrides, including TABL/BDEF `_package` query parameters and per-package safety/transport preflights. Plan: `docs/plans/completed/pr-e-tadir-lookup-batch-create-package.md`. | 2026-05-10 | Features |
 | — | PR-A native CLAS include writes + RAP behavior handler auto-skeletons — `SAPWrite(action="update", type="CLAS", include="definitions"|"implementations"|"macros"|"testclasses")` writes local class includes via the parent class lock instead of corrupting `/source/main`; `scaffold_rap_handlers(autoApply=true)` now creates missing `lhc_*` CCDEF/CCIMP skeletons before injecting RAP handler signatures and empty implementation stubs. | 2026-05-10 | Features |
 | — | Function-group (FUGR) and function-module (FUNC) write support — `SAPWrite create/update/delete` for both types with `group` parameter for FM (issue [#250](https://github.com/marianfoo/arc-1/issues/250)). FUGR routes through standard `objectBasePath`; FUNC bypasses with a dedicated URL pre-resolution branch in `handleSAPWrite` and `handleSAPActivate` (group from args; auto-resolved via search for update/delete). New `case 'FUGR'`/`case 'FUNC'` in `buildCreateXml`; `stripFmParamCommentBlock` helper auto-strips SAPGUI `*"…"*` parameter comment blocks (SAP rejects them with `FUNC_ADT028`). FM signature/parameters explicitly out of scope — managed via SAPGUI/SE37 or Eclipse. Verified live on a4h S/4HANA 2023 (full lifecycle); 132/132 E2E pass. Closes the "latent FUNC-update gap" flagged in 2026-04-27 competitor scan. | 2026-05-09 | Features |
 | — | CF deployment hardening (Node `--max-old-space-size=448` heap flag on mta.yaml + `application-logs` lite binding) and XSUAA `ARC-1 Viewer + SQL` role-collection parity with the `viewer-sql` API-key profile. Config-only — no source changes. | 2026-05-09 | Ops |

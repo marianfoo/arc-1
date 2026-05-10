@@ -245,15 +245,17 @@ const SAPQUERY_DESC_BTP =
 // ─── SAPSearch ──────────────────────────────────────────────────────
 
 const SAPSEARCH_DESC_ONPREM =
-  'Search for ABAP objects or search within source code. Two modes:\n' +
+  'Search for ABAP objects, exact object-directory entries, or source code. Three modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
-  '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
+  '2. TADIR lookup (searchType="tadir_lookup"): Exact cross-package object lookup for one or more names via ADT repository quick search. Use this before create/reset workflows instead of long SAPQuery TADIR IN-lists.\n' +
+  '3. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
   "Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references. The objectType field from results can be passed directly to SAPRead/SAPWrite/SAPActivate (ARC-1 auto-normalizes slash suffixes like DDLS/DF, CLAS/OC, PROG/P).\n\nNote: Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L.";
 
 const SAPSEARCH_DESC_BTP =
-  'Search for ABAP objects or search within source code (BTP ABAP Environment). Two modes:\n' +
+  'Search for ABAP objects, exact object-directory entries, or source code (BTP ABAP Environment). Three modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects. Classic programs, includes, and DDIC views are not searchable on BTP.\n' +
-  '2. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
+  '2. TADIR lookup (searchType="tadir_lookup"): Exact object lookup for one or more names via ADT repository quick search.\n' +
+  '3. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
   "Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.\n\nNote: Searches object names only (classes, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views.";
 
 // ─── SAPTransport ───────────────────────────────────────────────────
@@ -371,9 +373,14 @@ function stripSourceCodeLines(desc: string): string {
       (line) =>
         !line.includes('source_code') &&
         !line.includes('Source code search') &&
-        !line.startsWith('2. Source code search'),
+        !line.startsWith('2. Source code search') &&
+        !line.startsWith('3. Source code search'),
     )
     .join('\n')
+    .replace(
+      /, exact object-directory entries, or source code[^.]*\. Three modes:\n1\. Object search \(default\): /i,
+      '. ',
+    )
     .replace(/ or search within source code[^.]*\. Two modes:\n1\. Object search \(default\): /i, '. ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -391,8 +398,8 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
     query: {
       type: 'string',
       description: hideSourceCode
-        ? 'Search pattern: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*).'
-        : 'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
+        ? 'Search pattern for object search, or comma/whitespace-separated names for tadir_lookup.'
+        : 'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For tadir_lookup: exact name or comma/whitespace-separated names. For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
     },
     maxResults: {
       type: 'number',
@@ -402,17 +409,31 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
     },
   };
 
+  properties.searchType = {
+    type: 'string',
+    enum: hideSourceCode ? ['object', 'tadir_lookup'] : ['object', 'source_code', 'tadir_lookup'],
+    description: hideSourceCode
+      ? 'Search mode: "object" (default) searches by object name, "tadir_lookup" does exact cross-package object lookup.'
+      : 'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code, "tadir_lookup" does exact cross-package object lookup.',
+  };
+  properties.names = {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'For tadir_lookup: exact object names to resolve across packages. Prefer this over long SAPQuery TADIR IN-lists.',
+  };
+  properties.objectTypes = {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'For tadir_lookup: optional ADT/TADIR type filters (e.g., TABL, DDLS, BDEF, SRVB, CLAS/OC).',
+  };
+  properties.objectType = {
+    type: 'string',
+    description:
+      'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC). For tadir_lookup: single type filter; use objectTypes for multiple.',
+  };
+
   if (!hideSourceCode) {
-    properties.searchType = {
-      type: 'string',
-      enum: ['object', 'source_code'],
-      description:
-        'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code.',
-    };
-    properties.objectType = {
-      type: 'string',
-      description: 'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC)',
-    };
     properties.packageName = { type: 'string', description: 'For source_code search: filter by package name' };
   }
 
@@ -422,7 +443,6 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
     inputSchema: {
       type: 'object',
       properties,
-      required: ['query'],
     },
   };
 }
@@ -710,6 +730,14 @@ export function getToolDefinitions(
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
                 description: { type: 'string', description: 'Object description (defaults to name if omitted)' },
+                package: {
+                  type: 'string',
+                  description: 'Object-specific package. Overrides top-level package for this item.',
+                },
+                transport: {
+                  type: 'string',
+                  description: 'Object-specific transport request. Overrides top-level transport for this item.',
+                },
                 dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type' },
                 length: { type: 'number', description: 'DOMA/DTEL: data type length' },
                 decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
@@ -777,6 +805,7 @@ export function getToolDefinitions(
             description:
               'For batch_create: ordered list of objects to create and activate. Each object needs type, name, and source (if applicable). ' +
               'Objects are created and activated in array order — put dependencies first (e.g., TABL before DDLS, BDEF after DDLS). ' +
+              'Each item may include package and transport; item-level values override top-level package/transport. ' +
               'Example: [{type:"TABL",name:"ZTRAVEL",source:"..."},{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
           },
         },
