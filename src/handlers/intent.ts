@@ -3868,8 +3868,22 @@ async function handleSAPWrite(
       // subsequent reads. Future enhancement: extend cache key with include.
       let currentSource: string;
       if (resolvedInclude) {
-        const fetched = await client.getClass(name, resolvedInclude);
+        // **Draft-aware include reads (PR-D review fix, P1).**
+        // After `SAPWrite update include=...` or `scaffold_rap_handlers`, the
+        // edited CCDEF/CCIMP lives as an inactive draft; the active include
+        // is often still the empty placeholder. Reading "active" here would
+        // splice against stale content (and frequently "method not found").
+        // Use the standard inactive-list lookup to pick the right version —
+        // same auto-resolution semantics SAPRead exposes via `version='auto'`.
+        const { effectiveVersion } = await resolveVersionAndDraftInfo(client, cachingLayer, 'CLAS', name, 'auto');
+        const fetched = await client.getClass(name, resolvedInclude, { version: effectiveVersion });
         currentSource = stripIncludeHeader(fetched.source);
+        // If the include itself has no draft (only MAIN does), SAP returns the
+        // active include body for `?version=inactive`. That's correct — we
+        // splice whatever the editor would see. If the include source isn't
+        // available at all (response contains the "not available" placeholder
+        // injected by client.getClass on 404), splice will surface a clean
+        // "method not found" with the include name.
       } else {
         currentSource = cachingLayer
           ? (

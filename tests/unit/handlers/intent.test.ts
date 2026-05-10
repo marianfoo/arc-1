@@ -8169,6 +8169,14 @@ define role ZTEST_DCL {
       className: string;
       includeName: string;
       includeSource: string;
+      /**
+       * When set, simulates an inactive draft: GET `?version=inactive` returns
+       * this body; GET `?version=active` (or no version) returns
+       * `opts.includeSource` (the active baseline). The inactive-list endpoint
+       * also reports a draft for the class so `resolveVersionAndDraftInfo`
+       * picks the inactive branch.
+       */
+      inactiveIncludeSource?: string;
       packageName?: string;
     }): Array<{ method: string; url: string; body?: string }> {
       const calls: Array<{ method: string; url: string; body?: string }> = [];
@@ -8178,6 +8186,24 @@ define role ZTEST_DCL {
           const method = fetchOpts?.method ?? 'GET';
           const urlStr = String(url);
           calls.push({ method, url: urlStr, body: typeof fetchOpts?.body === 'string' ? fetchOpts.body : undefined });
+          // Inactive-object list (used by resolveVersionAndDraftInfo to decide
+          // whether the class has any unactivated draft). Format matches
+          // tests/fixtures/xml/inactive-objects.xml — parseInactiveObjects
+          // expects <adtcore:objectReference> nested inside <ioc:object>.
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/activation/inactiveobjects')) {
+            const hasDraft = opts.inactiveIncludeSource !== undefined;
+            const body = hasDraft
+              ? `<?xml version="1.0" encoding="utf-8"?>
+<ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects" xmlns:adtcore="http://www.sap.com/adt/core">
+  <ioc:entry>
+    <ioc:object>
+      <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/${opts.className.toLowerCase()}" adtcore:type="CLAS/OC" adtcore:name="${opts.className}" adtcore:description="(inactive draft)"/>
+    </ioc:object>
+  </ioc:entry>
+</ioc:inactiveObjects>`
+              : '<?xml version="1.0" encoding="utf-8"?><ioc:inactiveObjects xmlns:ioc="http://www.sap.com/adt/inactiveObjects"/>';
+            return Promise.resolve(mockResponse(200, body, { 'x-csrf-token': 'T' }));
+          }
           if (method === 'GET' && urlStr.endsWith(`/sap/bc/adt/oo/classes/${opts.className}`)) {
             const pkg = opts.packageName ?? '$TMP';
             return Promise.resolve(
@@ -8192,10 +8218,17 @@ define role ZTEST_DCL {
             method === 'GET' &&
             urlStr.includes(`/sap/bc/adt/oo/classes/${opts.className}/includes/${opts.includeName}`)
           ) {
+            // Version-aware: when an inactiveIncludeSource is provided, return
+            // it for ?version=inactive and the regular source for active.
+            const wantsInactive = urlStr.includes('version=inactive');
+            const body =
+              wantsInactive && opts.inactiveIncludeSource !== undefined
+                ? opts.inactiveIncludeSource
+                : opts.includeSource;
             // The ADT server returns raw source; client.getClass wraps it with
             // "=== <include> ===\n" header. The mock simulates the server, so
             // we return raw source — the client adds the header.
-            return Promise.resolve(mockResponse(200, opts.includeSource, { 'x-csrf-token': 'T' }));
+            return Promise.resolve(mockResponse(200, body, { 'x-csrf-token': 'T' }));
           }
           if (method === 'GET' && urlStr.includes(`/sap/bc/adt/oo/classes/${opts.className}/source/main`)) {
             return Promise.resolve(
@@ -8444,6 +8477,55 @@ ENDCLASS.`,
       expect(text).toContain('implementations');
       // Auto-routed hint should be present for callers who used the lhc_ prefix
       expect(text).toContain('auto-routed');
+    });
+
+    it('reads inactive CCIMP when an inactive draft exists (PR-D review fix)', async () => {
+      // Reproduces the RUN-NOTES Run 3 scenario: after `update include=` or
+      // `scaffold_rap_handlers`, the real handler body lives in the inactive
+      // CCIMP draft, while the active CCIMP is still the empty placeholder
+      // shipped with class creation. Without `version=inactive`, edit_method
+      // would read the active placeholder and report "method not found".
+      const calls = mockEditMethodIncludeFlow({
+        className: 'ZBP_DM_PROJECT',
+        includeName: 'implementations',
+        // Active = empty placeholder comment SAP ships with new classes
+        includeSource:
+          '*"* use this source file for the definition and implementation of\n' +
+          '*"* local helper classes, interface definitions and type\n' +
+          '*"* declarations\n',
+        // Inactive = the real handler body the user just wrote
+        inactiveIncludeSource: `CLASS lhc_project IMPLEMENTATION.
+  METHOD approve_project.
+    " original body
+    DATA(x) = 1.
+  ENDMETHOD.
+ENDCLASS.`,
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZBP_DM_PROJECT',
+        method: 'lhc_project~approve_project',
+        source: '    DATA(y) = 99.',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('include: implementations');
+
+      // Must have asked for ?version=inactive
+      const inactiveGets = calls.filter(
+        (c) => c.method === 'GET' && c.url.includes('/includes/implementations') && c.url.includes('version=inactive'),
+      );
+      expect(inactiveGets.length).toBe(1);
+
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      // PUT body must contain the new body spliced onto the INACTIVE draft,
+      // not the empty active placeholder.
+      expect(putCalls[0]?.body).toContain('DATA(y) = 99.');
+      expect(putCalls[0]?.body).toContain('CLASS lhc_project IMPLEMENTATION');
+      expect(putCalls[0]?.body).not.toContain('use this source file for the definition');
     });
 
     it('include reads bypass the source cache (no MAIN/CCIMP collision)', async () => {

@@ -84,8 +84,17 @@ local classes silently picks the first one.
   it to the implementation block whose containing class equals `<localclass>`.
   This is also exposed for any CCIMP/MAIN source — disambiguates same-named
   methods across local classes regardless of include.
-- Lint, syntax check, package check, audit, and caching invalidation continue
-  to apply (no skipped guard rails).
+- Package check, audit, and caching invalidation continue to apply.
+- **Pre-write lint and SAP-side syntax check are intentionally skipped for
+  include= writes.** CCDEF/CCIMP/macros/testclasses fragments don't parse as a
+  complete class on their own (the DEFINITION/IMPLEMENTATION halves live in
+  separate include files), so abaplint reports false positives like *"Expected
+  CLASSDEFINITION"*. The existing `case 'update'` include= branch already
+  skips these checks for the same reason. **Activation (`SAPActivate`) is the
+  authoritative syntax check after an include write** — the user activates the
+  parent class once they're done iterating, and the full merged source goes
+  through the SAP-side compile. MAIN-targeted `edit_method` calls retain the
+  pre-write lint + syntax check.
 - All paths covered by unit tests (~12 new tests) and one integration smoke that
   edits a method in a `$TMP` test pool on the live system. NW 7.50 compatibility
   is in scope: the include= URL pattern is identical to what PR #257 verified
