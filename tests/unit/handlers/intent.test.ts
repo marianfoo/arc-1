@@ -1417,6 +1417,106 @@ describe('Intent Handler', () => {
       expect(result.isError).toBeUndefined();
     });
 
+    it('runs exact TADIR lookup from names array', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          200,
+          `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project_d" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT_D" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Draft table"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project_extra" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT_EXTRA" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Substring hit"/>
+</adtcore:objectReferences>`,
+        ),
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        names: ['zdm_project_d'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('/sap/bc/adt/repository/informationsystem/search');
+      expect(url).toContain('operation=quickSearch');
+      expect(url).toContain('query=ZDM_PROJECT_D');
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.count).toBe(1);
+      expect(payload.lookups[0]).toMatchObject({
+        name: 'ZDM_PROJECT_D',
+        found: true,
+      });
+      expect(payload.lookups[0].matches[0]).toMatchObject({
+        objectType: 'TABL/DT',
+        objectName: 'ZDM_PROJECT_D',
+        packageName: 'ZDEMO_MIG_RAP',
+      });
+      expect(payload.missing).toEqual([]);
+    });
+
+    it('runs exact TADIR lookup from query and reports missing names', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<objectReferences><objectReference uri="/sap/bc/adt/bo/behaviordefinitions/zr_dm_project" type="BDEF/BDO" name="ZR_DM_PROJECT" packageName="ZDEMO_MIG_RAP" description="Behavior"/></objectReferences>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        query: 'ZR_DM_PROJECT, ZDOES_NOT_EXIST',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.count).toBe(1);
+      expect(payload.missing).toEqual(['ZDOES_NOT_EXIST']);
+    });
+
+    it('warns when exact TADIR lookup names contain wildcards', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        names: ['ZDM_PROJECT*'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.missing).toEqual(['ZDM_PROJECT*']);
+      expect(payload.warnings[0]).toContain('exact-name lookup');
+      expect(payload.warnings[0]).toContain('ZDM_PROJECT*');
+    });
+
+    it('passes objectTypes as typed TADIR lookup filters', async () => {
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse(
+            200,
+            `<objectReferences><objectReference uri="/sap/bc/adt/ddic/tables/zdm_project_d" type="TABL/DT" name="ZDM_PROJECT_D" packageName="ZDEMO_MIG_RAP" description="Draft table"/></objectReferences>`,
+          ),
+        )
+        .mockResolvedValueOnce(mockResponse(200, '<objectReferences/>'));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPSearch', {
+        searchType: 'tadir_lookup',
+        names: ['ZDM_PROJECT_D'],
+        objectTypes: ['TABL', 'BDEF'],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const urls = mockFetch.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes('objectType=TABL'))).toBe(true);
+      expect(urls.some((url) => url.includes('objectType=BDEF'))).toBe(true);
+      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(payload.count).toBe(1);
+    });
+
     // ─── Transliteration ──────────────────────────────────────────────
 
     describe('transliterateQuery', () => {
@@ -1844,6 +1944,33 @@ ENDCLASS.`;
       expect(parsed.preset).toBe('cloud');
     });
 
+    it('list_rules uses config.abapRelease when cached features are absent', async () => {
+      resetCachedFeatures();
+      const s4Config = { ...DEFAULT_CONFIG, systemType: 'onprem' as const, abapRelease: '758' };
+      const result = await handleToolCall(createClient(), s4Config, 'SAPLint', {
+        action: 'list_rules',
+      });
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed.preset).toBe('onprem');
+      expect(parsed.abapVersion).toBe('758');
+      expect(parsed.syntaxVersion).toBe('v758');
+    });
+
+    it('list_rules prefers cached feature release over config.abapRelease', async () => {
+      setCachedFeatures({ abapRelease: '750', systemType: 'onprem' } as ResolvedFeatures);
+      try {
+        const s4Config = { ...DEFAULT_CONFIG, systemType: 'onprem' as const, abapRelease: '758' };
+        const result = await handleToolCall(createClient(), s4Config, 'SAPLint', {
+          action: 'list_rules',
+        });
+        const parsed = JSON.parse(result.content[0]?.text);
+        expect(parsed.abapVersion).toBe('750');
+        expect(parsed.syntaxVersion).toBe('v750');
+      } finally {
+        resetCachedFeatures();
+      }
+    });
+
     it('lint accepts custom rule overrides', async () => {
       const source = `CLASS zcl_test DEFINITION PUBLIC.
   PUBLIC SECTION.
@@ -2156,6 +2283,47 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('"line" is required for "quickfix" action.');
     });
 
+    it('quickfix action uses sourceUri override for include targets', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; body?: string | Buffer | null; headers?: Record<string, string> },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          calls.push({
+            method,
+            url: String(url),
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
+          if (method === 'POST' && String(url).includes('/sap/bc/adt/quickfixes/evaluation')) {
+            return Promise.resolve(
+              mockResponse(200, '<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>', {
+                'x-csrf-token': 'T',
+              }),
+            );
+          }
+          return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'quickfix',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
+        source: 'CLASS lhc_test DEFINITION. ENDCLASS.',
+        line: 1,
+        column: 45,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const evalCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/quickfixes/evaluation'));
+      expect(evalCall?.url).toContain('%2Fsap%2Fbc%2Fadt%2Foo%2Fclasses%2FZCL_TEST%2Fincludes%2Fdefinitions');
+      expect(evalCall?.url).toContain('%23start%3D1%2C45');
+    });
+
     it('apply_quickfix action posts to proposal URI and returns deltas JSON', async () => {
       mockFetch.mockReset();
       const calls: Array<{ method: string; url: string; body?: string }> = [];
@@ -2177,7 +2345,7 @@ ENDCLASS.`;
                 200,
                 `<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes">
                   <quickfixes:delta uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main" startLine="3" startColumn="1" endLine="3" endColumn="4">
-                    <quickfixes:content>DATA</quickfixes:content>
+                    <content>DATA</content>
                   </quickfixes:delta>
                 </quickfixes:applicationResult>`,
                 { 'x-csrf-token': 'T' },
@@ -2192,6 +2360,7 @@ ENDCLASS.`;
         action: 'apply_quickfix',
         type: 'CLAS',
         name: 'ZCL_TEST',
+        sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
         source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
         line: 3,
         column: 1,
@@ -2214,6 +2383,57 @@ ENDCLASS.`;
       expect(applyCall?.body).toContain('<userContent>opaque-state</userContent>');
     });
 
+    it('apply_quickfix action accepts empty userContent and forwards affected objects', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation(
+        (
+          url: string | URL,
+          opts?: { method?: string; body?: string | Buffer | null; headers?: Record<string, string> },
+        ) => {
+          const method = opts?.method ?? 'GET';
+          calls.push({
+            method,
+            url: String(url),
+            body: typeof opts?.body === 'string' ? opts.body : undefined,
+          });
+          return Promise.resolve(
+            mockResponse(200, '<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>', {
+              'x-csrf-token': 'T',
+            }),
+          );
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'apply_quickfix',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        sourceUri: '/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions',
+        source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+        line: 3,
+        column: 1,
+        proposalUri: '/sap/bc/adt/quickfixes/1',
+        proposalUserContent: '',
+        proposalAffectedObjects: [
+          {
+            uri: '/sap/bc/adt/oo/classes/ZCL_HELPER/source/main',
+            type: 'CLAS/OC',
+            name: 'ZCL_HELPER',
+            content: 'CLASS zcl_helper DEFINITION. ENDCLASS.',
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const applyCall = calls.find((c) => c.method === 'POST' && c.url.includes('/sap/bc/adt/quickfixes/1'));
+      expect(applyCall?.body).toContain('<userContent></userContent>');
+      expect(applyCall?.body).toContain('/sap/bc/adt/oo/classes/ZCL_TEST/includes/definitions#start=3,1');
+      expect(applyCall?.body).toContain('<affectedObjects>');
+      expect(applyCall?.body).toContain('adtcore:uri="/sap/bc/adt/oo/classes/ZCL_HELPER/source/main"');
+      expect(applyCall?.body).toContain('<content>CLASS zcl_helper DEFINITION. ENDCLASS.</content>');
+    });
+
     it('apply_quickfix action returns error when proposalUri is missing', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
         action: 'apply_quickfix',
@@ -2225,6 +2445,19 @@ ENDCLASS.`;
       });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('"proposalUri" is required for "apply_quickfix" action.');
+    });
+
+    it('apply_quickfix action returns error when proposalUserContent is missing', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'apply_quickfix',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        source: 'CLASS zcl_test DEFINITION. ENDCLASS.',
+        line: 3,
+        proposalUri: '/sap/bc/adt/quickfixes/1',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('"proposalUserContent" is required for "apply_quickfix" action.');
     });
 
     it('schema validation rejects unknown SAPDiagnose actions', async () => {
@@ -2585,6 +2818,64 @@ ENDCLASS.`;
       // unrestricted config has empty allowedPackages → skip resolveObjectPackage
       expect(result.content[0]?.text).not.toContain('blocked by safety');
     });
+
+    it('updates a CLAS local include without touching source/main', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer | null }) => {
+        const method = opts?.method ?? 'GET';
+        const urlStr = String(url);
+        calls.push({ method, url: urlStr, body: typeof opts?.body === 'string' ? opts.body : undefined });
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR>A4HK900001</CORRNR><IS_LOCAL></IS_LOCAL></DATA></asx:values></asx:abap>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const source = 'CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.\nENDCLASS.';
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZBP_I_TRAVELREQ',
+        include: 'definitions',
+        source,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully updated CLAS ZBP_I_TRAVELREQ include definitions');
+      expect(result.content[0]?.text).toContain('SAPRead(version="inactive")');
+      const putCalls = calls.filter((call) => call.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      expect(putCalls[0]?.url).toContain('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions');
+      expect(putCalls[0]?.url).toContain('lockHandle=LH1');
+      expect(putCalls[0]?.url).toContain('corrNr=A4HK900001');
+      expect(putCalls[0]?.body).toBe(source);
+      expect(putCalls.some((call) => call.url.includes('/source/main'))).toBe(false);
+      const lockCall = calls.find((call) => call.method === 'POST' && call.url.includes('_action=LOCK'));
+      expect(lockCall?.url).toContain('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ');
+    });
+
+    it('rejects CLAS include update without source before HTTP writes', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'CLAS',
+        name: 'ZBP_I_TRAVELREQ',
+        include: 'implementations',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('source');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   // ─── SAPWrite FUGR / FUNC (issue #250) ───────────────────────────
@@ -2858,6 +3149,23 @@ CLASS zcl_test IMPLEMENTATION.
 ENDCLASS.`,
       });
       // Should not be a lint error
+      if (result.content[0]?.text) {
+        expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
+      }
+    });
+
+    it('uses config.abapRelease for pre-write lint when cached features are absent', async () => {
+      resetCachedFeatures();
+      const config = { ...DEFAULT_CONFIG, systemType: 'onprem' as const, abapRelease: '758', lintBeforeWrite: true };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'update',
+        type: 'PROG',
+        name: 'ZTEST',
+        source: `REPORT ztest.
+DATA lv TYPE string.
+lv = CONV string( 1 ).`,
+      });
+
       if (result.content[0]?.text) {
         expect(result.content[0]?.text).not.toContain('Pre-write lint check failed');
       }
@@ -7919,13 +8227,13 @@ ENDCLASS.`;
       expect(result.content[0]?.text).toContain('Available aliases in ZI_TRAVELREQ: Travel');
     });
 
-    it('autoApply reports unresolved handler skeletons with a recovery hint', async () => {
+    it('autoApply creates missing handler skeletons and scaffolds methods', async () => {
       mockFetch.mockReset();
-      const calls: Array<{ method: string; url: string }> = [];
-      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string | Buffer | null }) => {
         const method = opts?.method ?? 'GET';
         const urlStr = String(url);
-        calls.push({ method, url: urlStr });
+        calls.push({ method, url: urlStr, body: typeof opts?.body === 'string' ? opts.body : undefined });
 
         if (method === 'GET' && urlStr.endsWith('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ')) {
           return Promise.resolve(mockResponse(200, classMetadataXml, { 'x-csrf-token': 'T' }));
@@ -7945,6 +8253,15 @@ ENDCLASS.`;
         if (method === 'GET' && urlStr.includes('/sap/bc/adt/bo/behaviordefinitions/ZI_TRAVELREQ/source/main')) {
           return Promise.resolve(mockResponse(200, bdefSource, { 'x-csrf-token': 'T' }));
         }
+        if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+          return Promise.resolve(
+            mockResponse(
+              200,
+              '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        }
         return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
       });
 
@@ -7958,12 +8275,26 @@ ENDCLASS.`;
       });
 
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
-      expect(parsed.applied).toBe(false);
-      expect(parsed.applyResult.unresolved.length).toBeGreaterThan(0);
-      expect(parsed.hint).toContain('lhc_travel');
-      expect(parsed.hint).toContain('Create local handler class');
-      expect(calls.some((call) => call.method === 'PUT' || call.url.includes('_action=LOCK'))).toBe(false);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('Auto-created 2 handler skeleton section(s)');
+      const parsed = JSON.parse(text.slice(text.indexOf('{')));
+      expect(parsed.applied).toBe(true);
+      expect(parsed.hint).toBeUndefined();
+      expect(parsed.applyResult.skeletons.createdDefinitions).toEqual(['lhc_travel']);
+      expect(parsed.applyResult.skeletons.createdImplementations).toEqual(['lhc_travel']);
+      expect(parsed.applyResult.unresolved).toEqual([]);
+      const definitionPut = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/definitions'),
+      );
+      const implementationPut = calls.find(
+        (call) =>
+          call.method === 'PUT' && call.url.includes('/sap/bc/adt/oo/classes/ZBP_I_TRAVELREQ/includes/implementations'),
+      );
+      expect(definitionPut?.body).toContain('CLASS lhc_travel DEFINITION INHERITING FROM cl_abap_behavior_handler.');
+      expect(definitionPut?.body).toContain('METHODS submitforapproval FOR MODIFY');
+      expect(implementationPut?.body).toContain('CLASS lhc_travel IMPLEMENTATION.');
+      expect(implementationPut?.body).toContain('METHOD submitforapproval.');
     });
 
     it('autoApply injects signatures and writes class source', async () => {
@@ -8359,6 +8690,137 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       const text = result.content[0]?.text ?? '';
       expect(text).toContain('blocked');
+    });
+
+    it('applies package filter to object-specific batch_create packages before mutation', async () => {
+      mockFetch.mockReset();
+      const client = new AdtClient({
+        baseUrl: 'http://sap:8000',
+        username: 'admin',
+        password: 'secret',
+        safety: { ...unrestrictedSafetyConfig(), allowedPackages: ['ZALLOWED*'] },
+      });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [{ type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.', package: 'ZBLOCKED' }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('blocked');
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+
+    it('uses object-specific package in batch_create when top-level package is omitted', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          {
+            type: 'PROG',
+            name: 'ZPROG1',
+            source: 'REPORT zprog1.',
+            package: 'ZOBJPKG',
+            transport: 'A4HK900123',
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = mockFetch.mock.calls.find(
+        (call) =>
+          String(call[0]).includes('/sap/bc/adt/programs/programs?') &&
+          (call[1] as Record<string, unknown> | undefined)?.method === 'POST',
+      );
+      const body = (createCall?.[1] as Record<string, unknown> | undefined)?.body;
+      expect(body).toContain('<adtcore:packageRef adtcore:name="ZOBJPKG"/>');
+      expect(body).not.toContain('$TMP');
+      expect(result.content[0]?.text).toContain('in package ZOBJPKG');
+    });
+
+    it('uses object-specific transport in batch_create when top-level transport differs', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        transport: 'TOP900001',
+        objects: [
+          {
+            type: 'PROG',
+            name: 'ZPROG1',
+            source: 'REPORT zprog1.',
+            transport: 'OBJ900001',
+          },
+        ],
+      });
+
+      const createUrl = mockFetch.mock.calls
+        .map((call) => String(call[0]))
+        .find((url) => url.includes('/sap/bc/adt/programs/programs?corrNr='));
+      expect(createUrl).toContain('corrNr=OBJ900001');
+      expect(createUrl).not.toContain('TOP900001');
+    });
+
+    it('includes effective packages in mixed-package batch_create summaries', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: '$TMP',
+        transport: 'A4HK900123',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', source: 'REPORT zprog2.', package: 'ZOBJPKG' },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('across packages [$TMP, ZOBJPKG]');
+      expect(text).toContain('ZPROG1 (PROG) ✓ [$TMP]');
+      expect(text).toContain('ZPROG2 (PROG) ✓ [ZOBJPKG]');
+    });
+
+    it('treats empty package and transport overrides as absent in batch_create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<xml>ok</xml>', { 'x-csrf-token': 'T' }));
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        package: 'ZTOPPKG',
+        transport: 'A4HK900123',
+        objects: [
+          {
+            type: 'PROG',
+            name: 'ZPROG1',
+            source: 'REPORT zprog1.',
+            package: '',
+            transport: '',
+          },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      const createCall = mockFetch.mock.calls.find(
+        (call) =>
+          String(call[0]).includes('/sap/bc/adt/programs/programs?') &&
+          (call[1] as Record<string, unknown> | undefined)?.method === 'POST',
+      );
+      const body = String((createCall?.[1] as Record<string, unknown> | undefined)?.body ?? '');
+      const createUrl = String(createCall?.[0] ?? '');
+      expect(body).toContain('<adtcore:packageRef adtcore:name="ZTOPPKG"/>');
+      expect(body).not.toContain('$TMP');
+      expect(createUrl).toContain('corrNr=A4HK900123');
+      expect(result.content[0]?.text).toContain('in package ZTOPPKG');
     });
 
     it('activates each object after creation', async () => {
@@ -9197,6 +9659,13 @@ ENDCLASS.`;
         ${transports.length > 0 ? `<TRANSPORTS>${transportEntries}</TRANSPORTS>` : ''}
       </DATA></asx:values></asx:abap>`;
     };
+    const lockedTransportInfoResponse = (transport: string, packageName: string) =>
+      `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA>
+        <RECORDING>X</RECORDING>
+        <DLVUNIT>SAP</DLVUNIT>
+        <DEVCLASS>${packageName}</DEVCLASS>
+        <LOCKS><HEADER><TRKORR>${transport}</TRKORR></HEADER></LOCKS>
+      </DATA></asx:values></asx:abap>`;
 
     it('returns guidance error when creating in transportable package without transport', async () => {
       const calls: Array<{ url: string; method: string }> = [];
@@ -9316,6 +9785,38 @@ ENDCLASS.`;
       expect(result.content[0]?.text).not.toContain('requires a transport number');
     });
 
+    it('logs and proceeds if batch_create transportInfo check fails', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      try {
+        mockFetch.mockImplementation((url: string) => {
+          if (String(url).includes('/cts/transportchecks')) {
+            return Promise.resolve(mockResponse(500, 'Internal Error', { 'x-csrf-token': 'T' }));
+          }
+          return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+        });
+
+        const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+        const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+          action: 'batch_create',
+          package: 'Z_MY_PKG',
+          objects: [{ type: 'PROG', name: 'ZTEST', source: 'REPORT ztest.' }],
+        });
+
+        expect(result.content[0]?.text).not.toContain('requires a transport number');
+        expect(warnSpy).toHaveBeenCalledWith(
+          'SAPWrite batch_create transport preflight failed; continuing without auto transport',
+          expect.objectContaining({
+            package: 'Z_MY_PKG',
+            type: 'PROG',
+            name: 'ZTEST',
+            error: expect.stringContaining('ADT API error'),
+          }),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
     it('returns guidance error for batch_create in transportable package without transport', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (String(url).includes('/cts/transportchecks')) {
@@ -9337,6 +9838,76 @@ ENDCLASS.`;
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('requires a transport number');
       expect(result.content[0]?.text).toContain('SAPTransport');
+    });
+
+    it('still preflights batch_create package when only some objects provide object transport', async () => {
+      const calls: string[] = [];
+      mockFetch.mockImplementation((url: string) => {
+        calls.push(String(url));
+        if (String(url).includes('/cts/transportchecks')) {
+          return Promise.resolve(
+            mockResponse(200, transportInfoResponse(true, false, ['A4HK900502']), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml/>', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', package: 'Z_MY_PKG', transport: 'A4HK900501', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', package: 'Z_MY_PKG', source: 'REPORT zprog2.' },
+        ],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('requires a transport number');
+      expect(calls.some((url) => url.includes('/cts/transportchecks'))).toBe(true);
+      expect(calls.some((url) => url.includes('/sap/bc/adt/programs/programs?corrNr=A4HK900501'))).toBe(false);
+    });
+
+    it('auto-uses locked transports separately for each batch_create package', async () => {
+      let transportCheckCount = 0;
+      const calls: Array<{ url: string; method: string }> = [];
+      mockFetch.mockImplementation((url: string, opts: any) => {
+        const urlStr = String(url);
+        const method = opts?.method ?? 'GET';
+        calls.push({ url: urlStr, method });
+
+        if (urlStr.includes('/cts/transportchecks')) {
+          transportCheckCount++;
+          const transport = transportCheckCount === 1 ? 'A4HK900111' : 'A4HK900222';
+          const packageName = transportCheckCount === 1 ? 'ZPKG1' : 'ZPKG2';
+          return Promise.resolve(
+            mockResponse(200, lockedTransportInfoResponse(transport, packageName), { 'x-csrf-token': 'T' }),
+          );
+        }
+        return Promise.resolve(mockResponse(200, '<xml>created</xml>', { 'x-csrf-token': 'T' }));
+      });
+
+      const config = { ...DEFAULT_CONFIG, lintBeforeWrite: false };
+      const result = await handleToolCall(createClient(), config, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          { type: 'PROG', name: 'ZPROG1', package: 'ZPKG1', source: 'REPORT zprog1.' },
+          { type: 'PROG', name: 'ZPROG2', package: 'ZPKG2', source: 'REPORT zprog2.' },
+        ],
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(calls.filter((c) => c.url.includes('/cts/transportchecks'))).toHaveLength(2);
+      const createUrls = calls
+        .filter(
+          (c) =>
+            c.method === 'POST' &&
+            c.url.includes('/sap/bc/adt/programs/programs') &&
+            !c.url.includes('_action=') &&
+            !c.url.includes('/activation'),
+        )
+        .map((c) => c.url);
+      expect(createUrls.some((url) => url.includes('corrNr=A4HK900111'))).toBe(true);
+      expect(createUrls.some((url) => url.includes('corrNr=A4HK900222'))).toBe(true);
+      expect(result.content[0]?.text).toContain('across packages [ZPKG1, ZPKG2]');
     });
 
     it('proceeds for local package response even if DLVUNIT is not LOCAL', async () => {
@@ -10171,6 +10742,39 @@ ENDCLASS.`;
           (c[1] as Record<string, unknown>).method === 'POST',
       );
       expect(createCall).toBeDefined();
+    });
+
+    it('passes object-specific _package query parameter for TABL in batch_create', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'batch_create',
+        objects: [
+          {
+            type: 'TABL',
+            name: 'ZTABL_TEST',
+            package: 'ZOBJPKG',
+            transport: 'A4HK900123',
+            source:
+              "@EndUserText.label : 'T'\n@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE\n@AbapCatalog.tableCategory : #TRANSPARENT\n@AbapCatalog.deliveryClass : #A\n@AbapCatalog.dataMaintenance : #RESTRICTED\ndefine table ZTABL_TEST { key client : abap.clnt not null; }",
+          },
+        ],
+      });
+
+      const createCall = mockFetch.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('/sap/bc/adt/ddic/tables') &&
+          c[0].includes('_package=ZOBJPKG') &&
+          !c[0].includes('_package=%24TMP') &&
+          typeof c[1] === 'object' &&
+          (c[1] as Record<string, unknown>).method === 'POST',
+      );
+      expect(createCall).toBeDefined();
+      expect((createCall?.[1] as Record<string, unknown> | undefined)?.body).toContain(
+        '<adtcore:packageRef adtcore:name="ZOBJPKG"/>',
+      );
     });
 
     it('passes _package query parameter for BDEF in batch_create', async () => {

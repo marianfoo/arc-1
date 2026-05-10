@@ -788,6 +788,70 @@ describe('AdtClient', () => {
     });
   });
 
+  describe('lookupObjects', () => {
+    const LOOKUP_RESPONSE = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project_d" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT_D" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Draft table"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/ddic/tables/zdm_project_extra" adtcore:type="TABL/DT" adtcore:name="ZDM_PROJECT_EXTRA" adtcore:packageName="ZDEMO_MIG_RAP" adtcore:description="Substring hit"/>
+</adtcore:objectReferences>`;
+
+    it('uses repository quick search and exact-filters matches', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, LOOKUP_RESPONSE));
+      const client = createClient();
+      const result = await client.lookupObjects(['ZDM_PROJECT_D']);
+
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('/sap/bc/adt/repository/informationsystem/search');
+      expect(url).toContain('operation=quickSearch');
+      expect(url).toContain('query=ZDM_PROJECT_D');
+      expect(url).not.toContain('objectType=');
+      expect(result).toEqual([
+        {
+          name: 'ZDM_PROJECT_D',
+          found: true,
+          matches: [
+            {
+              objectType: 'TABL/DT',
+              objectName: 'ZDM_PROJECT_D',
+              packageName: 'ZDEMO_MIG_RAP',
+              description: 'Draft table',
+              uri: '/sap/bc/adt/ddic/tables/zdm_project_d',
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('adds objectType filters and deduplicates typed lookup results', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, LOOKUP_RESPONSE));
+      const client = createClient();
+      const result = await client.lookupObjects(['zdm_project_d'], { objectTypes: ['TABL', 'TABL'], maxResults: 5 });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('objectType=TABL');
+      expect(url).toContain('maxResults=5');
+      expect(result[0]?.name).toBe('ZDM_PROJECT_D');
+      expect(result[0]?.matches).toHaveLength(1);
+    });
+
+    it('returns missing lookup entries when no exact match is found', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(
+          200,
+          '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"></adtcore:objectReferences>',
+        ),
+      );
+      const client = createClient();
+      const result = await client.lookupObjects(['ZDOES_NOT_EXIST']);
+
+      expect(result).toEqual([{ name: 'ZDOES_NOT_EXIST', found: false, matches: [] }]);
+    });
+  });
+
   describe('withSafety', () => {
     it('returns a new client with the given safety config', () => {
       const client = createClient();

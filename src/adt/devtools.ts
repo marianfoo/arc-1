@@ -12,7 +12,14 @@ import { logger } from '../server/logger.js';
 import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
-import type { FixDelta, FixProposal, SyntaxCheckResult, SyntaxMessage, UnitTestResult } from './types.js';
+import type {
+  FixAffectedObject,
+  FixDelta,
+  FixProposal,
+  SyntaxCheckResult,
+  SyntaxMessage,
+  UnitTestResult,
+} from './types.js';
 import { decodeXmlEntities, escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
 
 /** Run syntax check on an ABAP object.
@@ -216,10 +223,15 @@ ${refs}
 
     const outcome = parseActivationOutcome(resp.body);
     if (outcome.kind !== 'preaudit' || !preaudit) {
-      return outcomeToResult(outcome);
+      const result = outcomeToResult(outcome);
+      return retryBatchActivationIndividuallyAfterEd064(http, safety, objects, result, options);
     }
 
-    return confirmPreaudit(http, outcome.refs, objects.map((o) => o.name).join(', '), phase1DurationMs);
+    return confirmPreaudit(http, outcome.refs, objects.map((o) => o.name).join(', '), phase1DurationMs, {
+      ed064RetryObjects: objects,
+      preaudit: options?.preaudit,
+      safety,
+    });
   } catch (err) {
     return rethrowOrLockHint(err, objects.map((o) => o.name).join(', '));
   }
@@ -235,6 +247,11 @@ async function confirmPreaudit(
   refs: Array<{ uri: string; name: string }>,
   objectLabel: string,
   phase1DurationMs: number,
+  options?: {
+    ed064RetryObjects?: Array<{ url: string; name: string }>;
+    preaudit?: boolean;
+    safety: SafetyConfig;
+  },
 ): Promise<ActivationResult> {
   logger.debug('Activation preaudit: SAP returned inactive objects, confirming with preauditRequested=false', {
     count: refs.length,
@@ -262,6 +279,15 @@ ${refLines}
       { Accept: 'application/xml' },
     );
     result = outcomeToResult(parseActivationOutcome(resp.body));
+    if (options?.ed064RetryObjects) {
+      result = await retryBatchActivationIndividuallyAfterEd064(
+        http,
+        options.safety,
+        options.ed064RetryObjects,
+        result,
+        { preaudit: options.preaudit },
+      );
+    }
     return result;
   } finally {
     logger.emitAudit({
@@ -275,6 +301,80 @@ ${refLines}
       outcome: result?.success ? 'success' : 'error',
     });
   }
+}
+
+function isEd064Text(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return /\bed0?64\b/.test(normalized) || (normalized.includes('no next') && normalized.includes('previous object'));
+}
+
+function isRecoverableEd064BatchQuirk(result: ActivationResult): boolean {
+  if (result.success) return false;
+  const errorTexts = result.details
+    .filter((d) => d.severity === 'error')
+    .map((d) => d.text)
+    .filter(Boolean);
+
+  if (errorTexts.length === 0) {
+    const messages = result.messages.filter(Boolean);
+    return messages.length > 0 && messages.every(isEd064Text);
+  }
+
+  return errorTexts.every(isEd064Text);
+}
+
+async function retryBatchActivationIndividuallyAfterEd064(
+  http: AdtHttpClient,
+  safety: SafetyConfig,
+  objects: Array<{ url: string; name: string }>,
+  original: ActivationResult,
+  options?: { preaudit?: boolean },
+): Promise<ActivationResult> {
+  if (!isRecoverableEd064BatchQuirk(original) || objects.length === 0) return original;
+
+  logger.debug('Batch activation returned ED064 only; retrying original objects individually', {
+    count: objects.length,
+    objects: objects.map((o) => ({ name: o.name, uri: o.url })),
+  });
+
+  const retryResults: Array<{ object: { url: string; name: string }; result: ActivationResult }> = [];
+  for (const object of objects) {
+    const result = await activate(http, safety, object.url, { name: object.name, preaudit: options?.preaudit });
+    retryResults.push({ object, result });
+  }
+
+  const note =
+    `Batch activation returned ED064 "no next/previous object found"; ` +
+    `retried ${objects.length} object${objects.length === 1 ? '' : 's'} individually.`;
+  const retryMessages = retryResults.flatMap(({ object, result }) =>
+    result.messages.map((message) => `${object.name}: ${message}`),
+  );
+  const retryDetails = retryResults.flatMap(({ object, result }) =>
+    result.details.map((detail) => ({
+      ...detail,
+      text: `${object.name}: ${detail.text}`,
+    })),
+  );
+
+  if (retryResults.every(({ result }) => result.success)) {
+    return {
+      success: true,
+      messages: [note, ...retryMessages],
+      details: [
+        { severity: 'warning', text: note },
+        ...original.details.map((detail) =>
+          detail.severity === 'error' ? { ...detail, severity: 'warning' as const } : detail,
+        ),
+        ...retryDetails,
+      ],
+    };
+  }
+
+  return {
+    success: false,
+    messages: [...original.messages, note, ...retryMessages],
+    details: [...original.details, { severity: 'info', text: note }, ...retryDetails],
+  };
 }
 
 // NW 7.50 lock-conflict-as-auth-error quirk:
@@ -530,17 +630,24 @@ export async function applyFixProposal(
   checkOperation(safety, OperationType.Read, 'ApplyFixProposal');
 
   const uriWithStart = `${sourceUri}#start=${line},${column}`;
+  const userContent =
+    proposal.userContent === undefined
+      ? ''
+      : `
+  <userContent>${escapeXmlText(proposal.userContent)}</userContent>`;
+  const affectedObjects = serializeAffectedObjects(proposal.affectedObjects);
+  // quickfixes.xsd uses elementFormDefault="unqualified"; only the root and imported adtcore
+  // elements are prefixed.
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <quickfixes:proposalRequest xmlns:quickfixes="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
   <input>
     <content>${escapeXmlText(source)}</content>
     <adtcore:objectReference adtcore:uri="${escapeXmlAttr(uriWithStart)}"/>
-  </input>
-  <userContent>${escapeXmlText(proposal.userContent)}</userContent>
+  </input>${affectedObjects}${userContent}
 </quickfixes:proposalRequest>`;
 
-  const resp = await http.post(proposal.uri, body, 'application/*', {
-    Accept: 'application/*',
+  const resp = await http.post(proposal.uri, body, 'application/xml', {
+    Accept: 'application/xml',
   });
 
   return parseFixDeltas(resp.body);
@@ -820,6 +927,74 @@ function readNodeText(node: unknown): string {
     .join('');
 }
 
+function nodeRecords(value: unknown): Array<Record<string, unknown>> {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is Record<string, unknown> => item != null && typeof item === 'object');
+  }
+  return typeof value === 'object' ? [value as Record<string, unknown>] : [];
+}
+
+function readObjectReference(value: unknown): FixAffectedObject | undefined {
+  const objectRef = toNodeRecord(value);
+  const uri = String(objectRef?.['@_uri'] ?? '');
+  if (!uri) return undefined;
+
+  const affected: FixAffectedObject = { uri };
+  const type = objectRef?.['@_type'];
+  const name = objectRef?.['@_name'];
+  const description = objectRef?.['@_description'];
+  if (type != null) affected.type = String(type);
+  if (name != null) affected.name = String(name);
+  if (description != null) affected.description = String(description);
+  return affected;
+}
+
+function parseAffectedObjects(value: unknown): FixAffectedObject[] | undefined {
+  const affectedNode = toNodeRecord(value);
+  if (!affectedNode) return undefined;
+
+  const affected: FixAffectedObject[] = [];
+  for (const unit of nodeRecords(affectedNode.unit)) {
+    const ref = readObjectReference(unit.objectReference);
+    if (!ref) continue;
+    if (unit.content !== undefined) ref.content = readNodeText(unit.content);
+    affected.push(ref);
+  }
+
+  for (const objectRef of nodeRecords(affectedNode.objectReference)) {
+    const ref = readObjectReference(objectRef);
+    if (ref) affected.push(ref);
+  }
+
+  return affected.length > 0 ? affected : undefined;
+}
+
+function serializeObjectReferenceAttrs(ref: FixAffectedObject): string {
+  const attrs = [`adtcore:uri="${escapeXmlAttr(ref.uri)}"`];
+  if (ref.type !== undefined) attrs.push(`adtcore:type="${escapeXmlAttr(ref.type)}"`);
+  if (ref.name !== undefined) attrs.push(`adtcore:name="${escapeXmlAttr(ref.name)}"`);
+  if (ref.description !== undefined) attrs.push(`adtcore:description="${escapeXmlAttr(ref.description)}"`);
+  return attrs.join(' ');
+}
+
+function serializeAffectedObjects(affectedObjects: FixAffectedObject[] | undefined): string {
+  const units = (affectedObjects ?? [])
+    .filter((affected) => affected.uri && affected.content !== undefined)
+    .map(
+      (affected) => `    <unit>
+      <content>${escapeXmlText(affected.content ?? '')}</content>
+      <adtcore:objectReference ${serializeObjectReferenceAttrs(affected)}/>
+    </unit>`,
+    );
+
+  if (units.length === 0) return '';
+  return `
+  <affectedObjects>
+${units.join('\n')}
+  </affectedObjects>`;
+}
+
 function parseFixProposals(xml: string): FixProposal[] {
   const parsed = parseXml(xml);
   const results = findDeepNodes(parsed, 'evaluationResult');
@@ -828,12 +1003,14 @@ function parseFixProposals(xml: string): FixProposal[] {
   return results
     .map((result) => {
       const objectRef = toNodeRecord(result.objectReference);
+      const affectedObjects = parseAffectedObjects(result.affectedObjects);
       return {
         uri: String(objectRef?.['@_uri'] ?? ''),
         type: String(objectRef?.['@_type'] ?? ''),
         name: String(objectRef?.['@_name'] ?? ''),
         description: String(objectRef?.['@_description'] ?? ''),
         userContent: readNodeText(result.userContent),
+        ...(affectedObjects ? { affectedObjects } : {}),
       } satisfies FixProposal;
     })
     .filter((proposal) => proposal.uri.length > 0);
@@ -846,7 +1023,7 @@ function parseIntOrUndefined(value: unknown): number | undefined {
 }
 
 function parsePositionFragment(uri: string, key: 'start' | 'end'): { line: number; column: number } | undefined {
-  const re = key === 'start' ? /#start=(\d+),(\d+)/ : /#end=(\d+),(\d+)/;
+  const re = key === 'start' ? /(?:#|[;&])start=(\d+),(\d+)/ : /(?:#|[;&])end=(\d+),(\d+)/;
   const match = uri.match(re);
   if (!match?.[1] || !match[2]) return undefined;
   return {
@@ -855,8 +1032,62 @@ function parsePositionFragment(uri: string, key: 'start' | 'end'): { line: numbe
   };
 }
 
+function parseFixDeltaNode(node: Record<string, unknown>): FixDelta {
+  const objectRef = toNodeRecord(node.objectReference);
+  const startNode = toNodeRecord(node.start ?? node.from ?? node.sourceStart);
+  const endNode = toNodeRecord(node.end ?? node.to ?? node.sourceEnd);
+
+  const uri = String(node['@_uri'] ?? objectRef?.['@_uri'] ?? '');
+
+  const startFromUri = parsePositionFragment(uri, 'start');
+  const endFromUri = parsePositionFragment(uri, 'end');
+
+  const startLine =
+    parseIntOrUndefined(node['@_startLine']) ??
+    parseIntOrUndefined(node['@_startline']) ??
+    parseIntOrUndefined(startNode?.['@_line']) ??
+    startFromUri?.line ??
+    0;
+  const startColumn =
+    parseIntOrUndefined(node['@_startColumn']) ??
+    parseIntOrUndefined(node['@_startCol']) ??
+    parseIntOrUndefined(node['@_startcolumn']) ??
+    parseIntOrUndefined(startNode?.['@_column']) ??
+    parseIntOrUndefined(startNode?.['@_col']) ??
+    startFromUri?.column ??
+    0;
+  const endLine =
+    parseIntOrUndefined(node['@_endLine']) ??
+    parseIntOrUndefined(node['@_endline']) ??
+    parseIntOrUndefined(endNode?.['@_line']) ??
+    endFromUri?.line ??
+    startLine;
+  const endColumn =
+    parseIntOrUndefined(node['@_endColumn']) ??
+    parseIntOrUndefined(node['@_endCol']) ??
+    parseIntOrUndefined(node['@_endcolumn']) ??
+    parseIntOrUndefined(endNode?.['@_column']) ??
+    parseIntOrUndefined(endNode?.['@_col']) ??
+    endFromUri?.column ??
+    startColumn;
+
+  const content = readNodeText(node.content ?? node.replacement ?? node.newText ?? node.text ?? node['#text']);
+
+  return {
+    uri,
+    range: {
+      start: { line: startLine, column: startColumn },
+      end: { line: endLine, column: endColumn },
+    },
+    content,
+  };
+}
+
 function parseFixDeltas(xml: string): FixDelta[] {
   const parsed = parseXml(xml);
+  const unitNodes = findDeepNodes(parsed, 'deltas').flatMap((deltas) => nodeRecords(deltas.unit));
+  if (unitNodes.length > 0) return unitNodes.map(parseFixDeltaNode);
+
   const candidateKeys = ['delta', 'edit', 'textEdit', 'replacement', 'replace'] as const;
   let nodes: Array<Record<string, unknown>> = [];
 
@@ -865,58 +1096,7 @@ function parseFixDeltas(xml: string): FixDelta[] {
     if (nodes.length > 0) break;
   }
 
-  if (nodes.length === 0) return [];
-
-  return nodes.map((node) => {
-    const objectRef = toNodeRecord(node.objectReference);
-    const startNode = toNodeRecord(node.start ?? node.from ?? node.sourceStart);
-    const endNode = toNodeRecord(node.end ?? node.to ?? node.sourceEnd);
-
-    const uri = String(node['@_uri'] ?? objectRef?.['@_uri'] ?? '');
-
-    const startFromUri = parsePositionFragment(uri, 'start');
-    const endFromUri = parsePositionFragment(uri, 'end');
-
-    const startLine =
-      parseIntOrUndefined(node['@_startLine']) ??
-      parseIntOrUndefined(node['@_startline']) ??
-      parseIntOrUndefined(startNode?.['@_line']) ??
-      startFromUri?.line ??
-      0;
-    const startColumn =
-      parseIntOrUndefined(node['@_startColumn']) ??
-      parseIntOrUndefined(node['@_startCol']) ??
-      parseIntOrUndefined(node['@_startcolumn']) ??
-      parseIntOrUndefined(startNode?.['@_column']) ??
-      parseIntOrUndefined(startNode?.['@_col']) ??
-      startFromUri?.column ??
-      0;
-    const endLine =
-      parseIntOrUndefined(node['@_endLine']) ??
-      parseIntOrUndefined(node['@_endline']) ??
-      parseIntOrUndefined(endNode?.['@_line']) ??
-      endFromUri?.line ??
-      startLine;
-    const endColumn =
-      parseIntOrUndefined(node['@_endColumn']) ??
-      parseIntOrUndefined(node['@_endCol']) ??
-      parseIntOrUndefined(node['@_endcolumn']) ??
-      parseIntOrUndefined(endNode?.['@_column']) ??
-      parseIntOrUndefined(endNode?.['@_col']) ??
-      endFromUri?.column ??
-      startColumn;
-
-    const content = readNodeText(node.content ?? node.replacement ?? node.newText ?? node.text ?? node['#text']);
-
-    return {
-      uri,
-      range: {
-        start: { line: startLine, column: startColumn },
-        end: { line: endLine, column: endColumn },
-      },
-      content,
-    };
-  });
+  return nodes.map(parseFixDeltaNode);
 }
 
 function parseAtcFindings(xml: string): AtcFinding[] {

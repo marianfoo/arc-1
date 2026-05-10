@@ -151,6 +151,7 @@ import {
 import type {
   ClassHierarchy,
   DumpDetail,
+  FixAffectedObject,
   InactiveObject,
   ObjectTransportHistory,
   ResolvedFeatures,
@@ -1828,6 +1829,27 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
   const maxResults = Number(args.maxResults ?? 100);
   const searchType = String(args.searchType ?? 'object');
 
+  if (searchType === 'tadir_lookup') {
+    const names = extractLookupNames(rawQuery, args.names);
+    if (names.length === 0) {
+      return errorResult('SAPSearch(searchType="tadir_lookup") requires names[] or query with at least one name.');
+    }
+    const objectTypes = extractLookupObjectTypes(args.objectType, args.objectTypes);
+    const lookups = await client.lookupObjects(names, { maxResults, objectTypes });
+    const missing = lookups.filter((l) => !l.found).map((l) => l.name);
+    const matchCount = lookups.reduce((count, lookup) => count + lookup.matches.length, 0);
+    const wildcardNames = names.filter((name) => name.includes('*'));
+    const warnings =
+      wildcardNames.length > 0
+        ? [
+            `tadir_lookup performs exact-name lookup; wildcard characters are treated literally for: ${wildcardNames.join(', ')}`,
+          ]
+        : undefined;
+    return textResult(
+      JSON.stringify({ count: matchCount, lookups, missing, ...(warnings ? { warnings } : {}) }, null, 2),
+    );
+  }
+
   if (searchType === 'source_code') {
     // Source code search: do NOT transliterate — source can contain umlauts in strings/comments
     if (cachedFeatures?.textSearch && !cachedFeatures.textSearch.available) {
@@ -1877,6 +1899,41 @@ async function handleSAPSearch(client: AdtClient, args: Record<string, unknown>)
     return textResult(hint);
   }
   return textResult(transliterationNote + JSON.stringify(results, null, 2));
+}
+
+function extractLookupNames(query: string, rawNames: unknown): string[] {
+  const fromNames = Array.isArray(rawNames) ? rawNames.map((n) => String(n).trim()).filter(Boolean) : [];
+  const fromQuery = query
+    .split(/[,\s]+/)
+    .map((n) => n.trim())
+    .filter(Boolean);
+  return [...new Set([...fromNames, ...fromQuery].map((n) => n.toUpperCase()))];
+}
+
+function extractLookupObjectTypes(rawObjectType: unknown, rawObjectTypes: unknown): string[] {
+  const types = Array.isArray(rawObjectTypes)
+    ? rawObjectTypes.map((t) => normalizeObjectType(String(t))).filter(Boolean)
+    : [];
+  if (typeof rawObjectType === 'string' && rawObjectType.trim()) {
+    types.push(normalizeObjectType(rawObjectType));
+  }
+  return [...new Set(types)];
+}
+
+function normalizePackageOverride(rawPackage: unknown, fallback: string): string {
+  if (rawPackage === undefined || rawPackage === null) {
+    return fallback;
+  }
+  const value = String(rawPackage).trim();
+  return value || fallback;
+}
+
+function normalizeTransportOverride(rawTransport: unknown): string | undefined {
+  if (rawTransport === undefined || rawTransport === null) {
+    return undefined;
+  }
+  const value = String(rawTransport).trim();
+  return value || undefined;
 }
 
 function classifySapQueryParserError(err: AdtApiError, sql: string): string | undefined {
@@ -2121,11 +2178,14 @@ async function handleSAPLint(
       const rules = listRulesFromConfig(lintConfig);
       const enabled = rules.filter((r) => r.enabled);
       const disabled = rules.filter((r) => !r.enabled);
+      const effectiveAbapRelease = configOptions.abapRelease ?? 'unknown';
+      const syntax = lintConfig.get().syntax as { version?: string } | undefined;
       return textResult(
         JSON.stringify(
           {
             preset: configOptions.systemType === 'btp' ? 'cloud' : 'onprem',
-            abapVersion: cachedFeatures?.abapRelease ?? 'unknown',
+            abapVersion: effectiveAbapRelease,
+            syntaxVersion: syntax?.version ?? 'unknown',
             enabledRules: enabled.length,
             disabledRules: disabled.length,
             rules: enabled,
@@ -2180,7 +2240,7 @@ function buildLintConfigOptions(config: ServerConfig, ruleOverrides?: RuleOverri
   const systemType = cachedFeatures?.systemType ?? (config.systemType !== 'auto' ? config.systemType : undefined);
   return {
     systemType,
-    abapRelease: cachedFeatures?.abapRelease,
+    abapRelease: cachedFeatures?.abapRelease ?? config.abapRelease,
     configFile: config.abaplintConfig,
     ruleOverrides,
   };
@@ -3145,9 +3205,18 @@ function sourceUrlForType(type: string, name: string): string {
   return `${objectUrlForType(type, name)}/source/main`;
 }
 
+type ClassWriteInclude = 'definitions' | 'implementations' | 'macros' | 'testclasses';
+const CLASS_WRITE_INCLUDES: readonly ClassWriteInclude[] = ['definitions', 'implementations', 'macros', 'testclasses'];
+
 /** Get a CLAS include URL (definitions/implementations/macros/testclasses) */
-function classIncludeUrl(name: string, include: 'definitions' | 'implementations' | 'macros' | 'testclasses'): string {
+function classIncludeUrl(name: string, include: ClassWriteInclude): string {
   return `/sap/bc/adt/oo/classes/${encodeURIComponent(name)}/includes/${include}`;
+}
+
+function normalizeClassWriteInclude(include: unknown): ClassWriteInclude | undefined {
+  if (typeof include !== 'string') return undefined;
+  const normalized = include.toLowerCase() as ClassWriteInclude;
+  return CLASS_WRITE_INCLUDES.includes(normalized) ? normalized : undefined;
 }
 
 // ─── SAPWrite Handler ────────────────────────────────────────────────
@@ -3162,6 +3231,8 @@ async function handleSAPWrite(
   const type = normalizeObjectType(String(args.type ?? ''));
   const name = String(args.name ?? '');
   const source = String(args.source ?? '');
+  const hasSource = typeof args.source === 'string';
+  const include = normalizeClassWriteInclude(args.include);
   const transport = args.transport as string | undefined;
   const lintOverride = args.lintBeforeWrite as boolean | undefined;
   const preflightOverride = args.preflightBeforeWrite as boolean | undefined;
@@ -3250,6 +3321,37 @@ async function handleSAPWrite(
   switch (action) {
     case 'update': {
       const existingPackage = await enforcePackageForExistingObject();
+
+      // Keep CLAS local include writes ahead of the generic /source/main fallthrough.
+      // If CLAS ever gains separate metadata-update handling, this branch must still
+      // win whenever callers pass include=definitions|implementations|macros|testclasses.
+      if (args.include !== undefined) {
+        if (!include) {
+          return errorResult(
+            `Invalid CLAS include "${String(args.include)}". Valid values: ${CLASS_WRITE_INCLUDES.join(', ')}.`,
+          );
+        }
+        if (type !== 'CLAS') {
+          return errorResult('SAPWrite include is only supported for action="update" with type="CLAS".');
+        }
+        if (!hasSource) {
+          return errorResult('"source" is required when updating a CLAS include.');
+        }
+
+        await safeUpdateSource(
+          client.http,
+          client.safety,
+          objectUrl,
+          classIncludeUrl(name, include),
+          source,
+          transport,
+          cachedFeatures?.abapRelease,
+        );
+        invalidateWrittenObject(type, name);
+        return textResult(
+          `Successfully updated ${type} ${name} include ${include}. Active version remains unchanged until activation; read with SAPRead(version="inactive") to verify the draft.`,
+        );
+      }
 
       if (type === 'SKTD') {
         // KTD update requires the full <sktd:docu> XML envelope with the Markdown
@@ -3792,6 +3894,7 @@ async function handleSAPWrite(
               applied: false,
               hint: unresolvedHint,
               applyResult: {
+                skeletons: scaffoldPlan.skeletons,
                 main: scaffoldPlan.signatures.main,
                 definitions: scaffoldPlan.signatures.definitions,
                 implementations: scaffoldPlan.signatures.implementations,
@@ -3873,6 +3976,7 @@ async function handleSAPWrite(
 
       const msg =
         `Scaffolded ${scaffoldPlan.insertedSignatureCount} RAP handler signature(s) and ${scaffoldPlan.insertedImplementationStubCount} implementation stub(s) in ${type} ${name} from BDEF ${bdefName}. ` +
+        `Auto-created ${scaffoldPlan.skeletons.createdDefinitions.length + scaffoldPlan.skeletons.createdImplementations.length} handler skeleton section(s). ` +
         `Updated section(s): ${scaffoldPlan.changedSections.join(', ')}.`;
       const warnings = mergePreWriteWarnings(
         lintWarningsMain?.warnings,
@@ -3884,6 +3988,7 @@ async function handleSAPWrite(
           ...summary,
           applied: true,
           applyResult: {
+            skeletons: scaffoldPlan.skeletons,
             main: scaffoldPlan.signatures.main,
             definitions: scaffoldPlan.signatures.definitions,
             implementations: scaffoldPlan.signatures.implementations,
@@ -3936,22 +4041,40 @@ async function handleSAPWrite(
         return errorResult('"objects" array is required and must be non-empty for batch_create action.');
       }
 
-      const pkg = String(args.package ?? '$TMP');
+      const defaultPackage = normalizePackageOverride(args.package, '$TMP');
 
-      // Check package is allowed before starting any creates
-      checkPackage(client.safety, pkg);
+      const batchPlan = objects.map((obj) => {
+        const objType = normalizeObjectType(String(obj.type ?? ''));
+        const objName = String(obj.name ?? '');
+        const objPackage = normalizePackageOverride(obj.package, defaultPackage);
+        const explicitTransport = normalizeTransportOverride(obj.transport) ?? transport;
+        return { obj, type: objType, name: objName, packageName: objPackage, explicitTransport };
+      });
 
-      // Pre-flight transport check for batch_create (same logic as single create)
-      let batchTransport = transport;
-      if (!transport && pkg.toUpperCase() !== '$TMP') {
+      // Check every target package before starting any creates.
+      for (const pkg of new Set(batchPlan.map((item) => item.packageName))) {
+        checkPackage(client.safety, pkg);
+      }
+
+      // Pre-flight transport check for batch_create (same logic as single create),
+      // but keyed by each effective package because objects can override package.
+      const autoTransportByPackage = new Map<string, string | undefined>();
+      const firstPlanNeedingTransportByPackage = new Map<string, (typeof batchPlan)[number]>();
+      for (const plan of batchPlan) {
+        if (
+          !plan.explicitTransport &&
+          plan.packageName.toUpperCase() !== '$TMP' &&
+          !firstPlanNeedingTransportByPackage.has(plan.packageName)
+        ) {
+          firstPlanNeedingTransportByPackage.set(plan.packageName, plan);
+        }
+      }
+      for (const [pkg, plan] of firstPlanNeedingTransportByPackage) {
         try {
-          // Use first object's URL for the transport check
-          const firstObj = objects[0];
-          const firstType = normalizeObjectType(String(firstObj?.type ?? ''));
-          const firstUrl = objectUrlForType(firstType, String(firstObj?.name ?? ''));
+          const firstUrl = objectUrlForType(plan.type, plan.name);
           const transportInfo = await getTransportInfo(client.http, client.safety, firstUrl, pkg, 'I');
           if (transportInfo.lockedTransport) {
-            batchTransport = transportInfo.lockedTransport;
+            autoTransportByPackage.set(pkg, transportInfo.lockedTransport);
           } else if (!transportInfo.isLocal && transportInfo.recording) {
             const existingList =
               transportInfo.existingTransports.length > 0
@@ -3969,21 +4092,33 @@ async function handleSAPWrite(
                 existingList,
             );
           }
-        } catch {
+        } catch (err) {
+          logger.warn('SAPWrite batch_create transport preflight failed; continuing without auto transport', {
+            package: pkg,
+            type: plan.type,
+            name: plan.name,
+            error: err instanceof Error ? err.message : String(err),
+          });
           // If transportInfo check fails, proceed — SAP will return its own error if needed.
         }
       }
 
-      const results: Array<{ type: string; name: string; status: 'success' | 'failed'; error?: string }> = [];
+      const results: Array<{
+        type: string;
+        name: string;
+        packageName: string;
+        status: 'success' | 'failed';
+        error?: string;
+      }> = [];
       const batchWarnings: string[] = [];
       // Per-batch cache for the MSAG transport-vs-task guard. The bug is universal so the
       // guard fires for every MSAG entry, but a batch typically shares one transport — cache
       // the lookup result to avoid one HTTP roundtrip per object.
       const transportLookupCache = new Map<string, Awaited<ReturnType<typeof getTransport>>>();
 
-      for (const obj of objects) {
-        const objType = normalizeObjectType(String(obj.type ?? ''));
-        const objName = String(obj.name ?? '');
+      for (const plan of batchPlan) {
+        const { obj, type: objType, name: objName, packageName: objPackage } = plan;
+        const objTransport = plan.explicitTransport ?? autoTransportByPackage.get(objPackage);
         const metadataObject = isMetadataWriteType(objType);
         const objSource = obj.source ? String(obj.source) : undefined;
         const objDescription = String(obj.description ?? objName);
@@ -3995,6 +4130,7 @@ async function handleSAPWrite(
           results.push({
             type: objType,
             name: objName,
+            packageName: objPackage,
             status: 'failed',
             error: `Object name "${objName}" contains lowercase characters. SAP object names must be uppercase (e.g. "${objName.toUpperCase()}"). Source code inside the object can use mixed case.`,
           });
@@ -4002,18 +4138,19 @@ async function handleSAPWrite(
         }
 
         // MSAG transport-vs-task guard (per-batch cache to avoid per-object roundtrip).
-        if (objType === 'MSAG' && batchTransport) {
-          let tr = transportLookupCache.get(batchTransport);
+        if (objType === 'MSAG' && objTransport) {
+          let tr = transportLookupCache.get(objTransport);
           if (tr === undefined) {
-            tr = await getTransport(client.http, client.safety, batchTransport);
-            transportLookupCache.set(batchTransport, tr);
+            tr = await getTransport(client.http, client.safety, objTransport);
+            transportLookupCache.set(objTransport, tr);
           }
           if (!tr) {
             results.push({
               type: objType,
               name: objName,
+              packageName: objPackage,
               status: 'failed',
-              error: `Transport "${batchTransport}" is not a valid transport request. MSAG creation requires a transport request number, not a task number.`,
+              error: `Transport "${objTransport}" is not a valid transport request. MSAG creation requires a transport request number, not a task number.`,
             });
             break;
           }
@@ -4025,6 +4162,7 @@ async function handleSAPWrite(
           results.push({
             type: objType,
             name: objName,
+            packageName: objPackage,
             status: 'failed',
             error: `AFF metadata validation failed:\n- ${(affResult.errors ?? []).join('\n- ')}`,
           });
@@ -4047,6 +4185,7 @@ async function handleSAPWrite(
               results.push({
                 type: objType,
                 name: objName,
+                packageName: objPackage,
                 status: 'failed',
                 error: preflightWarnings.result!.content[0].text,
               });
@@ -4061,6 +4200,7 @@ async function handleSAPWrite(
               results.push({
                 type: objType,
                 name: objName,
+                packageName: objPackage,
                 status: 'failed',
                 error: `source rejected by lint: ${lintWarnings.result!.content[0].text}`,
               });
@@ -4072,7 +4212,7 @@ async function handleSAPWrite(
           const objUrl = objectUrlForType(objType, objName);
           const createUrl = objUrl.replace(/\/[^/]+$/, '');
           const objMetadataProps = getMetadataWriteProperties(obj);
-          const body = buildCreateXml(objType, objName, pkg, objDescription, objMetadataProps);
+          const body = buildCreateXml(objType, objName, objPackage, objDescription, objMetadataProps);
           const contentType = createContentTypeForType(objType);
           const needsPackageParam = objType === 'BDEF' || objType === 'TABL';
           try {
@@ -4082,8 +4222,8 @@ async function handleSAPWrite(
               createUrl,
               body,
               contentType,
-              batchTransport,
-              needsPackageParam ? pkg : undefined,
+              objTransport,
+              needsPackageParam ? objPackage : undefined,
               cachedFeatures?.abapRelease,
             );
           } catch (createErr) {
@@ -4100,7 +4240,7 @@ async function handleSAPWrite(
           if (objType === 'DTEL' && dtelNeedsPostCreateUpdate(objMetadataProps)) {
             await client.http.withStatefulSession(async (session) => {
               const lock = await lockObject(session, client.safety, objUrl, 'MODIFY', cachedFeatures?.abapRelease);
-              const lockTransport = batchTransport ?? (lock.corrNr || undefined);
+              const lockTransport = objTransport ?? (lock.corrNr || undefined);
               try {
                 await updateObject(session, client.safety, objUrl, body, lock.lockHandle, contentType, lockTransport);
               } finally {
@@ -4118,7 +4258,7 @@ async function handleSAPWrite(
               objUrl,
               srcUrl,
               objSource,
-              batchTransport,
+              objTransport,
               cachedFeatures?.abapRelease,
             );
           }
@@ -4129,6 +4269,7 @@ async function handleSAPWrite(
             results.push({
               type: objType,
               name: objName,
+              packageName: objPackage,
               status: 'failed',
               error: `activation failed: ${activationResult.messages.join('; ')}`,
             });
@@ -4136,11 +4277,12 @@ async function handleSAPWrite(
           }
 
           invalidateWrittenObject(objType, objName);
-          results.push({ type: objType, name: objName, status: 'success' });
+          results.push({ type: objType, name: objName, packageName: objPackage, status: 'success' });
         } catch (err) {
           results.push({
             type: objType,
             name: objName,
+            packageName: objPackage,
             status: 'failed',
             error: err instanceof Error ? err.message : String(err),
           });
@@ -4150,22 +4292,35 @@ async function handleSAPWrite(
 
       // Add 'skipped' entries for objects that were never attempted due to early break
       for (let i = results.length; i < objects.length; i++) {
-        const skipped = objects[i];
+        const skippedPlan = batchPlan[i];
+        const skipped = skippedPlan?.obj ?? objects[i];
         results.push({
-          type: normalizeObjectType(String(skipped?.type ?? '')),
-          name: String(skipped.name ?? ''),
+          type: skippedPlan?.type ?? normalizeObjectType(String(skipped?.type ?? '')),
+          name: skippedPlan?.name ?? String(skipped?.name ?? ''),
+          packageName: skippedPlan?.packageName ?? normalizePackageOverride(skipped?.package, defaultPackage),
           status: 'failed',
           error: 'skipped — stopped after previous failure',
         });
       }
 
       const summary = results
-        .map((r) => `${r.name} (${r.type}) ${r.status === 'success' ? '✓' : `✗ — ${r.error}`}`)
+        .map((r) =>
+          r.status === 'success'
+            ? `${r.name} (${r.type}) ✓ [${r.packageName}]`
+            : `${r.name} (${r.type}) ✗ [${r.packageName}] — ${r.error}`,
+        )
         .join(', ');
       const successCount = results.filter((r) => r.status === 'success').length;
       const hasFailure = results.some((r) => r.status === 'failed');
       const warningSuffix =
         batchWarnings.length > 0 ? `\n\nRAP preflight warnings:\n- ${batchWarnings.join('\n- ')}` : '';
+      const packageNames = [...new Set(batchPlan.map((item) => item.packageName))];
+      const packageSummary =
+        packageNames.length === 1
+          ? `in package ${packageNames[0]}`
+          : packageNames.length <= 3
+            ? `across packages [${packageNames.join(', ')}]`
+            : `across ${packageNames.length} packages`;
 
       if (hasFailure) {
         const cleanupHint =
@@ -4173,10 +4328,10 @@ async function handleSAPWrite(
             ? ` Note: ${successCount} already-created object(s) remain on the SAP system and may need manual cleanup.`
             : '';
         return errorResult(
-          `Batch created ${successCount}/${objects.length} objects in package ${pkg}: ${summary}${cleanupHint}${warningSuffix}`,
+          `Batch created ${successCount}/${objects.length} objects ${packageSummary}: ${summary}${cleanupHint}${warningSuffix}`,
         );
       }
-      return textResult(`Batch created ${successCount} objects in package ${pkg}: ${summary}${warningSuffix}`);
+      return textResult(`Batch created ${successCount} objects ${packageSummary}: ${summary}${warningSuffix}`);
     }
     default:
       return errorResult(
@@ -4302,7 +4457,7 @@ function runPreWriteLint(
     const systemType = cachedFeatures?.systemType ?? (config.systemType !== 'auto' ? config.systemType : undefined);
     const configOptions: LintConfigOptions = {
       systemType,
-      abapRelease: cachedFeatures?.abapRelease,
+      abapRelease: cachedFeatures?.abapRelease ?? config.abapRelease,
       configFile: config.abaplintConfig,
     };
     const result = validateBeforeWrite(source, filename, configOptions);
@@ -4990,6 +5145,7 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
     }
     case 'quickfix': {
       const source = args.source as string | undefined;
+      const sourceUri = args.sourceUri as string | undefined;
       if (!name || !type) return errorResult('"name" and "type" are required for "quickfix" action.');
       if (!source) return errorResult('"source" is required for "quickfix" action.');
       if (args.line == null) return errorResult('"line" is required for "quickfix" action.');
@@ -5002,7 +5158,7 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
       const proposals = await getFixProposals(
         client.http,
         client.safety,
-        sourceUrlForType(type, name),
+        sourceUri ?? sourceUrlForType(type, name),
         source,
         line,
         column,
@@ -5011,13 +5167,16 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
     }
     case 'apply_quickfix': {
       const source = args.source as string | undefined;
+      const sourceUri = args.sourceUri as string | undefined;
       const proposalUri = args.proposalUri as string | undefined;
       const proposalUserContent = args.proposalUserContent as string | undefined;
+      const proposalAffectedObjects = args.proposalAffectedObjects as FixAffectedObject[] | undefined;
       if (!name || !type) return errorResult('"name" and "type" are required for "apply_quickfix" action.');
       if (!source) return errorResult('"source" is required for "apply_quickfix" action.');
       if (args.line == null) return errorResult('"line" is required for "apply_quickfix" action.');
       if (!proposalUri) return errorResult('"proposalUri" is required for "apply_quickfix" action.');
-      if (!proposalUserContent) return errorResult('"proposalUserContent" is required for "apply_quickfix" action.');
+      if (proposalUserContent === undefined)
+        return errorResult('"proposalUserContent" is required for "apply_quickfix" action.');
 
       const line = Number(args.line);
       const column = Number(args.column ?? 0);
@@ -5033,8 +5192,9 @@ async function handleSAPDiagnose(client: AdtClient, args: Record<string, unknown
           name: '',
           description: '',
           userContent: proposalUserContent,
+          ...(proposalAffectedObjects ? { affectedObjects: proposalAffectedObjects } : {}),
         },
-        sourceUrlForType(type, name),
+        sourceUri ?? sourceUrlForType(type, name),
         source,
         line,
         column,

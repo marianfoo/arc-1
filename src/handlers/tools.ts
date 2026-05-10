@@ -150,10 +150,12 @@ const SAPWRITE_TYPES_BTP = [
   'DTEL',
   'MSAG',
 ];
+const SAPWRITE_CLAS_INCLUDES = ['definitions', 'implementations', 'macros', 'testclasses'];
 
 const SAPWRITE_DESC_ONPREM =
   'Create or update ABAP source code and DDIC metadata. Handles lock/modify/unlock automatically. Supports PROG, CLAS, INTF, FUNC, FUGR, INCL, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
+  'For CLAS update, pass include="definitions"|"implementations"|"macros"|"testclasses" to update that local include natively; omit include to update source/main. ' +
   'TABL uses source-based writes via /source/main (define table syntax), similar to DDLS/BDEF/SRVD. ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. Create empty then update, or provide messages at creation. ' +
@@ -165,11 +167,12 @@ const SAPWRITE_DESC_ONPREM =
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). Pass "objects" array with dependency order. ' +
-  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
+  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally create missing lhc_* skeletons plus inject declarations and empty implementation stubs into an existing behavior pool class.';
 
 const SAPWRITE_DESC_BTP =
   'Create or update ABAP source code and DDIC metadata (BTP ABAP Environment). Handles lock/modify/unlock automatically. Supports CLAS, INTF, DDLS, DDLX, BDEF, SRVD, SRVB, SKTD, TABL, DOMA, DTEL, MSAG. ' +
   'Type codes are auto-normalized and case-insensitive (e.g., "CLAS/OC" → "CLAS"). ' +
+  'For CLAS update, pass include="definitions"|"implementations"|"macros"|"testclasses" to update that local include natively; omit include to update source/main. ' +
   'TABL supports custom table source writes via /source/main (define table syntax). ' +
   'DOMA/DTEL use metadata XML writes (not /source/main): provide DDIC fields like dataType, length, fixedValues, typeKind, labels, searchHelp. ' +
   'MSAG (message classes) use metadata XML writes: provide "messages" array with {number, shortText} entries. ' +
@@ -179,7 +182,7 @@ const SAPWRITE_DESC_BTP =
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). ' +
-  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally inject declarations plus empty implementation stubs into an existing behavior pool class.';
+  'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally create missing lhc_* skeletons plus inject declarations and empty implementation stubs into an existing behavior pool class.';
 
 // ─── SAPContext Types ───────────────────────────────────────────────
 
@@ -242,15 +245,17 @@ const SAPQUERY_DESC_BTP =
 // ─── SAPSearch ──────────────────────────────────────────────────────
 
 const SAPSEARCH_DESC_ONPREM =
-  'Search for ABAP objects or search within source code. Two modes:\n' +
+  'Search for ABAP objects, exact object-directory entries, or source code. Three modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards (* for any characters). Returns object type, name, package, description, and ADT URI. Use this to find classes, programs, function modules, tables, etc.\n' +
-  '2. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
+  '2. TADIR lookup (searchType="tadir_lookup"): Exact cross-package object lookup for one or more names via ADT repository quick search. Use this before create/reset workflows instead of long SAPQuery TADIR IN-lists.\n' +
+  '3. Source code search (searchType="source_code"): Full-text search within ABAP source code across the system. Use this to find all objects containing a specific string (e.g., a method call, variable name, or class reference). Requires SAP_BASIS >= 7.51.\n\n' +
   "Tips: BOR business objects appear as SOBJ type in results. The uri field from results can be used directly with SAPNavigate for references. The objectType field from results can be passed directly to SAPRead/SAPWrite/SAPActivate (ARC-1 auto-normalizes slash suffixes like DDLS/DF, CLAS/OC, PROG/P).\n\nNote: Searches object names only (classes, tables, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views or SAPQuery against DD03L.";
 
 const SAPSEARCH_DESC_BTP =
-  'Search for ABAP objects or search within source code (BTP ABAP Environment). Two modes:\n' +
+  'Search for ABAP objects, exact object-directory entries, or source code (BTP ABAP Environment). Three modes:\n' +
   '1. Object search (default): Search by name pattern with wildcards. Returns released SAP objects and custom Z/Y objects. Classic programs, includes, and DDIC views are not searchable on BTP.\n' +
-  '2. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
+  '2. TADIR lookup (searchType="tadir_lookup"): Exact object lookup for one or more names via ADT repository quick search.\n' +
+  '3. Source code search (searchType="source_code"): Full-text search within ABAP source code.\n\n' +
   "Tips: On BTP, focus on classes (CL_*), interfaces (IF_*), CDS views (I_*), and custom Z/Y objects.\n\nNote: Searches object names only (classes, CDS views, etc.) — field/column names are not searchable here. To find fields by name, use SAPRead(type='DDLS', include='elements') for CDS views.";
 
 // ─── SAPTransport ───────────────────────────────────────────────────
@@ -368,9 +373,14 @@ function stripSourceCodeLines(desc: string): string {
       (line) =>
         !line.includes('source_code') &&
         !line.includes('Source code search') &&
-        !line.startsWith('2. Source code search'),
+        !line.startsWith('2. Source code search') &&
+        !line.startsWith('3. Source code search'),
     )
     .join('\n')
+    .replace(
+      /, exact object-directory entries, or source code[^.]*\. Three modes:\n1\. Object search \(default\): /i,
+      '. ',
+    )
     .replace(/ or search within source code[^.]*\. Two modes:\n1\. Object search \(default\): /i, '. ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -388,8 +398,8 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
     query: {
       type: 'string',
       description: hideSourceCode
-        ? 'Search pattern: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*).'
-        : 'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
+        ? 'Search pattern for object search, or comma/whitespace-separated names for tadir_lookup.'
+        : 'Search pattern. For object search: name pattern with wildcards (e.g., ZCL_ORDER*, Z*TEST*). For tadir_lookup: exact name or comma/whitespace-separated names. For source_code search: text string to find in source (e.g., cl_lsapi_manager, CALL FUNCTION).',
     },
     maxResults: {
       type: 'number',
@@ -399,17 +409,31 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
     },
   };
 
+  properties.searchType = {
+    type: 'string',
+    enum: hideSourceCode ? ['object', 'tadir_lookup'] : ['object', 'source_code', 'tadir_lookup'],
+    description: hideSourceCode
+      ? 'Search mode: "object" (default) searches by object name, "tadir_lookup" does exact cross-package object lookup.'
+      : 'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code, "tadir_lookup" does exact cross-package object lookup.',
+  };
+  properties.names = {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'For tadir_lookup: exact object names to resolve across packages. Prefer this over long SAPQuery TADIR IN-lists.',
+  };
+  properties.objectTypes = {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'For tadir_lookup: optional ADT/TADIR type filters (e.g., TABL, DDLS, BDEF, SRVB, CLAS/OC).',
+  };
+  properties.objectType = {
+    type: 'string',
+    description:
+      'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC). For tadir_lookup: single type filter; use objectTypes for multiple.',
+  };
+
   if (!hideSourceCode) {
-    properties.searchType = {
-      type: 'string',
-      enum: ['object', 'source_code'],
-      description:
-        'Search mode: "object" (default) searches by object name, "source_code" searches within ABAP source code.',
-    };
-    properties.objectType = {
-      type: 'string',
-      description: 'For source_code search: filter by object type (e.g., PROG, CLAS, FUNC)',
-    };
     properties.packageName = { type: 'string', description: 'For source_code search: filter by package name' };
   }
 
@@ -419,7 +443,6 @@ function buildSAPSearchTool(btp: boolean, textSearchAvailable?: boolean): ToolDe
     inputSchema: {
       type: 'object',
       properties,
-      required: ['query'],
     },
   };
 }
@@ -555,6 +578,12 @@ export function getToolDefinitions(
           },
           name: { type: 'string', description: 'Object name (for create/update/delete/edit_method)' },
           source: { type: 'string', description: 'ABAP source code (for create/update/edit_method)' },
+          include: {
+            type: 'string',
+            enum: SAPWRITE_CLAS_INCLUDES,
+            description:
+              'For update type=CLAS only: write a class-local include instead of source/main. Valid values: definitions (CCDEF), implementations (CCIMP), macros, testclasses. Omit include to update source/main. Include writes create an inactive draft; read with SAPRead version="inactive" before activation.',
+          },
           method: {
             type: 'string',
             description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',
@@ -701,6 +730,14 @@ export function getToolDefinitions(
                 name: { type: 'string', description: 'Object name' },
                 source: { type: 'string', description: 'ABAP source code (optional — some objects have no source)' },
                 description: { type: 'string', description: 'Object description (defaults to name if omitted)' },
+                package: {
+                  type: 'string',
+                  description: 'Object-specific package. Overrides top-level package for this item.',
+                },
+                transport: {
+                  type: 'string',
+                  description: 'Object-specific transport request. Overrides top-level transport for this item.',
+                },
                 dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type' },
                 length: { type: 'number', description: 'DOMA/DTEL: data type length' },
                 decimals: { type: 'number', description: 'DOMA/DTEL: decimal places' },
@@ -768,6 +805,7 @@ export function getToolDefinitions(
             description:
               'For batch_create: ordered list of objects to create and activate. Each object needs type, name, and source (if applicable). ' +
               'Objects are created and activated in array order — put dependencies first (e.g., TABL before DDLS, BDEF after DDLS). ' +
+              'Each item may include package and transport; item-level values override top-level package/transport. ' +
               'Example: [{type:"TABL",name:"ZTRAVEL",source:"..."},{type:"DDLS",name:"ZI_TRAVEL",source:"..."},{type:"BDEF",name:"ZI_TRAVEL",source:"..."},{type:"SRVD",name:"ZSD_TRAVEL",source:"..."}]',
           },
         },
@@ -935,9 +973,9 @@ export function getToolDefinitions(
         '- "syntax": Syntax check an ABAP object. Requires name + type. Optional: version ("active" or "inactive", defaults to active). Optional: source — when supplied, SAP compiles the given content as if it lived at the object\'s URI (pre-write dry-run, nothing is written). Omit source to check what is stored.\n' +
         '- "unittest": Run ABAP unit tests. Requires name + type.\n' +
         '- "atc": Run ATC code quality checks. Requires name + type. Optional: variant.\n' +
-        '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column.\n' +
-        '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column.\n' +
         '- "object_state": Compare active and inactive source versions. Requires name + type. For CLAS, also compares main, definitions, implementations, macros, and testclasses includes (up to 10 parallel reads per class; sequence calls when sweeping many classes). Returns ETags, byte lengths, hashes, and divergence flags.\n' +
+        '- "quickfix": Get SAP quick fix proposals for a specific source position. Requires name + type + source + line. Optional: column, sourceUri for exact ADT include/source targets.\n' +
+        '- "apply_quickfix": Apply one quick fix proposal and return text deltas (does not write source). Requires name + type + source + line + proposalUri + proposalUserContent. Optional: column, sourceUri, proposalAffectedObjects. proposalUserContent may be an empty string; pass it through exactly from quickfix.\n' +
         '- "dumps": List or read ABAP short dumps (ST22). Without id: lists recent dumps (filter by user, maxResults). With id: returns focused chapter sections by default; set includeFullText=true to include the full formatted dump blob. Optional sections=[kap0,kap3,...] to request specific chapter IDs.\n' +
         '- "traces": List or analyze ABAP profiler traces. Without id: lists trace files. With id + analysis: returns trace analysis (hitlist = hot spots, statements = call tree, dbAccesses = database access statistics).\n\n' +
         '- "system_messages": List SM02 system messages via ADT feed (filter by user, maxResults, from, to).\n' +
@@ -971,6 +1009,11 @@ export function getToolDefinitions(
             type: 'string',
             description: 'Current source code (required for quickfix/apply_quickfix).',
           },
+          sourceUri: {
+            type: 'string',
+            description:
+              'Exact ADT source URI for quickfix/apply_quickfix. Defaults to the type/name main source; use this for class includes such as /includes/definitions.',
+          },
           line: {
             type: 'number',
             description: 'Source line number for quickfix evaluation (required for quickfix/apply_quickfix).',
@@ -991,7 +1034,24 @@ export function getToolDefinitions(
           },
           proposalUserContent: {
             type: 'string',
-            description: 'Opaque userContent from quickfix action (required for apply_quickfix).',
+            description:
+              'Opaque userContent from quickfix action (required for apply_quickfix). May be an empty string; pass through exactly.',
+          },
+          proposalAffectedObjects: {
+            type: 'array',
+            description:
+              'Optional affectedObjects array from quickfix action. Include content for each affected source unit when applying multi-object quickfixes.',
+            items: {
+              type: 'object',
+              required: ['uri'],
+              properties: {
+                uri: { type: 'string', description: 'Affected ADT source URI, optionally with #start/#end range.' },
+                type: { type: 'string', description: 'Optional ADT object type metadata.' },
+                name: { type: 'string', description: 'Optional ADT object name metadata.' },
+                description: { type: 'string', description: 'Optional affected object description.' },
+                content: { type: 'string', description: 'Current source content for this affected unit.' },
+              },
+            },
           },
           variant: { type: 'string', description: 'ATC check variant (for atc action)' },
           id: {

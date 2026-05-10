@@ -333,10 +333,13 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('gateway_errors');
     expect(sapDiagnose.description).toContain('active and inactive source versions');
     expect(schema.properties.source).toBeDefined();
+    expect(schema.properties.sourceUri).toBeDefined();
     expect(schema.properties.line).toBeDefined();
     expect(schema.properties.column).toBeDefined();
     expect(schema.properties.proposalUri).toBeDefined();
     expect(schema.properties.proposalUserContent).toBeDefined();
+    expect(schema.properties.proposalAffectedObjects).toBeDefined();
+    expect(schema.properties.proposalAffectedObjects.items.required).toContain('uri');
     expect(schema.properties.sections).toBeDefined();
     expect(schema.properties.includeFullText).toBeDefined();
     expect(schema.properties.detailUrl).toBeDefined();
@@ -352,6 +355,9 @@ describe('Tool Definitions', () => {
       const schema = sapSearch.inputSchema as Record<string, any>;
       expect(schema.properties.searchType).toBeDefined();
       expect(schema.properties.searchType.enum).toContain('source_code');
+      expect(schema.properties.searchType.enum).toContain('tadir_lookup');
+      expect(schema.properties.names).toBeDefined();
+      expect(schema.properties.objectTypes).toBeDefined();
       expect(schema.properties.objectType).toBeDefined();
       expect(schema.properties.packageName).toBeDefined();
     });
@@ -360,8 +366,12 @@ describe('Tool Definitions', () => {
       const tools = getToolDefinitions(DEFAULT_CONFIG, false);
       const sapSearch = tools.find((t) => t.name === 'SAPSearch')!;
       const schema = sapSearch.inputSchema as Record<string, any>;
-      expect(schema.properties.searchType).toBeUndefined();
-      expect(schema.properties.objectType).toBeUndefined();
+      expect(schema.properties.searchType).toBeDefined();
+      expect(schema.properties.searchType.enum).not.toContain('source_code');
+      expect(schema.properties.searchType.enum).toContain('tadir_lookup');
+      expect(schema.properties.objectType).toBeDefined();
+      expect(schema.properties.names).toBeDefined();
+      expect(schema.properties.objectTypes).toBeDefined();
       expect(schema.properties.packageName).toBeUndefined();
     });
 
@@ -371,6 +381,7 @@ describe('Tool Definitions', () => {
       const schema = sapSearch.inputSchema as Record<string, any>;
       expect(schema.properties.searchType).toBeDefined();
       expect(schema.properties.searchType.enum).toContain('source_code');
+      expect(schema.properties.searchType.enum).toContain('tadir_lookup');
     });
 
     it('SAPSearch description omits source_code mode when unavailable', () => {
@@ -696,10 +707,32 @@ describe('Tool Definitions', () => {
       expect(item.properties.messages.items.required).toEqual(['number', 'shortText']);
     });
 
+    it('exposes package and transport inside batch_create items (on-prem)', () => {
+      const schema = getSAPWriteSchema(false);
+      const item = schema.properties.objects.items;
+      expect(item.properties.package).toBeDefined();
+      expect(item.properties.package.type).toBe('string');
+      expect(item.properties.transport).toBeDefined();
+      expect(item.properties.transport.type).toBe('string');
+    });
+
     it('exposes the messages property at top-level SAPWrite (BTP)', () => {
       const schema = getSAPWriteSchema(true);
       expect(schema.properties.messages).toBeDefined();
       expect(schema.properties.messages.type).toBe('array');
+    });
+
+    it('exposes the CLAS include update property at top-level SAPWrite', () => {
+      for (const btp of [false, true]) {
+        const schema = getSAPWriteSchema(btp);
+        const include = schema.properties.include;
+        expect(include).toBeDefined();
+        expect(include.type).toBe('string');
+        expect(include.enum).toEqual(['definitions', 'implementations', 'macros', 'testclasses']);
+        expect(include.description).toContain('update type=CLAS');
+        expect(include.description).toContain('source/main');
+        expect(include.description).toContain('version="inactive"');
+      }
     });
   });
 });

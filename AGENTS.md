@@ -79,6 +79,7 @@ npm run dev
 | `SAP_BTP_SERVICE_KEY_FILE` / `--btp-service-key-file` | Path to BTP ABAP service key file |
 | `SAP_BTP_OAUTH_CALLBACK_PORT` / `--btp-oauth-callback-port` | OAuth browser callback port (default: auto) |
 | `SAP_SYSTEM_TYPE` / `--system-type` | System type: `auto` (default), `btp`, or `onprem` |
+| `SAP_ABAP_RELEASE` / `--abap-release` | Optional SAP_BASIS release override for local tooling such as abaplint (for example `758` for S/4HANA 2023). Probe-detected release still wins when available. |
 | `ARC1_TOOL_MODE` / `--tool-mode` | Tool mode: `standard` (12 tools, default) or `hyperfocused` (1 universal SAP tool, ~200 tokens) |
 | `SAP_ABAPLINT_CONFIG` / `--abaplint-config` | Path to custom abaplint.jsonc config file for lint rules |
 | `SAP_LINT_BEFORE_WRITE` / `--lint-before-write` | Enable pre-write lint validation (default: true) |
@@ -169,6 +170,7 @@ tests/
 | Add XML response parser | `src/adt/xml-parser.ts` |
 | Add safety check | `src/adt/safety.ts` |
 | Add lint rule config | `src/lint/lint.ts`, `src/lint/config-builder.ts`, `src/lint/presets/` |
+| Add activation batch quirk recovery | `src/adt/devtools.ts`, `tests/unit/adt/devtools.test.ts` |
 | Add dependency pattern | `src/context/deps.ts` |
 | Add CDS dependency pattern | `src/context/cds-deps.ts` |
 | Add contract extraction for new type | `src/context/contract.ts` |

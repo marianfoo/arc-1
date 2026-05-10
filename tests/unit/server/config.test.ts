@@ -413,6 +413,30 @@ describe('parseArgs', () => {
     expect(config.systemType).toBe('btp');
   });
 
+  // --- ABAP Release Override ---
+
+  it('defaults abapRelease to undefined', () => {
+    const config = parseArgs([]);
+    expect(config.abapRelease).toBeUndefined();
+  });
+
+  it('parses --abap-release flag', () => {
+    const config = parseArgs(['--abap-release', '758']);
+    expect(config.abapRelease).toBe('758');
+  });
+
+  it('parses SAP_ABAP_RELEASE env var', () => {
+    process.env.SAP_ABAP_RELEASE = '750';
+    const config = parseArgs([]);
+    expect(config.abapRelease).toBe('750');
+  });
+
+  it('CLI --abap-release takes precedence over SAP_ABAP_RELEASE env', () => {
+    process.env.SAP_ABAP_RELEASE = '750';
+    const config = parseArgs(['--abap-release', '7.58']);
+    expect(config.abapRelease).toBe('7.58');
+  });
+
   // --- allowDataPreview (replaces blockData) ---
 
   it('parses --allow-data-preview flag', () => {

@@ -30,6 +30,29 @@ function mockHttp(responseBody = ''): AdtHttpClient {
   } as unknown as AdtHttpClient;
 }
 
+function mockHttpSequence(...responses: string[]): AdtHttpClient {
+  const post = vi.fn();
+  for (const body of responses) {
+    post.mockResolvedValueOnce({ statusCode: 200, headers: {}, body });
+  }
+  return {
+    get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+    post,
+    put: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+    delete: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+    fetchCsrfToken: vi.fn(),
+    withStatefulSession: vi.fn(),
+  } as unknown as AdtHttpClient;
+}
+
+function defer<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 describe('DevTools', () => {
   // ─── syntaxCheck ───────────────────────────────────────────────────
 
@@ -534,6 +557,105 @@ describe('DevTools', () => {
       expect(result.messages).toContain('Activation failed for ZI_TRAVEL');
     });
 
+    it('retries pure ED064 batch activation failures individually', async () => {
+      const ed064 =
+        '<messages><msg type="E" shortText="ZDM_PROJECT_D (ED064) no next/previous object found"/></messages>';
+      const http = mockHttpSequence(ed064, '', '');
+      const result = await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/tables/zdm_project_d', name: 'ZDM_PROJECT_D' },
+        { url: '/sap/bc/adt/ddic/tables/zdm_task_d', name: 'ZDM_TASK_D' },
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(result.messages.join(' ')).toContain('retried 2 objects individually');
+      expect(result.details[0]?.severity).toBe('warning');
+      expect(http.post).toHaveBeenCalledTimes(3);
+      expect((http.post as any).mock.calls[1][1]).toContain('adtcore:name="ZDM_PROJECT_D"');
+      expect((http.post as any).mock.calls[2][1]).toContain('adtcore:name="ZDM_TASK_D"');
+    });
+
+    it('runs individual ED064 retries sequentially', async () => {
+      const ed064 = '<messages><msg type="E" shortText="ED064 no next/previous object found"/></messages>';
+      const firstRetry = defer<{ statusCode: number; headers: Record<string, string>; body: string }>();
+      const post = vi
+        .fn()
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: ed064 })
+        .mockReturnValueOnce(firstRetry.promise)
+        .mockResolvedValueOnce({ statusCode: 200, headers: {}, body: '' });
+      const http = {
+        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+        post,
+        put: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+        delete: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
+        fetchCsrfToken: vi.fn(),
+        withStatefulSession: vi.fn(),
+      } as unknown as AdtHttpClient;
+
+      const resultPromise = activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/tables/zdm_project_d', name: 'ZDM_PROJECT_D' },
+        { url: '/sap/bc/adt/ddic/tables/zdm_task_d', name: 'ZDM_TASK_D' },
+      ]);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(post).toHaveBeenCalledTimes(2);
+      expect(post.mock.calls[1][1]).toContain('adtcore:name="ZDM_PROJECT_D"');
+
+      firstRetry.resolve({ statusCode: 200, headers: {}, body: '' });
+      const result = await resultPromise;
+
+      expect(result.success).toBe(true);
+      expect(post).toHaveBeenCalledTimes(3);
+      expect(post.mock.calls[2][1]).toContain('adtcore:name="ZDM_TASK_D"');
+    });
+
+    it('does not retry ED064 when the batch response contains a real activation error', async () => {
+      const mixed = `<messages>
+        <msg type="E" shortText="ZDM_PROJECT_D (ED064) no next/previous object found"/>
+        <msg type="E" shortText="Unknown type ZFOO"/>
+      </messages>`;
+      const http = mockHttpSequence(mixed);
+      const result = await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/tables/zdm_project_d', name: 'ZDM_PROJECT_D' },
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(result.messages).toContain('Unknown type ZFOO');
+      expect(http.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves ED064 details and retry errors when individual fallback fails', async () => {
+      const ed064 =
+        '<messages><msg type="E" shortText="ZDM_PROJECT_D (ED064) no next/previous object found"/></messages>';
+      const retryError = '<messages><msg type="E" shortText="Field PROJECTID is missing"/></messages>';
+      const http = mockHttpSequence(ed064, retryError);
+      const result = await activateBatch(http, unrestrictedSafetyConfig(), [
+        { url: '/sap/bc/adt/ddic/tables/zdm_project_d', name: 'ZDM_PROJECT_D' },
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(result.messages).toContain('ZDM_PROJECT_D (ED064) no next/previous object found');
+      expect(result.messages).toContain('ZDM_PROJECT_D: Field PROJECTID is missing');
+      expect(result.details.some((d) => d.text.includes('Field PROJECTID is missing'))).toBe(true);
+      expect(http.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('propagates preaudit=false to individual ED064 retries', async () => {
+      const ed064 = '<messages><msg type="E" shortText="ED064 no next/previous object found"/></messages>';
+      const http = mockHttpSequence(ed064, '');
+      const result = await activateBatch(
+        http,
+        unrestrictedSafetyConfig(),
+        [{ url: '/sap/bc/adt/programs/programs/ZTEST', name: 'ZTEST' }],
+        { preaudit: false },
+      );
+
+      expect(result.success).toBe(true);
+      expect(http.post).toHaveBeenCalledTimes(2);
+      expect((http.post as any).mock.calls[0][0]).toContain('preauditRequested=false');
+      expect((http.post as any).mock.calls[1][0]).toContain('preauditRequested=false');
+    });
+
     it('is blocked in read-only mode', async () => {
       const http = mockHttp();
       const safety = { ...unrestrictedSafetyConfig(), allowWrites: false };
@@ -575,21 +697,6 @@ describe('DevTools', () => {
     </ioc:transport>
   </ioc:entry>
 </ioc:inactiveObjects>`;
-
-    function mockHttpSequence(...responses: string[]): AdtHttpClient {
-      const post = vi.fn();
-      for (const body of responses) {
-        post.mockResolvedValueOnce({ statusCode: 200, headers: {}, body });
-      }
-      return {
-        get: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
-        post,
-        put: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
-        delete: vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: '' }),
-        fetchCsrfToken: vi.fn(),
-        withStatefulSession: vi.fn(),
-      } as unknown as AdtHttpClient;
-    }
 
     describe('parseActivationOutcome', () => {
       it('returns success for empty body', () => {
@@ -746,6 +853,21 @@ describe('DevTools', () => {
 
         expect(result.success).toBe(false);
         expect(http.post).toHaveBeenCalledTimes(1);
+      });
+
+      it('retries individually when phase 2 returns pure ED064 for a batch activation', async () => {
+        const ed064 = '<messages><msg type="E" shortText="ED064 no next/previous object found"/></messages>';
+        const http = mockHttpSequence(preauditXml, ed064, '');
+        const result = await activateBatch(http, unrestrictedSafetyConfig(), [
+          { url: '/sap/bc/adt/oo/classes/ZCL_TEST', name: 'ZCL_TEST' },
+        ]);
+
+        expect(result.success).toBe(true);
+        expect(result.messages.join(' ')).toContain('retried 1 object individually');
+        expect(http.post).toHaveBeenCalledTimes(3);
+        expect((http.post as any).mock.calls[1][0]).toContain('preauditRequested=false');
+        expect((http.post as any).mock.calls[2][0]).toContain('preauditRequested=true');
+        expect((http.post as any).mock.calls[2][1]).toContain('adtcore:name="ZCL_TEST"');
       });
     });
 
@@ -1098,6 +1220,43 @@ describe('DevTools', () => {
       expect(proposals[1]?.name).toBe('Inline DATA');
     });
 
+    it('getFixProposals preserves affected object units from evaluation response', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <qf:evaluationResult>
+    <adtcore:objectReference adtcore:uri="/sap/bc/adt/quickfixes/1" adtcore:type="quickfix/proposal" adtcore:name="Apply multi-object fix" adtcore:description="Updates helper include"/>
+    <qf:affectedObjects>
+      <qf:unit>
+        <qf:content>CLASS helper DEFINITION. ENDCLASS.</qf:content>
+        <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=1,0;end=1,5" adtcore:type="CLAS/OC" adtcore:name="ZCL_TEST" adtcore:description="Main class"/>
+      </qf:unit>
+    </qf:affectedObjects>
+    <qf:userContent></qf:userContent>
+  </qf:evaluationResult>
+</qf:evaluationResults>`;
+      const http = mockHttp(xml);
+
+      const proposals = await getFixProposals(
+        http,
+        unrestrictedSafetyConfig(),
+        '/sap/bc/adt/oo/classes/ZCL_TEST/source/main',
+        'CLASS zcl_test IMPLEMENTATION. ENDCLASS.',
+        1,
+        0,
+      );
+
+      expect(proposals[0]?.userContent).toBe('');
+      expect(proposals[0]?.affectedObjects).toEqual([
+        {
+          uri: '/sap/bc/adt/oo/classes/ZCL_TEST/source/main#start=1,0;end=1,5',
+          type: 'CLAS/OC',
+          name: 'ZCL_TEST',
+          description: 'Main class',
+          content: 'CLASS helper DEFINITION. ENDCLASS.',
+        },
+      ]);
+    });
+
     it('getFixProposals returns empty array for empty evaluation response', async () => {
       const http = mockHttp('<qf:evaluationResults xmlns:qf="http://www.sap.com/adt/quickfixes"/>');
       const proposals = await getFixProposals(
@@ -1181,7 +1340,7 @@ describe('DevTools', () => {
       const xml = `<?xml version="1.0" encoding="utf-8"?>
 <quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes">
   <quickfixes:delta uri="/sap/bc/adt/oo/classes/ZCL_TEST/source/main" startLine="7" startColumn="3" endLine="7" endColumn="8">
-    <quickfixes:content>DATA(lv_count)</quickfixes:content>
+    <content>DATA(lv_count)</content>
   </quickfixes:delta>
 </quickfixes:applicationResult>`;
       const http = mockHttp(xml);
@@ -1211,6 +1370,43 @@ describe('DevTools', () => {
       ]);
     });
 
+    it('applyFixProposal parses ADT proposalResult unit deltas', async () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes" xmlns:adtcore="http://www.sap.com/adt/core">
+  <deltas>
+    <unit>
+      <content>METHODS approve_project FOR MODIFY.</content>
+      <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions#start=4,2;end=4,2"/>
+    </unit>
+  </deltas>
+</quickfixes:proposalResult>`;
+      const http = mockHttp(xml);
+
+      const deltas = await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/1',
+          type: 'quickfix/proposal',
+          name: 'Create implementation',
+          description: 'Creates handler methods',
+          userContent: '',
+        },
+        '/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions',
+        'CLASS lhc_project DEFINITION. ENDCLASS.',
+        4,
+        2,
+      );
+
+      expect(deltas).toEqual([
+        {
+          uri: '/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/definitions#start=4,2;end=4,2',
+          range: { start: { line: 4, column: 2 }, end: { line: 4, column: 2 } },
+          content: 'METHODS approve_project FOR MODIFY.',
+        },
+      ]);
+    });
+
     it('applyFixProposal posts to proposal URI', async () => {
       const http = mockHttp('<quickfixes:applicationResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
       await applyFixProposal(
@@ -1231,6 +1427,8 @@ describe('DevTools', () => {
 
       const target = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
       expect(target).toBe('/sap/bc/adt/quickfixes/123');
+      expect((http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[2]).toBe('application/xml');
+      expect((http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[3]).toEqual({ Accept: 'application/xml' });
     });
 
     it('applyFixProposal includes userContent in request XML', async () => {
@@ -1253,6 +1451,64 @@ describe('DevTools', () => {
 
       const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(body).toContain('<userContent>opaque-state</userContent>');
+    });
+
+    it('applyFixProposal preserves empty userContent in request XML', async () => {
+      const http = mockHttp('<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: '',
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<userContent></userContent>');
+    });
+
+    it('applyFixProposal serializes affected object units with content', async () => {
+      const http = mockHttp('<quickfixes:proposalResult xmlns:quickfixes="http://www.sap.com/adt/quickfixes"/>');
+      await applyFixProposal(
+        http,
+        unrestrictedSafetyConfig(),
+        {
+          uri: '/sap/bc/adt/quickfixes/123',
+          type: 'quickfix/proposal',
+          name: 'Fix',
+          description: 'Fix',
+          userContent: 'opaque-state',
+          affectedObjects: [
+            {
+              uri: '/sap/bc/adt/oo/classes/ZCL_HELPER/source/main',
+              type: 'CLAS/OC',
+              name: 'ZCL_HELPER',
+              description: 'Helper class',
+              content: 'CLASS zcl_helper DEFINITION. ENDCLASS.',
+            },
+          ],
+        },
+        '/sap/bc/adt/programs/programs/ZTEST/source/main',
+        'REPORT ztest.',
+        1,
+        0,
+      );
+
+      const body = (http.post as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(body).toContain('<affectedObjects>');
+      expect(body).toContain('<unit>');
+      expect(body).toContain('<content>CLASS zcl_helper DEFINITION. ENDCLASS.</content>');
+      expect(body).toContain('adtcore:uri="/sap/bc/adt/oo/classes/ZCL_HELPER/source/main"');
+      expect(body).toContain('adtcore:type="CLAS/OC"');
+      expect(body).toContain('adtcore:name="ZCL_HELPER"');
     });
 
     it('applyFixProposal XML-escapes source and userContent', async () => {

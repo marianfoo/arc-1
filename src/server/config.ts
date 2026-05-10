@@ -395,6 +395,7 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   // ── System Type Detection ──────────────────────────────────────────
   const systemType = resolveStr('system-type', 'SAP_SYSTEM_TYPE', 'auto', 'systemType');
   config.systemType = (['btp', 'onprem'].includes(systemType) ? systemType : 'auto') as ServerConfig['systemType'];
+  config.abapRelease = resolveOptionalStr('abap-release', 'SAP_ABAP_RELEASE', 'abapRelease');
 
   // ── Authentication ─────────────────────────────────────────────────
   const apiKeysRaw = getFlag('api-keys') ?? process.env.ARC1_API_KEYS;
