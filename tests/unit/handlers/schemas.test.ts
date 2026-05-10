@@ -563,7 +563,7 @@ describe('SAPWriteSchema', () => {
     }
   });
 
-  it('rejects SAPWrite include outside CLAS update', () => {
+  it('rejects SAPWrite include outside CLAS update/edit_method', () => {
     const nonUpdate = SAPWriteSchema.safeParse({
       action: 'create',
       type: 'CLAS',
@@ -572,7 +572,9 @@ describe('SAPWriteSchema', () => {
     });
     expect(nonUpdate.success).toBe(false);
     if (!nonUpdate.success) {
-      expect(nonUpdate.error.issues[0]?.message).toContain('action="update"');
+      // PR-D: include= is now valid for both update and edit_method actions.
+      // The schema must still reject create/delete/batch_create/scaffold_rap_handlers.
+      expect(nonUpdate.error.issues[0]?.message).toMatch(/action="update".*edit_method|update or action="edit_method"/);
     }
 
     const nonClass = SAPWriteSchema.safeParse({
@@ -585,6 +587,37 @@ describe('SAPWriteSchema', () => {
     expect(nonClass.success).toBe(false);
     if (!nonClass.success) {
       expect(nonClass.error.issues[0]?.message).toContain('type="CLAS"');
+    }
+  });
+
+  it('accepts include for action=edit_method on CLAS (PR-D)', () => {
+    const editIncl = SAPWriteSchema.safeParse({
+      action: 'edit_method',
+      type: 'CLAS',
+      name: 'ZBP_DM_PROJECT',
+      method: 'lhc_project~approve_project',
+      include: 'implementations',
+      source: '    DATA(x) = 1.',
+    });
+    expect(editIncl.success).toBe(true);
+    if (editIncl.success) {
+      expect(editIncl.data.include).toBe('implementations');
+      expect(editIncl.data.action).toBe('edit_method');
+    }
+  });
+
+  it('rejects include on edit_method when type is not CLAS', () => {
+    const result = SAPWriteSchema.safeParse({
+      action: 'edit_method',
+      type: 'PROG',
+      name: 'ZPROG',
+      method: 'foo',
+      include: 'implementations',
+      source: 'WRITE / 1.',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.message.includes('type="CLAS"'))).toBe(true);
     }
   });
 

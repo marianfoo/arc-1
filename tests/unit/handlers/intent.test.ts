@@ -8156,6 +8156,319 @@ define role ZTEST_DCL {
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('CLAS');
     });
+
+    // ── PR-D: local handler classes (CCDEF/CCIMP) ─────────────────────
+
+    /**
+     * Build a mock that satisfies the edit_method flow against a CCIMP
+     * include: GET class metadata (for package check), GET include source,
+     * POST lock, PUT new source, POST unlock. Returns the captured call
+     * trace so tests can assert URL routing.
+     */
+    function mockEditMethodIncludeFlow(opts: {
+      className: string;
+      includeName: string;
+      includeSource: string;
+      packageName?: string;
+    }): Array<{ method: string; url: string; body?: string }> {
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(
+        (url: string | URL, fetchOpts?: { method?: string; body?: string | Buffer | null }) => {
+          const method = fetchOpts?.method ?? 'GET';
+          const urlStr = String(url);
+          calls.push({ method, url: urlStr, body: typeof fetchOpts?.body === 'string' ? fetchOpts.body : undefined });
+          if (method === 'GET' && urlStr.endsWith(`/sap/bc/adt/oo/classes/${opts.className}`)) {
+            const pkg = opts.packageName ?? '$TMP';
+            return Promise.resolve(
+              mockResponse(
+                200,
+                `<class:abapClass xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="${pkg}"/></class:abapClass>`,
+                { 'x-csrf-token': 'T' },
+              ),
+            );
+          }
+          if (
+            method === 'GET' &&
+            urlStr.includes(`/sap/bc/adt/oo/classes/${opts.className}/includes/${opts.includeName}`)
+          ) {
+            // The ADT server returns raw source; client.getClass wraps it with
+            // "=== <include> ===\n" header. The mock simulates the server, so
+            // we return raw source — the client adds the header.
+            return Promise.resolve(mockResponse(200, opts.includeSource, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'GET' && urlStr.includes(`/sap/bc/adt/oo/classes/${opts.className}/source/main`)) {
+            return Promise.resolve(
+              mockResponse(
+                200,
+                `CLASS ${opts.className} DEFINITION PUBLIC. ENDCLASS. CLASS ${opts.className} IMPLEMENTATION. ENDCLASS.`,
+                { 'x-csrf-token': 'T' },
+              ),
+            );
+          }
+          if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+            return Promise.resolve(
+              mockResponse(
+                200,
+                '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+                { 'x-csrf-token': 'T' },
+              ),
+            );
+          }
+          if (method === 'POST' && urlStr.includes('_action=UNLOCK')) {
+            return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'PUT') {
+            // Tests assert which URL receives the PUT — accept any here.
+            return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+          }
+          // Reject anything else loudly. A routing regression (e.g. an extra
+          // GET to /source/main when we wanted /includes/implementations) must
+          // surface as a test failure, not silently pass on the catch-all.
+          return Promise.resolve(
+            mockResponse(
+              404,
+              `<exc:exception><type id="ResourceNotFound"/><message>Unexpected URL in mock: ${method} ${urlStr}</message></exc:exception>`,
+              { 'x-csrf-token': 'T' },
+            ),
+          );
+        },
+      );
+      return calls;
+    }
+
+    const CCIMP_LHC_BODY = `CLASS lhc_project IMPLEMENTATION.
+  METHOD approve_project.
+    " original body
+    DATA(x) = 1.
+  ENDMETHOD.
+  METHOD get_instance_authorizations.
+    result = VALUE #( ).
+  ENDMETHOD.
+ENDCLASS.`;
+
+    it('auto-routes lhc_project~approve_project to /includes/implementations', async () => {
+      const calls = mockEditMethodIncludeFlow({
+        className: 'ZBP_DM_PROJECT',
+        includeName: 'implementations',
+        includeSource: CCIMP_LHC_BODY,
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZBP_DM_PROJECT',
+        method: 'lhc_project~approve_project',
+        source: '    " new body\n    DATA(y) = 99.',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Successfully updated method "lhc_project~approve_project"');
+      expect(result.content[0]?.text).toContain('include: implementations');
+
+      const getCalls = calls.filter(
+        (c) => c.method === 'GET' && c.url.includes('/sap/bc/adt/oo/classes/ZBP_DM_PROJECT'),
+      );
+      // Must read the include, NOT /source/main
+      expect(getCalls.some((c) => c.url.includes('/includes/implementations'))).toBe(true);
+      expect(getCalls.some((c) => c.url.includes('/source/main'))).toBe(false);
+
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      expect(putCalls[0]?.url).toContain('/sap/bc/adt/oo/classes/ZBP_DM_PROJECT/includes/implementations');
+      expect(putCalls[0]?.url).toContain('lockHandle=LH1');
+      expect(putCalls[0]?.body).toContain('DATA(y) = 99.');
+      expect(putCalls[0]?.body).not.toContain('DATA(x) = 1.');
+      // The "=== implementations ===" header from the GET must not leak into the PUT body
+      expect(putCalls[0]?.body).not.toContain('=== implementations ===');
+    });
+
+    it('explicit include="implementations" routes regardless of method name', async () => {
+      const calls = mockEditMethodIncludeFlow({
+        className: 'ZBP_X',
+        includeName: 'implementations',
+        includeSource: `CLASS lhc_x IMPLEMENTATION.
+  METHOD foo.
+    WRITE 'old'.
+  ENDMETHOD.
+ENDCLASS.`,
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZBP_X',
+        method: 'foo',
+        include: 'implementations',
+        source: "    WRITE 'new'.",
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('include: implementations');
+
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      expect(putCalls[0]?.url).toContain('/includes/implementations');
+      expect(putCalls[0]?.url).not.toContain('/source/main');
+    });
+
+    it('explicit include="testclasses" overrides auto-detected lhc_* prefix', async () => {
+      const calls = mockEditMethodIncludeFlow({
+        className: 'ZBP_DM_PROJECT',
+        includeName: 'testclasses',
+        includeSource: `CLASS lhc_project IMPLEMENTATION.
+  METHOD foo.
+    " test class body
+  ENDMETHOD.
+ENDCLASS.`,
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZBP_DM_PROJECT',
+        method: 'lhc_project~foo', // would auto-detect implementations
+        include: 'testclasses', // …but explicit wins
+        source: '    " new test body',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('include: testclasses');
+
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      expect(putCalls[0]?.url).toContain('/includes/testclasses');
+      expect(putCalls[0]?.url).not.toContain('/includes/implementations');
+    });
+
+    it('global-interface methods (zif_X~create) keep using /source/main', async () => {
+      mockFetch.mockReset();
+      const calls: Array<{ method: string; url: string; body?: string }> = [];
+      const mainSource = `CLASS zcl_impl DEFINITION PUBLIC.
+  PUBLIC SECTION.
+    INTERFACES zif_order.
+ENDCLASS.
+CLASS zcl_impl IMPLEMENTATION.
+  METHOD zif_order~create.
+    rv = 'old'.
+  ENDMETHOD.
+ENDCLASS.`;
+      mockFetch.mockImplementation(
+        (url: string | URL, fetchOpts?: { method?: string; body?: string | Buffer | null }) => {
+          const method = fetchOpts?.method ?? 'GET';
+          const urlStr = String(url);
+          calls.push({ method, url: urlStr, body: typeof fetchOpts?.body === 'string' ? fetchOpts.body : undefined });
+          if (method === 'GET' && urlStr.endsWith('/sap/bc/adt/oo/classes/ZCL_IMPL')) {
+            return Promise.resolve(
+              mockResponse(
+                200,
+                '<class:abapClass xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name="$TMP"/></class:abapClass>',
+                { 'x-csrf-token': 'T' },
+              ),
+            );
+          }
+          if (method === 'GET' && urlStr.includes('/sap/bc/adt/oo/classes/ZCL_IMPL/source/main')) {
+            return Promise.resolve(mockResponse(200, mainSource, { 'x-csrf-token': 'T' }));
+          }
+          if (method === 'POST' && urlStr.includes('_action=LOCK')) {
+            return Promise.resolve(
+              mockResponse(
+                200,
+                '<asx:abap><asx:values><DATA><LOCK_HANDLE>LH1</LOCK_HANDLE><CORRNR></CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>',
+                { 'x-csrf-token': 'T' },
+              ),
+            );
+          }
+          return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+        },
+      );
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZCL_IMPL',
+        method: 'zif_order~create',
+        source: "    rv = 'new'.",
+        lintBeforeWrite: false,
+      });
+
+      expect(result.isError).toBeUndefined();
+      // Should NOT mention "include:" — it went through MAIN
+      expect(result.content[0]?.text).not.toContain('include:');
+
+      const putCalls = calls.filter((c) => c.method === 'PUT');
+      expect(putCalls).toHaveLength(1);
+      expect(putCalls[0]?.url).toContain('/sap/bc/adt/oo/classes/ZCL_IMPL/source/main');
+      expect(putCalls[0]?.url).not.toContain('/includes/');
+    });
+
+    it('rejects garbage include value with the same message as case=update', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        method: 'foo',
+        include: 'garbage',
+        source: 'rv = 1.',
+      });
+
+      expect(result.isError).toBe(true);
+      // Schema rejects unknown enum BEFORE the handler-level guard, so the
+      // user sees the schema's enum error here.
+      expect(result.content[0]?.text.toLowerCase()).toMatch(/invalid|enum|garbage/);
+    });
+
+    it('reports which include was searched when method is not found', async () => {
+      mockEditMethodIncludeFlow({
+        className: 'ZBP_DM_PROJECT',
+        includeName: 'implementations',
+        includeSource: `CLASS lhc_project IMPLEMENTATION.
+  METHOD approve_project. WRITE 'x'. ENDMETHOD.
+ENDCLASS.`,
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZBP_DM_PROJECT',
+        method: 'lhc_typo~approve_project',
+        source: '    " body',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('not found');
+      expect(text).toContain('implementations');
+      // Auto-routed hint should be present for callers who used the lhc_ prefix
+      expect(text).toContain('auto-routed');
+    });
+
+    it('include reads bypass the source cache (no MAIN/CCIMP collision)', async () => {
+      // The cache key is (type, name, active|inactive) and does NOT include the
+      // include name. Reusing it would silently mix MAIN bytes with CCIMP bytes
+      // on subsequent reads. Prove the include path makes a fresh GET each time.
+      const calls = mockEditMethodIncludeFlow({
+        className: 'ZBP_DM_PROJECT',
+        includeName: 'implementations',
+        includeSource: CCIMP_LHC_BODY,
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'edit_method',
+        type: 'CLAS',
+        name: 'ZBP_DM_PROJECT',
+        method: 'lhc_project~approve_project',
+        source: '    DATA(z) = 1.',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const includeGets = calls.filter((c) => c.method === 'GET' && c.url.includes('/includes/implementations'));
+      // Exactly one GET against the include URL — no cache hit, no double-fetch.
+      expect(includeGets.length).toBe(1);
+    });
   });
 
   describe('SAPWrite scaffold_rap_handlers', () => {

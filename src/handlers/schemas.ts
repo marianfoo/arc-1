@@ -339,11 +339,15 @@ function validateSapWriteInput(
 ): void {
   if (!input.include) return;
 
-  if (input.action !== 'update') {
+  // `edit_method` joins `update` as a valid action for include= so callers can
+  // surgically edit a method inside a class-local include (CCDEF/CCIMP/macros/
+  // testclasses). The handler in intent.ts also auto-detects the right include
+  // from `lhc_*~method` style specifiers, but explicit override remains valid.
+  if (input.action !== 'update' && input.action !== 'edit_method') {
     ctx.addIssue({
       code: 'custom',
       path: ['include'],
-      message: 'SAPWrite include is only supported for action="update".',
+      message: 'SAPWrite include is only supported for action="update" or action="edit_method".',
     });
   }
 

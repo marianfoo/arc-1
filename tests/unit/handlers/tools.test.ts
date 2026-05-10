@@ -779,9 +779,12 @@ describe('Tool Definitions', () => {
         expect(include).toBeDefined();
         expect(include.type).toBe('string');
         expect(include.enum).toEqual(['definitions', 'implementations', 'macros', 'testclasses']);
-        expect(include.description).toContain('update type=CLAS');
+        // PR-D: include= now valid for both update and edit_method actions on CLAS
+        expect(include.description).toMatch(/action=update.*edit_method.*CLAS|update or action=edit_method.*CLAS/);
         expect(include.description).toContain('source/main');
         expect(include.description).toContain('version="inactive"');
+        // Auto-detection guidance is part of the contract
+        expect(include.description).toMatch(/auto-detects?/i);
       }
     });
   });

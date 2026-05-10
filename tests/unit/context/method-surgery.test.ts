@@ -361,3 +361,185 @@ ENDCLASS.`;
     expect(output).toContain('0 methods');
   });
 });
+
+// ─── Local-handler classes inside CCDEF/CCIMP (PR-D) ────────────────
+
+/**
+ * Realistic CCIMP-only source: no global DEFINITION, two local handler
+ * classes, each with its own method names. Modeled after the actual CCIMP
+ * fetched from ZBP_DM_PROJECT on a4h (S/4HANA 2023) on 2026-05-10.
+ */
+const CCIMP_SINGLE_LHC = `*"* use this source file for the definition and implementation of
+*"* local helper classes, interface definitions and type
+*"* declarations
+CLASS lhc_project IMPLEMENTATION.
+
+  METHOD get_instance_authorizations.
+    READ ENTITIES OF zr_dm_project IN LOCAL MODE
+      ENTITY Project FIELDS ( ProjectId )
+        WITH CORRESPONDING #( keys )
+      RESULT DATA(projects).
+    result = VALUE #( ).
+  ENDMETHOD.
+
+  METHOD approve_project.
+    " original body
+    DATA(x) = 1.
+  ENDMETHOD.
+
+ENDCLASS.`;
+
+/**
+ * Two distinct local classes both declaring a method with the same bare
+ * name — exercises the cross-class ambiguity guard and qualified-name
+ * disambiguation.
+ */
+const CCIMP_MULTI_LHC = `CLASS lhc_project IMPLEMENTATION.
+  METHOD approve_project.
+    " body in lhc_project
+    WRITE 'project'.
+  ENDMETHOD.
+ENDCLASS.
+
+CLASS lhc_task IMPLEMENTATION.
+  METHOD approve_project.
+    " body in lhc_task
+    WRITE 'task'.
+  ENDMETHOD.
+  METHOD complete_task.
+    WRITE 'done'.
+  ENDMETHOD.
+ENDCLASS.`;
+
+/**
+ * Local class that itself implements an interface — proves a global-style
+ * `zif_X~method` lookup still works alongside the new qualified-class lookup
+ * without one intercepting the other.
+ */
+const CCIMP_LHC_WITH_INTERFACE = `CLASS lhc_x IMPLEMENTATION.
+  METHOD foo.
+    WRITE 'foo'.
+  ENDMETHOD.
+  METHOD zif_order~create.
+    rv_id = 'new'.
+  ENDMETHOD.
+ENDCLASS.`;
+
+describe('listMethods — local handler classes (CCIMP)', () => {
+  it('captures containingClass for each method in a single-class CCIMP', () => {
+    const result = listMethods(CCIMP_SINGLE_LHC, 'ZBP_DM_PROJECT');
+    expect(result.success).toBe(true);
+    expect(result.methods.length).toBe(2);
+    for (const m of result.methods) {
+      expect(m.containingClass?.toLowerCase()).toBe('lhc_project');
+    }
+  });
+
+  it('captures distinct containingClass values across multiple local classes', () => {
+    const result = listMethods(CCIMP_MULTI_LHC, 'ZBP_DM_PROJECT');
+    expect(result.success).toBe(true);
+    const byClass = new Map<string, string[]>();
+    for (const m of result.methods) {
+      const key = (m.containingClass ?? '').toLowerCase();
+      if (!byClass.has(key)) byClass.set(key, []);
+      byClass.get(key)!.push(m.name.toLowerCase());
+    }
+    expect(byClass.get('lhc_project')).toEqual(['approve_project']);
+    // lhc_task has both approve_project and complete_task (alphabetical from sort)
+    const taskMethods = byClass.get('lhc_task') ?? [];
+    expect(taskMethods.sort()).toEqual(['approve_project', 'complete_task']);
+  });
+});
+
+describe('extractMethod — qualified <localclass>~<method> lookup', () => {
+  it('resolves lhc_project~approve_project to the right block', () => {
+    const result = extractMethod(CCIMP_MULTI_LHC, 'ZBP_DM_PROJECT', 'lhc_project~approve_project');
+    expect(result.success).toBe(true);
+    expect(result.methodSource).toContain("WRITE 'project'");
+    expect(result.methodSource).not.toContain("WRITE 'task'");
+  });
+
+  it('resolves lhc_task~approve_project to the second class', () => {
+    const result = extractMethod(CCIMP_MULTI_LHC, 'ZBP_DM_PROJECT', 'lhc_task~approve_project');
+    expect(result.success).toBe(true);
+    expect(result.methodSource).toContain("WRITE 'task'");
+    expect(result.methodSource).not.toContain("WRITE 'project'");
+  });
+
+  it('resolves the bare name when only one local class defines it', () => {
+    const result = extractMethod(CCIMP_SINGLE_LHC, 'ZBP_DM_PROJECT', 'approve_project');
+    expect(result.success).toBe(true);
+    expect(result.methodName).toBe('approve_project');
+  });
+
+  it('errors when a bare name is ambiguous across local classes', () => {
+    const result = extractMethod(CCIMP_MULTI_LHC, 'ZBP_DM_PROJECT', 'approve_project');
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/ambiguous/i);
+    expect(result.error).toContain('lhc_project');
+    expect(result.error).toContain('lhc_task');
+    expect(result.error).toContain('lhc_project~approve_project');
+  });
+
+  it('handles mixed case in qualified specifiers', () => {
+    const result = extractMethod(CCIMP_MULTI_LHC, 'ZBP_DM_PROJECT', 'lhc_PROJECT~Approve_Project');
+    expect(result.success).toBe(true);
+    expect(result.methodSource).toContain("WRITE 'project'");
+  });
+
+  it('does NOT intercept global-interface methods (zif_X~create regression)', () => {
+    // Existing test fixture INTERFACE_CLASS has zif_order~create stored as `m.name === 'zif_order~create'`.
+    // Step 2 (exact match) must catch it — step 3 (qualified) must NOT fire and look up
+    // m.containingClass === 'zif_order' (which doesn't exist).
+    const result = extractMethod(INTERFACE_CLASS, 'zcl_impl', 'zif_order~create');
+    expect(result.success).toBe(true);
+    expect(result.methodSource).toContain("rv_id = 'new'");
+  });
+
+  it('disambiguates lhc_x~foo (qualified) vs zif_order~create (interface impl) in same CCIMP', () => {
+    // CCIMP_LHC_WITH_INTERFACE has CLASS lhc_x with both METHOD foo and METHOD zif_order~create.
+    const fooResult = extractMethod(CCIMP_LHC_WITH_INTERFACE, 'ZBP_X', 'lhc_x~foo');
+    expect(fooResult.success).toBe(true);
+    expect(fooResult.methodSource).toContain("WRITE 'foo'");
+
+    const interfaceResult = extractMethod(CCIMP_LHC_WITH_INTERFACE, 'ZBP_X', 'zif_order~create');
+    expect(interfaceResult.success).toBe(true);
+    expect(interfaceResult.methodSource).toContain("rv_id = 'new'");
+  });
+
+  it('reports unknown qualified names with available-methods hint that includes class prefix', () => {
+    const result = extractMethod(CCIMP_MULTI_LHC, 'ZBP_DM_PROJECT', 'lhc_typo~approve_project');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    // Error should include qualified candidates so the LLM can fix the typo
+    expect(result.error).toMatch(/lhc_project~approve_project|lhc_task~approve_project/);
+  });
+});
+
+describe('spliceMethod — qualified specifier on CCIMP source', () => {
+  it('splices into the right local class when both have the same bare method name', () => {
+    const result = spliceMethod(
+      CCIMP_MULTI_LHC,
+      'ZBP_DM_PROJECT',
+      'lhc_project~approve_project',
+      "    \" rewritten body\n    WRITE 'rewritten'.",
+    );
+    expect(result.success).toBe(true);
+    // Project class got the new body
+    expect(result.newSource).toContain("WRITE 'rewritten'");
+    expect(result.newSource).not.toContain("WRITE 'project'");
+    // Task class is untouched — its approve_project still says 'task'
+    expect(result.newSource).toContain("WRITE 'task'");
+    expect(result.newSource).toContain("WRITE 'done'");
+  });
+
+  it('preserves the rest of the CCIMP after splice', () => {
+    const result = spliceMethod(CCIMP_SINGLE_LHC, 'ZBP_DM_PROJECT', 'lhc_project~approve_project', '    DATA(y) = 99.');
+    expect(result.success).toBe(true);
+    expect(result.newSource).toContain('CLASS lhc_project IMPLEMENTATION.');
+    expect(result.newSource).toContain('METHOD get_instance_authorizations');
+    expect(result.newSource).toContain('DATA(y) = 99.');
+    expect(result.newSource).not.toContain('DATA(x) = 1.');
+    expect(result.newSource).toContain('ENDCLASS.');
+  });
+});

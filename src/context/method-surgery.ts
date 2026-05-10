@@ -32,6 +32,17 @@ export interface MethodInfo {
   isRedefinition: boolean;
   /** Whether the name contains ~ (interface method implementation) */
   isInterfaceMethod: boolean;
+  /**
+   * Local class name from `CLASS xxx IMPLEMENTATION.` containing this method
+   * (e.g. "lhc_project", "lcl_helper"). Distinct from `MethodListResult.className`,
+   * which is the global class. For sources containing only one class block this
+   * matches the global name; for CCDEF/CCIMP includes with multiple local classes
+   * this is what enables qualified-name disambiguation in `extractMethod`.
+   *
+   * Empty string when no IMPLEMENTATION block could be associated (e.g. a
+   * definition-only signature with no impl).
+   */
+  containingClass?: string;
 }
 
 /** Result of listing all methods in a class */
@@ -115,8 +126,14 @@ function listMethodsAST(source: string, className: string, ver: Version): Method
     { signature: string; visibility: 'public' | 'protected' | 'private'; isRedefinition: boolean }
   >();
 
-  // Collect method line ranges from IMPLEMENTATION
-  const implementations = new Map<string, { startLine: number; endLine: number }>();
+  // Collect method line ranges from IMPLEMENTATION, tagged with the containing
+  // local-class name. Multiple local classes inside one source can declare the
+  // same bare method name; the upper-case name alone is not unique, so the map
+  // key combines containing-class + method name.
+  const implementations = new Map<
+    string,
+    { startLine: number; endLine: number; containingClass: string; bareName: string }
+  >();
 
   for (const obj of reg.getObjects()) {
     const file = (obj as { getMainABAPFile?: () => unknown }).getMainABAPFile?.() as
@@ -138,6 +155,12 @@ function listMethodsAST(source: string, className: string, ver: Version): Method
     // ── Implementation: extract METHOD ... ENDMETHOD line ranges ──
     const classImpls = structure.findAllStructuresRecursive(Structures.ClassImplementation);
     for (const classImpl of classImpls) {
+      // Capture the containing local-class name from "CLASS <name> IMPLEMENTATION."
+      const classFirstStmt = classImpl.getFirstStatement?.();
+      const classTokens = classFirstStmt?.concatTokens() ?? '';
+      const classMatch = classTokens.match(/^CLASS\s+(\S+)\s+IMPLEMENTATION/i);
+      const containingClass = classMatch?.[1] ?? '';
+
       const methods = classImpl.findAllStructuresRecursive(Structures.Method) as AstNode[];
       for (const method of methods) {
         const firstStmt = method.getFirstStatement();
@@ -149,7 +172,10 @@ function listMethodsAST(source: string, className: string, ver: Version): Method
           const name = match[1]!.replace(/\.$/, '');
           const startLine = firstStmt.getFirstToken().getRow();
           const endLine = method.getLastToken().getRow();
-          implementations.set(name.toUpperCase(), { startLine, endLine });
+          // Composite key: containing class + bare method name. Two local
+          // classes can legally declare a method with the same bare name.
+          const mapKey = `${containingClass.toUpperCase()}~${name.toUpperCase()}`;
+          implementations.set(mapKey, { startLine, endLine, containingClass, bareName: name });
         }
       }
     }
@@ -162,12 +188,13 @@ function listMethodsAST(source: string, className: string, ver: Version): Method
   const methods: MethodInfo[] = [];
   const processed = new Set<string>();
 
-  for (const [upperImplName, impl] of implementations) {
+  for (const [, impl] of implementations) {
     // Find original case from source
     const lines = source.split('\n');
     const methodLine = lines[impl.startLine - 1] ?? '';
     const nameMatch = methodLine.match(/METHOD\s+(\S+)\s*\./i);
-    const originalName = nameMatch?.[1] ?? upperImplName;
+    const originalName = nameMatch?.[1] ?? impl.bareName;
+    const upperImplName = impl.bareName.toUpperCase();
 
     // Try to match to a definition signature
     // For interface methods like "zif_order~create", the definition has "create" (INTERFACES zif_order)
@@ -193,6 +220,7 @@ function listMethodsAST(source: string, className: string, ver: Version): Method
       endLine: impl.endLine,
       isRedefinition,
       isInterfaceMethod: originalName.includes('~'),
+      containingClass: impl.containingClass,
     });
 
     processed.add(upperImplName);
@@ -331,6 +359,7 @@ function listMethodsRegex(source: string, className: string): MethodListResult {
 
   // Phase 2: Scan IMPLEMENTATION for METHOD ... ENDMETHOD line ranges
   let inImplementation = false;
+  let currentContainingClass = '';
   let currentMethodName = '';
   let methodStartLine = 0;
 
@@ -338,12 +367,15 @@ function listMethodsRegex(source: string, className: string): MethodListResult {
     const trimmed = lines[i]!.trim();
     const upper = trimmed.toUpperCase();
 
-    if (upper.match(/^CLASS\s+\S+\s+IMPLEMENTATION\s*\./)) {
+    const implOpen = trimmed.match(/^CLASS\s+(\S+)\s+IMPLEMENTATION\s*\.?$/i);
+    if (implOpen) {
       inImplementation = true;
+      currentContainingClass = implOpen[1]!;
       continue;
     }
     if (upper === 'ENDCLASS.' && inImplementation) {
       inImplementation = false;
+      currentContainingClass = '';
       continue;
     }
 
@@ -365,6 +397,7 @@ function listMethodsRegex(source: string, className: string): MethodListResult {
           endLine,
           isRedefinition: sig?.isRedefinition ?? false,
           isInterfaceMethod: currentMethodName.includes('~'),
+          containingClass: currentContainingClass,
         });
 
         currentMethodName = '';
@@ -390,9 +423,25 @@ function listMethodsRegex(source: string, className: string): MethodListResult {
 /**
  * Extract a single method's implementation from a class.
  *
+ * Lookup order:
+ * 1. **Cross-class ambiguity guard** — if the caller passed a bare name (no `~`)
+ *    and multiple methods with that name exist in different containing local
+ *    classes, error with a list of qualified candidates. Prevents silent
+ *    first-match wins on CCIMP sources.
+ * 2. **Exact match** — `m.name === methodName`. Catches both unique bare names
+ *    and global-interface implementations stored as `zif_order~create`.
+ * 3. **Qualified-class match** — only when methodName has `~` AND step 2 found
+ *    nothing. Splits LHS/RHS and matches against the method's `containingClass`
+ *    plus its bare name. Routes `lhc_project~approve_project` → the right
+ *    method inside `CLASS lhc_project IMPLEMENTATION`.
+ * 4. **Fuzzy interface match** — last-resort suffix match for callers who pass
+ *    a bare name that happens to match the right-hand side of an interface
+ *    method specifier (e.g. `process` → `zif_order~process`).
+ *
  * Supports:
  * - Exact name match: "get_name"
  * - Interface method: "zif_order~process"
+ * - Local-class qualified: "lhc_project~approve_project"
  * - Fuzzy interface match: "process" finds "zif_order~process"
  */
 export function extractMethod(
@@ -417,10 +466,75 @@ export function extractMethod(
     };
   }
 
-  // Find the method — try exact match first, then fuzzy interface match
   const upperName = methodName.toUpperCase();
+  const hasTilde = methodName.includes('~');
+
+  // ── Step 1: cross-class ambiguity guard ──
+  // If caller passed bare "approve_project" and the source has BOTH
+  //   CLASS lhc_project IMPLEMENTATION. METHOD approve_project. ENDMETHOD.
+  //   CLASS lhc_task IMPLEMENTATION.    METHOD approve_project. ENDMETHOD.
+  // …then `find()` would silently pick whichever appears first in source order.
+  // Detect the multi-class match early and ask the caller to qualify.
+  if (!hasTilde) {
+    const exactCandidates = listing.methods.filter((m) => m.name.toUpperCase() === upperName);
+    if (exactCandidates.length > 1) {
+      const distinctClasses = Array.from(
+        new Set(exactCandidates.map((c) => (c.containingClass ?? '').trim()).filter((c) => c.length > 0)),
+      );
+      if (distinctClasses.length > 1) {
+        const qualified = distinctClasses.map((cls) => `${cls}~${methodName}`).join(', ');
+        return {
+          className,
+          methodName,
+          methodSource: '',
+          bodySource: '',
+          startLine: 0,
+          endLine: 0,
+          success: false,
+          error:
+            `Ambiguous method name "${methodName}" in ${className}. ` +
+            `Multiple local classes define it: ${distinctClasses.join(', ')}. ` +
+            `Use a qualified name like "${qualified.split(', ')[0]}".`,
+        };
+      }
+    }
+  }
+
+  // ── Step 2: exact match ──
   let method = listing.methods.find((m) => m.name.toUpperCase() === upperName);
 
+  // ── Step 3: qualified-class match (lhc_project~approve_project) ──
+  // Only fires when caller passed a tilde AND the exact lookup above didn't
+  // catch it. This branch must NOT intercept global-interface methods like
+  // `zif_order~create` — those are stored with `~` in `m.name` and are
+  // matched by step 2.
+  if (!method && hasTilde) {
+    const tildeIdx = methodName.indexOf('~');
+    const lhsUpper = methodName.slice(0, tildeIdx).toUpperCase();
+    const rhsUpper = methodName.slice(tildeIdx + 1).toUpperCase();
+    const qualifiedMatches = listing.methods.filter(
+      (m) => (m.containingClass ?? '').toUpperCase() === lhsUpper && m.name.toUpperCase() === rhsUpper,
+    );
+    if (qualifiedMatches.length === 1) {
+      method = qualifiedMatches[0];
+    } else if (qualifiedMatches.length > 1) {
+      // ABAP forbids two methods with the same name in the same class, but
+      // belt-and-braces — surface it instead of silently picking one.
+      const names = qualifiedMatches.map((c) => `${c.containingClass}~${c.name}`).join(', ');
+      return {
+        className,
+        methodName,
+        methodSource: '',
+        bodySource: '',
+        startLine: 0,
+        endLine: 0,
+        success: false,
+        error: `Ambiguous qualified method "${methodName}". Matched multiple: ${names}.`,
+      };
+    }
+  }
+
+  // ── Step 4: existing fuzzy interface match — unchanged ──
   if (!method) {
     // Fuzzy: user said "process", we try to match "*~process"
     const candidates = listing.methods.filter((m) => {
@@ -445,7 +559,15 @@ export function extractMethod(
   }
 
   if (!method || method.startLine === 0 || method.endLine === 0) {
-    const available = listing.methods.map((m) => m.name).join(', ');
+    // Build a helpful "available methods" list. For sources with multiple
+    // local classes, prefer the qualified form so the LLM can copy-paste it.
+    const distinctClasses = new Set(
+      listing.methods.map((m) => (m.containingClass ?? '').trim()).filter((c) => c.length > 0),
+    );
+    const available =
+      distinctClasses.size > 1
+        ? listing.methods.map((m) => (m.containingClass ? `${m.containingClass}~${m.name}` : m.name)).join(', ')
+        : listing.methods.map((m) => m.name).join(', ');
     return {
       className,
       methodName,

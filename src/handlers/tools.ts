@@ -166,6 +166,9 @@ const SAPWRITE_DESC_ONPREM =
   'FUNC (function modules): require "group" parameter — the parent FUGR must exist (create it first via SAPWrite type=FUGR). Pass structured `parameters` array to manage FM signatures (IMPORTING/EXPORTING/CHANGING/TABLES/EXCEPTIONS/RAISING). Example: parameters=[{kind:"importing",name:"IV_X",type:"STRING",byValue:true},{kind:"exporting",name:"EV_Y",type:"STRING",byValue:true},{kind:"raising",name:"CX_ROOT"}]. Use SAPRead(type=FUNC, includeSignature=true) to read parameters back as structured JSON. SAPGUI-style *"...IMPORTING..."* parameter comment blocks in source are stripped before PUT as defense-in-depth (SAP rejects them with FUNC_ADT028); a warning is appended in that case. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
   'Provide just the new method implementation code in "source" — 95% fewer tokens than full-class updates. ' +
+  'For local handler classes inside a class include (RAP behavior pools, local helpers, test classes), pass the qualified specifier "lhc_project~approve_project" — ARC-1 routes the read+write to /includes/implementations automatically. ' +
+  'Auto-detection prefixes: lhc_*/lcl_* → implementations, ltc_* → testclasses. Override with include="definitions"|"implementations"|"macros"|"testclasses" for explicit control. ' +
+  'Global-interface methods like "zif_order~create" continue to use /source/main. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). Pass "objects" array with dependency order. ' +
   'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally create missing lhc_* skeletons plus inject declarations and empty implementation stubs into an existing behavior pool class. ' +
   'For generate_behavior_implementation: one-shot RAP behavior pool — auto-discover the bound BDEF via class metadata (rootEntityRef), scaffold every required handler (creating lhc_<alias> skeletons when missing), write under one lock, and (by default) activate. Reliable equivalent of Eclipse ADT\'s "Generate Behavior Implementation" Cmd+1 quickfix without the broken /sap/bc/adt/quickfixes/proposals/.../create_class_implementation server endpoint.';
@@ -182,6 +185,8 @@ const SAPWRITE_DESC_BTP =
   'SKTD (Knowledge Transfer Documents, Markdown docs attached to an ABAP object): create requires refObjectType (parent ADT type+subtype, e.g., "DDLS/DF"). A KTD inherits the name of the object it documents — so "name" MUST equal the parent object name (one KTD per object; refObjectName defaults to name and cannot differ). Update takes Markdown in "source"; delete uses the ADT deletion framework (two-step check/delete). Follow creates/updates with SAPActivate(type="SKTD", name="..."). ' +
   'Must use ABAP Cloud language version (no classic statements). Only Z*/Y* namespace allowed on BTP. ' +
   'For edit_method: surgically replace a single method body in a CLAS without sending the full class source. ' +
+  'For local handler classes inside a class include (RAP behavior pools, local helpers, test classes), pass the qualified specifier "lhc_project~approve_project" — ARC-1 routes the read+write to /includes/implementations automatically. ' +
+  'Auto-detection prefixes: lhc_*/lcl_* → implementations, ltc_* → testclasses. Override with include= for explicit control. ' +
   'For batch_create: create and activate multiple objects in a single call — ideal for RAP stacks (TABL → DDLS → DCLS → BDEF → SRVD). ' +
   'For scaffold_rap_handlers: derive missing RAP behavior handler signatures from an interface BDEF and optionally create missing lhc_* skeletons plus inject declarations and empty implementation stubs into an existing behavior pool class. ' +
   'For generate_behavior_implementation: one-shot RAP behavior pool — auto-discover the bound BDEF via class metadata (rootEntityRef), scaffold every required handler (creating lhc_<alias> skeletons when missing), write under one lock, and (by default) activate.';
@@ -597,11 +602,12 @@ export function getToolDefinitions(
             type: 'string',
             enum: SAPWRITE_CLAS_INCLUDES,
             description:
-              'For update type=CLAS only: write a class-local include instead of source/main. Valid values: definitions (CCDEF), implementations (CCIMP), macros, testclasses. Omit include to update source/main. Include writes create an inactive draft; read with SAPRead version="inactive" before activation.',
+              'For action=update or action=edit_method on a CLAS: target a class-local include instead of source/main. Valid values: definitions (CCDEF), implementations (CCIMP), macros, testclasses. Omit include to operate on source/main. For edit_method, ARC-1 also auto-detects the include from the method specifier (lhc_*/lcl_* → implementations, ltc_* → testclasses); explicit include= overrides auto-detection. Include writes create an inactive draft; read with SAPRead version="inactive" before activation.',
           },
           method: {
             type: 'string',
-            description: 'For edit_method action: method name to replace (e.g., "get_name", "zif_order~process")',
+            description:
+              'For edit_method action: method name to replace. Examples: "get_name" (regular method), "zif_order~process" (global interface implementation, routes to source/main), "lhc_project~approve_project" (local handler in a RAP behavior pool, auto-routes to /includes/implementations). When two local classes in the same CCIMP share a bare method name, the qualified <localclass>~<method> form is required to disambiguate.',
           },
           bdefName: {
             type: 'string',

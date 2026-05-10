@@ -1408,6 +1408,128 @@ describe('ADT Integration Tests', () => {
     });
   });
 
+  // ─── edit_method against class includes (CCIMP) — PR-D ───────────
+  //
+  // Smoke test for SAPWrite(action="edit_method", method="<localclass>~<method>")
+  // routing to /sap/bc/adt/oo/classes/{name}/includes/implementations.
+  // Uses the same lock+PUT+unlock flow PR #257 verified for `case 'update'`,
+  // so the URL contract on NW 7.50 is already covered there. This test just
+  // proves the edit_method dispatch picks the right include and the splice
+  // round-trips through ADT.
+  //
+  // Verified URL pattern against a4h on 2026-05-10 (manual curl):
+  //   GET  /sap/bc/adt/oo/classes/{name}/includes/implementations
+  //   POST /sap/bc/adt/oo/classes/{name}?_action=LOCK&accessMode=MODIFY
+  //   PUT  /sap/bc/adt/oo/classes/{name}/includes/implementations?lockHandle=...
+  //   POST /sap/bc/adt/oo/classes/{name}?_action=UNLOCK&lockHandle=...
+
+  describe('edit_method against class includes (CCIMP)', () => {
+    it('round-trips a local handler method body through /includes/implementations', async (ctx) => {
+      requireOrSkip(ctx, process.env.TEST_SAP_URL, SkipReason.NO_CREDENTIALS);
+      const { generateUniqueName } = await import('./crud-harness.js');
+      const { handleToolCall } = await import('../../src/handlers/intent.js');
+      const className = generateUniqueName('ZARC1_PRD');
+      const config = {
+        arc1Port: 8080,
+        arc1HttpAddr: '0.0.0.0:8080',
+        toolMode: 'standard',
+      } as unknown as Parameters<typeof handleToolCall>[1];
+
+      // Track whether the class was created so cleanup runs even if
+      // intermediate steps fail.
+      let created = false;
+      try {
+        // 1. Create empty CLAS in $TMP (auto-generated MAIN + empty includes)
+        const createResult = await handleToolCall(client, config, 'SAPWrite', {
+          action: 'create',
+          type: 'CLAS',
+          name: className,
+          description: 'PR-D edit_method smoke test (transient)',
+          package: '$TMP',
+        });
+        expect(createResult.isError).toBeUndefined();
+        created = true;
+
+        // 2. Populate CCDEF (declarations) and CCIMP (implementation) so the
+        // class compiles. ABAP requires both halves of the local class.
+        const ccdefSource =
+          'CLASS lcl_helper DEFINITION.\n' +
+          '  PUBLIC SECTION.\n' +
+          '    METHODS hello\n' +
+          '      EXPORTING ev_text TYPE string.\n' +
+          'ENDCLASS.';
+        const ccimpSourceOld =
+          'CLASS lcl_helper IMPLEMENTATION.\n' +
+          '  METHOD hello.\n' +
+          "    ev_text = 'old'.\n" +
+          '  ENDMETHOD.\n' +
+          'ENDCLASS.';
+
+        const writeDef = await handleToolCall(client, config, 'SAPWrite', {
+          action: 'update',
+          type: 'CLAS',
+          name: className,
+          include: 'definitions',
+          source: ccdefSource,
+          lintBeforeWrite: false,
+        });
+        expect(writeDef.isError).toBeUndefined();
+
+        const writeImpl = await handleToolCall(client, config, 'SAPWrite', {
+          action: 'update',
+          type: 'CLAS',
+          name: className,
+          include: 'implementations',
+          source: ccimpSourceOld,
+          lintBeforeWrite: false,
+        });
+        expect(writeImpl.isError).toBeUndefined();
+
+        // 3. Activate so the class compiles cleanly.
+        const activateResult = await handleToolCall(client, config, 'SAPActivate', {
+          objects: [{ type: 'CLAS', name: className }],
+        });
+        expect(activateResult.isError).toBeUndefined();
+
+        // 4. The actual PR-D test: surgically replace lcl_helper~hello.
+        const editResult = await handleToolCall(client, config, 'SAPWrite', {
+          action: 'edit_method',
+          type: 'CLAS',
+          name: className,
+          method: 'lcl_helper~hello',
+          source: "    ev_text = 'new'.",
+        });
+        expect(editResult.isError).toBeUndefined();
+        expect(editResult.content[0]?.text).toContain('include: implementations');
+
+        // 5. Read CCIMP back and confirm the body changed.
+        const readResult = await handleToolCall(client, config, 'SAPRead', {
+          type: 'CLAS',
+          name: className,
+          include: 'implementations',
+          version: 'inactive', // include writes create an inactive draft
+        });
+        expect(readResult.isError).toBeUndefined();
+        const text = readResult.content[0]?.text ?? '';
+        expect(text).toContain("ev_text = 'new'");
+        expect(text).not.toContain("ev_text = 'old'");
+      } finally {
+        // best-effort-cleanup
+        if (created) {
+          try {
+            await handleToolCall(client, config, 'SAPWrite', {
+              action: 'delete',
+              type: 'CLAS',
+              name: className,
+            });
+          } catch {
+            // best-effort-cleanup; transient $TMP class will time out eventually
+          }
+        }
+      }
+    });
+  });
+
   // ─── DDLX (Metadata Extension) Operations ─────────────────────────
 
   describe('DDLX read operations', () => {

@@ -3240,6 +3240,40 @@ function normalizeClassWriteInclude(include: unknown): ClassWriteInclude | undef
   return CLASS_WRITE_INCLUDES.includes(normalized) ? normalized : undefined;
 }
 
+/**
+ * Auto-detect which class include a method specifier targets, based on the
+ * local-class prefix on the LHS of `<localclass>~<method>`. Used by
+ * `edit_method` so callers can pass `lhc_project~approve_project` and have
+ * ARC-1 transparently route the read+write to `/includes/implementations`
+ * instead of `/source/main`.
+ *
+ * Prefix → include mapping (intentionally narrow; extend via explicit
+ * `include` parameter when a code-base uses other conventions):
+ *   - `lhc_*`  → implementations (RAP behavior pool handler classes)
+ *   - `lcl_*`  → implementations (local helper classes)
+ *   - `ltc_*`  → testclasses    (ABAP Unit local test classes)
+ *
+ * Returns `undefined` for:
+ *   - Specifiers with no `~` (route to MAIN)
+ *   - Global-interface methods like `zif_order~create`, `if_oo_adt_classrun~main`
+ *     (route to MAIN — the impl lives in a global class)
+ *   - `lif_*` local interfaces (interfaces only declare methods — there's no
+ *     impl in CCDEF; an `lhc_*`/`lcl_*` class implements them and the call
+ *     site uses that class's prefix instead)
+ */
+function detectLocalHandlerInclude(method: string): ClassWriteInclude | undefined {
+  if (!method.includes('~')) return undefined;
+  const lhs = method.slice(0, method.indexOf('~')).trim().toLowerCase();
+  if (/^(lhc|lcl)_/.test(lhs)) return 'implementations';
+  if (/^ltc_/.test(lhs)) return 'testclasses';
+  return undefined;
+}
+
+/** Strip the leading "=== <include> ===\n" header that `client.getClass(name, include)` prepends. */
+function stripIncludeHeader(source: string): string {
+  return source.replace(/^=== \w+ ===\n/, '');
+}
+
 // ─── SAPWrite Handler ────────────────────────────────────────────────
 
 async function handleSAPWrite(
@@ -3809,14 +3843,42 @@ async function handleSAPWrite(
       if (type !== 'CLAS') return errorResult('edit_method is only supported for type=CLAS.');
       await enforcePackageForExistingObject();
 
-      // Fetch current full source (use cache if available)
-      const currentSource = cachingLayer
-        ? (
-            await cachingLayer.getSource('CLAS', name, (ifNoneMatch) =>
-              client.getClass(name, undefined, { ifNoneMatch }),
-            )
-          ).source
-        : (await client.getClass(name)).source;
+      // ── Resolve which class section the method body lives in ──
+      // Order:
+      //   1. Explicit `include` parameter wins (must be a valid CLAS include).
+      //      If the user passed something but normalization rejected it,
+      //      report it the same way `case 'update'` does.
+      //   2. Auto-detect from local-class prefix in `method` specifier
+      //      (lhc_*/lcl_* → implementations, ltc_* → testclasses). This is
+      //      transparent to RAP-skill callers passing `lhc_project~approve_project`.
+      //   3. Fall through to MAIN (existing behavior — covers global classes
+      //      and `zif_order~create` style interface methods).
+      if (args.include !== undefined && !include) {
+        return errorResult(
+          `Invalid CLAS include "${String(args.include)}". Valid values: ${CLASS_WRITE_INCLUDES.join(', ')}.`,
+        );
+      }
+      const detectedInclude = include ? undefined : detectLocalHandlerInclude(method);
+      const resolvedInclude: ClassWriteInclude | undefined = include ?? detectedInclude;
+
+      // Fetch the source that contains the method.
+      // Note: include reads bypass the source cache because the cache key is
+      // `(type, name, active|inactive)` and does not differentiate by include.
+      // Mixing MAIN and CCIMP bytes under the same key would silently corrupt
+      // subsequent reads. Future enhancement: extend cache key with include.
+      let currentSource: string;
+      if (resolvedInclude) {
+        const fetched = await client.getClass(name, resolvedInclude);
+        currentSource = stripIncludeHeader(fetched.source);
+      } else {
+        currentSource = cachingLayer
+          ? (
+              await cachingLayer.getSource('CLAS', name, (ifNoneMatch) =>
+                client.getClass(name, undefined, { ifNoneMatch }),
+              )
+            ).source
+          : (await client.getClass(name)).source;
+      }
 
       // Use detected ABAP version from probe if available
       const abaplintVer = cachedFeatures?.abapRelease
@@ -3826,35 +3888,50 @@ async function handleSAPWrite(
       // Splice in the new method body
       const spliced = spliceMethod(currentSource, name, method, source, abaplintVer);
       if (!spliced.success) {
-        return errorResult(spliced.error ?? `Failed to splice method "${method}" in ${name}.`);
+        // Augment the error with which include was searched, so the LLM can
+        // either correct the method specifier or override include= explicitly.
+        const where = resolvedInclude ? `include "${resolvedInclude}"` : 'main source';
+        const baseError = spliced.error ?? `Failed to splice method "${method}" in ${name}.`;
+        const hint = detectedInclude
+          ? ` (auto-routed via "${method}" prefix; pass include= explicitly to override).`
+          : '';
+        return errorResult(`${baseError} Searched ${where} of ${name}.${hint}`);
       }
 
-      // Pre-write lint validation on the full spliced source
-      const lintWarnings = runPreWriteLint(spliced.newSource, type, name, config, lintOverride);
-      if (lintWarnings.blocked) return lintWarnings.result!;
+      // Pre-write lint + server-side syntax check on the spliced source.
+      //
+      // Skip BOTH for include= writes. abaplint cannot parse a CCIMP/CCDEF
+      // fragment as a complete class (the DEFINITION/IMPLEMENTATION halves
+      // live in different files), so it would block legitimate writes with
+      // "Expected CLASSDEFINITION" errors. The existing `case 'update'` include=
+      // path also bypasses these checks for the same reason — keep parity.
+      // The full-class activation pass after the write is the authoritative
+      // syntax check.
+      let lintWarnings: ReturnType<typeof runPreWriteLint> = { blocked: false } as ReturnType<typeof runPreWriteLint>;
+      let checkNotes = '';
+      if (!resolvedInclude) {
+        lintWarnings = runPreWriteLint(spliced.newSource, type, name, config, lintOverride);
+        if (lintWarnings.blocked) return lintWarnings.result!;
 
-      // Pre-write server-side syntax check on the full spliced source (opt-in; warnings only).
-      const checkNotes = await runPreWriteSyntaxCheck(
-        client,
-        type,
-        spliced.newSource,
-        objectUrl,
-        config,
-        checkOverride,
-      );
+        checkNotes = await runPreWriteSyntaxCheck(client, type, spliced.newSource, objectUrl, config, checkOverride);
+      }
 
-      // Write the full source back (existing lock/modify/unlock flow)
+      // Write the full source back (existing lock/modify/unlock flow).
+      // For include writes, the parent class lock auto-applies; the include URL
+      // takes the body. See `compare/eclipse-adt/api/05-lock-create-update-transport.md`.
+      const writeUrl = resolvedInclude ? classIncludeUrl(name, resolvedInclude) : srcUrl;
       await safeUpdateSource(
         client.http,
         client.safety,
         objectUrl,
-        srcUrl,
+        writeUrl,
         spliced.newSource,
         transport,
         cachedFeatures?.abapRelease,
       );
       invalidateWrittenObject(type, name);
-      const msg = `Successfully updated method "${method}" in ${type} ${name}.`;
+      const where = resolvedInclude ? ` (include: ${resolvedInclude})` : '';
+      const msg = `Successfully updated method "${method}" in ${type} ${name}${where}.`;
       const extras = [lintWarnings.warnings, checkNotes].filter(Boolean).join('\n\n');
       return extras ? textResult(`${msg}\n\n${extras}`) : textResult(msg);
     }
