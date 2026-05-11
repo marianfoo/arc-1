@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.5](https://github.com/marianfoo/arc-1/compare/v0.9.4...v0.9.5) (2026-05-11)
+
+
+### Features
+
+* add SAPSearch tadir_lookup source modes + SAPWrite batch_create activateAtEnd ([#270](https://github.com/marianfoo/arc-1/issues/270)) ([dec53b4](https://github.com/marianfoo/arc-1/commit/dec53b46dd6143d58bcba9d22bbcb2ffc50f8718))
+* stable DCR signing key + 0/negative TTL = infinite ([#267](https://github.com/marianfoo/arc-1/issues/267)) ([1b4b191](https://github.com/marianfoo/arc-1/commit/1b4b1917d41bf615534e472fc7e32a290a9c23f2))
+
+
+### Bug Fixes
+
+* **rap:** write handler skeletons to CCIMP, not CCDEF ([#263](https://github.com/marianfoo/arc-1/issues/263)) ([60773f6](https://github.com/marianfoo/arc-1/commit/60773f6f034029174d901e5cabd21c4295efae5c))
+
 ## [0.9.4](https://github.com/marianfoo/arc-1/compare/v0.9.3...v0.9.4) (2026-05-10)
 
 
