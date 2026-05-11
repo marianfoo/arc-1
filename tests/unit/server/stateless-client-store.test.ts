@@ -210,6 +210,25 @@ describe('StatelessDcrClientStore default TTL', () => {
     nowMs += 2_000;
     expect(await store.getClient(registered.client_id)).toBeUndefined();
   });
+
+  it('explicit ttlSeconds=0 disables expiration entirely', async () => {
+    let nowMs = 1_700_000_000_000;
+    const store = makeStore({ now: () => nowMs, ttlSeconds: 0 });
+    const registered = await store.registerClient({ redirect_uris: ['https://example.com/cb'] });
+
+    // 10 years later — still valid (no TTL)
+    nowMs += 10 * 365 * 24 * 60 * 60 * 1000;
+    expect(await store.getClient(registered.client_id)).toBeDefined();
+  });
+
+  it('negative ttlSeconds also disables expiration', async () => {
+    let nowMs = 1_700_000_000_000;
+    const store = makeStore({ now: () => nowMs, ttlSeconds: -1 });
+    const registered = await store.registerClient({ redirect_uris: ['https://example.com/cb'] });
+
+    nowMs += 365 * 24 * 60 * 60 * 1000;
+    expect(await store.getClient(registered.client_id)).toBeDefined();
+  });
 });
 
 describe('StatelessDcrClientStore audit events', () => {

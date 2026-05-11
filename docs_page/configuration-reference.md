@@ -193,7 +193,8 @@ Full reference: [oauth-jwt-setup.md](oauth-jwt-setup.md).
 | Flag | Env Var | Default | Description |
 |---|---|---|---|
 | `--xsuaa-auth` | `SAP_XSUAA_AUTH` | `false` | Enable XSUAA token validation |
-| `--oauth-dcr-ttl-seconds` | `ARC1_OAUTH_DCR_TTL_SECONDS` | `2592000` (30 d) | Lifetime of an OAuth Dynamic Client Registration `client_id`. Min 60 s, max 90 d. Lower bounds blast radius if the signing key leaks; higher reduces re-auth churn. Only consulted when `--xsuaa-auth=true`. |
+| `--oauth-dcr-ttl-seconds` | `ARC1_OAUTH_DCR_TTL_SECONDS` | `2592000` (30 d) | Lifetime of an OAuth Dynamic Client Registration `client_id`. Positive values are clamped to `[60 s, 90 d]`. Set to `0` (or any non-positive value) to disable expiration — recommended when MCP clients in use don't auto-re-register on `invalid_client` (Copilot CLI, Cursor) and a finite TTL would just produce periodic outages. Only consulted when `--xsuaa-auth=true`. |
+| `--dcr-signing-secret` | `ARC1_DCR_SIGNING_SECRET` | unset (falls back to XSUAA `clientsecret`) | Dedicated secret for HMAC-signing DCR `client_id`s. Set this (typically via `cf set-env`) to keep cached `client_id`s valid across `cf deploy` operations that recreate the XSUAA binding. Re-setting the value invalidates every outstanding registration (explicit revocation). Recommended: `openssl rand -base64 48`. |
 
 Full reference: [xsuaa-setup.md](xsuaa-setup.md).
 

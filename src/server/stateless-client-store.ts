@@ -21,6 +21,13 @@
  *   - Per-client revocation is impossible (only TTL or full key rotation)
  *   - Rotating the signing key invalidates every outstanding registration
  *
+ * Default TTL is 30 days (matches typical refresh-token lifetimes). Setting
+ * `ttlSeconds` to `0` or a negative value disables expiration — recommended
+ * when MCP clients don't auto-re-register on `invalid_client` (Copilot CLI,
+ * Cursor) and a finite TTL just produces periodic outages without security
+ * gain. In that mode, forced revocation goes through full key rotation
+ * (rotate the signing secret or bump `KDF_LABEL` from `arc1-dcr/v1` → `v2`).
+ *
  * The signing key is derived (via HKDF-style HMAC) from the XSUAA
  * `clientsecret`, so it's already as stable as the service binding —
  * service rebinding rotates both at once, which is the right boundary.
@@ -54,10 +61,13 @@ const PAYLOAD_VERSION = 1;
 const SIG_BYTES = 16;
 
 /**
- * Default lifetime of a DCR registration. Tunable via `ttlSeconds` so deployments
- * with stricter compromise-window requirements can shorten it. 30 days matches
- * typical OAuth refresh-token lifetimes — long enough that users don't see
- * spurious "re-authenticate" prompts during normal use.
+ * Default lifetime of a DCR registration. 30 days matches typical OAuth
+ * refresh-token lifetimes and provides a conservative compromise window.
+ * Set `ttlSeconds` to `0` (or any non-positive value) to disable expiration
+ * — recommended for environments where MCP clients don't auto-re-register
+ * on `invalid_client` (Copilot CLI, Cursor) and a finite TTL produces
+ * periodic outages. Forced revocation in that case goes through full key
+ * rotation (rotate the signing secret or bump `KDF_LABEL`).
  */
 const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -104,9 +114,10 @@ interface SignedPayload {
 export interface StatelessDcrClientStoreOptions {
   /**
    * How long an issued client_id remains valid, in seconds. After this
-   * window `getClient()` returns undefined and clients re-register via
-   * `/register`. Default: 30 days. Lower values bound the blast radius if
-   * the signing key leaks; higher values reduce re-auth churn.
+   * window `getClient()` returns undefined and clients are forced to
+   * re-register via `/register`. Default: 30 days. Set to `0` (or any
+   * non-positive value) to disable expiration — registrations then stay
+   * valid until the signing key rotates.
    */
   ttlSeconds?: number;
 
@@ -177,11 +188,13 @@ export class StatelessDcrClientStore implements OAuthRegisteredClientsStore {
       return undefined;
     }
 
-    const ageSec = Math.floor(this.now() / 1000) - decoded.payload.iat;
-    if (ageSec > this.ttlSeconds) {
-      this.emitLookupFailed(clientId, 'expired');
-      logger.debug('OAuth client expired (TTL)', { clientId, ageSec, ttlSeconds: this.ttlSeconds });
-      return undefined;
+    if (this.ttlSeconds > 0) {
+      const ageSec = Math.floor(this.now() / 1000) - decoded.payload.iat;
+      if (ageSec > this.ttlSeconds) {
+        this.emitLookupFailed(clientId, 'expired');
+        logger.debug('OAuth client expired (TTL)', { clientId, ageSec, ttlSeconds: this.ttlSeconds });
+        return undefined;
+      }
     }
 
     return this.payloadToClientInfo(clientId, decoded.payload);

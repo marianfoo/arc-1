@@ -451,8 +451,17 @@ class XsuaaProxyOAuthProvider extends ProxyOAuthServerProvider {
 
 export interface CreateXsuaaOAuthProviderOptions {
   /** Lifetime of issued DCR client_ids in seconds. Falls back to the store's
-   *  built-in default (30 days) when omitted. */
+   *  built-in default (30 days) when omitted. `0` disables expiration. */
   dcrTtlSeconds?: number;
+  /**
+   * Optional dedicated secret for HMAC-signing DCR client_ids. When set, the
+   * DCR signing key derives from this secret instead of the XSUAA
+   * `clientsecret`. Use this to keep cached client_ids valid across
+   * `cf deploy` (which recreates the XSUAA binding and rotates its
+   * clientsecret). Omit to fall back to the XSUAA clientsecret (legacy
+   * behavior).
+   */
+  dcrSigningSecret?: string;
 }
 
 export function createXsuaaOAuthProvider(
@@ -460,16 +469,19 @@ export function createXsuaaOAuthProvider(
   appUrl: string,
   options: CreateXsuaaOAuthProviderOptions = {},
 ): { provider: ProxyOAuthServerProvider; clientStore: StatelessDcrClientStore } {
-  // The XSUAA `clientsecret` doubles as the DCR signing secret. It's
-  // stable across the lifetime of the service binding (only `cf bind-service`
-  // rotates it) and is already a closely-guarded shared secret — exactly
-  // the trust boundary we want for "this server can mint client_ids".
-  const clientStore = new StatelessDcrClientStore(
-    credentials.clientid,
-    credentials.clientsecret,
-    credentials.clientsecret,
-    { ttlSeconds: options.dcrTtlSeconds },
-  );
+  // The signing secret defaults to the XSUAA `clientsecret`, which is the
+  // trust anchor for "this server can mint client_ids". The downside: MTA
+  // `cf deploy` recreates the service binding and rotates the clientsecret
+  // — every redeploy invalidates every cached client_id. To opt out, pass a
+  // dedicated secret via `dcrSigningSecret` (typically `ARC1_DCR_SIGNING_SECRET`
+  // set with `cf set-env`, which survives `cf deploy`). Re-setting it
+  // doubles as the explicit revocation knob.
+  const dcrSigningSecret = options.dcrSigningSecret ?? credentials.clientsecret;
+  const dcrSigningSource: 'env' | 'xsuaa' = options.dcrSigningSecret ? 'env' : 'xsuaa';
+
+  const clientStore = new StatelessDcrClientStore(credentials.clientid, credentials.clientsecret, dcrSigningSecret, {
+    ttlSeconds: options.dcrTtlSeconds,
+  });
   const verifier = createXsuaaTokenVerifier(credentials);
 
   const provider = new XsuaaProxyOAuthProvider(credentials, verifier, clientStore);
@@ -479,7 +491,18 @@ export function createXsuaaOAuthProvider(
     authorizationUrl: `${credentials.url}/oauth/authorize`,
     appUrl,
     dcrTtlSeconds: options.dcrTtlSeconds,
+    dcrSigningSource,
   });
+  if (dcrSigningSource === 'env') {
+    logger.info(
+      'DCR signing key uses dedicated ARC1_DCR_SIGNING_SECRET — cached client_ids survive cf deploys that rotate the XSUAA clientsecret.',
+    );
+  }
+  if (options.dcrTtlSeconds !== undefined && options.dcrTtlSeconds <= 0) {
+    logger.info(
+      'DCR client_id TTL is disabled (ARC1_OAUTH_DCR_TTL_SECONDS=0) — registrations never expire by time; revocation is via ARC1_DCR_SIGNING_SECRET rotation.',
+    );
+  }
 
   return { provider, clientStore };
 }
