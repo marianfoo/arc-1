@@ -6,7 +6,7 @@
 
 The bug is in `ensureRapHandlerSkeletons` in `src/adt/rap-handlers.ts`. The fix is to route both block types into `sections.implementations` and never modify `sections.definitions`. Existing unit tests at `tests/unit/adt/rap-handlers.test.ts` lines 251–329 and `tests/unit/adt/rap-generate.test.ts` codify the buggy split — they need rewriting to the canonical layout. PR #260's "live A4H smoke" used `dryRun=true, activate=false` so it never exercised activation; this plan adds an integration test that activates a freshly-scaffolded class against a live SAP system.
 
-Recovery for classes already in the broken state (the talk demo's `ZBP_DM_PROJECT`, plus any other affected user) is handled by surfacing a clear error from the scaffold pipeline directing the user to delete + recreate. Auto-migration (moving the existing DEFINITION block from CCDEF to CCIMP) is intentionally **out of scope** for this PR — the source-rewriting risk is non-trivial and the delete+recreate path is already documented and reliable.
+arc-1 is pre-1.0, so breaking changes are acceptable. Classes previously scaffolded by an earlier arc-1 version carry the wrong CCDEF/CCIMP split and will fail to activate; users delete and recreate them to pick up the canonical layout. No in-code detection or auto-migration ships — keeping the fix minimal.
 
 ## Context
 
@@ -48,7 +48,7 @@ Recovery for classes already in the broken state (the talk demo's `ZBP_DM_PROJEC
 
 1. **Match SAP's own canonical layout.** SAP demo class `BP_DEMO_RAP_STRICT` (package `SABAPDEMOS`) is the ground truth: CCDEF holds only the SAP-generated placeholder comment; CCIMP holds the entire handler class (DEFINITION block followed by IMPLEMENTATION block).
 2. **Keep the public type contract.** `RapHandlerSkeletonResult.createdDefinitions` and `createdImplementations` continue to enumerate which classes had each block kind created, even though both blocks now land in the same include. Renaming the fields would break downstream callers and telemetry. Add a JSDoc clarification that the names refer to block KIND, not file location.
-3. **No auto-migration of existing broken state.** A class whose CCDEF already contains `CLASS lhc_<alias> DEFINITION INHERITING FROM cl_abap_behavior_handler. ... ENDCLASS.` — i.e. one previously scaffolded with the buggy arc-1 — is not silently rewritten. The scaffold pipeline detects this state and throws `AdtSafetyError` with a precise recovery: delete the class via `SAPManage(action="delete")`, recreate via `SAPWrite(action="create")` with the empty `FOR BEHAVIOR OF` shell, then rerun `generate_behavior_implementation`. Auto-rewriting CCDEF + CCIMP carries source-loss risk that's not worth the convenience.
+3. **Breaking change is acceptable (pre-1.0).** Classes previously scaffolded by an earlier arc-1 version carry the wrong CCDEF/CCIMP split. They will fail to activate. The user-facing path is to delete + recreate the class — no in-code detection, no auto-migration. Pre-1.0 status lets us keep the fix minimal and the code clean.
 4. **Test the activation, not just the scaffold.** PR #260's smoke was `dryRun=true, activate=false` and missed this bug entirely. The new integration test must call `generate_behavior_implementation` with `activate=true` against a real SAP system and read back the active versions of CCDEF + CCIMP via `SAPRead include=... version=active` to assert layout.
 5. **Eclipse ADT contract evidence.** Per `pr-review-guide.md`, ADT-related changes need cross-evidence from the active Eclipse install. The relevant bundles are `com.sap.adt.cds.behaviordefinition_3.56.0` (BDEF subtypes) and `com.sap.adt.codecomposer.cmpttyp.ui_3.56.1` (code composer templates that back Eclipse's "Generate Behavior Implementation" wizard). Reference doc: `~/DEV/arc-1-eclipse-adt/api/03-rap-wizards-object-generator-code-composer.md`. The PR description must include an "ADT Contract Check" section per the guide's template.
 6. **Live SAP verification on a4h is mandatory.** Unit tests can be fooled by mocked responses (PR #260 was). The fix is verified only when a fresh class scaffolded against a4h activates without the `CL_ABAP_BEHAVIOR_HANDLER` error and the active includes match the BP_DEMO_RAP_STRICT shape.
@@ -157,42 +157,9 @@ The orchestrator tests at lines ~350–400 seed mock `structuredResponse.definit
   - Run `generateBehaviorImplementation(client, 'ZBP_TEST')` and assert it throws `AdtSafetyError` whose message contains the recovery instructions ("delete and recreate the class via SAPManage…SAPWrite").
 - [ ] Run `npm test -- tests/unit/adt/rap-generate.test.ts` — passes.
 
-### Task 5: Detect legacy broken state in the orchestrator
+### Task 5: ~~Detect legacy broken state in the orchestrator~~ — dropped
 
-**Files:**
-- Modify: `src/adt/rap-generate.ts`
-- Modify: `src/adt/rap-handlers.ts`
-
-A class previously scaffolded with the buggy arc-1 has `CLASS lhc_<alias> DEFINITION INHERITING FROM cl_abap_behavior_handler. ... ENDCLASS.` already in CCDEF. With the Task 2 fix, the scaffold path will leave CCDEF unchanged but won't fix the existing broken state — and any subsequent activation still fails. Detect the broken state at the start of the orchestrator and throw `AdtSafetyError` with a precise recovery path.
-
-- [ ] In `src/adt/rap-handlers.ts`, add an exported helper `detectLegacyHandlerInDefinitions(definitionsSource: string): string[]`:
-  - Returns the list of class names matching `CLASS\s+(lhc_\w+|lcl_\w+)\s+DEFINITION\s+INHERITING\s+FROM\s+cl_abap_behavior_handler` in the source.
-  - Returns `[]` for empty / placeholder-only / non-handler source.
-  - The regex must be case-insensitive and match across line breaks.
-- [ ] In `src/adt/rap-generate.ts` `generateBehaviorImplementation`, after `getClassStructured` (around line 213) and before the cross-validation block:
-  - Call `detectLegacyHandlerInDefinitions(definitionsSource)`.
-  - If the result is non-empty AND `dryRun !== true`, throw `AdtSafetyError` with a message like:
-    ```
-    generate_behavior_implementation: class <className> has a legacy handler class layout
-    (CLASS <name> DEFINITION INHERITING FROM cl_abap_behavior_handler in CCDEF). This was
-    scaffolded by an earlier version of arc-1 that wrote handler classes to the wrong include.
-    Per ABAP docs (ABENABP_HANDLER_CLASS_GLOSRY) and SAP demo BP_DEMO_RAP_STRICT, the entire
-    handler class belongs in CCIMP (/source/implementations). Recover by:
-    1. SAPManage(action="delete", type="CLAS", name="<className>")
-    2. SAPWrite(action="create", type="CLAS", name="<className>",
-                source="CLASS <className_lower> DEFINITION PUBLIC ABSTRACT FINAL
-                          FOR BEHAVIOR OF <bdef_lower>.\nENDCLASS.\n\nCLASS <className_lower> IMPLEMENTATION.\nENDCLASS.")
-    3. Re-run generate_behavior_implementation against the freshly-created class.
-    ```
-  - Surface the same diagnostic in the `RapGenerateResult` shape under `validation.mismatchReason` when `dryRun === true`, so callers can preview without throwing.
-- [ ] Add a unit test in `tests/unit/adt/rap-handlers.test.ts` for `detectLegacyHandlerInDefinitions`:
-  - Empty source → `[]`.
-  - Placeholder-only comment → `[]`.
-  - Single legacy CLASS lhc_X DEFINITION INHERITING FROM cl_abap_behavior_handler → `['lhc_x']`.
-  - Two legacy classes → both names returned, lowercased.
-  - Mixed: one legacy class + one type-only declaration → only the legacy class returned.
-- [ ] Add a unit test in `tests/unit/adt/rap-generate.test.ts` (this overlaps with Task 4's third bullet — coordinate naming).
-- [ ] Run `npm test` — passes.
+Originally proposed detection + guard in the orchestrator that throws on classes still carrying the legacy CCDEF layout from earlier arc-1 versions. Dropped during implementation: pre-1.0 status accepts the breaking change. Users with legacy-broken classes delete + recreate. The fix code stays minimal — `ensureRapHandlerSkeletons` writes to CCIMP only, and that's the entire mutation change.
 
 ### Task 6: Add live-activation integration test
 

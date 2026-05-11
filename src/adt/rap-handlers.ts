@@ -1076,33 +1076,6 @@ export function ensureRapHandlerSkeletons(
 }
 
 /**
- * Detect handler classes in the CCDEF include (legacy broken layout).
- *
- * arc-1 versions <= 0.9.4 incorrectly wrote `CLASS lhc_<alias> DEFINITION
- * INHERITING FROM cl_abap_behavior_handler. ... ENDCLASS.` to CCDEF. SAP's
- * activator rejects this with `Local classes of "CL_ABAP_BEHAVIOR_HANDLER"
- * can only be derived in the "Local Definitions/Implementations" of a global
- * BEHAVIOR class`. This helper detects that state so the orchestrator can
- * surface a precise recovery (delete + recreate) instead of mutating around
- * the broken layout.
- *
- * Returns the lowercased class names found. Empty CCDEF, placeholder-only
- * CCDEF, and CCDEF holding only TYPES/INTERFACES (no inheritance from
- * cl_abap_behavior_handler) all return `[]`.
- */
-export function detectLegacyHandlerInDefinitions(definitionsSource: string | undefined): string[] {
-  if (!definitionsSource) return [];
-  const re = /\bCLASS\s+([A-Za-z_][\w$]*)\s+DEFINITION[\s\S]*?\bINHERITING\s+FROM\s+cl_abap_behavior_handler\b/gi;
-  const found: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(definitionsSource)) !== null) {
-    const name = match[1];
-    if (name) found.push(name.toLowerCase());
-  }
-  return found;
-}
-
-/**
  * Build the source used to resolve semantic method names while creating stubs.
  *
  * The declaration (`METHODS set_status_accepted FOR ACTION travel~acceptTravel`)

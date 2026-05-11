@@ -420,41 +420,6 @@ ENDCLASS.`;
     // Critical: NO write to /includes/definitions (CCDEF must stay at the SAP placeholder).
     expect(writePaths.some((p) => p.includes('/includes/definitions'))).toBe(false);
   });
-
-  it('throws AdtSafetyError when CCDEF holds a legacy handler class (broken layout)', async () => {
-    // arc-1 versions <= 0.9.4 wrote the lhc_<alias> DEFINITION to CCDEF, which SAP rejects
-    // on activation with `Local classes of "CL_ABAP_BEHAVIOR_HANDLER" can only be derived
-    // in the "Local Definitions/Implementations" of a global BEHAVIOR class`. The orchestrator
-    // detects that state up-front and throws with a precise recovery (delete + recreate) so
-    // the user is not stuck in an unrecoverable activation loop.
-    const state = defaultState({ activationMode: 'success' });
-    state.structuredResponse.definitions = `CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.`;
-    const { client } = makeClient(state);
-
-    await expect(generateBehaviorImplementation(client, 'ZBP_DM_PROJECT')).rejects.toThrowError(
-      /legacy handler-class layout/i,
-    );
-    // No writes — the guard runs before the lock+write phase.
-    expect(state.writes.length).toBe(0);
-  });
-
-  it('legacy-broken-state guard does not fire in dryRun mode (preview path)', async () => {
-    // dryRun is the audit/preview path — it should report what's wrong via validation
-    // diagnostics without throwing, so callers can show users what they need to fix.
-    const state = defaultState();
-    state.structuredResponse.definitions = `CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.`;
-    const { client } = makeClient(state);
-
-    const result = await generateBehaviorImplementation(client, 'ZBP_DM_PROJECT', { dryRun: true });
-
-    expect(result.dryRun).toBe(true);
-    // No writes — dryRun never mutates.
-    expect(state.writes.length).toBe(0);
-  });
 });
 
 // ──────────────────────────────────────────────────────────────────────

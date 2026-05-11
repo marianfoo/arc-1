@@ -6,7 +6,6 @@ import {
   applyRapHandlerImplementationStubs,
   applyRapHandlerScaffold,
   applyRapHandlerSignatures,
-  detectLegacyHandlerInDefinitions,
   ensureRapHandlerSkeletons,
   extractRapHandlerRequirements,
   findMissingRapHandlerImplementationStubs,
@@ -390,67 +389,6 @@ define behavior for demo_rap_strict alias DemoRapStrict
     expect(ccimpFixture.indexOf('CLASS lhc_DEMO_RAP_STRICT DEFINITION')).toBeLessThan(
       ccimpFixture.indexOf('CLASS lhc_DEMO_RAP_STRICT IMPLEMENTATION'),
     );
-  });
-});
-
-describe('detectLegacyHandlerInDefinitions', () => {
-  it('returns [] for empty / undefined CCDEF', () => {
-    expect(detectLegacyHandlerInDefinitions(undefined)).toEqual([]);
-    expect(detectLegacyHandlerInDefinitions('')).toEqual([]);
-  });
-
-  it('returns [] for the SAP-generated placeholder comment only', () => {
-    const placeholder = `*"* use this source file for any type of declarations (class
-*"* definitions, interfaces or type declarations) you need for
-*"* components in the private section`;
-    expect(detectLegacyHandlerInDefinitions(placeholder)).toEqual([]);
-  });
-
-  it('returns [] for CCDEF holding only TYPES / INTERFACES (no behavior handler)', () => {
-    const source = `TYPES: BEGIN OF ty_local,
-         id TYPE i,
-         name TYPE string,
-       END OF ty_local.
-
-INTERFACE lif_helper.
-  METHODS do_something.
-ENDINTERFACE.`;
-    expect(detectLegacyHandlerInDefinitions(source)).toEqual([]);
-  });
-
-  it('returns the lowercased class name when CCDEF contains a legacy lhc_ DEFINITION', () => {
-    const source = `CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.`;
-    expect(detectLegacyHandlerInDefinitions(source)).toEqual(['lhc_project']);
-  });
-
-  it('returns multiple class names when CCDEF contains several legacy handler classes', () => {
-    const source = `CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.
-
-CLASS lhc_task DEFINITION INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.`;
-    expect(detectLegacyHandlerInDefinitions(source)).toEqual(['lhc_project', 'lhc_task']);
-  });
-
-  it('matches across line breaks between DEFINITION and INHERITING', () => {
-    const source = `CLASS lhc_project DEFINITION
-  INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.`;
-    expect(detectLegacyHandlerInDefinitions(source)).toEqual(['lhc_project']);
-  });
-
-  it('mixed CCDEF: returns only the legacy handler class, ignores type-only declarations', () => {
-    const source = `TYPES: BEGIN OF ty_local, id TYPE i, END OF ty_local.
-
-CLASS lhc_project DEFINITION INHERITING FROM cl_abap_behavior_handler.
-  PRIVATE SECTION.
-ENDCLASS.`;
-    expect(detectLegacyHandlerInDefinitions(source)).toEqual(['lhc_project']);
   });
 });
 
