@@ -50,8 +50,11 @@ Copy the skill markdown content into your tool's system prompt, custom instructi
 ## Prerequisites
 
 These skills assume you have:
-1. **ARC-1 MCP server** connected and configured (SAP system access)
-2. **mcp-sap-docs MCP server** connected (optional but recommended — provides SAP documentation context)
+1. **ARC-1 MCP server** connected and configured (SAP system access). Required for every skill that touches ABAP.
+2. **mcp-sap-docs MCP server** connected (optional but recommended — provides SAP documentation context). Used by most skills; required for the UI5 modernization skills to look up V4 binding patterns and FCL behaviour.
+3. **SAPUI5 MCP server** (`@ui5/mcp-server`). Required for `modernize-ui5-app` and `convert-ui5-to-fiori-elements` — provides the authoritative TypeScript conversion guidelines, project scaffolding, ui5-linter, and manifest validation.
+4. **Fiori MCP server** (`@sap-ux/fiori-mcp-server`). Required for `convert-ui5-to-fiori-elements` only — provides the LROP scaffold + annotation-aware page-template configuration.
+5. **A browser MCP** — `Claude_in_Chrome` or `Claude_Preview`. Used by `modernize-ui5-app` for the final render verification step (HTTP 200 alone is not a sufficient acceptance gate — see the "blank page" traps in the skill).
 
 ## Available Skills
 
@@ -82,6 +85,8 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 
 - `SAPContext(action="impact")` for RAP/CDS reuse and "what breaks if I change this?" analysis
 - `SAPRead(type="VERSIONS")` and `SAPRead(type="VERSION_SOURCE")` for pattern mining and safer edits of existing RAP stacks
+- `SAPSearch(searchType="tadir_lookup", source="both")` for one-shot existence checks against both released and inactive variants, with a `splitBrain` warning when an object exists only in one source — used by `migrate-segw-to-rap` Phase 6a (ARC-1 v0.9.5+ / PR #270)
+- `SAPWrite(action="batch_create", activateAtEnd: true)` for atomic CDS-composition activation — replaces per-file + manual terminal activation in `migrate-segw-to-rap` Step 2 (ARC-1 v0.9.5+ / PR #270)
 - `SAPTransport(action="history")` for object-to-transport traceability during later iterations
 - `SAPLint(action="format" | "get_formatter_settings")` for SAP-native keyword case and indentation
 - `SAPRead` / `SAPWrite` for `SKTD` so generated RAP services can carry attached Markdown documentation
@@ -101,6 +106,30 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 |---|---|---|
 | [sap-clean-core-atc](sap-clean-core-atc.md) | Audits a package of custom code and buckets every Z/Y object into Clean Core Levels A–D using mcp-sap-docs + ATC | Planning an ECC→S/4HANA Cloud or BTP move; quarterly custom-code health check |
 | [sap-unused-code](sap-unused-code.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_ALLOW_FREE_SQL=true` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
+
+### Legacy Migration (Backend + UI)
+
+End-to-end conversion of legacy SAP stacks. `migrate-segw-to-rap` handles the OData V2 → RAP V4 backend; then **one of** the two UI skills runs in parallel against the new V4 service. Pick the UI path based on whether the target architecture is annotation-driven (Fiori Elements) or custom-controls freestyle (UI5 TypeScript).
+
+| Skill | What it does | When to use |
+|---|---|---|
+| [migrate-segw-to-rap](migrate-segw-to-rap.md) | Reverse-engineers a SEGW-built OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT) into a modern RAP V4 service: tables, CDS views (interface + projection), behavior definitions, draft entities, service definition + binding | S/4HANA modernization; ABAP Cloud readiness; replacing CASE_MANAGEMENT_API / SEGW services that need to land on a Fiori Elements or modern UI5 app |
+| [convert-ui5-to-fiori-elements](convert-ui5-to-fiori-elements.md) | Generates a Fiori Elements V4 LROP app (list report + object page) driven by `@UI.*` annotations on the V4 service, using the Fiori MCP server's 3-step (`list_functionalities` → `get_functionality_details` → `execute_functionality`) workflow | The legacy UI maps cleanly to a standard LROP pattern; you want minimum custom code and maximum SAP-managed consistency |
+| [modernize-ui5-app](modernize-ui5-app.md) | Converts a legacy UI5 freestyle JavaScript app (sync bootstrap, jQuery.sap.*, ES5, sap_belize) into a modern UI5 TypeScript app on UI5 1.147 with `sap.f.FlexibleColumnLayout`, typed event handlers, ES modules, `BaseController`, sap_horizon — with 5 documented "Critical Traps" up front to skip past common debugging detours | The legacy UI has custom controls / non-standard UX that don't fit a Fiori Elements template, or you want a TypeScript freestyle baseline for further customization |
+
+#### convert-ui5-to-fiori-elements vs modernize-ui5-app
+
+Both run against the same V4 RAP service produced by `migrate-segw-to-rap`. The difference is the target UI architecture:
+
+| | convert-ui5-to-fiori-elements | modernize-ui5-app |
+|---|---|---|
+| **UI framework** | Fiori Elements V4 (`sap.fe.templates.*`) | UI5 1.147 freestyle (`sap.m.*` / `sap.f.*`) + TypeScript |
+| **Layout pattern** | List Report → Object Page (FCL-ready via `allowDeepLinking`) | FlexibleColumnLayout with hand-authored views |
+| **Customization mechanism** | OData annotations (`@UI.LineItem`, `@UI.HeaderInfo`, `@UI.DataPoint`, ...) on CDS projection / annotation views | Hand-authored XML views + TypeScript controllers |
+| **Custom code** | Minimal — annotations only; controller extensions only when unavoidable | Full — every view, controller, formatter is hand-written TS |
+| **Best for** | Standard CRUD, search/filter, sort, drilldown, value help, Approve/Submit action buttons | Non-standard UX, custom controls, dashboards, freeform layouts, anything `sap.fe.*` doesn't template |
+| **Skill depends on** | ARC-1 + sap-docs + ui5-mcp-server + fiori-mcp | ARC-1 (optional) + sap-docs + ui5-mcp-server + browser MCP |
+| **Maturity** | Driven by `@sap-ux/fiori-mcp-server` 3-step API + annotation-discovery via `mcp__sap-docs__search` | 5 documented Critical Traps from accumulated run learnings; teaches LLM to investigate via Self-help patterns |
 
 ### System Context & Local Workflow
 
@@ -147,3 +176,17 @@ For clean-core / custom-code retirement planning:
 4. sap-object-documenter     →  Document the keepers before rewriting
 5. migrate-custom-code       →  Fix the Level B/C/D findings one at a time
 ```
+
+For end-to-end legacy SEGW + UI5 modernization (backend + UI):
+
+```
+1. bootstrap-system-context             →  Know the system
+2. migrate-segw-to-rap                  →  Reverse-engineer SEGW V2 service to RAP V4
+                                            (tables, CDS, BDEF, SRVD, SRVB, draft entities)
+3. ONE of (parallel paths against the new V4 service):
+   - convert-ui5-to-fiori-elements      →  Annotation-driven Fiori Elements V4 LROP
+   - modernize-ui5-app                  →  Freestyle UI5 1.147 + TypeScript
+4. analyze-chat-session                 →  Capture learnings; propose new skill traps
+```
+
+The three migration skills are explicitly designed as parallel paths after the backend lands. You don't run both UI skills — you pick the one whose architecture matches your legacy app's complexity and your team's preference.
