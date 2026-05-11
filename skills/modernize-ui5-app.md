@@ -177,6 +177,76 @@ public async onApprove(_event: Button$PressEvent): Promise<void> {
 The same applies to `onNavBack`, `onItemPress` (when you derive the source from `this.byId`
 not the event), and any other handler where the event payload is unused.
 
+### Trap 5: Manifest v2 + missing `"type": "View"` — routes match but nothing renders
+
+**Symptom:** Page is blank. FCL columns exist with the right widths but each NavContainer is
+empty. Console is otherwise clean except for one easily-missed warning a millisecond after
+each route match:
+
+```
+page stack is empty but should have been initialized -
+application failed to provide a page to display
+```
+
+Routing logs show the route matches correctly (`"The route named 'main' did match"`), but no
+view ever gets placed in any column.
+
+**Root cause:** With `"_version": "2.0.0"` or higher (introduced in UI5 1.136 — the same
+version we're targeting in this skill), the older routing keys `viewName`, `viewPath`,
+`viewLevel` are **removed** and replaced by `name`, `path`, `level` — and a routing **target
+no longer has an implicit `"type": "View"` default**. Without an explicit type, target
+resolution silently produces nothing.
+
+Source: SAP Help, *"Migration Information for Upgrading the Manifest File"*, the 2.0.0
+(1.136) "Deprecated Manifest Entries" row: *"The routing properties ViewId, viewName,
+viewPath and viewLevel can no longer be used. Please use the documented alternatives by
+replacing them with the properties id, name, path and level, respectively along with adding
+the `type: "view"`."*
+
+**Fix:** in the `routing` block of `manifest.json`:
+
+1. Add `"type": "View"` to `routing.config` (so it's the default for all targets in the
+   block — saves repeating it).
+2. Use `path` (NOT `viewPath`) for the view-folder namespace.
+3. Use `name` (NOT `viewName`) on each target — and add `"type": "View"` per target too
+   (belt + braces; some UI5 versions don't propagate the config default reliably).
+4. Use `level` (NOT `viewLevel`) on each target.
+
+```jsonc
+"routing": {
+    "config": {
+        "routerClass": "sap.f.routing.Router",
+        "type": "View",                 // ← REQUIRED in manifest v2
+        "viewType": "XML",
+        "path": "<ns>.view",            // ← NOT "viewPath"
+        "async": true,
+        "controlId": "flexibleColumnLayout",
+        "controlAggregation": "beginColumnPages",
+        "bypassed": { "target": "notFound" }
+    },
+    "routes": [ /* ... layout property per Trap 1 ... */ ],
+    "targets": {
+        "main": {
+            "type": "View",             // ← REQUIRED per target
+            "id": "main",
+            "name": "Main",             // ← NOT "viewName"
+            "level": 1,                 // ← NOT "viewLevel"
+            "controlAggregation": "beginColumnPages"
+        },
+        // ... other targets
+    }
+}
+```
+
+This shape works in both manifest v1.x and v2.x — adding `type: "View"` is backwards-compatible
+(it became available in 1.14.0 / UI5 1.62). The new key names (`name`/`path`/`level`) are also
+backwards-compatible. So always emit the v2 shape, even if you're not sure whether the
+project ends up on v1 or v2 — there's no downside.
+
+**Quick diagnostic when you see this:** open the browser console, search for "page stack is
+empty". If you find it: you have Trap 5. If you don't, you're probably looking at Trap 1
+(missing `layout`) or Trap 2 (height cascade).
+
 ---
 
 ## Self-help: when the skill doesn't have the answer
@@ -809,14 +879,17 @@ Read `<target>/webapp/manifest.json`, then **merge in** the legacy specifics:
 
 7. Set `sap.ui5.rootView` to `{ "viewName": "<ns>.view.App", "type": "XML", "id": "app" }`.
 
-8. Routing — **every route MUST have a `layout` property** (Trap 1 above):
+8. Routing — **every route MUST have a `layout` property** (Trap 1) **and every target MUST
+   have `type: "View"` + use `name`/`path`/`level` (NOT `viewName`/`viewPath`/`viewLevel`)**
+   (Trap 5):
 
    ```jsonc
    "routing": {
      "config": {
        "routerClass": "sap.f.routing.Router",
+       "type": "View",                       // ← REQUIRED in manifest v2 (Trap 5)
        "viewType": "XML",
-       "viewPath": "<ns>.view",
+       "path": "<ns>.view",                  // ← NOT "viewPath"
        "async": true,
        "controlId": "flexibleColumnLayout",
        "controlAggregation": "beginColumnPages",
@@ -827,23 +900,27 @@ Read `<target>/webapp/manifest.json`, then **merge in** the legacy specifics:
          "pattern": "",
          "name": "main",
          "target": ["main", "welcome"],
-         "layout": "TwoColumnsMidExpanded"   // ← REQUIRED (Welcome lives in mid column)
+         "layout": "TwoColumnsMidExpanded"   // ← REQUIRED (Trap 1)
        },
        {
-         "pattern": "Project/{projectId}",
+         "pattern": "<EntityRoute>/{<keyParam>}",
          "name": "detail",
          "target": ["main", "detail"],
-         "layout": "TwoColumnsMidExpanded"   // ← REQUIRED
+         "layout": "TwoColumnsMidExpanded"   // ← REQUIRED (Trap 1)
        }
      ],
      "targets": {
-       "main":     { "viewName": "Main",     "viewLevel": 1, "controlAggregation": "beginColumnPages" },
-       "welcome":  { "viewName": "Welcome",  "viewLevel": 2, "controlAggregation": "midColumnPages" },
-       "detail":   { "viewName": "Detail",   "viewLevel": 2, "controlAggregation": "midColumnPages" },
-       "notFound": { "viewName": "NotFound", "viewLevel": 3, "controlAggregation": "midColumnPages" }
+       "main":     { "type": "View", "id": "main",     "name": "Main",     "level": 1, "controlAggregation": "beginColumnPages" },
+       "welcome":  { "type": "View", "id": "welcome",  "name": "Welcome",  "level": 2, "controlAggregation": "midColumnPages" },
+       "detail":   { "type": "View", "id": "detail",   "name": "Detail",   "level": 2, "controlAggregation": "midColumnPages" },
+       "notFound": { "type": "View", "id": "notFound", "name": "NotFound", "level": 3, "controlAggregation": "midColumnPages" }
      }
    }
    ```
+
+   Note: `type: "View"` appears both on `config` AND on each target. The config-level default
+   should propagate, but per-target redundancy is belt+braces against UI5-version differences
+   in how the default is resolved.
 
 9. `sap.ui5.contentDensities` = `{ "compact": true, "cozy": true }` (declarative — fine).
 
@@ -1623,6 +1700,7 @@ What's next:
 | Symptom | Cause | Fix |
 |---|---|---|
 | **Page renders blank; console clean; DOM populated but every element has height: 0** | UI5 ComponentSupport stripped `data-sap-ui-component` attribute, so any CSS height selector tied to that attribute fails to match (Trap 2) | Add `style="height: 100%"` inline directly on the component `<div>` in `index.html`. CSS selectors won't work. |
+| **Page blank, columns empty, console warning "page stack is empty but should have been initialized"** | Manifest `_version` is 2.0.0+ (UI5 1.136+) and routing targets miss explicit `"type": "View"` and/or still use deprecated `viewName`/`viewPath`/`viewLevel` keys (Trap 5) | Add `"type": "View"` to `routing.config` AND each target; rename `viewName` → `name`, `viewPath` → `path`, `viewLevel` → `level`. Always-safe to do, even on v1.x manifests. |
 | **Only one FCL column visible; routing places content in mid/end column but it's hidden** | Matched route is missing the `layout` property (Trap 1) | Add `"layout": "TwoColumnsMidExpanded"` (or appropriate value) to **every** route, including the home/main route. The router only updates FCL layout from the matched route's `layout` value. |
 | **TypeScript forces casts like `(event.getParameters() as {listItem: ListItem}).listItem`** | Generic `Event` from `sap/ui/base/Event` was imported instead of the specific `<Control>$<Event>Event` (Trap 3) | Replace with the specific event type, e.g. `import { List$SelectionChangeEvent } from "sap/m/List"`. Use `get_api_reference` if uncertain. |
 | `create_ui5_app` returns no error but `<target>/webapp/Component.ts` is a `.js` file | UI5 MCP fell back to a JS template | Re-call with `typescript: true` explicit; verify `frameworkVersion` is supported (must be >= 1.96) |
