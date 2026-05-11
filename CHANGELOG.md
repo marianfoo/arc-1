@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.9.5](https://github.com/marianfoo/arc-1/compare/v0.9.4...v0.9.5) (2026-05-11)
+
+
+### Features
+
+* add SAPSearch tadir_lookup source modes + SAPWrite batch_create activateAtEnd ([#270](https://github.com/marianfoo/arc-1/issues/270)) ([dec53b4](https://github.com/marianfoo/arc-1/commit/dec53b46dd6143d58bcba9d22bbcb2ffc50f8718))
+* stable DCR signing key + 0/negative TTL = infinite ([#267](https://github.com/marianfoo/arc-1/issues/267)) ([1b4b191](https://github.com/marianfoo/arc-1/commit/1b4b1917d41bf615534e472fc7e32a290a9c23f2))
+
+
+### Bug Fixes
+
+* **rap:** write handler skeletons to CCIMP, not CCDEF ([#263](https://github.com/marianfoo/arc-1/issues/263)) ([60773f6](https://github.com/marianfoo/arc-1/commit/60773f6f034029174d901e5cabd21c4295efae5c))
+
+## [0.9.4](https://github.com/marianfoo/arc-1/compare/v0.9.3...v0.9.4) (2026-05-10)
+
+
+### Features
+
+* add FUNC structured-parameter support ([#259](https://github.com/marianfoo/arc-1/issues/259)) ([154db0f](https://github.com/marianfoo/arc-1/commit/154db0fdda32cb95dd9fa2d70acf8cd5ae25bb49))
+* add sprint 3 diagnostics cleanup ([#254](https://github.com/marianfoo/arc-1/issues/254)) ([0bb34cc](https://github.com/marianfoo/arc-1/commit/0bb34cc4e17fb1fb0fd38b6dd0c8521c38549343))
+* add TADIR lookup and batch package overrides ([#256](https://github.com/marianfoo/arc-1/issues/256)) ([dc2fe3d](https://github.com/marianfoo/arc-1/commit/dc2fe3dcec0ebc28dfced882843a357d6852b05b))
+* edit_method splices into class-local includes (CCDEF/CCIMP) ([#261](https://github.com/marianfoo/arc-1/issues/261)) ([99ba5a1](https://github.com/marianfoo/arc-1/commit/99ba5a13f4d0a1de5e5319e35b57e730883a24ec))
+* SAPWrite generate_behavior_implementation action (PR-C) ([#260](https://github.com/marianfoo/arc-1/issues/260)) ([5151d13](https://github.com/marianfoo/arc-1/commit/5151d13ece4635a79e5b97b61c5ce28de8e8386f))
+
+
+### Bug Fixes
+
+* harden apply_quickfix payloads ([#253](https://github.com/marianfoo/arc-1/issues/253)) ([a859fc5](https://github.com/marianfoo/arc-1/commit/a859fc57ee630aaa3dc72f745ecfcae0f656ac65))
+* retry ED064 activation and support ABAP release lint override ([#255](https://github.com/marianfoo/arc-1/issues/255)) ([8cc8833](https://github.com/marianfoo/arc-1/commit/8cc883305baad3deabead8b5c6ab2c54781e4b38))
+* support class include writes and RAP skeletons ([#257](https://github.com/marianfoo/arc-1/issues/257)) ([c4ac325](https://github.com/marianfoo/arc-1/commit/c4ac325fcb9704e48e089fd9a23499117db48e7f))
+
 ## [0.9.3](https://github.com/marianfoo/arc-1/compare/v0.9.2...v0.9.3) (2026-05-09)
 
 
