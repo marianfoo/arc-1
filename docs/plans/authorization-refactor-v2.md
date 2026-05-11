@@ -615,7 +615,7 @@ The exact list comes from the Task 0 inventory. The guaranteed set:
 - Modify: `CLAUDE.md`
 - Modify: `AGENTS.md`
 - Modify: `CHANGELOG.md` (breaking-change release notes)
-- Modify: `.claude/skills/arc1-cursor-regression/SKILL.md` (if hits)
+- Modify: `skills/arc1-cursor-regression/SKILL.md` (if hits)
 - Modify: `compare/00-feature-matrix.md` (timestamp refresh + add "central ACTION_POLICY" row)
 - Plus: any additional files from Task 0 grep not listed above.
 

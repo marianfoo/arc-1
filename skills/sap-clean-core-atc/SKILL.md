@@ -1,8 +1,13 @@
+---
+name: sap-clean-core-atc
+description: Audit a package of custom code and bucket every Z/Y object into Clean Core Levels A–D based on the SAP APIs it uses — the "is this cloud-ready?" assessment. Use when asked to "classify this package for clean core", "clean core readiness report", "Level A-D audit", or "is this code cloud-ready".
+---
+
 # SAP Clean Core ATC Classification
 
 Inventory a package of custom code and bucket every Z/Y object into **Clean Core Levels A–D** based on the SAP APIs it uses — the "is this cloud-ready?" audit.
 
-This is different from [migrate-custom-code](migrate-custom-code.md): that skill fixes one object's ATC findings; this one **produces a package-wide classification report** with per-object levels, used to plan a clean-core / BTP migration. It combines ARC-1 (ATC + source access) with mcp-sap-docs (released-API classification data from `SAP/abap-atc-cr-cv-s4hc`).
+This is different from [migrate-custom-code](../migrate-custom-code/SKILL.md): that skill fixes one object's ATC findings; this one **produces a package-wide classification report** with per-object levels, used to plan a clean-core / BTP migration. It combines ARC-1 (ATC + source access) with mcp-sap-docs (released-API classification data from `SAP/abap-atc-cr-cv-s4hc`).
 
 ## Clean Core Levels (what they mean)
 
@@ -153,9 +158,9 @@ CL_IXML          (used in 12 Z-objects)  →  XML transformations (A)
 
 Offer next steps:
 - "Want per-object detail for Level D objects?" (drill into the 4 riskiest)
-- "Want to migrate one of these objects now?" (→ [migrate-custom-code](migrate-custom-code.md))
-- "Want to see which Z-objects are even USED?" (→ [sap-unused-code](sap-unused-code.md) — no point migrating dead code)
-- "Want to document the Level A objects as reference examples?" (→ [sap-object-documenter](sap-object-documenter.md))
+- "Want to migrate one of these objects now?" (→ [migrate-custom-code](../migrate-custom-code/SKILL.md))
+- "Want to see which Z-objects are even USED?" (→ [sap-unused-code](../sap-unused-code/SKILL.md) — no point migrating dead code)
+- "Want to document the Level A objects as reference examples?" (→ [sap-object-documenter](../sap-object-documenter/SKILL.md))
 
 ## Error Handling
 
@@ -171,7 +176,7 @@ Offer next steps:
 
 ### What this skill is NOT
 
-- **Not a migration tool** — it classifies risk; use [migrate-custom-code](migrate-custom-code.md) to actually fix.
+- **Not a migration tool** — it classifies risk; use [migrate-custom-code](../migrate-custom-code/SKILL.md) to actually fix.
 - **Not a replacement for SAP's Custom Code Migration app** — that tool has more depth (runtime usage analysis, simplification DB, transport impact). This skill is a fast, LLM-friendly approximation.
 - **Accuracy depends on mcp-sap-docs dataset freshness** — the SAP/abap-atc-cr-cv-s4hc repo is updated per S/4HANA release.
 
@@ -186,4 +191,4 @@ Offer next steps:
 - Planning a move from ECC → ABAP Cloud on BTP
 - Quarterly custom-code health check
 - Before a major release upgrade (to flag high-risk objects early)
-- Scoping a custom-code retirement project (combine with [sap-unused-code](sap-unused-code.md))
+- Scoping a custom-code retirement project (combine with [sap-unused-code](../sap-unused-code/SKILL.md))

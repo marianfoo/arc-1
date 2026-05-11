@@ -1,3 +1,8 @@
+---
+name: generate-rap-service
+description: Generate a complete RAP OData UI service from a natural-language business object description — table, CDS views, behavior definitions, metadata extension, service definition, and behavior pool class. Use when asked to "create a RAP service for X", "scaffold a RAP UI", "build a Fiori RAP app", or "generate the RAP stack from scratch".
+---
+
 # Generate RAP OData UI Service
 
 Generate a complete RAP OData UI service from a natural language description of a business object. Creates the full artifact stack: database table, CDS views, behavior definitions, metadata extension, service definition, and behavior pool class.

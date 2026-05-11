@@ -1,3 +1,8 @@
+---
+name: migrate-custom-code
+description: ATC-driven S/4HANA custom code migration — runs ATC readiness checks, groups findings, and generates clean-core replacement code following modern ABAP patterns. Use when asked to "migrate this Z program", "fix ATC findings", "modernize this code for S/4HANA", "clean-core fixes", or "ABAP Cloud readiness for this object".
+---
+
 # Migrate Custom Code
 
 ATC-driven S/4HANA custom code migration assistant with automated fix proposals.

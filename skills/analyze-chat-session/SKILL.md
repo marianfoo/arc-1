@@ -1,3 +1,8 @@
+---
+name: analyze-chat-session
+description: Analyze the current conversation's tool calls, responses, errors, and approach to produce a structured feedback report for improving MCP tool usage with ARC-1. Use when the user asks to "analyze this session", "review my chat", "give feedback on tool usage", "how did I do", or wants a retrospective on a debugging session.
+---
+
 # Analyze Chat Session
 
 Analyze the current conversation's tool calls, responses, errors, and overall approach to produce a structured feedback report. The goal is continuous improvement of MCP tool usage patterns, prompt strategies, and ARC-1 server capabilities.
