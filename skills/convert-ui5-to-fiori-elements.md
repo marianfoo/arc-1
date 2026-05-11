@@ -35,6 +35,14 @@ This skill depends on:
 > domain. Substitute the user's entities throughout — the LLM rewrites every projection /
 > entity / field identifier to match the V4 service.
 
+> **Canonical annotation reference.** This skill points at the **ABAP RAP Fiori Feature
+> Showcase** (`SAP-samples/abap-platform-fiori-feature-showcase`) as the authoritative source
+> for `@UI.*` / `@ObjectModel.*` / `@Common.*` annotation patterns. When uncertain about how
+> to express a legacy UI feature as an annotation, search the showcase via
+> `mcp__sap-docs__search` with the feature's *Search Term* (e.g. `#OPHeaderAction`,
+> `#LineItemHighlight`, `#HeaderInfo`, `#ActionInLineItem`). The showcase is the
+> ground-truth catalog every annotation in this skill maps back to.
+
 ## Why this is its own skill
 
 Fiori Elements isn't a code transformation — it's a **deletion + relocation**. Most of the
@@ -52,14 +60,14 @@ real jobs:
 | Setting | Default | Rationale |
 |---|---|---|
 | Legacy app | `<source_app>/` | The freestyle JS app — read-only; mined in Phase 1 for the feature inventory. Authoritative source of every user-visible behavior the FE app must reproduce. |
-| Target FE app | `<fe_app>/` | Reserved folder; Fiori MCP generates here |
+| Target FE app | `<fe_app>/` — default name `modern-fe-app/` if user gives no path (mirrors the workspace pattern `legacy-ui5-app/` → `modern-ui5-app/` → `modern-fe-app/`) | Fiori MCP generates here; folder must exist and be empty (or empty subfolders) |
 | FE floorplan | List Report + Object Page (LROP V4) when the BO has a clear root + child facets | Maps cleanly to the typical RAP composition root + children. OVP only if the user explicitly asks. |
 | Template | `lropv4` | Default unless the user asks otherwise |
 | Generator | **SAP Fiori MCP server (`@sap-ux/fiori-mcp-server`)** via the `list_functionalities` → `get_functionality_details` → `execute_functionality` sequence | First-party SAP tool; understands FE V4 patterns natively |
 | App namespace | `<source_namespace>.fe` | Keeps the legacy and FE apps distinguishable (and the modern TS app too, if `modernize-ui5-app` was also run as the alternate path) |
 | UI5 version | Latest 1.x release (e.g. `1.147.2`) unless user specifies | LTS-track; latest FE V4 features available |
 | Language | TypeScript | Modern default; extension files use type-safe APIs |
-| OData V4 service URL | User-provided. Default: derive from the SRVB name produced by `migrate-segw-to-rap` (shape `/sap/opu/odata4/sap/<service>_o4/srvd_a2x/sap/<service>/0001`). | The Fiori MCP generator needs the exact endpoint to fetch `$metadata` |
+| OData V4 service URL | **Prefer the SRVD-direct path** on the system's HTTPS port: `https://<host>:<https-port>/sap/opu/odata4/sap/<srvb>/srvd/sap/<srvb>/0001` (e.g. `https://a4h.marianzeis.de:50001/sap/opu/odata4/sap/zui_dm_projects_o4/srvd/sap/zui_dm_projects_o4/0001`). Falls back to the Gateway hub path `http://<host>:<http-port>/sap/opu/odata4/sap/<srvb>/srvd_a2x/sap/<service>/0001` only when SRVD-direct isn't reachable. | Run 5 + Run 6 verified the SRVD-direct path works without `/n/IWFND/MAINT_SERVICE` registration on 7.5x systems. The hub path requires the routing-group manual step. |
 | Main entity | Root entity alias exposed by the SRVB (e.g. the alias on `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
 | Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
 | Extension language | TypeScript (controller extensions) | Match the rest of the chain |
@@ -102,11 +110,19 @@ Assert the SRVB exists and is active. If not, stop with *"V4 service binding `<V
 missing or inactive — run `migrate-segw-to-rap.md` first."*
 
 ```text
-Bash: curl -s -o /tmp/svc_metadata.xml -w "%{http_code}\n" "<base>/<V4_service_URL>/$metadata"
+Bash: curl -s -o /tmp/svc_metadata.xml -w "%{http_code}\n" "<V4_service_URL>/\$metadata?sap-client=<client>"
 ```
 
-Assert 200 OK. If 403, the V4 service group registration is missing — surface the manual step
-`/n/IWFND/MAINT_SERVICE` and stop.
+Assert 200 OK. **Try the SRVD-direct path first** (HTTPS port + `/srvd/sap/<srvb>/0001/`).
+
+If 403 with `IWBEP/CM_V4_COS/136`, the URL is using the Gateway hub path and the routing
+group isn't registered. **Switch to the SRVD-direct URL pattern before stopping** — the
+direct path bypasses the hub registration. Only fall back to *"register service group via
+`/n/IWFND/MAINT_SERVICE`"* if BOTH URL patterns fail.
+
+If 503 with `IWBEP/CM_V4_RUNTIME/000` ("service alias cache outdated"), retry once — this is
+a transient Gateway cache issue. If it persists across retries, treat as 403 and switch URL
+patterns.
 
 ### 0b. CDS projection is readable + writable
 
@@ -306,7 +322,7 @@ Classify each inventory item as one of:
 | Sort default StartDate desc | `@UI.PresentationVariant.SortOrder: [{ Property: 'StartDate', Descending: true }]` |
 | Search by ProjectId + Title | `@Search.searchable: true` at view level + `@Search.defaultSearchElement: true` on ProjectId and Title; `@UI.SelectionFields: ['ProjectId', 'Title', 'Status']` for the filter bar |
 | Audit-field display | `@UI.Identification`: Erdat, Ernam, Aedat, Aenam grouped as `@UI.FieldGroup.Audit` with `@UI.Facet` referencing the group |
-| Approve button (header) | RAP action `approve_project` is already annotated by the BDEF; FE renders it as a header button automatically. Add `@UI.LineItem` `dataAction` reference if you want it as a row action too. |
+| Approve button (header) | **The action does NOT auto-render from the BDEF.** Add an entry in `@UI.identification` on the root projection: `{ type: #FOR_ACTION, dataAction: 'approve_project', label: 'Approve' }` (showcase #OPHeaderAction). For a list-report toolbar button instead, add the same shape to `@UI.lineItem` (showcase #ActionInLineItem). Both annotations require the projection BDEF to already expose `use action approve_project;` from `migrate-segw-to-rap` Step 6. |
 | Project count footer | FE's list-report shows the count natively; no annotation needed |
 | Tasks tab in OP | `@UI.Facet` of type `#LINEITEM_REFERENCE` targeting `_Tasks` association |
 | Tasks columns | `@UI.LineItem` on `<child_projection_task>` (similar shape to the root LineItem) |
@@ -427,6 +443,15 @@ Splice in the planned annotations. Concrete shape (substitute your entities):
     targetQualifier: 'Audit' },
   { id: 'Tasks',        purpose: #STANDARD, type: #LINEITEM_REFERENCE, label: 'Tasks',
     targetElement: '_Tasks' }
+]
+// Header action — renders as an "Approve" button on the OP header (showcase #OPHeaderAction).
+// criticality 3 = green (success), 0 = neutral, 1 = red.
+@UI.identification: [
+  { type: #FOR_ACTION,
+    dataAction: 'approve_project',
+    label: 'Approve',
+    criticality: 3,
+    criticalityRepresentation: #WITH_ICON }
 ]
 @Search.searchable: true
 define root view entity <root_projection>
@@ -753,12 +778,21 @@ Reference checklist (adapt to the user's inventory):
 7. **Status field** in the row has the right color (criticality).
 8. **Tabs/facets** render each `@UI.Facet`-referenced association.
 9. **Nested facets** drill into grandchild entities (e.g. TimeEntries under Tasks).
-10. **Action button** renders for the BDEF action; clicking opens the action dialog or executes
-    directly.
+10. **Action button** renders for the BDEF action (from `@UI.identification` `DataFieldForAction`); clicking executes via the framework's standard CSRF/etag flow — no extension required for the round-trip.
 11. **Extension hook** fires for the cases inventoried in Phase 2b (validation, custom prompts).
 12. **Audit fields** show in the Audit facet on the OP.
 13. **Native FE count** in the list-report header matches the legacy footer phrasing
     (allowing for "X projects" vs "Showing X of Y" UX differences).
+
+### 7c.1 — Draft V4 reality (verified in Run 6)
+
+The V4 service exposes `IsActiveEntity` as part of every entity key under a draft scenario.
+Two consequences for testing:
+
+- **Keyed reads** must include `IsActiveEntity`: `Project(ProjectId='PRJ-0001',IsActiveEntity=true)` returns 200; the legacy-style `Project('PRJ-0001')` returns 400.
+- **Action invocation** requires the full CSRF dance: GET `<service-root>/?sap-client=<n>` with `X-CSRF-Token: Fetch` first → POST the action URL with the returned `X-CSRF-Token`, session cookie, and `If-Match: <etag>`. Skipping `If-Match` returns 428 (`CX_OD_PRECOND_REQUIRED`).
+
+These are normal for any V4 + draft service; FE templates handle them automatically at runtime. The notes here are for manual `curl` smokes only.
 
 If any step fails:
 
