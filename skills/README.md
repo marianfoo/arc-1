@@ -114,7 +114,7 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | Skill | What it does | When to use |
 |---|---|---|
 | [analyze-chat-session](analyze-chat-session/SKILL.md) | Analyzes the current conversation's tool calls and produces a feedback report | After a complex session — identifies inefficiencies, anti-patterns, and improvement suggestions |
-| [arc1-cursor-regression](arc1-cursor-regression/SKILL.md) | Generates a tailored Cursor MCP config and regression prompt set for ARC-1, derived from PR diff or chat findings | Verifying a specific ARC-1 PR/fix/feature against the live MCP surface |
+| [arc1-cursor-regression](../.claude/skills/arc1-cursor-regression/SKILL.md) | Generates a tailored Cursor MCP config and regression prompt set for ARC-1, derived from PR diff or chat findings | Verifying a specific ARC-1 PR/fix/feature against the live MCP surface |
 
 ### Typical Workflow
 
