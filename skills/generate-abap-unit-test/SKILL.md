@@ -1,3 +1,8 @@
+---
+name: generate-abap-unit-test
+description: Generate ABAP Unit tests for classes with dependency analysis, interface-based test doubles, and method-level surgical insertion. Use when asked to "generate unit tests for this class", "add ABAP Unit tests", "write tests for this method", or "create test doubles for ZCL_X".
+---
+
 # Generate ABAP Unit Test
 
 Generate ABAP Unit tests for classes with dependency analysis, test doubles, and method-level surgery.

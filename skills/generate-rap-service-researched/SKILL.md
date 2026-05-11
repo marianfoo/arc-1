@@ -1,3 +1,8 @@
+---
+name: generate-rap-service-researched
+description: Generate a production-quality RAP OData service through deep system research, best-practice analysis, and iterative planning with user approval before any code is written. Use when asked to "plan a RAP service properly", "research before building RAP", "design a RAP service for production", or for large RAP greenfield work in transportable packages.
+---
+
 # Generate RAP OData Service — Research-First
 
 Generate a production-quality RAP OData service through deep system research, best-practice analysis, and iterative planning before writing a single line of code.

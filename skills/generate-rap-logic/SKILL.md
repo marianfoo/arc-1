@@ -1,3 +1,8 @@
+---
+name: generate-rap-logic
+description: Generate RAP determinations, validations, and custom action implementations for an existing behavior definition by reading the RAP stack and filling empty method stubs in the behavior pool. Use when asked to "implement RAP determinations", "fill in behavior pool methods", "add RAP validation logic", or "generate custom action code".
+---
+
 # Generate RAP Business Logic
 
 Generate RAP determination, validation, and custom action implementations for an existing behavior definition. Reads the RAP stack, identifies empty method stubs (or missing handler signatures) in the behavior pool, and generates ABAP Cloud implementation code.

@@ -1,3 +1,8 @@
+---
+name: generate-cds-unit-test
+description: Generate an ABAP Unit test class for a CDS entity using the CDS Test Double Framework — replicates SAP Joule's "CDS Unit Test Generation" capability. Use when asked to "generate CDS unit tests", "test this CDS view", "create CDSTDF tests", or "write unit tests for ZI_SALESORDER".
+---
+
 # Generate CDS Unit Test
 
 Generate an ABAP Unit test class for a CDS entity using the CDS Test Double Framework.

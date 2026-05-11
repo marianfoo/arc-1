@@ -1,8 +1,13 @@
+---
+name: sap-object-documenter
+description: Produce stable, package-scoped Markdown documentation for many custom ABAP objects at once — classifies each by style (Classic/Modern/Mixed) and summarizes purpose and dependencies. Use when asked to "document this package", "generate onboarding docs for Z code", "seed a docs folder", or "knowledge transfer for this package".
+---
+
 # SAP Object Documenter
 
 Produce stable, package-scoped documentation for custom ABAP objects — classifies each by style (Classic / Modern / Mixed), summarizes purpose and dependencies, and outputs Markdown suitable for a repo wiki or onboarding doc.
 
-This skill complements [explain-abap-code](explain-abap-code.md) which targets a single object interactively. Use this one when you want **written docs for many objects at once** — e.g., to seed a `docs/` folder during onboarding, or to generate knowledge-transfer material before a team handoff.
+This skill complements [explain-abap-code](../explain-abap-code/SKILL.md) which targets a single object interactively. Use this one when you want **written docs for many objects at once** — e.g., to seed a `docs/` folder during onboarding, or to generate knowledge-transfer material before a team handoff.
 
 ## Smart Defaults (apply silently, do NOT ask)
 
@@ -183,9 +188,9 @@ Longest objects (may need deeper docs):
 
 ### Follow-up Options
 
-- "Want to expand any of these into deeper explanations?" (→ [explain-abap-code](explain-abap-code.md))
-- "Want to check clean-core readiness for this package?" (→ [sap-clean-core-atc](sap-clean-core-atc.md))
-- "Want to prune the dead ones first?" (→ [sap-unused-code](sap-unused-code.md))
+- "Want to expand any of these into deeper explanations?" (→ [explain-abap-code](../explain-abap-code/SKILL.md))
+- "Want to check clean-core readiness for this package?" (→ [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md))
+- "Want to prune the dead ones first?" (→ [sap-unused-code](../sap-unused-code/SKILL.md))
 
 ## Error Handling
 
@@ -217,6 +222,6 @@ Longest objects (may need deeper docs):
 
 ### When NOT to Use This Skill
 
-- For a single object — use [explain-abap-code](explain-abap-code.md), faster and interactive.
+- For a single object — use [explain-abap-code](../explain-abap-code/SKILL.md), faster and interactive.
 - For SAP-shipped code — this is Z/Y-only; for SAP objects, use mcp-sap-docs directly.
-- When code quality analysis is the goal — use [migrate-custom-code](migrate-custom-code.md).
+- When code quality analysis is the goal — use [migrate-custom-code](../migrate-custom-code/SKILL.md).

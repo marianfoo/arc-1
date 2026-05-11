@@ -1,3 +1,8 @@
+---
+name: convert-ui5-to-fiori-elements
+description: Generate a Fiori Elements V4 LROP app (list report + object page) driven by @UI.* annotations on a V4 RAP service, using the Fiori MCP server's 3-step (list_functionalities → get_functionality_details → execute_functionality) workflow. Use when asked to "build a Fiori Elements app", "generate LROP from this V4 service", "convert to annotation-driven UI", or "scaffold Fiori Elements V4".
+---
+
 # Convert legacy UI5 JS app ➜ Fiori Elements V4 (annotation-first)
 
 Generate a Fiori Elements V4 list-report + object-page app driven by `@UI.*` annotations on

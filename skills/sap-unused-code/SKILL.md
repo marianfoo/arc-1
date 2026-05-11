@@ -1,3 +1,8 @@
+---
+name: sap-unused-code
+description: Find Z/Y custom objects never called at runtime by combining SAP call-monitor (SCMON) usage data with static where-used analysis — classifies each as UNUSED/LIKELY_UNUSED/USED/INDETERMINATE. Use when asked to "find unused custom code", "identify retirement candidates", "dead Z objects", or "what can we delete safely".
+---
+
 # SAP Unused Code Discovery
 
 Find Z/Y custom objects that are **never called at runtime** — the prerequisite for any credible custom-code retirement project. Combines runtime usage data from SAP's call monitor (SCMON) with static where-used analysis to classify each object as **UNUSED / LIKELY_UNUSED / USED / INDETERMINATE**.
@@ -250,8 +255,8 @@ A LIKELY_UNUSED object whose callers are all UNUSED is transitively deletable. O
 ### 6d. Follow-up options
 
 - "Want to see the static reference graph as a tree?" (→ chained `SAPNavigate where-used`)
-- "Want to clean-core-check the USED objects before worrying about unused ones?" (→ [sap-clean-core-atc](sap-clean-core-atc.md))
-- "Want documentation for the USED objects?" (→ [sap-object-documenter](sap-object-documenter.md))
+- "Want to clean-core-check the USED objects before worrying about unused ones?" (→ [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md))
+- "Want documentation for the USED objects?" (→ [sap-object-documenter](../sap-object-documenter/SKILL.md))
 - "Want to start deleting UNUSED objects?" → Manual: this skill **does not delete anything**; the user does it via `SAPWrite` or a transport
 
 ## Error Handling
@@ -277,7 +282,7 @@ A LIKELY_UNUSED object whose callers are all UNUSED is transitively deletable. O
 
 - **No deletion.** Report only. Deletion must be a human decision, ideally via transport and CTS.
 - **No cross-system consolidation** (DEV + QAS + PRD usage). That requires exports from each system; this skill reads one system at a time.
-- **No replacement suggestions** for deprecated-but-used code. For that, use [sap-clean-core-atc](sap-clean-core-atc.md).
+- **No replacement suggestions** for deprecated-but-used code. For that, use [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md).
 - **No XML import** (Option C). If the customer has SUSG XML dumps and nothing else, they need an offline parser.
 
 ### When to Use This Skill
@@ -286,4 +291,4 @@ A LIKELY_UNUSED object whose callers are all UNUSED is transitively deletable. O
 - Before a migration — don't migrate what you don't use
 - Post-project cleanup — removing code written for a feature that was rolled back
 - License/compliance reviews requiring a dead-code inventory
-- **Combine with [sap-clean-core-atc](sap-clean-core-atc.md):** migrate USED Level-A code, audit USED Level-C/D code, delete UNUSED code entirely
+- **Combine with [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md):** migrate USED Level-A code, audit USED Level-C/D code, delete UNUSED code entirely

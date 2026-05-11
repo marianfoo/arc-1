@@ -1,3 +1,8 @@
+---
+name: bootstrap-system-context
+description: Ground the assistant in the target SAP system before any coding work by producing a local system-info.md that captures SID, release, components, detected features, RAP constraints, and ARC-1 lint preset. Use when asked to "set up system context", "bootstrap the SAP system", "create system-info.md", or when starting a session against an unfamiliar SAP system.
+---
+
 # Bootstrap System Context
 
 Ground the assistant in the target SAP system before any coding work. Produces a local `system-info.md` file that captures SID, release, installed components, detected features, RAP-relevant constraints, and ARC-1's active lint preset — so later prompts stop guessing at constraints.

@@ -1,3 +1,8 @@
+---
+name: migrate-segw-to-rap
+description: Reverse-engineer a SEGW-built OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT) into a modern RAP V4 service — tables, CDS views (interface + projection), behavior definitions, draft entities, service definition + binding. Use when asked to "migrate this SEGW service to RAP", "convert OData V2 to V4 RAP", "modernize this gateway service for S/4", or "replace SEGW with RAP V4".
+---
+
 # Migrate SEGW OData V2 service ➜ RAP service
 
 Reverse-engineer a classic SEGW-built OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT) into a modern

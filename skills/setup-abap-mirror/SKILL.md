@@ -1,3 +1,8 @@
+---
+name: setup-abap-mirror
+description: Create a local abapGit-style mirror of an SAP package or object set so you can git-diff and search locally without round-tripping every read. Use when asked to "mirror this package locally", "set up local ABAP files", "create an abapGit-style mirror", or "pull these objects to disk for offline review".
+---
+
 # Setup ABAP Mirror
 
 Create a local abapGit-style mirror of an SAP package or object set. Reads are authoritative from the SAP system; local files give you IDE context, `git diff`, and fast searching without round-tripping every time.

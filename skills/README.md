@@ -1,51 +1,51 @@
 # ARC-1 Skills
 
-Best-practice prompt templates for common SAP development workflows with ARC-1.
+Best-practice agent skills for common SAP development workflows with ARC-1.
 
-## Usage
+Each skill is a directory containing a `SKILL.md` file with YAML frontmatter — the format used by [Anthropic Agent Skills](https://code.claude.com/docs/en/skills) and consumed by the [`vercel-labs/skills`](https://github.com/vercel-labs/skills) CLI. Agents discover them by `description` and load them on demand.
 
-These skills are prompt templates that work with any AI coding assistant that supports custom instructions or commands. Pick your tool below.
+## Install via the `skills` CLI (recommended)
 
-### Claude Code (CLI / Desktop / Web)
-
-Copy skill files into your commands directory, then invoke as slash commands:
+The fastest way is `npx skills` — it auto-detects the agents installed in your project (Claude Code, Cursor, GitHub Copilot, OpenCode, Gemini CLI, Codex, …) and installs into the right paths.
 
 ```bash
-cp skills/generate-cds-unit-test.md ~/.claude/commands/
+# Install all ARC-1 skills into the current project
+npx skills add marianfoo/arc-1
+
+# Install globally (available in every project)
+npx skills add marianfoo/arc-1 -g
+
+# Install just one skill
+npx skills add marianfoo/arc-1 -s generate-rap-service
+
+# Pin to a release tag
+npx skills add marianfoo/arc-1#v1.0.0
 ```
+
+See the [`skills` CLI docs](https://github.com/vercel-labs/skills#readme) for `update`, `remove`, project-pinned lockfiles, and the full agent compatibility matrix.
+
+## Manual install (without the CLI)
+
+Copy the whole `skills/<skill-name>/` directory into your tool's skills directory. The agent reads `SKILL.md` and discovers the skill via its frontmatter `description`.
+
+| Tool | Project install | Global install |
+|---|---|---|
+| Claude Code | `.claude/skills/<name>/` | `~/.claude/skills/<name>/` |
+| Cursor | `.agents/skills/<name>/` | `~/.cursor/skills/<name>/` |
+| GitHub Copilot (VS Code) | `.agents/skills/<name>/` | `~/.copilot/skills/<name>/` |
+| OpenAI Codex (CLI) | `.agents/skills/<name>/` | `~/.codex/skills/<name>/` |
+| Gemini CLI | `.agents/skills/<name>/` | `~/.gemini/skills/<name>/` |
+| OpenCode | `.agents/skills/<name>/` | `~/.config/opencode/skills/<name>/` |
+
+Example for Claude Code (project scope):
+
+```bash
+git clone https://github.com/marianfoo/arc-1.git /tmp/arc-1
+mkdir -p .claude/skills
+cp -r /tmp/arc-1/skills/generate-rap-service .claude/skills/
 ```
-/generate-cds-unit-test ZI_SALESORDER
-```
 
-Docs: https://docs.anthropic.com/en/docs/claude-code/slash-commands
-
-### VS Code — GitHub Copilot
-
-Add as a reusable prompt file in `.github/copilot-instructions.md` or use the **Copilot Chat prompt files** feature (`.github/prompts/*.prompt.md`). Reference in chat with `#<prompt-name>`.
-
-Docs: https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot
-
-### VS Code — Copilot Coding Agent (Copilot Workspace)
-
-Place instructions in `.github/copilot-instructions.md` — the agent reads them automatically for task context.
-
-Docs: https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot
-
-### Cursor
-
-Add as a **Rule** in `.cursor/rules/` (one `.md` file per skill). Rules are automatically included in context.
-
-Docs: https://cursor.com/docs/rules
-
-### OpenAI Codex (CLI)
-
-Copy a .rules file under ./codex/rules/ (for example, ~/.codex/rules/default.rules)
-
-Docs: https://developers.openai.com/codex/rules
-
-### Generic / Other Tools
-
-Copy the skill markdown content into your tool's system prompt, custom instructions, or project context file. The skills are self-contained prompt templates — they work anywhere you can provide custom instructions.
+For tools not listed above, copy the body of `SKILL.md` into your tool's system prompt, custom instructions, or project context file. The skills are self-contained — they work anywhere you can provide custom instructions.
 
 ## Prerequisites
 
@@ -62,11 +62,11 @@ These skills assume you have:
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [generate-rap-service](generate-rap-service.md) | Creates a complete RAP OData service stack (table, CDS views, BDEF, SRVD, SRVB, class) from a natural language description, with provider-contract-aware service generation | Quick prototyping, simple CRUD, standard UI service generation |
-| [generate-rap-service-researched](generate-rap-service-researched.md) | Same output as above, but researches the target system first (existing naming conventions, architecture patterns, revisions, docs, formatter settings, impact) and builds an approved plan before creating anything | Production-quality services in transportable packages, complex domains, "measure twice, cut once" mode |
-| [generate-rap-logic](generate-rap-logic.md) | Implements determination and validation methods in an existing RAP behavior pool using structured class reads, version-aware edits, and quickfix-aware validation | After creating a RAP service — fills in the empty method stubs with ABAP Cloud logic |
-| [generate-cds-unit-test](generate-cds-unit-test.md) | Generates ABAP Unit tests for CDS entities using the CDS Test Double Framework | When a CDS view has calculations, CASE expressions, WHERE filters, JOINs, or aggregations worth testing |
-| [generate-abap-unit-test](generate-abap-unit-test.md) | Generates ABAP Unit tests for classes with dependency analysis and test doubles | When a class has non-trivial business logic and uses dependency injection |
+| [generate-rap-service](generate-rap-service/SKILL.md) | Creates a complete RAP OData service stack (table, CDS views, BDEF, SRVD, SRVB, class) from a natural language description, with provider-contract-aware service generation | Quick prototyping, simple CRUD, standard UI service generation |
+| [generate-rap-service-researched](generate-rap-service-researched/SKILL.md) | Same output as above, but researches the target system first (existing naming conventions, architecture patterns, revisions, docs, formatter settings, impact) and builds an approved plan before creating anything | Production-quality services in transportable packages, complex domains, "measure twice, cut once" mode |
+| [generate-rap-logic](generate-rap-logic/SKILL.md) | Implements determination and validation methods in an existing RAP behavior pool using structured class reads, version-aware edits, and quickfix-aware validation | After creating a RAP service — fills in the empty method stubs with ABAP Cloud logic |
+| [generate-cds-unit-test](generate-cds-unit-test/SKILL.md) | Generates ABAP Unit tests for CDS entities using the CDS Test Double Framework | When a CDS view has calculations, CASE expressions, WHERE filters, JOINs, or aggregations worth testing |
+| [generate-abap-unit-test](generate-abap-unit-test/SKILL.md) | Generates ABAP Unit tests for classes with dependency analysis and test doubles | When a class has non-trivial business logic and uses dependency injection |
 
 #### generate-rap-service vs generate-rap-service-researched
 
@@ -96,16 +96,16 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [explain-abap-code](explain-abap-code.md) | Reads an ABAP object, fetches all dependencies via SAPContext, and produces a structured explanation | Onboarding to unfamiliar code, investigating bugs, documenting undocumented objects |
-| [migrate-custom-code](migrate-custom-code.md) | Runs ATC readiness checks, groups findings by priority, and generates replacement code | Preparing custom code for S/4HANA migration or ABAP Cloud readiness |
-| [sap-object-documenter](sap-object-documenter.md) | Batch-documents many custom objects at once — purpose, style (Classic/Modern/Mixed), dependencies — as Markdown | Onboarding packages, handoffs, seeding a repo wiki (vs. explain-abap-code which is single-object interactive) |
+| [explain-abap-code](explain-abap-code/SKILL.md) | Reads an ABAP object, fetches all dependencies via SAPContext, and produces a structured explanation | Onboarding to unfamiliar code, investigating bugs, documenting undocumented objects |
+| [migrate-custom-code](migrate-custom-code/SKILL.md) | Runs ATC readiness checks, groups findings by priority, and generates replacement code | Preparing custom code for S/4HANA migration or ABAP Cloud readiness |
+| [sap-object-documenter](sap-object-documenter/SKILL.md) | Batch-documents many custom objects at once — purpose, style (Classic/Modern/Mixed), dependencies — as Markdown | Onboarding packages, handoffs, seeding a repo wiki (vs. explain-abap-code which is single-object interactive) |
 
 ### Clean Core & Custom Code Retirement
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [sap-clean-core-atc](sap-clean-core-atc.md) | Audits a package of custom code and buckets every Z/Y object into Clean Core Levels A–D using mcp-sap-docs + ATC | Planning an ECC→S/4HANA Cloud or BTP move; quarterly custom-code health check |
-| [sap-unused-code](sap-unused-code.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_ALLOW_FREE_SQL=true` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
+| [sap-clean-core-atc](sap-clean-core-atc/SKILL.md) | Audits a package of custom code and buckets every Z/Y object into Clean Core Levels A–D using mcp-sap-docs + ATC | Planning an ECC→S/4HANA Cloud or BTP move; quarterly custom-code health check |
+| [sap-unused-code](sap-unused-code/SKILL.md) | Finds Z/Y objects never called at runtime using SCMON or SUSG, then cross-references static where-used | Scoping a custom-code retirement project; pre-migration dead-code cleanup (requires `SAP_ALLOW_FREE_SQL=true` + `S_TABU_NAM` on `SCMON_*`/`SUSG_*`) |
 
 ### Legacy Migration (Backend + UI)
 
@@ -113,9 +113,9 @@ End-to-end conversion of legacy SAP stacks. `migrate-segw-to-rap` handles the OD
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [migrate-segw-to-rap](migrate-segw-to-rap.md) | Reverse-engineers a SEGW-built OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT) into a modern RAP V4 service: tables, CDS views (interface + projection), behavior definitions, draft entities, service definition + binding | S/4HANA modernization; ABAP Cloud readiness; replacing CASE_MANAGEMENT_API / SEGW services that need to land on a Fiori Elements or modern UI5 app |
-| [convert-ui5-to-fiori-elements](convert-ui5-to-fiori-elements.md) | Generates a Fiori Elements V4 LROP app (list report + object page) driven by `@UI.*` annotations on the V4 service, using the Fiori MCP server's 3-step (`list_functionalities` → `get_functionality_details` → `execute_functionality`) workflow | The legacy UI maps cleanly to a standard LROP pattern; you want minimum custom code and maximum SAP-managed consistency |
-| [modernize-ui5-app](modernize-ui5-app.md) | Converts a legacy UI5 freestyle JavaScript app (sync bootstrap, jQuery.sap.*, ES5, sap_belize) into a modern UI5 TypeScript app on UI5 1.147 with `sap.f.FlexibleColumnLayout`, typed event handlers, ES modules, `BaseController`, sap_horizon — with 5 documented "Critical Traps" up front to skip past common debugging detours | The legacy UI has custom controls / non-standard UX that don't fit a Fiori Elements template, or you want a TypeScript freestyle baseline for further customization |
+| [migrate-segw-to-rap](migrate-segw-to-rap/SKILL.md) | Reverse-engineers a SEGW-built OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT) into a modern RAP V4 service: tables, CDS views (interface + projection), behavior definitions, draft entities, service definition + binding | S/4HANA modernization; ABAP Cloud readiness; replacing CASE_MANAGEMENT_API / SEGW services that need to land on a Fiori Elements or modern UI5 app |
+| [convert-ui5-to-fiori-elements](convert-ui5-to-fiori-elements/SKILL.md) | Generates a Fiori Elements V4 LROP app (list report + object page) driven by `@UI.*` annotations on the V4 service, using the Fiori MCP server's 3-step (`list_functionalities` → `get_functionality_details` → `execute_functionality`) workflow | The legacy UI maps cleanly to a standard LROP pattern; you want minimum custom code and maximum SAP-managed consistency |
+| [modernize-ui5-app](modernize-ui5-app/SKILL.md) | Converts a legacy UI5 freestyle JavaScript app (sync bootstrap, jQuery.sap.*, ES5, sap_belize) into a modern UI5 TypeScript app on UI5 1.147 with `sap.f.FlexibleColumnLayout`, typed event handlers, ES modules, `BaseController`, sap_horizon — with 5 documented "Critical Traps" up front to skip past common debugging detours | The legacy UI has custom controls / non-standard UX that don't fit a Fiori Elements template, or you want a TypeScript freestyle baseline for further customization |
 
 #### convert-ui5-to-fiori-elements vs modernize-ui5-app
 
@@ -135,14 +135,15 @@ Both run against the same V4 RAP service produced by `migrate-segw-to-rap`. The 
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [bootstrap-system-context](bootstrap-system-context.md) | Probes SID, release, installed components, feature flags, and lint preset; writes a local `system-info.md` | First step of a session against an unfamiliar system — grounds the assistant in real constraints before any code work |
-| [setup-abap-mirror](setup-abap-mirror.md) | Creates a local abapGit-style mirror of a package or object list for IDE context and `git diff` | Onboarding a codebase, pre-migration snapshotting, feeding local context to tools that can't call MCP per-read |
+| [bootstrap-system-context](bootstrap-system-context/SKILL.md) | Probes SID, release, installed components, feature flags, and lint preset; writes a local `system-info.md` | First step of a session against an unfamiliar system — grounds the assistant in real constraints before any code work |
+| [setup-abap-mirror](setup-abap-mirror/SKILL.md) | Creates a local abapGit-style mirror of a package or object list for IDE context and `git diff` | Onboarding a codebase, pre-migration snapshotting, feeding local context to tools that can't call MCP per-read |
 
 ### Meta / Quality
 
 | Skill | What it does | When to use |
 |---|---|---|
-| [analyze-chat-session](analyze-chat-session.md) | Analyzes the current conversation's tool calls and produces a feedback report | After a complex session — identifies inefficiencies, anti-patterns, and improvement suggestions |
+| [analyze-chat-session](analyze-chat-session/SKILL.md) | Analyzes the current conversation's tool calls and produces a feedback report | After a complex session — identifies inefficiencies, anti-patterns, and improvement suggestions |
+| [arc1-cursor-regression](../.claude/skills/arc1-cursor-regression/SKILL.md) | Generates a tailored Cursor MCP config and regression prompt set for ARC-1, derived from PR diff or chat findings | Verifying a specific ARC-1 PR/fix/feature against the live MCP surface |
 
 ### Typical Workflow
 

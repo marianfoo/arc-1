@@ -1,3 +1,8 @@
+---
+name: explain-abap-code
+description: Explain ABAP objects with full dependency context (via SAPContext) and optional ATC code quality analysis — replicates SAP Joule's "Explain Code" capability. Use when asked to "explain this ABAP", "what does ZCL_X do", "walk me through this class/CDS view", or "review this object's quality".
+---
+
 # Explain ABAP Code
 
 Explain ABAP objects with full dependency context and optional ATC code quality analysis.

@@ -1,3 +1,8 @@
+---
+name: modernize-ui5-app
+description: Convert a legacy UI5 freestyle JavaScript app (sync bootstrap, jQuery.sap.*, ES5, sap_belize) into a modern UI5 1.147 TypeScript app with sap.f.FlexibleColumnLayout, typed event handlers, ES modules, BaseController, and sap_horizon — with 5 documented critical traps up front. Use when asked to "modernize this UI5 app", "convert to UI5 TypeScript", "upgrade jQuery.sap to modern UI5", or "migrate freestyle UI5 to 1.147".
+---
+
 # Modernize UI5 freestyle JS app ➜ UI5 TypeScript app
 
 Convert a legacy UI5 freestyle JavaScript app (typical 2018–2021 era — sync bootstrap, JS
