@@ -63,6 +63,7 @@ nav:
   - Reference:
       - Architecture: architecture.md
       - Configuration: configuration-reference.md
+      - Configuration Precedence: configuration-precedence.md
       - Caching: caching.md
       - Security: security-guide.md
       - Updating: updating.md
