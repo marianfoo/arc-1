@@ -385,6 +385,13 @@ Print the full plan to the user. Wait for explicit **"yes, proceed"** or modific
 the user wants changes (different naming, draft enabled, different RAP scenario), revise and
 re-present.
 
+> **Non-interactive mode.** If the user's initial prompt already supplied the Phase-5
+> equivalent inputs (legacy service, target package, transport, scenario, draft on/off)
+> AND said "run end-to-end" / "don't stop for review", skip the rhetorical *"yes, proceed?"*
+> gate. Print the plan as a manifest and advance directly to Phase 5f / Phase 6. Only stop
+> if Phase 5 surfaced a genuine conflict (missing input, contradictory scenario flags, etc.).
+> See Run 6 findings — full-chain automations otherwise hit a phantom gate.
+
 ### 5f. Lock the artifact list as a Phase-6 contract
 
 **Before leaving Phase 5, the skill MUST emit an artifact-list contract that Phase 6 will
@@ -554,7 +561,20 @@ dats_tims_to_tstmp(
 ) as LastChangedStamp
 ```
 
-Activate after each create (or use `batch_create`).
+> **Activation order for composition CDS — anti-pattern callout.** Do **not** use
+> `batch_create` for the three composition-linked CDS roots (parent → child → grandchild).
+> `batch_create` activates each object inline in array order, so the parent
+> `composition [0..*] of ZR_DM_TASK as _Tasks` activates **before** `ZR_DM_TASK` exists,
+> hitting *"data source `ZR_DM_TASK` does not exist"* (Run 6 reproducer). Two safe paths:
+>
+> 1. **Per-file `SAPWrite(action="create")`** for each root, then a **single
+>    `SAPActivate(action="activate", objects=[...])` batch** at the end (after every DDL
+>    source has landed). This is the recommended pattern for composition graphs.
+> 2. Equivalent: `SAPWrite create` parent → `SAPActivate` child first → activate parent
+>    last, manually walking the tree bottom-up.
+>
+> The same anti-pattern applies to **Step 3 projections** (composition chain mirrored).
+> Activate the projection trio together at the end, not inline.
 
 #### Step 3 — CDS projections (`ZC_DM_*`) — DO NOT SKIP
 
@@ -569,12 +589,17 @@ the contract on children yields *"inappropriate provider contract on …"* on ac
 
 ##### Root projection — WITH contract
 
+Pick the contract based on scenario:
+- **Managed + draft + CUD** (this skill's default): `provider contract transactional_query`
+  (Run 3 evidence on 7.58: combining projection BDEF + `use draft` rejects `transactional_interface`).
+- **Read-mostly, no draft, no CUD**: `provider contract transactional_interface`.
+
 ```cds
 @AccessControl.authorizationCheck : #NOT_REQUIRED
 @EndUserText.label : 'Demo project — UI projection (root)'
 @Metadata.allowExtensions: true
 define root view entity ZC_DM_PROJECT
-  provider contract transactional_interface
+  provider contract transactional_query
   as projection on ZR_DM_PROJECT
 {
   key ProjectId,
@@ -634,6 +659,14 @@ SAPWrite(action="create", type="CLAS", name="ZBP_DM_PROJECT",
          package="<target_package>", transport="<transport>")
 SAPActivate(type="CLAS", name="ZBP_DM_PROJECT")
 ```
+
+> **Expected activation behavior.** The `SAPActivate` here may return *"no behavior
+> definition for `zr_dm_project`"* — that's **expected and OK**. The BDEF doesn't exist
+> yet; it's created in Step 5. Don't treat this as a real failure. The class will activate
+> cleanly once the BDEF is in place; Step 7 (`generate_behavior_implementation`) re-activates
+> the class with handlers anyway. Either:
+> - Skip activation here (write only) and rely on Step 7 to activate.
+> - Or accept the warning and re-activate the class as part of Step 10's batch activate.
 
 That's it. No CCDEF/CCIMP write here. No ADT pause. Continue to Step 5.
 
@@ -719,22 +752,43 @@ chain has to terminate at the entity that holds `lock master`.
 
 #### Step 6 — Projection BDEF
 
-Trivial; just declares behavior alias:
+Declares the behavior alias for the projection. Run 6 found that 7.58 enforces two
+non-obvious syntax rules in projection BDEFs — bake them in:
+
+1. `use draft;` at the **top** (not inside the body) when the root BDEF declared
+   `with draft`. Without it, `use action Edit/Activate/Discard/Resume/Prepare` is rejected.
+2. Inside `use association _X { ... }` blocks, write **bare operation names** (`create;`),
+   **not** `use create;` — the `use` keyword belongs at the top level only.
+
+Canonical projection BDEF for the root projection (managed + draft + CUD scenario):
 
 ```abap
 projection;
 strict ( 2 );
+use draft;
 
 define behavior for ZC_DM_PROJECT alias Project
   use etag
 {
-  use create; use update; use delete;
-  use action Edit; use action Activate; use action Discard; use action Resume;
+  use create;
+  use update;
+  use delete;
+
+  use action Edit;
+  use action Activate;
+  use action Discard;
+  use action Resume;
   use action Prepare;
   use action approve_project;
-  use association _Tasks { use create; }
+
+  use association _Tasks { create; }     " <- bare 'create;' inside, NOT 'use create;'
 }
 ```
+
+Child projections (`ZC_DM_TASK`, `ZC_DM_TIMEENTRY`) need their own projection BDEF blocks
+in the same DDLS or as separate definitions, each using
+`use association _Project` / `_Task` to expose the upward composition for the lock-master
+chain. Bare `create;` inside association bodies, same rule.
 
 #### Step 7 — Generate the behavior implementation (one call, fully autonomous)
 
@@ -848,14 +902,23 @@ SAPActivate(action="activate", objects=[
 SAPActivate(action="publish_srvb", name="ZUI_DM_PROJECTS_O4")
 ```
 
-#### Step 12 — MANUAL step: register V4 service group in /IWFND
+#### Step 12 — CONTINGENT manual step: V4 service-group registration
 
-`publish_srvb` activates the binding at ADT level **but on 7.5x systems the V4 routing group
-is not auto-registered with the SAP Gateway hub**. Without this manual step the runtime URL
-returns 403 with `IWBEP/CM_V4_COS/136 — Service 'ZUI_DM_PROJECTS' repository 'SRVD_A2X' is
-not assigned to group 'ZUI_DM_PROJECTS_O4'`.
+`publish_srvb` activates the binding at ADT level. On most 7.5x systems there are **two
+runtime URL shapes** that consume the binding, and only one needs Gateway-hub registration:
 
-Tell the user to do (in SAP GUI):
+| Path | Behavior on a fresh `publish_srvb` (no IWFND step) |
+|---|---|
+| **Gateway hub** — `http://<host>:50000/sap/opu/odata4/sap/<srvb>_o4/srvd_a2x/sap/<srvb_short>/0001/` | Returns **403** with `IWBEP/CM_V4_COS/136 — Service 'ZUI_DM_PROJECTS' repository 'SRVD_A2X' is not assigned to group 'ZUI_DM_PROJECTS_O4'`. Needs registration. |
+| **SRVD-direct** — `https://<host>:50001/sap/opu/odata4/sap/<srvb>_o4/srvd/sap/<srvb>/0001/` | Returns **200** without IWFND registration — verified Run 5 + Run 6. Path segment `srvd/sap/<srvb>` (not `srvd_a2x/sap/<srvb_short>`). |
+
+**Decision:**
+1. Try the **SRVD-direct path** in Phase 7 first (no manual step). If it works, proceed —
+   Step 12 becomes a no-op.
+2. Only return here to do the manual step if the SRVD-direct path also fails on the
+   target system, OR if the consumer (FE app, partner) is hardwired to the hub path.
+
+If you do need the manual step, in SAP GUI:
 
 ```text
 /n/IWFND/MAINT_SERVICE
@@ -868,8 +931,10 @@ Tell the user to do (in SAP GUI):
   → Service Group "ZUI_DM_PROJECTS_O4" → Assign SRVD_A2X service "ZUI_DM_PROJECTS"
 ```
 
-**STOP and wait** for user confirmation that the service group is registered before running
-Phase 7 smoke tests — they'll all 403 otherwise.
+Note: the hub path can return a transient **503 `CM_V4_RUNTIME/000`** ("Service alias cache
+outdated") immediately after `publish_srvb`, followed by **403 `COS/136`** on the next call.
+Distinct symptoms — the 503 is an alias-cache wedge, the 403 is the missing registration.
+Wait a few seconds and re-test before assuming the registration is the cause.
 
 #### Step 13 — Phase 5 → Phase 6 contract echo
 
@@ -911,22 +976,78 @@ curl -u "$USER:$PASS" "<base>/sap/opu/odata/sap/<legacy_service>/ProjectSet('PRJ
 # expect: 3
 ```
 
-### 7b. New V4 results
+### 7b. New V4 — pick the URL shape that works
+
+Try both in parallel. The SRVD-direct path usually works without the Step 12 manual
+registration; the Gateway hub path requires it.
 
 ```bash
-NEW_BASE="<base>/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001"
-curl -u "$USER:$PASS" "$NEW_BASE/Project/\$count"
-# expect: 5  (same)
-curl -u "$USER:$PASS" "$NEW_BASE/Project('PRJ-0001')/_Tasks/\$count"
-# expect: 3  (same)
-curl -u "$USER:$PASS" -X POST "$NEW_BASE/Project/com.sap.gateway.srvd.zui_dm_projects.v0001.approve_project" \
-     -H "Content-Type: application/json" -H "X-CSRF-Token: <token>" \
-     -d '{"ProjectId":"PRJ-0003"}'
+# SRVD-direct (HTTPS, port 50001, /srvd/sap/<srvb>/ path) — preferred, no Step 12 needed
+NEW_BASE_DIRECT="https://<host>:50001/sap/opu/odata4/sap/zui_dm_projects_o4/srvd/sap/zui_dm_projects_o4/0001"
+
+# Gateway hub (HTTP, port 50000, /srvd_a2x/sap/<srvb_short>/ path) — needs Step 12
+NEW_BASE_HUB="<base>/sap/opu/odata4/sap/zui_dm_projects_o4/srvd_a2x/sap/zui_dm_projects/0001"
+
+# Smoke-test the SRVD-direct path first
+curl -s -o /dev/null -w "%{http_code}\n" -u "$USER:$PASS" \
+  "$NEW_BASE_DIRECT/Project?\$top=1&sap-client=001"
+# 200 = good; 403 = check Gateway hub registration; 503 = transient alias cache, retry
+```
+
+Pick whichever path returned 200, then use it for the rest of Phase 7. Pin the working
+URL into RUN-NOTES for the demo.
+
+### 7c. Draft V4 keying — non-obvious
+
+For a service generated from a **managed-with-draft** BDEF, the entity keys exposed in
+`$metadata` are **composite**: every primary key field PLUS `IsActiveEntity` (Edm.Boolean).
+Bare `Project('PRJ-0001')` returns **400**; the correct form is:
+
+```bash
+NEW_BASE="$NEW_BASE_DIRECT"   # or $NEW_BASE_HUB after Step 12
+
+# Counts — same as legacy V2 if the migration is byte-equivalent
+curl -u "$USER:$PASS" "$NEW_BASE/Project/\$count?sap-client=001"
+# expect: 5
+
+# Composite key — note ProjectId AND IsActiveEntity, not just ProjectId
+curl -u "$USER:$PASS" \
+  "$NEW_BASE/Project(ProjectId='PRJ-0001',IsActiveEntity=true)/_Tasks/\$count?sap-client=001"
+# expect: 3
+```
+
+Filter the active row set explicitly via `?$filter=IsActiveEntity eq true` if you want
+parity with legacy V2's no-draft semantics.
+
+### 7d. Action invocation — CSRF + If-Match required
+
+V4 bound actions on draft entities need **both** `X-CSRF-Token` (with session cookies) and
+`If-Match: <etag>`. Missing `If-Match` returns **428 `CX_OD_PRECOND_REQUIRED`**.
+
+```bash
+# 1. Fetch CSRF token + session cookies
+curl -s -u "$USER:$PASS" -c /tmp/cookies.txt \
+     -H "X-CSRF-Token: Fetch" \
+     "$NEW_BASE/?sap-client=001" -D - -o /dev/null | grep -i 'x-csrf-token'
+
+# 2. Get the current etag for the target row
+ETAG=$(curl -s -u "$USER:$PASS" -b /tmp/cookies.txt \
+       "$NEW_BASE/Project(ProjectId='PRJ-0003',IsActiveEntity=true)?sap-client=001" \
+       -D - -o /dev/null | grep -i 'etag' | awk '{print $2}' | tr -d '\r')
+
+# 3. POST the action with both headers
+curl -u "$USER:$PASS" -b /tmp/cookies.txt -X POST \
+     "$NEW_BASE/Project(ProjectId='PRJ-0003',IsActiveEntity=true)/com.sap.gateway.srvd.zui_dm_projects.v0001.approve_project?sap-client=001" \
+     -H "Content-Type: application/json" \
+     -H "X-CSRF-Token: <from step 1>" \
+     -H "If-Match: $ETAG" \
+     -d '{}'
 # expect: 200 + entity with Status="A"
 ```
 
 If counts don't match, the CDS where-clauses are likely wrong — re-read the legacy DPC_EXT
-methods for filters you missed.
+methods for filters you missed. If actions fail with 412/428 even with both headers, the
+service likely needs a fresh `publish_srvb` to pick up newer BDEF action declarations.
 
 
 ---
