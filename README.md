@@ -156,6 +156,7 @@ Full documentation is available at **[marianfoo.github.io/arc-1](https://marianf
 | [Tool Reference](https://marianfoo.github.io/arc-1/tools/) | Complete reference for all 12 tools |
 | [Architecture](https://marianfoo.github.io/arc-1/architecture/) | System architecture with diagrams |
 | [AI Usage Patterns](https://marianfoo.github.io/arc-1/mcp-usage/) | Agent workflow patterns and best practices |
+| [Blog Series](https://marianfoo.github.io/arc-1/blog-series/) | Long-form posts on AI for ABAP development, ARC-1 internals, and real-world walkthroughs |
 
 ## Development
 
