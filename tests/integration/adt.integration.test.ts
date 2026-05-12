@@ -427,6 +427,45 @@ describe('ADT Integration Tests', () => {
       expect(result.rows.length).toBeGreaterThanOrEqual(1);
     });
 
+    it('reads table contents with offset for pagination', async (ctx) => {
+      // TADIR has thousands of entries — safe for pagination testing
+      let page1: Awaited<ReturnType<typeof client.getTableContents>>;
+      let page2: Awaited<ReturnType<typeof client.getTableContents>>;
+      try {
+        page1 = await client.getTableContents('TADIR', 3);
+        page2 = await client.getTableContents('TADIR', 3, undefined, 4);
+      } catch (err) {
+        expectSapFailureClass(err, [404], [/No suitable resource/i, /not found/i]);
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: /datapreview/ddic endpoint not available on this release`,
+        );
+        return;
+      }
+      // Both pages must have the same columns
+      expect(page2.columns).toEqual(page1.columns);
+      // If offset returns identical rows, the backend silently ignores searchStart — skip rather than fail
+      if (JSON.stringify(page2.rows) === JSON.stringify(page1.rows)) {
+        requireOrSkip(
+          ctx,
+          undefined,
+          `${SkipReason.BACKEND_UNSUPPORTED}: searchStart pagination not supported on this SAP release`,
+        );
+        return;
+      }
+      // Page 2 (offset=4) must not overlap with page 1 (rows 1–3)
+      requireOrSkip(
+        ctx,
+        page1.rows.length >= 3 && page2.rows.length >= 1 ? true : undefined,
+        'TADIR returned too few rows for pagination test',
+      );
+      const firstPageKeys = page1.rows.map((r) => JSON.stringify(r));
+      for (const row of page2.rows) {
+        expect(firstPageKeys).not.toContain(JSON.stringify(row));
+      }
+    });
+
     it('returns 404 for non-existent program', async () => {
       await expect(client.getProgram('ZZZNOTEXIST999')).rejects.toThrow();
     });
