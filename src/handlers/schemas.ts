@@ -181,6 +181,8 @@ export const SAPReadSchema = z
     /** For type=DEVC: max number of objects to list. Default 200, clamped to [1, 1000]. */
     maxResults: z.coerce.number().int().min(1).max(1000).optional(),
     sqlFilter: z.string().optional(),
+    /** For type=TABLE_CONTENTS: 1-based row offset for pagination (first row to return). */
+    offset: z.coerce.number().int().min(1).optional(),
     objectType: z.string().optional(),
     versionUri: z.string().optional(),
     /** For type=FUNC: when true, response is JSON {source, signature: {importing, exporting, ...}}. */
@@ -202,6 +204,8 @@ export const SAPReadSchemaBtp = z
     /** For type=DEVC: max number of objects to list. Default 200, clamped to [1, 1000]. */
     maxResults: z.coerce.number().int().min(1).max(1000).optional(),
     sqlFilter: z.string().optional(),
+    /** For type=TABLE_CONTENTS: 1-based row offset for pagination (first row to return). */
+    offset: z.coerce.number().int().min(1).optional(),
     objectType: z.string().optional(),
     versionUri: z.string().optional(),
     /** For type=FUNC: when true, response is JSON {source, signature: {importing, exporting, ...}}. */

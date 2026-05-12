@@ -552,6 +552,11 @@ export function getToolDefinitions(
             description:
               'For TABLE_CONTENTS: condition expression only (no WHERE, no SELECT), e.g. "MANDT = \'100\'" or "MATNR LIKE \'Z%\'".',
           },
+          offset: {
+            type: 'number',
+            description:
+              'For TABLE_CONTENTS: 1-based row offset for pagination. Use with maxRows to page through large tables, e.g. offset=101 maxRows=50 returns rows 101–150.',
+          },
           objectType: {
             type: 'string',
             description:

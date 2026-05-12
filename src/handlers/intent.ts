@@ -1732,7 +1732,8 @@ async function handleSAPRead(
     }
     case 'TABLE_CONTENTS': {
       const maxRows = Number(args.maxRows ?? 100);
-      const data = await client.getTableContents(name, maxRows, args.sqlFilter as string | undefined);
+      const offset = args.offset != null ? Number(args.offset) : undefined;
+      const data = await client.getTableContents(name, maxRows, args.sqlFilter as string | undefined, offset);
       return textResult(JSON.stringify(data, null, 2));
     }
     case 'SOBJ': {

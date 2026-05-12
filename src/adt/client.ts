@@ -860,10 +860,12 @@ export class AdtClient {
     tableName: string,
     maxRows = 100,
     sqlFilter?: string,
+    offset?: number,
   ): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
     checkOperation(this.safety, OperationType.Query, 'GetTableContents');
+    const searchStart = offset && offset > 0 ? `&searchStart=${Math.floor(offset)}` : '';
     const resp = await this.http.post(
-      `/sap/bc/adt/datapreview/ddic?rowNumber=${maxRows}&ddicEntityName=${encodeURIComponent(tableName)}`,
+      `/sap/bc/adt/datapreview/ddic?rowNumber=${maxRows}${searchStart}&ddicEntityName=${encodeURIComponent(tableName)}`,
       sqlFilter,
       'text/plain',
     );
