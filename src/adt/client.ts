@@ -180,7 +180,10 @@ export class AdtClient {
       ppProxyAuth: config.ppProxyAuth,
       bearerTokenProvider: config.bearerTokenProvider,
       disableSaml: config.disableSaml,
-      semaphore: config.maxConcurrent ? new Semaphore(config.maxConcurrent) : undefined,
+      // Prefer the shared server-wide semaphore when provided so all per-user PP clients
+      // share one cap. Fall back to a private semaphore for stdio/tests when only maxConcurrent
+      // is set. When neither is set, no concurrency cap applies.
+      semaphore: config.adtSemaphore ?? (config.maxConcurrent ? new Semaphore(config.maxConcurrent) : undefined),
     };
 
     this.http = new AdtHttpClient(httpConfig);

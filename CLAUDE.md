@@ -93,7 +93,9 @@ Copy `.env.example` to `.env`. All options live in `src/server/config.ts` (parse
 | `ARC1_CACHE_FILE` / `--cache-file` | SQLite cache file path (default: `.arc1-cache.db`) |
 | `ARC1_CACHE_WARMUP` / `--cache-warmup` | Pre-warm cache on startup via TADIR scan (default: false) |
 | `ARC1_CACHE_WARMUP_PACKAGES` / `--cache-warmup-packages` | Package filter for warmup (e.g., "Z*,Y*") |
-| `ARC1_MAX_CONCURRENT` / `--max-concurrent` | Max concurrent SAP HTTP requests (default: `10`). Prevents work process exhaustion |
+| `ARC1_MAX_CONCURRENT` / `--max-concurrent` | Max concurrent SAP HTTP requests, **server-wide across all users** (default: `10`). One shared `Semaphore` gates every `AdtClient`, including per-user PP clients. Honors `Retry-After` on `429`/`503` (clamped to 60 s, single retry). Size against `rdisp/wp_no_dia` — see [Rate Limiting Guide](docs_page/rate-limiting.md). |
+| `ARC1_AUTH_RATE_LIMIT` / `--auth-rate-limit` | **Layer 1 rate limit.** Per-IP cap on OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`) in req/min (default `20`). `/mcp` gets `max(value × 30, 600)/min/IP`. Set `0` to disable. On hit: HTTP `429` + `Retry-After` + RFC 9331 `RateLimit-*` headers + `auth_rate_limited` audit event. Closes CodeQL alert `js/missing-rate-limiting`. |
+| `ARC1_RATE_LIMIT` / `--rate-limit` | **Layer 2 rate limit.** Per-user cap on MCP tool calls in req/min (default `60`). Key = `authInfo.userName ?? clientId ?? '__anon__'`. Stdio mode (no user identity) exempt. Returns MCP tool error with `retryAfter` (NOT HTTP 429, so the agent loop backs off cleanly). Set `0` to disable. Emits `mcp_rate_limited` audit event on denial. |
 | `SAP_BTP_DESTINATION` | BTP Destination name (overrides URL/user/password) |
 | `SAP_BTP_PP_DESTINATION` | BTP PP Destination name (PrincipalPropagation type) |
 | `SAP_PP_ENABLED` / `--pp-enabled` | Enable per-user principal propagation (default: false) |
@@ -120,6 +122,8 @@ src/
 │   ├── context.ts, elicit.ts   # MCP context helpers, elicitation
 │   ├── xsuaa.ts                # XSUAA JWT validation for BTP
 │   ├── stateless-client-store.ts # OAuth DCR store (HMAC-signed client_ids, restart-resilient)
+│   ├── auth-rate-limit.ts      # Layer 1: express-rate-limit factory + auth_rate_limited audit event
+│   ├── mcp-rate-limit.ts       # Layer 2: per-user token bucket (rate-limiter-flexible) + RateLimitDecision
 │   └── sinks/                  # Audit sinks: stderr, file, btp-auditlog
 ├── handlers/
 │   ├── intent.ts               # 12 intent-based tool router (handleToolCall)
@@ -235,6 +239,7 @@ tests/
 | Add source state diagnostic | `src/adt/diagnostics.ts`, `src/adt/types.ts`, `src/handlers/intent.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add audit logging | `src/server/audit.ts`, `src/server/sinks/` |
 | Add audit event type | `src/server/audit.ts` (typed `*Event` interface + `AuditEvent` union); emit via `logger.emitAudit({...})` from the call site (e.g. `confirmPreaudit` in `src/adt/devtools.ts`) |
+| Add/modify rate limiting | **Layer 1** (HTTP edge): `src/server/auth-rate-limit.ts` (factory + audit emit), `src/server/http.ts` (`buildLimiter` helper + mounts on `/register`, `/authorize`, `/token`, `/revoke`, `/mcp` BEFORE auth middleware). **Layer 2** (per-user MCP): `src/server/mcp-rate-limit.ts` (token bucket wrapper), `src/handlers/intent.ts` (top of `handleToolCall` — runs before scope check; returns MCP tool error with `retryAfter`, not HTTP 429). **Layer 3** (SAP-bound): shared `Semaphore` constructed once in `createAndStartServer` ([src/server/server.ts](src/server/server.ts)), threaded through `buildAdtConfig` (5th positional) + `createPerUserClient` + `runStartupProbe` + `runStartupAuthPreflight` + warmup + `createServer`. Backed by `parseRetryAfter` helper in `src/adt/http.ts` (RFC 7231, clamped 60 s, 429/503 single retry, audit records `source: header|fallback`). Config: `src/server/{types,config}.ts` (`authRateLimit`/`rateLimit`/`maxConcurrent`). Audit: `auth_rate_limited`, `mcp_rate_limited` in `src/server/audit.ts`. Tests: `tests/unit/adt/shared-semaphore.test.ts`, `tests/unit/adt/retry-after.test.ts`, `tests/unit/server/auth-rate-limit.test.ts`, `tests/unit/server/mcp-rate-limit.test.ts`, `tests/unit/handlers/intent-rate-limit.test.ts`. Operator guide: [docs_page/rate-limiting.md](docs_page/rate-limiting.md). ADR: [docs/adr/0004-layered-rate-limiting.md](docs/adr/0004-layered-rate-limiting.md). |
 | Add/modify Dependabot config | `.github/dependabot.yml` — npm + github-actions + docker, weekly. Grouping + ignore rules in-file. |
 | Add/modify npm audit / SAST / dep review CI gate | `.github/workflows/test.yml` (`npm audit --audit-level=high`); `.github/workflows/dependency-review.yml` (license allow/deny). |
 | Add/modify container scanning | Trivy advisory in `docker.yml`, gating in `release.yml`; SARIF uploaded via `github/codeql-action/upload-sarif@v4`. |

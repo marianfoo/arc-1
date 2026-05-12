@@ -578,36 +578,26 @@ SAP confirmed GA of ABAP Cloud Extension for VS Code with built-in agentic AI po
 ---
 
 <a id="sec-05"></a>
-### SEC-05: Rate Limiting
+### SEC-05: Layered Rate Limiting
 | Field | Value |
 |-------|-------|
 | **Priority** | P2 |
 | **Effort** | S (1-2 days) |
 | **Risk** | Low |
-| **Usefulness** | Medium — prevents runaway AI loops from overwhelming SAP; closes CodeQL alert `js/missing-rate-limiting` on `/authorize` |
-| **Status** | Not started — CodeQL alert #12 dismissed in Security UI with rationale "tracked in SEC-05" (2026-05-08) |
+| **Usefulness** | High — fixes per-PP-user concurrency bug (100 users × `maxConcurrent` slots, not 10 total), prevents runaway AI loops, closes CodeQL alert `js/missing-rate-limiting` on `/authorize`. |
+| **Status** | **Completed — 2026-05-12** ([PR #276](https://github.com/marianfoo/arc-1/pull/276)) |
 
-**What:** Token-bucket rate limiter at two layers: (a) per MCP session for SAP-call throttling, configurable via env var; (b) per source IP / per `client_id` on the OAuth auth-relevant endpoints (`/authorize`, `/register`, `/token`) and on `/mcp` to mitigate brute-force / probing. Prevents an AI agent in a retry loop from generating thousands of SAP API calls per minute, AND prevents unauthenticated callers from hammering the OAuth surface.
+**What shipped:** Three independent layers, per-instance, in-memory, two operator-facing env vars total:
 
-**Why:** Prevents LLM retry loops from overloading SAP. Enterprise deployments need predictable load. Closes CodeQL HIGH alert `js/missing-rate-limiting` flagged on the `/authorize` route handler in [src/server/http.ts:279](https://github.com/marianfoo/arc-1/blob/main/src/server/http.ts) — auth endpoints with no brute-force gate are an unconditional finding for any OWASP / SAST scanner.
+- **Layer 1 (HTTP edge)** — `express-rate-limit` per-IP on `/register`, `/authorize`, `/token`, `/revoke`, `/mcp`. Configurable via `ARC1_AUTH_RATE_LIMIT` (default `20/min/IP`). `/mcp` gets `max(value × 30, 600)/min/IP`. On hit: HTTP `429` + `Retry-After` + RFC 9331 `RateLimit-*` headers + `auth_rate_limited` audit event.
+- **Layer 2 (Per-user MCP quota)** — `rate-limiter-flexible` token bucket inside `handleToolCall`, keyed on `authInfo.userName ?? clientId ?? '__anon__'`. Configurable via `ARC1_RATE_LIMIT` (default `60/min/user`). On hit: MCP tool error with structured `retryAfter` (NOT HTTP 429, so the agent loop backs off cleanly) + `mcp_rate_limited` audit event. Stdio mode exempt.
+- **Layer 3 (SAP-bound semaphore)** — promoted the existing `Semaphore` from per-`AdtClient` to ONE server-wide instance constructed in `createAndStartServer` and threaded through every `buildAdtConfig` call. `ARC1_MAX_CONCURRENT` (default `10`) is now a true server-wide cap regardless of stdio/HTTP or shared/PP auth. Honors `Retry-After` on both `429` and `503` (clamped to 60 s, single retry, audit records `source: header|fallback`).
 
-**Why not:** Rate limiting at the MCP session level doesn't prevent SAP overload — a single aggressive query can exhaust a bucket in milliseconds while a slow query stays under limits. SAP's own throttling (RFC connection pools, dialog process limits) and reverse proxies (API Gateway rate limits) are more effective at the right layer. For multi-instance deployments, session-keyed rate limiting requires distributed state (Redis), adding a significant dependency. The OAuth-surface limiter is a different shape — IP-keyed in-memory is fine for single-instance and "good enough" for BTP CF (the gorouter is the real perimeter).
+**Simplifications vs original SEC-05 proposal:** No `_BURST` env vars (the underlying limiters handle burst tolerance internally). Per-endpoint OAuth ceilings are constants in code, not env. No monitor mode for Layer 2 — defaults are conservative; flip to `0` to disable. No Redis-backed shared state (preserves stateless-deployment property from PR #212; multi-instance attackers cost `N × limit` — acceptable). Cost weighting per tool deferred to v2.
 
-**Configuration:**
-```bash
-ARC1_RATE_LIMIT=60            # MCP requests per minute per session (0 = unlimited)
-ARC1_RATE_LIMIT_BURST=10      # MCP burst allowance
-ARC1_AUTH_RATE_LIMIT=20       # OAuth /authorize|/register|/token requests per minute per IP (0 = unlimited)
-ARC1_AUTH_RATE_LIMIT_BURST=5  # OAuth surface burst allowance
-```
+**Documentation:** Operator guide at [Rate Limiting Guide](rate-limiting.md). Design rationale: [ADR-0004](../docs/adr/0004-layered-rate-limiting.md).
 
-**Implementation:**
-- Use `rate-limiter-flexible` npm package or simple in-memory token bucket. The `express-rate-limit` package (already in the dep tree as a transitive of helmet) is the simpler option for the OAuth-surface limiter.
-- MCP-layer limiter: per-session (keyed by MCP session ID or OIDC user). Return MCP error with `retry-after` hint when rate limited.
-- OAuth-surface limiter: per IP (or per `cf-connecting-ip` / `x-real-ip` when behind a proxy). Return HTTP 429 with `Retry-After` header. Audit-log each rejected request as `auth_rate_limited`.
-- New audit event types: `mcp_rate_limited`, `auth_rate_limited`. Both go through `src/server/audit.ts` like the existing `cors_rejected`.
-
-**CodeQL alert linkage:** Alert #12 (`js/missing-rate-limiting`) on `/authorize` is dismissed in the Security UI with rationale "tracked in SEC-05". When SEC-05 lands, re-enable the alert (or it will auto-close on the next scan since rate limiting will be present).
+**CodeQL alert linkage:** Alert #12 (`js/missing-rate-limiting`) on `/authorize` auto-closes on the next scan now that Layer 1 is mounted before the OAuth router.
 
 ---
 

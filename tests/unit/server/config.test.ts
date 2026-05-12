@@ -489,6 +489,66 @@ describe('parseArgs', () => {
     expect(config.maxConcurrent).toBe(3);
   });
 
+  // --- Rate limiting (Layer 1 + Layer 2) ---
+
+  it('defaults authRateLimit to 20 and rateLimit to 60', () => {
+    const config = parseArgs([]);
+    expect(config.authRateLimit).toBe(20);
+    expect(config.rateLimit).toBe(60);
+  });
+
+  it('parses --auth-rate-limit flag', () => {
+    const config = parseArgs(['--auth-rate-limit', '50']);
+    expect(config.authRateLimit).toBe(50);
+  });
+
+  it('parses ARC1_AUTH_RATE_LIMIT env var', () => {
+    process.env.ARC1_AUTH_RATE_LIMIT = '30';
+    const config = parseArgs([]);
+    expect(config.authRateLimit).toBe(30);
+  });
+
+  it('ARC1_AUTH_RATE_LIMIT=0 disables Layer 1', () => {
+    process.env.ARC1_AUTH_RATE_LIMIT = '0';
+    const config = parseArgs([]);
+    expect(config.authRateLimit).toBe(0);
+  });
+
+  it('parses --rate-limit flag', () => {
+    const config = parseArgs(['--rate-limit', '120']);
+    expect(config.rateLimit).toBe(120);
+  });
+
+  it('parses ARC1_RATE_LIMIT env var', () => {
+    process.env.ARC1_RATE_LIMIT = '90';
+    const config = parseArgs([]);
+    expect(config.rateLimit).toBe(90);
+  });
+
+  it('ARC1_RATE_LIMIT=0 disables Layer 2', () => {
+    process.env.ARC1_RATE_LIMIT = '0';
+    const config = parseArgs([]);
+    expect(config.rateLimit).toBe(0);
+  });
+
+  it('invalid ARC1_AUTH_RATE_LIMIT falls back to default 20', () => {
+    process.env.ARC1_AUTH_RATE_LIMIT = 'notanumber';
+    const config = parseArgs([]);
+    expect(config.authRateLimit).toBe(20);
+  });
+
+  it('invalid ARC1_RATE_LIMIT falls back to default 60', () => {
+    process.env.ARC1_RATE_LIMIT = '-5';
+    const config = parseArgs([]);
+    expect(config.rateLimit).toBe(60);
+  });
+
+  it('--auth-rate-limit takes precedence over ARC1_AUTH_RATE_LIMIT', () => {
+    process.env.ARC1_AUTH_RATE_LIMIT = '99';
+    const config = parseArgs(['--auth-rate-limit', '7']);
+    expect(config.authRateLimit).toBe(7);
+  });
+
   // --- oauthDcrTtlSeconds ---
 
   it('defaults oauthDcrTtlSeconds to 30 days', () => {

@@ -92,8 +92,14 @@ export interface AdtClientConfig {
   bearerTokenProvider?: () => Promise<string>;
   /** Opt-in: disable SAML redirect via X-SAP-SAML2 header + saml2 query param */
   disableSaml?: boolean;
-  /** Maximum concurrent SAP HTTP requests. When set, requests beyond this limit queue. */
+  /** Maximum concurrent SAP HTTP requests. When set, requests beyond this limit queue.
+   *  Falls back to constructing a private Semaphore if `adtSemaphore` is not provided.
+   *  Used by stdio / tests that don't have a server-wide shared instance. */
   maxConcurrent?: number;
+  /** Shared SAP-bound Semaphore — when provided, this single instance gates ALL clients
+   *  constructed with this config. The server constructs one at startup so principal-propagation
+   *  per-user clients all share the same cap. Takes precedence over `maxConcurrent`. */
+  adtSemaphore?: import('./semaphore.js').Semaphore;
 }
 
 /** Create default ADT client config */

@@ -214,6 +214,25 @@ export async function startHttpServer(
 
   applySecurityMiddleware(app, config.allowedOrigins);
 
+  // ─── Layer 1: HTTP-edge rate limiter helper ──────────────────────────
+  // One operator-facing knob (`ARC1_AUTH_RATE_LIMIT`, default 20/min/IP) controls all
+  // OAuth endpoints uniformly. `/mcp` gets `max(value × 30, 600)/min/IP` so legitimate
+  // batched tool-call traffic isn't choked while pre-bearer-auth probing is still gated.
+  // Per-endpoint differentiation lives here, not in env, so the operator surface stays tiny.
+  // See docs_page/rate-limiting.md (Layer 1) and ADR-0004.
+  const { createAuthRateLimiter, createNoopRateLimiter } = await import('./auth-rate-limit.js');
+  function buildLimiter(endpoint: string): import('express').RequestHandler {
+    if (config.authRateLimit === 0) return createNoopRateLimiter();
+    const perMinute = endpoint === '/mcp' ? Math.max(config.authRateLimit * 30, 600) : config.authRateLimit;
+    return createAuthRateLimiter(endpoint, perMinute);
+  }
+  logger.info('Auth rate limiting', {
+    perMinute: config.authRateLimit,
+    mcpPerMinute: config.authRateLimit === 0 ? 0 : Math.max(config.authRateLimit * 30, 600),
+    endpoints: ['/register', '/authorize', '/token', '/revoke', '/mcp'],
+    disabled: config.authRateLimit === 0,
+  });
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   const mcpHandler = createMcpHandler(serverFactory);
@@ -268,6 +287,16 @@ export async function startHttpServer(
       verifier: { verifyAccessToken: chainedVerifier },
       resourceMetadataUrl,
     });
+
+    // ─── Layer 1: per-IP rate limiters on OAuth endpoints ───────────────
+    // Mounted BEFORE the auth router so spammed credentials are rejected before any
+    // crypto / DB work. Discovery endpoints (/.well-known/*) are intentionally NOT
+    // rate-limited — they're cheap, cacheable, and legitimate clients hit them on
+    // every reconnect. See docs_page/rate-limiting.md.
+    app.use('/register', buildLimiter('/register'));
+    app.use('/authorize', buildLimiter('/authorize'));
+    app.use('/token', buildLimiter('/token'));
+    app.use('/revoke', buildLimiter('/revoke'));
 
     // ─── OAuth authorize normalization + Copilot Studio MCP workaround ──
     // Copilot Studio sends MCP JSON-RPC requests to /authorize instead of
@@ -402,6 +431,9 @@ export async function startHttpServer(
       }),
     );
 
+    // Layer 1: rate-limit /mcp BEFORE bearer auth so anonymous probing is gated.
+    // /mcp gets a higher cap to absorb legitimate batched tool-call traffic — see buildLimiter.
+    app.use('/mcp', buildLimiter('/mcp'));
     // Protected MCP endpoint with chained token verification
     app.all('/mcp', bearerAuth, mcpHandler);
 
@@ -414,6 +446,11 @@ export async function startHttpServer(
     if (config.oidcIssuer) {
       await initJwks(config.oidcIssuer);
     }
+
+    // Layer 1 on /mcp also applies outside XSUAA mode — API-key / OIDC / no-auth
+    // deployments get the same anonymous-probing protection. OAuth endpoints don't
+    // exist in non-XSUAA mode so only /mcp needs mounting here.
+    app.use('/mcp', buildLimiter('/mcp'));
 
     if (config.apiKeys || config.oidcIssuer) {
       // Use requireBearerAuth so that authInfo is populated on the MCP request context.

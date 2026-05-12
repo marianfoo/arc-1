@@ -180,6 +180,7 @@ This means:
 - DCR registrations survive `cf restart`, `cf push`, `cf restage`, cell evacuations, OOM auto-recovery, and multi-instance scale-out — none of these invalidate cached `client_id`s.
 - The default lifetime is **30 days** (matches typical OAuth refresh-token lifetimes). Configurable via `--oauth-dcr-ttl-seconds` / `ARC1_OAUTH_DCR_TTL_SECONDS` (positive values clamped to `[60s, 90d]`). Set to `0` (or any non-positive value) to disable expiration entirely — recommended when MCP clients in use don't auto-re-register on `invalid_client` (Copilot CLI, Cursor) and a finite TTL would just produce periodic outages without security gain.
 - Per-client revocation is intentionally not supported. Forced revocation goes through full key rotation (see below) — either rotate the DCR signing key, rebind the XSUAA service, or bump `KDF_LABEL` in `stateless-client-store.ts` (`arc1-dcr/v1` → `v2`).
+- `/register`, `/authorize`, `/token`, `/revoke` are per-IP rate-limited by default (`ARC1_AUTH_RATE_LIMIT=20`/min/IP). Closes CodeQL alert `js/missing-rate-limiting`. Tune via the env var or disable with `=0` if an upstream proxy already provides this. See the [Rate Limiting Guide](rate-limiting.md).
 
 ### Stable DCR signing key (recommended)
 
