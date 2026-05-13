@@ -80,14 +80,14 @@ ls k8s/onprem/keycloak-realm.json k8s/keycloak/*.json 2>/dev/null && echo "  →
 
 If auto-detection is inconclusive or yields multiple candidates, ask the user explicitly:
 
-> **Which deployment target are we auditing?**
+> **Which deployment target are we auditing?** (Default: **BTP Cloud Foundry** if you're unsure — most widely-adopted SAP-managed runtime)
 >
-> 1. **BTP Cloud Foundry** — XSUAA + HANA HDI + html5-apps-repo + mta.yaml
-> 2. **BTP Kyma** — XSUAA/IAS via OIDC + PostgreSQL in-cluster or HANA Cloud + APIRule CRD + Kyma BTP Operator
-> 3. **On-Premise Kyma** — Customer IdP (Keycloak) + HANA on-prem or PostgreSQL on-prem + cluster flavor (k3d / Rancher / Gardener / OpenShift) + `*.svc.cluster.local` remotes
-> 4. **On-Premise CF** — legacy continuity only — XSUAA on-prem + S/4 Flex Workflow + SMTP + filesystem DMS
+> 1. **BTP Cloud Foundry** *(default)* — XSUAA + HANA HDI + html5-apps-repo + mta.yaml. Best for: managed-services-only customers; lowest operational ceremony.
+> 2. **BTP Kyma** — XSUAA/IAS via OIDC + PostgreSQL in-cluster or HANA Cloud + APIRule CRD + Kyma BTP Operator. Best for: customers who want Kubernetes operational model; container-native eventing.
+> 3. **On-Premise Kyma** — Customer IdP (Keycloak) + HANA on-prem or PostgreSQL on-prem + cluster flavor (k3d / Rancher / Gardener / OpenShift) + `*.svc.cluster.local` remotes. Best for: data sovereignty mandates; existing Kubernetes investment.
+> 4. **On-Premise CF** — legacy continuity only — XSUAA on-prem + S/4 Flex Workflow + SMTP + filesystem DMS. EOL; only if existing investment dictates.
 
-Do **not** guess. The audit's per-target Phase 3 dispatches differ; getting this wrong wastes the agent budget.
+Do **not** guess. The audit's per-target Phase 3 dispatches differ; getting this wrong wastes the agent budget. When the user defers ("I don't know yet"), default to **BTP Cloud Foundry** and emit a finding recommending the customer confirm the target before deployment-readiness sign-off.
 
 ### 0c — Persist the target for downstream phases
 
