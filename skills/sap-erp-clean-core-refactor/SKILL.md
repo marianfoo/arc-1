@@ -36,7 +36,7 @@ This skill does NOT ship a pre-built KB. It ships:
 | Cache location | `.cache/sap-clean-core/<topic-hash>/` (gitignored) | Per-project local; not committed |
 | Output destination | `docs/refactor/<yyyy-mm-dd>-clean-core-plan.md` | Committed; serves as the decision record |
 | Target Clean Core level | `A` | Most restrictive; works for all cloud targets |
-| Side-by-side target | Asked once at session start | Reuses Step 0 of [`../sap-cap-stack-audit-full/SKILL.md`](../sap-cap-stack-audit-full/SKILL.md) deployment-target decision tree |
+| Side-by-side target | Asked once at session start | Reuses Step 0 of [`sap-cap-stack-audit-full`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-stack-audit-full/SKILL.md) deployment-target decision tree |
 | Level B handling | `keep_at_level_b` by default (compliant; documented) | B is already Clean-Core compliant. Pushing to A is opt-in via `--aggressive` / `--push-to-a` / `--target-level=A` because escalation adds cost and may be wrong choice (most B objects use SAP-recommended patterns) |
 | Level C target | A (via released-API rewrite) when equivalent exists, else B (via BAdI substitution), else side-by-side (ERP becomes A) | Cost-minimizing default. Override with `--target-level=B` to settle for B even when A is cheaper |
 | Level D target | B (via BAdI / enhancement-point rewrite) when feasible, else side-by-side (ERP becomes A) | Cost-minimizing default. D objects usually have business logic that genuinely needs an extension surface; BAdI-rewrite is the SAP-recommended path. Override with `--target-level=A` to prefer side-by-side over BAdI |
@@ -92,9 +92,9 @@ If unavailable, the skill degrades to **manual mode**: it produces a plan with e
 
 ### 1c — Resolve the side-by-side deployment target
 
-The plan's "extract to BTP" suggestions differ per target (BTP CF vs Kyma vs on-prem). If `--target` wasn't passed, ask the user once (same dialog as [`../sap-cap-stack-audit-full/SKILL.md`](../sap-cap-stack-audit-full/SKILL.md) Step 0).
+The plan's "extract to BTP" suggestions differ per target (BTP CF vs Kyma vs on-prem). If `--target` wasn't passed, ask the user once (same dialog as [`sap-cap-stack-audit-full`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-stack-audit-full/SKILL.md) Step 0).
 
-Record the target as `$TARGET`. The plan's side-by-side suggestions consult the matching section of [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-3--btp--kyma--on-premise-deployment-lessons`](../sap-cap-fiori-battle-tested-patterns/SKILL.md).
+Record the target as `$TARGET`. The plan's side-by-side suggestions consult the matching section of [`sap-cap-fiori-battle-tested-patterns`](./PATTERNS.md).
 
 ### 1d — Initialize the local cache
 
@@ -294,7 +294,7 @@ Object starting level = B (Eligible)?
 - D → goes to B (default via BAdI) OR to A via side-by-side (when BAdI not feasible OR `--target-level=A` is on) OR accept_as_d (last resort with explicit sign-off).
 - Unused → removed (no level applies).
 
-**Side-by-side outcome — clarification**: when an object is extracted to BTP, the **ERP-side artefact disappears**. The ERP no longer contains the custom code, so by absence the ERP is at Level A for that domain. The logic continues to live on BTP as a CAP extension (not classified by ABAP Clean Core levels — BTP-side compliance is governed by the deployment-target gate, see [`../sap-cap-clean-core-enforce/SKILL.md`](../sap-cap-clean-core-enforce/SKILL.md)).
+**Side-by-side outcome — clarification**: when an object is extracted to BTP, the **ERP-side artefact disappears**. The ERP no longer contains the custom code, so by absence the ERP is at Level A for that domain. The logic continues to live on BTP as a CAP extension (not classified by ABAP Clean Core levels — BTP-side compliance is governed by the deployment-target gate, see [`sap-cap-clean-core-enforce`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md)).
 
 ### 4e — Level B → Level A escalation (aggressive mode)
 
@@ -500,7 +500,7 @@ For projects with abapGit / gCTS, [`SAPGit`](https://github.com/marianfoo/arc-1)
 After any execute action:
 - **ATC regression check** (`SAPLint(run_atc)`): the gate that blocks the execute loop if findings count regresses.
 - **Unit test regression** (`SAPDiagnose(run_unit_tests)`): runs the tests generated in Step 6-pre PLUS pre-existing tests. Any failure aborts the loop.
-- **Cross-check against the audit catalog** used by [`../sap-cap-clean-core-enforce/SKILL.md`](../sap-cap-clean-core-enforce/SKILL.md) if the CAP side has been deployed.
+- **Cross-check against the audit catalog** used by [`sap-cap-clean-core-enforce`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) if the CAP side has been deployed.
 - **Compare ATC counts before/after**; any net regression aborts the execute loop and surfaces a finding.
 - **Optional**: invoke [`../analyze-chat-session/SKILL.md`](../analyze-chat-session/SKILL.md) at session end to capture learnings (which rewrite patterns worked, which findings recurred) and propose new skill traps for the team.
 
@@ -514,7 +514,7 @@ The decision tree is the same; what differs is the **side-by-side target framewo
 | BTP Kyma | CAP Node.js / TypeScript | PostgreSQL in-cluster or HANA Cloud | BTP Event Mesh or Kyma-native NATS |
 | On-Premise Kyma | CAP Node.js / TypeScript | HANA on-prem or PostgreSQL on-prem | Kyma-native NATS |
 
-See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-3--btp--kyma--on-premise-deployment-lessons`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) Category 3 for per-target deployment patterns.
+See [`sap-cap-fiori-battle-tested-patterns`](./PATTERNS.md) Category 3 for per-target deployment patterns.
 
 ## Cost model
 
@@ -574,7 +574,7 @@ For projects with no Apify budget, the skill operates in **manual mode**: it emi
 
 ## Battle-Tested Patterns Referenced
 
-This skill builds on [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md):
+This skill builds on [`sap-cap-fiori-battle-tested-patterns`](./PATTERNS.md):
 
 - **3.0 Deployment target decision matrix** — selecting the right BTP target for the extension.
 - **3.A.* / 3.B.* / 3.C.* / 3.D.*** — target-specific deployment patterns.
@@ -652,11 +652,18 @@ The plugins below split into **MUST** (the skill is materially less useful witho
 | [`convert-ui5-to-fiori-elements`](../convert-ui5-to-fiori-elements/SKILL.md) | Step 6b (Fiori Elements UI on top of new CAP service) |
 | [`analyze-chat-session`](../analyze-chat-session/SKILL.md) | Step 7 (session-end learnings capture) |
 
-See [`./INTEGRATIONS.md`](./INTEGRATIONS.md) for the full step-by-step mapping of refactor phase × ARC-1 MCP tool × arc-1 skill × secondsky plugin. See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the broader companion plugin map across CAP audit skills.
+See [`./INTEGRATIONS.md`](./INTEGRATIONS.md) for the full step-by-step mapping of refactor phase × ARC-1 MCP tool × arc-1 skill × secondsky plugin. See [`sap-cap-fiori-battle-tested-patterns`](./PATTERNS.md) for the broader companion plugin map across CAP audit skills.
 
 ## See also
 
-- [`./SOURCES.md`](./SOURCES.md) — curated list of authoritative SAP documentation sources consulted by this skill (just the URLs + when-to-use guidance, no crawled content).
+The skill ships **four files** so it is fully self-contained:
+
+- [`./SKILL.md`](./SKILL.md) — this protocol document
+- [`./SOURCES.md`](./SOURCES.md) — curated catalog of 23 authoritative SAP documentation sources (the URLs + when-to-use guidance, no crawled content)
+- [`./PATTERNS.md`](./PATTERNS.md) — ~70 production-distilled battle-tested patterns in 8 categories (UI5/FE V4 traps, CAP/TS pitfalls, BTP/Kyma/OnPrem deployment, security, customizing, lifecycle, events, ecosystem plugins). Consulted during Step 1c target resolution + Step 6b side-by-side scaffold. Same content is also available as a standalone skill in [`Raistlin82/sap-cap-toolkit`](https://github.com/Raistlin82/sap-cap-toolkit) for CAP-only audiences
+- [`./INTEGRATIONS.md`](./INTEGRATIONS.md) — step-by-step mapping of refactor phase × ARC-1 MCP tool × arc-1 native skill × [secondsky/sap-skills](https://github.com/secondsky/sap-skills) plugin × external sources
+
+External cross-links to the CAP audit toolkit are operational ("see also" / coordinate with), not critical dependencies of this skill.
 
 ## References
 

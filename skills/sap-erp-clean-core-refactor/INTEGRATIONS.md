@@ -94,7 +94,7 @@ Use this document to:
 |---|---|---|---|---|---|
 | 7a — ATC final check | `SAPLint(action="run_atc")` (whole package) | — | — | — | Cumulative regression |
 | 7b — Unit test full run | `SAPDiagnose(action="run_unit_tests")` (whole package) | — | — | — | All tests including pre-existing |
-| 7c — Cross-check against CAP audit | — | [`sap-cap-clean-core-enforce`](../sap-cap-clean-core-enforce/SKILL.md) (other branch) | — | — | Verify BTP-side compliance |
+| 7c — Cross-check against CAP audit | — | [`sap-cap-clean-core-enforce`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) (other branch) | — | — | Verify BTP-side compliance |
 | 7d — Session learnings | — | **`analyze-chat-session`** | — | — | Propose new skill traps for future runs |
 
 ## Coverage assessment
@@ -168,6 +168,6 @@ Plugins **NOT** used by this skill (out of scope):
 
 - [`./SKILL.md`](./SKILL.md) — main protocol; this document is the integration deep-dive.
 - [`./SOURCES.md`](./SOURCES.md) — authoritative SAP source catalog (Tier 1-4).
-- [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) — broader companion plugin map (Category 8) for the CAP-side toolkit.
+- [`sap-cap-fiori-battle-tested-patterns`](./PATTERNS.md) — broader companion plugin map (Category 8) for the CAP-side toolkit.
 - [ARC-1 README](https://github.com/marianfoo/arc-1) — full MCP capability reference.
 - [secondsky/sap-skills](https://github.com/secondsky/sap-skills) — 32-plugin SAP skill catalog.

@@ -1,13 +1,12 @@
----
-name: sap-cap-fiori-battle-tested-patterns
-description: Knowledge base of battle-tested patterns and gotchas for SAP CAP + Fiori Elements V4 + BTP (Cloud Foundry / Kyma) projects — distilled from production deployments. Eight categories covering UI5/FE V4 traps, CAP/TypeScript pitfalls, Kyma deployment lessons, security defense-in-depth, customizing-driven patterns, lifecycle/process discipline, post-commit events/messaging, and the companion-plugin ecosystem landscape. Use when asked to "review CAP best practices", "diagnose Fiori Elements bug", "fix CAP runtime issue", "harden deployment", "review draft behavior", "audit my CAP project", or as a knowledge reference linked from other skills. Not a runnable skill — it is a curated reference catalog.
----
-
 # SAP CAP + Fiori Elements V4 — Battle-Tested Patterns
+
+> **This is a reference document**, not a runnable skill. It ships alongside [`SKILL.md`](./SKILL.md) inside the `sap-erp-clean-core-refactor` skill so the refactor skill is **self-contained** — it doesn't need an external repository to consult deployment patterns when generating side-by-side scaffolds.
+>
+> The same content is also published as a standalone reference skill in the companion [`Raistlin82/sap-cap-toolkit`](https://github.com/Raistlin82/sap-cap-toolkit) repository, where it's discoverable as `sap-cap-fiori-battle-tested-patterns`. If you're working on a CAP project unrelated to ABAP refactoring, install that repo instead.
 
 A reference catalog of patterns and gotchas that have surfaced repeatedly across production SAP CAP + Fiori Elements V4 + BTP deployments. Each entry distills a real-world failure mode into a generic pattern: **symptom** observed by users or operators, **root cause** in the framework / runtime / deployment layer, and a **remedy** that is portable across CAP projects.
 
-This skill is **not a runner** — it never executes commands. It is a curated reference invoked either directly (when the user asks for best practices) or cross-linked from operational skills like [`../sap-cap-stack-audit-full/SKILL.md`](../sap-cap-stack-audit-full/SKILL.md), [`../sap-fiori-app-audit/SKILL.md`](../sap-fiori-app-audit/SKILL.md), [`../sap-cap-security-rbac-matrix/SKILL.md`](../sap-cap-security-rbac-matrix/SKILL.md), and similar.
+This document is **not a runner** — it never executes commands. It is a curated reference consulted by [`SKILL.md`](./SKILL.md) during refactor planning (Step 1c target resolution, Step 6b side-by-side scaffold), referenced from [`INTEGRATIONS.md`](./INTEGRATIONS.md) for the companion plugin map, and available for direct reading by humans.
 
 Patterns are organized into **eight categories**. Each category lists the most load-bearing patterns first; lighter-weight items follow. Where multiple frameworks expose the same gotcha (e.g. `@UI.Hidden` interaction with `@Core.OperationAvailable`), the entry points to the framework documentation rather than reproducing it.
 
@@ -246,7 +245,7 @@ Add `npm run typecheck:strict`. Promote folders one at a time, lock them in CI w
 
 **Root cause.** `cap-js/*` plugins are powerful but each one extends the runtime (e.g. `@cap-js/audit-logging` registers a BTP-emit layer; `@cap-js/change-tracking` hooks every update). Adding them silently leaves the team unaware of the new coupling.
 
-**Remedy.** Maintain a matrix doc (an ADR is sufficient) listing every `@cap-js/*` plugin: `Adopted` / `Deferred` / `Not-applicable`. CI gate verifies that `package.json` ↔ matrix doc match (see [`../sap-cap-ci-gates-pattern/SKILL.md`](../sap-cap-ci-gates-pattern/SKILL.md#pattern-4--convention--matrix-drift-detection) Pattern 4).
+**Remedy.** Maintain a matrix doc (an ADR is sufficient) listing every `@cap-js/*` plugin: `Adopted` / `Deferred` / `Not-applicable`. CI gate verifies that `package.json` ↔ matrix doc match (see [`sap-cap-ci-gates-pattern`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-ci-gates-pattern/SKILL.md#pattern-4--convention--matrix-drift-detection) Pattern 4).
 
 ---
 
@@ -284,7 +283,7 @@ The default recommendation for a new project is **BTP Cloud Foundry** — it is 
 
 **Root cause.** `xs-security.json` declares scopes; CAP handlers must `@(restrict: [{grant: '...', to: '<scope-or-role>'}])` to enforce. Mismatch between xs-security and `services-auth.cds` is silent.
 
-**Remedy.** Treat `xs-security.json` as the single source of truth for scope names. Match every `services-auth.cds` `to:` clause to a declared scope. Add a CI gate (see [`../sap-cap-ci-gates-pattern/SKILL.md#pattern-4--convention--matrix-drift-detection`](../sap-cap-ci-gates-pattern/SKILL.md) Pattern 4) that catches drift.
+**Remedy.** Treat `xs-security.json` as the single source of truth for scope names. Match every `services-auth.cds` `to:` clause to a declared scope. Add a CI gate (see [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-ci-gates-pattern/SKILL.md#pattern-4--convention--matrix-drift-detection`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-ci-gates-pattern/SKILL.md) Pattern 4) that catches drift.
 
 #### 3.A.3 — Destination service for S/4HANA Tier-2 proxies
 
@@ -649,7 +648,7 @@ Map `livenessProbe` → `/health/Live`, `readinessProbe` → `/health/Ready`.
 
 3. **The project's compatibility catalog** (e.g. `srv/integration/s4CompatibilityPolicy.js`): the project's *declared* edition × service matrix with `availability[]` and `probeObject` fields. The CI gate verifies this catalog matches sources 1 + 2; any drift is a HARD FAIL (cannot ship).
 
-Use [`../sap-cap-clean-core-enforce/SKILL.md`](../sap-cap-clean-core-enforce/SKILL.md) to discover consumption, build the matrix, detect drift. Use [`../sap-cap-ci-gates-pattern/SKILL.md#pattern-3--released-state--api-availability-drift-detection`](../sap-cap-ci-gates-pattern/SKILL.md) Pattern 3 to enforce the gate on every PR.
+Use [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) to discover consumption, build the matrix, detect drift. Use [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-ci-gates-pattern/SKILL.md#pattern-3--released-state--api-availability-drift-detection`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-ci-gates-pattern/SKILL.md) Pattern 3 to enforce the gate on every PR.
 
 Compliance contract:
 - **Level A** (Released APIs only): every consumed Tier-2 S/4 service is in the released catalog for ALL deployment-target editions. Zero RFC/BAPI/SQL-direct usage. Zero modifications to standard tables. Zero user-exits.
@@ -764,7 +763,7 @@ const value = params.MY_KEY                    // canonical
            || process.env.MY_KEY                // env var fallback
            || DEFAULT_VALUE;                    // hardcoded last-resort
 ```
-Mark the order in code comments. Audit ensures every adapter uses this chain (see [`../sap-cap-customizing-honor/SKILL.md`](../sap-cap-customizing-honor/SKILL.md)).
+Mark the order in code comments. Audit ensures every adapter uses this chain (see [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-customizing-honor/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-customizing-honor/SKILL.md)).
 
 ### 5.3 — Per-tenant override pattern (catalog → company override)
 
@@ -791,7 +790,7 @@ Runtime resolution: override → catalog → hardcoded default.
 
 **Root cause.** No enforced contract between CSV seed and code consumer.
 
-**Remedy.** A CI gate (see [`../sap-cap-ci-gates-pattern/SKILL.md`](../sap-cap-ci-gates-pattern/SKILL.md#pattern-1--bidirectional-csv--code-consistency)) that fails the build on **inverse orphans** (code reads, CSV missing) or **forward orphans** (CSV seeds, no consumer). Allowlist for legitimate external consumers.
+**Remedy.** A CI gate (see [`sap-cap-ci-gates-pattern`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-ci-gates-pattern/SKILL.md#pattern-1--bidirectional-csv--code-consistency)) that fails the build on **inverse orphans** (code reads, CSV missing) or **forward orphans** (CSV seeds, no consumer). Allowlist for legitimate external consumers.
 
 ---
 
@@ -1017,11 +1016,11 @@ When the user asks "what's the best practice for X in CAP / Fiori Elements?", se
 ### As a cross-link target
 
 Other skills in this repository cross-link to specific patterns by anchor:
-- [`../sap-fiori-app-audit/SKILL.md`](../sap-fiori-app-audit/SKILL.md) refers to Category 1 for FE V4 traps.
-- [`../sap-cap-security-rbac-matrix/SKILL.md`](../sap-cap-security-rbac-matrix/SKILL.md) refers to Category 4 for defense-in-depth.
-- [`../sap-cap-customizing-honor/SKILL.md`](../sap-cap-customizing-honor/SKILL.md) refers to Category 5 for customizing patterns.
-- [`../sap-cap-clean-core-enforce/SKILL.md`](../sap-cap-clean-core-enforce/SKILL.md) refers to Category 3.8 for multi-region deployment.
-- [`../sap-cap-stack-audit-full/SKILL.md`](../sap-cap-stack-audit-full/SKILL.md) acts as orchestrator and consults this catalog when consolidating findings.
+- [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-fiori-app-audit/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-fiori-app-audit/SKILL.md) refers to Category 1 for FE V4 traps.
+- [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-security-rbac-matrix/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-security-rbac-matrix/SKILL.md) refers to Category 4 for defense-in-depth.
+- [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-customizing-honor/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-customizing-honor/SKILL.md) refers to Category 5 for customizing patterns.
+- [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) refers to Category 3.8 for multi-region deployment.
+- [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-stack-audit-full/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-stack-audit-full/SKILL.md) acts as orchestrator and consults this catalog when consolidating findings.
 
 ### As a teaching index
 
@@ -1030,7 +1029,7 @@ A developer new to CAP + Fiori Elements V4 can read Categories 1 → 8 in order.
 ## When NOT to use
 
 - For project-specific advice that depends on domain semantics (the patterns here are deliberately generic).
-- For runnable diagnostics (use the operational skills like [`../sap-cap-stack-audit-full/SKILL.md`](../sap-cap-stack-audit-full/SKILL.md)).
+- For runnable diagnostics (use the operational skills like [`https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-stack-audit-full/SKILL.md`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-stack-audit-full/SKILL.md)).
 - As a replacement for SAP official documentation — this catalog distills production lessons, but the authoritative spec lives in the SAP help portal.
 
 ## Recommended Companion Plugins
