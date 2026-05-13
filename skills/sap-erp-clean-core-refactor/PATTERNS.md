@@ -881,12 +881,12 @@ This way the audit log captures the pre-dispatch state.
 
 **Remedy.** Declare events in a service:
 ```cds
-service NOVAEvents @(path: '/odata/v4/events') {
+service BusinessEvents @(path: '/odata/v4/events') {
   event InvoiceApproved : { eDocumentGuid: UUID; companyCode: String; approver: String; approvedAt: Timestamp };
   // …
 }
 ```
-Emit via `cds.connect.to('NOVAEvents').emit('InvoiceApproved', payload)`. AsyncAPI auto-generated from the declaration.
+Emit via `cds.connect.to('BusinessEvents').emit('InvoiceApproved', payload)`. AsyncAPI auto-generated from the declaration.
 
 ### 7.2 — Post-commit fire-and-forget emit
 
@@ -897,7 +897,7 @@ Emit via `cds.connect.to('NOVAEvents').emit('InvoiceApproved', payload)`. AsyncA
 **Remedy.** Emit from `req.on('succeeded')`:
 ```javascript
 req.on('succeeded', async () => {
-  try { await emitNovaEvent('InvoiceApproved', payload); }
+  try { await emitBusinessEvent('InvoiceApproved', payload); }
   catch (err) { LOG.warn({ err }, 'emit failed'); }
 });
 ```
@@ -913,7 +913,7 @@ The user-facing tx commits; emit failure logs but doesn't propagate.
 ```typescript
 let cached: Promise<Service> | null = null;
 function getEvents(): Promise<Service> {
-  if (!cached) cached = cds.connect.to('NOVAEvents');
+  if (!cached) cached = cds.connect.to('BusinessEvents');
   return cached;
 }
 ```
@@ -933,7 +933,7 @@ First call starts the connect; all concurrent calls await the same promise.
 
 **Root cause.** No replay path for emissions that failed silently.
 
-**Remedy.** Mirror emit events into `cds.outbox.Messages` (or a project-specific table). A periodic job re-emits unacknowledged entries. Distinguish first-emit from replay-emit in the metrics (`nova_events_emit_total` vs `nova_events_replay_total`).
+**Remedy.** Mirror emit events into `cds.outbox.Messages` (or a project-specific table). A periodic job re-emits unacknowledged entries. Distinguish first-emit from replay-emit in the metrics (`business_events_emit_total` vs `business_events_replay_total`).
 
 ---
 

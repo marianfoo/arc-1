@@ -237,7 +237,7 @@ npx cds compile srv --service all --to edmx > /dev/null
 npx cds compile db/schema.cds --to sql > /dev/null
 ```
 
-If the target NOVA-style project has `scripts/ci/check-s4-compat-coverage.sh` (or equivalent Clean Core CI gate), invoke it.
+If the target project has `scripts/ci/check-s4-compat-coverage.sh` (or equivalent Clean Core CI gate), invoke it.
 
 Emit final summary report at `<target>/.target-cap-staging/docs/migration-summary.md`:
 
