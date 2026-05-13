@@ -51,6 +51,8 @@ These are all the knobs you have. Set values via env vars, CLI flags, or `.env`.
 
 **What it caps.** Requests per minute, per source IP, to the OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`). `/mcp` gets a separately-derived higher cap (`max(value × 30, 600)/min/IP`) to absorb legitimate MCP batch traffic while still gating anonymous probing.
 
+**Copilot Studio note.** Copilot Studio POSTs MCP JSON-RPC bodies to `/authorize` instead of `/mcp` (a documented quirk of that client). Those requests are dispatched to the `/mcp` cap by their body shape so legitimate batched tool calls aren't choked at the OAuth cap. The `/mcp` bucket is shared across direct `/mcp` traffic and `/authorize` JSON-RPC traffic from the same IP — a client can't double-spend by alternating routes. Real OAuth `/authorize` flows still go through the OAuth cap.
+
 **What happens on hit.** HTTP `429 Too Many Requests` with `Retry-After` and RFC 9331 `RateLimit-Limit, remaining, reset` headers. Emits one `auth_rate_limited` audit event per denial.
 
 **When to tune.**
@@ -60,7 +62,16 @@ These are all the knobs you have. Set values via env vars, CLI flags, or `.env`.
 
 ### `ARC1_RATE_LIMIT` — Layer 2 (default `60`)
 
-**What it caps.** MCP tool calls per minute, per authenticated user. The user key is resolved as: `authInfo.userName` (preferred — comes from JWT `user_name`/`email` or XSUAA claim) → `authInfo.clientId` (DCR-registered client) → `'__anon__'` (token without identity claim). Stdio mode (no authInfo) is exempt entirely — there's no user identity to key on, and stdio is single-user-by-design.
+**What it caps.** MCP tool calls per minute, per authenticated user. Stdio mode (no `authInfo`) is exempt entirely — there's no user identity to key on, and stdio is single-user-by-design.
+
+**User-key derivation** walks identity claims most-specific-first so users sharing an OAuth `azp` (app id) never collapse into one bucket:
+
+1. `extra.userName` — XSUAA logon name (`SecurityContext.getLogonName()`).
+2. `extra.email` — XSUAA email or any OIDC token that populates the claim.
+3. `extra.sub` — OIDC subject. Guaranteed unique per user within an issuer. **This is the critical hop for OIDC** — without it, distinct users on the same OAuth app would all share `clientId = azp`.
+4. `extra.preferred_username` — sometimes set on OIDC tokens.
+5. `clientId` — last resort. For OIDC this is `azp`, for API keys it's `api-key:<profile>`. Falling here means everyone using that client/profile shares one bucket; tune `ARC1_RATE_LIMIT` accordingly or configure auth so an earlier candidate is populated.
+6. `'__anon__'` — token with no usable identity. Shared bucket for anonymous traffic; production deployments should configure auth so this branch is never reached.
 
 **What happens on hit.** An MCP **tool error** (not HTTP 429) with structured content:
 ```json

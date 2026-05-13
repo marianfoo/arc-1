@@ -1,5 +1,11 @@
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { describe, expect, it } from 'vitest';
-import { createMcpRateLimiter } from '../../../src/server/mcp-rate-limit.js';
+import { createMcpRateLimiter, resolveRateLimitUserKey } from '../../../src/server/mcp-rate-limit.js';
+
+/** Minimal AuthInfo factory — every field is optional in the SDK type. */
+function authInfo(extra: Record<string, unknown>, clientId?: string): AuthInfo {
+  return { token: 'tok', scopes: ['read'], clientId: clientId ?? 'cli', extra } as AuthInfo;
+}
 
 /**
  * Task 4 (Layer 2): Per-user MCP tool-call rate limiter.
@@ -53,5 +59,62 @@ describe('createMcpRateLimiter (Layer 2)', () => {
     expect((await limiter.consume('userA', 'SAPWrite')).allowed).toBe(true);
     // The third hits the limit
     expect((await limiter.consume('userA', 'SAPSearch')).allowed).toBe(false);
+  });
+});
+
+/**
+ * Per-user key derivation. Critical for OIDC mode where `clientId = azp` (the
+ * OAuth app id) is shared by every user of that app — falling back to clientId
+ * would collapse them all into one bucket. The resolver walks the most-specific
+ * identity claim first.
+ */
+describe('resolveRateLimitUserKey', () => {
+  it('XSUAA shape: prefers extra.userName (SAP logon name)', () => {
+    expect(resolveRateLimitUserKey(authInfo({ userName: 'MARIAN', email: 'm@example.com' }))).toBe('MARIAN');
+  });
+
+  it('OIDC shape: uses extra.sub when userName is absent (the bug Codex flagged)', () => {
+    // OIDC tokens populate {sub, iss} but NOT userName. clientId is the azp claim,
+    // shared by every user of the app. Without sub-aware resolution, all of them
+    // would collapse into one bucket keyed on clientId.
+    const oidc = authInfo({ sub: 'user-uuid-alice', iss: 'https://idp.example' }, 'app-abc');
+    expect(resolveRateLimitUserKey(oidc)).toBe('user-uuid-alice');
+  });
+
+  it('OIDC shape: two distinct users on the same OIDC app get distinct keys', () => {
+    const alice = authInfo({ sub: 'user-uuid-alice', iss: 'https://idp.example' }, 'app-abc');
+    const bob = authInfo({ sub: 'user-uuid-bob', iss: 'https://idp.example' }, 'app-abc'); // same clientId!
+    expect(resolveRateLimitUserKey(alice)).not.toBe(resolveRateLimitUserKey(bob));
+  });
+
+  it('prefers extra.email over extra.sub when both are present', () => {
+    expect(resolveRateLimitUserKey(authInfo({ email: 'a@b.com', sub: 'sub-id' }))).toBe('a@b.com');
+  });
+
+  it('falls back to preferred_username when userName/email/sub are absent', () => {
+    expect(resolveRateLimitUserKey(authInfo({ preferred_username: 'someUser' }))).toBe('someUser');
+  });
+
+  it('falls back to clientId only when no identity claim is usable', () => {
+    expect(resolveRateLimitUserKey(authInfo({}, 'api-key:viewer'))).toBe('api-key:viewer');
+  });
+
+  it("returns '__anon__' when authInfo is undefined", () => {
+    expect(resolveRateLimitUserKey(undefined)).toBe('__anon__');
+  });
+
+  it("returns '__anon__' when every candidate is empty or wrong-typed", () => {
+    const trash = {
+      token: 'tok',
+      scopes: ['read'],
+      clientId: '',
+      extra: { userName: '', email: null, sub: 42, preferred_username: undefined },
+    } as unknown as AuthInfo;
+    expect(resolveRateLimitUserKey(trash)).toBe('__anon__');
+  });
+
+  it('skips empty-string identity values and tries the next candidate', () => {
+    // userName empty → falls through to email
+    expect(resolveRateLimitUserKey(authInfo({ userName: '', email: 'a@b.com' }))).toBe('a@b.com');
   });
 });

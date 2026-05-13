@@ -290,7 +290,7 @@ export async function startHttpServer(
       resourceMetadataUrl,
     });
 
-    // ─── Layer 1: per-IP rate limiters on OAuth endpoints ───────────────
+    // ─── Layer 1: per-IP rate limiters on OAuth endpoints + /mcp ────────
     // Mounted BEFORE the auth router so spammed credentials are rejected before any
     // crypto / DB work. Discovery endpoints (/.well-known/*) are intentionally NOT
     // rate-limited — they're cheap, cacheable, and legitimate clients hit them on
@@ -301,9 +301,29 @@ export async function startHttpServer(
     // mount site without indirection. When the operator opts out via
     // ARC1_AUTH_RATE_LIMIT=0, we skip the mounts entirely rather than installing a
     // noop — keeping the express middleware chain free of dead-weight passthroughs.
+    //
+    // Copilot Studio quirk: that client POSTs MCP JSON-RPC bodies to /authorize
+    // instead of /mcp (see routing handler below). Without special handling, every
+    // legitimate Copilot tool call would be gated by the LOW OAuth cap (20/min/IP)
+    // and never reach Layer 2. The /authorize limiter therefore dispatches by body
+    // shape: JSON-RPC payloads route to mcpRateLimit (the larger /mcp bucket, shared
+    // with direct /mcp traffic from the same IP); everything else uses the OAuth
+    // cap. Both branches end at a fresh `rateLimit({...})` call so CodeQL's query
+    // still sees /authorize as rate-limited.
+    let mcpRateLimit: import('express').RequestHandler | undefined;
     if (rateLimitEnabled) {
+      const oauthAuthorize = createAuthRateLimiter('/authorize', config.authRateLimit);
+      mcpRateLimit = createAuthRateLimiter('/mcp', mcpRatePerMinute);
       app.use('/register', createAuthRateLimiter('/register', config.authRateLimit));
-      app.use('/authorize', createAuthRateLimiter('/authorize', config.authRateLimit));
+      app.use('/authorize', (req, res, next) => {
+        const body = req.body as { jsonrpc?: unknown } | undefined;
+        if (req.method === 'POST' && body && body.jsonrpc !== undefined) {
+          // Copilot Studio MCP traffic on /authorize → /mcp cap, not OAuth cap.
+          // Same bucket as /mcp so a client alternating routes can't double-spend.
+          return mcpRateLimit?.(req, res, next);
+        }
+        return oauthAuthorize(req, res, next);
+      });
       app.use('/token', createAuthRateLimiter('/token', config.authRateLimit));
       app.use('/revoke', createAuthRateLimiter('/revoke', config.authRateLimit));
     }
@@ -442,11 +462,11 @@ export async function startHttpServer(
     );
 
     // Layer 1: rate-limit /mcp BEFORE bearer auth so anonymous probing is gated.
-    // /mcp gets a higher cap to absorb legitimate batched tool-call traffic — see
-    // mcpRatePerMinute above. Skipped entirely when the operator opts out so the
-    // dataflow CodeQL traces is `rateLimit({...}) → app.use('/mcp', …)` with no branches.
-    if (rateLimitEnabled) {
-      app.use('/mcp', createAuthRateLimiter('/mcp', mcpRatePerMinute));
+    // Reuses the `mcpRateLimit` instance built above with the OAuth-mounts block —
+    // sharing one bucket across /mcp AND Copilot Studio JSON-RPC on /authorize so a
+    // client alternating routes can't bypass the cap.
+    if (mcpRateLimit) {
+      app.use('/mcp', mcpRateLimit);
     }
     // Protected MCP endpoint with chained token verification
     app.all('/mcp', bearerAuth, mcpHandler);

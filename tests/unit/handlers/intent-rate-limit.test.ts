@@ -69,7 +69,7 @@ describe('handleToolCall — Layer 2 rate limiting', () => {
     expect(stubLimiter.consume).toHaveBeenCalledWith('marian@example.com', 'SAPRead');
   });
 
-  it('falls back to clientId when userName is missing', async () => {
+  it('falls back to clientId when no extra identity claim is set', async () => {
     const stubLimiter: McpRateLimiter = {
       consume: vi.fn().mockResolvedValue({ allowed: false, retryAfterMs: 5000, limitPerMinute: 60 }),
     };
@@ -87,6 +87,52 @@ describe('handleToolCall — Layer 2 rate limiting', () => {
     );
 
     expect(stubLimiter.consume).toHaveBeenCalledWith('copilot-studio', 'SAPRead');
+  });
+
+  it('OIDC: keys by extra.sub when userName is absent (no clientId collapse)', async () => {
+    // OIDC verifier shape: extra={sub, iss}, clientId=azp (shared app id).
+    // Two distinct OIDC users on the same app must NOT share a rate-limit bucket.
+    const stubLimiter: McpRateLimiter = {
+      consume: vi.fn().mockResolvedValue({ allowed: true }),
+    };
+
+    await handleToolCall(
+      makeClient(),
+      makeConfig(),
+      'SAPRead',
+      { type: 'PROG', name: 'ZHELLO' },
+      {
+        token: 'tok',
+        scopes: ['read'],
+        clientId: 'shared-azp-app-id',
+        extra: { sub: 'user-uuid-alice', iss: 'https://idp.example' },
+      },
+      undefined,
+      undefined,
+      false,
+      stubLimiter,
+    );
+    await handleToolCall(
+      makeClient(),
+      makeConfig(),
+      'SAPRead',
+      { type: 'PROG', name: 'ZHELLO' },
+      {
+        token: 'tok',
+        scopes: ['read'],
+        clientId: 'shared-azp-app-id',
+        extra: { sub: 'user-uuid-bob', iss: 'https://idp.example' },
+      },
+      undefined,
+      undefined,
+      false,
+      stubLimiter,
+    );
+
+    expect(stubLimiter.consume).toHaveBeenNthCalledWith(1, 'user-uuid-alice', 'SAPRead');
+    expect(stubLimiter.consume).toHaveBeenNthCalledWith(2, 'user-uuid-bob', 'SAPRead');
+    // Critical assertion: the two calls used DIFFERENT keys despite same clientId.
+    expect(stubLimiter.consume).not.toHaveBeenCalledWith('shared-azp-app-id', 'SAPRead');
   });
 
   it('emits mcp_rate_limited audit event on denial', async () => {

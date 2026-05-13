@@ -138,3 +138,128 @@ describe('createAuthRateLimiter (Layer 1)', () => {
 
 // Note: when ARC1_AUTH_RATE_LIMIT=0 the limiter is NOT mounted at all (see http.ts).
 // There is no noop-middleware helper any more — keeps CodeQL's dataflow direct.
+
+/**
+ * Mirrors the `/authorize` dispatcher in `src/server/http.ts`: POST bodies with
+ * `jsonrpc` route to the higher /mcp cap (Copilot Studio MCP traffic), other
+ * requests use the lower OAuth cap. Same one-instance-shared-with-/mcp pattern.
+ *
+ * Codex review flagged the original mount as a regression because the low OAuth
+ * cap (20/min/IP default) would throttle Copilot's normal MCP tool-call traffic.
+ * This test asserts the dispatcher routes the two correctly.
+ */
+describe('/authorize JSON-RPC dispatch (Copilot Studio MCP fix)', () => {
+  /** Build the same dispatcher pattern used by src/server/http.ts. */
+  function buildApp(oauthCap: number, mcpCap: number) {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(express.json());
+    const oauthAuthorize = createAuthRateLimiter('/authorize', oauthCap);
+    const mcpRateLimit = createAuthRateLimiter('/mcp', mcpCap);
+    app.use('/authorize', (req, res, next) => {
+      const body = req.body as { jsonrpc?: unknown } | undefined;
+      if (req.method === 'POST' && body && body.jsonrpc !== undefined) {
+        return mcpRateLimit(req, res, next);
+      }
+      return oauthAuthorize(req, res, next);
+    });
+    // Same /mcp limiter instance — shared bucket
+    app.use('/mcp', mcpRateLimit);
+    app.all('/authorize', (_req, res) => res.json({ ok: 'authorize' }));
+    app.all('/mcp', (_req, res) => res.json({ ok: 'mcp' }));
+    return app;
+  }
+
+  async function fireJsonPost(
+    app: express.Express,
+    path: string,
+    body: object,
+    ip = '10.7.7.1',
+  ): Promise<{ status: number; headers: Record<string, string> }> {
+    const http = await import('node:http');
+    const server = http.createServer(app);
+    await new Promise<void>((r) => server.listen(0, r));
+    const addr = server.address();
+    if (!addr || typeof addr === 'string') throw new Error('server not listening');
+    const port = addr.port;
+    const payload = JSON.stringify(body);
+    try {
+      return await new Promise<{ status: number; headers: Record<string, string> }>((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(payload),
+              'X-Forwarded-For': ip,
+            },
+          },
+          (response) => {
+            response.on('data', () => {});
+            response.on('end', () => {
+              resolve({
+                status: response.statusCode ?? 0,
+                headers: Object.fromEntries(
+                  Object.entries(response.headers).map(([k, v]) => [
+                    k.toLowerCase(),
+                    Array.isArray(v) ? v.join(',') : (v ?? ''),
+                  ]),
+                ),
+              });
+            });
+          },
+        );
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+      });
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  }
+
+  it('JSON-RPC POST /authorize uses the /mcp cap, not the OAuth cap', async () => {
+    // OAuth cap=2, /mcp cap=10. Fire 5 JSON-RPC POSTs to /authorize — all should pass
+    // (would be capped at 2 if the OAuth limiter were applied).
+    const app = buildApp(2, 10);
+    const results: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const r = await fireJsonPost(app, '/authorize', { jsonrpc: '2.0', id: i, method: 'tools/list' });
+      results.push(r.status);
+    }
+    expect(results).toEqual([200, 200, 200, 200, 200]);
+  });
+
+  it('non-JSON-RPC POST /authorize still uses the OAuth cap', async () => {
+    // OAuth cap=2. A POST body WITHOUT jsonrpc field (a real OAuth flow) — should hit
+    // the OAuth cap at request 3.
+    const app = buildApp(2, 10);
+    const results: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const r = await fireJsonPost(app, '/authorize', { client_id: 'foo', response_type: 'code' });
+      results.push(r.status);
+    }
+    expect(results.slice(0, 2)).toEqual([200, 200]);
+    expect(results.slice(2)).toEqual([429, 429]);
+  });
+
+  it('JSON-RPC /authorize and /mcp share one bucket so clients cannot double-spend by alternating', async () => {
+    // /mcp cap=4. Mix 3 calls on /authorize JSON-RPC + 3 calls on /mcp. If they shared
+    // bucket correctly: first 4 pass, last 2 hit 429. If buckets were independent,
+    // all 6 would pass.
+    const app = buildApp(2, 4);
+    const results: { path: string; status: number }[] = [];
+    const sequence = ['/authorize', '/mcp', '/authorize', '/mcp', '/authorize', '/mcp'];
+    for (const path of sequence) {
+      const r = await fireJsonPost(app, path, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+      results.push({ path, status: r.status });
+    }
+    const passes = results.filter((r) => r.status === 200).length;
+    const denials = results.filter((r) => r.status === 429).length;
+    expect(passes).toBe(4); // exactly the shared cap
+    expect(denials).toBe(2);
+  });
+});

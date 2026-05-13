@@ -18,9 +18,48 @@
  *   one point. See ADR-0004 for the rationale.
  */
 
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 
 export type RateLimitDecision = { allowed: true } | { allowed: false; retryAfterMs: number; limitPerMinute: number };
+
+/**
+ * Resolve the per-user rate-limit key from an `AuthInfo`, walking the most-
+ * specific identity claims first so distinct users never share a quota when
+ * they share an auth client / application.
+ *
+ * Order, by descending specificity:
+ *   1. `extra.userName`        — XSUAA logon name (`securityContext.getLogonName()`)
+ *   2. `extra.email`           — XSUAA / OIDC email when populated
+ *   3. `extra.sub`             — OIDC subject claim (guaranteed unique per user within issuer)
+ *   4. `extra.preferred_username` — sometimes set on OIDC tokens
+ *   5. `clientId`              — last resort. Note for OIDC this is `azp`
+ *      (the app's client id), shared by all users of that app — so falling here
+ *      collapses them into one bucket. The earlier checks exist specifically
+ *      to avoid that. Acceptable only for the API-key path where the clientId
+ *      is `api-key:<profile>` and the operator has chosen the profile granularity.
+ *   6. `'__anon__'`            — token with no usable identity claim. Single
+ *      shared bucket for anonymous traffic. Operators should configure auth so
+ *      this branch is never reached in production.
+ *
+ * Why not just `sub`? Because XSUAA tokens don't put `sub` on `extra`; they put
+ * the SAP logon name on `extra.userName`. OIDC does the inverse. We accept both
+ * shapes rather than forcing every auth provider to align on one claim.
+ */
+export function resolveRateLimitUserKey(authInfo: AuthInfo | undefined): string {
+  if (!authInfo) return '__anon__';
+  const extra = (authInfo.extra ?? {}) as {
+    userName?: unknown;
+    email?: unknown;
+    sub?: unknown;
+    preferred_username?: unknown;
+  };
+  const candidates = [extra.userName, extra.email, extra.sub, extra.preferred_username, authInfo.clientId];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.length > 0) return c;
+  }
+  return '__anon__';
+}
 
 export interface McpRateLimiter {
   /**

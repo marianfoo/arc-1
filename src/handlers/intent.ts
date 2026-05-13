@@ -176,7 +176,7 @@ import { detectFilename, lintAbapSource, lintAndFix, validateBeforeWrite } from 
 import { sanitizeArgs } from '../server/audit.js';
 import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
-import type { McpRateLimiter } from '../server/mcp-rate-limit.js';
+import { type McpRateLimiter, resolveRateLimitUserKey } from '../server/mcp-rate-limit.js';
 import type { ServerConfig } from '../server/types.js';
 import { expandHyperfocusedArgs } from './hyperfocused.js';
 import { getToolSchema } from './schemas.js';
@@ -1074,7 +1074,10 @@ export async function handleToolCall(
   // See docs_page/rate-limiting.md (Layer 2). Cost weighting per tool is deferred
   // to v2 — every consume call counts as one point.
   if (mcpRateLimiter && authInfo) {
-    const userKey = user ?? clientId ?? '__anon__';
+    // Walks the most-specific identity claim first (userName → email → sub →
+    // preferred_username → clientId) so OIDC users sharing one `azp` clientId
+    // don't collapse into a single bucket. See resolveRateLimitUserKey.
+    const userKey = resolveRateLimitUserKey(authInfo);
     const decision = await mcpRateLimiter.consume(userKey, toolName);
     if (!decision.allowed) {
       const retryAfter = Math.ceil(decision.retryAfterMs / 1000);
