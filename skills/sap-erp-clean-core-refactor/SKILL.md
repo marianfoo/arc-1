@@ -37,10 +37,11 @@ This skill does NOT ship a pre-built KB. It ships:
 | Output destination | `docs/refactor/<yyyy-mm-dd>-clean-core-plan.md` | Committed; serves as the decision record |
 | Target Clean Core level | `A` | Most restrictive; works for all cloud targets |
 | Side-by-side target | Asked once at session start | Reuses Step 0 of [`../sap-cap-stack-audit-full/SKILL.md`](../sap-cap-stack-audit-full/SKILL.md) deployment-target decision tree |
+| Level B handling | `keep_at_level_b` by default (compliant; documented) | B is already Clean-Core compliant. Pushing to A is opt-in via `--aggressive` or `--push-to-a` because escalation adds cost and may be wrong choice (most B objects use SAP-recommended patterns) |
 
 ## Input
 
-Single argument with format `<package-or-object> [mode] [--target=<deployment-target>]`:
+Single argument with format `<package-or-object> [mode] [flags]`:
 
 | Argument | Meaning |
 |---|---|
@@ -50,12 +51,16 @@ Single argument with format `<package-or-object> [mode] [--target=<deployment-ta
 | `--target=` | `btp-cf` · `btp-kyma` · `onprem-kyma` · `onprem-cf` (drives side-by-side target choice) |
 | `--force-refresh` | Bypass the local cache; re-query the source even if cached < 30 days |
 | `--budget=N` | Override the default per-finding Apify lookup budget (default 5 pages) |
+| `--aggressive` | For every Level B finding, also research Level A escalation paths (rewrite via Customizing OR side-by-side extraction). Emits **multi-option proposals** instead of default `keep_at_level_b`. Adds ~30-50% to plan generation cost |
+| `--push-to-a=A,B,C` | Selective B→A escalation: only the listed object names get the expanded analysis. Cheaper than `--aggressive`, requires you know which objects upfront |
 
 Examples:
-- `ZFI plan --target=btp-kyma` — typical first call.
-- `ZCL_INVOICE_HANDLER plan` — single-object focus.
-- `ZFI execute --target=btp-kyma` — apply the plan (requires confirmation per object).
-- `ZFI plan --force-refresh` — re-query every source even if cached.
+- `ZFI plan --target=btp-kyma` — typical first call (default: Level B kept as B)
+- `ZCL_INVOICE_HANDLER plan` — single-object focus
+- `ZFI execute --target=btp-kyma` — apply the plan (requires confirmation per object)
+- `ZFI plan --force-refresh` — re-query every source even if cached
+- `ZFI plan --target=btp-kyma --aggressive` — explore Level A escalation for every Level B
+- `ZFI plan --target=btp-kyma --push-to-a=ZTABLE_TAX_RATES_LOCAL,ZCL_VENDOR_LOOKUP_EXT` — selective B→A for two specific objects
 
 ## Step 1: Pre-flight
 
@@ -188,6 +193,79 @@ Persist as `.cache/sap-clean-core/<topic-hash>/<source-id>-<yyyy-mm-dd>.md`. The
 
 If the per-finding lookup budget runs out without a definitive answer, mark the finding as **research-required** in the plan. Do **not** guess. The plan's "Research backlog" section flags these for human investigation.
 
+### 4e — Level B → Level A escalation (aggressive mode)
+
+By default, an object classified Level B by `sap-clean-core-atc` is decided `keep_at_level_b` — it is already Clean-Core compliant; pushing to A is effort with diminishing returns, and the chosen pattern (BAdI, Key User Extensibility, custom CDS on released base, …) is usually the SAP-recommended one for the use case.
+
+When the user opts into escalation (`--aggressive` for all Level B, OR `--push-to-a=A,B,C` for selected objects), the skill performs an **extended analysis** per Level B finding: it researches Level A escalation paths in addition to the default decision, and emits a **multi-option proposal** instead of a single decision.
+
+**Why this is not the default**:
+
+- Level B is already compliant (Clean Core green).
+- Most B objects exist because the SAP-recommended pattern IS a B-eligible extension (BAdI, key-user, custom CDS on released base). Pushing to A means *removing the extension*, which often defeats the purpose.
+- Each `--aggressive` pass adds ~30-50% to per-finding cost (extra Apify lookups for Customizing alternatives + side-by-side patterns + extension samples cross-check).
+
+**When the user DOES want escalation**:
+
+| Scenario | Reason |
+|---|---|
+| Governance mandate: "zero custom logic in ERP" | Organizational policy supersedes SAP defaults |
+| Target deployment: S/4HANA Public Cloud strict mode | Public Cloud rejects most B patterns; must go A or side-by-side |
+| Strong BTP team available | Side-by-side extraction is cleaner long-term |
+| Object's B pattern was an accident ("did it custom 4 years ago for laziness") | Customizing alternative exists and is simpler |
+| Object's B pattern uses a deprecated BAdI / enhancement-point | Forced migration anyway — escalate to choose target |
+
+**When the user should NOT escalate**:
+
+| Scenario | Reason |
+|---|---|
+| Object uses an SAP-blessed BAdI / Key User app | You're already at the SAP-recommended pattern; A would mean abandoning it |
+| Object is a stable lookup table (e.g. country-specific tax rates) | B with documentation is correct; A would mean "no logic", which loses business meaning |
+| Customer has no BTP plan and no Customizing alternative | Side-by-side and config rewrite both blocked; B is the only option |
+| Effort budget is tight | A escalation costs 2-5× the effort of B-keep |
+
+### 4f — Extended decision logic for escalated findings
+
+When an object is in the escalation set (matched by `--aggressive` or `--push-to-a`):
+
+1. **First**, perform the standard Level B classification check (Step 4b) — record what pattern made it eligible.
+2. **Then**, run the escalation lookup:
+   - Search the KB for "Customizing alternative to <pattern>" → if found, propose `rewrite_in_place` via standard Customizing.
+   - Search the KB for "side-by-side pattern for <domain>" → if found, propose `extract_to_side_by_side`.
+   - If neither escalation path is found, fall back to `keep_at_level_b` (as default).
+3. **Emit a multi-option proposal** in the plan instead of a single decision:
+
+```yaml
+ZTABLE_TAX_RATES_LOCAL  # currently Level B via BAdI BADI_TAX_RATE_DETERMINATION
+  default_decision: keep_at_level_b
+  default_effort: S (2-4 h)
+  default_risk: low
+  escalation_options:
+    - decision: rewrite_in_place
+      replacement: Tax Customizing (T007A entries via SM30 / Key User app)
+      effort: M (8-12 h)
+      risk: medium (may not cover all custom rules — needs validation per country)
+      kb_evidence: kb-cache/<hash>/help-sap-tax-customizing-2026-05-13.md
+    - decision: extract_to_side_by_side
+      pattern: BTP CAP tax service consumed via Cloud SDK
+      effort: L (16-24 h)
+      risk: medium (introduces BTP runtime dependency)
+      kb_evidence: kb-cache/<hash>/cap-tax-service-pattern-2026-05-13.md
+  recommended: extract_to_side_by_side (consistent with vendor risk score extension already planned)
+```
+
+The recommendation is informed by **consistency with other decisions in the same plan**: if the plan already has 5 side-by-side extensions and this Level B is in the same domain, recommend side-by-side too. If the plan is otherwise all in-place rewrites, recommend Customizing.
+
+### 4g — Per-object override mechanism (post-plan editing)
+
+After the plan is emitted, the user can ALWAYS override any decision by editing `docs/refactor/<date>-clean-core-plan.md` between Step 5 and Step 6. The plan file is the contract: `execute` mode reads it back and respects the latest decision. Useful for:
+
+- Overriding `keep_at_level_b` to `rewrite_in_place` for one specific object after manual inspection.
+- Downgrading an `extract_to_side_by_side` to `keep_at_level_b` after cost concerns surface.
+- Adding research notes to `research_required` findings before re-running.
+
+This is the **finest-grained control mechanism**, complementary to `--aggressive` / `--push-to-a`. No re-run needed; just edit and execute.
+
 ## Step 5: Refactor plan emission
 
 Output to `docs/refactor/<yyyy-mm-dd>-clean-core-plan.md`:
@@ -211,6 +289,16 @@ Output to `docs/refactor/<yyyy-mm-dd>-clean-core-plan.md`:
 [Per-object decision: rewrite_in_place / extract_to_side_by_side / keep_at_level_b / remove_unused
  with effort estimate + risk + source citations]
 
+## Level B escalation proposals (only if --aggressive or --push-to-a was used)
+[For each Level B object in the escalation set, multi-option proposal showing:
+ - default_decision (keep_at_level_b)
+ - escalation_options (rewrite_in_place via Customizing, extract_to_side_by_side via BTP)
+ - recommended option with reasoning
+ - per-option effort + risk + KB evidence]
+
+The user reviews and chooses per object by editing the plan file before invoking execute.
+Default behaviour (no flag): every Level B is kept; no escalation proposals are generated.
+
 ## Side-by-side extension catalog
 [For every "extract" outcome, the proposed CAP extension scaffold spec]
 
@@ -220,11 +308,17 @@ Output to `docs/refactor/<yyyy-mm-dd>-clean-core-plan.md`:
 3. Rewrite in-place — phase 1 (low-risk): <N> objects
 4. Rewrite in-place — phase 2 (medium-risk): <N> objects
 5. Side-by-side extraction — per-extension PR cadence: <N> extensions
+6. Level B escalations chosen by user (if any): mixed cadence per chosen path
 
 ## Effort estimate
-- Total: <hours> across <count> objects
+- Total: <hours> across <count> objects (default plan)
 - Critical path: <hours>
 - Quick wins (unused + documentation): <hours>
+- Escalation deltas (if aggressive/push-to-a used):
+  * Keep at B (default): <hours>
+  * Rewrite via Customizing (option 1): <hours>
+  * Side-by-side extraction (option 2): <hours>
+  User chooses per object; effort can vary 2-5× depending on choices.
 
 ## Research backlog (budget-exhausted findings)
 [Items where the lookup budget was insufficient; flag for human research]
@@ -285,11 +379,15 @@ The skill is designed so total Apify cost for a typical refactor is **€0.50-�
 | Discovery (ARC-1 only) | €0 |
 | Classification (ATC + git-clone) | €0 |
 | Per-finding JIT Apify (5 pages × ~€0.01) | €0.05 |
-| Refactor of 50 findings | ~€2.50 |
-| Refactor of 200 findings | ~€10 |
+| Refactor plan of 50 findings (default mode) | ~€2.50 |
+| Refactor plan of 200 findings (default mode) | ~€10 |
 | Re-running the plan within 30 days (cache hit) | €0 |
+| `--aggressive` mode delta (extra escalation lookups per Level B) | +30-50% on plan cost |
+| `--push-to-a=<list>` selective (3-5 extra lookups per listed object) | +€0.05-€0.10 per object |
 
-For projects with no Apify budget, the skill operates in **manual mode**: it emits the plan with `consult URL X manually` pointers; the user pastes back doc snippets; the skill incorporates them. Slower, but zero cost.
+Example: a 200-finding refactor with **default** = ~€10. The same with `--aggressive` = ~€13-15. The same with `--push-to-a` on 8 specific objects = ~€11.
+
+For projects with no Apify budget, the skill operates in **manual mode**: it emits the plan with `consult URL X manually` pointers; the user pastes back doc snippets; the skill incorporates them. Slower, but zero cost. Escalation modes (`--aggressive` / `--push-to-a`) still work in manual mode — they just produce more "consult manually" pointers per object.
 
 ## Error Handling
 
