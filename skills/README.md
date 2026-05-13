@@ -100,6 +100,22 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | [migrate-custom-code](migrate-custom-code/SKILL.md) | Runs ATC readiness checks, groups findings by priority, and generates replacement code | Preparing custom code for S/4HANA migration or ABAP Cloud readiness |
 | [sap-object-documenter](sap-object-documenter/SKILL.md) | Batch-documents many custom objects at once — purpose, style (Classic/Modern/Mixed), dependencies — as Markdown | Onboarding packages, handoffs, seeding a repo wiki (vs. explain-abap-code which is single-object interactive) |
 
+### SAP CAP Enterprise Audit (Preview)
+
+End-to-end audit and compliance verification for SAP CAP applications deployed on BTP (Cloud Foundry or Kyma) consuming S/4HANA Tier-2 services. Read-only skills that produce committable markdown reports; `fix` modes are limited to safe additive corrections on dedicated branches.
+
+| Skill | What it does | When to use |
+|---|---|---|
+| [sap-cap-clean-core-enforce](sap-cap-clean-core-enforce/SKILL.md) | Discovery-driven Clean Core Level A audit. Scans `cds.connect.to()` runtime + `@cds.external` services, probes SAP API release-state repository via mcp-sap-docs, builds availability matrix (Public × Private × On-Premise), detects catalog drift, suggests SAP-released replacements | Pre-deployment audit / quarterly compliance check for CAP+S/4 stacks |
+| [sap-cap-customizing-honor](sap-cap-customizing-honor/SKILL.md) | Bidirectional CSV↔code customizing audit: forward orphans (seeded but unused) + inverse orphans (code-read but unseeded) + hardcoded business-decision sweep + master-data FK ValueList enforcement | Verifying that admin Setup UI parameters are wired to code consumers; pre-release coverage check |
+| [sap-cap-security-rbac-matrix](sap-cap-security-rbac-matrix/SKILL.md) | Multi-area parallel security scan (handlers, MCP, file-upload, deploy, jobs) + OWASP Top 10 orthogonal pass + role coherence matrix across 4 layers (xs-security ↔ IdP realm ↔ services-auth ↔ handlers) + compliance mapping (OWASP / ASVS / NIST CSF / CIS / SAP-SOM / GDPR / SOX) | Pre-release security audit; quarterly compliance verification; auditor evidence pack |
+| [sap-fiori-app-audit](sap-fiori-app-audit/SKILL.md) | Single Fiori Elements V4 app audit — user journey, frontend/backend contract chain, manifest + annotations + EDMX alignment, computed flag matrix, i18n coverage, action availability, draft behaviour. Optional safe quick-win fixes on a dedicated branch | Before merging a Fiori app PR; after UI5 version bump; quarterly regression check |
+| [sap-cap-text-polish](sap-cap-text-polish/SKILL.md) | Audit and rewrite user-visible text (backend reject/throw, helper rejects, frontend toasts/dialogs, i18n bundles, CDS labels, CodeList descriptions). Detects ten anti-patterns including PII leak. Locale-aware, tone-profile-driven, additive safe rewrites only | Pre-release polish; PII safety net for audit logging; after localization phase |
+| [sap-cap-stack-audit-full](sap-cap-stack-audit-full/SKILL.md) | Orchestrator that runs the full audit stack in parallel — UI5 linter, manifest validation, CDS compile, TypeScript typecheck, hardcoded-customizing sweep, test suite + the specialized audit skills above — and consolidates findings into a single deduplicated report | Pre-release situational awareness; project hand-off baseline; after large refactors |
+| [sap-cap-ci-gates-pattern](sap-cap-ci-gates-pattern/SKILL.md) | Library of five reusable CI gate patterns (bidirectional CSV↔code, catalog raise-coverage, API-availability drift, convention-matrix drift, CSV schema lint). Generates portable shell scripts + GitHub Actions / GitLab / Jenkins workflow YAML | Setting up CI for a new CAP project; locking in audit findings as enforced gates |
+
+> **Status**: Preview / Work-in-progress. The seven skills above form the **SAP CAP Enterprise Audit toolkit** delivered in two waves — Wave 1 (Clean Core + Customizing) in PR #279, Waves 2-3 (the remaining five) in the current PR. They are designed to chain together: see the *Typical Workflow* sections below for `sap-cap-stack-audit-full` and `sap-cap-ci-gates-pattern` as composition entry points.
+
 ### Clean Core & Custom Code Retirement
 
 | Skill | What it does | When to use |
@@ -191,3 +207,23 @@ For end-to-end legacy SEGW + UI5 modernization (backend + UI):
 ```
 
 The three migration skills are explicitly designed as parallel paths after the backend lands. You don't run both UI skills — you pick the one whose architecture matches your legacy app's complexity and your team's preference.
+
+For SAP CAP enterprise audit (pre-release readiness for a CAP + Fiori Elements + S/4 Tier-2 stack on BTP):
+
+```
+1. sap-cap-stack-audit-full     →  Run the full audit stack in parallel; consolidated report
+                                    (orchestrates all the skills below)
+
+   Composed of:
+   - sap-cap-clean-core-enforce →  Audit Tier-2 S/4 service availability vs released-state repo
+   - sap-cap-customizing-honor  →  Bidirectional CSV↔code parameter consistency
+   - sap-cap-security-rbac-matrix →  OWASP/ASVS/NIST + role coherence across 4 layers
+   - sap-fiori-app-audit (xN)   →  Per-app UI/UX + frontend/backend contract chain
+   - sap-cap-text-polish        →  User-visible text + PII safety + i18n bundle gaps
+
+2. sap-cap-ci-gates-pattern     →  Lock the audit findings into CI gates that prevent regression
+                                    (bidirectional, raise-coverage, availability-drift,
+                                     convention-drift, csv-lint)
+```
+
+The seven CAP audit skills are designed as a single toolkit. Run `sap-cap-stack-audit-full` to dispatch everything at once, or invoke individual skills for a focused investigation. Findings flow into `sap-cap-ci-gates-pattern` so the audit converts to enforced CI gates, not one-off checks.
