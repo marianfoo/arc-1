@@ -51,7 +51,7 @@ Single argument with format `<package-or-object> [mode] [flags]`:
 | `<package>` | Top-level customer package (e.g. `ZFI`, `ZHR`, `Y_CUSTOM`) — recursively scoped |
 | `<object>` | Single object focus mode (e.g. `ZCL_INVOICE_HANDLER`, `ZFM_GET_BP_DATA`) |
 | `mode` | `discover` · `plan` (default) · `execute` |
-| `--target=` | `btp-cf` · `btp-kyma` · `onprem-kyma` · `onprem-cf` (drives side-by-side target choice) |
+| `--target=` | `btp-cf` *(default)* · `btp-kyma` · `onprem-kyma` (drives side-by-side target choice). Default is BTP Cloud Foundry — most widely-adopted SAP-managed runtime, broadest service ecosystem (Free + paid tiers), mature `mta.yaml` tooling, lowest operational ceremony |
 | `--force-refresh` | Bypass the local cache; re-query the source even if cached < 30 days |
 | `--budget=N` | Override the default per-finding Apify lookup budget (default 5 pages) |
 | `--aggressive` | Synonym for `--target-level=A`. For every Level B finding, also research Level A escalation paths (rewrite via Customizing OR side-by-side extraction). Emits **multi-option proposals** instead of default `keep_at_level_b`. Adds ~30-50% to plan generation cost |
@@ -60,12 +60,13 @@ Single argument with format `<package-or-object> [mode] [flags]`:
 | `--target-level=B` | **Minimal-compliance mode** — settle for B everywhere. For Level C, pick the cheapest path that reaches B (instead of A via released API) when that saves effort. For Level D, BAdI-rewrite only (never side-by-side just for "purity"). Useful when customer's appetite is "good enough compliance with minimum disruption" |
 
 Examples:
-- `ZFI plan --target=btp-kyma` — typical first call (default: Level B kept as B)
+- `ZFI plan` — typical first call (defaults: target=`btp-cf`, mode=`plan`, Level B kept as B)
 - `ZCL_INVOICE_HANDLER plan` — single-object focus
-- `ZFI execute --target=btp-kyma` — apply the plan (requires confirmation per object)
+- `ZFI plan --target=btp-kyma` — override target to Kyma when the customer wants the Kubernetes operational model
+- `ZFI execute` — apply the plan (requires confirmation per object)
 - `ZFI plan --force-refresh` — re-query every source even if cached
-- `ZFI plan --target=btp-kyma --aggressive` — explore Level A escalation for every Level B
-- `ZFI plan --target=btp-kyma --push-to-a=ZTABLE_TAX_RATES_LOCAL,ZCL_VENDOR_LOOKUP_EXT` — selective B→A for two specific objects
+- `ZFI plan --aggressive` — explore Level A escalation for every Level B (target stays at default `btp-cf`)
+- `ZFI plan --target=btp-kyma --push-to-a=ZTABLE_TAX_RATES_LOCAL,ZCL_VENDOR_LOOKUP_EXT` — Kyma target + selective B→A for two specific objects
 
 ## Step 1: Pre-flight
 
@@ -336,7 +337,7 @@ Output to `docs/refactor/<yyyy-mm-dd>-clean-core-plan.md`:
 
 ## Target deployment
 - Side-by-side framework: SAP CAP (Node.js + TypeScript)
-- Side-by-side runtime: <btp-cf | btp-kyma | onprem-kyma | onprem-cf>
+- Side-by-side runtime: <btp-cf | btp-kyma | onprem-kyma>
 - Lookup budget: 5 Apify pages + 1 git lookup + 1 MCP query per finding (default)
 - Apify lookups consumed: <N> (estimated cost: €<X>)
 - Cache hits: <N> (no cost; reused from prior runs)
@@ -439,10 +440,9 @@ The decision tree is the same; what differs is the **side-by-side target framewo
 
 | Target | Side-by-side framework | Storage | Eventing |
 |---|---|---|---|
-| BTP CF | CAP Node.js / TypeScript | HANA HDI | BTP Event Mesh |
+| BTP CF *(default)* | CAP Node.js / TypeScript | HANA HDI | BTP Event Mesh |
 | BTP Kyma | CAP Node.js / TypeScript | PostgreSQL in-cluster or HANA Cloud | BTP Event Mesh or Kyma-native NATS |
 | On-Premise Kyma | CAP Node.js / TypeScript | HANA on-prem or PostgreSQL on-prem | Kyma-native NATS |
-| On-Premise CF | CAP Node.js / TypeScript (legacy) | HANA on-prem | SMTP / file-poll |
 
 See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-3--btp--kyma--on-premise-deployment-lessons`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) Category 3 for per-target deployment patterns.
 
