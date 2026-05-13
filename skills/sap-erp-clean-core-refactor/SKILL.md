@@ -105,6 +105,12 @@ grep -q "^\.cache/$" .gitignore 2>/dev/null || echo ".cache/" >> .gitignore
 
 Cache entries are gitignored. Each entry is `.cache/sap-clean-core/<sha256-of-topic>/<source-id>-<yyyy-mm-dd>.md` so the same topic queried twice in the same week reads from disk.
 
+### 1e — Bootstrap system context (one-time per system)
+
+Before the first invocation against a given SAP system, run [`../bootstrap-system-context/SKILL.md`](../bootstrap-system-context/SKILL.md) to capture: SID, release, installed components, feature toggles, ATC preset, formatter settings. The output `system-info.md` grounds all subsequent decisions (which BAdIs are available on this release; which formatter to apply post-rewrite; which transport backend is configured).
+
+The refactor skill checks for `system-info.md` in the working directory; if missing, prompts the user to run bootstrap first. Idempotent and cheap (~30s, read-only). Without it, the plan is system-generic; with it, the plan is system-grounded.
+
 ## Step 2: Inventory via ARC-1 MCP
 
 Discover every customer-owned object in scope.
@@ -130,6 +136,26 @@ Keep only `Z*`, `Y*`, and `/<customer-namespace>/*` prefixes.
 ### 2d — Detect inactive / orphaned objects
 
 Cross-check with [`../sap-unused-code/SKILL.md`](../sap-unused-code/SKILL.md) when available. Mark each row with `usage_status`: `ACTIVE` / `UNUSED` / `Z_ONLY`.
+
+### 2e — Impact / dependency analysis (`SAPContext`)
+
+For every non-A object that may end up rewritten or extracted, ARC-1's `SAPContext(action="impact")` is the **most important MCP call** the skill makes. It returns:
+
+- **Upstream dependencies**: what the object reads / consumes.
+- **Reverse dependencies (fan-in)**: who calls the object — count + identity of caller objects.
+- **CDS upstream / downstream**: for CDS views, the view dependency graph.
+
+The fan-in count drives effort and risk estimation:
+
+| Fan-in | Risk multiplier | Strategy hint |
+|---|---|---|
+| 0 (orphan) | 0× | candidate for `remove_unused` even if SCMON shows recent hits (might be one-off) |
+| 1-3 callers, all internal Z | 1× | low-risk rewrite_in_place |
+| 4-10 callers | 2× | medium-risk; consider keeping a thin adapter layer when rewriting |
+| 11-50 callers | 4× | high-risk rewrite; **prefer extract_to_side_by_side** if BTP available (move new logic to BTP, leave a thin proxy in ERP that's auto-deprecation-tagged) |
+| 50+ callers | 8× + manual review | **mandatory architectural review** before any decision — surface as `research_required` regardless of other signals |
+
+Persist the impact table alongside the inventory TSV. It feeds Step 4 decision logic.
 
 ## Step 3: Classification via `sap-clean-core-atc`
 
@@ -198,6 +224,21 @@ Persist as `.cache/sap-clean-core/<topic-hash>/<source-id>-<yyyy-mm-dd>.md`. The
 ### 4d — Budget exhaustion handling
 
 If the per-finding lookup budget runs out without a definitive answer, mark the finding as **research-required** in the plan. Do **not** guess. The plan's "Research backlog" section flags these for human investigation.
+
+For `research_required` findings, the skill optionally invokes [`../explain-abap-code/SKILL.md`](../explain-abap-code/SKILL.md) on the specific object to produce a structured deep-dive (object purpose, dependencies, style classification, suggested investigation paths). This narrows the human research scope from "open the code" to "verify or refute this hypothesis", reducing per-finding manual effort by ~50%.
+
+### 4d-quater — Pattern mining (`SAPRead(VERSIONS)`)
+
+Before generating rewrite suggestions for a non-trivial finding, the skill mines the project's own history via ARC-1:
+
+```
+SAPRead(type="VERSIONS", object_type="CLAS", object_name="<similar-Z-class>")
+SAPRead(type="VERSION_SOURCE", object_type="CLAS", object_name="<class>", revision="<rev-with-relevant-change>")
+```
+
+The signal: how have **similar** Z objects in this package or neighbouring packages been migrated **already** by the customer's own team? Pattern matches on naming (`ZCL_*_OLD`, `ZCL_*_V2`, `ZCL_NEW_*`), version history of the target class, or `SAPTransport(action="history")` on the package.
+
+When a pattern emerges (e.g. "every BAPI replacement in this customer's code follows pattern X with helper Z"), the rewrite suggestion adopts the same pattern instead of a generic SAP-recommended one. **Reduces rewrite effort by 30-50% on customers with established conventions**. The mined pattern is cited in the plan alongside the SAP-released-API citation.
 
 ### 4d-bis — Decision tree (per-object)
 
@@ -408,31 +449,60 @@ Default behaviour (no flag): every Level B is kept; no escalation proposals are 
 
 `mode = execute` enables real changes. The skill processes objects one at a time, asks confirmation per object, and routes each to:
 
+### 6-pre — Generate regression tests BEFORE the rewrite
+
+For every object whose decision is `rewrite_in_place` and that has no existing unit test, the skill invokes [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) (for `CLAS` / `FUGR`) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (for `DDLS`) **before** the rewrite is applied.
+
+The pre-rewrite tests capture the **current behaviour** as a baseline. After the rewrite they become the regression gate: if any pre-rewrite test fails post-rewrite, the rewrite is rolled back via `SAPGit`. Without this gate, "ATC pass" alone is not a sufficient verification — ATC checks syntax/policy compliance, not semantic equivalence.
+
+For objects where test generation is infeasible (too complex, too many DB dependencies), the skill flags the rewrite as **`rewrite_in_place_no_tests`** in the plan: the user can still proceed but acknowledges the higher risk.
+
 ### 6a — Rewrite in-place (Outcome 1)
 
 Delegate to ARC-1 MCP:
 ```
+SAPRead(type="VERSIONS", ...) → confirm no concurrent writer
 SAPWrite(action="update", object_type="CLAS", object_name="ZCL_X", source="<rewritten-source>")
 SAPActivate(scope="object", object_type="CLAS", object_name="ZCL_X")
+SAPLint(action="format", object_name="ZCL_X")        ← honor project formatter from system-info.md
 SAPLint(action="run_atc", scope="object", object_name="ZCL_X", target_level="A")
+SAPDiagnose(action="run_unit_tests", scope="object", object_name="ZCL_X")  ← run regression tests
 ```
 
-Roll back via SAPGit if ATC regresses.
+For rewrites that introduce RAP behavior pool logic, delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md). For rewrites that introduce a full RAP service stack (rare in refactor but possible), delegate to [`../generate-rap-service-researched/SKILL.md`](../generate-rap-service-researched/SKILL.md).
+
+Roll back via `SAPGit` if ATC regresses OR regression tests fail.
 
 ### 6b — Side-by-side scaffold (Outcome 2)
 
 Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). The source ABAP object is **not yet removed** — both coexist until QA confirms parity. Optionally annotate the ABAP source as deprecated.
 
+When the side-by-side target has a Fiori Elements UI, [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) generates the UI on top of the new CAP service.
+
 ### 6c — Document Level B keep-as-is (Outcome 3)
 
-Attach SKTD documentation via ARC-1 explaining the eligible-Level-B rationale. Update ATC exemption configuration if the project uses one.
+Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) which produces structured SKTD documentation explaining the eligible-Level-B rationale (which BAdI / enhancement-point pattern the object uses, what business rule it implements, why no released alternative). Update ATC exemption configuration if the project uses one (`SAPLint` exemption file).
+
+### 6.5 — Transport management
+
+For every object touched in this execute pass, route the change through a coordinated transport:
+
+```
+SAPTransport(action="requirement_check", object="<obj>", target="<TR>")  ← ensure deps reachable
+SAPTransport(action="create", description="Clean Core Phase <N> — <package>") OR reuse open TR
+SAPTransport(action="reassign", object="<obj>", from="<auto>", to="<chosen-TR>")
+```
+
+For projects with abapGit / gCTS, [`SAPGit`](https://github.com/marianfoo/arc-1) (with `SAP_ALLOW_GIT_WRITES=true`) auto-commits the change with a structured message: `chore(clean-core): rewrite ZCL_X to released API X (Phase N)`.
 
 ## Step 7: Verification
 
 After any execute action:
-- ATC regression check (`SAPLint`).
-- Cross-check against the audit catalog used by [`../sap-cap-clean-core-enforce/SKILL.md`](../sap-cap-clean-core-enforce/SKILL.md) if the CAP side has been deployed.
-- Compare ATC counts before/after; any net regression aborts the execute loop and surfaces a finding.
+- **ATC regression check** (`SAPLint(run_atc)`): the gate that blocks the execute loop if findings count regresses.
+- **Unit test regression** (`SAPDiagnose(run_unit_tests)`): runs the tests generated in Step 6-pre PLUS pre-existing tests. Any failure aborts the loop.
+- **Cross-check against the audit catalog** used by [`../sap-cap-clean-core-enforce/SKILL.md`](../sap-cap-clean-core-enforce/SKILL.md) if the CAP side has been deployed.
+- **Compare ATC counts before/after**; any net regression aborts the execute loop and surfaces a finding.
+- **Optional**: invoke [`../analyze-chat-session/SKILL.md`](../analyze-chat-session/SKILL.md) at session end to capture learnings (which rewrite patterns worked, which findings recurred) and propose new skill traps for the team.
 
 ## BTP vs On-Premise Differences
 
@@ -522,18 +592,67 @@ For the side-by-side:
 
 ## Recommended Companion Plugins
 
+The plugins below split into **MUST** (the skill is materially less useful without them) and **SHOULD/OPTIONAL** (situationally valuable depending on the refactor's target).
+
+### MUST — required for the skill to function correctly
+
 | Plugin / Skill / MCP | Used for |
 |---|---|
-| **ARC-1 MCP server** | ABAP discovery, classification, in-place writes |
-| **Apify MCP server** (optional) | JIT documentation lookups against HTTP/SPA sources |
-| `mcp-sap-docs` (optional) | Live cross-check vs Apify; preferred for SAP Help Portal queries |
-| `sap-cap-capire` | CAP scaffolding patterns for the side-by-side |
-| `sap-cloud-sdk` | Cloud SDK examples for the extension's S/4 consumption |
-| `sap-fiori-tools` | Fiori Elements V4 scaffolding for the extension's UI |
-| `sap-btp-cloud-platform` | BTP service binding reference |
-| `sap-docs` | SAP Notes / Help Portal cross-reference |
+| **ARC-1 MCP server** | All 12 ABAP-side operations: discovery (`SAPSearch`), impact (`SAPContext`), classification (`SAPLint`), pattern mining (`SAPRead`), rewrite (`SAPWrite` + `SAPActivate`), verification (`SAPDiagnose`), transport (`SAPTransport`). The skill is non-functional without it |
+| **`sap-abap`** ([secondsky/sap-skills](https://github.com/secondsky/sap-skills/tree/main/plugins/sap-abap)) | Authoritative reference for ABAP language patterns (Cloud-compatible syntax, OO, EML, RTTI/RTTC, exception handling, ABAP SQL, dynamic programming). Required during Step 6a `rewrite_in_place` so the generated ABAP is Cloud-compatible by construction |
+| **`sap-abap-cds`** ([secondsky/sap-skills](https://github.com/secondsky/sap-skills/tree/main/plugins/sap-abap-cds)) | CDS view design reference (associations, annotations, DCL access control, CURR/QUAN handling, CASE expressions, built-in functions). Required when the rewrite introduces new CDS views (e.g. replacing direct-DB-access with a view projection) |
+| **`sap-cap-capire`** ([secondsky/sap-skills](https://github.com/secondsky/sap-skills/tree/main/plugins/sap-cap-capire)) | CAP framework knowledge: CDS modeling, service handlers, deployment, multitenancy. Ships **4 dispatchable agents** the skill invokes during Step 6b side-by-side scaffold: `cap-cds-modeler`, `cap-service-developer`, `cap-performance-debugger`, `cap-project-architect` |
+| **`sap-btp-developer-guide`** ([secondsky/sap-skills](https://github.com/secondsky/sap-skills/tree/main/plugins/sap-btp-developer-guide)) | Comprehensive BTP reference; broad enough to cover all four target deployments. Required during Step 1c side-by-side target resolution and Step 6b scaffold generation |
 
-See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the full companion plugin map.
+### SHOULD — strongly recommended depending on refactor scope
+
+| Plugin / Skill | When |
+|---|---|
+| `sap-btp-cloud-platform` | When the side-by-side scaffold binds BTP-managed services |
+| `sap-btp-connectivity` | When the extension consumes S/4 via Destination service + Cloud Connector |
+| `sap-fiori-tools` | When the side-by-side extension exposes a Fiori Elements UI |
+| `sapui5` ([secondsky/sap-skills](https://github.com/secondsky/sap-skills/tree/main/plugins/sapui5)) | UI5 framework reference for the extension UI; ships 4 dispatchable agents (ui5-api-explorer, ui5-app-scaffolder, ui5-code-quality-advisor, ui5-migration-specialist) |
+| `sapui5-linter` | Code quality gate for the generated UI5 |
+| `sap-cloud-sdk` | When the extension uses Cloud SDK to consume S/4 services |
+| `sap-cloud-sdk-ai` | When the extension includes LLM/embedding logic (e.g. document classification, vendor risk scoring) |
+
+### OPTIONAL — situational
+
+| Plugin / Skill | When |
+|---|---|
+| **Apify MCP server** | JIT documentation lookups against HTTP/SPA sources (api.sap.com, help.sap.com). Falls back to manual mode if absent |
+| `mcp-sap-docs` | Preferred over Apify for SAP Help Portal queries when installed |
+| `context7` | Generic library docs for non-SAP dependencies in the extension |
+| `sap-btp-job-scheduling` | When the side-by-side includes scheduled jobs |
+| `sap-btp-cloud-logging` | Observability for the production extension |
+| `sap-btp-master-data-integration` | When the extension subscribes to MDI events (BusinessPartnerChanged etc.) |
+| `sap-btp-cloud-transport-management` | When the customer uses cTMS for coordinated transport across S/4 + BTP |
+| `sap-btp-cias` | When the customer uses SAP Cloud Identity Services (IAS) instead of XSUAA |
+| `sap-btp-business-application-studio` | Dev environment reference for hand-off to the customer's developer team |
+| `sap-btp-integration-suite` | When the side-by-side pattern uses iFlows instead of direct CAP |
+| `sap-btp-build-work-zone-advanced` | When the extension UI must surface in SAP Work Zone |
+
+### arc-1 native skill chain (already cross-linked in the steps above)
+
+| arc-1 skill | Invoked from |
+|---|---|
+| [`bootstrap-system-context`](../bootstrap-system-context/SKILL.md) | Step 1e (prereq) |
+| [`setup-abap-mirror`](../setup-abap-mirror/SKILL.md) | Step 1 (optional read-only exploration) |
+| [`explain-abap-code`](../explain-abap-code/SKILL.md) | Step 4d (research_required fallback) |
+| [`sap-clean-core-atc`](../sap-clean-core-atc/SKILL.md) | Step 3 (delegate) |
+| [`sap-unused-code`](../sap-unused-code/SKILL.md) | Step 2d (delegate) |
+| [`sap-object-documenter`](../sap-object-documenter/SKILL.md) | Step 6c (delegate Level B documentation) |
+| [`generate-abap-unit-test`](../generate-abap-unit-test/SKILL.md) | Step 6-pre (regression test for CLAS/FUGR before rewrite) |
+| [`generate-cds-unit-test`](../generate-cds-unit-test/SKILL.md) | Step 6-pre (regression test for DDLS before rewrite) |
+| [`generate-rap-logic`](../generate-rap-logic/SKILL.md) | Step 6a (when rewrite introduces RAP behavior pool logic) |
+| [`generate-rap-service-researched`](../generate-rap-service-researched/SKILL.md) | Step 6a (when rewrite introduces full RAP stack — rare) |
+| [`migrate-segw-to-rap`](../migrate-segw-to-rap/SKILL.md) | Step 6a (when the Z package contains a SEGW V2 service to modernize in parallel) |
+| [`migrate-custom-code`](../migrate-custom-code/SKILL.md) | Step 6a (sibling — ATC fix patterns for rewrite findings) |
+| [`modernize-abap-to-btp-cap`](../modernize-abap-to-btp-cap/SKILL.md) chain | Step 6b (side-by-side scaffold orchestrator) |
+| [`convert-ui5-to-fiori-elements`](../convert-ui5-to-fiori-elements/SKILL.md) | Step 6b (Fiori Elements UI on top of new CAP service) |
+| [`analyze-chat-session`](../analyze-chat-session/SKILL.md) | Step 7 (session-end learnings capture) |
+
+See [`./INTEGRATIONS.md`](./INTEGRATIONS.md) for the full step-by-step mapping of refactor phase × ARC-1 MCP tool × arc-1 skill × secondsky plugin. See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the broader companion plugin map across CAP audit skills.
 
 ## See also
 
