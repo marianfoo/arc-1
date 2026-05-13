@@ -173,6 +173,34 @@ export interface CorsRejectedEvent extends AuditEventBase {
   path: string;
 }
 
+/** Layer 1: a per-IP HTTP-edge rate limit fired. Either OAuth (`/register`, `/authorize`,
+ *  `/token`, `/revoke`) or `/mcp` (pre-bearer-auth probing). Returned a 429 with
+ *  `Retry-After` and RFC 9331 `RateLimit-*` headers. See docs_page/rate-limiting.md. */
+export interface AuthRateLimitedEvent extends AuditEventBase {
+  event: 'auth_rate_limited';
+  /** Endpoint that triggered — '/register' | '/authorize' | '/token' | '/revoke' | '/mcp'. */
+  endpoint: string;
+  /** Client IP after `trust proxy 1` resolution. May be attacker-controlled. */
+  ip: string;
+  /** Configured per-minute cap for this endpoint at the time of denial. */
+  limitPerMinute: number;
+}
+
+/** Layer 2: a per-user MCP tool-call rate limit fired. Returned an MCP tool error with
+ *  `retryAfter` (not HTTP 429), so the LLM client surfaces it as a tool failure and
+ *  the agent loop backs off. See docs_page/rate-limiting.md. */
+export interface McpRateLimitedEvent extends AuditEventBase {
+  event: 'mcp_rate_limited';
+  /** Resolved user key: `authInfo.userName ?? clientId ?? '__anon__'`. */
+  user: string;
+  /** MCP tool that was denied (e.g. 'SAPRead', 'SAPWrite'). */
+  tool: string;
+  /** Configured per-user per-minute cap at the time of denial. */
+  limitPerMinute: number;
+  /** Milliseconds until the bucket refills enough for the next call. */
+  retryAfterMs: number;
+}
+
 /** Discriminated union of all audit events */
 export type AuditEvent =
   | ToolCallStartEvent
@@ -189,7 +217,9 @@ export type AuditEvent =
   | OAuthClientRegisteredEvent
   | OAuthClientLookupFailedEvent
   | OAuthRedirectUriRegisteredEvent
-  | CorsRejectedEvent;
+  | CorsRejectedEvent
+  | AuthRateLimitedEvent
+  | McpRateLimitedEvent;
 
 /** Sanitize tool call arguments — remove values that might contain sensitive data */
 export function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {

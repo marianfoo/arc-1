@@ -12,6 +12,7 @@ As an **admin**, you control what the AI can and cannot do via positive-opt-in f
 - Package allowlist restricts writes to `$TMP`, `Z*`, or any pattern
 - `SAP_DENY_ACTIONS` blocks individual actions (e.g. `SAPWrite.delete`) for admins who need a finer scalpel
 - Every tool call audited with user identity; per-user scopes (via XSUAA role collections, OIDC JWTs, or API-key profiles) tighten further
+- **Layered rate limiting** out of the box — per-IP OAuth edge, per-user MCP quota, server-wide SAP-bound semaphore with `Retry-After` honoring. See the [Rate Limiting Guide](rate-limiting.md).
 
 ## Quick Start
 

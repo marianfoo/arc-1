@@ -199,6 +199,13 @@ export class AdtHttpClient {
     this.discoveryMap = map;
   }
 
+  /** Read-only access to the SAP-bound concurrency Semaphore (Layer 3).
+   *  Returns the shared server-wide instance when `AdtClientConfig.adtSemaphore` was provided,
+   *  the private fallback when only `maxConcurrent` was set, or `undefined` when neither was. */
+  get semaphore(): Semaphore | undefined {
+    return this.config.semaphore;
+  }
+
   /** GET request */
   async get(path: string, headers?: Record<string, string>, options?: AdtRequestOptions): Promise<AdtResponse> {
     return this.request('GET', path, undefined, undefined, headers, options);
@@ -370,6 +377,7 @@ export class AdtHttpClient {
     // Per-request guards to prevent infinite retry loops
     let negotiationRetried = false;
     let authRetried = false;
+    let retried429 = false;
 
     try {
       let response = await this.doFetch(url, method, headers, body);
@@ -443,8 +451,12 @@ export class AdtHttpClient {
       // Retry ALL methods: a 503 means ICM rejected the request before it reached a work
       // process, so the operation never executed — retrying is safe even for POST/PUT/DELETE.
       // Retry happens INSIDE the semaphore slot to avoid increasing load on an overloaded system.
+      // Honors RFC 7231 Retry-After header when present; falls back to 1-2 s jitter otherwise.
       if (response.status === 503) {
-        const jitterMs = 1000 + Math.random() * 1000; // 1-2s with jitter
+        const { delayMs: jitterMs, source } = parseRetryAfter(
+          response.headers.get('retry-after'),
+          1000 + Math.random() * 1000,
+        );
         logger.emitAudit({
           timestamp: new Date().toISOString(),
           level: 'warn',
@@ -453,7 +465,7 @@ export class AdtHttpClient {
           path,
           statusCode: 503,
           durationMs: Date.now() - httpStart,
-          errorBody: `503 Service Unavailable — retrying in ${Math.round(jitterMs)}ms`,
+          errorBody: `503 Service Unavailable — retrying in ${Math.round(jitterMs)}ms (${source})`,
         });
 
         await new Promise((resolve) => setTimeout(resolve, jitterMs));
@@ -471,6 +483,50 @@ export class AdtHttpClient {
           statusCode: retryResp.status,
           durationMs: Date.now() - httpStart,
           errorBody: `503 retry completed (${retryResp.status})`,
+        });
+
+        return this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
+      }
+
+      // Handle 429 Too Many Requests — emitted by SAP Web Dispatcher, BTP API
+      // Management, or any upstream gateway throttling us. Like 503, the request did
+      // not reach a SAP work process, so retrying ALL methods is safe (gateway-level
+      // rejection, never partial execution). Honors RFC 7231 Retry-After when present;
+      // falls back to 1-2 s jitter. Single retry only — per-request `retried429` guard
+      // prevents loops. If the upstream is still throttling on the second attempt, we
+      // surface the 429 to the caller for them to back off at the agent/LLM layer.
+      if (response.status === 429 && !retried429) {
+        retried429 = true;
+        const { delayMs: jitterMs, source } = parseRetryAfter(
+          response.headers.get('retry-after'),
+          1000 + Math.random() * 1000,
+        );
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          event: 'http_request',
+          method,
+          path,
+          statusCode: 429,
+          durationMs: Date.now() - httpStart,
+          errorBody: `429 Too Many Requests — retrying in ${Math.round(jitterMs)}ms (${source})`,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, jitterMs));
+
+        const retryResp = await this.doFetch(url, method, headers, body);
+        const retryBody = await retryResp.text();
+        this.storeCookies(retryResp);
+
+        logger.emitAudit({
+          timestamp: new Date().toISOString(),
+          level: retryResp.status === 429 ? 'warn' : 'info',
+          event: 'http_request',
+          method,
+          path,
+          statusCode: retryResp.status,
+          durationMs: Date.now() - httpStart,
+          errorBody: `429 retry completed (${retryResp.status})`,
         });
 
         return this.handleResponse(retryResp.status, retryResp.headers, retryBody, path);
@@ -1173,6 +1229,46 @@ export class AdtHttpClient {
 /** HTTP methods that modify server state and require CSRF token */
 function isModifyingMethod(method: string): boolean {
   return ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+}
+
+/**
+ * Parse RFC 7231 `Retry-After` header into a delay in milliseconds.
+ *
+ * Accepts both forms allowed by the spec:
+ * - delta-seconds (e.g. `"5"`)
+ * - HTTP-date (e.g. `"Wed, 12 May 2026 14:30:00 GMT"`)
+ *
+ * On missing, NaN, malformed, past-date, or negative input, falls back to `fallbackMs`.
+ * Always clamps to `[0, 60_000]` ms so a misbehaving gateway can't stall us indefinitely
+ * and a too-small/past value can't degenerate into a hot retry loop.
+ *
+ * Returns `{ delayMs, source }` — `source: 'header' | 'fallback'` lets audit events
+ * record whether the delay came from the server or from our jitter floor (useful for
+ * capacity tuning).
+ */
+export function parseRetryAfter(
+  header: string | null | undefined,
+  fallbackMs: number,
+): { delayMs: number; source: 'header' | 'fallback' } {
+  const clamp = (ms: number): number => Math.max(0, Math.min(60_000, ms));
+  if (header == null || header === '') {
+    return { delayMs: clamp(fallbackMs), source: 'fallback' };
+  }
+  const trimmed = header.trim();
+  // delta-seconds form: integer (and only digits, optionally signed)
+  if (/^-?\d+$/.test(trimmed)) {
+    const seconds = Number.parseInt(trimmed, 10);
+    if (Number.isFinite(seconds)) {
+      return { delayMs: clamp(seconds * 1000), source: 'header' };
+    }
+    return { delayMs: clamp(fallbackMs), source: 'fallback' };
+  }
+  // HTTP-date form
+  const epochMs = Date.parse(trimmed);
+  if (Number.isFinite(epochMs)) {
+    return { delayMs: clamp(epochMs - Date.now()), source: 'header' };
+  }
+  return { delayMs: clamp(fallbackMs), source: 'fallback' };
 }
 
 /**

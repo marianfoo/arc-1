@@ -219,6 +219,18 @@ For detailed setup instructions:
 
 ---
 
+## 8a. Layered rate limiting
+
+ARC-1 ships three independent rate-limiting layers, each addressing a distinct threat:
+
+- **Layer 1 — HTTP edge** (per-IP, `express-rate-limit`). Mounted on `/register`, `/authorize`, `/token`, `/revoke`, and `/mcp` BEFORE auth middleware. Protects against OAuth brute-force and anonymous probing. Returns HTTP `429` with `Retry-After` + RFC 9331 headers. Closes CodeQL alert `js/missing-rate-limiting`. Single env var: `ARC1_AUTH_RATE_LIMIT` (default `20/min/IP`).
+- **Layer 2 — Per-user MCP quota** (per-user token bucket, `rate-limiter-flexible`). Applied at the top of `handleToolCall`. Prevents one developer's runaway LLM from monopolizing the shared semaphore. Returns an MCP tool error with structured `retryAfter` (not HTTP 429) so the agent loop backs off correctly. Single env var: `ARC1_RATE_LIMIT` (default `60/min/user`).
+- **Layer 3 — SAP-bound shared semaphore** (server-wide FIFO queue). One `Semaphore` for the whole process, shared across all `AdtClient` instances including per-user PP clients. Caps concurrent SAP HTTP requests at `ARC1_MAX_CONCURRENT` (default `10`) — true server-wide, not per-user. Honors `Retry-After` on `429`/`503` from SAP / BTP gateways (single retry, clamped to 60 s). Excess requests wait in queue; no rejection.
+
+All three layers are per-instance and in-memory. Multi-instance attackers cost `N × limit` for Layers 1 + 2 — acceptable trade-off for the stateless-deployment property.
+
+For the full operator picture (threat model, sizing math against `rdisp/wp_no_dia`, troubleshooting decision tree, opt-out per layer), see the [Rate Limiting Guide](rate-limiting.md). Design rationale: [ADR-0004](../docs/adr/0004-layered-rate-limiting.md).
+
 ## 9. Audit Logging
 
 ARC-1 emits structured audit events to all registered sinks. Three sink types are available:
@@ -243,6 +255,8 @@ ARC-1 emits structured audit events to all registered sinks. Three sink types ar
 | `oauth_client_lookup_failed` | XSUAA only: a `client_id` failed to resolve. `reason` ∈ {`unknown_prefix`, `malformed`, `bad_signature`, `invalid_payload`, `expired`}. Useful for spotting forgery / probing. |
 | `oauth_redirect_uri_registered` | XSUAA only: a redirect URI was added at `/authorize` time to the pre-registered XSUAA default client. |
 | `cors_rejected` | A browser request was blocked because its `Origin` header is not in `ARC1_ALLOWED_ORIGINS`. Includes origin, method, path. Useful for spotting misconfigured browser clients or probing. |
+| `auth_rate_limited` | **Layer 1** rate-limit denial on OAuth or `/mcp` endpoint (per-IP). Includes endpoint, IP, `limitPerMinute`. See [Rate Limiting Guide](rate-limiting.md). |
+| `mcp_rate_limited` | **Layer 2** rate-limit denial on per-user MCP tool quota. Includes user, tool, `limitPerMinute`, `retryAfterMs`. The MCP client receives a tool error with `retryAfter` (not HTTP 429). |
 
 All events within a single MCP tool call share a `requestId` for correlation. Events include `user` and `clientId` fields when authentication is active.
 

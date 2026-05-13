@@ -144,8 +144,23 @@ export interface ServerConfig {
   cacheWarmupPackages: string;
 
   // --- Concurrency ---
-  /** Maximum concurrent SAP HTTP requests (default: 10). Prevents work process exhaustion. */
+  /** Maximum concurrent SAP HTTP requests, server-wide across all users (default: 10).
+   *  Prevents work process exhaustion. With principal propagation, one shared semaphore
+   *  enforces the cap across all per-user clients — not `maxConcurrent` per user.
+   *  See docs/adr/0004-layered-rate-limiting.md (Layer 3). */
   maxConcurrent: number;
+
+  // --- Rate limiting (Layer 1 + Layer 2) ---
+  /** Per-IP cap on OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`) in
+   *  requests per minute. `/mcp` gets `max(value × 30, 600)/min/IP` to absorb legitimate
+   *  batch traffic. Set `0` to disable Layer 1 entirely. Default: 20.
+   *  See docs_page/rate-limiting.md (Layer 1). */
+  authRateLimit: number;
+  /** Per-user cap on MCP tool calls in requests per minute. Key = authInfo.userName
+   *  ?? clientId ?? '__anon__'. Stdio (no user identity) is exempt. Returns an MCP
+   *  tool error with `retryAfter` (not HTTP 429). Set `0` to disable Layer 2. Default: 60.
+   *  See docs_page/rate-limiting.md (Layer 2). */
+  rateLimit: number;
 
   // --- Browser-based MCP clients (CORS) ---
   /** Exact-match CORS allowlist. Empty array (the default) disables CORS entirely so that
@@ -201,6 +216,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   cacheWarmup: false,
   cacheWarmupPackages: '',
   maxConcurrent: 10,
+  authRateLimit: 20,
+  rateLimit: 60,
   allowedOrigins: [],
   logLevel: 'info',
   logFormat: 'text',

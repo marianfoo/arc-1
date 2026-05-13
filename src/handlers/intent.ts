@@ -176,6 +176,7 @@ import { detectFilename, lintAbapSource, lintAndFix, validateBeforeWrite } from 
 import { sanitizeArgs } from '../server/audit.js';
 import { generateRequestId, requestContext } from '../server/context.js';
 import { logger } from '../server/logger.js';
+import { type McpRateLimiter, resolveRateLimitUserKey } from '../server/mcp-rate-limit.js';
 import type { ServerConfig } from '../server/types.js';
 import { expandHyperfocusedArgs } from './hyperfocused.js';
 import { getToolSchema } from './schemas.js';
@@ -1044,6 +1045,7 @@ export async function handleToolCall(
   _server?: Server,
   cachingLayer?: CachingLayer,
   isPerUserClient?: boolean,
+  mcpRateLimiter?: McpRateLimiter,
 ): Promise<ToolResult> {
   const reqId = generateRequestId();
   const start = Date.now();
@@ -1063,6 +1065,48 @@ export async function handleToolCall(
     tool: toolName,
     args: sanitizeArgs(args),
   });
+
+  // ─── Layer 2: per-user MCP tool-call rate limit ─────────────────────
+  // Applied immediately so we don't waste any work on denied calls. Stdio mode
+  // (no authInfo) is exempt — there's no user identity to key on. On denial we
+  // return an MCP tool error (not HTTP 429) so the LLM client surfaces it as a
+  // tool failure and the agent loop backs off via its own retry policy.
+  // See docs_page/rate-limiting.md (Layer 2). Cost weighting per tool is deferred
+  // to v2 — every consume call counts as one point.
+  if (mcpRateLimiter && authInfo) {
+    // Walks the most-specific identity claim first (userName → email → sub →
+    // preferred_username → clientId) so OIDC users sharing one `azp` clientId
+    // don't collapse into a single bucket. See resolveRateLimitUserKey.
+    const userKey = resolveRateLimitUserKey(authInfo);
+    const decision = await mcpRateLimiter.consume(userKey, toolName);
+    if (!decision.allowed) {
+      const retryAfter = Math.ceil(decision.retryAfterMs / 1000);
+      logger.emitAudit({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        event: 'mcp_rate_limited',
+        requestId: reqId,
+        clientId,
+        user: userKey,
+        tool: toolName,
+        limitPerMinute: decision.limitPerMinute,
+        retryAfterMs: decision.retryAfterMs,
+      });
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: 'rate_limited',
+              retryAfter,
+              message: `Rate limit exceeded (${decision.limitPerMinute}/min per user). Retry after ${retryAfter} seconds.`,
+            }),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
 
   // Unified scope enforcement via ACTION_POLICY — routes through action/type-aware lookup.
   // For SAPRead, the policy key is Tool.{type}; for other action-bearing tools, Tool.{action};

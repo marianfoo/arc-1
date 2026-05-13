@@ -144,6 +144,16 @@ Effective permission = server safety ceiling AND user scope/profile AND SAP auth
 A user role can never expand what the ARC-1 instance was configured to allow.
 If `SAP_ALLOW_WRITES=false`, no user can write, even with `admin` scope.
 
+### Rate-limiting layers in the request flow
+
+Three rate-limiting layers gate the request flow at different stages:
+
+- **Layer 1** runs at the HTTP edge BEFORE any auth middleware (`express-rate-limit` per-IP on `/register`, `/authorize`, `/token`, `/revoke`, `/mcp`). Anonymous probing is rejected with HTTP `429` before any work happens.
+- **Layer 2** runs at the top of `handleToolCall`, AFTER `authInfo` is available but BEFORE scope/Zod/safety checks. A per-user token bucket returns an MCP tool error (not HTTP 429) so the LLM agent loop backs off.
+- **Layer 3** is the server-wide `Semaphore` inside the ADT HTTP client — caps concurrent SAP requests across ALL users (shared + per-user PP). Honors `Retry-After` on `429`/`503` from SAP or BTP gateways.
+
+See the [Rate Limiting Guide](rate-limiting.md) and [ADR-0004](../docs/adr/0004-layered-rate-limiting.md).
+
 ## Tool listing flow
 
 Tool listing is dynamic. Users should treat the exposed schema as the server's

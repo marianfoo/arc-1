@@ -227,9 +227,18 @@ How ARC-1 itself listens for MCP traffic.
 | `--port` | `ARC1_PORT` | `8080` | Simpler alternative when only the port needs to change. Wins over `ARC1_HTTP_ADDR`'s port if both are set. Valid range `1–65535`. |
 | `--allowed-origins` | `ARC1_ALLOWED_ORIGINS` | (empty) | Comma-separated CORS allowlist for **browser-based** MCP clients. Exact match only (no wildcards — the response sets `Access-Control-Allow-Credentials: true`). Empty disables CORS entirely. Native clients (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) don't need this. See [security-guide.md §11](security-guide.md#11-network-security). |
 | — | `ARC1_PUBLIC_URL` | (auto from `VCAP_APPLICATION`, else bind host:port) | Public URL ARC-1 advertises in OAuth metadata (issuer, `authorize`/`token`/`register`/`revoke` URLs, protected-resource metadata, `WWW-Authenticate` headers). Set this when ARC-1 is reached through a reverse proxy on a different hostname or under a base-path prefix — without it, MCP clients receive metadata pointing at the underlying host and bypass the proxy. Path prefix supported (e.g. `https://gateway.example.com/arc1`); the well-known endpoints are also served at that prefix. Trailing slash stripped. |
-| `--max-concurrent` | `ARC1_MAX_CONCURRENT` | `10` | Maximum concurrent in-flight SAP HTTP requests. Caps work-process consumption on the SAP side. Increase only if your SAP system has spare work processes. |
+| `--max-concurrent` | `ARC1_MAX_CONCURRENT` | `10` | Maximum concurrent in-flight SAP HTTP requests, **server-wide across all users** (not per-client). One shared `Semaphore` gates every `AdtClient`, including per-user PP clients. Honors `Retry-After` on `429`/`503` (clamped to 60 s, single retry). Size against `rdisp/wp_no_dia`. See [Rate Limiting Guide](rate-limiting.md). |
 
 ARC-1 also sets standard browser security headers (HSTS, CSP, X-Frame-Options, COOP, etc.) on every HTTP response via [helmet](https://helmetjs.github.io/). These are always-on; there's no flag to disable them. Full list and rationale in [Security Guide §11](security-guide.md#11-network-security).
+
+### Rate limiting
+
+Two operator-facing knobs cover all three rate-limiting layers ARC-1 ships (the third layer reuses `ARC1_MAX_CONCURRENT` above). Per-endpoint OAuth ceilings are constants in code, not env, to keep the operator surface tiny. See the [Rate Limiting Guide](rate-limiting.md) for threat model, sizing math, and audit-event reference.
+
+| Flag | Env var | Default | Effect |
+|---|---|---|---|
+| `--auth-rate-limit` | `ARC1_AUTH_RATE_LIMIT` | `20` | **Layer 1.** Per-IP cap on OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`) in requests per minute. `/mcp` gets `max(value × 30, 600)/min/IP` to absorb legitimate MCP batch traffic. On hit: HTTP `429` + `Retry-After` + RFC 9331 `RateLimit-*` headers + `auth_rate_limited` audit event. Set `0` to disable Layer 1 (use only behind a rate-limiting reverse proxy). |
+| `--rate-limit` | `ARC1_RATE_LIMIT` | `60` | **Layer 2.** Per-user cap on MCP tool calls in requests per minute. User key = `authInfo.userName ?? clientId ?? '__anon__'`. Stdio mode (no user identity) is exempt. On hit: MCP tool error `{error:'rate_limited',retryAfter,message}` + `mcp_rate_limited` audit event — **not** HTTP 429 (preserves the agent loop's retry semantics). Set `0` to disable Layer 2. |
 
 ---
 

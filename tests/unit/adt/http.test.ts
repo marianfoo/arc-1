@@ -1379,6 +1379,63 @@ describe('AdtHttpClient', () => {
     });
   });
 
+  // ─── 429 Retry (Layer 3 Retry-After) ────────────────────────────────
+
+  describe('429 retry with Retry-After honoring', () => {
+    it('retries GET on 429 and succeeds on second attempt', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'retry-after': '1' }))
+        .mockResolvedValueOnce(mockResponse(200, 'OK'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      const response = await client.get('/sap/bc/adt/programs/programs/ZHELLO/source/main');
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe('OK');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries POST on 429 (gateway-level rejection — safe for mutating methods)', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'retry-after': '1' }))
+        .mockResolvedValueOnce(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T2' }));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      const result = await client.post('/sap/bc/adt/some/action', '<xml/>');
+      expect(result.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws AdtApiError when 429 retry also returns 429', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests', { 'retry-after': '1' }))
+        .mockResolvedValueOnce(mockResponse(429, 'Still Throttled', { 'retry-after': '1' }));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      await expect(client.get('/sap/bc/adt/programs/programs/ZHELLO/source/main')).rejects.toThrow(AdtApiError);
+      // Exactly one retry — the guard prevents a third attempt
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back to jitter when Retry-After is missing on 429', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(429, 'Too Many Requests'))
+        .mockResolvedValueOnce(mockResponse(200, 'OK'));
+
+      const client = new AdtHttpClient(getDefaultConfig());
+      (client as any).csrfToken = 'T';
+
+      const response = await client.get('/sap/bc/adt/programs/programs/ZHELLO/source/main');
+      expect(response.statusCode).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // ─── Semaphore Integration ──────────────────────────────────────────
 
   describe('semaphore integration', () => {

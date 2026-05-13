@@ -16,6 +16,7 @@ import type { AdtClientConfig } from '../adt/config.js';
 import { resolveCookies } from '../adt/cookies.js';
 import { AdtApiError } from '../adt/errors.js';
 import { deriveUserSafety, deriveUserSafetyFromProfile } from '../adt/safety.js';
+import { Semaphore } from '../adt/semaphore.js';
 import { getActionPolicy, hasRequiredScope } from '../authz/policy.js';
 import type { Cache } from '../cache/cache.js';
 import { CachingLayer } from '../cache/caching-layer.js';
@@ -31,6 +32,7 @@ import { getToolDefinitions, type ToolDefinition } from '../handlers/tools.js';
 import { API_KEY_PROFILES } from './config.js';
 import { isActionDenied } from './deny-actions.js';
 import { initLogger, logger } from './logger.js';
+import { createMcpRateLimiter, type McpRateLimiter } from './mcp-rate-limit.js';
 import { FileSink } from './sinks/file.js';
 import type { ServerConfig } from './types.js';
 
@@ -167,11 +169,16 @@ export function logAuthSummary(config: ServerConfig): void {
 /** Build the base ADT client config (without per-user auth) */
 // When perUser=true, strips shared credentials (username/password/cookies)
 // so per-user PP clients never inherit admin auth.
+//
+// adtSemaphore (Layer 3): when provided, the constructed AdtClient shares this single
+// server-wide semaphore with every other client built from this server. This is what
+// makes ARC1_MAX_CONCURRENT a true server-wide cap rather than per-client.
 export function buildAdtConfig(
   config: ServerConfig,
   btpProxy?: BTPProxyConfig,
   bearerTokenProvider?: () => Promise<string>,
   opts?: { perUser?: boolean },
+  adtSemaphore?: Semaphore,
 ): Partial<AdtClientConfig> {
   const adtConfig: Partial<AdtClientConfig> = {
     baseUrl: config.url,
@@ -182,6 +189,7 @@ export function buildAdtConfig(
     btpProxy,
     bearerTokenProvider,
     maxConcurrent: config.maxConcurrent,
+    adtSemaphore,
     safety: {
       allowWrites: config.allowWrites,
       allowDataPreview: config.allowDataPreview,
@@ -224,6 +232,7 @@ async function createPerUserClient(
   btpConfig: BTPConfig,
   btpProxy: BTPProxyConfig | undefined,
   userJwt: string,
+  adtSemaphore?: Semaphore,
 ): Promise<AdtClient> {
   const { lookupDestinationWithUserToken } = await import('../adt/btp.js');
   // Use SAP_BTP_PP_DESTINATION if set, otherwise fall back to SAP_BTP_DESTINATION.
@@ -247,7 +256,7 @@ async function createPerUserClient(
       ? { ...btpProxy, locationId: destination.CloudConnectorLocationId }
       : btpProxy;
 
-  const adtConfig = buildAdtConfig(config, effectiveProxy, undefined, { perUser: true });
+  const adtConfig = buildAdtConfig(config, effectiveProxy, undefined, { perUser: true }, adtSemaphore);
   // Override URL from destination (in case it differs from startup-resolved URL)
   adtConfig.baseUrl = destination.URL;
   // Set per-user auth for principal propagation.
@@ -304,8 +313,9 @@ export function runStartupProbe(
   btpProxy?: BTPProxyConfig,
   bearerTokenProvider?: () => Promise<string>,
   btpConfig?: BTPConfig,
+  adtSemaphore?: Semaphore,
 ): Promise<void> {
-  const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+  const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider, undefined, adtSemaphore));
   return (async () => {
     try {
       const { defaultFeatureConfig } = await import('../adt/config.js');
@@ -413,6 +423,7 @@ export async function runStartupAuthPreflight(
   config: ServerConfig,
   btpProxy?: BTPProxyConfig,
   bearerTokenProvider?: () => Promise<string>,
+  adtSemaphore?: Semaphore,
 ): Promise<StartupAuthPreflightResult> {
   const checkedAt = new Date().toISOString();
   const endpoint = STARTUP_AUTH_ENDPOINT;
@@ -430,7 +441,7 @@ export async function runStartupAuthPreflight(
   }
 
   try {
-    const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+    const client = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider, undefined, adtSemaphore));
     await client.http.get(endpoint);
     const reason = 'Startup auth preflight succeeded for shared SAP credentials.';
     logger.info(reason, { endpoint });
@@ -495,11 +506,15 @@ export function createServer(
   cachingLayer?: CachingLayer,
   startupProbePromise?: Promise<void>,
   startupAuthPreflightPromise?: Promise<StartupAuthPreflightResult>,
+  adtSemaphore?: Semaphore,
+  mcpRateLimiter?: McpRateLimiter,
 ): Server {
   const server = new Server({ name: 'arc-1', version: VERSION }, { capabilities: { tools: {} } });
 
-  // Create default ADT client (shared, uses startup-time credentials or OAuth bearer)
-  const defaultClient = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+  // Create default ADT client (shared, uses startup-time credentials or OAuth bearer).
+  // Passes the shared server-wide semaphore so per-user PP clients (created at request
+  // time) share the same Layer 3 concurrency cap.
+  const defaultClient = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider, undefined, adtSemaphore));
 
   // Cookie-auth preflight propagation: when startup preflight returned a non-blocking
   // 401 in SAP_COOKIE_FILE mode, the throwaway preflight client marked itself stale —
@@ -566,7 +581,7 @@ export function createServer(
       const ppUser = (extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId) as string | undefined;
       const ppDest = process.env.SAP_BTP_PP_DESTINATION ?? process.env.SAP_BTP_DESTINATION ?? '';
       try {
-        client = await createPerUserClient(config, btpConfig, btpProxy, token);
+        client = await createPerUserClient(config, btpConfig, btpProxy, token, adtSemaphore);
         isPerUserClient = true;
         logger.emitAudit({
           timestamp: new Date().toISOString(),
@@ -646,6 +661,7 @@ export function createServer(
       server,
       cachingLayer,
       isPerUserClient,
+      mcpRateLimiter,
     );
     return { ...result } as Record<string, unknown>;
   });
@@ -816,6 +832,24 @@ export async function createAndStartServer(
     });
   }
 
+  // ─── Layer 3: shared SAP-bound Semaphore (server-wide cap) ────────
+  // One Semaphore for the whole process. Threaded into the shared startup client AND
+  // every per-user PP client built at request time, so ARC1_MAX_CONCURRENT is a true
+  // server-wide ceiling rather than a per-client one (the latter would multiply the cap
+  // by the number of active PP users — see ADR-0004).
+  const adtSemaphore = new Semaphore(config.maxConcurrent);
+  logger.info('SAP semaphore', { maxConcurrent: config.maxConcurrent, scope: 'server-wide' });
+
+  // ─── Layer 2: per-user MCP tool-call rate limiter ─────────────────
+  // Applied inside handleToolCall. Stdio (no authInfo) is exempt — there's no user
+  // identity to key on. When rateLimit=0 the factory returns a no-op stub.
+  // See docs_page/rate-limiting.md.
+  const mcpRateLimiter = createMcpRateLimiter(config.rateLimit);
+  logger.info('MCP rate limiting', {
+    perMinute: config.rateLimit,
+    disabled: config.rateLimit === 0,
+  });
+
   // ─── Cache Setup ───────────────────────────────────────────────────
   const cachingLayer = await createCachingLayer(config);
   if (cachingLayer) {
@@ -832,7 +866,9 @@ export async function createAndStartServer(
   if (config.cacheWarmup && cachingLayer && config.url) {
     try {
       const { runWarmup } = await import('../cache/warmup.js');
-      const warmupClient = new AdtClient(buildAdtConfig(config, btpProxy, bearerTokenProvider));
+      const warmupClient = new AdtClient(
+        buildAdtConfig(config, btpProxy, bearerTokenProvider, undefined, adtSemaphore),
+      );
       const result = await runWarmup(
         warmupClient,
         cachingLayer,
@@ -857,7 +893,7 @@ export async function createAndStartServer(
   // Run feature probe once at startup — shared across all requests (stdio and HTTP).
   // First run startup auth preflight in shared mode. If it blocks (401/403), skip feature probe
   // to avoid firing many failing requests with invalid technical credentials.
-  const startupAuthPreflightPromise = runStartupAuthPreflight(config, btpProxy, bearerTokenProvider);
+  const startupAuthPreflightPromise = runStartupAuthPreflight(config, btpProxy, bearerTokenProvider, adtSemaphore);
   const startupProbePromise = (async () => {
     const authPreflight = await startupAuthPreflightPromise;
     if (authPreflight.blocking) {
@@ -865,7 +901,7 @@ export async function createAndStartServer(
       setCachedDiscovery(new Map());
       return;
     }
-    await runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig);
+    await runStartupProbe(config, btpProxy, bearerTokenProvider, btpConfig, adtSemaphore);
   })();
 
   const server = createServer(
@@ -876,6 +912,8 @@ export async function createAndStartServer(
     cachingLayer,
     startupProbePromise,
     startupAuthPreflightPromise,
+    adtSemaphore,
+    mcpRateLimiter,
   );
 
   // Shutdown hook for SQLite cache cleanup (guard against double-close from multiple signals).
@@ -954,6 +992,8 @@ export async function createAndStartServer(
           cachingLayer,
           startupProbePromise,
           startupAuthPreflightPromise,
+          adtSemaphore,
+          mcpRateLimiter,
         ),
       config,
       xsuaaCredentials,

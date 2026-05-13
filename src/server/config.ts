@@ -499,6 +499,38 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
     config.maxConcurrent = Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
   }
 
+  // ── Rate limiting (Layer 1 + Layer 2) ──────────────────────────────
+  // Both knobs accept a positive integer (requests per minute) or `0` to disable.
+  // Malformed input → log warning, keep default. See docs_page/rate-limiting.md.
+  const authRateLimitRaw = getFlag('auth-rate-limit') ?? process.env.ARC1_AUTH_RATE_LIMIT;
+  if (authRateLimitRaw !== undefined) {
+    const parsed = Number.parseInt(authRateLimitRaw, 10);
+    if (Number.isNaN(parsed) || parsed < 0 || String(parsed) !== authRateLimitRaw.trim()) {
+      logger.warn(
+        `Invalid ARC1_AUTH_RATE_LIMIT='${authRateLimitRaw}' — expected positive integer or 0. Using default 20.`,
+      );
+    } else {
+      config.authRateLimit = parsed;
+      sources.authRateLimit =
+        getFlag('auth-rate-limit') !== undefined ? { flag: '--auth-rate-limit' } : { env: 'ARC1_AUTH_RATE_LIMIT' };
+    }
+  } else {
+    sources.authRateLimit = 'default';
+  }
+
+  const rateLimitRaw = getFlag('rate-limit') ?? process.env.ARC1_RATE_LIMIT;
+  if (rateLimitRaw !== undefined) {
+    const parsed = Number.parseInt(rateLimitRaw, 10);
+    if (Number.isNaN(parsed) || parsed < 0 || String(parsed) !== rateLimitRaw.trim()) {
+      logger.warn(`Invalid ARC1_RATE_LIMIT='${rateLimitRaw}' — expected positive integer or 0. Using default 60.`);
+    } else {
+      config.rateLimit = parsed;
+      sources.rateLimit = getFlag('rate-limit') !== undefined ? { flag: '--rate-limit' } : { env: 'ARC1_RATE_LIMIT' };
+    }
+  } else {
+    sources.rateLimit = 'default';
+  }
+
   // ── CORS (browser-based MCP clients only) ──────────────────────────
   // Empty allowlist (the default) disables CORS. Native MCP clients don't need
   // this — only set when a browser UI calls /mcp directly.
