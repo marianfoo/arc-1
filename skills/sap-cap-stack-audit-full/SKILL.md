@@ -362,6 +362,41 @@ The orchestrator logic is identical; expect more `TOOL UNAVAILABLE` flags on-pre
 - Findings tagged `TOOL UNAVAILABLE` indicate gaps in the local tooling, not in the project.
 - Critical (P1) findings should block release; High (P2) should have owners assigned; Medium (P3) belongs in the backlog.
 
+## Battle-Tested Patterns Referenced
+
+This skill orchestrates the full audit stack and consults [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) as its **gotcha catalog**. The catalog's eight categories map to the orchestrator's phases:
+
+- **Category 1 (UI5 / FE V4 traps)** ↔ Phase 2a-2b (UI5 linter, manifest validation) and Phase 3 ([`sap-fiori-app-audit`](../sap-fiori-app-audit/SKILL.md)).
+- **Category 2 (CAP / TypeScript pitfalls)** ↔ Phase 2e (TS typecheck), Phase 4 (CAP-specific deep checks).
+- **Category 3 (BTP / Kyma deployment)** ↔ Phase 3 deployment-readiness agent.
+- **Category 4 (Security defense-in-depth)** ↔ Phase 3 ([`sap-cap-security-rbac-matrix`](../sap-cap-security-rbac-matrix/SKILL.md)).
+- **Category 5 (Customizing-driven)** ↔ Phase 3 ([`sap-cap-customizing-honor`](../sap-cap-customizing-honor/SKILL.md)).
+- **Category 6 (Lifecycle/process discipline)** ↔ Phase 4 model integrity check.
+- **Category 7 (Events/messaging)** ↔ Phase 3 architecture agent.
+- **Category 8 (Ecosystem plugin landscape)** ↔ Phase 5 best-practice cross-check.
+
+Findings from any phase that match a battle-tested pattern should be cross-referenced in the consolidated report — link to the specific pattern by anchor (e.g. "matches battle-tested pattern 1.2 — `@UI.Hidden` on `OperationAvailable`").
+
+## Recommended Companion Plugins
+
+The orchestrator works best when **all relevant companion plugins are installed** because Phase 3 specialized agents and Phase 5 best-practice cross-check rely on them. Adapt to what's available; degrade gracefully (mark `TOOL UNAVAILABLE`) for absent ones.
+
+| Plugin / Skill | Used in phase |
+|---|---|
+| `sap-cap-capire` | Phase 4 (model integrity, profile audit) |
+| `sapui5` | Phase 2a (UI5 linter), Phase 3 (FE app audit) |
+| `sap-fiori-tools` | Phase 2b (manifest validation), Phase 2c (Fiori app discovery) |
+| `sap-btp-cloud-platform` | Phase 3 BTP best-practice agent |
+| `sap-btp-connectivity` | Phase 3 (XSUAA / destination audit) |
+| `sap-btp-cloud-logging` | Phase 3 logging-pattern check |
+| `sap-btp-integration-suite` | Phase 3 (if iFlow consumption detected) |
+| `sap-btp-audit-log` | Phase 3 audit-logging strategy review |
+| `sap-pce-expert` | Phase 4 (if S/4HANA PCE consumed) |
+| `sap-docs` | Phase 1 / Phase 3 SAP Notes search |
+| `context7` | Phase 2e (non-SAP dependencies) |
+
+See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the full companion plugin map and `sap-btp-*` family entries.
+
 ## References
 
 - [SAP CAP — Production-Readiness Guide](https://cap.cloud.sap/docs/guides/deployment/)

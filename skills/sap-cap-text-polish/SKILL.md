@@ -374,6 +374,27 @@ The audit logic is identical; only the discovery of the PII helper varies.
 - Pair with [`../sap-cap-security-rbac-matrix/SKILL.md`](../sap-cap-security-rbac-matrix/SKILL.md) — its PII findings hand off to this skill's PII_RISK class.
 - Pair with [`../sap-cap-ci-gates-pattern/SKILL.md`](../sap-cap-ci-gates-pattern/SKILL.md) to gate the regression of PII leaks and missing ICU placeholders in CI.
 
+## Battle-Tested Patterns Referenced
+
+This skill builds on [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md). The patterns most relevant to text polish:
+
+- **1.6 `i18n>{model>keyPath}` dynamic binding does not work** — common reason for blank text findings; flag as REWRITE with controller-side resolution.
+- **1.9 `manifest.json` must declare the i18n model explicitly** — bundle gap diagnosis (Step 1e).
+- **2.4 `cds.log(...)` everywhere; never `console.*`** — when the polish target includes operator-visible log strings, prefer `cds.log` calls.
+- **2.5 Centralized reject helper (`rejectSafe`) — never expose `err.message`** — tied to TECH_LEAK classification (Step 2).
+- **4.2 PII sanitization before audit log** — direct source of PII_RISK class; flag missing `_sanitizePII` helper as gap-to-add-helper.
+
+## Recommended Companion Plugins
+
+| Plugin / Skill | Why for text polish |
+|---|---|
+| `sap-cap-capire` | i18n model setup, localized messages, `cds.i18n` runtime reference |
+| `sapui5` | `ResourceModel`, `_t` helper, `MessageBox` / `MessageToast` API details |
+| `context7` | ICU MessageFormat placeholder syntax (`{0,number,#,##0.00}`, `{0,date,medium}`) |
+| `sap-docs` | SAP Fiori Design Guidelines — Writing tone conventions |
+
+See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the full companion plugin map.
+
 ## References
 
 - [SAP UI5 — `ResourceModel` and `_t` Helper Pattern](https://sapui5.hana.ondemand.com/sdk/#/topic/91f217ce374d4dec8a4b08c8e4c0b3a4)

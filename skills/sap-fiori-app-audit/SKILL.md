@@ -350,6 +350,36 @@ The audit logic is identical; expect different manifest sap.platform values and 
 - Pair with [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) when the audit reveals patterns that should be migrated to Fiori Elements V4.
 - Pair with [`../sap-cap-ci-gates-pattern/SKILL.md`](../sap-cap-ci-gates-pattern/SKILL.md) to add CI gates that prevent regressions of the high-severity findings.
 
+## Battle-Tested Patterns Referenced
+
+This skill builds on [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md). The patterns most relevant to a Fiori app audit:
+
+- **1.1 Pin the UI5 minor version explicitly** — Step 2a `manifest.json` check; missing pin is a P2.
+- **1.2 `@UI.Hidden` on `@Core.OperationAvailable` operand silently disables buttons** — Step 2e common UX-positive-false root cause.
+- **1.3 Actions returning `Entity` must NOT use `.columns(...)`** — Step 2f refresh after action.
+- **1.4 `liveMode: true` triggers `$batch` per keystroke on large entities** — Step 2a/2b filter audit.
+- **1.5 Composition vs Association for audit/log child entities** — Step 2c draft behavior check.
+- **1.6 `i18n>{model>keyPath}` dynamic binding does not work** — Step 2g i18n coverage.
+- **1.7 Custom Facets must not collide with HeaderInfo auto-Facet IDs** — Step 2d Facets audit.
+- **1.8 `@Common.ValueListWithFixedValues` duplicated crashes MDC** — Step 2b filter bar audit.
+- **1.9 `manifest.json` must declare the i18n model explicitly** — Step 2g.
+- **1.10 `@odata.draft.enabled` master data: per-case decision** — Step 2c draft audit per entity.
+- **1.11 Status fields: use `sap.common.CodeList` not `String enum`** — Step 2b for filterable status columns.
+- **3.10 `cds-plugin-ui5` is dev-only; ship UI separately** — Step 4 build verification.
+
+## Recommended Companion Plugins
+
+| Plugin / Skill | Why for Fiori app audits |
+|---|---|
+| `sapui5` | UI5 API explorer — verify control APIs, events, properties when validating annotations |
+| `sap-fiori-tools` | Manifest validation MCP tool, Fiori app discovery, page-template alignment |
+| `sap-cap-capire` | CAP service annotations reference (`@cds.redirection.target`, `@Common.SideEffects`) |
+| `sap-docs` | Search SAP Notes for FE V4 / UI5 issues that match the audit findings |
+| `playwright` | Browser smoke test for the "did the fix actually work in the UI" verification step |
+| `context7` | Look up non-SAP libraries used in `webapp/ext/` (npm packages, build tools) |
+
+See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the full companion plugin map.
+
 ## References
 
 - [SAP Fiori Elements V4 — Guidance](https://sapui5.hana.ondemand.com/sdk/#/topic/03265b0408e2432c9571d6b3feb6b1fd)

@@ -428,6 +428,32 @@ Related skills:
 - [sap-cap-customizing-honor](../sap-cap-customizing-honor/SKILL.md) — customizing coverage audit (complementary)
 - [migrate-custom-code](../migrate-custom-code/SKILL.md) — ABAP-side ATC fixes (companion for SAP custom code)
 
+## Battle-Tested Patterns Referenced
+
+This skill builds on [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md), which catalogs gotchas distilled from production deployments. The patterns most relevant to a security/RBAC audit:
+
+- **Category 4 (entire) — Security Defense-in-Depth**: the seven multi-layer patterns are the foundation for the audit's compliance mapping (OWASP/ASVS/NIST/CIS/SAP-SOM).
+- **4.1 Audit log append-only — three layers** (CDS + handler + DB trigger): every entity with an audit log must satisfy all three.
+- **4.2 PII sanitization before audit log**: cross-check that the project has a centralized `_sanitizePII` helper; if missing, flag as HIGH.
+- **4.3 Magic bytes verification on upload**: cross-check file-upload handlers — never trust `Content-Type` header.
+- **4.4 Rate limiters per endpoint class**: verify global + write + upload + jobs + integration limiters all exist.
+- **4.5 Token rotation quarterly**: ensure a runbook exists for every long-lived token (job, MCP, integration).
+- **4.6 OData `$expand` depth + `$top` cap**: verify request preprocessing enforces both.
+- **2.7 `xs-security.json` tenant-mode discipline**: single-tenant `dedicated` by default; `shared` requires deliberate review of data-layer isolation.
+
+## Recommended Companion Plugins
+
+| Plugin / Skill | Why for security audits |
+|---|---|
+| `sap-cap-capire` | CDS `@restrict` semantics, authentication/authorization patterns reference |
+| `sap-btp-audit-log` | BTP Audit Log Service integration — adopt as destination for local AuditLogEntry events |
+| `sap-btp-cloud-logging` | Cloud Logging dashboards for security event correlation |
+| `sap-btp-connectivity` | XSUAA scope wiring, principal propagation, destination service auth |
+| `sap-docs` | SAP Notes search for security advisories on consumed S/4 APIs |
+| `context7` | OWASP / ASVS / NIST reference lookup for compliance mapping rationale |
+
+See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the full companion plugin map.
+
 ## References
 
 - [OWASP Top 10 2021](https://owasp.org/Top10/)

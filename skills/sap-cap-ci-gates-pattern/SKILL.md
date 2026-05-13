@@ -400,6 +400,28 @@ The gate scripts are identical across providers; only the YAML wrapper differs.
 - When a gate becomes noisy, examine the allowlist before relaxing the gate itself — noisy gates often mean the project's reader pattern has drifted, not that the gate is wrong.
 - Schedule Pattern 3 (availability-drift) on a weekly cron, not per-PR — the upstream clone is expensive.
 
+## Battle-Tested Patterns Referenced
+
+This skill encodes patterns from [`../sap-cap-fiori-battle-tested-patterns/SKILL.md`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) as enforced CI gates. The patterns each gate locks in:
+
+- **5.5 Bidirectional CSV ↔ code consistency** ↔ Gate Pattern 1.
+- **6.4 / 6.5 Exception auto-dispatch ordering / Orphan workflow cleanup** ↔ Gate Pattern 2 (catalog raise-coverage prevents dead catalog entries that would break auto-dispatch).
+- **3.1 / 3.10 `cds run` does NOT mount UI5 apps** + Clean Core Level A compliance ↔ Gate Pattern 3 (availability drift catches consumed Tier-2 services that lose released state).
+- **2.8 `cap-js` plugin matrix discipline** ↔ Gate Pattern 4 (convention/matrix drift between `package.json` and ADR doc).
+- **5.4 Master-data references must be value-list-bound** ↔ Gate Pattern 5 partial (CSV schema lint with FK referential integrity).
+
+A noisy gate (false positives) usually signals a **drift in the project's reader pattern**, not a gate bug. Tune the regex in Pattern 1's skeleton (line 16 of `check-settings-bidirectional.sh`) before relaxing the gate.
+
+## Recommended Companion Plugins
+
+| Plugin / Skill | Why for CI gate generation |
+|---|---|
+| `sap-cap-capire` | Pattern 5 (CSV schema lint) uses `cds.load` to introspect the model; capire docs cover edge cases |
+| `sap-docs` | Pattern 3 (availability drift) cross-references `SAP/abap-atc-cr-cv-s4hc` and Help Portal Communication Scenario docs |
+| `context7` | GitHub Actions workflow syntax, bash safe-defaults, ICU MessageFormat (when CSV-derived strings carry placeholders) |
+
+See [`../sap-cap-fiori-battle-tested-patterns/SKILL.md#category-8--ecosystem-plugin-landscape`](../sap-cap-fiori-battle-tested-patterns/SKILL.md) for the full companion plugin map.
+
 ## References
 
 - [SAP CAP — Deployment Guide](https://cap.cloud.sap/docs/guides/deployment/)
