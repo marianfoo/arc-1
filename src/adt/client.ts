@@ -20,6 +20,7 @@ import type { AdtClientConfig } from './config.js';
 import { defaultAdtClientConfig } from './config.js';
 import { AdtApiError, isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig } from './http.js';
+import { AdtPackageHierarchyResolver, type PackageHierarchyResolver } from './package-hierarchy.js';
 import { checkOperation, OperationType, type SafetyConfig } from './safety.js';
 import { Semaphore } from './semaphore.js';
 import type {
@@ -159,6 +160,10 @@ export class AdtClient {
   /** Per-client cache of resolved TABL URLs (transparent table at /tables/, structure at /structures/).
    *  Populated by getTabl() so subsequent write/activate paths skip the 404 retry. */
   private readonly tablUrlCache = new Map<string, string>();
+  /** Lazily-instantiated DEVCLASS hierarchy resolver — only built when a subtree
+   *  allowedPackages rule is hit. Shared across `withSafety()` clones because the
+   *  hierarchy is a property of the SAP system, not of the current safety scope. */
+  private packageHierarchyResolverHolder: { resolver: PackageHierarchyResolver | null } = { resolver: null };
 
   constructor(options: Partial<AdtClientConfig> = {}) {
     const config = { ...defaultAdtClientConfig(), ...options };
@@ -199,7 +204,38 @@ export class AdtClient {
     // Share the TABL URL resolution cache — it's purely about object addressing,
     // independent of per-request safety scope.
     Object.defineProperty(clone, 'tablUrlCache', { value: this.tablUrlCache, writable: false, enumerable: false });
+    // Share the package-hierarchy resolver holder so cached subtrees survive
+    // per-request safety derivation. Wrapping in a holder lets the clone see
+    // lazy instantiations performed on the original (or another clone).
+    Object.defineProperty(clone, 'packageHierarchyResolverHolder', {
+      value: this.packageHierarchyResolverHolder,
+      writable: false,
+      enumerable: false,
+    });
     return clone;
+  }
+
+  /**
+   * Lazily build (and return) the DEVCLASS hierarchy resolver. The resolver
+   * powers `ZFOO/**` subtree rules in `allowedPackages`; reads/writes that
+   * don't trigger a subtree rule never instantiate it (zero cost).
+   *
+   * Shared across `withSafety()` clones — the hierarchy is per-SAP-system, not
+   * per-safety-scope. Cache invalidation is exposed via `invalidatePackageHierarchy()`.
+   */
+  getPackageHierarchyResolver(): PackageHierarchyResolver {
+    if (!this.packageHierarchyResolverHolder.resolver) {
+      this.packageHierarchyResolverHolder.resolver = new AdtPackageHierarchyResolver((root) =>
+        this.getSubpackages(root),
+      );
+    }
+    return this.packageHierarchyResolverHolder.resolver;
+  }
+
+  /** Invalidate the resolver cache. Called after admin actions that change the
+   *  hierarchy (create_package / change_package / delete_package). */
+  invalidatePackageHierarchy(root?: string): void {
+    this.packageHierarchyResolverHolder.resolver?.invalidate(root);
   }
 
   // ─── Source Code Read Operations ──────────────────────────────────
@@ -851,6 +887,44 @@ export class AdtClient {
       description: ref.description,
       uri: ref.uri,
     }));
+  }
+
+  /**
+   * Direct sub-packages of `packageName` — names only, uppercased, deduplicated.
+   *
+   * Uses the ADT informationsystem search filtered by `objectType=DEVC/K`,
+   * which queries TADIR for `OBJECT=DEVC` rows whose `DEVCLASS = packageName`
+   * — i.e. the direct children only (one hierarchy level). Callers requiring
+   * the full subtree should layer their own BFS (see `AdtPackageHierarchyResolver`).
+   *
+   * Backs the `allowedPackages` subtree-rule (`ZFOO/**`) safety gate, so any
+   * failure (network, 403, 404, parse) is surfaced as an exception, NEVER as
+   * an empty list. Empty list always means "no direct children found".
+   *
+   * `maxResults` is clamped to `[1, 1000]`. A direct-child count beyond 1000
+   * is pathological and may indicate truncation; callers should treat that
+   * boundary with care.
+   */
+  async getSubpackages(packageName: string, maxResults = 1000): Promise<string[]> {
+    checkOperation(this.safety, OperationType.Read, 'GetSubpackages');
+    const limit = Math.max(1, Math.min(maxResults, 1000));
+    const resp = await this.http.get(
+      `/sap/bc/adt/repository/informationsystem/search?operation=quickSearch&query=*&packageName=${encodeURIComponent(packageName)}&objectType=${encodeURIComponent('DEVC/K')}&maxResults=${limit}`,
+    );
+    const refs = parseSearchResults(resp.body);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const ref of refs) {
+      // Belt-and-suspenders: filter on objectType in case SAP returns extras.
+      if (ref.objectType !== 'DEVC/K') continue;
+      const name = ref.objectName.trim().toUpperCase();
+      if (!name || seen.has(name)) continue;
+      // Never count the package itself as its own child.
+      if (name === packageName.toUpperCase()) continue;
+      seen.add(name);
+      out.push(name);
+    }
+    return out;
   }
 
   // ─── Table Data Operations ─────────────────────────────────────────

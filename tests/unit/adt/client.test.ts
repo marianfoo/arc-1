@@ -788,6 +788,134 @@ describe('AdtClient', () => {
     });
   });
 
+  describe('getSubpackages (direct DEVCLASS children)', () => {
+    const SUBPKG_RESPONSE = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/packages/zfoo_a" adtcore:type="DEVC/K" adtcore:name="ZFOO_A" adtcore:packageName="ZFOO_A" adtcore:description="Child A"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/packages/zfoo_b" adtcore:type="DEVC/K" adtcore:name="ZFOO_B" adtcore:packageName="ZFOO_B" adtcore:description="Child B"/>
+</adtcore:objectReferences>`;
+
+    const MIXED_RESPONSE = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/packages/zfoo_a" adtcore:type="DEVC/K" adtcore:name="ZFOO_A"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_one" adtcore:type="CLAS/OC" adtcore:name="ZCL_ONE"/>
+</adtcore:objectReferences>`;
+
+    it('filters by objectType=DEVC/K in the URL', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SUBPKG_RESPONSE));
+      const client = createClient();
+      await client.getSubpackages('ZFOO');
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('/sap/bc/adt/repository/informationsystem/search');
+      expect(url).toContain('packageName=ZFOO');
+      expect(url).toContain('objectType=DEVC%2FK');
+      expect(url).toContain('operation=quickSearch');
+    });
+
+    it('returns uppercase names of direct children only', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SUBPKG_RESPONSE));
+      const client = createClient();
+      const subs = await client.getSubpackages('ZFOO');
+      expect(subs).toEqual(['ZFOO_A', 'ZFOO_B']);
+    });
+
+    it('belt-and-suspenders: drops any non-DEVC/K entries the server may return', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, MIXED_RESPONSE));
+      const client = createClient();
+      const subs = await client.getSubpackages('ZFOO');
+      // ZCL_ONE is not DEVC/K — must NOT appear.
+      expect(subs).toEqual(['ZFOO_A']);
+    });
+
+    it('never returns the queried package itself (no self-reference)', async () => {
+      const SELF_RESPONSE = `<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:type="DEVC/K" adtcore:name="ZFOO"/>
+  <adtcore:objectReference adtcore:type="DEVC/K" adtcore:name="ZFOO_A"/>
+</adtcore:objectReferences>`;
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, SELF_RESPONSE));
+      const client = createClient();
+      const subs = await client.getSubpackages('ZFOO');
+      expect(subs).toEqual(['ZFOO_A']);
+    });
+
+    it('encodes namespace package names in the URL', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(200, '<adtcore:objectReferences/>'));
+      const client = createClient();
+      await client.getSubpackages('/COMPANY/THING');
+      const url = String(mockFetch.mock.calls[0]?.[0] ?? '');
+      expect(url).toContain('packageName=%2FCOMPANY%2FTHING');
+    });
+
+    it('propagates SAP errors (does NOT silently return [])', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(500, '<error/>'));
+      const client = createClient();
+      await expect(client.getSubpackages('ZFOO')).rejects.toThrow(AdtApiError);
+    });
+  });
+
+  describe('package hierarchy resolver (lazy + shared)', () => {
+    it('getPackageHierarchyResolver instantiates lazily and returns the same instance on repeat calls', () => {
+      const client = createClient();
+      const r1 = client.getPackageHierarchyResolver();
+      const r2 = client.getPackageHierarchyResolver();
+      expect(r1).toBe(r2);
+    });
+
+    it('withSafety() clones share the same resolver instance (hierarchy is per-system, not per-scope)', () => {
+      const original = createClient();
+      const cloned = original.withSafety({
+        ...unrestrictedSafetyConfig(),
+        allowWrites: false,
+      });
+      expect(cloned.getPackageHierarchyResolver()).toBe(original.getPackageHierarchyResolver());
+    });
+
+    it('resolver is wired to client.getSubpackages — descends real subtree from the search endpoint', async () => {
+      // Mock the BFS: ZROOT -> [ZA], ZA -> [].
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: unknown) => {
+        const s = String(url);
+        if (s.includes('packageName=ZROOT')) {
+          return mockResponse(
+            200,
+            `<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:type="DEVC/K" adtcore:name="ZA"/>
+</adtcore:objectReferences>`,
+          );
+        }
+        if (s.includes('packageName=ZA')) {
+          return mockResponse(200, '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"/>');
+        }
+        return mockResponse(404, 'not found');
+      });
+      const client = createClient();
+      const resolver = client.getPackageHierarchyResolver();
+      expect(await resolver.isDescendantOrSelf('ZROOT', 'ZA')).toBe(true);
+      expect(await resolver.isDescendantOrSelf('ZROOT', 'ZNOTHERE')).toBe(false);
+    });
+
+    it('invalidatePackageHierarchy() drops cached subtrees', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(
+        mockResponse(200, '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"/>'),
+      );
+      const client = createClient();
+      const resolver = client.getPackageHierarchyResolver();
+      await resolver.isDescendantOrSelf('ZROOT', 'ZA');
+      const before = mockFetch.mock.calls.length;
+      client.invalidatePackageHierarchy();
+      await resolver.isDescendantOrSelf('ZROOT', 'ZA');
+      expect(mockFetch.mock.calls.length).toBe(before + 1);
+    });
+  });
+
   describe('lookupObjects', () => {
     const LOOKUP_RESPONSE = `<?xml version="1.0" encoding="utf-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">

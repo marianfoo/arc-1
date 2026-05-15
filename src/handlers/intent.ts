@@ -3474,7 +3474,7 @@ async function handleSAPWrite(
   async function enforcePackageForExistingObject(): Promise<string | undefined> {
     if (client.safety.allowedPackages.length === 0) return undefined;
     const pkg = await client.resolveObjectPackage(objectUrl);
-    if (pkg) checkPackage(client.safety, pkg);
+    if (pkg) await checkPackage(client.safety, pkg, client.getPackageHierarchyResolver());
     return pkg;
   }
 
@@ -3652,7 +3652,7 @@ async function handleSAPWrite(
     }
     case 'create': {
       const pkg = String(args.package ?? '$TMP');
-      checkPackage(client.safety, pkg);
+      await checkPackage(client.safety, pkg, client.getPackageHierarchyResolver());
       const description = String(args.description ?? name);
 
       // Pre-flight: check transport requirements for non-$TMP packages when no transport provided.
@@ -4378,8 +4378,13 @@ async function handleSAPWrite(
       });
 
       // Check every target package before starting any creates.
-      for (const pkg of new Set(batchPlan.map((item) => item.packageName))) {
-        checkPackage(client.safety, pkg);
+      // Resolver is shared across the loop so subtree BFS happens once even when
+      // many objects target descendants of the same `ZFOO/**` root.
+      {
+        const resolver = client.getPackageHierarchyResolver();
+        for (const pkg of new Set(batchPlan.map((item) => item.packageName))) {
+          await checkPackage(client.safety, pkg, resolver);
+        }
       }
 
       // Pre-flight transport check for batch_create (same logic as single create),
@@ -5915,17 +5920,22 @@ async function handleSAPGit(
           password,
           token,
         };
-        result = await gctsCloneRepo(client.http, client.safety, params);
+        result = await gctsCloneRepo(client.http, client.safety, params, client.getPackageHierarchyResolver());
       } else {
         if (!packageName) return errorResult('SAPGit(action="clone", backend="abapgit") requires package.');
-        result = await abapGitCreateRepo(client.http, client.safety, {
-          package: packageName,
-          url,
-          branchName: branch || undefined,
-          transportRequest: String(args.transport ?? '').trim() || undefined,
-          user,
-          password,
-        });
+        result = await abapGitCreateRepo(
+          client.http,
+          client.safety,
+          {
+            package: packageName,
+            url,
+            branchName: branch || undefined,
+            transportRequest: String(args.transport ?? '').trim() || undefined,
+            user,
+            password,
+          },
+          client.getPackageHierarchyResolver(),
+        );
       }
       break;
     case 'pull':
@@ -5974,10 +5984,16 @@ async function handleSAPGit(
     case 'create_branch':
       if (!repoId || !branch) return errorResult('SAPGit(action="create_branch") requires repoId and branch.');
       if (backend === 'gcts') {
-        result = await gctsCreateBranch(client.http, client.safety, repoId, {
-          branch,
-          ...(packageName ? { package: packageName } : {}),
-        });
+        result = await gctsCreateBranch(
+          client.http,
+          client.safety,
+          repoId,
+          {
+            branch,
+            ...(packageName ? { package: packageName } : {}),
+          },
+          client.getPackageHierarchyResolver(),
+        );
       } else {
         await abapGitCreateBranch(client.http, client.safety, repoId, branch);
         result = { ok: true };
@@ -6590,9 +6606,11 @@ async function handleSAPManage(
       checkOperation(client.safety, OperationType.Create, 'CreatePackage');
 
       // Package allowlist is enforced on the parent package, not the new package name.
-      // This enables creating children in allowed parents like $TMP.
+      // This enables creating children in allowed parents like $TMP. With subtree
+      // (`X/**`) rules, the new child will automatically be inside its parent's
+      // subtree, so subsequent writes flow through naturally.
       if (superPackage) {
-        checkPackage(client.safety, superPackage);
+        await checkPackage(client.safety, superPackage, client.getPackageHierarchyResolver());
       }
 
       let effectiveTransport = transport || undefined;
@@ -6651,6 +6669,9 @@ async function handleSAPManage(
         undefined,
         cachedFeatures?.abapRelease,
       );
+      // Hierarchy changed: invalidate any cached subtree that could contain
+      // the new package. Conservative: clear all (cheap; per-call cost is one BFS).
+      client.invalidatePackageHierarchy();
       return textResult(`Created package ${name}.`);
     }
 
@@ -6676,6 +6697,8 @@ async function handleSAPManage(
         }
       });
 
+      // Hierarchy changed: invalidate cached subtrees.
+      client.invalidatePackageHierarchy();
       return textResult(`Deleted package ${name}.`);
     }
 
@@ -6693,8 +6716,11 @@ async function handleSAPManage(
       if (!newPackage) return errorResult('"newPackage" is required for change_package action.');
 
       checkOperation(client.safety, OperationType.Update, 'ChangePackage');
-      checkPackage(client.safety, oldPackage);
-      checkPackage(client.safety, newPackage);
+      {
+        const resolver = client.getPackageHierarchyResolver();
+        await checkPackage(client.safety, oldPackage, resolver);
+        await checkPackage(client.safety, newPackage, resolver);
+      }
 
       // Resolve object URI via search if not provided
       if (!objectUri) {
@@ -6751,6 +6777,8 @@ async function handleSAPManage(
         transport: effectiveTransport,
       });
 
+      // Hierarchy may have shifted (object moved between packages); invalidate cache.
+      client.invalidatePackageHierarchy();
       const transportNote = result.transport ? ` (transport: ${result.transport})` : '';
       return textResult(`Moved ${objectName} from package ${oldPackage} to ${newPackage}${transportNote}.`);
     }
