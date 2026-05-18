@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.6](https://github.com/marianfoo/arc-1/compare/v0.9.5...v0.9.6) (2026-05-18)
+
+
+### Features
+
+* ARC-1-native pre-write hint for canonical %admin draft include ([#271](https://github.com/marianfoo/arc-1/issues/271)) ([21ac60b](https://github.com/marianfoo/arc-1/commit/21ac60b8fb7cc455e5c93ce301573c535fe85e39))
+
+
+### Bug Fixes
+
+* refuse TABL/DT writes on NW 7.50/7.51 with SE11 hint ([#285](https://github.com/marianfoo/arc-1/issues/285)) ([#286](https://github.com/marianfoo/arc-1/issues/286)) ([b098140](https://github.com/marianfoo/arc-1/commit/b09814000669b4101535f91d005f6b0d238bddb6))
+
 ## [0.9.5](https://github.com/marianfoo/arc-1/compare/v0.9.4...v0.9.5) (2026-05-11)
 
 
