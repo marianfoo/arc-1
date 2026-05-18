@@ -269,9 +269,24 @@ ONLY honest gate for this trap is the **Phase 8d browser-render verification** �
 Phase 8d is mandatory, not optional. Don't believe a "clean lint + clean validation" report
 means the routing config is correct.
 
-If you have the cycles to file an upstream issue, this is a clear gap in `@ui5/linter`'s
-`no-removed-manifest-property` rule — adding `routing.targets[].viewName/viewPath/viewLevel`
-to the checked-property list would close it.
+**Upstream tracking** (this trap is acknowledged by SAP):
+
+- [github.com/UI5/linter#1044](https://github.com/UI5/linter/issues/1044) — open enhancement
+  to extend `no-removed-manifest-property` to flag routing target's
+  `viewName`/`viewPath`/`viewLevel`/`viewId` under `_version >= 2.0.0`. SAP confirmed the gap
+  and tracks the fix internally as **CPOUI5FOUNDATION-1121**.
+- Until that ships, the SAP workaround they suggest is the **v1 → lint → v2** workflow:
+  *(1)* keep manifest `_version` at `1.x`, *(2)* run `ui5lint` and fix all reported errors,
+  *(3)* upgrade `_version` to `2.x`. The legacy v1 keys (`viewName` etc.) work in v1, so the
+  linter catches the wrong-key issues before the v2 cutover.
+- This skill's recommendation is the alternative: **always emit the v2 shape directly**
+  (`type: "View"` + `name`/`path`/`level`). That shape is backwards-compatible to v1, sidesteps
+  the linter gap entirely, and avoids the v1→v2 round-trip. The browser-render gate (Phase 8d)
+  catches any regression if a future scaffold reintroduces v1 keys.
+
+When CPOUI5FOUNDATION-1121 lands and `@ui5/linter` flags this at lint time, the Phase 7
+acceptance gates become sufficient — re-enable trust in lint-clean = render-clean and the
+browser-render gate can be downgraded from mandatory to recommended.
 
 ---
 
