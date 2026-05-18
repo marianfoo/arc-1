@@ -557,6 +557,101 @@ for the demo.
 
 ---
 
+## How to invoke this skill (prompt skeleton)
+
+A runbook prompt invoking this skill should be **short** — most of what looks like instructions
+to the LLM is actually already in this skill. Include ONLY the project-specific values:
+
+```text
+Run skills/modernize-ui5-app.md to convert <source_app>/ → <target_app>/ (wipe target first).
+
+Project-specifics:
+- V4 service URL: <URL or how to discover via arc-1 SAPRead SRVB>
+- SAP proxy baseUri: <https://host:port> (+ note on strictSSL if self-signed)
+- sap-client: <number>
+- Bound action FQN: <FQN or arc-1 SAPRead BDEF lookup>
+
+[Optional] Publication mode: this chat will be committed to a public repo. Apply
+the skill's "Publication-ready output" conventions verbatim.
+```
+
+What the skill itself enforces (so the prompt doesn't need to repeat):
+
+- Preflight: read `get_typescript_conversion_guidelines` + `get_guidelines`, scan the legacy app,
+  print Phase 1 discovery, print Phase 2 plan and STOP for `ok` before any writes.
+- The 5 Critical Traps (read them first).
+- Naming overrides (no Hungarian; "main" not "master").
+- The acceptance gate chain: eslint `--fix` → ui5-linter → manifest validation → ts-typecheck
+  → browser-render verification (Phase 7 + 8d). Browser render is non-negotiable because of
+  Trap 5 / upstream UI5/linter#1044.
+- MCPs used: ui5-mcp-server (primary), sap-docs, arc-1 (for SRVB / BDEF discovery),
+  Claude_in_Chrome OR Claude_Preview (for the render gate). NOT fiori-mcp.
+
+If a prompt is missing one of the project-specifics above, ask before guessing.
+
+---
+
+## Publication-ready output (opt-in via prompt)
+
+When the invoking prompt includes "Publication mode" (or equivalent — e.g. "this chat will be
+committed to a public repo"):
+
+### Credentials hygiene
+
+- Don't echo environment variables, SAP passwords, or anything from `.cursor/mcp.json` in any
+  response. The MCP servers (arc-1, ui5-mcp-server, browser MCPs) handle auth internally —
+  you never need to display credentials.
+- If a tool error message includes credentials (auth headers, query-string secrets), sanitize
+  before commenting on the error.
+
+### Tutorial-quality narration
+
+- The transcript becomes documentation for readers who weren't in the chat. Narrate decisions
+  inline ("I'm choosing X over Y because Z"), not just outcomes.
+- Quote the SAP-docs / UI5 MCP responses you rely on so readers can verify the source.
+- When you hit a trap, name it (e.g. "this is Trap 5 from the skill — manifest v2 missing
+  type:\"View\"") so the reader can cross-reference.
+
+### Final-report format
+
+End your last response with this canonical block, filled in:
+
+```
+## Run summary
+
+| | |
+|---|---|
+| Skill | modernize-ui5-app |
+| Date | <YYYY-MM-DD> |
+| Duration | ~<N> min |
+| Outcome | <success / partial / blocked> |
+
+**Artifacts created:**
+- <target>/ with: <list key files>
+
+**Acceptance gates:**
+- eslint --fix: <pass/fail>
+- ui5-linter: <pass/fail>
+- manifest validation: <pass/fail>
+- ts-typecheck: <pass/fail>
+- Browser render (.sapFFCL clientHeight > 400, two columns): <pass/fail>
+
+**Key V2→V4 binding migrations applied:**
+- <list — e.g. /ProjectSet → /Project, expand:Tasks → $expand=_Tasks,
+  callFunction → bindContext.invoke>
+
+**Traps hit during this run (and how they were resolved):**
+- <trap>: <one-line summary>
+
+**Next:**
+- Open `<dev-server URL>/index.html` in a real browser and compare side-by-side with the
+  legacy app / Fiori Elements variant.
+```
+
+Keep the table cell content concise — the published transcript should be scannable.
+
+---
+
 ## Phase 0 — Preflight
 
 ### 0a. Legacy app readable

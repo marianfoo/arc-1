@@ -155,7 +155,7 @@ real jobs:
 | App namespace | `<source_namespace>.fe` | Keeps the legacy and FE apps distinguishable (and the modern TS app too, if `modernize-ui5-app` was also run as the alternate path) |
 | UI5 version | Latest 1.x release (e.g. `1.147.2`) unless user specifies | LTS-track; latest FE V4 features available |
 | Language | TypeScript | Modern default; extension files use type-safe APIs |
-| OData V4 service URL | **Prefer the SRVD-direct path** on the system's HTTPS port: `https://<host>:<https-port>/sap/opu/odata4/sap/<srvb>/srvd/sap/<srvb>/0001` (e.g. `https://a4h.marianzeis.de:50001/sap/opu/odata4/sap/zui_dm_projects_o4/srvd/sap/zui_dm_projects_o4/0001`). Falls back to the Gateway hub path `http://<host>:<http-port>/sap/opu/odata4/sap/<srvb>/srvd_a2x/sap/<service>/0001` only when SRVD-direct isn't reachable. | Run 5 + Run 6 verified the SRVD-direct path works without `/n/IWFND/MAINT_SERVICE` registration on 7.5x systems. The hub path requires the routing-group manual step. |
+| OData V4 service URL | **Prefer the SRVD-direct path** on the system's HTTPS port: `https://<host>:<https-port>/sap/opu/odata4/sap/<srvb>/srvd/sap/<srvb>/0001` (e.g. `https://example-s4hana.local:50001/sap/opu/odata4/sap/zui_dm_projects_o4/srvd/sap/zui_dm_projects_o4/0001`). Falls back to the Gateway hub path `http://<host>:<http-port>/sap/opu/odata4/sap/<srvb>/srvd_a2x/sap/<service>/0001` only when SRVD-direct isn't reachable. | Run 5 + Run 6 verified the SRVD-direct path works without `/n/IWFND/MAINT_SERVICE` registration on 7.5x systems. The hub path requires the routing-group manual step. |
 | Main entity | Root entity alias exposed by the SRVB (e.g. the alias on `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
 | Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
 | Extension language | TypeScript (controller extensions) | Match the rest of the chain |
@@ -177,6 +177,155 @@ The user provides:
 
 If only the legacy app path and V4 URL are provided, apply smart defaults and surface the plan
 in Phase 3 for user `ok` before any writes.
+
+---
+
+## How to invoke this skill (prompt skeleton)
+
+A runbook prompt invoking this skill should be **short** — most instructions are already in this
+skill. Include ONLY the project-specific values:
+
+```text
+Run skills/convert-ui5-to-fiori-elements.md to convert <source_app>/ → <target_app>/
+(wipe target first).
+
+Project-specifics:
+- Package: <package_name>
+- V4 service: <URL or arc-1 SAPRead SRVB <name>>
+- Projection CDS to annotate inline (@UI.headerInfo + @UI.presentationVariant):
+    <ZC_*>, <ZC_*>, ...
+- DDLX to create (@UI.facet, @UI.lineItem, @UI.selectionField, @UI.identification
+  + @UI.fieldGroup if any):
+    <ZME_*>, <ZME_*>, ...
+- Bound action(s) for @UI.dataFieldForAction:
+    <action_name> on <projection_view>
+- SAP proxy baseUri: <https://host:port>
+
+[Optional] Post-reset mode: backend annotations have just been stripped by a prior
+"reset" chat. This skill's "Two-level work pattern" applies — recreate the backend
+annotations AND scaffold the frontend.
+
+[Optional] Publication mode: this chat will be committed to a public repo. Apply
+the skill's "Publication-ready output" conventions verbatim.
+```
+
+What the skill itself enforces (so the prompt doesn't need to repeat):
+
+- Annotation discovery via `mcp__sap-docs__search` for every non-obvious `@UI.*` decision —
+  see "Using `mcp__sap-docs__search` for annotation discovery" near the top.
+- Phase 1 feature inventory of the legacy app + Phase 2 annotation map + Phase 3 plan with
+  `ok` gate.
+- The 3-step Fiori MCP dance: `list_functionalities` → `get_functionality_details` →
+  `execute_functionality`. Phase 5 covers this.
+- BDEF preparation in Phase 2c — if the action needs to surface as a `DataFieldForAction`,
+  add `@UI.dataAction` + `@Lifecycle.draftAction` where needed BEFORE Phase 4.
+- Validation in Phase 7 + the `$metadata` annotation-publication check (Phase 4d).
+- Known Fiori MCP rough edges (§5e) — `fetch-service-metadata` workaround, etc.
+- MCPs used: arc-1 (CDS / DDLX writes), sap-docs (annotation discovery), ui5-mcp-server
+  (linter + manifest validation), fiori-mcp (LROP scaffold + per-page configuration).
+
+If a prompt is missing one of the project-specifics above, ask before guessing.
+
+---
+
+## Two-level work pattern (post-reset invocation)
+
+Use this section when the invoking prompt says "the backend has just been reset" or "annotations
+have been stripped". The pattern: the V4 service is reachable but `$metadata` carries no
+`@UI.*` annotations, so this skill has two levels of work to do:
+
+**Level 1 — Backend annotation work** (Phase 4 in the skill body):
+
+1. For each projection CDS named in the prompt: SAPRead the source, add the entity-level
+   `@UI.headerInfo` + `@UI.presentationVariant` blocks inline (BEFORE `define root view entity`).
+2. For each DDLX named in the prompt: SAPWrite a new `annotate view <ZC_*> with { ... }`
+   DDLX object carrying the field-level annotations (`@UI.facet`, `@UI.lineItem`,
+   `@UI.selectionField`, `@UI.identification`, `@UI.fieldGroup`, etc.) — see Phase 4a / 4b
+   templates.
+3. SAPActivate each modified DDLS + new DDLX.
+4. Publish the SRVB (Phase 4c) to expose the annotations through `$metadata`.
+5. Verify (Phase 4d) — curl `$metadata` and confirm each `@UI.*` annotation now appears as
+   an OData annotation in the XML.
+
+**Level 2 — Frontend scaffold work** (Phases 5–7):
+
+1. Run the Fiori MCP 3-step dance to scaffold the LROP.
+2. Configure extensions per Phase 6 (only the ones called out in Phase 2b).
+3. Run validation + smoke in Phase 7.
+
+Both levels must pass before declaring success. If Level 1 fails (e.g. an annotation has a
+syntax issue), Level 2 is meaningless — the LROP will render against the un-annotated
+fallback shapes.
+
+Why this matters for the demo's documentation value: a reader of the published transcript
+sees the FE skill creating UI metadata in the backend AND wiring the frontend in a single
+chat — that's the showcase. Keep the narration of each annotation explicit ("adding
+`@UI.headerInfo` to ZC_DM_PROJECT because the LROP needs a title field at the top of the
+Object Page").
+
+---
+
+## Publication-ready output (opt-in via prompt)
+
+When the invoking prompt includes "Publication mode" (or equivalent — e.g. "this chat will be
+committed to a public repo"):
+
+### Credentials hygiene
+
+- Don't echo environment variables, SAP passwords, or anything from `.cursor/mcp.json`. The
+  MCP servers (arc-1, fiori-mcp, ui5-mcp-server) handle auth internally — you never need to
+  display credentials.
+- If a tool error message includes credentials, sanitize before commenting on the error.
+
+### Tutorial-quality narration
+
+- The transcript becomes documentation. Narrate each annotation decision inline ("adding
+  `@UI.lineItem` position 10 to ProjectId because it's the LROP table's leftmost column").
+- Quote sap-docs and Fiori MCP responses you rely on so readers can verify.
+- When a Fiori MCP rough edge bites (e.g. §5e fetch-service-metadata), name it.
+
+### Final-report format
+
+End with this canonical block, filled in:
+
+```
+## Run summary
+
+| | |
+|---|---|
+| Skill | convert-ui5-to-fiori-elements |
+| Date | <YYYY-MM-DD> |
+| Duration | ~<N> min |
+| Outcome | <success / partial / blocked> |
+
+**Backend annotations created:**
+- <projection_view> (inline): <annotations + key field values>
+- <ddlx_object> (DDLX): <annotation kinds + which fields they apply to>
+- ...
+
+**Frontend artifacts created:**
+- <target>/<inner>/ with: <list manifest.json, annotation.xml, ui5.yaml, .env.example>
+
+**Acceptance gates:**
+- Backend activation: <pass/fail>
+- $metadata exposes annotations: <pass/fail>
+- Scaffold (Fiori MCP 3-step): <pass/fail>
+- annotation.xml validity: <pass/fail>
+- LROP renders: <pass/fail>
+- Object Page renders: <pass/fail>
+- Action button + invocation: <pass/fail>
+- Multi-level navigation: <pass/fail>
+
+**Known limitations accepted (with justification):**
+- <e.g. "Status criticality color not applied — release boundary; tried paths X, Y, Z">
+
+**Traps hit / Fiori MCP rough edges:**
+- <list>
+
+**Next:**
+- Open the FLP sandbox URL printed by `npm start` and verify the LROP + Object Page +
+  drilldown rendering.
+```
 
 ---
 
